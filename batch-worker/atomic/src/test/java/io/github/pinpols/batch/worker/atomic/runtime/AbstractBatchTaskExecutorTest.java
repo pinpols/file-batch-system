@@ -20,265 +20,265 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 @ExtendWith(OutputCaptureExtension.class)
 class AbstractBatchTaskExecutorTest {
 
-  private static TaskContext ctx() {
-    return new TaskContext("tx", "j", "ti-1", "w-1", Map.of(), Map.of());
-  }
+    private static TaskContext ctx() {
+        return new TaskContext("tx", "j", "ti-1", "w-1", Map.of(), Map.of());
+    }
 
-  @Test
-  @DisplayName("执行成功时应依次经过校验, 前置, 执行, 后置与清理五个阶段")
-  void shouldRunAllHooksInOrder_whenExecutionSucceeds() {
-    List<String> log = new ArrayList<>();
-    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
-      @Override
-      public String taskType() {
-        return "tt";
-      }
+    @Test
+    @DisplayName("执行成功时应依次经过校验, 前置, 执行, 后置与清理五个阶段")
+    void shouldRunAllHooksInOrder_whenExecutionSucceeds() {
+        List<String> log = new ArrayList<>();
+        AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+            @Override
+            public String taskType() {
+                return "tt";
+            }
 
-      @Override
-      public TaskCapability capability() {
-        return TaskCapability.of();
-      }
+            @Override
+            public TaskCapability capability() {
+                return TaskCapability.of();
+            }
 
-      @Override
-      protected void validate(TaskContext c) {
-        log.add("validate");
-      }
+            @Override
+            protected void validate(TaskContext c) {
+                log.add("validate");
+            }
 
-      @Override
-      protected void before(TaskContext c) {
-        log.add("before");
-      }
+            @Override
+            protected void before(TaskContext c) {
+                log.add("before");
+            }
 
-      @Override
-      protected TaskResult doExecute(TaskContext c) {
-        log.add("doExecute");
-        return TaskResult.ok("done", Map.of("rows", 5));
-      }
+            @Override
+            protected TaskResult doExecute(TaskContext c) {
+                log.add("doExecute");
+                return TaskResult.ok("done", Map.of("rows", 5));
+            }
 
-      @Override
-      protected void after(TaskContext c, TaskResult r) {
-        log.add("after");
-      }
+            @Override
+            protected void after(TaskContext c, TaskResult r) {
+                log.add("after");
+            }
 
-      @Override
-      protected void cleanup(TaskContext c) {
-        log.add("cleanup");
-      }
-    };
+            @Override
+            protected void cleanup(TaskContext c) {
+                log.add("cleanup");
+            }
+        };
 
-    TaskResult r = exec.execute(ctx());
+        TaskResult r = exec.execute(ctx());
 
-    assertThat(r.success()).isTrue();
-    assertThat(log).containsExactly("validate", "before", "doExecute", "after", "cleanup");
-  }
+        assertThat(r.success()).isTrue();
+        assertThat(log).containsExactly("validate", "before", "doExecute", "after", "cleanup");
+    }
 
-  @Test
-  @DisplayName("执行阶段抛异常时应返回失败结果, 且清理钩子仍然执行一次")
-  void shouldStillRunCleanup_whenExecuteThrows() {
-    AtomicInteger cleanupCount = new AtomicInteger();
-    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
-      @Override
-      public String taskType() {
-        return "tt";
-      }
+    @Test
+    @DisplayName("执行阶段抛异常时应返回失败结果, 且清理钩子仍然执行一次")
+    void shouldStillRunCleanup_whenExecuteThrows() {
+        AtomicInteger cleanupCount = new AtomicInteger();
+        AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+            @Override
+            public String taskType() {
+                return "tt";
+            }
 
-      @Override
-      public TaskCapability capability() {
-        return TaskCapability.of();
-      }
+            @Override
+            public TaskCapability capability() {
+                return TaskCapability.of();
+            }
 
-      @Override
-      protected TaskResult doExecute(TaskContext c) {
-        throw new RuntimeException("biz boom");
-      }
+            @Override
+            protected TaskResult doExecute(TaskContext c) {
+                throw new RuntimeException("biz boom");
+            }
 
-      @Override
-      protected void cleanup(TaskContext c) {
-        cleanupCount.incrementAndGet();
-      }
-    };
+            @Override
+            protected void cleanup(TaskContext c) {
+                cleanupCount.incrementAndGet();
+            }
+        };
 
-    TaskResult r = exec.execute(ctx());
+        TaskResult r = exec.execute(ctx());
 
-    assertThat(r.success()).isFalse();
-    assertThat(r.error()).isInstanceOf(RuntimeException.class).hasMessage("biz boom");
-    assertThat(cleanupCount.get()).isEqualTo(1);
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(r.error()).isInstanceOf(RuntimeException.class).hasMessage("biz boom");
+        assertThat(cleanupCount.get()).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("校验失败时应直接返回失败, 前置与清理钩子都不执行")
-  void shouldSkipBeforeAndCleanup_whenValidationFails() {
-    AtomicInteger cleanupCount = new AtomicInteger();
-    AtomicInteger beforeCount = new AtomicInteger();
-    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
-      @Override
-      public String taskType() {
-        return "tt";
-      }
+    @Test
+    @DisplayName("校验失败时应直接返回失败, 前置与清理钩子都不执行")
+    void shouldSkipBeforeAndCleanup_whenValidationFails() {
+        AtomicInteger cleanupCount = new AtomicInteger();
+        AtomicInteger beforeCount = new AtomicInteger();
+        AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+            @Override
+            public String taskType() {
+                return "tt";
+            }
 
-      @Override
-      public TaskCapability capability() {
-        return TaskCapability.of();
-      }
+            @Override
+            public TaskCapability capability() {
+                return TaskCapability.of();
+            }
 
-      @Override
-      protected void validate(TaskContext c) {
-        throw new IllegalArgumentException("bad input");
-      }
+            @Override
+            protected void validate(TaskContext c) {
+                throw new IllegalArgumentException("bad input");
+            }
 
-      @Override
-      protected void before(TaskContext c) {
-        beforeCount.incrementAndGet();
-      }
+            @Override
+            protected void before(TaskContext c) {
+                beforeCount.incrementAndGet();
+            }
 
-      @Override
-      protected TaskResult doExecute(TaskContext c) {
-        throw new AssertionError("must not run");
-      }
+            @Override
+            protected TaskResult doExecute(TaskContext c) {
+                throw new AssertionError("must not run");
+            }
 
-      @Override
-      protected void cleanup(TaskContext c) {
-        cleanupCount.incrementAndGet();
-      }
-    };
+            @Override
+            protected void cleanup(TaskContext c) {
+                cleanupCount.incrementAndGet();
+            }
+        };
 
-    TaskResult r = exec.execute(ctx());
+        TaskResult r = exec.execute(ctx());
 
-    assertThat(r.success()).isFalse();
-    assertThat(beforeCount.get()).isZero();
-    assertThat(cleanupCount.get()).isZero(); // before 未跑,cleanup 不该跑
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(beforeCount.get()).isZero();
+        assertThat(cleanupCount.get()).isZero(); // before 未跑,cleanup 不该跑
+    }
 
-  @Test
-  @DisplayName("前置钩子抛异常时应保留该异常, 执行与清理钩子都不运行")
-  void shouldSkipExecuteAndCleanup_whenBeforeFails() {
-    // before 抛异常时 started 仍为 false(在 started=true 之前抛),cleanup 不应跑;
-    // 与 validate 失败一样落在 started=false 分支,但 before 确实被调用过。
-    AtomicInteger beforeCount = new AtomicInteger();
-    AtomicInteger doExecuteCount = new AtomicInteger();
-    AtomicInteger cleanupCount = new AtomicInteger();
-    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
-      @Override
-      public String taskType() {
-        return "tt";
-      }
+    @Test
+    @DisplayName("前置钩子抛异常时应保留该异常, 执行与清理钩子都不运行")
+    void shouldSkipExecuteAndCleanup_whenBeforeFails() {
+        // before 抛异常时 started 仍为 false(在 started=true 之前抛),cleanup 不应跑;
+        // 与 validate 失败一样落在 started=false 分支,但 before 确实被调用过。
+        AtomicInteger beforeCount = new AtomicInteger();
+        AtomicInteger doExecuteCount = new AtomicInteger();
+        AtomicInteger cleanupCount = new AtomicInteger();
+        AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+            @Override
+            public String taskType() {
+                return "tt";
+            }
 
-      @Override
-      public TaskCapability capability() {
-        return TaskCapability.of();
-      }
+            @Override
+            public TaskCapability capability() {
+                return TaskCapability.of();
+            }
 
-      @Override
-      protected void before(TaskContext c) {
-        beforeCount.incrementAndGet();
-        throw new IllegalStateException("acquire failed");
-      }
+            @Override
+            protected void before(TaskContext c) {
+                beforeCount.incrementAndGet();
+                throw new IllegalStateException("acquire failed");
+            }
 
-      @Override
-      protected TaskResult doExecute(TaskContext c) {
-        doExecuteCount.incrementAndGet();
-        return TaskResult.ok();
-      }
+            @Override
+            protected TaskResult doExecute(TaskContext c) {
+                doExecuteCount.incrementAndGet();
+                return TaskResult.ok();
+            }
 
-      @Override
-      protected void cleanup(TaskContext c) {
-        cleanupCount.incrementAndGet();
-      }
-    };
+            @Override
+            protected void cleanup(TaskContext c) {
+                cleanupCount.incrementAndGet();
+            }
+        };
 
-    TaskResult r = exec.execute(ctx());
+        TaskResult r = exec.execute(ctx());
 
-    assertThat(r.success()).isFalse();
-    assertThat(r.error()).isInstanceOf(IllegalStateException.class).hasMessage("acquire failed");
-    assertThat(beforeCount.get()).isEqualTo(1); // before 跑过
-    assertThat(doExecuteCount.get()).isZero(); // doExecute 未跑
-    assertThat(cleanupCount.get()).isZero(); // started=false → cleanup 不跑
-  }
+        assertThat(r.success()).isFalse();
+        assertThat(r.error()).isInstanceOf(IllegalStateException.class).hasMessage("acquire failed");
+        assertThat(beforeCount.get()).isEqualTo(1); // before 跑过
+        assertThat(doExecuteCount.get()).isZero(); // doExecute 未跑
+        assertThat(cleanupCount.get()).isZero(); // started=false → cleanup 不跑
+    }
 
-  @Test
-  @DisplayName("执行阶段返回空结果时应按失败处理, 并提示结果缺失")
-  void shouldTreatAsFailure_whenResultIsNull() {
-    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
-      @Override
-      public String taskType() {
-        return "tt";
-      }
+    @Test
+    @DisplayName("执行阶段返回空结果时应按失败处理, 并提示结果缺失")
+    void shouldTreatAsFailure_whenResultIsNull() {
+        AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+            @Override
+            public String taskType() {
+                return "tt";
+            }
 
-      @Override
-      public TaskCapability capability() {
-        return TaskCapability.of();
-      }
+            @Override
+            public TaskCapability capability() {
+                return TaskCapability.of();
+            }
 
-      @Override
-      protected TaskResult doExecute(TaskContext c) {
-        return null;
-      }
-    };
+            @Override
+            protected TaskResult doExecute(TaskContext c) {
+                return null;
+            }
+        };
 
-    TaskResult r = exec.execute(ctx());
-    assertThat(r.success()).isFalse();
-    assertThat(r.message()).contains("returned null");
-  }
+        TaskResult r = exec.execute(ctx());
+        assertThat(r.success()).isFalse();
+        assertThat(r.message()).contains("returned null");
+    }
 
-  @Test
-  @DisplayName("清理钩子抛异常时不应覆盖原有成功结果与消息")
-  void shouldKeepOriginalResult_whenCleanupThrows() {
-    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
-      @Override
-      public String taskType() {
-        return "tt";
-      }
+    @Test
+    @DisplayName("清理钩子抛异常时不应覆盖原有成功结果与消息")
+    void shouldKeepOriginalResult_whenCleanupThrows() {
+        AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+            @Override
+            public String taskType() {
+                return "tt";
+            }
 
-      @Override
-      public TaskCapability capability() {
-        return TaskCapability.of();
-      }
+            @Override
+            public TaskCapability capability() {
+                return TaskCapability.of();
+            }
 
-      @Override
-      protected TaskResult doExecute(TaskContext c) {
-        return TaskResult.ok("ok", Map.of());
-      }
+            @Override
+            protected TaskResult doExecute(TaskContext c) {
+                return TaskResult.ok("ok", Map.of());
+            }
 
-      @Override
-      protected void cleanup(TaskContext c) {
-        throw new RuntimeException("cleanup boom");
-      }
-    };
+            @Override
+            protected void cleanup(TaskContext c) {
+                throw new RuntimeException("cleanup boom");
+            }
+        };
 
-    TaskResult r = exec.execute(ctx());
-    assertThat(r.success()).isTrue(); // 原 success 不被 cleanup 异常覆盖
-    assertThat(r.message()).isEqualTo("ok");
-  }
+        TaskResult r = exec.execute(ctx());
+        assertThat(r.success()).isTrue(); // 原 success 不被 cleanup 异常覆盖
+        assertThat(r.message()).isEqualTo("ok");
+    }
 
-  @Test
-  @DisplayName("执行与清理异常日志不得输出原始凭据")
-  void shouldMaskExecutionAndCleanupExceptionsInLogs(CapturedOutput output) {
-    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
-      @Override
-      public String taskType() {
-        return "tt";
-      }
+    @Test
+    @DisplayName("执行与清理异常日志不得输出原始凭据")
+    void shouldMaskExecutionAndCleanupExceptionsInLogs(CapturedOutput output) {
+        AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+            @Override
+            public String taskType() {
+                return "tt";
+            }
 
-      @Override
-      public TaskCapability capability() {
-        return TaskCapability.of();
-      }
+            @Override
+            public TaskCapability capability() {
+                return TaskCapability.of();
+            }
 
-      @Override
-      protected TaskResult doExecute(TaskContext c) {
-        throw new RuntimeException("execute token=probe-secret");
-      }
+            @Override
+            protected TaskResult doExecute(TaskContext c) {
+                throw new RuntimeException("execute token=probe-secret");
+            }
 
-      @Override
-      protected void cleanup(TaskContext c) {
-        throw new RuntimeException("cleanup token=probe-secret");
-      }
-    };
+            @Override
+            protected void cleanup(TaskContext c) {
+                throw new RuntimeException("cleanup token=probe-secret");
+            }
+        };
 
-    TaskResult result = exec.execute(ctx());
+        TaskResult result = exec.execute(ctx());
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.error()).hasMessageContaining("probe-secret");
-    assertThat(output.getOut()).doesNotContain("probe-secret");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.error()).hasMessageContaining("probe-secret");
+        assertThat(output.getOut()).doesNotContain("probe-secret");
+    }
 }

@@ -40,178 +40,174 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("作业执行日志查询: 偏移分页与游标分页的结果映射")
 class ConsoleJobExecutionLogQueryTest {
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private JobExecutionLogMapper jobExecutionLogMapper;
+    @Mock
+    private JobExecutionLogMapper jobExecutionLogMapper;
 
-  @Mock
-  private LocalizedErrorRenderer localizedErrorRenderer;
+    @Mock
+    private LocalizedErrorRenderer localizedErrorRenderer;
 
-  @Mock
-  private BatchTimezoneProvider timezoneProvider;
+    @Mock
+    private BatchTimezoneProvider timezoneProvider;
 
-  @Mock
-  private JobDefinitionMapper jobDefinitionMapper;
+    @Mock
+    private JobDefinitionMapper jobDefinitionMapper;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private JobStepInstanceMapper jobStepInstanceMapper;
+    @Mock
+    private JobStepInstanceMapper jobStepInstanceMapper;
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  private ConsoleJobQueryService service;
+    private ConsoleJobQueryService service;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleJobQueryMappers mappers = new ConsoleJobQueryMappers(
-        jobDefinitionMapper,
-        jobInstanceMapper,
-        jobStepInstanceMapper,
-        jobPartitionMapper,
-        jobExecutionLogMapper);
-    service =
-        new ConsoleJobQueryService(tenantGuard, mappers, localizedErrorRenderer, timezoneProvider);
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleJobQueryMappers mappers = new ConsoleJobQueryMappers(
+                jobDefinitionMapper,
+                jobInstanceMapper,
+                jobStepInstanceMapper,
+                jobPartitionMapper,
+                jobExecutionLogMapper);
+        service = new ConsoleJobQueryService(tenantGuard, mappers, localizedErrorRenderer, timezoneProvider);
+    }
 
-  private JobExecutionLogEntity log(long id) {
-    JobExecutionLogEntity e = new JobExecutionLogEntity();
-    e.setId(id);
-    e.setTenantId("t1");
-    e.setJobInstanceId(1001L);
-    e.setLogLevel("INFO");
-    e.setLogType("BUSINESS");
-    e.setMessage("step " + id + " done");
-    e.setExtraJson("{\"apiToken\":\"log-secret\",\"attempt\":1}");
-    e.setCreatedAt(Instant.parse("2026-05-30T00:00:00Z"));
-    return e;
-  }
+    private JobExecutionLogEntity log(long id) {
+        JobExecutionLogEntity e = new JobExecutionLogEntity();
+        e.setId(id);
+        e.setTenantId("t1");
+        e.setJobInstanceId(1001L);
+        e.setLogLevel("INFO");
+        e.setLogType("BUSINESS");
+        e.setMessage("step " + id + " done");
+        e.setExtraJson("{\"apiToken\":\"log-secret\",\"attempt\":1}");
+        e.setCreatedAt(Instant.parse("2026-05-30T00:00:00Z"));
+        return e;
+    }
 
-  @Test
-  @DisplayName("偏移分页模式统计总数并映射条目, 查询条件含实例编号与日志级别且游标为空")
-  void offsetMode_queriesCountAndMapsRows() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(2), log(1)));
-    when(jobExecutionLogMapper.countByQuery(any())).thenReturn(2L);
+    @Test
+    @DisplayName("偏移分页模式统计总数并映射条目, 查询条件含实例编号与日志级别且游标为空")
+    void offsetMode_queriesCountAndMapsRows() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(2), log(1)));
+        when(jobExecutionLogMapper.countByQuery(any())).thenReturn(2L);
 
-    JobExecutionLogQueryRequest req = new JobExecutionLogQueryRequest();
-    req.setTenantId("t1");
-    req.setJobInstanceId(1001L);
-    req.setLogLevel("INFO");
+        JobExecutionLogQueryRequest req = new JobExecutionLogQueryRequest();
+        req.setTenantId("t1");
+        req.setJobInstanceId(1001L);
+        req.setLogLevel("INFO");
 
-    PageResponse<ConsoleJobExecutionLogResponse> resp = service.jobExecutionLogs(req);
+        PageResponse<ConsoleJobExecutionLogResponse> resp = service.jobExecutionLogs(req);
 
-    assertThat(resp.total()).isEqualTo(2);
-    assertThat(resp.items()).hasSize(2);
-    assertThat(resp.items().get(0).message()).isEqualTo("step 2 done");
-    assertThat(resp.items().get(0).extraJson())
-        .contains("\"apiToken\":\"****\"")
-        .contains("\"attempt\":1")
-        .doesNotContain("log-secret");
+        assertThat(resp.total()).isEqualTo(2);
+        assertThat(resp.items()).hasSize(2);
+        assertThat(resp.items().get(0).message()).isEqualTo("step 2 done");
+        assertThat(resp.items().get(0).extraJson())
+                .contains("\"apiToken\":\"****\"")
+                .contains("\"attempt\":1")
+                .doesNotContain("log-secret");
 
-    ArgumentCaptor<JobExecutionLogQuery> captor =
-        ArgumentCaptor.forClass(JobExecutionLogQuery.class);
-    verify(jobExecutionLogMapper).selectByQuery(captor.capture());
-    assertThat(captor.getValue().jobInstanceId()).isEqualTo(1001L);
-    assertThat(captor.getValue().logLevel()).isEqualTo("INFO");
-    assertThat(captor.getValue().cursorId()).isNull();
-  }
+        ArgumentCaptor<JobExecutionLogQuery> captor = ArgumentCaptor.forClass(JobExecutionLogQuery.class);
+        verify(jobExecutionLogMapper).selectByQuery(captor.capture());
+        assertThat(captor.getValue().jobInstanceId()).isEqualTo(1001L);
+        assertThat(captor.getValue().logLevel()).isEqualTo("INFO");
+        assertThat(captor.getValue().cursorId()).isNull();
+    }
 
-  @Test
-  @DisplayName("游标分页模式不做计数, 按游标编号推进查询并返回后续游标与还有更多标记")
-  void cursorMode_skipsCountAndReturnsNextCursor() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(5), log(4)));
+    @Test
+    @DisplayName("游标分页模式不做计数, 按游标编号推进查询并返回后续游标与还有更多标记")
+    void cursorMode_skipsCountAndReturnsNextCursor() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(5), log(4)));
 
-    JobExecutionLogQueryRequest req = new JobExecutionLogQueryRequest();
-    req.setTenantId("t1");
-    req.setJobInstanceId(1001L);
-    req.setPageSize(2);
-    req.setCursor(CursorCodec.encode(Map.of("id", 9L)));
+        JobExecutionLogQueryRequest req = new JobExecutionLogQueryRequest();
+        req.setTenantId("t1");
+        req.setJobInstanceId(1001L);
+        req.setPageSize(2);
+        req.setCursor(CursorCodec.encode(Map.of("id", 9L)));
 
-    PageResponse<ConsoleJobExecutionLogResponse> resp = service.jobExecutionLogs(req);
+        PageResponse<ConsoleJobExecutionLogResponse> resp = service.jobExecutionLogs(req);
 
-    assertThat(resp.nextCursor()).isNotBlank();
-    assertThat(resp.hasMore()).isTrue();
-    verify(jobExecutionLogMapper, never()).countByQuery(any());
+        assertThat(resp.nextCursor()).isNotBlank();
+        assertThat(resp.hasMore()).isTrue();
+        verify(jobExecutionLogMapper, never()).countByQuery(any());
 
-    ArgumentCaptor<JobExecutionLogQuery> captor =
-        ArgumentCaptor.forClass(JobExecutionLogQuery.class);
-    verify(jobExecutionLogMapper).selectByQuery(captor.capture());
-    assertThat(captor.getValue().cursorId()).isEqualTo(9L);
-  }
+        ArgumentCaptor<JobExecutionLogQuery> captor = ArgumentCaptor.forClass(JobExecutionLogQuery.class);
+        verify(jobExecutionLogMapper).selectByQuery(captor.capture());
+        assertThat(captor.getValue().cursorId()).isEqualTo(9L);
+    }
 
-  @Test
-  @DisplayName("仅携带追踪标识时实例编号可为空, 仍返回匹配的日志快照条目")
-  void traceMode_allowsTraceWithoutJobInstanceForSnapshot() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(7)));
-    when(jobExecutionLogMapper.countByQuery(any())).thenReturn(1L);
+    @Test
+    @DisplayName("仅携带追踪标识时实例编号可为空, 仍返回匹配的日志快照条目")
+    void traceMode_allowsTraceWithoutJobInstanceForSnapshot() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(7)));
+        when(jobExecutionLogMapper.countByQuery(any())).thenReturn(1L);
 
-    JobExecutionLogQueryRequest req = new JobExecutionLogQueryRequest();
-    req.setTenantId("t1");
-    req.setTraceId("trace-1");
+        JobExecutionLogQueryRequest req = new JobExecutionLogQueryRequest();
+        req.setTenantId("t1");
+        req.setTraceId("trace-1");
 
-    PageResponse<ConsoleJobExecutionLogResponse> resp = service.jobExecutionLogs(req);
+        PageResponse<ConsoleJobExecutionLogResponse> resp = service.jobExecutionLogs(req);
 
-    assertThat(resp.items()).hasSize(1);
+        assertThat(resp.items()).hasSize(1);
 
-    ArgumentCaptor<JobExecutionLogQuery> captor =
-        ArgumentCaptor.forClass(JobExecutionLogQuery.class);
-    verify(jobExecutionLogMapper).selectByQuery(captor.capture());
-    assertThat(captor.getValue().jobInstanceId()).isNull();
-    assertThat(captor.getValue().traceId()).isEqualTo("trace-1");
-  }
+        ArgumentCaptor<JobExecutionLogQuery> captor = ArgumentCaptor.forClass(JobExecutionLogQuery.class);
+        verify(jobExecutionLogMapper).selectByQuery(captor.capture());
+        assertThat(captor.getValue().jobInstanceId()).isNull();
+        assertThat(captor.getValue().traceId()).isEqualTo("trace-1");
+    }
 
-  @Test
-  @DisplayName("作业实例参数快照返回前递归脱敏敏感字段")
-  void jobInstance_masksSensitiveValuesInParameterSnapshot() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(1001L);
-    instance.setTenantId("t1");
-    instance.setParamsSnapshot(
-        "{\"effectiveParams\":{\"apiToken\":\"secret-value\",\"nested\":[{\"password\":\"pw\"}]},"
-            + "\"executionPolicy\":{\"retryMaxCount\":2}}");
-    instance.setResultSummary("{\"accessToken\":\"result-secret\",\"rowsProcessed\":42}");
-    when(jobInstanceMapper.selectById("t1", 1001L)).thenReturn(instance);
+    @Test
+    @DisplayName("作业实例参数快照返回前递归脱敏敏感字段")
+    void jobInstance_masksSensitiveValuesInParameterSnapshot() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setId(1001L);
+        instance.setTenantId("t1");
+        instance.setParamsSnapshot(
+                "{\"effectiveParams\":{\"apiToken\":\"secret-value\",\"nested\":[{\"password\":\"pw\"}]},"
+                        + "\"executionPolicy\":{\"retryMaxCount\":2}}");
+        instance.setResultSummary("{\"accessToken\":\"result-secret\",\"rowsProcessed\":42}");
+        when(jobInstanceMapper.selectById("t1", 1001L)).thenReturn(instance);
 
-    ConsoleJobInstanceResponse response = service.jobInstance("t1", 1001L);
+        ConsoleJobInstanceResponse response = service.jobInstance("t1", 1001L);
 
-    assertThat(response.paramsSnapshot())
-        .contains("\"apiToken\":\"****\"")
-        .contains("\"password\":\"****\"")
-        .contains("\"retryMaxCount\":2")
-        .doesNotContain("secret-value", "pw");
-    assertThat(response.resultSummary())
-        .contains("\"accessToken\":\"****\"")
-        .contains("\"rowsProcessed\":42")
-        .doesNotContain("result-secret");
-  }
+        assertThat(response.paramsSnapshot())
+                .contains("\"apiToken\":\"****\"")
+                .contains("\"password\":\"****\"")
+                .contains("\"retryMaxCount\":2")
+                .doesNotContain("secret-value", "pw");
+        assertThat(response.resultSummary())
+                .contains("\"accessToken\":\"****\"")
+                .contains("\"rowsProcessed\":42")
+                .doesNotContain("result-secret");
+    }
 
-  @Test
-  @DisplayName("步骤结果摘要返回前递归脱敏敏感字段")
-  void jobStepInstance_masksSensitiveValuesInResultSummary() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    JobStepInstanceView step = new JobStepInstanceView();
-    step.setId(10L);
-    step.setTenantId("t1");
-    step.setResultSummary("{\"credential\":\"step-secret\",\"rowsProcessed\":5}");
-    when(jobStepInstanceMapper.selectByQuery(any())).thenReturn(List.of(step));
-    when(jobStepInstanceMapper.countByQuery(any())).thenReturn(1L);
+    @Test
+    @DisplayName("步骤结果摘要返回前递归脱敏敏感字段")
+    void jobStepInstance_masksSensitiveValuesInResultSummary() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        JobStepInstanceView step = new JobStepInstanceView();
+        step.setId(10L);
+        step.setTenantId("t1");
+        step.setResultSummary("{\"credential\":\"step-secret\",\"rowsProcessed\":5}");
+        when(jobStepInstanceMapper.selectByQuery(any())).thenReturn(List.of(step));
+        when(jobStepInstanceMapper.countByQuery(any())).thenReturn(1L);
 
-    JobStepInstanceQueryRequest request = new JobStepInstanceQueryRequest();
-    request.setTenantId("t1");
-    var response = service.jobStepInstances(request);
+        JobStepInstanceQueryRequest request = new JobStepInstanceQueryRequest();
+        request.setTenantId("t1");
+        var response = service.jobStepInstances(request);
 
-    assertThat(response.items()).hasSize(1);
-    assertThat(response.items().getFirst().resultSummary())
-        .contains("\"credential\":\"****\"")
-        .contains("\"rowsProcessed\":5")
-        .doesNotContain("step-secret");
-  }
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().getFirst().resultSummary())
+                .contains("\"credential\":\"****\"")
+                .contains("\"rowsProcessed\":5")
+                .doesNotContain("step-secret");
+    }
 }

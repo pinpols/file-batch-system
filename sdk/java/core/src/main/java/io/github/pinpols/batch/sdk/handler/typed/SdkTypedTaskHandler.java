@@ -48,36 +48,35 @@ import java.util.Map;
  */
 public abstract class SdkTypedTaskHandler<I, O> implements SdkTaskHandler {
 
-  private final SdkTypedParameters<I> params;
+    private final SdkTypedParameters<I> params;
 
-  protected SdkTypedTaskHandler() {
-    this(SdkTypedParameters.defaultObjectMapper());
-  }
-
-  protected SdkTypedTaskHandler(ObjectMapper objectMapper) {
-    this.params = SdkTypedParameters.forHandler(objectMapper, this, SdkTypedTaskHandler.class, 0);
-  }
-
-  @Override
-  public final SdkTaskResult execute(SdkTaskContext ctx) {
-    I input;
-    try {
-      input = params.parse(ctx);
-    } catch (IllegalArgumentException ex) {
-      return SdkTaskResult.fail(
-          "invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
+    protected SdkTypedTaskHandler() {
+        this(SdkTypedParameters.defaultObjectMapper());
     }
-    O output = handle(input, ctx);
-    String message = successMessage(output);
-    Map<String, Object> outputMap = params.toOutputMap(output);
-    return SdkTaskResult.ok(message, outputMap);
-  }
 
-  /** 业务实现 —— 拿强类型入参,返业务结果。抛异常即失败(框架回退)。 */
-  protected abstract O handle(I input, SdkTaskContext ctx);
+    protected SdkTypedTaskHandler(ObjectMapper objectMapper) {
+        this.params = SdkTypedParameters.forHandler(objectMapper, this, SdkTypedTaskHandler.class, 0);
+    }
 
-  /** 成功时的 message,默认 {@code "ok"};按需重写返摘要。 */
-  protected String successMessage(O output) {
-    return "ok";
-  }
+    @Override
+    public final SdkTaskResult execute(SdkTaskContext ctx) {
+        I input;
+        try {
+            input = params.parse(ctx);
+        } catch (IllegalArgumentException ex) {
+            return SdkTaskResult.fail("invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
+        }
+        O output = handle(input, ctx);
+        String message = successMessage(output);
+        Map<String, Object> outputMap = params.toOutputMap(output);
+        return SdkTaskResult.ok(message, outputMap);
+    }
+
+    /** 业务实现 —— 拿强类型入参,返业务结果。抛异常即失败(框架回退)。 */
+    protected abstract O handle(I input, SdkTaskContext ctx);
+
+    /** 成功时的 message,默认 {@code "ok"};按需重写返摘要。 */
+    protected String successMessage(O output) {
+        return "ok";
+    }
 }

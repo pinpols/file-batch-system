@@ -18,92 +18,88 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @DisplayName("ShedLock 锁提供者工厂:自动建表开关与 Redis 后端互斥语义验证")
 class ShedLockProviderFactoryTest extends AbstractIntegrationTest {
 
-  private static final String DB_USERNAME = "batch_user";
-  private static final String DB_PASSWORD = "batch_pass_123";
+    private static final String DB_USERNAME = "batch_user";
+    private static final String DB_PASSWORD = "batch_pass_123";
 
-  @Test
-  @DisplayName("开启自动建表开关时锁表应被创建,且加锁与释放链路可用")
-  void shouldAutoCreateShedLockTableWhenEnabled() {
-    DriverManagerDataSource dataSource = new DriverManagerDataSource();
-    dataSource.setDriverClassName("org.postgresql.Driver");
-    dataSource.setUrl(platformJdbcUrl());
-    dataSource.setUsername(DB_USERNAME);
-    dataSource.setPassword(DB_PASSWORD);
+    @Test
+    @DisplayName("开启自动建表开关时锁表应被创建,且加锁与释放链路可用")
+    void shouldAutoCreateShedLockTableWhenEnabled() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource();
+        dataSource.setDriverClassName("org.postgresql.Driver");
+        dataSource.setUrl(platformJdbcUrl());
+        dataSource.setUsername(DB_USERNAME);
+        dataSource.setPassword(DB_PASSWORD);
 
-    JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
-    String dropShedLockTableSql = """
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        String dropShedLockTableSql = """
         drop table if exists batch.shedlock
     """;
-    jdbcTemplate.execute(dropShedLockTableSql);
+        jdbcTemplate.execute(dropShedLockTableSql);
 
-    LockProvider lockProvider = ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, true);
+        LockProvider lockProvider = ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, true);
 
-    String shedLockTableCountSql = """
+        String shedLockTableCountSql = """
             select count(*)
               from information_schema.tables
              where table_schema = 'batch'
                and table_name = 'shedlock'
             """;
-    Integer tableCount = jdbcTemplate.queryForObject(shedLockTableCountSql, Integer.class);
-    assertThat(tableCount).isEqualTo(1);
-    String lockUntilTypeSql = """
+        Integer tableCount = jdbcTemplate.queryForObject(shedLockTableCountSql, Integer.class);
+        assertThat(tableCount).isEqualTo(1);
+        String lockUntilTypeSql = """
             select data_type
               from information_schema.columns
              where table_schema = 'batch'
                and table_name = 'shedlock'
                and column_name = 'lock_until'
             """;
-    String lockUntilType = jdbcTemplate.queryForObject(lockUntilTypeSql, String.class);
-    assertThat(lockUntilType).isEqualTo("timestamp without time zone");
+        String lockUntilType = jdbcTemplate.queryForObject(lockUntilTypeSql, String.class);
+        assertThat(lockUntilType).isEqualTo("timestamp without time zone");
 
-    SimpleLock simpleLock = lockProvider
-        .lock(new LockConfiguration(
-            BatchDateTimeSupport.utcNow(),
-            "factory-auto-create",
-            Duration.ofSeconds(30),
-            Duration.ZERO))
-        .orElseThrow();
-    String lockUntilUtcWindowSql = """
+        SimpleLock simpleLock = lockProvider
+                .lock(new LockConfiguration(
+                        BatchDateTimeSupport.utcNow(), "factory-auto-create", Duration.ofSeconds(30), Duration.ZERO))
+                .orElseThrow();
+        String lockUntilUtcWindowSql = """
         select lock_until > timezone('utc', current_timestamp) + interval '25 seconds'
         from batch.shedlock where name = 'factory-auto-create'
         """;
-    Boolean lockUntilCoversMinimumWindow =
-        jdbcTemplate.queryForObject(lockUntilUtcWindowSql, Boolean.class);
-    assertThat(lockUntilCoversMinimumWindow).isTrue();
-    simpleLock.unlock();
-  }
-
-  /**
-   * Redis LockProvider 同款锁语义验证:抢到锁 → 重复抢同名应失败 → 释放后能再抢。 验 ShedLock switch 到 Redis
-   * 后业务侧 @SchedulerLock 行为不变。
-   */
-  @Test
-  @DisplayName("Redis 后端下同一把锁重复抢占应失败,释放后应可再次抢占")
-  void shouldEnforceMutualExclusion_whenRedisLockProvider() {
-    LettuceConnectionFactory connectionFactory =
-        new LettuceConnectionFactory(new RedisStandaloneConfiguration(redisHost(), redisPort()));
-    connectionFactory.afterPropertiesSet();
-    try {
-      LockProvider provider = ShedLockProviderFactory.redisLockProvider(connectionFactory, "test");
-
-      LockConfiguration cfg = new LockConfiguration(
-          BatchDateTimeSupport.utcNow(),
-          "factory-redis-mutex-" + System.nanoTime(),
-          Duration.ofSeconds(30),
-          Duration.ZERO);
-
-      SimpleLock first = provider.lock(cfg).orElseThrow();
-      try {
-        // 第二次抢同名锁必须失败(SETNX 互斥)
-        assertThat(provider.lock(cfg)).isEmpty();
-      } finally {
-        first.unlock();
-      }
-      // 释放后能再抢到
-      SimpleLock again = provider.lock(cfg).orElseThrow();
-      again.unlock();
-    } finally {
-      connectionFactory.destroy();
+        Boolean lockUntilCoversMinimumWindow = jdbcTemplate.queryForObject(lockUntilUtcWindowSql, Boolean.class);
+        assertThat(lockUntilCoversMinimumWindow).isTrue();
+        simpleLock.unlock();
     }
-  }
+
+    /**
+     * Redis LockProvider 同款锁语义验证:抢到锁 → 重复抢同名应失败 → 释放后能再抢。 验 ShedLock switch 到 Redis
+     * 后业务侧 @SchedulerLock 行为不变。
+     */
+    @Test
+    @DisplayName("Redis 后端下同一把锁重复抢占应失败,释放后应可再次抢占")
+    void shouldEnforceMutualExclusion_whenRedisLockProvider() {
+        LettuceConnectionFactory connectionFactory =
+                new LettuceConnectionFactory(new RedisStandaloneConfiguration(redisHost(), redisPort()));
+        connectionFactory.afterPropertiesSet();
+        try {
+            LockProvider provider = ShedLockProviderFactory.redisLockProvider(connectionFactory, "test");
+
+            LockConfiguration cfg = new LockConfiguration(
+                    BatchDateTimeSupport.utcNow(),
+                    "factory-redis-mutex-" + System.nanoTime(),
+                    Duration.ofSeconds(30),
+                    Duration.ZERO);
+
+            SimpleLock first = provider.lock(cfg).orElseThrow();
+            try {
+                // 第二次抢同名锁必须失败(SETNX 互斥)
+                assertThat(provider.lock(cfg)).isEmpty();
+            } finally {
+                first.unlock();
+            }
+            // 释放后能再抢到
+            SimpleLock again = provider.lock(cfg).orElseThrow();
+            again.unlock();
+        } finally {
+            connectionFactory.destroy();
+        }
+    }
 }

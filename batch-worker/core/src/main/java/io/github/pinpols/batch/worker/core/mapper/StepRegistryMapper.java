@@ -8,10 +8,8 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface StepRegistryMapper {
 
-  int deleteByModule(@Param("module") String module);
+    int deleteByModule(@Param("module") String module);
 
-  int insertEntry(
-      @Param("module") String module,
-      @Param("implCode") String implCode,
-      @Param("implClass") String implClass);
+    int insertEntry(
+            @Param("module") String module, @Param("implCode") String implCode, @Param("implClass") String implClass);
 }

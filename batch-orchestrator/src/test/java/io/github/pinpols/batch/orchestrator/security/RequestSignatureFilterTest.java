@@ -24,98 +24,98 @@ import org.springframework.mock.web.MockHttpServletResponse;
 @DisplayName("请求签名过滤器,验证开关,请求方法,密钥请求头与验签结果对放行或拒绝的影响")
 class RequestSignatureFilterTest {
 
-  @Mock
-  private RequestSignatureVerifier verifier;
+    @Mock
+    private RequestSignatureVerifier verifier;
 
-  @Mock
-  private FilterChain chain;
+    @Mock
+    private FilterChain chain;
 
-  private RequestSignatureFilter newFilter(boolean enabled) {
-    RequestSigningProperties props = new RequestSigningProperties();
-    props.setEnabled(enabled);
-    InternalRequestProperties internal = new InternalRequestProperties();
-    internal.setMaxBodyBytes(1024);
-    return new RequestSignatureFilter(props, verifier, internal);
-  }
-
-  private MockHttpServletRequest post(boolean withApiKey) {
-    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/10/report");
-    req.setContent("{\"tenantId\":\"t1\"}".getBytes());
-    if (withApiKey) {
-      req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
-      req.addHeader("X-Batch-Timestamp", "1700000000000");
-      req.addHeader("X-Batch-Nonce", "n1");
-      req.addHeader("X-Batch-Signature", "sig");
+    private RequestSignatureFilter newFilter(boolean enabled) {
+        RequestSigningProperties props = new RequestSigningProperties();
+        props.setEnabled(enabled);
+        InternalRequestProperties internal = new InternalRequestProperties();
+        internal.setMaxBodyBytes(1024);
+        return new RequestSignatureFilter(props, verifier, internal);
     }
-    return req;
-  }
 
-  @Test
-  @DisplayName("开关关闭 → 直通,不验签")
-  void shouldPassThroughWithoutVerification_whenFilterDisabled() throws Exception {
-    newFilter(false).doFilter(post(true), new MockHttpServletResponse(), chain);
-    verify(chain).doFilter(any(), any());
-    verifyNoInteractions(verifier);
-  }
+    private MockHttpServletRequest post(boolean withApiKey) {
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/10/report");
+        req.setContent("{\"tenantId\":\"t1\"}".getBytes());
+        if (withApiKey) {
+            req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
+            req.addHeader("X-Batch-Timestamp", "1700000000000");
+            req.addHeader("X-Batch-Nonce", "n1");
+            req.addHeader("X-Batch-Signature", "sig");
+        }
+        return req;
+    }
 
-  @Test
-  @DisplayName("无 api_key(内部 secret 调用)→ 直通")
-  void shouldPassThrough_whenApiKeyHeaderAbsent() throws Exception {
-    newFilter(true).doFilter(post(false), new MockHttpServletResponse(), chain);
-    verify(chain).doFilter(any(), any());
-    verifyNoInteractions(verifier);
-  }
+    @Test
+    @DisplayName("开关关闭 → 直通,不验签")
+    void shouldPassThroughWithoutVerification_whenFilterDisabled() throws Exception {
+        newFilter(false).doFilter(post(true), new MockHttpServletResponse(), chain);
+        verify(chain).doFilter(any(), any());
+        verifyNoInteractions(verifier);
+    }
 
-  @Test
-  @DisplayName("GET 读请求 → 直通")
-  void shouldPassThrough_whenRequestIsGetRead() throws Exception {
-    MockHttpServletRequest req = new MockHttpServletRequest("GET", "/internal/tasks/10/claimed");
-    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
-    newFilter(true).doFilter(req, new MockHttpServletResponse(), chain);
-    verify(chain).doFilter(any(), any());
-    verifyNoInteractions(verifier);
-  }
+    @Test
+    @DisplayName("无 api_key(内部 secret 调用)→ 直通")
+    void shouldPassThrough_whenApiKeyHeaderAbsent() throws Exception {
+        newFilter(true).doFilter(post(false), new MockHttpServletResponse(), chain);
+        verify(chain).doFilter(any(), any());
+        verifyNoInteractions(verifier);
+    }
 
-  @Test
-  @DisplayName("启用+api_key+写方法+验签 OK → 放行")
-  void shouldProceed_whenSignatureVerificationSucceeds() throws Exception {
-    when(verifier.verify(any(), anyLong())).thenReturn(Result.OK);
-    newFilter(true).doFilter(post(true), new MockHttpServletResponse(), chain);
-    verify(chain).doFilter(any(), any());
-  }
+    @Test
+    @DisplayName("GET 读请求 → 直通")
+    void shouldPassThrough_whenRequestIsGetRead() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/internal/tasks/10/claimed");
+        req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
+        newFilter(true).doFilter(req, new MockHttpServletResponse(), chain);
+        verify(chain).doFilter(any(), any());
+        verifyNoInteractions(verifier);
+    }
 
-  @Test
-  @DisplayName("验签失败 → 401,不放行")
-  void shouldRejectWith401_whenSignatureInvalid() throws Exception {
-    when(verifier.verify(any(), anyLong())).thenReturn(Result.BAD_SIGNATURE);
-    MockHttpServletResponse resp = new MockHttpServletResponse();
-    newFilter(true).doFilter(post(true), resp, chain);
-    assertThat(resp.getStatus()).isEqualTo(401);
-    verify(chain, never()).doFilter(any(), any());
-  }
+    @Test
+    @DisplayName("启用+api_key+写方法+验签 OK → 放行")
+    void shouldProceed_whenSignatureVerificationSucceeds() throws Exception {
+        when(verifier.verify(any(), anyLong())).thenReturn(Result.OK);
+        newFilter(true).doFilter(post(true), new MockHttpServletResponse(), chain);
+        verify(chain).doFilter(any(), any());
+    }
 
-  @Test
-  @DisplayName("启用+api_key+chunked 超大 body → 413,不验签")
-  void shouldRejectWith413_whenChunkedBodyExceedsLimit() throws Exception {
-    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/10/report") {
-      @Override
-      public int getContentLength() {
-        return -1;
-      }
+    @Test
+    @DisplayName("验签失败 → 401,不放行")
+    void shouldRejectWith401_whenSignatureInvalid() throws Exception {
+        when(verifier.verify(any(), anyLong())).thenReturn(Result.BAD_SIGNATURE);
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        newFilter(true).doFilter(post(true), resp, chain);
+        assertThat(resp.getStatus()).isEqualTo(401);
+        verify(chain, never()).doFilter(any(), any());
+    }
 
-      @Override
-      public long getContentLengthLong() {
-        return -1L;
-      }
-    };
-    req.setContent(new byte[2048]);
-    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
-    MockHttpServletResponse resp = new MockHttpServletResponse();
+    @Test
+    @DisplayName("启用+api_key+chunked 超大 body → 413,不验签")
+    void shouldRejectWith413_whenChunkedBodyExceedsLimit() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/10/report") {
+            @Override
+            public int getContentLength() {
+                return -1;
+            }
 
-    newFilter(true).doFilter(req, resp, chain);
+            @Override
+            public long getContentLengthLong() {
+                return -1L;
+            }
+        };
+        req.setContent(new byte[2048]);
+        req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
+        MockHttpServletResponse resp = new MockHttpServletResponse();
 
-    assertThat(resp.getStatus()).isEqualTo(413);
-    verifyNoInteractions(verifier);
-    verify(chain, never()).doFilter(any(), any());
-  }
+        newFilter(true).doFilter(req, resp, chain);
+
+        assertThat(resp.getStatus()).isEqualTo(413);
+        verifyNoInteractions(verifier);
+        verify(chain, never()).doFilter(any(), any());
+    }
 }

@@ -10,19 +10,16 @@ import org.springframework.stereotype.Component;
  * 保证「开了登录防护但还没选验证码」也能正常工作,不阻断登录。
  */
 @Component
-@ConditionalOnProperty(
-    name = "batch.console.captcha.provider",
-    havingValue = "none",
-    matchIfMissing = true)
+@ConditionalOnProperty(name = "batch.console.captcha.provider", havingValue = "none", matchIfMissing = true)
 public class NoopCaptchaVerifier implements CaptchaVerifier {
 
-  @Override
-  public CaptchaResult verify(String token, String clientIp) {
-    return CaptchaResult.ok();
-  }
+    @Override
+    public CaptchaResult verify(String token, String clientIp) {
+        return CaptchaResult.ok();
+    }
 
-  @Override
-  public String provider() {
-    return "none";
-  }
+    @Override
+    public String provider() {
+        return "none";
+    }
 }

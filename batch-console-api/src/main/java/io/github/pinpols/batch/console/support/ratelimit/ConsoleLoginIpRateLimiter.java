@@ -13,57 +13,57 @@ import org.springframework.dao.DataAccessException;
 @Slf4j
 public class ConsoleLoginIpRateLimiter {
 
-  private final SlidingWindowRateLimiter rateLimiter;
-  private final ConsoleRateLimitProperties rateLimitProperties;
-  private final ConsoleSecurityProperties securityProperties;
-  private final RedisRateLimitCircuitBreaker redisCircuitBreaker;
+    private final SlidingWindowRateLimiter rateLimiter;
+    private final ConsoleRateLimitProperties rateLimitProperties;
+    private final ConsoleSecurityProperties securityProperties;
+    private final RedisRateLimitCircuitBreaker redisCircuitBreaker;
 
-  public ConsoleLoginIpRateLimiter(
-      SlidingWindowRateLimiter rateLimiter,
-      ConsoleRateLimitProperties rateLimitProperties,
-      ConsoleSecurityProperties securityProperties,
-      RedisRateLimitCircuitBreaker redisCircuitBreaker) {
-    this.rateLimiter = rateLimiter;
-    this.rateLimitProperties = rateLimitProperties;
-    this.securityProperties = securityProperties;
-    this.redisCircuitBreaker = redisCircuitBreaker;
-  }
+    public ConsoleLoginIpRateLimiter(
+            SlidingWindowRateLimiter rateLimiter,
+            ConsoleRateLimitProperties rateLimitProperties,
+            ConsoleSecurityProperties securityProperties,
+            RedisRateLimitCircuitBreaker redisCircuitBreaker) {
+        this.rateLimiter = rateLimiter;
+        this.rateLimitProperties = rateLimitProperties;
+        this.securityProperties = securityProperties;
+        this.redisCircuitBreaker = redisCircuitBreaker;
+    }
 
-  public boolean tryAcquire(HttpServletRequest request) {
-    String clientIp = resolveClientIp(request);
-    if (!redisCircuitBreaker.allowRedisCall()) {
-      return true;
+    public boolean tryAcquire(HttpServletRequest request) {
+        String clientIp = resolveClientIp(request);
+        if (!redisCircuitBreaker.allowRedisCall()) {
+            return true;
+        }
+        try {
+            boolean allowed =
+                    rateLimiter.tryAcquire("login:ip:" + clientIp, rateLimitProperties.getLoginIpLimitPerMinute());
+            redisCircuitBreaker.recordSuccess();
+            return allowed;
+        } catch (DataAccessException exception) {
+            redisCircuitBreaker.recordFailure();
+            String sanitizedClientIp = LogSanitizer.value(clientIp);
+            String causeSummary = SwallowedExceptionLogger.summary(exception);
+            log.warn(
+                    "login rate limiter Redis unavailable; fail-open: ip={}, cause={}",
+                    sanitizedClientIp,
+                    causeSummary);
+            return true;
+        }
     }
-    try {
-      boolean allowed = rateLimiter.tryAcquire(
-          "login:ip:" + clientIp, rateLimitProperties.getLoginIpLimitPerMinute());
-      redisCircuitBreaker.recordSuccess();
-      return allowed;
-    } catch (DataAccessException exception) {
-      redisCircuitBreaker.recordFailure();
-      String sanitizedClientIp = LogSanitizer.value(clientIp);
-      String causeSummary = SwallowedExceptionLogger.summary(exception);
-      log.warn(
-          "login rate limiter Redis unavailable; fail-open: ip={}, cause={}",
-          sanitizedClientIp,
-          causeSummary);
-      return true;
-    }
-  }
 
-  private String resolveClientIp(HttpServletRequest request) {
-    if (securityProperties.isTrustForwardedHeaders()) {
-      String forwardedFor = request.getHeader("X-Forwarded-For");
-      if (Texts.hasText(forwardedFor)) {
-        int comma = forwardedFor.indexOf(',');
-        String forwardedClientIp = comma > 0 ? forwardedFor.substring(0, comma) : forwardedFor;
-        return forwardedClientIp.trim();
-      }
-      String realIp = request.getHeader("X-Real-IP");
-      if (Texts.hasText(realIp)) {
-        return realIp.trim();
-      }
+    private String resolveClientIp(HttpServletRequest request) {
+        if (securityProperties.isTrustForwardedHeaders()) {
+            String forwardedFor = request.getHeader("X-Forwarded-For");
+            if (Texts.hasText(forwardedFor)) {
+                int comma = forwardedFor.indexOf(',');
+                String forwardedClientIp = comma > 0 ? forwardedFor.substring(0, comma) : forwardedFor;
+                return forwardedClientIp.trim();
+            }
+            String realIp = request.getHeader("X-Real-IP");
+            if (Texts.hasText(realIp)) {
+                return realIp.trim();
+            }
+        }
+        return request.getRemoteAddr();
     }
-    return request.getRemoteAddr();
-  }
 }

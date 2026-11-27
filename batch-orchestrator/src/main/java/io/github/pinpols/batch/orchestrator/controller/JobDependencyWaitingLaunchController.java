@@ -15,14 +15,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class JobDependencyWaitingLaunchController {
 
-  private final JobDependencyWaitingLaunchService waitingLaunchService;
+    private final JobDependencyWaitingLaunchService waitingLaunchService;
 
-  @GetMapping
-  public List<JobDependencyWaitingLaunchSummary> list(
-      @RequestParam String tenantId,
-      @RequestParam(required = false) String waitStatus,
-      @RequestParam(required = false) String jobCode,
-      @RequestParam(defaultValue = "100") int limit) {
-    return waitingLaunchService.listRecent(tenantId, waitStatus, jobCode, limit);
-  }
+    @GetMapping
+    public List<JobDependencyWaitingLaunchSummary> list(
+            @RequestParam String tenantId,
+            @RequestParam(required = false) String waitStatus,
+            @RequestParam(required = false) String jobCode,
+            @RequestParam(defaultValue = "100") int limit) {
+        return waitingLaunchService.listRecent(tenantId, waitStatus, jobCode, limit);
+    }
 }

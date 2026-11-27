@@ -19,198 +19,186 @@ import org.junit.jupiter.api.Test;
 @DisplayName("运维响应记录的 JSON 键契约:与历史映射响应逐字一致, 嵌套空列省略与动态负载均保持")
 class OpsMapResponseJacksonTest {
 
-  private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+    private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
-  @Test
-  @DisplayName("审批明细:嵌套审批行的空列被省略, 顶层审批键恒在且时间归一")
-  void shouldOmitNullApprovalColumnsButKeepKey_whenSerializingConfigApprovalDetail()
-      throws Exception {
-    // 顶层 approval 键恒定（无审批时为 null）；嵌套 approval 行来自 MyBatis map，pending 时省略 reviewedBy 等 null 列。
-    Instant requestedAt = Instant.parse("2026-07-11T02:00:00Z");
-    ConsoleConfigApprovalDetailResponse response = new ConsoleConfigApprovalDetailResponse(
-        7L,
-        "ta",
-        "JOB",
-        "job-a",
-        ConfigLifecycleStatus.PENDING_APPROVAL.code(),
-        ConsoleConfigApprovalDetailResponse.ApprovalRow.builder()
-            .id(100L)
-            .tenantId("ta")
-            .releaseId(7L)
-            .approvalStatus("PENDING")
-            .requestedBy("admin")
-            .requestedAt(requestedAt)
-            .build());
-    Map<String, Object> back = roundTrip(response);
+    @Test
+    @DisplayName("审批明细:嵌套审批行的空列被省略, 顶层审批键恒在且时间归一")
+    void shouldOmitNullApprovalColumnsButKeepKey_whenSerializingConfigApprovalDetail() throws Exception {
+        // 顶层 approval 键恒定（无审批时为 null）；嵌套 approval 行来自 MyBatis map，pending 时省略 reviewedBy 等 null 列。
+        Instant requestedAt = Instant.parse("2026-07-11T02:00:00Z");
+        ConsoleConfigApprovalDetailResponse response = new ConsoleConfigApprovalDetailResponse(
+                7L,
+                "ta",
+                "JOB",
+                "job-a",
+                ConfigLifecycleStatus.PENDING_APPROVAL.code(),
+                ConsoleConfigApprovalDetailResponse.ApprovalRow.builder()
+                        .id(100L)
+                        .tenantId("ta")
+                        .releaseId(7L)
+                        .approvalStatus("PENDING")
+                        .requestedBy("admin")
+                        .requestedAt(requestedAt)
+                        .build());
+        Map<String, Object> back = roundTrip(response);
 
-    assertThat(back)
-        .containsOnlyKeys(
-            "releaseId", "tenantId", "configType", "configKey", "configStatus", "approval");
-    Map<String, Object> approval =
-        mapper.convertValue(back.get("approval"), new TypeReference<>() {});
-    assertThat(approval)
-        .containsEntry("approvalStatus", "PENDING")
-        .containsKey("requestedAt")
-        .doesNotContainKey("reviewedBy")
-        .doesNotContainKey("reviewedAt")
-        .doesNotContainKey("reviewComment");
-    // 时间值由 record 承载。
-    assertThat(response.approval().requestedAt()).isEqualTo(Instant.parse("2026-07-11T02:00:00Z"));
-  }
+        assertThat(back)
+                .containsOnlyKeys("releaseId", "tenantId", "configType", "configKey", "configStatus", "approval");
+        Map<String, Object> approval = mapper.convertValue(back.get("approval"), new TypeReference<>() {});
+        assertThat(approval)
+                .containsEntry("approvalStatus", "PENDING")
+                .containsKey("requestedAt")
+                .doesNotContainKey("reviewedBy")
+                .doesNotContainKey("reviewedAt")
+                .doesNotContainKey("reviewComment");
+        // 时间值由 record 承载。
+        assertThat(response.approval().requestedAt()).isEqualTo(Instant.parse("2026-07-11T02:00:00Z"));
+    }
 
-  @Test
-  @DisplayName("审批明细:无审批时保留显式空值键, 序列化后仍是空值")
-  void shouldKeepExplicitNullApproval_whenApprovalAbsent() throws Exception {
-    ConsoleConfigApprovalDetailResponse response =
-        new ConsoleConfigApprovalDetailResponse(7L, "ta", "JOB", "job-a", "DRAFT", null);
-    Map<String, Object> back = roundTrip(response);
-    assertThat(back).containsKey("approval").containsEntry("approval", null);
-  }
+    @Test
+    @DisplayName("审批明细:无审批时保留显式空值键, 序列化后仍是空值")
+    void shouldKeepExplicitNullApproval_whenApprovalAbsent() throws Exception {
+        ConsoleConfigApprovalDetailResponse response =
+                new ConsoleConfigApprovalDetailResponse(7L, "ta", "JOB", "job-a", "DRAFT", null);
+        Map<String, Object> back = roundTrip(response);
+        assertThat(back).containsKey("approval").containsEntry("approval", null);
+    }
 
-  @Test
-  @DisplayName("Worker 一致性:分组内空的分组名键被省略, 外层计数保留")
-  void shouldOmitNullWorkerGroupKey_whenSerializingWorkerConsistency() throws Exception {
-    var group = new ConsoleWorkerConsistencyResponse.WorkerGroupCapacity(
-        null, 2L, 1L, null, null, null, null, null);
-    var response = ConsoleWorkerConsistencyResponse.builder()
-        .onlineWorkers(3L)
-        .healthy(true)
-        .workerGroups(List.of(group))
-        .build();
+    @Test
+    @DisplayName("Worker 一致性:分组内空的分组名键被省略, 外层计数保留")
+    void shouldOmitNullWorkerGroupKey_whenSerializingWorkerConsistency() throws Exception {
+        var group =
+                new ConsoleWorkerConsistencyResponse.WorkerGroupCapacity(null, 2L, 1L, null, null, null, null, null);
+        var response = ConsoleWorkerConsistencyResponse.builder()
+                .onlineWorkers(3L)
+                .healthy(true)
+                .workerGroups(List.of(group))
+                .build();
 
-    Map<String, Object> back = roundTrip(response);
-    Map<String, Object> group0 =
-        mapper.convertValue(((List<?>) back.get("workerGroups")).get(0), new TypeReference<>() {});
-    assertThat(group0).doesNotContainKey("workerGroup").containsEntry("totalWorkers", 2);
-    assertThat(back).containsEntry("onlineWorkers", 3).containsEntry("healthy", true);
-  }
+        Map<String, Object> back = roundTrip(response);
+        Map<String, Object> group0 =
+                mapper.convertValue(((List<?>) back.get("workerGroups")).get(0), new TypeReference<>() {});
+        assertThat(group0).doesNotContainKey("workerGroup").containsEntry("totalWorkers", 2);
+        assertThat(back).containsEntry("onlineWorkers", 3).containsEntry("healthy", true);
+    }
 
-  @Test
-  @DisplayName("实例诊断:摘要结构化并保留显式空键, 动态证据原样透传")
-  void shouldTypeSummaryAndKeepDynamicEvidence_whenSerializingInstanceDiagnosis() throws Exception {
-    var instance = ConsoleInstanceDiagnosisResponse.InstanceSummary.builder()
-        .id(9L)
-        .instanceNo("INS-9")
-        .jobCode("JOB_A")
-        .instanceStatus("RUNNING")
-        .build();
-    var summary = new ConsoleInstanceDiagnosisResponse.DiagnosisSummary(
-        List.of(new ConsoleInstanceDiagnosisResponse.StatusCount("RUNNING", 2L)),
-        List.of(),
-        List.of(new ConsoleInstanceDiagnosisResponse.OutboxStatusCount(
-            "NEW", 1L, Instant.parse("2026-07-11T02:00:00Z"), null)),
-        3L);
-    var finding = new ConsoleInstanceDiagnosisResponse.Finding(
-        "WARN",
-        "NO_ONLINE_WORKER_FOR_GROUP",
-        "msg",
-        List.of("do x"),
-        Map.of("workerGroup", "grp-1", "activeTasks", 5L));
-    var response =
-        new ConsoleInstanceDiagnosisResponse("ta", 9L, false, instance, summary, List.of(finding));
-    Map<String, Object> back = roundTrip(response);
+    @Test
+    @DisplayName("实例诊断:摘要结构化并保留显式空键, 动态证据原样透传")
+    void shouldTypeSummaryAndKeepDynamicEvidence_whenSerializingInstanceDiagnosis() throws Exception {
+        var instance = ConsoleInstanceDiagnosisResponse.InstanceSummary.builder()
+                .id(9L)
+                .instanceNo("INS-9")
+                .jobCode("JOB_A")
+                .instanceStatus("RUNNING")
+                .build();
+        var summary = new ConsoleInstanceDiagnosisResponse.DiagnosisSummary(
+                List.of(new ConsoleInstanceDiagnosisResponse.StatusCount("RUNNING", 2L)),
+                List.of(),
+                List.of(new ConsoleInstanceDiagnosisResponse.OutboxStatusCount(
+                        "NEW", 1L, Instant.parse("2026-07-11T02:00:00Z"), null)),
+                3L);
+        var finding = new ConsoleInstanceDiagnosisResponse.Finding(
+                "WARN",
+                "NO_ONLINE_WORKER_FOR_GROUP",
+                "msg",
+                List.of("do x"),
+                Map.of("workerGroup", "grp-1", "activeTasks", 5L));
+        var response = new ConsoleInstanceDiagnosisResponse("ta", 9L, false, instance, summary, List.of(finding));
+        Map<String, Object> back = roundTrip(response);
 
-    Map<String, Object> backInstance =
-        mapper.convertValue(back.get("instance"), new TypeReference<>() {});
-    assertThat(backInstance).containsKey("queueCode").containsEntry("queueCode", null);
-    assertThat(backInstance).containsEntry("instanceNo", "INS-9");
+        Map<String, Object> backInstance = mapper.convertValue(back.get("instance"), new TypeReference<>() {});
+        assertThat(backInstance).containsKey("queueCode").containsEntry("queueCode", null);
+        assertThat(backInstance).containsEntry("instanceNo", "INS-9");
 
-    Map<String, Object> backSummary =
-        mapper.convertValue(back.get("summary"), new TypeReference<>() {});
-    Map<String, Object> outbox0 = mapper.convertValue(
-        ((List<?>) backSummary.get("outboxStatusCounts")).get(0), new TypeReference<>() {});
-    // 可空时间字段 newest 不应出现在序列化结果中。
-    assertThat(outbox0).containsKeys("status", "count", "oldest").doesNotContainKey("newest");
-    assertThat(outbox0).containsEntry("status", "NEW").containsEntry("count", 1);
+        Map<String, Object> backSummary = mapper.convertValue(back.get("summary"), new TypeReference<>() {});
+        Map<String, Object> outbox0 =
+                mapper.convertValue(((List<?>) backSummary.get("outboxStatusCounts")).get(0), new TypeReference<>() {});
+        // 可空时间字段 newest 不应出现在序列化结果中。
+        assertThat(outbox0).containsKeys("status", "count", "oldest").doesNotContainKey("newest");
+        assertThat(outbox0).containsEntry("status", "NEW").containsEntry("count", 1);
 
-    Map<String, Object> backFinding =
-        mapper.convertValue(((List<?>) back.get("findings")).get(0), new TypeReference<>() {});
-    assertThat(backFinding)
-        .containsKeys("severity", "reasonCode", "message", "suggestedActions", "evidence");
-    Map<String, Object> evidence =
-        mapper.convertValue(backFinding.get("evidence"), new TypeReference<>() {});
-    assertThat(evidence).containsEntry("workerGroup", "grp-1").containsEntry("activeTasks", 5);
-  }
+        Map<String, Object> backFinding =
+                mapper.convertValue(((List<?>) back.get("findings")).get(0), new TypeReference<>() {});
+        assertThat(backFinding).containsKeys("severity", "reasonCode", "message", "suggestedActions", "evidence");
+        Map<String, Object> evidence = mapper.convertValue(backFinding.get("evidence"), new TypeReference<>() {});
+        assertThat(evidence).containsEntry("workerGroup", "grp-1").containsEntry("activeTasks", 5);
+    }
 
-  @Test
-  @DisplayName("消费积压:正常, 无积压与出错三种形态的键集合各自保持不变")
-  void shouldPreserveNormalAndErrorShapes_whenSerializingKafkaConsumerLag() throws Exception {
-    Map<String, Object> normal = new LinkedHashMap<>();
-    normal.put("groupId", "batch-a");
-    normal.put("totalLag", 5L);
-    normal.put("partitionCount", 2);
-    normal.put(
-        "partitionsWithLag",
-        List.of(Map.of(
-            "topic", "t1", "partition", 0, "committedOffset", 10L, "endOffset", 15L, "lag", 5L)));
+    @Test
+    @DisplayName("消费积压:正常, 无积压与出错三种形态的键集合各自保持不变")
+    void shouldPreserveNormalAndErrorShapes_whenSerializingKafkaConsumerLag() throws Exception {
+        Map<String, Object> normal = new LinkedHashMap<>();
+        normal.put("groupId", "batch-a");
+        normal.put("totalLag", 5L);
+        normal.put("partitionCount", 2);
+        normal.put(
+                "partitionsWithLag",
+                List.of(Map.of("topic", "t1", "partition", 0, "committedOffset", 10L, "endOffset", 15L, "lag", 5L)));
 
-    Map<String, Object> normalBack = roundTrip(
-        mapper.readValue(mapper.writeValueAsString(normal), ConsoleKafkaConsumerLagResponse.class));
-    assertThat(normalBack)
-        .containsOnlyKeys("groupId", "totalLag", "partitionCount", "partitionsWithLag")
-        .doesNotContainKey("error");
-    assertThat(normalBack).containsEntry("totalLag", 5).containsEntry("partitionCount", 2);
+        Map<String, Object> normalBack =
+                roundTrip(mapper.readValue(mapper.writeValueAsString(normal), ConsoleKafkaConsumerLagResponse.class));
+        assertThat(normalBack)
+                .containsOnlyKeys("groupId", "totalLag", "partitionCount", "partitionsWithLag")
+                .doesNotContainKey("error");
+        assertThat(normalBack).containsEntry("totalLag", 5).containsEntry("partitionCount", 2);
 
-    // 无积压组：不含 partitionsWithLag 键。
-    Map<String, Object> noLag = new LinkedHashMap<>();
-    noLag.put("groupId", "batch-b");
-    noLag.put("totalLag", 0L);
-    noLag.put("partitionCount", 1);
-    Map<String, Object> noLagBack = roundTrip(
-        mapper.readValue(mapper.writeValueAsString(noLag), ConsoleKafkaConsumerLagResponse.class));
-    assertThat(noLagBack)
-        .containsOnlyKeys("groupId", "totalLag", "partitionCount")
-        .doesNotContainKey("partitionsWithLag");
+        // 无积压组：不含 partitionsWithLag 键。
+        Map<String, Object> noLag = new LinkedHashMap<>();
+        noLag.put("groupId", "batch-b");
+        noLag.put("totalLag", 0L);
+        noLag.put("partitionCount", 1);
+        Map<String, Object> noLagBack =
+                roundTrip(mapper.readValue(mapper.writeValueAsString(noLag), ConsoleKafkaConsumerLagResponse.class));
+        assertThat(noLagBack)
+                .containsOnlyKeys("groupId", "totalLag", "partitionCount")
+                .doesNotContainKey("partitionsWithLag");
 
-    // 出错条目：仅 {groupId,error}。
-    Map<String, Object> error = new LinkedHashMap<>();
-    error.put("groupId", "batch-c");
-    error.put("error", "boom");
-    Map<String, Object> errorBack = roundTrip(
-        mapper.readValue(mapper.writeValueAsString(error), ConsoleKafkaConsumerLagResponse.class));
-    assertThat(errorBack).containsOnlyKeys("groupId", "error").containsEntry("error", "boom");
-  }
+        // 出错条目：仅 {groupId,error}。
+        Map<String, Object> error = new LinkedHashMap<>();
+        error.put("groupId", "batch-c");
+        error.put("error", "boom");
+        Map<String, Object> errorBack =
+                roundTrip(mapper.readValue(mapper.writeValueAsString(error), ConsoleKafkaConsumerLagResponse.class));
+        assertThat(errorBack).containsOnlyKeys("groupId", "error").containsEntry("error", "boom");
+    }
 
-  @Test
-  @DisplayName("取证导出:空下载地址键保留, 文件大小按数值回填")
-  void shouldKeepNullDownloadUrlKey_whenSerializingForensicExport() throws Exception {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("exportId", "exp-1");
-    row.put("status", "COMPLETED");
-    row.put("storagePath", "/tmp/exp-1.zip");
-    row.put("fileSizeBytes", 2048L);
-    row.put("sha256", "abc");
-    row.put("downloadUrl", null);
+    @Test
+    @DisplayName("取证导出:空下载地址键保留, 文件大小按数值回填")
+    void shouldKeepNullDownloadUrlKey_whenSerializingForensicExport() throws Exception {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("exportId", "exp-1");
+        row.put("status", "COMPLETED");
+        row.put("storagePath", "/tmp/exp-1.zip");
+        row.put("fileSizeBytes", 2048L);
+        row.put("sha256", "abc");
+        row.put("downloadUrl", null);
 
-    Map<String, Object> back = roundTrip(
-        mapper.readValue(mapper.writeValueAsString(row), ConsoleForensicExportResponse.class));
-    assertThat(back)
-        .containsKeys(
-            "exportId", "status", "storagePath", "fileSizeBytes", "sha256", "downloadUrl");
-    assertThat(back).containsEntry("downloadUrl", null).containsEntry("fileSizeBytes", 2048);
-  }
+        Map<String, Object> back =
+                roundTrip(mapper.readValue(mapper.writeValueAsString(row), ConsoleForensicExportResponse.class));
+        assertThat(back).containsKeys("exportId", "status", "storagePath", "fileSizeBytes", "sha256", "downloadUrl");
+        assertThat(back).containsEntry("downloadUrl", null).containsEntry("fileSizeBytes", 2048);
+    }
 
-  @Test
-  @DisplayName("调度锁状态:嵌套锁条目的时间与标识字段完整保留")
-  void shouldTypeNestedLockEntries_whenSerializingShedLockStatus() throws Exception {
-    var lock = new ConsoleShedLockStatusResponse.LockEntry(
-        "job-scheduler",
-        Instant.parse("2026-07-11T02:05:00Z"),
-        Instant.parse("2026-07-11T02:00:00Z"),
-        "node-1");
-    var response = new ConsoleShedLockStatusResponse(1, 1L, List.of(lock));
+    @Test
+    @DisplayName("调度锁状态:嵌套锁条目的时间与标识字段完整保留")
+    void shouldTypeNestedLockEntries_whenSerializingShedLockStatus() throws Exception {
+        var lock = new ConsoleShedLockStatusResponse.LockEntry(
+                "job-scheduler",
+                Instant.parse("2026-07-11T02:05:00Z"),
+                Instant.parse("2026-07-11T02:00:00Z"),
+                "node-1");
+        var response = new ConsoleShedLockStatusResponse(1, 1L, List.of(lock));
 
-    Map<String, Object> back = roundTrip(response);
-    assertThat(back).containsEntry("totalLocks", 1).containsEntry("activeLocks", 1);
-    Map<String, Object> lock0 =
-        mapper.convertValue(((List<?>) back.get("locks")).get(0), new TypeReference<>() {});
-    assertThat(lock0)
-        .containsKeys("name", "lockUntil", "lockedAt", "lockedBy")
-        .containsEntry("name", "job-scheduler")
-        .containsEntry("lockedBy", "node-1");
-  }
+        Map<String, Object> back = roundTrip(response);
+        assertThat(back).containsEntry("totalLocks", 1).containsEntry("activeLocks", 1);
+        Map<String, Object> lock0 = mapper.convertValue(((List<?>) back.get("locks")).get(0), new TypeReference<>() {});
+        assertThat(lock0)
+                .containsKeys("name", "lockUntil", "lockedAt", "lockedBy")
+                .containsEntry("name", "job-scheduler")
+                .containsEntry("lockedBy", "node-1");
+    }
 
-  private Map<String, Object> roundTrip(Object value) throws Exception {
-    return mapper.readValue(mapper.writeValueAsString(value), new TypeReference<>() {});
-  }
+    private Map<String, Object> roundTrip(Object value) throws Exception {
+        return mapper.readValue(mapper.writeValueAsString(value), new TypeReference<>() {});
+    }
 }

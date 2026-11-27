@@ -51,199 +51,189 @@ import org.springframework.stereotype.Component;
 @Component
 public class AlertmanagerEmitPublisher {
 
-  /** 超出核心数的告警发送线程空闲回收秒数。 */
-  private static final long EMIT_KEEP_ALIVE_SECONDS = 30L;
+    /** 超出核心数的告警发送线程空闲回收秒数。 */
+    private static final long EMIT_KEEP_ALIVE_SECONDS = 30L;
 
-  /** 待发送告警队列容量，队列满后按拒绝策略处理。 */
-  private static final int EMIT_QUEUE_CAPACITY = 512;
+    /** 待发送告警队列容量，队列满后按拒绝策略处理。 */
+    private static final int EMIT_QUEUE_CAPACITY = 512;
 
-  private static final String METRIC = "batch.alert.am_emit";
-  private static final String ALERTS_PATH = "/api/v2/alerts";
+    private static final String METRIC = "batch.alert.am_emit";
+    private static final String ALERTS_PATH = "/api/v2/alerts";
 
-  private final AlertmanagerEmitProperties props;
-  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private final OutboundHttpTransport httpTransport;
-  private final ExecutorService executor;
-  private final String alertsUri;
+    private final AlertmanagerEmitProperties props;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    private final OutboundHttpTransport httpTransport;
+    private final ExecutorService executor;
+    private final String alertsUri;
 
-  public AlertmanagerEmitPublisher(
-      AlertmanagerEmitProperties props,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
-    this.props = props;
-    this.meterRegistryProvider = meterRegistryProvider;
-    this.httpTransport = httpTransport;
-    if (props.isEnabled() && Texts.hasText(props.getEndpoint())) {
-      ThreadPoolExecutor pool = new ThreadPoolExecutor(
-          1,
-          Math.max(1, props.getEmitThreads()),
-          EMIT_KEEP_ALIVE_SECONDS,
-          TimeUnit.SECONDS,
-          new LinkedBlockingQueue<>(EMIT_QUEUE_CAPACITY),
-          r -> {
-            Thread t = new Thread(r, "am-emit");
-            t.setDaemon(true);
-            return t;
-          },
-          new ThreadPoolExecutor.AbortPolicy());
-      this.executor = pool;
-      this.alertsUri = stripTrailingSlash(props.getEndpoint()) + ALERTS_PATH;
-      String endpointForLog = props.getEndpoint();
-      String sanitizedEndpoint = SecretMasking.maskEndpoint(endpointForLog);
-      log.info("AlertmanagerEmitPublisher enabled: endpoint={}", sanitizedEndpoint);
-    } else {
-      this.executor = null;
-      this.alertsUri = null;
-      log.info("AlertmanagerEmitPublisher disabled (am-emit.enabled=false or endpoint blank)");
-    }
-  }
-
-  /** 是否已启用（供 re-emit 调度器短路判断）。 */
-  public boolean isEnabled() {
-    return executor != null;
-  }
-
-  /** 推一条 firing 告警（disabled / null → no-op）。 */
-  public void publishFiring(AlertEventEntity entity) {
-    if (EmptyChecks.isNotNull(entity) && "CLOSED".equals(entity.getStatus())) {
-      return;
-    }
-    publish(entity, false);
-  }
-
-  /** 重发已持久化的关闭意图；最终渠道回执另行确认，不把入队当作送达。 */
-  public void publishResolved(AlertEventEntity entity) {
-    if (EmptyChecks.isNull(entity)
-        || EmptyChecks.isNull(entity.getClosedAt())
-        || !"CLOSED".equals(entity.getStatus())) {
-      return;
-    }
-    publish(entity, true);
-  }
-
-  private void publish(AlertEventEntity entity, boolean resolved) {
-    if (executor == null || entity == null) {
-      return;
-    }
-    try {
-      executor.execute(() -> sendQuietly(entity, resolved));
-    } catch (RejectedExecutionException ex) {
-      recordEmitMetric("rejected");
-      SwallowedExceptionLogger.info(
-          AlertmanagerEmitPublisher.class, "catch:RejectedExecutionException", ex);
-    }
-  }
-
-  /** 停机时优雅关闭线程池:停收新任务 + 有限等待 drain 已入队的 POST,超时才强制中断(不裸丢队列)。 */
-  @PreDestroy
-  public void shutdown() {
-    if (executor == null) {
-      return;
-    }
-    executor.shutdown();
-    try {
-      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        log.warn(
-            "AlertmanagerEmitPublisher executor did not drain within 5s; forcing interruption");
-        executor.shutdownNow();
-      }
-    } catch (InterruptedException e) {
-      SwallowedExceptionLogger.info(
-          AlertmanagerEmitPublisher.class, "catch:InterruptedException", e);
-      executor.shutdownNow();
-      Thread.currentThread().interrupt();
-    }
-  }
-
-  private void sendQuietly(AlertEventEntity entity, boolean resolved) {
-    try {
-      Map<String, Object> alert =
-          resolved ? buildResolvedAlert(entity) : buildPostableAlert(entity);
-      List<Map<String, Object>> alerts = List.of(alert);
-      String body = JsonUtils.toJson(alerts);
-      Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMillis());
-      Duration requestTimeout = Duration.ofMillis(props.getTimeoutMillis());
-      OutboundHttpContent httpContent =
-          new OutboundHttpContent(body, "application/json; charset=utf-8");
-      OutboundHttpRequest request = OutboundHttpRequest.post(
-          alertsUri,
-          Map.of(),
-          httpContent,
-          connectTimeout,
-          requestTimeout,
-          OutboundAddressPolicy.TRUSTED);
-      OutboundHttpResponse response = httpTransport.execute(request);
-      if (response.isSuccessful()) {
-        recordEmitMetric("success");
-      } else {
-        recordEmitMetric("http_error");
-        log.warn(
-            "am_emit non-2xx: status={} alertType={}",
-            response.statusCode(),
-            entity.getAlertType());
-      }
-    } catch (RuntimeException | IOException ex) {
-      recordEmitMetric("failed");
-      SwallowedExceptionLogger.warn(AlertmanagerEmitPublisher.class, "catch:am_emit", ex);
-    }
-  }
-
-  /**
-   * 把 alert_event 行映射成 AM PostableAlert（labels + annotations + startsAt）。
-   *
-   * <p>fingerprint label 区分告警实体，不加入 group_by；通知仍按低基数枚举分组。
-   * resource_key / trace_id / alert_id 留在 annotations。不带 endsAt = firing。
-   */
-  Map<String, Object> buildPostableAlert(AlertEventEntity entity) {
-    // 与 close 桥接的 resolved 共用同一套规范 label 集(AlertLabels.canonicalLabels),保证 firing/resolved
-    // label 集严格一致,否则 AM 匹配不到原 firing(见 canonicalLabels javadoc)。
-    Map<String, String> labels = AlertLabels.canonicalLabels(entity);
-
-    Map<String, String> annotations = new LinkedHashMap<>();
-    if (Texts.hasText(entity.getTitle())) {
-      annotations.put("summary", entity.getTitle());
-    }
-    if (Texts.hasText(entity.getDetailJson())) {
-      annotations.put("description", entity.getDetailJson());
-    }
-    if (Texts.hasText(entity.getTraceId())) {
-      annotations.put("trace_id", entity.getTraceId());
-    }
-    if (entity.getDedupFingerprint() != null) {
-      annotations.put("fingerprint", entity.getDedupFingerprint());
-    }
-    if (entity.getId() != null) {
-      annotations.put("alert_id", String.valueOf(entity.getId()));
+    public AlertmanagerEmitPublisher(
+            AlertmanagerEmitProperties props,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
+        this.props = props;
+        this.meterRegistryProvider = meterRegistryProvider;
+        this.httpTransport = httpTransport;
+        if (props.isEnabled() && Texts.hasText(props.getEndpoint())) {
+            ThreadPoolExecutor pool = new ThreadPoolExecutor(
+                    1,
+                    Math.max(1, props.getEmitThreads()),
+                    EMIT_KEEP_ALIVE_SECONDS,
+                    TimeUnit.SECONDS,
+                    new LinkedBlockingQueue<>(EMIT_QUEUE_CAPACITY),
+                    r -> {
+                        Thread t = new Thread(r, "am-emit");
+                        t.setDaemon(true);
+                        return t;
+                    },
+                    new ThreadPoolExecutor.AbortPolicy());
+            this.executor = pool;
+            this.alertsUri = stripTrailingSlash(props.getEndpoint()) + ALERTS_PATH;
+            String endpointForLog = props.getEndpoint();
+            String sanitizedEndpoint = SecretMasking.maskEndpoint(endpointForLog);
+            log.info("AlertmanagerEmitPublisher enabled: endpoint={}", sanitizedEndpoint);
+        } else {
+            this.executor = null;
+            this.alertsUri = null;
+            log.info("AlertmanagerEmitPublisher disabled (am-emit.enabled=false or endpoint blank)");
+        }
     }
 
-    Map<String, Object> alert = new LinkedHashMap<>();
-    alert.put("labels", labels);
-    alert.put("annotations", annotations);
-    // startsAt 用首次/最近观测时间；缺失则由 AM 以接收时刻兜底。不带 endsAt = firing。
-    if (entity.getFirstSeenAt() != null) {
-      alert.put("startsAt", entity.getFirstSeenAt().toString());
-    } else if (entity.getLastSeenAt() != null) {
-      alert.put("startsAt", entity.getLastSeenAt().toString());
+    /** 是否已启用（供 re-emit 调度器短路判断）。 */
+    public boolean isEnabled() {
+        return executor != null;
     }
-    return alert;
-  }
 
-  /** 发生和恢复共用标签与首次时间；恢复时间使用持久意图，不随重试推进。 */
-  Map<String, Object> buildResolvedAlert(AlertEventEntity entity) {
-    Map<String, Object> alert = buildPostableAlert(entity);
-    alert.put("endsAt", entity.getClosedAt().toString());
-    return alert;
-  }
-
-  private static String stripTrailingSlash(String url) {
-    return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
-  }
-
-  private void recordEmitMetric(String outcome) {
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry == null) {
-      return;
+    /** 推一条 firing 告警（disabled / null → no-op）。 */
+    public void publishFiring(AlertEventEntity entity) {
+        if (EmptyChecks.isNotNull(entity) && "CLOSED".equals(entity.getStatus())) {
+            return;
+        }
+        publish(entity, false);
     }
-    Counter.builder(METRIC).tags(Tags.of("outcome", outcome)).register(registry).increment();
-  }
+
+    /** 重发已持久化的关闭意图；最终渠道回执另行确认，不把入队当作送达。 */
+    public void publishResolved(AlertEventEntity entity) {
+        if (EmptyChecks.isNull(entity)
+                || EmptyChecks.isNull(entity.getClosedAt())
+                || !"CLOSED".equals(entity.getStatus())) {
+            return;
+        }
+        publish(entity, true);
+    }
+
+    private void publish(AlertEventEntity entity, boolean resolved) {
+        if (executor == null || entity == null) {
+            return;
+        }
+        try {
+            executor.execute(() -> sendQuietly(entity, resolved));
+        } catch (RejectedExecutionException ex) {
+            recordEmitMetric("rejected");
+            SwallowedExceptionLogger.info(AlertmanagerEmitPublisher.class, "catch:RejectedExecutionException", ex);
+        }
+    }
+
+    /** 停机时优雅关闭线程池:停收新任务 + 有限等待 drain 已入队的 POST,超时才强制中断(不裸丢队列)。 */
+    @PreDestroy
+    public void shutdown() {
+        if (executor == null) {
+            return;
+        }
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("AlertmanagerEmitPublisher executor did not drain within 5s; forcing interruption");
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            SwallowedExceptionLogger.info(AlertmanagerEmitPublisher.class, "catch:InterruptedException", e);
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void sendQuietly(AlertEventEntity entity, boolean resolved) {
+        try {
+            Map<String, Object> alert = resolved ? buildResolvedAlert(entity) : buildPostableAlert(entity);
+            List<Map<String, Object>> alerts = List.of(alert);
+            String body = JsonUtils.toJson(alerts);
+            Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMillis());
+            Duration requestTimeout = Duration.ofMillis(props.getTimeoutMillis());
+            OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/json; charset=utf-8");
+            OutboundHttpRequest request = OutboundHttpRequest.post(
+                    alertsUri, Map.of(), httpContent, connectTimeout, requestTimeout, OutboundAddressPolicy.TRUSTED);
+            OutboundHttpResponse response = httpTransport.execute(request);
+            if (response.isSuccessful()) {
+                recordEmitMetric("success");
+            } else {
+                recordEmitMetric("http_error");
+                log.warn("am_emit non-2xx: status={} alertType={}", response.statusCode(), entity.getAlertType());
+            }
+        } catch (RuntimeException | IOException ex) {
+            recordEmitMetric("failed");
+            SwallowedExceptionLogger.warn(AlertmanagerEmitPublisher.class, "catch:am_emit", ex);
+        }
+    }
+
+    /**
+     * 把 alert_event 行映射成 AM PostableAlert（labels + annotations + startsAt）。
+     *
+     * <p>fingerprint label 区分告警实体，不加入 group_by；通知仍按低基数枚举分组。
+     * resource_key / trace_id / alert_id 留在 annotations。不带 endsAt = firing。
+     */
+    Map<String, Object> buildPostableAlert(AlertEventEntity entity) {
+        // 与 close 桥接的 resolved 共用同一套规范 label 集(AlertLabels.canonicalLabels),保证 firing/resolved
+        // label 集严格一致,否则 AM 匹配不到原 firing(见 canonicalLabels javadoc)。
+        Map<String, String> labels = AlertLabels.canonicalLabels(entity);
+
+        Map<String, String> annotations = new LinkedHashMap<>();
+        if (Texts.hasText(entity.getTitle())) {
+            annotations.put("summary", entity.getTitle());
+        }
+        if (Texts.hasText(entity.getDetailJson())) {
+            annotations.put("description", entity.getDetailJson());
+        }
+        if (Texts.hasText(entity.getTraceId())) {
+            annotations.put("trace_id", entity.getTraceId());
+        }
+        if (entity.getDedupFingerprint() != null) {
+            annotations.put("fingerprint", entity.getDedupFingerprint());
+        }
+        if (entity.getId() != null) {
+            annotations.put("alert_id", String.valueOf(entity.getId()));
+        }
+
+        Map<String, Object> alert = new LinkedHashMap<>();
+        alert.put("labels", labels);
+        alert.put("annotations", annotations);
+        // startsAt 用首次/最近观测时间；缺失则由 AM 以接收时刻兜底。不带 endsAt = firing。
+        if (entity.getFirstSeenAt() != null) {
+            alert.put("startsAt", entity.getFirstSeenAt().toString());
+        } else if (entity.getLastSeenAt() != null) {
+            alert.put("startsAt", entity.getLastSeenAt().toString());
+        }
+        return alert;
+    }
+
+    /** 发生和恢复共用标签与首次时间；恢复时间使用持久意图，不随重试推进。 */
+    Map<String, Object> buildResolvedAlert(AlertEventEntity entity) {
+        Map<String, Object> alert = buildPostableAlert(entity);
+        alert.put("endsAt", entity.getClosedAt().toString());
+        return alert;
+    }
+
+    private static String stripTrailingSlash(String url) {
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
+    private void recordEmitMetric(String outcome) {
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry == null) {
+            return;
+        }
+        Counter.builder(METRIC)
+                .tags(Tags.of("outcome", outcome))
+                .register(registry)
+                .increment();
+    }
 }

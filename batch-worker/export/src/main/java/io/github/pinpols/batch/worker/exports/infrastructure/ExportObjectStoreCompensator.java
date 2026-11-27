@@ -14,14 +14,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExportObjectStoreCompensator extends AbstractObjectStoreRunCompensator {
 
-  public ExportObjectStoreCompensator(
-      PlatformFileRecordRepository fileRecords,
-      ObjectProvider<BatchObjectStore> objectStoreProvider) {
-    super(fileRecords, objectStoreProvider);
-  }
+    public ExportObjectStoreCompensator(
+            PlatformFileRecordRepository fileRecords, ObjectProvider<BatchObjectStore> objectStoreProvider) {
+        super(fileRecords, objectStoreProvider);
+    }
 
-  @Override
-  public String pipelineType() {
-    return ExportWorkerType.EXPORT;
-  }
+    @Override
+    public String pipelineType() {
+        return ExportWorkerType.EXPORT;
+    }
 }

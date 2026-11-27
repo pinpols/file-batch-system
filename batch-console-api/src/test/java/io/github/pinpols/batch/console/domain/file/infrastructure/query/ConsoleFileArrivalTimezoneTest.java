@@ -28,37 +28,35 @@ import org.mockito.ArgumentCaptor;
 
 @DisplayName("今日到达查询:业务时区自然日")
 class ConsoleFileArrivalTimezoneTest {
-  @ParameterizedTest
-  @CsvSource({
-    "2026-03-08T12:00:00Z, 2026-03-08T05:00:00Z, 2026-03-09T03:59:59.999999Z",
-    "2026-11-01T12:00:00Z, 2026-11-01T04:00:00Z, 2026-11-02T04:59:59.999999Z"
-  })
-  @DisplayName("夏令时切换日以当地两个午夜构造创建时间边界")
-  void shouldUseLocalMidnightsOnDaylightSavingTransition(
-      String now, String expectedStart, String expectedEnd) {
-    BatchTimezoneProperties properties = new BatchTimezoneProperties();
-    properties.setDefaultZone("America/New_York");
-    BatchDateTimeSupport clock = new BatchDateTimeSupport(
-        Clock.fixed(Instant.parse(now), ZoneOffset.UTC), new BatchTimezoneProvider(properties));
-    FileRecordMapper mapper = mock(FileRecordMapper.class);
-    when(mapper.selectByQuery(any())).thenReturn(List.of());
-    ConsoleFileQueryMappers mappers =
-        new ConsoleFileQueryMappers(mapper, null, null, null, null, null, null, null);
-    TenantIdResolver tenantResolver = ignored -> "tenant-a";
-    ConsoleFileQueryService service = new ConsoleFileQueryService(
-        tenantResolver,
-        mappers,
-        mock(BatchSecurityProperties.class),
-        mock(LocalizedErrorRenderer.class),
-        mock(ConsoleOrchestratorPort.class),
-        clock);
-    FileChainQueryRequest request = new FileChainQueryRequest();
-    request.setArrivalToday(true);
-    service.fileChains(request);
-    ArgumentCaptor<FileRecordQuery> captured = ArgumentCaptor.forClass(FileRecordQuery.class);
-    verify(mapper).selectByQuery(captured.capture());
-    assertThat(captured.getValue().fromTime()).isEqualTo(Instant.parse(expectedStart));
-    assertThat(captured.getValue().toTime()).isEqualTo(Instant.parse(expectedEnd));
-    verify(mapper).countByQuery(captured.getValue());
-  }
+    @ParameterizedTest
+    @CsvSource({
+        "2026-03-08T12:00:00Z, 2026-03-08T05:00:00Z, 2026-03-09T03:59:59.999999Z",
+        "2026-11-01T12:00:00Z, 2026-11-01T04:00:00Z, 2026-11-02T04:59:59.999999Z"
+    })
+    @DisplayName("夏令时切换日以当地两个午夜构造创建时间边界")
+    void shouldUseLocalMidnightsOnDaylightSavingTransition(String now, String expectedStart, String expectedEnd) {
+        BatchTimezoneProperties properties = new BatchTimezoneProperties();
+        properties.setDefaultZone("America/New_York");
+        BatchDateTimeSupport clock = new BatchDateTimeSupport(
+                Clock.fixed(Instant.parse(now), ZoneOffset.UTC), new BatchTimezoneProvider(properties));
+        FileRecordMapper mapper = mock(FileRecordMapper.class);
+        when(mapper.selectByQuery(any())).thenReturn(List.of());
+        ConsoleFileQueryMappers mappers = new ConsoleFileQueryMappers(mapper, null, null, null, null, null, null, null);
+        TenantIdResolver tenantResolver = ignored -> "tenant-a";
+        ConsoleFileQueryService service = new ConsoleFileQueryService(
+                tenantResolver,
+                mappers,
+                mock(BatchSecurityProperties.class),
+                mock(LocalizedErrorRenderer.class),
+                mock(ConsoleOrchestratorPort.class),
+                clock);
+        FileChainQueryRequest request = new FileChainQueryRequest();
+        request.setArrivalToday(true);
+        service.fileChains(request);
+        ArgumentCaptor<FileRecordQuery> captured = ArgumentCaptor.forClass(FileRecordQuery.class);
+        verify(mapper).selectByQuery(captured.capture());
+        assertThat(captured.getValue().fromTime()).isEqualTo(Instant.parse(expectedStart));
+        assertThat(captured.getValue().toTime()).isEqualTo(Instant.parse(expectedEnd));
+        verify(mapper).countByQuery(captured.getValue());
+    }
 }

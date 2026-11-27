@@ -13,22 +13,22 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.webhook.relay")
 public class WebhookRelayProperties {
 
-  /** Relay 轮询间隔(ms)。默认 60 000(1 分钟)。 */
-  private long pollIntervalMillis = 60_000L;
+    /** Relay 轮询间隔(ms)。默认 60 000(1 分钟)。 */
+    private long pollIntervalMillis = 60_000L;
 
-  /** 单批最多扫多少条 retry 记录。默认 50。 */
-  private int batchSize = 50;
+    /** 单批最多扫多少条 retry 记录。默认 50。 */
+    private int batchSize = 50;
 
-  /**
-   * Relay 端绝对最大重试次数(含 dispatcher 的 burst attempts)。默认 8 = dispatcher 3 + relay 5。 达到该值标 GIVE_UP +
-   * 报警。
-   */
-  private int absoluteMaxAttempts = 8;
+    /**
+     * Relay 端绝对最大重试次数(含 dispatcher 的 burst attempts)。默认 8 = dispatcher 3 + relay 5。 达到该值标 GIVE_UP +
+     * 报警。
+     */
+    private int absoluteMaxAttempts = 8;
 
-  /**
-   * 单租户最多可创建的 Webhook 订阅数。默认 50。
-   *
-   * <p>订阅数直接放大 relay 的轮询与投递量；没有上限时租户用户可无界创建，导致投递队列与库表膨胀。
-   */
-  private int maxSubscriptionsPerTenant = 50;
+    /**
+     * 单租户最多可创建的 Webhook 订阅数。默认 50。
+     *
+     * <p>订阅数直接放大 relay 的轮询与投递量；没有上限时租户用户可无界创建，导致投递队列与库表膨胀。
+     */
+    private int maxSubscriptionsPerTenant = 50;
 }

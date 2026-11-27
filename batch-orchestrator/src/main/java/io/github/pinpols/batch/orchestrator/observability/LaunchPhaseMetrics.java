@@ -16,49 +16,49 @@ import org.springframework.stereotype.Component;
 @Component
 public class LaunchPhaseMetrics {
 
-  private static final String METRIC_NAME = "batch.orchestrator.launch.phase.duration";
+    private static final String METRIC_NAME = "batch.orchestrator.launch.phase.duration";
 
-  private final Map<Phase, Timer> timers;
+    private final Map<Phase, Timer> timers;
 
-  public LaunchPhaseMetrics(MeterRegistry meterRegistry) {
-    EnumMap<Phase, Timer> configuredTimers = new EnumMap<>(Phase.class);
-    for (Phase phase : Phase.values()) {
-      configuredTimers.put(
-          phase,
-          Timer.builder(METRIC_NAME)
-              .description("Orchestrator launch phase duration")
-              .tag("phase", phase.metricTag())
-              .publishPercentileHistogram()
-              .register(meterRegistry));
-    }
-    this.timers = Map.copyOf(configuredTimers);
-  }
-
-  public <T> T record(Phase phase, Supplier<T> action) {
-    return timers.get(phase).record(action);
-  }
-
-  public void record(Phase phase, Runnable action) {
-    timers.get(phase).record(action);
-  }
-
-  public enum Phase {
-    VALIDATION("validation"),
-    PREPARE_TRANSACTION("prepare_transaction"),
-    DISPATCH_TRANSACTION("dispatch_transaction"),
-    PLAN_BUILD("plan_build"),
-    RESOURCE_SCHEDULE("resource_schedule"),
-    DISPATCH_MATERIALIZE("dispatch_materialize"),
-    INSTANCE_TRANSITION("instance_transition");
-
-    private final String metricTag;
-
-    Phase(String metricTag) {
-      this.metricTag = metricTag;
+    public LaunchPhaseMetrics(MeterRegistry meterRegistry) {
+        EnumMap<Phase, Timer> configuredTimers = new EnumMap<>(Phase.class);
+        for (Phase phase : Phase.values()) {
+            configuredTimers.put(
+                    phase,
+                    Timer.builder(METRIC_NAME)
+                            .description("Orchestrator launch phase duration")
+                            .tag("phase", phase.metricTag())
+                            .publishPercentileHistogram()
+                            .register(meterRegistry));
+        }
+        this.timers = Map.copyOf(configuredTimers);
     }
 
-    public String metricTag() {
-      return metricTag;
+    public <T> T record(Phase phase, Supplier<T> action) {
+        return timers.get(phase).record(action);
     }
-  }
+
+    public void record(Phase phase, Runnable action) {
+        timers.get(phase).record(action);
+    }
+
+    public enum Phase {
+        VALIDATION("validation"),
+        PREPARE_TRANSACTION("prepare_transaction"),
+        DISPATCH_TRANSACTION("dispatch_transaction"),
+        PLAN_BUILD("plan_build"),
+        RESOURCE_SCHEDULE("resource_schedule"),
+        DISPATCH_MATERIALIZE("dispatch_materialize"),
+        INSTANCE_TRANSITION("instance_transition");
+
+        private final String metricTag;
+
+        Phase(String metricTag) {
+            this.metricTag = metricTag;
+        }
+
+        public String metricTag() {
+            return metricTag;
+        }
+    }
 }

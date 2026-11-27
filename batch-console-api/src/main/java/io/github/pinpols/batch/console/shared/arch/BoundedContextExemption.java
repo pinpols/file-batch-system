@@ -20,9 +20,9 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface BoundedContextExemption {
 
-  /** 豁免原因与该依赖的业务必要性。 */
-  String reason();
+    /** 豁免原因与该依赖的业务必要性。 */
+    String reason();
 
-  /** 计划清理时间或清理条件（例如 "P1-B 拆分只读查询端点后移除"）。 */
-  String cleanupBy();
+    /** 计划清理时间或清理条件（例如 "P1-B 拆分只读查询端点后移除"）。 */
+    String cleanupBy();
 }

@@ -35,247 +35,243 @@ import org.yaml.snakeyaml.Yaml;
 @DisplayName("共享配置基线守护:基线文件的位置与类路径可达性、唯一来源键取值,以及各服务模块的配置漂移检查")
 class ConfigDriftGuardTest {
 
-  /** 基线"唯一来源"的键集合：这些键如果在模块 application.yml 里重新出现就算 drift。 */
-  private static final Set<String> OWNED_KEYS = Set.of(
-      // 全栈 UTF-8 / 优雅停机
-      "server.shutdown",
-      "server.servlet.encoding.charset",
-      "server.servlet.encoding.force",
-      "spring.messages.encoding",
-      "spring.jackson.time-zone",
-      // 平台 DB 连接元数据（驱动 / URL / 凭据；pool 配置不在此处由模块各自控制）
-      "spring.datasource.driver-class-name",
-      // Kafka 集群地址与生产者协议
-      "spring.kafka.bootstrap-servers",
-      "spring.kafka.producer.acks",
-      "spring.kafka.listener.ack-mode",
-      "spring.kafka.consumer.auto-offset-reset",
-      // Redis 通用项
-      "spring.data.redis.repositories.enabled",
-      "spring.data.redis.host",
-      "spring.data.redis.port",
-      // MyBatis 公共扫描路径
-      "mybatis.mapper-locations",
-      // Actuator 通用
-      "management.endpoint.health.show-details",
-      "management.health.db.enabled",
-      "management.health.redis.enabled",
-      "management.health.kafka.enabled",
-      // batch.* 共享键
-      "batch.timezone.default-zone",
-      "batch.orchestrator.base-url",
-      "batch.storage.s3.endpoint",
-      "batch.security.internal-secret",
-      "batch.mq.topics.task-result",
-      "batch.mq.topics.task-retry",
-      "batch.mq.topics.dead-letter");
+    /** 基线"唯一来源"的键集合：这些键如果在模块 application.yml 里重新出现就算 drift。 */
+    private static final Set<String> OWNED_KEYS = Set.of(
+            // 全栈 UTF-8 / 优雅停机
+            "server.shutdown",
+            "server.servlet.encoding.charset",
+            "server.servlet.encoding.force",
+            "spring.messages.encoding",
+            "spring.jackson.time-zone",
+            // 平台 DB 连接元数据（驱动 / URL / 凭据；pool 配置不在此处由模块各自控制）
+            "spring.datasource.driver-class-name",
+            // Kafka 集群地址与生产者协议
+            "spring.kafka.bootstrap-servers",
+            "spring.kafka.producer.acks",
+            "spring.kafka.listener.ack-mode",
+            "spring.kafka.consumer.auto-offset-reset",
+            // Redis 通用项
+            "spring.data.redis.repositories.enabled",
+            "spring.data.redis.host",
+            "spring.data.redis.port",
+            // MyBatis 公共扫描路径
+            "mybatis.mapper-locations",
+            // Actuator 通用
+            "management.endpoint.health.show-details",
+            "management.health.db.enabled",
+            "management.health.redis.enabled",
+            "management.health.kafka.enabled",
+            // batch.* 共享键
+            "batch.timezone.default-zone",
+            "batch.orchestrator.base-url",
+            "batch.storage.s3.endpoint",
+            "batch.security.internal-secret",
+            "batch.mq.topics.task-result",
+            "batch.mq.topics.task-retry",
+            "batch.mq.topics.dead-letter");
 
-  /**
-   * 已收敛到单点的键：这些键必须只从 {@code batch-defaults.yml}（值经 {@code ${ENV:default}} 解析） + {@code .env} / helm
-   * secret 注入，**禁止**在任何模块的 application-local.yml 里重复声明（避免凭据/基础设施配置扩散到各模块）。
-   *
-   * <p>与 {@link #OWNED_KEYS} 的区别：OWNED_KEYS 守护 application.yml + 非 local profile；本集合专门守护
-   * application-local.yml（OWNED_KEYS 豁免它）。开发者本机若确需不同值，应改 {@code .env} 的对应 ENV 变量，而非在 local-yml
-   * 固化——保持"单点"。
-   *
-   * <p>历史扩散背景：S3 凭据曾散在 import/console（trigger 缺凭据启动崩溃，见 PR #409）；KMS/kafka 曾在 7-8 个模块各抄一份。
-   */
-  private static final Set<String> CONSOLIDATED_LOCAL_KEYS = Set.of(
-      "spring.kafka.bootstrap-servers",
-      "batch.security.kms.default-key-ref",
-      "batch.storage.s3.endpoint",
-      "batch.storage.s3.access-key",
-      "batch.storage.s3.secret-key",
-      "batch.storage.s3.bucket");
+    /**
+     * 已收敛到单点的键：这些键必须只从 {@code batch-defaults.yml}（值经 {@code ${ENV:default}} 解析） + {@code .env} / helm
+     * secret 注入，**禁止**在任何模块的 application-local.yml 里重复声明（避免凭据/基础设施配置扩散到各模块）。
+     *
+     * <p>与 {@link #OWNED_KEYS} 的区别：OWNED_KEYS 守护 application.yml + 非 local profile；本集合专门守护
+     * application-local.yml（OWNED_KEYS 豁免它）。开发者本机若确需不同值，应改 {@code .env} 的对应 ENV 变量，而非在 local-yml
+     * 固化——保持"单点"。
+     *
+     * <p>历史扩散背景：S3 凭据曾散在 import/console（trigger 缺凭据启动崩溃，见 PR #409）；KMS/kafka 曾在 7-8 个模块各抄一份。
+     */
+    private static final Set<String> CONSOLIDATED_LOCAL_KEYS = Set.of(
+            "spring.kafka.bootstrap-servers",
+            "batch.security.kms.default-key-ref",
+            "batch.storage.s3.endpoint",
+            "batch.storage.s3.access-key",
+            "batch.storage.s3.secret-key",
+            "batch.storage.s3.bucket");
 
-  private static Path repoRoot() {
-    Path here = Paths.get("").toAbsolutePath();
-    // 测试可能从 batch-common 子目录或仓库根目录运行;定位到含 batch-common + batch-orchestrator 的根
-    while (here != null
-        && !(Files.exists(here.resolve("batch-common"))
-            && Files.exists(here.resolve("batch-orchestrator")))) {
-      here = here.getParent();
-    }
-    return here;
-  }
-
-  private static Path baselineYml() {
-    return repoRoot().resolve("batch-common/src/main/resources/batch-defaults.yml");
-  }
-
-  @Test
-  @DisplayName("共享基线配置文件必须存在于公共模块的资源目录下且为常规文件")
-  void shouldKeepBaselineConfigAtCanonicalLocation() {
-    assertThat(baselineYml())
-        .as("batch-defaults.yml 必须位于 batch-common/src/main/resources/(ADR-029 修订版)")
-        .exists()
-        .isRegularFile();
-  }
-
-  @Test
-  @DisplayName("共享基线配置文件在测试类路径上可被解析,否则配置导入会在启动时失败")
-  void shouldExposeBaselineConfigOnClasspath() {
-    // 任何继承了 batch-common 的模块在测试 classpath 上都应能 resolve 到这个 resource。
-    // 这是 spring.config.import: "classpath:batch-defaults.yml" 启动时的最终判据。
-    assertThat(getClass().getClassLoader().getResource("batch-defaults.yml"))
-        .as("batch-defaults.yml 必须在 classpath 上可见,否则 spring.config.import 启动失败")
-        .isNotNull();
-  }
-
-  @Test
-  @DisplayName("分布式锁的缓存键前缀默认取自应用名,避免多个服务共用缓存时互相干扰")
-  void shouldDefaultDistributedLockNamespaceToApplicationName() throws IOException {
-    Map<String, Object> flat = flatten(loadYaml(baselineYml()));
-
-    assertThat(flat.get("batch.shedlock.redis.key-prefix-env"))
-        .as("ShedLock Redis namespace must default to spring.application.name; blank falls back to"
-            + " 'default' for every service and can cross-lock unrelated modules sharing Redis")
-        .isEqualTo("${BATCH_SHEDLOCK_REDIS_ENV:${spring.application.name:default}}");
-  }
-
-  @Test
-  @DisplayName("可观测总开关统管调用链与日志导出,指标导出保持关闭由抓取方式采集")
-  void shouldLetMasterSwitchControlTraceAndLogExporters() throws IOException {
-    Map<String, Object> flat = flatten(loadYaml(baselineYml()));
-    String masterSwitch = "${MANAGEMENT_OPENTELEMETRY_ENABLED:false}";
-
-    assertThat(flat)
-        .as("指标由 Prometheus 拉取；OpenTelemetry 总开关只控制 traces/logs")
-        .containsEntry("management.opentelemetry.enabled", masterSwitch)
-        .containsEntry("management.otlp.metrics.export.enabled", false)
-        .containsEntry("management.tracing.export.otlp.enabled", masterSwitch)
-        .containsEntry("management.logging.export.otlp.enabled", masterSwitch);
-  }
-
-  @Test
-  @DisplayName("消息客户端与其配置类的日志级别均提升到告警,避免启动时刷出完整配置")
-  void shouldSuppressMessagingConfigurationDumpAtInfoLevel() throws IOException {
-    Map<String, Object> flat = flatten(loadYaml(baselineYml()));
-
-    assertThat(flat)
-        .containsEntry("logging.level.org.apache.kafka.clients", "WARN")
-        .containsEntry("logging.level.org.apache.kafka.common.config.AbstractConfig", "WARN");
-  }
-
-  @Test
-  @DisplayName("服务模块的常规与分环境配置文件都不得复刻基线负责的唯一来源键")
-  void shouldRejectServiceModulesRedefiningBaselineOwnedKeys() throws IOException {
-    Path root = repoRoot();
-    Map<String, String> drift = new LinkedHashMap<>();
-    for (String module : List.of(
-        "batch-trigger",
-        "batch-orchestrator",
-        "batch-worker-core",
-        "batch-worker-import",
-        "batch-worker-export",
-        "batch-worker-process",
-        "batch-worker-dispatch",
-        "batch-console-api")) {
-      // 同时扫 application.yml + 所有 application-<profile>.yml；profile yml 优先级更高，
-      // 任何在那里复刻基线键的行为都会在运行时覆盖 batch-defaults.yml。
-      Path resourcesDir = root.resolve(module).resolve("src/main/resources");
-      if (!Files.exists(resourcesDir)) {
-        continue;
-      }
-      for (Path yml : listApplicationYmls(resourcesDir)) {
-        Map<String, Object> flat = flatten(loadYaml(yml));
-        for (String owned : OWNED_KEYS) {
-          if (flat.containsKey(owned)) {
-            drift.put(
-                module + "::" + yml.getFileName() + "::" + owned, String.valueOf(flat.get(owned)));
-          }
+    private static Path repoRoot() {
+        Path here = Paths.get("").toAbsolutePath();
+        // 测试可能从 batch-common 子目录或仓库根目录运行;定位到含 batch-common + batch-orchestrator 的根
+        while (here != null
+                && !(Files.exists(here.resolve("batch-common")) && Files.exists(here.resolve("batch-orchestrator")))) {
+            here = here.getParent();
         }
-      }
+        return here;
     }
-    assertThat(drift)
-        .as("服务模块不应复刻基线 OWNED_KEYS（详见 ADR-029；包含 application-<profile>.yml）；"
-            + "如确需 overlay 请把 key 从 OWNED_KEYS 移除并在 ADR-029 记录原因")
-        .isEmpty();
-  }
 
-  @Test
-  @DisplayName("各模块本地环境配置不得重新声明已收敛到单点的消息地址与对象存储凭据键")
-  void shouldRejectLocalProfileReintroducingConsolidatedKeys() throws IOException {
-    Path root = repoRoot();
-    Map<String, String> scatter = new LinkedHashMap<>();
-    for (String module : List.of(
-        "batch-trigger",
-        "batch-orchestrator",
-        "batch-worker-core",
-        "batch-worker-import",
-        "batch-worker-export",
-        "batch-worker-process",
-        "batch-worker-dispatch",
-        "batch-worker-atomic",
-        "batch-console-api")) {
-      Path localYml = root.resolve(module).resolve("src/main/resources/application-local.yml");
-      if (!Files.exists(localYml)) {
-        continue;
-      }
-      Map<String, Object> flat = flatten(loadYaml(localYml));
-      for (String key : flat.keySet()) {
-        boolean hit = CONSOLIDATED_LOCAL_KEYS.contains(key)
-            || key.startsWith("batch.security.kms.")
-            || key.startsWith("batch.storage.s3.");
-        if (hit) {
-          scatter.put(module + "::application-local.yml::" + key, String.valueOf(flat.get(key)));
-        }
-      }
+    private static Path baselineYml() {
+        return repoRoot().resolve("batch-common/src/main/resources/batch-defaults.yml");
     }
-    assertThat(scatter)
-        .as("application-local.yml 不应重复声明已收敛到单点的键（kafka bootstrap / KMS / S3 凭据）；"
-            + "本机如需不同值请改 .env 的对应 ENV 变量，不要在 local-yml 固化（见 CONSOLIDATED_LOCAL_KEYS 注释）")
-        .isEmpty();
-  }
 
-  /**
-   * 守护范围：application.yml + 所有 application-<profile>.yml，但 <b>豁免</b> application-local.yml —— 它是开发者
-   * IDE 沙箱（指向本机 docker 端口），固化 localhost:15432 / 19092 等是设计意图，不属于"基线 drift"。生产/CI 不会激活 local
-   * profile。
-   */
-  private static List<Path> listApplicationYmls(Path resourcesDir) throws IOException {
-    List<Path> all = new ArrayList<>();
-    try (Stream<Path> entries = Files.list(resourcesDir)) {
-      entries
-          .filter(Files::isRegularFile)
-          .filter(p -> {
-            String name = p.getFileName().toString();
-            if (name.equals("application-local.yml")) {
-              return false;
+    @Test
+    @DisplayName("共享基线配置文件必须存在于公共模块的资源目录下且为常规文件")
+    void shouldKeepBaselineConfigAtCanonicalLocation() {
+        assertThat(baselineYml())
+                .as("batch-defaults.yml 必须位于 batch-common/src/main/resources/(ADR-029 修订版)")
+                .exists()
+                .isRegularFile();
+    }
+
+    @Test
+    @DisplayName("共享基线配置文件在测试类路径上可被解析,否则配置导入会在启动时失败")
+    void shouldExposeBaselineConfigOnClasspath() {
+        // 任何继承了 batch-common 的模块在测试 classpath 上都应能 resolve 到这个 resource。
+        // 这是 spring.config.import: "classpath:batch-defaults.yml" 启动时的最终判据。
+        assertThat(getClass().getClassLoader().getResource("batch-defaults.yml"))
+                .as("batch-defaults.yml 必须在 classpath 上可见,否则 spring.config.import 启动失败")
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("分布式锁的缓存键前缀默认取自应用名,避免多个服务共用缓存时互相干扰")
+    void shouldDefaultDistributedLockNamespaceToApplicationName() throws IOException {
+        Map<String, Object> flat = flatten(loadYaml(baselineYml()));
+
+        assertThat(flat.get("batch.shedlock.redis.key-prefix-env"))
+                .as("ShedLock Redis namespace must default to spring.application.name; blank falls back to"
+                        + " 'default' for every service and can cross-lock unrelated modules sharing Redis")
+                .isEqualTo("${BATCH_SHEDLOCK_REDIS_ENV:${spring.application.name:default}}");
+    }
+
+    @Test
+    @DisplayName("可观测总开关统管调用链与日志导出,指标导出保持关闭由抓取方式采集")
+    void shouldLetMasterSwitchControlTraceAndLogExporters() throws IOException {
+        Map<String, Object> flat = flatten(loadYaml(baselineYml()));
+        String masterSwitch = "${MANAGEMENT_OPENTELEMETRY_ENABLED:false}";
+
+        assertThat(flat)
+                .as("指标由 Prometheus 拉取；OpenTelemetry 总开关只控制 traces/logs")
+                .containsEntry("management.opentelemetry.enabled", masterSwitch)
+                .containsEntry("management.otlp.metrics.export.enabled", false)
+                .containsEntry("management.tracing.export.otlp.enabled", masterSwitch)
+                .containsEntry("management.logging.export.otlp.enabled", masterSwitch);
+    }
+
+    @Test
+    @DisplayName("消息客户端与其配置类的日志级别均提升到告警,避免启动时刷出完整配置")
+    void shouldSuppressMessagingConfigurationDumpAtInfoLevel() throws IOException {
+        Map<String, Object> flat = flatten(loadYaml(baselineYml()));
+
+        assertThat(flat)
+                .containsEntry("logging.level.org.apache.kafka.clients", "WARN")
+                .containsEntry("logging.level.org.apache.kafka.common.config.AbstractConfig", "WARN");
+    }
+
+    @Test
+    @DisplayName("服务模块的常规与分环境配置文件都不得复刻基线负责的唯一来源键")
+    void shouldRejectServiceModulesRedefiningBaselineOwnedKeys() throws IOException {
+        Path root = repoRoot();
+        Map<String, String> drift = new LinkedHashMap<>();
+        for (String module : List.of(
+                "batch-trigger",
+                "batch-orchestrator",
+                "batch-worker-core",
+                "batch-worker-import",
+                "batch-worker-export",
+                "batch-worker-process",
+                "batch-worker-dispatch",
+                "batch-console-api")) {
+            // 同时扫 application.yml + 所有 application-<profile>.yml；profile yml 优先级更高，
+            // 任何在那里复刻基线键的行为都会在运行时覆盖 batch-defaults.yml。
+            Path resourcesDir = root.resolve(module).resolve("src/main/resources");
+            if (!Files.exists(resourcesDir)) {
+                continue;
             }
-            return name.equals("application.yml")
-                || (name.startsWith("application-") && name.endsWith(".yml"));
-          })
-          .forEach(all::add);
+            for (Path yml : listApplicationYmls(resourcesDir)) {
+                Map<String, Object> flat = flatten(loadYaml(yml));
+                for (String owned : OWNED_KEYS) {
+                    if (flat.containsKey(owned)) {
+                        drift.put(module + "::" + yml.getFileName() + "::" + owned, String.valueOf(flat.get(owned)));
+                    }
+                }
+            }
+        }
+        assertThat(drift)
+                .as("服务模块不应复刻基线 OWNED_KEYS（详见 ADR-029；包含 application-<profile>.yml）；"
+                        + "如确需 overlay 请把 key 从 OWNED_KEYS 移除并在 ADR-029 记录原因")
+                .isEmpty();
     }
-    return all;
-  }
 
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> loadYaml(Path file) throws IOException {
-    try (InputStream in = Files.newInputStream(file)) {
-      Object loaded = new Yaml().load(in);
-      return loaded instanceof Map ? (Map<String, Object>) loaded : Map.of();
+    @Test
+    @DisplayName("各模块本地环境配置不得重新声明已收敛到单点的消息地址与对象存储凭据键")
+    void shouldRejectLocalProfileReintroducingConsolidatedKeys() throws IOException {
+        Path root = repoRoot();
+        Map<String, String> scatter = new LinkedHashMap<>();
+        for (String module : List.of(
+                "batch-trigger",
+                "batch-orchestrator",
+                "batch-worker-core",
+                "batch-worker-import",
+                "batch-worker-export",
+                "batch-worker-process",
+                "batch-worker-dispatch",
+                "batch-worker-atomic",
+                "batch-console-api")) {
+            Path localYml = root.resolve(module).resolve("src/main/resources/application-local.yml");
+            if (!Files.exists(localYml)) {
+                continue;
+            }
+            Map<String, Object> flat = flatten(loadYaml(localYml));
+            for (String key : flat.keySet()) {
+                boolean hit = CONSOLIDATED_LOCAL_KEYS.contains(key)
+                        || key.startsWith("batch.security.kms.")
+                        || key.startsWith("batch.storage.s3.");
+                if (hit) {
+                    scatter.put(module + "::application-local.yml::" + key, String.valueOf(flat.get(key)));
+                }
+            }
+        }
+        assertThat(scatter)
+                .as("application-local.yml 不应重复声明已收敛到单点的键（kafka bootstrap / KMS / S3 凭据）；"
+                        + "本机如需不同值请改 .env 的对应 ENV 变量，不要在 local-yml 固化（见 CONSOLIDATED_LOCAL_KEYS 注释）")
+                .isEmpty();
     }
-  }
 
-  private static Map<String, Object> flatten(Map<String, Object> source) {
-    Map<String, Object> out = new LinkedHashMap<>();
-    flattenInto(source, "", out);
-    return out;
-  }
-
-  @SuppressWarnings("unchecked")
-  private static void flattenInto(
-      Map<String, Object> source, String prefix, Map<String, Object> out) {
-    for (Map.Entry<String, Object> entry : source.entrySet()) {
-      String key = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
-      Object value = entry.getValue();
-      if (value instanceof Map<?, ?> nested) {
-        flattenInto((Map<String, Object>) nested, key, out);
-      } else {
-        out.put(key, value);
-      }
+    /**
+     * 守护范围：application.yml + 所有 application-<profile>.yml，但 <b>豁免</b> application-local.yml —— 它是开发者
+     * IDE 沙箱（指向本机 docker 端口），固化 localhost:15432 / 19092 等是设计意图，不属于"基线 drift"。生产/CI 不会激活 local
+     * profile。
+     */
+    private static List<Path> listApplicationYmls(Path resourcesDir) throws IOException {
+        List<Path> all = new ArrayList<>();
+        try (Stream<Path> entries = Files.list(resourcesDir)) {
+            entries.filter(Files::isRegularFile)
+                    .filter(p -> {
+                        String name = p.getFileName().toString();
+                        if (name.equals("application-local.yml")) {
+                            return false;
+                        }
+                        return name.equals("application.yml")
+                                || (name.startsWith("application-") && name.endsWith(".yml"));
+                    })
+                    .forEach(all::add);
+        }
+        return all;
     }
-  }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> loadYaml(Path file) throws IOException {
+        try (InputStream in = Files.newInputStream(file)) {
+            Object loaded = new Yaml().load(in);
+            return loaded instanceof Map ? (Map<String, Object>) loaded : Map.of();
+        }
+    }
+
+    private static Map<String, Object> flatten(Map<String, Object> source) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        flattenInto(source, "", out);
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void flattenInto(Map<String, Object> source, String prefix, Map<String, Object> out) {
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            String key = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof Map<?, ?> nested) {
+                flattenInto((Map<String, Object>) nested, key, out);
+            } else {
+                out.put(key, value);
+            }
+        }
+    }
 }

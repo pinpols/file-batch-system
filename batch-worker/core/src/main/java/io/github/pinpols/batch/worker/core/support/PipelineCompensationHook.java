@@ -40,221 +40,214 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class PipelineCompensationHook {
 
-  /** 模板顶层布尔开关键;默认 false。 */
-  static final String COMPENSATE_ON_FAILURE_KEY = "compensate_on_failure";
+    /** 模板顶层布尔开关键;默认 false。 */
+    static final String COMPENSATE_ON_FAILURE_KEY = "compensate_on_failure";
 
-  private static final String AUDIT_OPERATION_TYPE = "PIPELINE_COMPENSATE";
+    private static final String AUDIT_OPERATION_TYPE = "PIPELINE_COMPENSATE";
 
-  private final PlatformPipelineRunRepository pipelineRuns;
-  private final PlatformFileAuditRepository fileAudits;
-  private final ObjectProvider<PipelineCompensator> compensatorProvider;
+    private final PlatformPipelineRunRepository pipelineRuns;
+    private final PlatformFileAuditRepository fileAudits;
+    private final ObjectProvider<PipelineCompensator> compensatorProvider;
 
-  /**
-   * ADR-038 P0:反向补偿前作废 checkpoint 位点用。可选注入(语义同 compensatorProvider):无 store bean(测试 / 未装配续跑基础设施)时为
-   * null,{@link #invalidateCheckpointBeforeReverse} 直接视为无位点可清。
-   */
-  private final ProcessingPositionStore positionStore;
+    /**
+     * ADR-038 P0:反向补偿前作废 checkpoint 位点用。可选注入(语义同 compensatorProvider):无 store bean(测试 / 未装配续跑基础设施)时为
+     * null,{@link #invalidateCheckpointBeforeReverse} 直接视为无位点可清。
+     */
+    private final ProcessingPositionStore positionStore;
 
-  public PipelineCompensationHook(
-      PlatformPipelineRunRepository pipelineRuns,
-      PlatformFileAuditRepository fileAudits,
-      ObjectProvider<PipelineCompensator> compensatorProvider,
-      ObjectProvider<ProcessingPositionStore> positionStoreProvider) {
-    this.pipelineRuns = pipelineRuns;
-    this.fileAudits = fileAudits;
-    this.compensatorProvider = compensatorProvider;
-    this.positionStore = positionStoreProvider.getIfAvailable();
-  }
-
-  /**
-   * 在 pipeline 失败落地点调用。返回 true 表示已进入补偿(adapter 仍须随后 markPipelineFailed 落终态);返回 false 表示未触发补偿,
-   * adapter 走原路径。<b>永不抛异常。</b>
-   *
-   * @param tenantId 租户 ID
-   * @param pipelineType worker 上报的 pipeline 类型("IMPORT"/"EXPORT"/"DISPATCH")
-   * @param pipelineRun 当前 pipeline 实例及本次执行持有的运行代际
-   * @param attributes pipeline runtime attributes(含 templateConfig / fileId / traceId 等)
-   * @return 是否触发了补偿(仅用于 adapter 决定是否走 COMPENSATING→FAILED 两段写;无论返回值如何 adapter 都要落 FAILED)
-   */
-  public boolean runCompensation(
-      String tenantId,
-      String pipelineType,
-      PipelineRunFence pipelineRun,
-      Map<String, Object> attributes) {
-    Long pipelineInstanceId =
-        EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.pipelineInstanceId();
-    try {
-      boolean compensationIsNotConfiguredOrDisabled =
-          EmptyChecks.isNull(attributes) || !compensateEnabled(attributes);
-      if (compensationIsNotConfiguredOrDisabled) {
-        // 默认 off:行为逐字节不变,不触碰任何 compensator。
-        return false;
-      }
-      PipelineCompensator compensator = resolveCompensator(pipelineType);
-      if (compensator == null) {
-        // 开了开关但该 pipeline 类型没注册 compensator:无反向动作可做,走原路径。
-        return false;
-      }
-      Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
-      // ① 进入 COMPENSATING 中间态(adapter 随后落 FAILED 终态)。
-      pipelineRuns.markPipelineCompensating(pipelineRun);
-      // ② 先作废位点,再反向删业务数据。跨库无 1PC 时必须选择这个顺序:
-      //    - 位点清理失败:不执行反向删除,业务数据+位点仍一致;
-      //    - 位点清理成功后反向失败:重试从头跑,由 plugin 幂等约束吸收已存数据。
-      // 反过来“先删业务数据、再 best-effort 清位点”会在第二步失败时静默缺数。
-      if (!invalidateCheckpointBeforeReverse(tenantId, pipelineInstanceId)) {
-        CompensationResult result =
-            CompensationResult.failed("checkpoint invalidation failed; reverse not attempted");
-        audit(tenantId, pipelineType, pipelineInstanceId, fileId, attributes, result);
-        return true;
-      }
-      // ③ 执行反向动作(compensator 内部已吞咽异常,但此处再兜一层防御)。
-      CompensationResult result;
-      try {
-        result = compensator.compensate(tenantId, pipelineInstanceId, fileId, attributes);
-      } catch (RuntimeException ex) {
-        // 防御:compensator 理论上不抛,但若抛了也绝不掩盖原始失败。
-        log.warn(
-            "pipeline compensation threw unexpectedly (best-effort, not masking original"
-                + " failure): tenantId={}, pipelineType={}, pipelineInstanceId={}",
-            tenantId,
-            pipelineType,
-            pipelineInstanceId,
-            ex);
-        result = CompensationResult.failed("compensator threw: " + ex.getMessage());
-      }
-      // ④ 审计每条反向动作。
-      audit(tenantId, pipelineType, pipelineInstanceId, fileId, attributes, result);
-      return true;
-    } catch (RuntimeException ex) {
-      // 钩子自身永不把异常透传到 pipeline 主链路(否则掩盖原始失败 / 破坏 SLA)。
-      log.warn(
-          "pipeline compensation hook failed (swallowed, original failure preserved):"
-              + " tenantId={}, pipelineType={}, pipelineInstanceId={}",
-          tenantId,
-          pipelineType,
-          pipelineInstanceId,
-          ex);
-      return false;
+    public PipelineCompensationHook(
+            PlatformPipelineRunRepository pipelineRuns,
+            PlatformFileAuditRepository fileAudits,
+            ObjectProvider<PipelineCompensator> compensatorProvider,
+            ObjectProvider<ProcessingPositionStore> positionStoreProvider) {
+        this.pipelineRuns = pipelineRuns;
+        this.fileAudits = fileAudits;
+        this.compensatorProvider = compensatorProvider;
+        this.positionStore = positionStoreProvider.getIfAvailable();
     }
-  }
 
-  /**
-   * 反向动作前作废该 pipeline 实例的全部 checkpoint 位点。返回 false 时调用方必须停止反向删除, 保证不会出现“业务数据已删、位点仍跳过”的静默缺数窗口。无
-   * positionStore bean / 无 instance id 表示无可清位点,视为成功。
-   */
-  private boolean invalidateCheckpointBeforeReverse(String tenantId, Long pipelineInstanceId) {
-    if (positionStore == null || pipelineInstanceId == null) {
-      return true;
-    }
-    try {
-      positionStore.deleteAllStages(tenantId, pipelineInstanceId);
-      log.info(
-          "pipeline compensation invalidated checkpoint positions before reverse: tenantId={},"
-              + " pipelineInstanceId={}",
-          tenantId,
-          pipelineInstanceId);
-      return true;
-    } catch (RuntimeException ex) {
-      log.error(
-          "pipeline compensation cannot invalidate checkpoint positions; reverse aborted:"
-              + " tenantId={},"
-              + " pipelineInstanceId={}",
-          tenantId,
-          pipelineInstanceId,
-          ex);
-      return false;
-    }
-  }
-
-  private boolean compensateEnabled(Map<String, Object> attributes) {
-    Object templateConfig = attributes.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (!(templateConfig instanceof Map<?, ?> map)) {
-      // 模板配置不在 attributes(如失败发生在加载模板之前):此时尚未写入任何业务行 / 对象,无可补偿,安全跳过。
-      return false;
-    }
-    return truthy(map.get(COMPENSATE_ON_FAILURE_KEY));
-  }
-
-  private static boolean truthy(Object value) {
-    if (value instanceof Boolean b) {
-      return b;
-    }
-    if (EmptyChecks.isNull(value)) {
-      return false;
-    }
-    String rawValue = String.valueOf(value);
-    String normalizedValue = rawValue.trim();
-    return "true".equalsIgnoreCase(normalizedValue);
-  }
-
-  private PipelineCompensator resolveCompensator(String pipelineType) {
-    if (pipelineType == null || pipelineType.isBlank()) {
-      return null;
-    }
-    String trimmedPipelineType = pipelineType.trim();
-    String wanted = trimmedPipelineType.toUpperCase(Locale.ROOT);
-    for (PipelineCompensator candidate : compensatorProvider) {
-      if (EmptyChecks.isNotNull(candidate.pipelineType())) {
-        String candidateType = candidate.pipelineType();
-        String trimmedCandidateType = candidateType.trim();
-        String normalizedCandidateType = trimmedCandidateType.toUpperCase(Locale.ROOT);
-        if (wanted.equals(normalizedCandidateType)) {
-          return candidate;
+    /**
+     * 在 pipeline 失败落地点调用。返回 true 表示已进入补偿(adapter 仍须随后 markPipelineFailed 落终态);返回 false 表示未触发补偿,
+     * adapter 走原路径。<b>永不抛异常。</b>
+     *
+     * @param tenantId 租户 ID
+     * @param pipelineType worker 上报的 pipeline 类型("IMPORT"/"EXPORT"/"DISPATCH")
+     * @param pipelineRun 当前 pipeline 实例及本次执行持有的运行代际
+     * @param attributes pipeline runtime attributes(含 templateConfig / fileId / traceId 等)
+     * @return 是否触发了补偿(仅用于 adapter 决定是否走 COMPENSATING→FAILED 两段写;无论返回值如何 adapter 都要落 FAILED)
+     */
+    public boolean runCompensation(
+            String tenantId, String pipelineType, PipelineRunFence pipelineRun, Map<String, Object> attributes) {
+        Long pipelineInstanceId = EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.pipelineInstanceId();
+        try {
+            boolean compensationIsNotConfiguredOrDisabled =
+                    EmptyChecks.isNull(attributes) || !compensateEnabled(attributes);
+            if (compensationIsNotConfiguredOrDisabled) {
+                // 默认 off:行为逐字节不变,不触碰任何 compensator。
+                return false;
+            }
+            PipelineCompensator compensator = resolveCompensator(pipelineType);
+            if (compensator == null) {
+                // 开了开关但该 pipeline 类型没注册 compensator:无反向动作可做,走原路径。
+                return false;
+            }
+            Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
+            // ① 进入 COMPENSATING 中间态(adapter 随后落 FAILED 终态)。
+            pipelineRuns.markPipelineCompensating(pipelineRun);
+            // ② 先作废位点,再反向删业务数据。跨库无 1PC 时必须选择这个顺序:
+            //    - 位点清理失败:不执行反向删除,业务数据+位点仍一致;
+            //    - 位点清理成功后反向失败:重试从头跑,由 plugin 幂等约束吸收已存数据。
+            // 反过来“先删业务数据、再 best-effort 清位点”会在第二步失败时静默缺数。
+            if (!invalidateCheckpointBeforeReverse(tenantId, pipelineInstanceId)) {
+                CompensationResult result =
+                        CompensationResult.failed("checkpoint invalidation failed; reverse not attempted");
+                audit(tenantId, pipelineType, pipelineInstanceId, fileId, attributes, result);
+                return true;
+            }
+            // ③ 执行反向动作(compensator 内部已吞咽异常,但此处再兜一层防御)。
+            CompensationResult result;
+            try {
+                result = compensator.compensate(tenantId, pipelineInstanceId, fileId, attributes);
+            } catch (RuntimeException ex) {
+                // 防御:compensator 理论上不抛,但若抛了也绝不掩盖原始失败。
+                log.warn(
+                        "pipeline compensation threw unexpectedly (best-effort, not masking original"
+                                + " failure): tenantId={}, pipelineType={}, pipelineInstanceId={}",
+                        tenantId,
+                        pipelineType,
+                        pipelineInstanceId,
+                        ex);
+                result = CompensationResult.failed("compensator threw: " + ex.getMessage());
+            }
+            // ④ 审计每条反向动作。
+            audit(tenantId, pipelineType, pipelineInstanceId, fileId, attributes, result);
+            return true;
+        } catch (RuntimeException ex) {
+            // 钩子自身永不把异常透传到 pipeline 主链路(否则掩盖原始失败 / 破坏 SLA)。
+            log.warn(
+                    "pipeline compensation hook failed (swallowed, original failure preserved):"
+                            + " tenantId={}, pipelineType={}, pipelineInstanceId={}",
+                    tenantId,
+                    pipelineType,
+                    pipelineInstanceId,
+                    ex);
+            return false;
         }
-      }
     }
-    return null;
-  }
 
-  private void audit(
-      String tenantId,
-      String pipelineType,
-      Long pipelineInstanceId,
-      Long fileId,
-      Map<String, Object> attributes,
-      CompensationResult result) {
-    String traceId = attributes.get(PipelineRuntimeKeys.TRACE_ID) == null
-        ? null
-        : String.valueOf(attributes.get(PipelineRuntimeKeys.TRACE_ID));
-    // 结构化 info 日志(始终落,即便 fileId 为 null):删了什么 / 影响行数 / SKIPPED / FAILED 原因。
-    log.info(
-        "pipeline compensation done: tenantId={}, pipelineType={}, pipelineInstanceId={},"
-            + " fileId={}, outcome={}, reversedCount={}, detail={}",
-        tenantId,
-        pipelineType,
-        pipelineInstanceId,
-        fileId,
-        result.outcome(),
-        result.reversedCount(),
-        result.detail());
-    if (fileId == null) {
-      return;
+    /**
+     * 反向动作前作废该 pipeline 实例的全部 checkpoint 位点。返回 false 时调用方必须停止反向删除, 保证不会出现“业务数据已删、位点仍跳过”的静默缺数窗口。无
+     * positionStore bean / 无 instance id 表示无可清位点,视为成功。
+     */
+    private boolean invalidateCheckpointBeforeReverse(String tenantId, Long pipelineInstanceId) {
+        if (positionStore == null || pipelineInstanceId == null) {
+            return true;
+        }
+        try {
+            positionStore.deleteAllStages(tenantId, pipelineInstanceId);
+            log.info(
+                    "pipeline compensation invalidated checkpoint positions before reverse: tenantId={},"
+                            + " pipelineInstanceId={}",
+                    tenantId,
+                    pipelineInstanceId);
+            return true;
+        } catch (RuntimeException ex) {
+            log.error(
+                    "pipeline compensation cannot invalidate checkpoint positions; reverse aborted:"
+                            + " tenantId={},"
+                            + " pipelineInstanceId={}",
+                    tenantId,
+                    pipelineInstanceId,
+                    ex);
+            return false;
+        }
     }
-    // 持久化审计(file_audit_log)——fileId 存在时。
-    Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("pipelineType", pipelineType);
-    detail.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
-    detail.put("outcome", result.outcome().name());
-    detail.put("reversedCount", result.reversedCount());
-    detail.put("detail", result.detail());
-    try {
-      FileAuditParam auditParam = FileAuditParam.builder()
-          .tenantId(tenantId)
-          .fileId(fileId)
-          .operationType(AUDIT_OPERATION_TYPE)
-          .operationResult(result.outcome().name())
-          .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-          .traceId(traceId)
-          .detailSummary(detail)
-          .build();
-      fileAudits.appendAudit(auditParam);
-    } catch (RuntimeException ex) {
-      // 审计写入数据库失败不影响 pipeline 落终态;info 日志已是补充审计。
-      log.warn(
-          "pipeline compensation audit persist failed (info log already recorded): fileId={}",
-          fileId,
-          ex);
+
+    private boolean compensateEnabled(Map<String, Object> attributes) {
+        Object templateConfig = attributes.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (!(templateConfig instanceof Map<?, ?> map)) {
+            // 模板配置不在 attributes(如失败发生在加载模板之前):此时尚未写入任何业务行 / 对象,无可补偿,安全跳过。
+            return false;
+        }
+        return truthy(map.get(COMPENSATE_ON_FAILURE_KEY));
     }
-  }
+
+    private static boolean truthy(Object value) {
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        if (EmptyChecks.isNull(value)) {
+            return false;
+        }
+        String rawValue = String.valueOf(value);
+        String normalizedValue = rawValue.trim();
+        return "true".equalsIgnoreCase(normalizedValue);
+    }
+
+    private PipelineCompensator resolveCompensator(String pipelineType) {
+        if (pipelineType == null || pipelineType.isBlank()) {
+            return null;
+        }
+        String trimmedPipelineType = pipelineType.trim();
+        String wanted = trimmedPipelineType.toUpperCase(Locale.ROOT);
+        for (PipelineCompensator candidate : compensatorProvider) {
+            if (EmptyChecks.isNotNull(candidate.pipelineType())) {
+                String candidateType = candidate.pipelineType();
+                String trimmedCandidateType = candidateType.trim();
+                String normalizedCandidateType = trimmedCandidateType.toUpperCase(Locale.ROOT);
+                if (wanted.equals(normalizedCandidateType)) {
+                    return candidate;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void audit(
+            String tenantId,
+            String pipelineType,
+            Long pipelineInstanceId,
+            Long fileId,
+            Map<String, Object> attributes,
+            CompensationResult result) {
+        String traceId = attributes.get(PipelineRuntimeKeys.TRACE_ID) == null
+                ? null
+                : String.valueOf(attributes.get(PipelineRuntimeKeys.TRACE_ID));
+        // 结构化 info 日志(始终落,即便 fileId 为 null):删了什么 / 影响行数 / SKIPPED / FAILED 原因。
+        log.info(
+                "pipeline compensation done: tenantId={}, pipelineType={}, pipelineInstanceId={},"
+                        + " fileId={}, outcome={}, reversedCount={}, detail={}",
+                tenantId,
+                pipelineType,
+                pipelineInstanceId,
+                fileId,
+                result.outcome(),
+                result.reversedCount(),
+                result.detail());
+        if (fileId == null) {
+            return;
+        }
+        // 持久化审计(file_audit_log)——fileId 存在时。
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("pipelineType", pipelineType);
+        detail.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
+        detail.put("outcome", result.outcome().name());
+        detail.put("reversedCount", result.reversedCount());
+        detail.put("detail", result.detail());
+        try {
+            FileAuditParam auditParam = FileAuditParam.builder()
+                    .tenantId(tenantId)
+                    .fileId(fileId)
+                    .operationType(AUDIT_OPERATION_TYPE)
+                    .operationResult(result.outcome().name())
+                    .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
+                    .traceId(traceId)
+                    .detailSummary(detail)
+                    .build();
+            fileAudits.appendAudit(auditParam);
+        } catch (RuntimeException ex) {
+            // 审计写入数据库失败不影响 pipeline 落终态;info 日志已是补充审计。
+            log.warn("pipeline compensation audit persist failed (info log already recorded): fileId={}", fileId, ex);
+        }
+    }
 }

@@ -30,35 +30,33 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleCalendarControllerValidationTest {
 
-  @Mock
-  private ConsoleCalendarApplicationService service;
+    @Mock
+    private ConsoleCalendarApplicationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleCalendarController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleCalendarController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  private String body(String calendarCode) {
-    return """
+    private String body(String calendarCode) {
+        return """
         {
           "tenantId": "ta",
           "calendarCode": "%s",
@@ -66,55 +64,58 @@ class ConsoleCalendarControllerValidationTest {
           "timezone": "Asia/Shanghai"
         }
         """.formatted(calendarCode).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("日历编码含空格时返回参数校验失败, 且不写入下游")
-  void rejects_calendarCode_with_space() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/calendars").contentType(APPLICATION_JSON).content(body("q q q")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never()).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("日历编码含空格时返回参数校验失败, 且不写入下游")
+    void rejects_calendarCode_with_space() throws Exception {
+        mockMvc.perform(post("/api/console/calendars")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("q q q")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).create(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("日历编码含中文时返回参数校验失败")
-  void rejects_calendarCode_chinese() throws Exception {
-    mockMvc
-        .perform(post("/api/console/calendars").contentType(APPLICATION_JSON).content(body("中文日历")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("日历编码含中文时返回参数校验失败")
+    void rejects_calendarCode_chinese() throws Exception {
+        mockMvc.perform(post("/api/console/calendars")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("中文日历")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("日历编码以数字开头时返回参数校验失败")
-  void rejects_calendarCode_starts_with_digit() throws Exception {
-    mockMvc
-        .perform(post("/api/console/calendars").contentType(APPLICATION_JSON).content(body("1abc")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("日历编码以数字开头时返回参数校验失败")
+    void rejects_calendarCode_starts_with_digit() throws Exception {
+        mockMvc.perform(post("/api/console/calendars")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("1abc")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("日历编码为空时返回参数校验失败")
-  void rejects_calendarCode_blank() throws Exception {
-    mockMvc
-        .perform(post("/api/console/calendars").contentType(APPLICATION_JSON).content(body("")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("日历编码为空时返回参数校验失败")
+    void rejects_calendarCode_blank() throws Exception {
+        mockMvc.perform(post("/api/console/calendars")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("日历编码符合格式要求时创建成功并触达下游")
-  void accepts_valid_calendarCode() throws Exception {
-    when(service.create(ArgumentMatchers.any())).thenReturn(null);
-    mockMvc
-        .perform(
-            post("/api/console/calendars").contentType(APPLICATION_JSON).content(body("cal_ok_01")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-    verify(service).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("日历编码符合格式要求时创建成功并触达下游")
+    void accepts_valid_calendarCode() throws Exception {
+        when(service.create(ArgumentMatchers.any())).thenReturn(null);
+        mockMvc.perform(post("/api/console/calendars")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("cal_ok_01")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+        verify(service).create(ArgumentMatchers.any());
+    }
 }

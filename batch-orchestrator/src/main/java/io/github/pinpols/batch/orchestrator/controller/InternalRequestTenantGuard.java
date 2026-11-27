@@ -14,19 +14,19 @@ import jakarta.servlet.http.HttpServletRequest;
  */
 final class InternalRequestTenantGuard {
 
-  private InternalRequestTenantGuard() {}
+    private InternalRequestTenantGuard() {}
 
-  static String resolveTenant(HttpServletRequest request, String declaredTenantId) {
-    Object resolved = request.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID);
-    if (!(resolved instanceof String resolvedTenantId) || !Texts.hasText(resolvedTenantId)) {
-      return declaredTenantId;
+    static String resolveTenant(HttpServletRequest request, String declaredTenantId) {
+        Object resolved = request.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID);
+        if (!(resolved instanceof String resolvedTenantId) || !Texts.hasText(resolvedTenantId)) {
+            return declaredTenantId;
+        }
+        if (!Texts.hasText(declaredTenantId)) {
+            return resolvedTenantId;
+        }
+        if (!resolvedTenantId.equals(declaredTenantId)) {
+            throw BizException.of(ResultCode.FORBIDDEN, "error.common.tenant_id_mismatch");
+        }
+        return declaredTenantId;
     }
-    if (!Texts.hasText(declaredTenantId)) {
-      return resolvedTenantId;
-    }
-    if (!resolvedTenantId.equals(declaredTenantId)) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.common.tenant_id_mismatch");
-    }
-    return declaredTenantId;
-  }
 }

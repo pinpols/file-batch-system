@@ -37,43 +37,42 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AlertmanagerNotifyController {
 
-  private static final String BEARER_PREFIX = "Bearer ";
+    private static final String BEARER_PREFIX = "Bearer ";
 
-  private final AlertmanagerNotifyProperties properties;
-  private final AlertmanagerNotifyService notifyService;
+    private final AlertmanagerNotifyProperties properties;
+    private final AlertmanagerNotifyService notifyService;
 
-  /** 接住某 receiver 的一批 AM 告警,鉴权后投递到真实渠道并落投递日志。 */
-  @PostMapping("/{receiver}")
-  public CommonResponse<AmNotifyOutcome> receive(
-      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
-      @PathVariable String receiver,
-      @RequestBody AlertmanagerWebhookPayload payload) {
-    notifyService.assertEnabled();
-    authenticate(authorization);
-    AmNotifyOutcome outcome = notifyService.deliver(receiver, payload);
-    if (!outcome.delivered() && !outcome.intentionallyDisabled()) {
-      // AM 仅对失败 HTTP 回执重试；渠道失败或配置缺失不能被确认为已经投递。
-      throw BizException.of(
-          ResultCode.SERVICE_UNAVAILABLE, "error.alert.notification_delivery_pending");
+    /** 接住某 receiver 的一批 AM 告警,鉴权后投递到真实渠道并落投递日志。 */
+    @PostMapping("/{receiver}")
+    public CommonResponse<AmNotifyOutcome> receive(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @PathVariable String receiver,
+            @RequestBody AlertmanagerWebhookPayload payload) {
+        notifyService.assertEnabled();
+        authenticate(authorization);
+        AmNotifyOutcome outcome = notifyService.deliver(receiver, payload);
+        if (!outcome.delivered() && !outcome.intentionallyDisabled()) {
+            // AM 仅对失败 HTTP 回执重试；渠道失败或配置缺失不能被确认为已经投递。
+            throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.alert.notification_delivery_pending");
+        }
+        return CommonResponse.success(outcome);
     }
-    return CommonResponse.success(outcome);
-  }
 
-  /** fail-closed 共享密钥校验:未配置密钥 / 缺 header / 密钥不匹配一律 401(常量时间比对,不泄漏长度)。 */
-  private void authenticate(String authorization) {
-    String expected = properties.getBearerToken();
-    if (!Texts.hasText(expected)) {
-      log.warn("am-notify rejected: bearer token not configured (fail-closed)");
-      throw BizException.of(
-          ResultCode.UNAUTHORIZED, ResultCode.UNAUTHORIZED.detailKey(), "am-notify not configured");
+    /** fail-closed 共享密钥校验:未配置密钥 / 缺 header / 密钥不匹配一律 401(常量时间比对,不泄漏长度)。 */
+    private void authenticate(String authorization) {
+        String expected = properties.getBearerToken();
+        if (!Texts.hasText(expected)) {
+            log.warn("am-notify rejected: bearer token not configured (fail-closed)");
+            throw BizException.of(
+                    ResultCode.UNAUTHORIZED, ResultCode.UNAUTHORIZED.detailKey(), "am-notify not configured");
+        }
+        String provided = authorization != null && authorization.startsWith(BEARER_PREFIX)
+                ? authorization.substring(BEARER_PREFIX.length()).trim()
+                : null;
+        if (!SecretComparator.constantTimeEquals(expected, provided)) {
+            log.warn("am-notify rejected: invalid or missing bearer token");
+            throw BizException.of(
+                    ResultCode.UNAUTHORIZED, ResultCode.UNAUTHORIZED.detailKey(), "invalid am-notify token");
+        }
     }
-    String provided = authorization != null && authorization.startsWith(BEARER_PREFIX)
-        ? authorization.substring(BEARER_PREFIX.length()).trim()
-        : null;
-    if (!SecretComparator.constantTimeEquals(expected, provided)) {
-      log.warn("am-notify rejected: invalid or missing bearer token");
-      throw BizException.of(
-          ResultCode.UNAUTHORIZED, ResultCode.UNAUTHORIZED.detailKey(), "invalid am-notify token");
-    }
-  }
 }

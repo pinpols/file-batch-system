@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface JobPartitionMapper {
 
-  List<JobPartitionView> selectByQuery(JobPartitionQuery query);
+    List<JobPartitionView> selectByQuery(JobPartitionQuery query);
 
-  long countByQuery(JobPartitionQuery query);
+    long countByQuery(JobPartitionQuery query);
 }

@@ -13,17 +13,17 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
  */
 public final class SqliteSessionFactorySupport {
 
-  private SqliteSessionFactorySupport() {}
+    private SqliteSessionFactorySupport() {}
 
-  public static SqlSessionFactory createSqlSessionFactory(DataSource dataSource) throws Exception {
-    SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
-    factoryBean.setDataSource(dataSource);
-    Resource[] mapperResources = new PathMatchingResourcePatternResolver()
-        .getResources("classpath*:mapper/reportoutbox/sqlite/*.xml");
-    factoryBean.setMapperLocations(mapperResources);
-    Configuration configuration = new Configuration();
-    configuration.setMapUnderscoreToCamelCase(true);
-    factoryBean.setConfiguration(configuration);
-    return factoryBean.getObject();
-  }
+    public static SqlSessionFactory createSqlSessionFactory(DataSource dataSource) throws Exception {
+        SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        Resource[] mapperResources =
+                new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/reportoutbox/sqlite/*.xml");
+        factoryBean.setMapperLocations(mapperResources);
+        Configuration configuration = new Configuration();
+        configuration.setMapUnderscoreToCamelCase(true);
+        factoryBean.setConfiguration(configuration);
+        return factoryBean.getObject();
+    }
 }

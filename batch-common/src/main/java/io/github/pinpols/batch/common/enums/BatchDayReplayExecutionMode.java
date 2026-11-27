@@ -9,13 +9,13 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum BatchDayReplayExecutionMode implements DictEnum {
-  REPLAY("REPLAY", "正式重放"),
-  DRY_RUN("DRY_RUN", "无副作用演练");
+    REPLAY("REPLAY", "正式重放"),
+    DRY_RUN("DRY_RUN", "无副作用演练");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 
-  public static BatchDayReplayExecutionMode fromCodeOrNull(String value) {
-    return DictEnum.fromCode(BatchDayReplayExecutionMode.class, value);
-  }
+    public static BatchDayReplayExecutionMode fromCodeOrNull(String value) {
+        return DictEnum.fromCode(BatchDayReplayExecutionMode.class, value);
+    }
 }

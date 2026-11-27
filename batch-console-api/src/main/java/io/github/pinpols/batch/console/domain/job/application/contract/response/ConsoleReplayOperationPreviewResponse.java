@@ -7,25 +7,25 @@ import java.util.UUID;
 
 /** ADR-049 date-range preview impact. */
 public record ConsoleReplayOperationPreviewResponse(
-    String tenantId,
-    UUID operationKey,
-    String operationType,
-    String calendarCode,
-    LocalDate fromDate,
-    LocalDate throughDate,
-    String scope,
-    int totalCandidateCount,
-    String previewToken,
-    Instant expiresAt,
-    List<DayPreview> days) {
+        String tenantId,
+        UUID operationKey,
+        String operationType,
+        String calendarCode,
+        LocalDate fromDate,
+        LocalDate throughDate,
+        String scope,
+        int totalCandidateCount,
+        String previewToken,
+        Instant expiresAt,
+        List<DayPreview> days) {
 
-  public record DayPreview(
-      LocalDate bizDate,
-      String disposition,
-      int candidateCount,
-      List<ConsoleBatchDayReplayPreviewResponse.PreviewEntry> entries,
-      List<ConsoleBatchDayReplayPreviewResponse.ResultVersionImpact> resultVersionImpacts,
-      List<ConsoleBatchDayReplayPreviewResponse.AssetPartitionImpact> assetPartitionImpacts,
-      List<ConsoleBatchDayReplayPreviewResponse.DispatchImpact> dispatchImpacts,
-      List<String> warnings) {}
+    public record DayPreview(
+            LocalDate bizDate,
+            String disposition,
+            int candidateCount,
+            List<ConsoleBatchDayReplayPreviewResponse.PreviewEntry> entries,
+            List<ConsoleBatchDayReplayPreviewResponse.ResultVersionImpact> resultVersionImpacts,
+            List<ConsoleBatchDayReplayPreviewResponse.AssetPartitionImpact> assetPartitionImpacts,
+            List<ConsoleBatchDayReplayPreviewResponse.DispatchImpact> dispatchImpacts,
+            List<String> warnings) {}
 }

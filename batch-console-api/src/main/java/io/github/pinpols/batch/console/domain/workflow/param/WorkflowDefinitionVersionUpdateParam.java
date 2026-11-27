@@ -10,27 +10,25 @@ import lombok.Builder;
  */
 @Builder(toBuilder = true)
 public record WorkflowDefinitionVersionUpdateParam(
-    String tenantId,
-    Long id,
-    Integer expectedVersion,
-    String workflowName,
-    String workflowType,
-    Boolean enabled,
-    Boolean scheduleEnabled,
-    String scheduleType,
-    String scheduleExpr,
-    String timezone,
-    String triggerMode,
-    String calendarCode,
-    String dependsOnJobCode,
-    String description) {
+        String tenantId,
+        Long id,
+        Integer expectedVersion,
+        String workflowName,
+        String workflowType,
+        Boolean enabled,
+        Boolean scheduleEnabled,
+        String scheduleType,
+        String scheduleExpr,
+        String timezone,
+        String triggerMode,
+        String calendarCode,
+        String dependsOnJobCode,
+        String description) {
 
-  public WorkflowDefinitionVersionUpdateParam {
-    if (EmptyChecks.isBlank(tenantId)
-        || EmptyChecks.isNull(id)
-        || EmptyChecks.isNull(expectedVersion)) {
-      throw new IllegalArgumentException(
-          "tenantId, id and expectedVersion are required for Workflow replacement");
+    public WorkflowDefinitionVersionUpdateParam {
+        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(id) || EmptyChecks.isNull(expectedVersion)) {
+            throw new IllegalArgumentException(
+                    "tenantId, id and expectedVersion are required for Workflow replacement");
+        }
     }
-  }
 }

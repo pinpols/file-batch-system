@@ -38,94 +38,90 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleApprovalControllerTest {
 
-  @Mock
-  private ConsoleApprovalApplicationService approvalApplicationService;
+    @Mock
+    private ConsoleApprovalApplicationService approvalApplicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @BeforeEach
-  void setUp() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("authenticated-user", "t1", Set.of("ROLE_ADMIN")), "", List.of()));
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("authenticated-user", "t1", Set.of("ROLE_ADMIN")), "", List.of()));
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    // R4-P0-2：Controller 现在依赖 ConsoleTenantGuard 强校验请求体 tenantId。
-    // 测试用 mock guard，resolveTenant 简单返回入参（与原 body 直传等价）。
+        // R4-P0-2：Controller 现在依赖 ConsoleTenantGuard 强校验请求体 tenantId。
+        // 测试用 mock guard，resolveTenant 简单返回入参（与原 body 直传等价）。
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleApprovalController(approvalApplicationService, responseFactory, tenantGuard))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleApprovalController(approvalApplicationService, responseFactory, tenantGuard))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @AfterEach
-  void clearSecurityContext() {
-    SecurityContextHolder.clearContext();
-  }
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
-  @Test
-  @DisplayName("幂等缺失:未携带幂等键时返回参数错误, 且不调用审批服务")
-  void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
-    mockMvc
-        .perform(post("/api/console/approvals/appr-001/approve")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("幂等缺失:未携带幂等键时返回参数错误, 且不调用审批服务")
+    void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
+        mockMvc.perform(post("/api/console/approvals/appr-001/approve")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
 
-    verifyNoInteractions(approvalApplicationService);
-  }
+        verifyNoInteractions(approvalApplicationService);
+    }
 
-  @Test
-  @DisplayName("审批成功:操作人取认证主体用户名而不信任请求体")
-  void shouldApproveAndReturnCommonResponseOnSuccess() throws Exception {
-    when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
-    when(approvalApplicationService.approve(anyString(), anyString(), anyString(), anyString()))
-        .thenReturn("OK");
+    @Test
+    @DisplayName("审批成功:操作人取认证主体用户名而不信任请求体")
+    void shouldApproveAndReturnCommonResponseOnSuccess() throws Exception {
+        when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(approvalApplicationService.approve(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn("OK");
 
-    mockMvc
-        .perform(post("/api/console/approvals/appr-001/approve")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/approvals/appr-001/approve")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data").value("OK"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data").value("OK"));
 
-    verify(approvalApplicationService).approve("t1", "appr-001", "authenticated-user", "ok");
-  }
+        verify(approvalApplicationService).approve("t1", "appr-001", "authenticated-user", "ok");
+    }
 
-  @Test
-  @DisplayName("请求体非法:租户与操作人为空时返回校验错误, 不进入业务处理")
-  void shouldReturn400WhenRequestBodyInvalid() throws Exception {
-    mockMvc
-        .perform(post("/api/console/approvals/appr-001/reject")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("请求体非法:租户与操作人为空时返回校验错误, 不进入业务处理")
+    void shouldReturn400WhenRequestBodyInvalid() throws Exception {
+        mockMvc.perform(post("/api/console/approvals/appr-001/reject")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"","operatorId":"","reason":"ok"}
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 }

@@ -12,10 +12,10 @@ import lombok.Data;
 @Data
 public class JobTaskHeartbeatView {
 
-  private Long id;
-  private String tenantId;
-  private String taskStatus;
-  private String heartbeatDetails;
-  private Instant heartbeatAt;
-  private Boolean cancelRequested;
+    private Long id;
+    private String tenantId;
+    private String taskStatus;
+    private String heartbeatDetails;
+    private Instant heartbeatAt;
+    private Boolean cancelRequested;
 }

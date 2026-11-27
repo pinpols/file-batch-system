@@ -21,43 +21,40 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleOutboxOpsApplicationService
-    implements ConsoleOutboxOpsApplicationService {
+public class DefaultConsoleOutboxOpsApplicationService implements ConsoleOutboxOpsApplicationService {
 
-  private final TenantIdResolver tenantGuard;
-  private final ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
-  private final ConsoleRealtimeEventPort domainEventPublisher;
-  private final ConsoleOrchestratorPort orchestratorProxy;
-  private final ConsoleQueryCacheService cacheService;
+    private final TenantIdResolver tenantGuard;
+    private final ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
+    private final ConsoleRealtimeEventPort domainEventPublisher;
+    private final ConsoleOrchestratorPort orchestratorProxy;
+    private final ConsoleQueryCacheService cacheService;
 
-  @Override
-  public ConsoleOutboxStatsResponse stats(String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return cacheService.getOrLoad(
-        "dashboard:" + ConsoleQueryCacheService.keySegment(resolved) + ":outbox-stats",
-        ConsoleQueryCacheService.DASHBOARD_TTL,
-        ConsoleOutboxStatsResponse.class,
-        () -> new ConsoleOutboxStatsResponse(
-            resolved, consoleOutboxEventReadMapper.statsByStatus(resolved)));
-  }
+    @Override
+    public ConsoleOutboxStatsResponse stats(String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        return cacheService.getOrLoad(
+                "dashboard:" + ConsoleQueryCacheService.keySegment(resolved) + ":outbox-stats",
+                ConsoleQueryCacheService.DASHBOARD_TTL,
+                ConsoleOutboxStatsResponse.class,
+                () -> new ConsoleOutboxStatsResponse(resolved, consoleOutboxEventReadMapper.statsByStatus(resolved)));
+    }
 
-  @Override
-  public ConsoleOutboxCleanupResponse cleanup(String tenantId, int retainDays) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    OutboxCleanupProxyResponse result = orchestratorProxy.outboxCleanup(resolved, retainDays);
-    domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-cleanup");
-    cacheService.evictDashboard(resolved);
-    return new ConsoleOutboxCleanupResponse(
-        resolved, retainDays, result.published(), result.giveUp());
-  }
+    @Override
+    public ConsoleOutboxCleanupResponse cleanup(String tenantId, int retainDays) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        OutboxCleanupProxyResponse result = orchestratorProxy.outboxCleanup(resolved, retainDays);
+        domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-cleanup");
+        cacheService.evictDashboard(resolved);
+        return new ConsoleOutboxCleanupResponse(resolved, retainDays, result.published(), result.giveUp());
+    }
 
-  @Override
-  public ConsoleOutboxRepublishResponse republish(String tenantId, List<Long> ids) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    OutboxRepublishProxyResponse result = orchestratorProxy.outboxRepublish(resolved, ids);
-    domainEventPublisher.publishChanged(resolved, "outbox-retries", "outbox-republish");
-    domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-republish");
-    cacheService.evictDashboard(resolved);
-    return new ConsoleOutboxRepublishResponse(resolved, ids.size(), result.reset());
-  }
+    @Override
+    public ConsoleOutboxRepublishResponse republish(String tenantId, List<Long> ids) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        OutboxRepublishProxyResponse result = orchestratorProxy.outboxRepublish(resolved, ids);
+        domainEventPublisher.publishChanged(resolved, "outbox-retries", "outbox-republish");
+        domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-republish");
+        cacheService.evictDashboard(resolved);
+        return new ConsoleOutboxRepublishResponse(resolved, ids.size(), result.reset());
+    }
 }

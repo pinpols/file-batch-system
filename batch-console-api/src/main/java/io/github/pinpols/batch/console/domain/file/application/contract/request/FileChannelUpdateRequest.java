@@ -6,26 +6,26 @@ import lombok.Data;
 
 @Data
 public class FileChannelUpdateRequest {
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @Size(max = 256)
-  private String channelName;
+    @Size(max = 256)
+    private String channelName;
 
-  @Size(max = 32)
-  private String channelType;
+    @Size(max = 32)
+    private String channelType;
 
-  @Size(max = 512)
-  private String targetEndpoint;
+    @Size(max = 512)
+    private String targetEndpoint;
 
-  @Size(max = 32)
-  private String authType;
+    @Size(max = 32)
+    private String authType;
 
-  private String configJson;
+    private String configJson;
 
-  @Size(max = 32)
-  private String receiptPolicy;
+    @Size(max = 32)
+    private String receiptPolicy;
 
-  private Integer timeoutSeconds;
-  private Boolean enabled;
+    private Integer timeoutSeconds;
+    private Boolean enabled;
 }

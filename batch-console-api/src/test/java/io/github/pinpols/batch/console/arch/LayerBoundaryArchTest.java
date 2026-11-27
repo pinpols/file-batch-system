@@ -21,64 +21,64 @@ import org.junit.jupiter.api.Test;
 @DisplayName("分层边界守护: 冻结 Web 层对持久层、基础设施、内部客户端与对象存储的依赖方向")
 class LayerBoundaryArchTest {
 
-  private static final JavaClasses CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-      .importPackages("io.github.pinpols.batch.console..");
+    private static final JavaClasses CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("io.github.pinpols.batch.console..");
 
-  @Test
-  @DisplayName("Web 层不得直接依赖 Mapper 或 Repository, 数据访问只能经应用层或基础设施层")
-  void shouldRejectWebDependencyOnPersistence_whenLayersChecked() {
-    noClasses()
-        .that()
-        .resideInAPackage("..web..")
-        .should()
-        .dependOnClassesThat()
-        .resideInAnyPackage("..mapper..", "..repository..")
-        .because("web 层禁止直连 mapper，数据访问统一经 application/infrastructure")
-        .check(CLASSES);
-  }
+    @Test
+    @DisplayName("Web 层不得直接依赖 Mapper 或 Repository, 数据访问只能经应用层或基础设施层")
+    void shouldRejectWebDependencyOnPersistence_whenLayersChecked() {
+        noClasses()
+                .that()
+                .resideInAPackage("..web..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("..mapper..", "..repository..")
+                .because("web 层禁止直连 mapper，数据访问统一经 application/infrastructure")
+                .check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("Web 层不得直接依赖基础设施实现, 只允许经应用层接口访问")
-  void shouldRejectWebDependencyOnInfrastructure_whenLayersChecked() {
-    noClasses()
-        .that()
-        .resideInAPackage("..web..")
-        .should()
-        .dependOnClassesThat()
-        .resideInAPackage("..infrastructure..")
-        .because("web 层禁止直接依赖基础设施实现（仅允许经 application 接口）")
-        .check(CLASSES);
-  }
+    @Test
+    @DisplayName("Web 层不得直接依赖基础设施实现, 只允许经应用层接口访问")
+    void shouldRejectWebDependencyOnInfrastructure_whenLayersChecked() {
+        noClasses()
+                .that()
+                .resideInAPackage("..web..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("..infrastructure..")
+                .because("web 层禁止直接依赖基础设施实现（仅允许经 application 接口）")
+                .check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("控制器不得直接持有内部客户端或对象存储, 统一经应用端口与适配器")
-  void shouldRejectControllerDependencyOnInternalClients_whenLayersChecked() {
-    noClasses()
-        .that()
-        .resideInAPackage("..web..")
-        .and()
-        .haveSimpleNameEndingWith("Controller")
-        .should()
-        .dependOnClassesThat()
-        .resideInAnyPackage(
-            "io.github.pinpols.batch.console.shared.client..",
-            "io.github.pinpols.batch.common.storage..",
-            "org.springframework.web.client..")
-        .because("web 层不得直接持有内部 HTTP 客户端、对象存储或 RestClient，统一经应用端口和适配器")
-        .check(CLASSES);
-  }
+    @Test
+    @DisplayName("控制器不得直接持有内部客户端或对象存储, 统一经应用端口与适配器")
+    void shouldRejectControllerDependencyOnInternalClients_whenLayersChecked() {
+        noClasses()
+                .that()
+                .resideInAPackage("..web..")
+                .and()
+                .haveSimpleNameEndingWith("Controller")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage(
+                        "io.github.pinpols.batch.console.shared.client..",
+                        "io.github.pinpols.batch.common.storage..",
+                        "org.springframework.web.client..")
+                .because("web 层不得直接持有内部 HTTP 客户端、对象存储或 RestClient，统一经应用端口和适配器")
+                .check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("应用层与基础设施层不得依赖 Web 层请求与响应契约, 契约统一归应用契约包")
-  void shouldRejectAppDependencyOnWebContracts_whenLayersChecked() {
-    noClasses()
-        .that()
-        .resideInAnyPackage("..application..", "..infrastructure..", "..service..")
-        .should()
-        .dependOnClassesThat()
-        .resideInAnyPackage("..web.request..", "..web.query..", "..web.response..")
-        .because("应用层和基础设施层只能依赖 application.contract，不得耦合 HTTP DTO 包")
-        .check(CLASSES);
-  }
+    @Test
+    @DisplayName("应用层与基础设施层不得依赖 Web 层请求与响应契约, 契约统一归应用契约包")
+    void shouldRejectAppDependencyOnWebContracts_whenLayersChecked() {
+        noClasses()
+                .that()
+                .resideInAnyPackage("..application..", "..infrastructure..", "..service..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("..web.request..", "..web.query..", "..web.response..")
+                .because("应用层和基础设施层只能依赖 application.contract，不得耦合 HTTP DTO 包")
+                .check(CLASSES);
+    }
 }

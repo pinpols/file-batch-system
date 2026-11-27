@@ -38,51 +38,50 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleBusinessTenantPlacementController {
 
-  private final ConsoleBusinessTenantPlacementService placementService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleBusinessTenantPlacementService placementService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @GetMapping
-  public CommonResponse<List<BusinessTenantPlacementResponse>> list() {
-    List<BusinessTenantPlacementEntity> placements = placementService.list();
-    List<BusinessTenantPlacementResponse> responses =
-        placements.stream().map(BusinessTenantPlacementResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    @GetMapping
+    public CommonResponse<List<BusinessTenantPlacementResponse>> list() {
+        List<BusinessTenantPlacementEntity> placements = placementService.list();
+        List<BusinessTenantPlacementResponse> responses =
+                placements.stream().map(BusinessTenantPlacementResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  @PutMapping
-  @AuditAction(
-      action = "tenant_placement.upsert",
-      aggregateType = "tenant_placement",
-      aggregateId = "#request.tenantId",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<Void> upsert(@Valid @RequestBody UpsertTenantPlacementRequest request) {
-    String operator = requestMetadataResolver.current().operatorId();
-    BusinessTenantPlacementUpsertCommand command = BusinessTenantPlacementUpsertCommand.builder()
-        .tenantId(request.tenantId())
-        .placementKey(request.placementKey())
-        .operator(operator)
-        .build();
-    placementService.upsert(command);
-    return responseFactory.success(null);
-  }
+    @PutMapping
+    @AuditAction(
+            action = "tenant_placement.upsert",
+            aggregateType = "tenant_placement",
+            aggregateId = "#request.tenantId",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<Void> upsert(@Valid @RequestBody UpsertTenantPlacementRequest request) {
+        String operator = requestMetadataResolver.current().operatorId();
+        BusinessTenantPlacementUpsertCommand command = BusinessTenantPlacementUpsertCommand.builder()
+                .tenantId(request.tenantId())
+                .placementKey(request.placementKey())
+                .operator(operator)
+                .build();
+        placementService.upsert(command);
+        return responseFactory.success(null);
+    }
 
-  @DeleteMapping("/{tenantId}")
-  @AuditAction(
-      action = "tenant_placement.delete",
-      aggregateType = "tenant_placement",
-      aggregateId = "#tenantId",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<Void> delete(
-      @PathVariable("tenantId") @NotBlank @Size(max = 64) String tenantId) {
-    placementService.delete(tenantId);
-    return responseFactory.success(null);
-  }
+    @DeleteMapping("/{tenantId}")
+    @AuditAction(
+            action = "tenant_placement.delete",
+            aggregateType = "tenant_placement",
+            aggregateId = "#tenantId",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<Void> delete(@PathVariable("tenantId") @NotBlank @Size(max = 64) String tenantId) {
+        placementService.delete(tenantId);
+        return responseFactory.success(null);
+    }
 
-  /** placementKey 约束为 key 字符集(shard-N / silo-xxx 约定),防 typo 误把租户指到不存在的片。 */
-  record UpsertTenantPlacementRequest(
-      @NotBlank @Size(max = 64) String tenantId,
+    /** placementKey 约束为 key 字符集(shard-N / silo-xxx 约定),防 typo 误把租户指到不存在的片。 */
+    record UpsertTenantPlacementRequest(
+            @NotBlank @Size(max = 64) String tenantId,
 
-      @NotBlank @Size(max = 64) @Pattern(regexp = "^[a-z0-9-]+$")
-      String placementKey) {}
+            @NotBlank @Size(max = 64) @Pattern(regexp = "^[a-z0-9-]+$")
+            String placementKey) {}
 }

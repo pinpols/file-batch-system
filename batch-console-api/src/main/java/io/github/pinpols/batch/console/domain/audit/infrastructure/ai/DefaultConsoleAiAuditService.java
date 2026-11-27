@@ -16,37 +16,37 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleAiAuditService implements ConsoleAiAuditService {
 
-  private final ConsoleAiAuditLogMapper consoleAiAuditLogMapper;
+    private final ConsoleAiAuditLogMapper consoleAiAuditLogMapper;
 
-  /** 持久化 AI 审计实体。 */
-  @Override
-  public void record(AiAuditCommand command) {
-    ConsoleAiAuditLogEntity entity = new ConsoleAiAuditLogEntity();
-    entity.setTenantId(command.tenantId());
-    entity.setRequestId(command.requestId());
-    entity.setTraceId(command.traceId());
-    entity.setSessionId(command.sessionId());
-    entity.setOperatorId(command.operatorId());
-    String promptCategory = resolvePromptCategory(command.promptCategory());
-    entity.setPromptCategory(promptCategory);
-    entity.setPromptDecision(command.promptDecision());
-    entity.setModelName(command.modelName());
-    entity.setPromptHash(command.promptHash());
-    entity.setPromptPreview(command.promptPreview());
-    entity.setResponseHash(command.responseHash());
-    entity.setResponsePreview(command.responsePreview());
-    entity.setRefusalReason(command.refusalReason());
-    entity.setPromptTokens(command.promptTokens());
-    entity.setCompletionTokens(command.completionTokens());
-    entity.setEstimatedCostUsd(command.estimatedCostUsd());
-    entity.setCostStatus(command.costStatus());
-    consoleAiAuditLogMapper.insert(entity);
-  }
-
-  private String resolvePromptCategory(String promptCategory) {
-    if (promptCategory == null || promptCategory.isBlank()) {
-      return AiPromptCategory.OUT_OF_SCOPE.code();
+    /** 持久化 AI 审计实体。 */
+    @Override
+    public void record(AiAuditCommand command) {
+        ConsoleAiAuditLogEntity entity = new ConsoleAiAuditLogEntity();
+        entity.setTenantId(command.tenantId());
+        entity.setRequestId(command.requestId());
+        entity.setTraceId(command.traceId());
+        entity.setSessionId(command.sessionId());
+        entity.setOperatorId(command.operatorId());
+        String promptCategory = resolvePromptCategory(command.promptCategory());
+        entity.setPromptCategory(promptCategory);
+        entity.setPromptDecision(command.promptDecision());
+        entity.setModelName(command.modelName());
+        entity.setPromptHash(command.promptHash());
+        entity.setPromptPreview(command.promptPreview());
+        entity.setResponseHash(command.responseHash());
+        entity.setResponsePreview(command.responsePreview());
+        entity.setRefusalReason(command.refusalReason());
+        entity.setPromptTokens(command.promptTokens());
+        entity.setCompletionTokens(command.completionTokens());
+        entity.setEstimatedCostUsd(command.estimatedCostUsd());
+        entity.setCostStatus(command.costStatus());
+        consoleAiAuditLogMapper.insert(entity);
     }
-    return promptCategory;
-  }
+
+    private String resolvePromptCategory(String promptCategory) {
+        if (promptCategory == null || promptCategory.isBlank()) {
+            return AiPromptCategory.OUT_OF_SCOPE.code();
+        }
+        return promptCategory;
+    }
 }

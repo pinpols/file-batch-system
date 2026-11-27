@@ -36,69 +36,64 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleApiKeyController {
 
-  private final ConsoleApiKeyService apiKeyService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleApiKeyService apiKeyService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  /** 列出租户下所有 API Key（不含明文密钥）。 */
-  @GetMapping
-  public CommonResponse<List<ApiKeyResponse>> list(@RequestParam("tenantId") String tenantId) {
-    List<ApiKeyEntity> apiKeys = apiKeyService.list(tenantId);
-    List<ApiKeyResponse> responses = apiKeys.stream().map(ApiKeyResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    /** 列出租户下所有 API Key（不含明文密钥）。 */
+    @GetMapping
+    public CommonResponse<List<ApiKeyResponse>> list(@RequestParam("tenantId") String tenantId) {
+        List<ApiKeyEntity> apiKeys = apiKeyService.list(tenantId);
+        List<ApiKeyResponse> responses =
+                apiKeys.stream().map(ApiKeyResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  /** 查看 API Key 详情。 */
-  @GetMapping("/{id}")
-  public CommonResponse<ApiKeyResponse> detail(
-      @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
-    ApiKeyEntity apiKey = apiKeyService.detail(tenantId, id);
-    ApiKeyResponse response = ApiKeyResponse.from(apiKey);
-    return responseFactory.success(response);
-  }
+    /** 查看 API Key 详情。 */
+    @GetMapping("/{id}")
+    public CommonResponse<ApiKeyResponse> detail(@RequestParam("tenantId") String tenantId, @PathVariable Long id) {
+        ApiKeyEntity apiKey = apiKeyService.detail(tenantId, id);
+        ApiKeyResponse response = ApiKeyResponse.from(apiKey);
+        return responseFactory.success(response);
+    }
 
-  /** 创建 API Key，返回明文密钥（仅此一次可见）。双击/重试可能创建多把密钥 → 强制幂等。 */
-  @PostMapping
-  @Idempotent
-  @AuditAction(
-      action = "apiKey.create",
-      aggregateType = "api_key",
-      recordParams = false,
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleApiKeyCreateResponse> create(
-      @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateApiKeyRequest request) {
-    String operator = requestMetadataResolver.current().operatorId();
-    ConsoleApiKeyService.CreateResult result = apiKeyService.create(
-        tenantId, request.keyName(), request.scopes(), request.expiresAt(), operator);
-    ApiKeyEntity entity = result.entity();
-    ConsoleApiKeyCreateResponse response = new ConsoleApiKeyCreateResponse(
-        entity.getId(),
-        entity.getKeyName(),
-        entity.getKeyPrefix(),
-        result.rawKey(),
-        entity.getCreatedAt());
-    return responseFactory.success(response);
-  }
+    /** 创建 API Key，返回明文密钥（仅此一次可见）。双击/重试可能创建多把密钥 → 强制幂等。 */
+    @PostMapping
+    @Idempotent
+    @AuditAction(
+            action = "apiKey.create",
+            aggregateType = "api_key",
+            recordParams = false,
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleApiKeyCreateResponse> create(
+            @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateApiKeyRequest request) {
+        String operator = requestMetadataResolver.current().operatorId();
+        ConsoleApiKeyService.CreateResult result =
+                apiKeyService.create(tenantId, request.keyName(), request.scopes(), request.expiresAt(), operator);
+        ApiKeyEntity entity = result.entity();
+        ConsoleApiKeyCreateResponse response = new ConsoleApiKeyCreateResponse(
+                entity.getId(), entity.getKeyName(), entity.getKeyPrefix(), result.rawKey(), entity.getCreatedAt());
+        return responseFactory.success(response);
+    }
 
-  /** 吊销 API Key。 */
-  @DeleteMapping("/{id}")
-  // 撤销权与创建权对称:能自助建 key 的 TENANT_USER 也必须能撤销(泄露/轮换自救),
-  // 否则"能建不能撤"是更大的安全洞。租户隔离由 service 层保证。
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
-  @AuditAction(
-      action = "apiKey.revoke",
-      aggregateType = "api_key",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<Void> revoke(
-      @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
-    String operator = requestMetadataResolver.current().operatorId();
-    apiKeyService.revoke(tenantId, id, operator);
-    return responseFactory.success(null);
-  }
+    /** 吊销 API Key。 */
+    @DeleteMapping("/{id}")
+    // 撤销权与创建权对称:能自助建 key 的 TENANT_USER 也必须能撤销(泄露/轮换自救),
+    // 否则"能建不能撤"是更大的安全洞。租户隔离由 service 层保证。
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
+    @AuditAction(
+            action = "apiKey.revoke",
+            aggregateType = "api_key",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<Void> revoke(@RequestParam("tenantId") String tenantId, @PathVariable Long id) {
+        String operator = requestMetadataResolver.current().operatorId();
+        apiKeyService.revoke(tenantId, id, operator);
+        return responseFactory.success(null);
+    }
 
-  record CreateApiKeyRequest(
-      @NotBlank @Size(max = 128) String keyName,
-      @Size(max = 512) String scopes,
-      Instant expiresAt) {}
+    record CreateApiKeyRequest(
+            @NotBlank @Size(max = 128) String keyName,
+            @Size(max = 512) String scopes,
+            Instant expiresAt) {}
 }

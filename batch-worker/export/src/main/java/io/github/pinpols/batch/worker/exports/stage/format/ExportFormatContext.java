@@ -17,21 +17,21 @@ import lombok.Builder;
  */
 @Builder
 public record ExportFormatContext(
-    Map<String, Object> batch,
-    Object batchId,
-    int pageSize,
-    int chunkSize,
-    long maxRows,
-    Path generatedFile,
-    ExportJobContext jobContext,
-    ExportDataPlugin dataPlugin,
-    ExportDataContext dataCtx,
-    // 导出编码选项：由 GenerateStep 从模板 target_charset / with_bom / line_separator 解析后透传。
-    // 文本格式（DELIMITED / FIXED_WIDTH / JSON）生效；EXCEL 是二进制容器不适用（GenerateStep 恒传 UTF-8）。
-    Charset charset,
-    Boolean withBom,
-    String lineSeparator,
-    // ADR-038 P3:GENERATE 续跑编排;null = 续跑关闭(开关 off / 无 pipelineInstanceId / Excel 格式),
-    // 此时 generate 走与今天完全一致的全量写路径。
-    GenerateCheckpoint checkpoint,
-    PipelineStageProgressRegistry progressRegistry) {}
+        Map<String, Object> batch,
+        Object batchId,
+        int pageSize,
+        int chunkSize,
+        long maxRows,
+        Path generatedFile,
+        ExportJobContext jobContext,
+        ExportDataPlugin dataPlugin,
+        ExportDataContext dataCtx,
+        // 导出编码选项：由 GenerateStep 从模板 target_charset / with_bom / line_separator 解析后透传。
+        // 文本格式（DELIMITED / FIXED_WIDTH / JSON）生效；EXCEL 是二进制容器不适用（GenerateStep 恒传 UTF-8）。
+        Charset charset,
+        Boolean withBom,
+        String lineSeparator,
+        // ADR-038 P3:GENERATE 续跑编排;null = 续跑关闭(开关 off / 无 pipelineInstanceId / Excel 格式),
+        // 此时 generate 走与今天完全一致的全量写路径。
+        GenerateCheckpoint checkpoint,
+        PipelineStageProgressRegistry progressRegistry) {}

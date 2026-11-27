@@ -11,13 +11,13 @@ import lombok.Data;
 @Data
 public class BatchEnabledPatchRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotNull
-  private Boolean enabled;
+    @NotNull
+    private Boolean enabled;
 
-  @NotEmpty
-  @Size(max = 200)
-  private List<Long> ids;
+    @NotEmpty
+    @Size(max = 200)
+    private List<Long> ids;
 }

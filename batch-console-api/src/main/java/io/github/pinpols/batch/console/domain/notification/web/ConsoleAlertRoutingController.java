@@ -25,46 +25,44 @@ import org.springframework.web.bind.annotation.*;
 @Idempotent
 public class ConsoleAlertRoutingController {
 
-  private final ConsoleAlertRoutingApplicationService alertRoutingApplicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleAlertRoutingApplicationService alertRoutingApplicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<PageResponse<ConsoleAlertRoutingResponse>> list(
-      @Valid @ModelAttribute AlertRoutingQueryRequest request) {
-    PageResponse<ConsoleAlertRoutingResponse> page = alertRoutingApplicationService.list(request);
-    return responseFactory.success(page);
-  }
+    @GetMapping
+    public CommonResponse<PageResponse<ConsoleAlertRoutingResponse>> list(
+            @Valid @ModelAttribute AlertRoutingQueryRequest request) {
+        PageResponse<ConsoleAlertRoutingResponse> page = alertRoutingApplicationService.list(request);
+        return responseFactory.success(page);
+    }
 
-  @PostMapping
-  @AuditAction(
-      action = "alertRouting.create",
-      aggregateType = "alert_routing",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<ConsoleAlertRoutingResponse> create(
-      @Valid @RequestBody AlertRoutingSaveRequest request) {
-    return responseFactory.success(alertRoutingApplicationService.create(request));
-  }
+    @PostMapping
+    @AuditAction(
+            action = "alertRouting.create",
+            aggregateType = "alert_routing",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<ConsoleAlertRoutingResponse> create(@Valid @RequestBody AlertRoutingSaveRequest request) {
+        return responseFactory.success(alertRoutingApplicationService.create(request));
+    }
 
-  @PutMapping("/{id}")
-  @AuditAction(
-      action = "alertRouting.update",
-      aggregateType = "alert_routing",
-      aggregateId = "#id",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<ConsoleAlertRoutingResponse> update(
-      @PathVariable Long id, @Valid @RequestBody AlertRoutingSaveRequest request) {
-    return responseFactory.success(alertRoutingApplicationService.update(id, request));
-  }
+    @PutMapping("/{id}")
+    @AuditAction(
+            action = "alertRouting.update",
+            aggregateType = "alert_routing",
+            aggregateId = "#id",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<ConsoleAlertRoutingResponse> update(
+            @PathVariable Long id, @Valid @RequestBody AlertRoutingSaveRequest request) {
+        return responseFactory.success(alertRoutingApplicationService.update(id, request));
+    }
 
-  @PatchMapping("/{id}/enabled")
-  @AuditAction(
-      action = "alertRouting.toggle",
-      aggregateType = "alert_routing",
-      aggregateId = "#id",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<Void> setEnabled(
-      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    alertRoutingApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
-    return responseFactory.success(null);
-  }
+    @PatchMapping("/{id}/enabled")
+    @AuditAction(
+            action = "alertRouting.toggle",
+            aggregateType = "alert_routing",
+            aggregateId = "#id",
+            targetTenantParam = "#request.tenantId")
+    public CommonResponse<Void> setEnabled(@PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        alertRoutingApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
+        return responseFactory.success(null);
+    }
 }

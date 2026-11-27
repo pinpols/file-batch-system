@@ -29,113 +29,110 @@ import org.mockito.Mockito;
 @DisplayName("BatchPlatformClient 停止顺序 — 关闭次序与注销异常兜底")
 class BatchPlatformClientStopOrderTest {
 
-  private static BatchPlatformClientConfig cfg() {
-    return BatchPlatformClientConfig.builder()
-        .baseUrl("https://batch.example.com")
-        .tenantId("tx")
-        .workerCode("w-1")
-        .kafkaBootstrap("kafka:9092")
-        .kafkaTopicPattern("batch.task.dispatch.tx.*")
-        .kafkaGroupId("g")
-        .build();
-  }
+    private static BatchPlatformClientConfig cfg() {
+        return BatchPlatformClientConfig.builder()
+                .baseUrl("https://batch.example.com")
+                .tenantId("tx")
+                .workerCode("w-1")
+                .kafkaBootstrap("kafka:9092")
+                .kafkaTopicPattern("batch.task.dispatch.tx.*")
+                .kafkaGroupId("g")
+                .build();
+    }
 
-  private static void inject(BatchPlatformClient target, String fieldName, Object value)
-      throws Exception {
-    Field f = BatchPlatformClient.class.getDeclaredField(fieldName);
-    f.setAccessible(true);
-    f.set(target, value);
-  }
+    private static void inject(BatchPlatformClient target, String fieldName, Object value) throws Exception {
+        Field f = BatchPlatformClient.class.getDeclaredField(fieldName);
+        f.setAccessible(true);
+        f.set(target, value);
+    }
 
-  @Test
-  @DisplayName("停止时先关消费端并排空派发,再取消在飞请求、关心跳与租约并注销")
-  void shouldCloseInFixedOrder_whenStopping() throws Exception {
-    BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    KafkaTaskConsumer kafka = mock(KafkaTaskConsumer.class);
-    HeartbeatScheduler hb = mock(HeartbeatScheduler.class);
-    LeaseRenewalScheduler lease = mock(LeaseRenewalScheduler.class);
-    Thread kafkaThread = new Thread(() -> {}, "test-kafka");
-    kafkaThread.start();
-    kafkaThread.join();
+    @Test
+    @DisplayName("停止时先关消费端并排空派发,再取消在飞请求、关心跳与租约并注销")
+    void shouldCloseInFixedOrder_whenStopping() throws Exception {
+        BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        KafkaTaskConsumer kafka = mock(KafkaTaskConsumer.class);
+        HeartbeatScheduler hb = mock(HeartbeatScheduler.class);
+        LeaseRenewalScheduler lease = mock(LeaseRenewalScheduler.class);
+        Thread kafkaThread = new Thread(() -> {}, "test-kafka");
+        kafkaThread.start();
+        kafkaThread.join();
 
-    inject(client, "httpClient", http);
-    inject(client, "started", true);
-    inject(client, "dispatcher", dispatcher);
-    inject(client, "kafkaConsumer", kafka);
-    inject(client, "kafkaConsumerThread", kafkaThread);
-    inject(client, "heartbeatScheduler", hb);
-    inject(client, "leaseRenewalScheduler", lease);
+        inject(client, "httpClient", http);
+        inject(client, "started", true);
+        inject(client, "dispatcher", dispatcher);
+        inject(client, "kafkaConsumer", kafka);
+        inject(client, "kafkaConsumerThread", kafkaThread);
+        inject(client, "heartbeatScheduler", hb);
+        inject(client, "leaseRenewalScheduler", lease);
 
-    client.stop();
+        client.stop();
 
-    InOrder order = Mockito.inOrder(kafka, dispatcher, hb, lease, http);
-    order.verify(kafka).close(any(Duration.class));
-    order.verify(dispatcher).stop(any(Duration.class));
-    order.verify(http).cancelInFlightCalls();
-    order.verify(hb).close(any(Duration.class));
-    order.verify(lease).close(any(Duration.class));
-    order.verify(http).deactivate(anyString(), any(), any(Duration.class));
-    order.verify(http).evictIdleConnections();
-  }
+        InOrder order = Mockito.inOrder(kafka, dispatcher, hb, lease, http);
+        order.verify(kafka).close(any(Duration.class));
+        order.verify(dispatcher).stop(any(Duration.class));
+        order.verify(http).cancelInFlightCalls();
+        order.verify(hb).close(any(Duration.class));
+        order.verify(lease).close(any(Duration.class));
+        order.verify(http).deactivate(anyString(), any(), any(Duration.class));
+        order.verify(http).evictIdleConnections();
+    }
 
-  @Test
-  @DisplayName("注销上报失败被吞掉,停止流程仍完整走完")
-  void shouldSwallowDeactivateFailure_whenStopping() throws Exception {
-    BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    doThrow(new IOException("network down"))
-        .when(http)
-        .deactivate(anyString(), any(), any(Duration.class));
+    @Test
+    @DisplayName("注销上报失败被吞掉,停止流程仍完整走完")
+    void shouldSwallowDeactivateFailure_whenStopping() throws Exception {
+        BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        doThrow(new IOException("network down")).when(http).deactivate(anyString(), any(), any(Duration.class));
 
-    inject(client, "httpClient", http);
-    inject(client, "started", true);
+        inject(client, "httpClient", http);
+        inject(client, "started", true);
 
-    client.stop();
+        client.stop();
 
-    verify(http).deactivate(anyString(), any(), any(Duration.class));
-    verify(http).evictIdleConnections();
-  }
+        verify(http).deactivate(anyString(), any(), any(Duration.class));
+        verify(http).evictIdleConnections();
+    }
 
-  @Test
-  @DisplayName("未启动时调用停止不对任何组件发起操作")
-  void shouldDoNothing_whenStopCalledBeforeStart() throws Exception {
-    BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    inject(client, "httpClient", http);
+    @Test
+    @DisplayName("未启动时调用停止不对任何组件发起操作")
+    void shouldDoNothing_whenStopCalledBeforeStart() throws Exception {
+        BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        inject(client, "httpClient", http);
 
-    client.stop();
+        client.stop();
 
-    Mockito.verifyNoInteractions(http);
-  }
+        Mockito.verifyNoInteractions(http);
+    }
 
-  @Test
-  @DisplayName("启动中途失败时即使 started=false 也清理已分配的运行资源")
-  void shouldCleanPartialRuntimeResources_whenStartupFailsBeforeStartedFlag() throws Exception {
-    BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    KafkaTaskConsumer kafka = mock(KafkaTaskConsumer.class);
-    HeartbeatScheduler heartbeat = mock(HeartbeatScheduler.class);
-    LeaseRenewalScheduler lease = mock(LeaseRenewalScheduler.class);
+    @Test
+    @DisplayName("启动中途失败时即使 started=false 也清理已分配的运行资源")
+    void shouldCleanPartialRuntimeResources_whenStartupFailsBeforeStartedFlag() throws Exception {
+        BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+        KafkaTaskConsumer kafka = mock(KafkaTaskConsumer.class);
+        HeartbeatScheduler heartbeat = mock(HeartbeatScheduler.class);
+        LeaseRenewalScheduler lease = mock(LeaseRenewalScheduler.class);
 
-    inject(client, "httpClient", http);
-    inject(client, "started", false);
-    inject(client, "dispatcher", dispatcher);
-    inject(client, "kafkaConsumer", kafka);
-    inject(client, "heartbeatScheduler", heartbeat);
-    inject(client, "leaseRenewalScheduler", lease);
+        inject(client, "httpClient", http);
+        inject(client, "started", false);
+        inject(client, "dispatcher", dispatcher);
+        inject(client, "kafkaConsumer", kafka);
+        inject(client, "heartbeatScheduler", heartbeat);
+        inject(client, "leaseRenewalScheduler", lease);
 
-    client.stop(Duration.ofMillis(500));
+        client.stop(Duration.ofMillis(500));
 
-    InOrder order = Mockito.inOrder(kafka, dispatcher, heartbeat, lease, http);
-    order.verify(kafka).close(any(Duration.class));
-    order.verify(dispatcher).stop(any(Duration.class));
-    order.verify(http).cancelInFlightCalls();
-    order.verify(heartbeat).close(any(Duration.class));
-    order.verify(lease).close(any(Duration.class));
-    order.verify(http).deactivate(anyString(), any(), any(Duration.class));
-    order.verify(http).evictIdleConnections();
-  }
+        InOrder order = Mockito.inOrder(kafka, dispatcher, heartbeat, lease, http);
+        order.verify(kafka).close(any(Duration.class));
+        order.verify(dispatcher).stop(any(Duration.class));
+        order.verify(http).cancelInFlightCalls();
+        order.verify(heartbeat).close(any(Duration.class));
+        order.verify(lease).close(any(Duration.class));
+        order.verify(http).deactivate(anyString(), any(), any(Duration.class));
+        order.verify(http).evictIdleConnections();
+    }
 }

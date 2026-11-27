@@ -46,215 +46,210 @@ import org.springframework.transaction.annotation.Transactional;
 @SuppressWarnings("java:S2583")
 public class ResultVersionWriter {
 
-  static final String PROMOTION_AUTO_LATEST = "AUTO_LATEST";
-  static final String PROMOTION_MANUAL_APPROVAL = "MANUAL_APPROVAL";
-  static final String PAYLOAD_STORAGE_INLINE_JSON = "INLINE_JSON";
+    static final String PROMOTION_AUTO_LATEST = "AUTO_LATEST";
+    static final String PROMOTION_MANUAL_APPROVAL = "MANUAL_APPROVAL";
+    static final String PAYLOAD_STORAGE_INLINE_JSON = "INLINE_JSON";
 
-  private final ResultVersionMapper resultVersionMapper;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final AssetPartitionService assetPartitionService;
+    private final ResultVersionMapper resultVersionMapper;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final AssetPartitionService assetPartitionService;
 
-  /**
-   * ADR-021 DQ gate 执行器（可选注入）：BLOCKER 失败 → 强制 promotion_policy=MANUAL_APPROVAL；缺省 / NO_RULES →
-   * 不影响现有 promote 流程。
-   */
-  private final ObjectProvider<DataQualityCheckExecutor> dqExecutorProvider;
+    /**
+     * ADR-021 DQ gate 执行器（可选注入）：BLOCKER 失败 → 强制 promotion_policy=MANUAL_APPROVAL；缺省 / NO_RULES →
+     * 不影响现有 promote 流程。
+     */
+    private final ObjectProvider<DataQualityCheckExecutor> dqExecutorProvider;
 
-  /**
-   * 在 job_instance 进入 SUCCESS / PARTIAL_FAILED 终态时调用。 调用方必须确保已经在外层事务里完成了 instance
-   * 状态转换；本方法在同一事务里写入版本。
-   *
-   * <p>非成功类终态（FAILED / CANCELLED / TERMINATED）以及 instance 缺关键字段（jobCode / bizDate）一律 skip ——
-   * 不抛异常，避免污染状态机主链。
-   */
-  @Transactional(propagation = Propagation.MANDATORY)
-  public void writeOnTerminal(JobInstanceEntity instance, Map<String, Object> outputs) {
-    boolean instanceIsNotEligibleForResultVersion = EmptyChecks.isNull(instance)
-        || instance.getId() == null
-        || !Texts.hasText(instance.getTenantId())
-        || !isSuccessTerminal(instance.getInstanceStatus());
-    if (instanceIsNotEligibleForResultVersion) {
-      return;
-    }
-    if (!Texts.hasText(instance.getJobCode()) || instance.getBizDate() == null) {
-      return;
-    }
-    String tenantId = instance.getTenantId();
-    String businessKey = buildBusinessKey(instance);
-
-    resultVersionMapper.lockBusinessKey(tenantId, businessKey);
-
-    // 幂等：同一 job_instance 只允许落 1 行 result_version（重复 report 不重复创建）
-    ResultVersionEntity existing =
-        resultVersionMapper.selectByJobInstanceId(tenantId, instance.getId());
-    if (existing != null) {
-      return;
-    }
-
-    String promotionPolicy = resolvePromotionPolicy(instance);
-    Instant now = dateTimeSupport.nowInstant();
-    String status;
-    Instant effectiveAt;
-    String dqGateStatus = null;
-    boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
-    if (dryRun) {
-      // ADR-026 dry-run：不进 EFFECTIVE 链，落 DRY_RUN 状态供运维核对，不超越也不影响实盘版本
-      status = ResultVersionMapper.VersionStatus.DRY_RUN.name();
-      effectiveAt = null;
-    } else {
-      // ADR-021 DQ gate：若 BLOCKER 失败 → 强制 MANUAL_APPROVAL（即使 resultPolicy=CREATE_NEW_VERSION）
-      DataQualityGateOutcome dqOutcome = runDqGateSafely(instance, businessKey);
-      DataQualityGateOutcome.GateStatus gateStatus = dqOutcome.status();
-      dqGateStatus =
-          gateStatus == DataQualityGateOutcome.GateStatus.NO_RULES ? null : gateStatus.name();
-      boolean dqBlocked = dqOutcome.status() == DataQualityGateOutcome.GateStatus.BLOCKED;
-      // PARTIAL_FAILED（部分分片失败）不得自动进 EFFECTIVE：否则下游 readiness/asset_partition 会把不
-      // 完整结果当完整消费（违反 roadmap §2.2「PARTIAL_FAILED 不得被静默消费」）。强制 PENDING +
-      // MANUAL_APPROVAL,由运维重跑失败分片（→ 全 SUCCESS → EFFECTIVE）或人工确认后才可用;
-      // 且不 supersede 旧 EFFECTIVE（部分失败的重跑不得把上一版好结果降级）。
-      boolean partialFailed =
-          JobInstanceStatus.PARTIAL_FAILED.code().equals(instance.getInstanceStatus());
-      boolean versionCannotPromoteAutomatically =
-          dqBlocked || partialFailed || PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy);
-      if (versionCannotPromoteAutomatically) {
-        status = ResultVersionMapper.VersionStatus.PENDING.name();
-        effectiveAt = null;
-        if (partialFailed) {
-          promotionPolicy = PROMOTION_MANUAL_APPROVAL;
-          log.warn(
-              "PARTIAL_FAILED terminal -> result_version set to PENDING (not automatically EFFECTIVE; prevents downstream"
-                  + " consumption of partial results): tenantId={}, businessKey={}, jobInstanceId={}",
-              tenantId,
-              businessKey,
-              instance.getId());
+    /**
+     * 在 job_instance 进入 SUCCESS / PARTIAL_FAILED 终态时调用。 调用方必须确保已经在外层事务里完成了 instance
+     * 状态转换；本方法在同一事务里写入版本。
+     *
+     * <p>非成功类终态（FAILED / CANCELLED / TERMINATED）以及 instance 缺关键字段（jobCode / bizDate）一律 skip ——
+     * 不抛异常，避免污染状态机主链。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void writeOnTerminal(JobInstanceEntity instance, Map<String, Object> outputs) {
+        boolean instanceIsNotEligibleForResultVersion = EmptyChecks.isNull(instance)
+                || instance.getId() == null
+                || !Texts.hasText(instance.getTenantId())
+                || !isSuccessTerminal(instance.getInstanceStatus());
+        if (instanceIsNotEligibleForResultVersion) {
+            return;
         }
-        if (dqBlocked) {
-          promotionPolicy = PROMOTION_MANUAL_APPROVAL;
-          log.warn(
-              "DQ gate BLOCKED → result_version forced to PENDING/MANUAL_APPROVAL:"
-                  + " tenantId={}, businessKey={}, jobInstanceId={}",
-              tenantId,
-              businessKey,
-              instance.getId());
+        if (!Texts.hasText(instance.getJobCode()) || instance.getBizDate() == null) {
+            return;
         }
-      } else {
-        // AUTO_LATEST：先把同 business_key 的旧 EFFECTIVE 推到 SUPERSEDED，再插入新 EFFECTIVE
-        resultVersionMapper.supersedePriorEffective(tenantId, businessKey, now);
-        status = ResultVersionMapper.VersionStatus.EFFECTIVE.name();
-        effectiveAt = now;
-      }
+        String tenantId = instance.getTenantId();
+        String businessKey = buildBusinessKey(instance);
+
+        resultVersionMapper.lockBusinessKey(tenantId, businessKey);
+
+        // 幂等：同一 job_instance 只允许落 1 行 result_version（重复 report 不重复创建）
+        ResultVersionEntity existing = resultVersionMapper.selectByJobInstanceId(tenantId, instance.getId());
+        if (existing != null) {
+            return;
+        }
+
+        String promotionPolicy = resolvePromotionPolicy(instance);
+        Instant now = dateTimeSupport.nowInstant();
+        String status;
+        Instant effectiveAt;
+        String dqGateStatus = null;
+        boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
+        if (dryRun) {
+            // ADR-026 dry-run：不进 EFFECTIVE 链，落 DRY_RUN 状态供运维核对，不超越也不影响实盘版本
+            status = ResultVersionMapper.VersionStatus.DRY_RUN.name();
+            effectiveAt = null;
+        } else {
+            // ADR-021 DQ gate：若 BLOCKER 失败 → 强制 MANUAL_APPROVAL（即使 resultPolicy=CREATE_NEW_VERSION）
+            DataQualityGateOutcome dqOutcome = runDqGateSafely(instance, businessKey);
+            DataQualityGateOutcome.GateStatus gateStatus = dqOutcome.status();
+            dqGateStatus = gateStatus == DataQualityGateOutcome.GateStatus.NO_RULES ? null : gateStatus.name();
+            boolean dqBlocked = dqOutcome.status() == DataQualityGateOutcome.GateStatus.BLOCKED;
+            // PARTIAL_FAILED（部分分片失败）不得自动进 EFFECTIVE：否则下游 readiness/asset_partition 会把不
+            // 完整结果当完整消费（违反 roadmap §2.2「PARTIAL_FAILED 不得被静默消费」）。强制 PENDING +
+            // MANUAL_APPROVAL,由运维重跑失败分片（→ 全 SUCCESS → EFFECTIVE）或人工确认后才可用;
+            // 且不 supersede 旧 EFFECTIVE（部分失败的重跑不得把上一版好结果降级）。
+            boolean partialFailed = JobInstanceStatus.PARTIAL_FAILED.code().equals(instance.getInstanceStatus());
+            boolean versionCannotPromoteAutomatically =
+                    dqBlocked || partialFailed || PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy);
+            if (versionCannotPromoteAutomatically) {
+                status = ResultVersionMapper.VersionStatus.PENDING.name();
+                effectiveAt = null;
+                if (partialFailed) {
+                    promotionPolicy = PROMOTION_MANUAL_APPROVAL;
+                    log.warn(
+                            "PARTIAL_FAILED terminal -> result_version set to PENDING (not automatically EFFECTIVE; prevents downstream"
+                                    + " consumption of partial results): tenantId={}, businessKey={}, jobInstanceId={}",
+                            tenantId,
+                            businessKey,
+                            instance.getId());
+                }
+                if (dqBlocked) {
+                    promotionPolicy = PROMOTION_MANUAL_APPROVAL;
+                    log.warn(
+                            "DQ gate BLOCKED → result_version forced to PENDING/MANUAL_APPROVAL:"
+                                    + " tenantId={}, businessKey={}, jobInstanceId={}",
+                            tenantId,
+                            businessKey,
+                            instance.getId());
+                }
+            } else {
+                // AUTO_LATEST：先把同 business_key 的旧 EFFECTIVE 推到 SUPERSEDED，再插入新 EFFECTIVE
+                resultVersionMapper.supersedePriorEffective(tenantId, businessKey, now);
+                status = ResultVersionMapper.VersionStatus.EFFECTIVE.name();
+                effectiveAt = now;
+            }
+        }
+
+        Integer maxVersion = resultVersionMapper.selectMaxVersionNo(tenantId, businessKey);
+        int versionNo = (maxVersion == null ? 0 : maxVersion) + 1;
+
+        final String finalDqGateStatus = dqGateStatus;
+        String payloadJson = serializeOutputs(outputs);
+        String generatedBy = resolveGeneratedBy(instance);
+        ResultVersionEntity newVersion = ResultVersionEntity.builder()
+                .dqGateStatus(finalDqGateStatus)
+                .tenantId(tenantId)
+                .businessKey(businessKey)
+                .versionNo(versionNo)
+                .jobInstanceId(instance.getId())
+                .status(status)
+                .effectiveAt(effectiveAt)
+                .payloadStorage(PAYLOAD_STORAGE_INLINE_JSON)
+                .payloadJson(payloadJson)
+                .generatedAt(now)
+                .generatedBy(generatedBy)
+                .promotionPolicy(promotionPolicy)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        ResultVersionEntity persisted = resultVersionMapper.insertReturning(newVersion);
+        if (persisted == null) {
+            throw new IllegalStateException("result_version insert returned no row: tenantId=" + tenantId
+                    + ", businessKey=" + businessKey
+                    + ", jobInstanceId=" + instance.getId());
+        }
+        if (ResultVersionMapper.VersionStatus.EFFECTIVE.name().equals(status)) {
+            assetPartitionService.materializeEffectiveJobPartition(instance, persisted);
+        }
+
+        log.debug(
+                "result_version written: tenantId={}, businessKey={}, versionNo={}, status={}," + " jobInstanceId={}",
+                tenantId,
+                businessKey,
+                versionNo,
+                status,
+                instance.getId());
     }
 
-    Integer maxVersion = resultVersionMapper.selectMaxVersionNo(tenantId, businessKey);
-    int versionNo = (maxVersion == null ? 0 : maxVersion) + 1;
-
-    final String finalDqGateStatus = dqGateStatus;
-    String payloadJson = serializeOutputs(outputs);
-    String generatedBy = resolveGeneratedBy(instance);
-    ResultVersionEntity newVersion = ResultVersionEntity.builder()
-        .dqGateStatus(finalDqGateStatus)
-        .tenantId(tenantId)
-        .businessKey(businessKey)
-        .versionNo(versionNo)
-        .jobInstanceId(instance.getId())
-        .status(status)
-        .effectiveAt(effectiveAt)
-        .payloadStorage(PAYLOAD_STORAGE_INLINE_JSON)
-        .payloadJson(payloadJson)
-        .generatedAt(now)
-        .generatedBy(generatedBy)
-        .promotionPolicy(promotionPolicy)
-        .createdAt(now)
-        .updatedAt(now)
-        .build();
-    ResultVersionEntity persisted = resultVersionMapper.insertReturning(newVersion);
-    if (persisted == null) {
-      throw new IllegalStateException("result_version insert returned no row: tenantId=" + tenantId
-          + ", businessKey=" + businessKey
-          + ", jobInstanceId=" + instance.getId());
-    }
-    if (ResultVersionMapper.VersionStatus.EFFECTIVE.name().equals(status)) {
-      assetPartitionService.materializeEffectiveJobPartition(instance, persisted);
+    /** 业务主键格式（ADR-017 §业务主键定义）：{@code job:{jobCode}:{bizDate}}。 */
+    private String buildBusinessKey(JobInstanceEntity instance) {
+        return "job:" + instance.getJobCode() + ":" + instance.getBizDate();
     }
 
-    log.debug(
-        "result_version written: tenantId={}, businessKey={}, versionNo={}, status={},"
-            + " jobInstanceId={}",
-        tenantId,
-        businessKey,
-        versionNo,
-        status,
-        instance.getId());
-  }
-
-  /** 业务主键格式（ADR-017 §业务主键定义）：{@code job:{jobCode}:{bizDate}}。 */
-  private String buildBusinessKey(JobInstanceEntity instance) {
-    return "job:" + instance.getJobCode() + ":" + instance.getBizDate();
-  }
-
-  /**
-   * ADR-021 DQ gate 执行包装：executor bean 缺失 / 抛异常 → 返回 NO_RULES（不影响现有 promote 流程，避免 gate 自身故障阻塞业务）。
-   */
-  private DataQualityGateOutcome runDqGateSafely(JobInstanceEntity instance, String businessKey) {
-    DataQualityCheckExecutor executor = dqExecutorProvider.getIfAvailable();
-    if (executor == null) {
-      return DataQualityGateOutcome.noRules();
+    /**
+     * ADR-021 DQ gate 执行包装：executor bean 缺失 / 抛异常 → 返回 NO_RULES（不影响现有 promote 流程，避免 gate 自身故障阻塞业务）。
+     */
+    private DataQualityGateOutcome runDqGateSafely(JobInstanceEntity instance, String businessKey) {
+        DataQualityCheckExecutor executor = dqExecutorProvider.getIfAvailable();
+        if (executor == null) {
+            return DataQualityGateOutcome.noRules();
+        }
+        try {
+            return executor.execute(instance, businessKey);
+        } catch (RuntimeException ex) {
+            SwallowedExceptionLogger.warn(ResultVersionWriter.class, "catch:dq_gate_failure", ex);
+            return DataQualityGateOutcome.noRules();
+        }
     }
-    try {
-      return executor.execute(instance, businessKey);
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.warn(ResultVersionWriter.class, "catch:dq_gate_failure", ex);
-      return DataQualityGateOutcome.noRules();
-    }
-  }
 
-  private boolean isSuccessTerminal(String instanceStatus) {
-    return JobInstanceStatus.SUCCESS.code().equals(instanceStatus)
-        || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus)
-        || JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(instanceStatus);
-  }
-
-  /**
-   * 从 {@code job_instance.rerun_policy_snapshot.resultPolicy} 推导 promotion_policy：
-   *
-   * <ul>
-   *   <li>{@code CREATE_NEW_VERSION} 或 null（首跑） → AUTO_LATEST
-   *   <li>{@code KEEP_BOTH} / {@code MANUAL_CONFIRM_EFFECTIVE} → MANUAL_APPROVAL
-   * </ul>
-   */
-  String resolvePromotionPolicy(JobInstanceEntity instance) {
-    String snapshot = instance.getRerunPolicySnapshot();
-    if (!Texts.hasText(snapshot)) {
-      return PROMOTION_AUTO_LATEST;
+    private boolean isSuccessTerminal(String instanceStatus) {
+        return JobInstanceStatus.SUCCESS.code().equals(instanceStatus)
+                || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus)
+                || JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(instanceStatus);
     }
-    try {
-      Map<?, ?> payload = JsonUtils.fromJson(snapshot, Map.class);
-      Object resultPolicy = payload == null ? null : payload.get("resultPolicy");
-      if (resultPolicy == null) {
-        return PROMOTION_AUTO_LATEST;
-      }
-      String value = String.valueOf(resultPolicy);
-      if (ResultVersionPolicy.KEEP_BOTH.code().equalsIgnoreCase(value)
-          || ResultVersionPolicy.MANUAL_CONFIRM_EFFECTIVE.code().equalsIgnoreCase(value)) {
-        return PROMOTION_MANUAL_APPROVAL;
-      }
-      return PROMOTION_AUTO_LATEST;
-    } catch (Exception parseFailure) {
-      SwallowedExceptionLogger.warn(
-          ResultVersionWriter.class, "catch:rerun_policy_snapshot_parse", parseFailure);
-      return PROMOTION_AUTO_LATEST;
-    }
-  }
 
-  private String resolveGeneratedBy(JobInstanceEntity instance) {
-    String operatorId = instance.getOperatorId();
-    return Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM;
-  }
-
-  private String serializeOutputs(Map<String, Object> outputs) {
-    if (outputs == null || outputs.isEmpty()) {
-      return "{}";
+    /**
+     * 从 {@code job_instance.rerun_policy_snapshot.resultPolicy} 推导 promotion_policy：
+     *
+     * <ul>
+     *   <li>{@code CREATE_NEW_VERSION} 或 null（首跑） → AUTO_LATEST
+     *   <li>{@code KEEP_BOTH} / {@code MANUAL_CONFIRM_EFFECTIVE} → MANUAL_APPROVAL
+     * </ul>
+     */
+    String resolvePromotionPolicy(JobInstanceEntity instance) {
+        String snapshot = instance.getRerunPolicySnapshot();
+        if (!Texts.hasText(snapshot)) {
+            return PROMOTION_AUTO_LATEST;
+        }
+        try {
+            Map<?, ?> payload = JsonUtils.fromJson(snapshot, Map.class);
+            Object resultPolicy = payload == null ? null : payload.get("resultPolicy");
+            if (resultPolicy == null) {
+                return PROMOTION_AUTO_LATEST;
+            }
+            String value = String.valueOf(resultPolicy);
+            if (ResultVersionPolicy.KEEP_BOTH.code().equalsIgnoreCase(value)
+                    || ResultVersionPolicy.MANUAL_CONFIRM_EFFECTIVE.code().equalsIgnoreCase(value)) {
+                return PROMOTION_MANUAL_APPROVAL;
+            }
+            return PROMOTION_AUTO_LATEST;
+        } catch (Exception parseFailure) {
+            SwallowedExceptionLogger.warn(ResultVersionWriter.class, "catch:rerun_policy_snapshot_parse", parseFailure);
+            return PROMOTION_AUTO_LATEST;
+        }
     }
-    return JsonUtils.toJson(outputs);
-  }
+
+    private String resolveGeneratedBy(JobInstanceEntity instance) {
+        String operatorId = instance.getOperatorId();
+        return Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM;
+    }
+
+    private String serializeOutputs(Map<String, Object> outputs) {
+        if (outputs == null || outputs.isEmpty()) {
+            return "{}";
+        }
+        return JsonUtils.toJson(outputs);
+    }
 }

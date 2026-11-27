@@ -29,118 +29,106 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class ConsoleRequestContextFilter extends OncePerRequestFilter {
 
-  public static final String REQUEST_METADATA_ATTRIBUTE = "consoleRequestMetadata";
+    public static final String REQUEST_METADATA_ATTRIBUTE = "consoleRequestMetadata";
 
-  private final ConsoleSecurityResponseWriter responseWriter;
-  private final ApplicationNameProvider applicationNameProvider;
+    private final ConsoleSecurityResponseWriter responseWriter;
+    private final ApplicationNameProvider applicationNameProvider;
 
-  @Override
-  protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-      throws ServletException, IOException {
-    String requestId = resolveCorrelationId(
-        request,
-        response,
-        CommonConstants.DEFAULT_REQUEST_ID_HEADER,
-        IdGenerator.newBusinessNo("req"));
-    String traceId = resolveCorrelationId(
-        request, response, CommonConstants.DEFAULT_TRACE_ID_HEADER, IdGenerator.newTraceId());
-    response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
-    response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
-    String operatorId = resolveOperatorId();
-    String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
-    // P1(2026-05-23 audit):与 ConsoleJwtService.hashClientIp 统一身份绑定来源,只取 RemoteAddr,
-    // 不信任 X-Forwarded-For — 之前 XFF fallback 会让伪造 XFF 的请求与 JWT 绑定的 ipHash 不一致,
-    // 同时让审计 ipHash 可被攻击者主动选定。
-    // XFF 头改作 audit log 单独字段(MDC.xffHeaderValue)观察记录,不参与身份判断;
-    // 真要走 trusted-proxy XFF,需在更前置的 ForwardedHeaderFilter 上统一处理。
-    String clientIp = request.getRemoteAddr();
-    String xffHeaderValue = request.getHeader(CommonConstants.DEFAULT_FORWARDED_FOR_HEADER);
-    String tenantId =
-        resolveTenantId(response, request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER));
-    if (tenantId == null && response.isCommitted()) {
-      return;
-    }
-
-    ConsoleRequestMetadata metadata = new ConsoleRequestMetadata(
-        requestId, traceId, tenantId, operatorId, idempotencyKey, clientIp);
-    request.setAttribute(REQUEST_METADATA_ATTRIBUTE, metadata);
-    Map<String, String> previousContext = BatchMdc.snapshot();
-    try {
-      BatchMdc.put(StructuredLogField.SERVICE, applicationNameProvider.name("batch-console-api"));
-      BatchMdc.put(StructuredLogField.REQUEST_ID, requestId);
-      BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
-      if (tenantId != null && !tenantId.isBlank()) {
-        BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
-      }
-      // AuditFieldsInterceptor 拦截 insert/update 时读 MDC operatorId 自动填 created_by/updated_by
-      if (operatorId != null && !operatorId.isBlank()) {
-        BatchMdc.put(StructuredLogField.OPERATOR_ID, operatorId);
-      }
-      // P1(2026-05-23 audit):XFF 仅写入 audit 日志,不参与身份绑定;按 trusted-proxy 实际部署可观察伪造。
-      if (xffHeaderValue != null && !xffHeaderValue.isBlank()) {
-        BatchMdc.put(StructuredLogField.XFF_HEADER_VALUE, xffHeaderValue);
-      }
-      filterChain.doFilter(request, response);
-    } finally {
-      BatchMdc.restore(previousContext);
-    }
-  }
-
-  private static String resolveCorrelationId(
-      HttpServletRequest request,
-      HttpServletResponse response,
-      String headerName,
-      String fallback) {
-    String existing = CorrelationIds.normalize(response.getHeader(headerName));
-    if (EmptyChecks.isNotNull(existing)) {
-      return existing;
-    }
-    String requestedCorrelationId = request.getHeader(headerName);
-    return CorrelationIds.normalize(requestedCorrelationId, fallback);
-  }
-
-  private String resolveTenantId(HttpServletResponse response, String requestedTenantId) {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication != null
-        && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-      // 全局角色（ADMIN / AUDITOR / CONFIG_ADMIN）允许通过请求头指定目标租户
-      if (ConsoleRoles.hasGlobalRole(principal.authorities())) {
-        return (requestedTenantId != null && !requestedTenantId.isBlank())
-            ? requestedTenantId
-            : principal.tenantId();
-      }
-      // 租户角色：严格匹配
-      boolean requestedTenantIsDifferent = EmptyChecks.isNotNull(requestedTenantId)
-          && !requestedTenantId.isBlank()
-          && !requestedTenantId.equals(principal.tenantId());
-      if (requestedTenantIsDifferent) {
-        try {
-          responseWriter.write(
-              response,
-              HttpStatus.FORBIDDEN,
-              ResultCode.FORBIDDEN,
-              CommonErrorMessages.TENANT_MISMATCH);
-        } catch (IOException exception) {
-          throw new IllegalStateException("failed to write tenant mismatch response", exception);
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        String requestId = resolveCorrelationId(
+                request, response, CommonConstants.DEFAULT_REQUEST_ID_HEADER, IdGenerator.newBusinessNo("req"));
+        String traceId = resolveCorrelationId(
+                request, response, CommonConstants.DEFAULT_TRACE_ID_HEADER, IdGenerator.newTraceId());
+        response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
+        response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
+        String operatorId = resolveOperatorId();
+        String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
+        // P1(2026-05-23 audit):与 ConsoleJwtService.hashClientIp 统一身份绑定来源,只取 RemoteAddr,
+        // 不信任 X-Forwarded-For — 之前 XFF fallback 会让伪造 XFF 的请求与 JWT 绑定的 ipHash 不一致,
+        // 同时让审计 ipHash 可被攻击者主动选定。
+        // XFF 头改作 audit log 单独字段(MDC.xffHeaderValue)观察记录,不参与身份判断;
+        // 真要走 trusted-proxy XFF,需在更前置的 ForwardedHeaderFilter 上统一处理。
+        String clientIp = request.getRemoteAddr();
+        String xffHeaderValue = request.getHeader(CommonConstants.DEFAULT_FORWARDED_FOR_HEADER);
+        String tenantId = resolveTenantId(response, request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER));
+        if (tenantId == null && response.isCommitted()) {
+            return;
         }
-        return null;
-      }
-      return principal.tenantId();
-    }
-    return requestedTenantId;
-  }
 
-  private String resolveOperatorId() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null // empty-check: allow - Sonar S2259
-        || !authentication.isAuthenticated()) {
-      return null;
+        ConsoleRequestMetadata metadata =
+                new ConsoleRequestMetadata(requestId, traceId, tenantId, operatorId, idempotencyKey, clientIp);
+        request.setAttribute(REQUEST_METADATA_ATTRIBUTE, metadata);
+        Map<String, String> previousContext = BatchMdc.snapshot();
+        try {
+            BatchMdc.put(StructuredLogField.SERVICE, applicationNameProvider.name("batch-console-api"));
+            BatchMdc.put(StructuredLogField.REQUEST_ID, requestId);
+            BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
+            if (tenantId != null && !tenantId.isBlank()) {
+                BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+            }
+            // AuditFieldsInterceptor 拦截 insert/update 时读 MDC operatorId 自动填 created_by/updated_by
+            if (operatorId != null && !operatorId.isBlank()) {
+                BatchMdc.put(StructuredLogField.OPERATOR_ID, operatorId);
+            }
+            // P1(2026-05-23 audit):XFF 仅写入 audit 日志,不参与身份绑定;按 trusted-proxy 实际部署可观察伪造。
+            if (xffHeaderValue != null && !xffHeaderValue.isBlank()) {
+                BatchMdc.put(StructuredLogField.XFF_HEADER_VALUE, xffHeaderValue);
+            }
+            filterChain.doFilter(request, response);
+        } finally {
+            BatchMdc.restore(previousContext);
+        }
     }
-    if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal.username();
+
+    private static String resolveCorrelationId(
+            HttpServletRequest request, HttpServletResponse response, String headerName, String fallback) {
+        String existing = CorrelationIds.normalize(response.getHeader(headerName));
+        if (EmptyChecks.isNotNull(existing)) {
+            return existing;
+        }
+        String requestedCorrelationId = request.getHeader(headerName);
+        return CorrelationIds.normalize(requestedCorrelationId, fallback);
     }
-    String name = authentication.getName();
-    return "anonymousUser".equals(name) ? null : name;
-  }
+
+    private String resolveTenantId(HttpServletResponse response, String requestedTenantId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            // 全局角色（ADMIN / AUDITOR / CONFIG_ADMIN）允许通过请求头指定目标租户
+            if (ConsoleRoles.hasGlobalRole(principal.authorities())) {
+                return (requestedTenantId != null && !requestedTenantId.isBlank())
+                        ? requestedTenantId
+                        : principal.tenantId();
+            }
+            // 租户角色：严格匹配
+            boolean requestedTenantIsDifferent = EmptyChecks.isNotNull(requestedTenantId)
+                    && !requestedTenantId.isBlank()
+                    && !requestedTenantId.equals(principal.tenantId());
+            if (requestedTenantIsDifferent) {
+                try {
+                    responseWriter.write(
+                            response, HttpStatus.FORBIDDEN, ResultCode.FORBIDDEN, CommonErrorMessages.TENANT_MISMATCH);
+                } catch (IOException exception) {
+                    throw new IllegalStateException("failed to write tenant mismatch response", exception);
+                }
+                return null;
+            }
+            return principal.tenantId();
+        }
+        return requestedTenantId;
+    }
+
+    private String resolveOperatorId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null // empty-check: allow - Sonar S2259
+                || !authentication.isAuthenticated()) {
+            return null;
+        }
+        if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal.username();
+        }
+        String name = authentication.getName();
+        return "anonymousUser".equals(name) ? null : name;
+    }
 }

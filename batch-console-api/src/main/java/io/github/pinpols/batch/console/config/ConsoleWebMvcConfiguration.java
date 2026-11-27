@@ -11,10 +11,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class ConsoleWebMvcConfiguration implements WebMvcConfigurer {
 
-  private final ConsoleIdempotencyInterceptor idempotencyInterceptor;
+    private final ConsoleIdempotencyInterceptor idempotencyInterceptor;
 
-  @Override
-  public void addInterceptors(InterceptorRegistry registry) {
-    registry.addInterceptor(idempotencyInterceptor).addPathPatterns("/api/console/**");
-  }
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(idempotencyInterceptor).addPathPatterns("/api/console/**");
+    }
 }

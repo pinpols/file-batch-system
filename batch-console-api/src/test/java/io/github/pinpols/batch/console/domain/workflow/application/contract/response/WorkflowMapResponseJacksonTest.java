@@ -18,41 +18,39 @@ import org.junit.jupiter.api.Test;
 @DisplayName("工作流类型化响应序列化: 键名历史兼容与空值省略契约")
 class WorkflowMapResponseJacksonTest {
 
-  private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+    private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
-  private Map<String, Object> roundTrip(Object value) throws Exception {
-    return mapper.readValue(mapper.writeValueAsString(value), new TypeReference<>() {});
-  }
+    private Map<String, Object> roundTrip(Object value) throws Exception {
+        return mapper.readValue(mapper.writeValueAsString(value), new TypeReference<>() {});
+    }
 
-  @Test
-  @DisplayName("运行动作回包仅保留编号与状态两键, 且整型编号归一为数值 42")
-  void shouldKeepIdAndStatusKeys_whenRunActionRoundTrips() throws Exception {
-    // 编排 HTTP 回传数值 id，客户端按 Long 字段反序列化。
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", 42);
-    row.put("status", "TERMINATED");
+    @Test
+    @DisplayName("运行动作回包仅保留编号与状态两键, 且整型编号归一为数值 42")
+    void shouldKeepIdAndStatusKeys_whenRunActionRoundTrips() throws Exception {
+        // 编排 HTTP 回传数值 id，客户端按 Long 字段反序列化。
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", 42);
+        row.put("status", "TERMINATED");
 
-    var response =
-        mapper.readValue(mapper.writeValueAsString(row), ConsoleWorkflowRunActionResponse.class);
-    Map<String, Object> back = roundTrip(response);
+        var response = mapper.readValue(mapper.writeValueAsString(row), ConsoleWorkflowRunActionResponse.class);
+        Map<String, Object> back = roundTrip(response);
 
-    assertThat(back).containsOnlyKeys("id", "status");
-    assertThat(back).containsEntry("id", 42).containsEntry("status", "TERMINATED");
-  }
+        assertThat(back).containsOnlyKeys("id", "status");
+        assertThat(back).containsEntry("id", 42).containsEntry("status", "TERMINATED");
+    }
 
-  @Test
-  @DisplayName("跳过节点回包仅保留编号、节点编码与节点状态三键, 取值原样保留")
-  void shouldKeepThreeKeys_whenSkipNodeRoundTrips() throws Exception {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", 7);
-    row.put("nodeCode", "N1");
-    row.put("nodeStatus", "SKIPPED");
+    @Test
+    @DisplayName("跳过节点回包仅保留编号、节点编码与节点状态三键, 取值原样保留")
+    void shouldKeepThreeKeys_whenSkipNodeRoundTrips() throws Exception {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", 7);
+        row.put("nodeCode", "N1");
+        row.put("nodeStatus", "SKIPPED");
 
-    var response =
-        mapper.readValue(mapper.writeValueAsString(row), ConsoleWorkflowRunSkipNodeResponse.class);
-    Map<String, Object> back = roundTrip(response);
+        var response = mapper.readValue(mapper.writeValueAsString(row), ConsoleWorkflowRunSkipNodeResponse.class);
+        Map<String, Object> back = roundTrip(response);
 
-    assertThat(back).containsOnlyKeys("id", "nodeCode", "nodeStatus");
-    assertThat(back).containsEntry("nodeCode", "N1").containsEntry("nodeStatus", "SKIPPED");
-  }
+        assertThat(back).containsOnlyKeys("id", "nodeCode", "nodeStatus");
+        assertThat(back).containsEntry("nodeCode", "N1").containsEntry("nodeStatus", "SKIPPED");
+    }
 }

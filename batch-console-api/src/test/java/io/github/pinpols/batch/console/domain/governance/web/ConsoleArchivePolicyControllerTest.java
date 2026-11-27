@@ -32,65 +32,61 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleArchivePolicyControllerTest {
 
-  @Mock
-  private ConsoleArchivePolicyService archivePolicyService;
+    @Mock
+    private ConsoleArchivePolicyService archivePolicyService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleArchivePolicyController(
-            archivePolicyService, responseFactory, requestMetadataResolver))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleArchivePolicyController(
+                        archivePolicyService, responseFactory, requestMetadataResolver))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("查询归档策略列表时, 响应返回目标表与保留天数")
-  void shouldListPolicies() throws Exception {
-    ArchivePolicyEntity entity = new ArchivePolicyEntity();
-    entity.setId(1L);
-    entity.setTenantId("t1");
-    entity.setTargetTable("job_instance");
-    entity.setRetentionDays(90);
-    entity.setArchiveEnabled(true);
-    entity.setCleanupEnabled(false);
-    entity.setBatchSize(1000);
-    when(archivePolicyService.list("t1")).thenReturn(List.of(entity));
+    @Test
+    @DisplayName("查询归档策略列表时, 响应返回目标表与保留天数")
+    void shouldListPolicies() throws Exception {
+        ArchivePolicyEntity entity = new ArchivePolicyEntity();
+        entity.setId(1L);
+        entity.setTenantId("t1");
+        entity.setTargetTable("job_instance");
+        entity.setRetentionDays(90);
+        entity.setArchiveEnabled(true);
+        entity.setCleanupEnabled(false);
+        entity.setBatchSize(1000);
+        when(archivePolicyService.list("t1")).thenReturn(List.of(entity));
 
-    mockMvc
-        .perform(get("/api/console/ops/archive-policies").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].targetTable").value("job_instance"))
-        .andExpect(jsonPath("$.data[0].retentionDays").value(90));
-  }
+        mockMvc.perform(get("/api/console/ops/archive-policies").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].targetTable").value("job_instance"))
+                .andExpect(jsonPath("$.data[0].retentionDays").value(90));
+    }
 
-  @Test
-  @DisplayName("写入归档策略时, 请求体字段与操作人组装成服务入参")
-  void shouldUpsertPolicy() throws Exception {
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
-    mockMvc
-        .perform(put("/api/console/ops/archive-policies")
-            .param("tenantId", "t1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("写入归档策略时, 请求体字段与操作人组装成服务入参")
+    void shouldUpsertPolicy() throws Exception {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+        mockMvc.perform(put("/api/console/ops/archive-policies")
+                        .param("tenantId", "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "targetTable":"job_instance",
                       "retentionDays":90,
@@ -100,18 +96,18 @@ class ConsoleArchivePolicyControllerTest {
                       "description":"Archive job instances"
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArchivePolicyUpsertCommand expected = ArchivePolicyUpsertCommand.builder()
-        .tenantId("t1")
-        .targetTable("job_instance")
-        .retentionDays(90)
-        .archiveEnabled(true)
-        .batchSize(1000)
-        .description("Archive job instances")
-        .operator("operator-1")
-        .build();
-    verify(archivePolicyService).upsert(expected);
-  }
+        ArchivePolicyUpsertCommand expected = ArchivePolicyUpsertCommand.builder()
+                .tenantId("t1")
+                .targetTable("job_instance")
+                .retentionDays(90)
+                .archiveEnabled(true)
+                .batchSize(1000)
+                .description("Archive job instances")
+                .operator("operator-1")
+                .build();
+        verify(archivePolicyService).upsert(expected);
+    }
 }

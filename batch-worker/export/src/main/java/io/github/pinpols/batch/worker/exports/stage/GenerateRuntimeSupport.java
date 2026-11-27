@@ -15,35 +15,35 @@ import org.springframework.stereotype.Component;
 @Component
 public final class GenerateRuntimeSupport {
 
-  private final WorkerCheckpointProperties checkpointProperties;
-  private final ProcessingPositionStore positionStore;
-  private final GenerateCursorCodec cursorCodec;
-  private final PipelineStageProgressRegistry progressRegistry;
+    private final WorkerCheckpointProperties checkpointProperties;
+    private final ProcessingPositionStore positionStore;
+    private final GenerateCursorCodec cursorCodec;
+    private final PipelineStageProgressRegistry progressRegistry;
 
-  public GenerateRuntimeSupport(
-      WorkerCheckpointProperties checkpointProperties,
-      ProcessingPositionStore positionStore,
-      GenerateCursorCodec cursorCodec,
-      PipelineStageProgressRegistry progressRegistry) {
-    this.checkpointProperties = checkpointProperties;
-    this.positionStore = positionStore;
-    this.cursorCodec = cursorCodec;
-    this.progressRegistry = progressRegistry;
-  }
+    public GenerateRuntimeSupport(
+            WorkerCheckpointProperties checkpointProperties,
+            ProcessingPositionStore positionStore,
+            GenerateCursorCodec cursorCodec,
+            PipelineStageProgressRegistry progressRegistry) {
+        this.checkpointProperties = checkpointProperties;
+        this.positionStore = positionStore;
+        this.cursorCodec = cursorCodec;
+        this.progressRegistry = progressRegistry;
+    }
 
-  WorkerCheckpointProperties checkpointProperties() {
-    return checkpointProperties;
-  }
+    WorkerCheckpointProperties checkpointProperties() {
+        return checkpointProperties;
+    }
 
-  ProcessingPositionStore positionStore() {
-    return positionStore;
-  }
+    ProcessingPositionStore positionStore() {
+        return positionStore;
+    }
 
-  GenerateCursorCodec cursorCodec() {
-    return cursorCodec;
-  }
+    GenerateCursorCodec cursorCodec() {
+        return cursorCodec;
+    }
 
-  PipelineStageProgressRegistry progressRegistry() {
-    return progressRegistry;
-  }
+    PipelineStageProgressRegistry progressRegistry() {
+        return progressRegistry;
+    }
 }

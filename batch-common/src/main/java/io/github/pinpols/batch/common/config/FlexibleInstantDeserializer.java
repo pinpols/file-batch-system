@@ -30,66 +30,65 @@ import java.time.format.DateTimeParseException;
  */
 public class FlexibleInstantDeserializer extends StdScalarDeserializer<Instant> {
 
-  private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-  private final transient BatchTimezoneProvider timezoneProvider;
+    private final transient BatchTimezoneProvider timezoneProvider;
 
-  public FlexibleInstantDeserializer(BatchTimezoneProvider timezoneProvider) {
-    super(Instant.class);
-    this.timezoneProvider = timezoneProvider;
-  }
+    public FlexibleInstantDeserializer(BatchTimezoneProvider timezoneProvider) {
+        super(Instant.class);
+        this.timezoneProvider = timezoneProvider;
+    }
 
-  @Override
-  public Instant deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-    if (p.currentToken().isNumeric()) {
-      return Instant.ofEpochMilli(p.getLongValue());
+    @Override
+    public Instant deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+        if (p.currentToken().isNumeric()) {
+            return Instant.ofEpochMilli(p.getLongValue());
+        }
+        String raw = p.getValueAsString();
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String text = raw.trim();
+        // 1) 数字字符串 → epoch ms
+        boolean containsOnlyDigits = text.chars().allMatch(Character::isDigit);
+        if (containsOnlyDigits) {
+            try {
+                long epochMillis = Long.parseLong(text);
+                return Instant.ofEpochMilli(epochMillis);
+            } catch (NumberFormatException ignored) {
+                // 继续尝试下一种解析方式
+            }
+        }
+        // 2) 含 Z / offset 的 ISO
+        try {
+            return Instant.parse(text);
+        } catch (DateTimeParseException ignored) {
+            // 继续尝试下一种解析方式
+        }
+        try {
+            OffsetDateTime parsedOffsetDateTime = OffsetDateTime.parse(text);
+            Instant offsetInstant = parsedOffsetDateTime.toInstant();
+            return offsetInstant;
+        } catch (DateTimeParseException ignored) {
+            // 继续尝试下一种解析方式
+        }
+        // 3) naive LocalDateTime + 默认时区
+        ZoneId zone = timezoneProvider.defaultZone();
+        try {
+            LocalDateTime localDateTime = LocalDateTime.parse(text);
+            Instant resolvedInstant = localDateTime.atZone(zone).toInstant();
+            return resolvedInstant;
+        } catch (DateTimeParseException ignored) {
+            // 继续尝试下一种解析方式
+        }
+        // 4) 仅日期 (YYYY-MM-DD)
+        try {
+            LocalDate localDate = LocalDate.parse(text);
+            Instant startOfDayInstant = localDate.atStartOfDay(zone).toInstant();
+            return startOfDayInstant;
+        } catch (DateTimeParseException ignored) {
+            // 继续尝试下一种解析方式
+        }
+        return (Instant) ctxt.handleWeirdStringValue(Instant.class, text, "Value cannot be parsed as an Instant");
     }
-    String raw = p.getValueAsString();
-    if (raw == null || raw.isBlank()) {
-      return null;
-    }
-    String text = raw.trim();
-    // 1) 数字字符串 → epoch ms
-    boolean containsOnlyDigits = text.chars().allMatch(Character::isDigit);
-    if (containsOnlyDigits) {
-      try {
-        long epochMillis = Long.parseLong(text);
-        return Instant.ofEpochMilli(epochMillis);
-      } catch (NumberFormatException ignored) {
-        // 继续尝试下一种解析方式
-      }
-    }
-    // 2) 含 Z / offset 的 ISO
-    try {
-      return Instant.parse(text);
-    } catch (DateTimeParseException ignored) {
-      // 继续尝试下一种解析方式
-    }
-    try {
-      OffsetDateTime parsedOffsetDateTime = OffsetDateTime.parse(text);
-      Instant offsetInstant = parsedOffsetDateTime.toInstant();
-      return offsetInstant;
-    } catch (DateTimeParseException ignored) {
-      // 继续尝试下一种解析方式
-    }
-    // 3) naive LocalDateTime + 默认时区
-    ZoneId zone = timezoneProvider.defaultZone();
-    try {
-      LocalDateTime localDateTime = LocalDateTime.parse(text);
-      Instant resolvedInstant = localDateTime.atZone(zone).toInstant();
-      return resolvedInstant;
-    } catch (DateTimeParseException ignored) {
-      // 继续尝试下一种解析方式
-    }
-    // 4) 仅日期 (YYYY-MM-DD)
-    try {
-      LocalDate localDate = LocalDate.parse(text);
-      Instant startOfDayInstant = localDate.atStartOfDay(zone).toInstant();
-      return startOfDayInstant;
-    } catch (DateTimeParseException ignored) {
-      // 继续尝试下一种解析方式
-    }
-    return (Instant)
-        ctxt.handleWeirdStringValue(Instant.class, text, "Value cannot be parsed as an Instant");
-  }
 }

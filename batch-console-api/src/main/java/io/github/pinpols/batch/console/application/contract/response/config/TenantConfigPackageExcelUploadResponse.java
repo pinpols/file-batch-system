@@ -5,16 +5,16 @@ import lombok.Builder;
 /** 租户配置包 Excel 上传响应：返回 token 和各 sheet 行数。 */
 @Builder
 public record TenantConfigPackageExcelUploadResponse(
-    String uploadToken,
-    String fileName,
-    int resourceQueueRows,
-    int businessCalendarRows,
-    int batchWindowRows,
-    int jobRows,
-    int fileChannelRows,
-    int fileTemplateRows,
-    int pipelineRows,
-    int pipelineStepRows,
-    int workflowDefinitionRows,
-    int workflowNodeRows,
-    int workflowEdgeRows) {}
+        String uploadToken,
+        String fileName,
+        int resourceQueueRows,
+        int businessCalendarRows,
+        int batchWindowRows,
+        int jobRows,
+        int fileChannelRows,
+        int fileTemplateRows,
+        int pipelineRows,
+        int pipelineStepRows,
+        int workflowDefinitionRows,
+        int workflowNodeRows,
+        int workflowEdgeRows) {}

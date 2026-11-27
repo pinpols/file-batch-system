@@ -15,59 +15,59 @@ import java.util.Optional;
  */
 public interface SdkIdempotencyStore {
 
-  /**
-   * 原子地为 key 抢执行权。
-   *
-   * @param key 解析后的幂等键
-   * @param ttlMillis 存活毫秒({@code <= 0} = 永久),由实现决定如何使用
-   * @return true=抢到执行权,应执行业务;false=已有执行中占位或成功记录,调用方随后用 {@link #find} 判断能否短路
-   */
-  boolean tryAcquire(String key, long ttlMillis);
+    /**
+     * 原子地为 key 抢执行权。
+     *
+     * @param key 解析后的幂等键
+     * @param ttlMillis 存活毫秒({@code <= 0} = 永久),由实现决定如何使用
+     * @return true=抢到执行权,应执行业务;false=已有执行中占位或成功记录,调用方随后用 {@link #find} 判断能否短路
+     */
+    boolean tryAcquire(String key, long ttlMillis);
 
-  /**
-   * 查 key 是否已有成功记录。
-   *
-   * @param key 解析后的幂等键
-   * @return 已记录结果(命中)/ 空(未命中,需执行)
-   */
-  Optional<SdkIdempotencySnapshot> find(String key);
+    /**
+     * 查 key 是否已有成功记录。
+     *
+     * @param key 解析后的幂等键
+     * @return 已记录结果(命中)/ 空(未命中,需执行)
+     */
+    Optional<SdkIdempotencySnapshot> find(String key);
 
-  /**
-   * 记录一次成功执行结果。
-   *
-   * @param key 解析后的幂等键
-   * @param snapshot 结果快照(message + output)
-   * @param ttlMillis 存活毫秒({@code <= 0} = 永久),由实现决定如何使用
-   */
-  void record(String key, SdkIdempotencySnapshot snapshot, long ttlMillis);
+    /**
+     * 记录一次成功执行结果。
+     *
+     * @param key 解析后的幂等键
+     * @param snapshot 结果快照(message + output)
+     * @param ttlMillis 存活毫秒({@code <= 0} = 永久),由实现决定如何使用
+     */
+    void record(String key, SdkIdempotencySnapshot snapshot, long ttlMillis);
 
-  /**
-   * 释放未回填成功结果的执行中占位。业务失败或抛异常时调用,让平台重派后可重新抢占。已回填成功结果的 key 应保持不动。
-   *
-   * @param key 解析后的幂等键
-   */
-  void release(String key);
+    /**
+     * 释放未回填成功结果的执行中占位。业务失败或抛异常时调用,让平台重派后可重新抢占。已回填成功结果的 key 应保持不动。
+     *
+     * @param key 解析后的幂等键
+     */
+    void release(String key);
 
-  /** 默认 no-op 实现 —— 永不命中,等价关闭幂等(便于本地 / 测试占位)。 */
-  final class NoOp implements SdkIdempotencyStore {
-    @Override
-    public boolean tryAcquire(String key, long ttlMillis) {
-      return true;
+    /** 默认 no-op 实现 —— 永不命中,等价关闭幂等(便于本地 / 测试占位)。 */
+    final class NoOp implements SdkIdempotencyStore {
+        @Override
+        public boolean tryAcquire(String key, long ttlMillis) {
+            return true;
+        }
+
+        @Override
+        public Optional<SdkIdempotencySnapshot> find(String key) {
+            return Optional.empty();
+        }
+
+        @Override
+        public void record(String key, SdkIdempotencySnapshot snapshot, long ttlMillis) {
+            // 无操作
+        }
+
+        @Override
+        public void release(String key) {
+            // 无操作
+        }
     }
-
-    @Override
-    public Optional<SdkIdempotencySnapshot> find(String key) {
-      return Optional.empty();
-    }
-
-    @Override
-    public void record(String key, SdkIdempotencySnapshot snapshot, long ttlMillis) {
-      // 无操作
-    }
-
-    @Override
-    public void release(String key) {
-      // 无操作
-    }
-  }
 }

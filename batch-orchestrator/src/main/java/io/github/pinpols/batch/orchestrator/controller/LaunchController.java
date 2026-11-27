@@ -22,25 +22,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class LaunchController {
 
-  private final LaunchApplicationService launchApplicationService;
-  private final OrchestratorDrainService drainService;
+    private final LaunchApplicationService launchApplicationService;
+    private final OrchestratorDrainService drainService;
 
-  @PostMapping("/launch")
-  public LaunchResponse launch(@RequestBody LaunchRequest request, HttpServletRequest httpRequest) {
-    drainService.ensureAcceptingLaunches();
-    // 租户边界守卫(与 Worker/Task 控制器一致):租户 API-Key 路径下,以 filter 解析出的真实租户
-    // 为准,与 body 声明对账,不一致即拒。legacy X-Internal-Secret 路径无解析租户时透传 body。
-    LaunchRequest guardedRequest = withGuardedTenant(request, httpRequest);
-    return launchApplicationService.launch(guardedRequest);
-  }
-
-  private static LaunchRequest withGuardedTenant(
-      LaunchRequest request, HttpServletRequest httpRequest) {
-    String declared = request == null ? null : request.tenantId();
-    String resolved = InternalRequestTenantGuard.resolveTenant(httpRequest, declared);
-    if (request == null || Objects.equals(resolved, declared)) {
-      return request;
+    @PostMapping("/launch")
+    public LaunchResponse launch(@RequestBody LaunchRequest request, HttpServletRequest httpRequest) {
+        drainService.ensureAcceptingLaunches();
+        // 租户边界守卫(与 Worker/Task 控制器一致):租户 API-Key 路径下,以 filter 解析出的真实租户
+        // 为准,与 body 声明对账,不一致即拒。legacy X-Internal-Secret 路径无解析租户时透传 body。
+        LaunchRequest guardedRequest = withGuardedTenant(request, httpRequest);
+        return launchApplicationService.launch(guardedRequest);
     }
-    return request.toBuilder().tenantId(resolved).build();
-  }
+
+    private static LaunchRequest withGuardedTenant(LaunchRequest request, HttpServletRequest httpRequest) {
+        String declared = request == null ? null : request.tenantId();
+        String resolved = InternalRequestTenantGuard.resolveTenant(httpRequest, declared);
+        if (request == null || Objects.equals(resolved, declared)) {
+            return request;
+        }
+        return request.toBuilder().tenantId(resolved).build();
+    }
 }

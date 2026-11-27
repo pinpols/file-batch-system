@@ -8,11 +8,11 @@ package io.github.pinpols.batch.console.domain.notification.service;
  */
 public record WebhookDeliveryResult(boolean success, Integer httpStatus, String errorSummary) {
 
-  public static WebhookDeliveryResult ok() {
-    return new WebhookDeliveryResult(true, null, null);
-  }
+    public static WebhookDeliveryResult ok() {
+        return new WebhookDeliveryResult(true, null, null);
+    }
 
-  public static WebhookDeliveryResult failure(Integer httpStatus, String errorSummary) {
-    return new WebhookDeliveryResult(false, httpStatus, errorSummary);
-  }
+    public static WebhookDeliveryResult failure(Integer httpStatus, String errorSummary) {
+        return new WebhookDeliveryResult(false, httpStatus, errorSummary);
+    }
 }

@@ -65,426 +65,403 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class DefaultPartitionDispatchService implements PartitionDispatchService {
 
-  private final SchedulePlanBuilder schedulePlanBuilder;
-  private final ResourceScheduler resourceScheduler;
-  private final PartitionLifecycleService partitionLifecycleService;
-  private final TaskCreationService taskCreationService;
-  private final TaskDispatchOutboxService taskDispatchOutboxService;
-  private final LifecycleEventMapper<Object> lifecycleEventMapper;
-  private final GlobalJobAdmission globalJobAdmission;
-  private final WorkflowNodeDispatchService workflowNodeDispatchService;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final WorkflowRunMapper workflowRunMapper;
-  private final LaunchPhaseMetrics launchPhaseMetrics;
+    private final SchedulePlanBuilder schedulePlanBuilder;
+    private final ResourceScheduler resourceScheduler;
+    private final PartitionLifecycleService partitionLifecycleService;
+    private final TaskCreationService taskCreationService;
+    private final TaskDispatchOutboxService taskDispatchOutboxService;
+    private final LifecycleEventMapper<Object> lifecycleEventMapper;
+    private final GlobalJobAdmission globalJobAdmission;
+    private final WorkflowNodeDispatchService workflowNodeDispatchService;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final WorkflowRunMapper workflowRunMapper;
+    private final LaunchPhaseMetrics launchPhaseMetrics;
 
-  private record TaskExecutionContext(
-      LaunchRequest request,
-      Map<String, Object> effectiveParams,
-      String traceId,
-      JobInstanceEntity jobInstance) {}
+    private record TaskExecutionContext(
+            LaunchRequest request,
+            Map<String, Object> effectiveParams,
+            String traceId,
+            JobInstanceEntity jobInstance) {}
 
-  private record TaskSchedulingContext(
-      SchedulePlan plan,
-      List<JobPartitionEntity> partitions,
-      ResourceSchedulingDecision decision) {}
+    private record TaskSchedulingContext(
+            SchedulePlan plan, List<JobPartitionEntity> partitions, ResourceSchedulingDecision decision) {}
 
-  private record TaskCreationContext(
-      TaskExecutionContext execution, TaskSchedulingContext scheduling) {
-    private TaskBuildContext buildContext(JobPartitionEntity partition) {
-      return new TaskBuildContext(this, partition);
-    }
-  }
-
-  private record TaskBuildContext(TaskCreationContext creation, JobPartitionEntity partition) {}
-
-  // D-2-1: dispatch() 的 @Transactional 保证 createPartitions + createTasks + writeDispatchEvent
-  // 在同一个数据库事务内原子提交。createPartitions 使用默认 REQUIRED（加入调用方事务），
-  // writeDispatchEvent 使用 MANDATORY（必须在调用方事务内执行）。三者不会分别提交。
-  @Override
-  @Transactional
-  @Observed(name = "orch.partition.dispatch", contextualName = "orch.partition.dispatch")
-  public void dispatch(DispatchContext context) {
-    LaunchRequest request = context.request();
-    Map<String, Object> effectiveParams = context.effectiveParams();
-    String traceId = context.traceId();
-    JobInstanceEntity jobInstance = context.jobInstance();
-    WorkflowRunEntity workflowRun = context.workflowRun();
-    List<WorkflowDagService.DagNodeResolution> initialNodes = context.initialNodes();
-    Instant startedAt = context.startedAt();
-    String sourcePayload = buildPayloadJson(request, jobInstance, effectiveParams);
-    // 有 DAG 初始节点（非 START）时优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
-    DispatchOutcome outcome = (EmptyChecks.isNotNull(initialNodes)
-            && EmptyChecks.isNotEmpty(initialNodes))
-        ? dispatchInitialDagNodes(initialNodes, jobInstance, workflowRun, sourcePayload, traceId)
-        : dispatchByPlan(
-            request, effectiveParams, traceId, jobInstance, context.executionDefinition());
-    launchPhaseMetrics.record(Phase.INSTANCE_TRANSITION, () -> {
-      if (outcome.dispatchable()) {
-        transitionInstanceToRunning(jobInstance, workflowRun, outcome.partitionCount(), startedAt);
-      } else {
-        transitionInstanceToWaiting(jobInstance, workflowRun, outcome.partitionCount());
-      }
-    });
-  }
-
-  private record DispatchOutcome(int partitionCount, boolean dispatchable) {}
-
-  private DispatchOutcome dispatchInitialDagNodes(
-      List<WorkflowDagService.DagNodeResolution> initialNodes,
-      JobInstanceEntity jobInstance,
-      WorkflowRunEntity workflowRun,
-      String sourcePayload,
-      String traceId) {
-    // 普通作业在 ResourceScheduler 内只做一次全局准入；DAG 初始节点可能有多个，父实例却只应
-    // 占一个槽位。先在 T2 事务内锁定并观察一次，所有节点仍照常物化为 READY/WAITING，最后
-    // 依据该结果推进父实例，避免容量已满时父实例被错误推进为 RUNNING。
-    boolean globalCapacity = globalJobAdmission.hasCapacity();
-    int partitionCount = 0;
-    for (WorkflowDagService.DagNodeResolution initialNode : initialNodes) {
-      if (EmptyChecks.isNull(initialNode)
-          || WorkflowNodeCode.START.code().equals(initialNode.nodeCode())) {
-        continue;
-      }
-      partitionCount += workflowNodeDispatchService.dispatchNode(
-          jobInstance, workflowRun, initialNode, sourcePayload, traceId);
-    }
-    return new DispatchOutcome(partitionCount, globalCapacity || partitionCount == 0);
-  }
-
-  private DispatchOutcome dispatchByPlan(
-      LaunchRequest request,
-      Map<String, Object> effectiveParams,
-      String traceId,
-      JobInstanceEntity jobInstance,
-      JobDefinitionView executionDefinition) {
-    if (EmptyChecks.isNull(executionDefinition)) {
-      throw new IllegalStateException("Partition dispatch requires the admitted Job definition");
-    }
-    SchedulePlanCommand planCommand = new SchedulePlanCommand(
-        request.tenantId(),
-        request.jobCode(),
-        request.bizDate().toString(),
-        effectiveParams,
-        executionDefinition);
-    SchedulePlan plan =
-        launchPhaseMetrics.record(Phase.PLAN_BUILD, () -> schedulePlanBuilder.build(planCommand));
-    plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
-    ResourceSchedulingDecision decision = launchPhaseMetrics.record(
-        Phase.RESOURCE_SCHEDULE,
-        () -> resourceScheduler.schedule(SchedulePlanSupport.toSchedulingRequest(plan)));
-    if (isRejected(decision)) {
-      throw BizException.of(
-          ResultCode.BUSINESS_ERROR,
-          "error.partition.dispatch_business_error",
-          decision.getReasonCode(),
-          decision.getReasonMessage());
-    }
-    return launchPhaseMetrics.record(Phase.DISPATCH_MATERIALIZE, () -> {
-      SchedulePlanSupport.applySchedulingDecision(plan, decision);
-      prepareInitialPartitionStatuses(plan, decision);
-      List<JobPartitionEntity> partitions = partitionLifecycleService.createPartitions(
-          plan, jobInstance.getId(), initialPartitionStatus(decision));
-      jobInstance.setExpectedPartitionCount(partitions.size());
-      TaskExecutionContext executionContext =
-          new TaskExecutionContext(request, effectiveParams, traceId, jobInstance);
-      TaskSchedulingContext schedulingContext =
-          new TaskSchedulingContext(plan, partitions, decision);
-      TaskCreationContext taskContext =
-          new TaskCreationContext(executionContext, schedulingContext);
-      createTasksAndMaybeOutboxEvents(taskContext);
-      return new DispatchOutcome(partitions.size(), decision.isDispatchable());
-    });
-  }
-
-  private boolean isRejected(ResourceSchedulingDecision decision) {
-    return EmptyChecks.isNotNull(decision)
-        && (ResourceAdmissionAction.REJECT == decision.getAdmissionAction()
-            || decision.isFailFast());
-  }
-
-  /**
-   * 普通 plan 的新分区、新任务和 outbox 在同一 T2 事务内落库，提交前不会被 worker 看到。
-   * 因此可派发路径直接以 READY 初始化，避免刚插入又执行 CREATED → READY 的两次冗余 UPDATE。
-   * WAITING 路径仍保留调度决策的原始状态；DAG、重试和等待队列释放仍走 releaseForDispatch CAS。
-   */
-  private void prepareInitialPartitionStatuses(
-      SchedulePlan plan, ResourceSchedulingDecision decision) {
-    if (!decision.isDispatchable() || EmptyChecks.isEmpty(plan.getPartitions())) {
-      return;
-    }
-    for (SchedulePlan.PartitionPlan partition : plan.getPartitions()) {
-      partition.setPartitionStatus(PartitionStatus.READY.code());
-    }
-  }
-
-  private String initialPartitionStatus(ResourceSchedulingDecision decision) {
-    return decision.isDispatchable() ? PartitionStatus.READY.code() : decision.getPartitionStatus();
-  }
-
-  private void transitionInstanceToRunning(
-      JobInstanceEntity jobInstance,
-      WorkflowRunEntity workflowRun,
-      int partitionCount,
-      Instant startedAt) {
-    // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
-    MarkInstanceRunningParam.MarkInstanceRunningParamBuilder updateParam =
-        MarkInstanceRunningParam.builder();
-    updateParam.tenantId(jobInstance.getTenantId());
-    updateParam.id(jobInstance.getId());
-    String runningStatus = lifecycleEventMapper.map(jobInstance, "START").toState();
-    updateParam.instanceStatus(runningStatus);
-    updateParam.expectedPartitionCount(partitionCount);
-    updateParam.startedAt(startedAt);
-    updateParam.expectedVersion(jobInstance.getVersion());
-    int updated = jobInstanceMapper.markRunning(updateParam.build());
-    if (updated <= 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
-    }
-    jobInstance.setVersion(
-        (EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
-    if (EmptyChecks.isNotNull(workflowRun)) {
-      String tenantId = jobInstance.getTenantId();
-      Long workflowRunId = workflowRun.getId();
-      String workflowRunningStatus =
-          lifecycleEventMapper.map(workflowRun, "START").toState();
-      String currentNodeCode = workflowRun.getCurrentNodeCode();
-      WorkflowRunMarkRunningParam workflowRunMarkRunningParam =
-          WorkflowRunMarkRunningParam.builder()
-              .tenantId(tenantId)
-              .id(workflowRunId)
-              .runStatus(workflowRunningStatus)
-              .currentNodeCode(currentNodeCode)
-              .startedAt(startedAt)
-              .build();
-      workflowRunMapper.markRunning(workflowRunMarkRunningParam);
-    }
-  }
-
-  private void transitionInstanceToWaiting(
-      JobInstanceEntity jobInstance, WorkflowRunEntity workflowRun, int partitionCount) {
-    // 不可派发（资源不足/窗口限制等）：instance 进入 WAITING，由等待派发调度器后续推进。
-    int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
-        .tenantId(jobInstance.getTenantId())
-        .id(jobInstance.getId())
-        .instanceStatus(JobInstanceStatus.WAITING.code())
-        .expectedPartitionCount(partitionCount)
-        .startedAt(null)
-        .expectedVersion(jobInstance.getVersion())
-        .build());
-    if (updated <= 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_waiting_conflict");
-    }
-    jobInstance.setVersion(
-        (EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
-    if (EmptyChecks.isNotNull(workflowRun)) {
-      WorkflowRunMarkRunningParam workflowRunMarkRunningParam2 =
-          WorkflowRunMarkRunningParam.builder()
-              .tenantId(jobInstance.getTenantId())
-              .id(workflowRun.getId())
-              .runStatus(WorkflowRunStatus.CREATED.code())
-              .currentNodeCode(workflowRun.getCurrentNodeCode())
-              .startedAt(null)
-              .build();
-      workflowRunMapper.markRunning(workflowRunMarkRunningParam2);
-    }
-  }
-
-  // PERF(5.1): fan-out 由“逐分区 createTask + 逐条 outbox”改为两阶段——先整批构建 task 一次多行
-  // INSERT（含 step 镜像批写），再逐分区写 outbox。可派发的新行在该事务内直接以 READY 初始化，
-  // 不再额外执行 CREATED→READY 的两次 UPDATE。outbox 保持逐条：写入被 OutboxWriteChokePointArchTest 锁死在
-  // OutboxDomainEventPublisher.publish 单入口（NOT EXISTS 去重承重点），批量化需动 common 的
-  // DomainEventPublisher 契约与该治理护栏，按任务降级方案保持逐条（见 task-5-report）。
-  private void createTasksAndMaybeOutboxEvents(TaskCreationContext context) {
-    List<JobPartitionEntity> partitions = context.scheduling().partitions();
-    if (EmptyChecks.isEmpty(partitions)) {
-      return;
-    }
-    List<JobTaskEntity> tasks = new ArrayList<>(partitions.size());
-    for (JobPartitionEntity partition : partitions) {
-      TaskBuildContext taskBuildContext = context.buildContext(partition);
-      tasks.add(buildTask(taskBuildContext));
-    }
-    taskCreationService.createTasks(tasks);
-    if (!context.scheduling().decision().isDispatchable()) {
-      return;
-    }
-    for (int i = 0; i < partitions.size(); i++) {
-      JobPartitionEntity partition = partitions.get(i);
-      JobTaskEntity task = tasks.get(i);
-      JobInstanceEntity jobInstance = context.execution().jobInstance();
-      String traceId = context.execution().traceId();
-      String tenantId = context.execution().request().tenantId();
-      Long taskId = task.getId();
-      String dispatchEventKey = OutboxEventKeyGenerator.forDispatch(tenantId, taskId);
-      taskDispatchOutboxService.writeDispatchEvent(
-          jobInstance, task, partition, traceId, dispatchEventKey);
-    }
-  }
-
-  private JobTaskEntity buildTask(TaskBuildContext context) {
-    TaskCreationContext creation = context.creation();
-    TaskExecutionContext execution = creation.execution();
-    TaskSchedulingContext scheduling = creation.scheduling();
-    JobPartitionEntity partition = context.partition();
-    JobTaskEntity task = new JobTaskEntity();
-    task.setTenantId(execution.request().tenantId());
-    task.setJobInstanceId(execution.jobInstance().getId());
-    task.setJobInstanceBizDate(execution.jobInstance().getBizDate());
-    task.setJobPartitionId(partition.getId());
-    String taskType = resolveTaskType(scheduling.plan(), partition);
-    task.setTaskType(taskType);
-    task.setTaskSeq(1);
-    String selectedWorkerId = resolveSelectedWorkerId(scheduling.plan(), partition);
-    task.setAssignedWorkerCode(selectedWorkerId);
-    ResourceSchedulingDecision decision = scheduling.decision();
-    String taskStatus;
-    if (EmptyChecks.isNotNull(decision) && decision.isDispatchable()) {
-      taskStatus = TaskStatus.READY.code();
-    } else if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.getTaskStatus())) {
-      taskStatus = TaskStatus.READY.code();
-    } else {
-      taskStatus = decision.getTaskStatus();
-    }
-    task.setTaskStatus(taskStatus);
-    task.setVersion(0L);
-    // 演练任务保留控制面链路，并使用最低 task/outbox 优先级。
-    boolean dryRun = Boolean.TRUE.equals(execution.jobInstance().getDryRun());
-    Integer priority =
-        DryRunSchedulingPriority.resolve(dryRun, scheduling.plan().getPriority());
-    task.setPriority(priority);
-    Map<String, Object> effectiveParams = execution.effectiveParams();
-    String taskPayload =
-        buildPayloadJson(execution.request(), execution.jobInstance(), effectiveParams, partition);
-    task.setTaskPayload(taskPayload);
-    // ORCH-P3-3 生效参数审计快照（合并后、wire 注入前），与 task_payload 解耦
-    String effectiveParametersJson =
-        EmptyChecks.isNull(effectiveParams) ? null : JsonUtils.toJson(effectiveParams);
-    task.setEffectiveParameters(effectiveParametersJson);
-    task.setDryRun(dryRun);
-    return task;
-  }
-
-  private String resolveTaskType(SchedulePlan plan, JobPartitionEntity partition) {
-    boolean partitionHasWorkerGroupAndDefaultRoute = EmptyChecks.isNotNull(partition)
-        && EmptyChecks.isNotNull(partition.getWorkerGroup())
-        && hasDefaultRoute(plan)
-        && EmptyChecks.isNotNull(plan.getDefaultWorkerRoute().getWorkerType());
-    if (partitionHasWorkerGroupAndDefaultRoute) {
-      return plan.getDefaultWorkerRoute().getWorkerType();
-    }
-    return EmptyChecks.isNull(plan) ? null : plan.getDefaultWorkerType();
-  }
-
-  private boolean hasDefaultRoute(SchedulePlan plan) {
-    return EmptyChecks.isNotNull(plan) && EmptyChecks.isNotNull(plan.getDefaultWorkerRoute());
-  }
-
-  private String resolveSelectedWorkerId(SchedulePlan plan, JobPartitionEntity partition) {
-    String workerCode = EmptyChecks.isNull(partition) ? null : partition.getWorkerCode();
-    if (EmptyChecks.isNotBlank(workerCode)) {
-      return workerCode;
-    }
-    if (hasDefaultRoute(plan)) {
-      return plan.getDefaultWorkerRoute().getWorkerCode();
-    }
-    return null;
-  }
-
-  static Map<String, Object> enrichPayload(
-      LaunchRequest request, JobInstanceEntity jobInstance, Map<String, Object> params) {
-    Map<String, Object> payload = new LinkedHashMap<>();
-    if (EmptyChecks.isNotNull(params)) {
-      payload.putAll(params);
-    }
-    Object parentNodeCode = payload.get("_parentNodeCode");
-    if (payload.containsKey("_parentWorkflowRunId")
-        && parentNodeCode instanceof String nodeCode
-        && EmptyChecks.isNotBlank(nodeCode)) {
-      // 无根 Workflow 节点作为独立 Job Instance 执行。保留所属节点
-      // 标识到每个 Worker 任务，避免并行节点的结果依赖唯一活动
-      // 节点能否从 workflow_run.current_node_code 推断出来。
-      payload.put("workflowNodeCode", nodeCode);
-      payload.put("workflowNodeType", WorkflowNodeType.JOB.code());
-    }
-    if (!payload.containsKey("batchNo") && !payload.containsKey("batch_no")) {
-      String batchNo = EmptyChecks.isNull(jobInstance) ? null : jobInstance.getBatchNo();
-      if (EmptyChecks.isNotBlank(batchNo)) {
-        payload.put("batchNo", batchNo);
-      }
-    }
-    if (!payload.containsKey("bizDate")) {
-      String bizDate = EmptyChecks.isNull(request) || EmptyChecks.isNull(request.bizDate())
-          ? null
-          : request.bizDate().toString();
-      if (EmptyChecks.isNotBlank(bizDate)) {
-        payload.put("bizDate", bizDate);
-      }
-    }
-    if (!payload.containsKey("jobCode")) {
-      String jobCode = EmptyChecks.isNull(request) ? null : request.jobCode();
-      if (EmptyChecks.isNotBlank(jobCode)) {
-        payload.put("jobCode", jobCode);
-      }
-    }
-    // 实例是演练模式权威来源；业务参数不得让正式任务以演练方式执行。
-    if (EmptyChecks.isNotNull(jobInstance)) {
-      payload.put("dryRun", Boolean.TRUE.equals(jobInstance.getDryRun()));
-    }
-    return payload;
-  }
-
-  private String buildPayloadJson(
-      LaunchRequest request, JobInstanceEntity jobInstance, Map<String, Object> params) {
-    Map<String, Object> payload = enrichPayload(request, jobInstance, params);
-    return JsonUtils.toJson(payload);
-  }
-
-  private String buildPayloadJson(
-      LaunchRequest request,
-      JobInstanceEntity jobInstance,
-      Map<String, Object> params,
-      JobPartitionEntity partition) {
-    Map<String, Object> payload = enrichPayload(request, jobInstance, params);
-    enrichBundleBinding(payload, partition);
-    return JsonUtils.toJson(payload);
-  }
-
-  /**
-   * ADR-046 文件束:partition 携带 source_file_id/template_code/target_ref 绑定时注入 task payload，worker
-   * claim 后据此处理指定文件、指定模板、指定目标。普通(非束)partition 这些列为空，payload 与改造前完全一致——纯加法、不影响存量导入。
-   *
-   * <p><b>键命名空间(P1-1/P1-3 防御)</b>:source_file_id / target_ref 落 payload 时用带 {@code bundle} 前缀的键
-   * {@code bundleSourceFileId} / {@code bundleTargetRef},不与业务 payload 里可能出现的泛化 {@code sourceFileId}
-   * /{@code targetRef} 冲突——避免非束任务被误注入 FILE_ID(worker-core resolveSourceFileId)或 dispatch
-   * {@code @JsonAlias} 歧义。{@code templateCode} 是 Import/ExportPayload 的真字段,保持原名(束有意复用)。
-   */
-  static void enrichBundleBinding(Map<String, Object> payload, JobPartitionEntity partition) {
-    // 清除上游输入，仅实际分区绑定可赋予文件束身份。
-    payload.remove("bundleSourceFileId");
-    payload.remove("bundleTargetRef");
-    if (EmptyChecks.isNull(partition)) {
-      return;
-    }
-    if (EmptyChecks.isNotNull(partition.getSourceFileId())) {
-      payload.put("bundleSourceFileId", partition.getSourceFileId());
-    }
-    String templateCode = partition.getTemplateCode();
-    if (EmptyChecks.isNotBlank(templateCode)) {
-      payload.put("templateCode", templateCode);
-    }
-    Object frozenTemplates = payload.remove(FrozenFileTemplateSnapshot.COLLECTION_KEY);
-    if (frozenTemplates instanceof Map<?, ?> snapshots) {
-      payload.remove(FrozenFileTemplateSnapshot.PAYLOAD_KEY);
-      if (EmptyChecks.isNotBlank(templateCode)) {
-        Object selectedSnapshot = snapshots.get(templateCode);
-        if (selectedSnapshot instanceof String ciphertext) {
-          payload.put(FrozenFileTemplateSnapshot.PAYLOAD_KEY, ciphertext);
+    private record TaskCreationContext(TaskExecutionContext execution, TaskSchedulingContext scheduling) {
+        private TaskBuildContext buildContext(JobPartitionEntity partition) {
+            return new TaskBuildContext(this, partition);
         }
-      }
     }
-    String targetRef = partition.getTargetRef();
-    if (EmptyChecks.isNotBlank(targetRef)) {
-      payload.put("bundleTargetRef", targetRef);
+
+    private record TaskBuildContext(TaskCreationContext creation, JobPartitionEntity partition) {}
+
+    // D-2-1: dispatch() 的 @Transactional 保证 createPartitions + createTasks + writeDispatchEvent
+    // 在同一个数据库事务内原子提交。createPartitions 使用默认 REQUIRED（加入调用方事务），
+    // writeDispatchEvent 使用 MANDATORY（必须在调用方事务内执行）。三者不会分别提交。
+    @Override
+    @Transactional
+    @Observed(name = "orch.partition.dispatch", contextualName = "orch.partition.dispatch")
+    public void dispatch(DispatchContext context) {
+        LaunchRequest request = context.request();
+        Map<String, Object> effectiveParams = context.effectiveParams();
+        String traceId = context.traceId();
+        JobInstanceEntity jobInstance = context.jobInstance();
+        WorkflowRunEntity workflowRun = context.workflowRun();
+        List<WorkflowDagService.DagNodeResolution> initialNodes = context.initialNodes();
+        Instant startedAt = context.startedAt();
+        String sourcePayload = buildPayloadJson(request, jobInstance, effectiveParams);
+        // 有 DAG 初始节点（非 START）时优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
+        DispatchOutcome outcome = (EmptyChecks.isNotNull(initialNodes) && EmptyChecks.isNotEmpty(initialNodes))
+                ? dispatchInitialDagNodes(initialNodes, jobInstance, workflowRun, sourcePayload, traceId)
+                : dispatchByPlan(request, effectiveParams, traceId, jobInstance, context.executionDefinition());
+        launchPhaseMetrics.record(Phase.INSTANCE_TRANSITION, () -> {
+            if (outcome.dispatchable()) {
+                transitionInstanceToRunning(jobInstance, workflowRun, outcome.partitionCount(), startedAt);
+            } else {
+                transitionInstanceToWaiting(jobInstance, workflowRun, outcome.partitionCount());
+            }
+        });
     }
-  }
+
+    private record DispatchOutcome(int partitionCount, boolean dispatchable) {}
+
+    private DispatchOutcome dispatchInitialDagNodes(
+            List<WorkflowDagService.DagNodeResolution> initialNodes,
+            JobInstanceEntity jobInstance,
+            WorkflowRunEntity workflowRun,
+            String sourcePayload,
+            String traceId) {
+        // 普通作业在 ResourceScheduler 内只做一次全局准入；DAG 初始节点可能有多个，父实例却只应
+        // 占一个槽位。先在 T2 事务内锁定并观察一次，所有节点仍照常物化为 READY/WAITING，最后
+        // 依据该结果推进父实例，避免容量已满时父实例被错误推进为 RUNNING。
+        boolean globalCapacity = globalJobAdmission.hasCapacity();
+        int partitionCount = 0;
+        for (WorkflowDagService.DagNodeResolution initialNode : initialNodes) {
+            if (EmptyChecks.isNull(initialNode) || WorkflowNodeCode.START.code().equals(initialNode.nodeCode())) {
+                continue;
+            }
+            partitionCount += workflowNodeDispatchService.dispatchNode(
+                    jobInstance, workflowRun, initialNode, sourcePayload, traceId);
+        }
+        return new DispatchOutcome(partitionCount, globalCapacity || partitionCount == 0);
+    }
+
+    private DispatchOutcome dispatchByPlan(
+            LaunchRequest request,
+            Map<String, Object> effectiveParams,
+            String traceId,
+            JobInstanceEntity jobInstance,
+            JobDefinitionView executionDefinition) {
+        if (EmptyChecks.isNull(executionDefinition)) {
+            throw new IllegalStateException("Partition dispatch requires the admitted Job definition");
+        }
+        SchedulePlanCommand planCommand = new SchedulePlanCommand(
+                request.tenantId(),
+                request.jobCode(),
+                request.bizDate().toString(),
+                effectiveParams,
+                executionDefinition);
+        SchedulePlan plan = launchPhaseMetrics.record(Phase.PLAN_BUILD, () -> schedulePlanBuilder.build(planCommand));
+        plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
+        ResourceSchedulingDecision decision = launchPhaseMetrics.record(
+                Phase.RESOURCE_SCHEDULE,
+                () -> resourceScheduler.schedule(SchedulePlanSupport.toSchedulingRequest(plan)));
+        if (isRejected(decision)) {
+            throw BizException.of(
+                    ResultCode.BUSINESS_ERROR,
+                    "error.partition.dispatch_business_error",
+                    decision.getReasonCode(),
+                    decision.getReasonMessage());
+        }
+        return launchPhaseMetrics.record(Phase.DISPATCH_MATERIALIZE, () -> {
+            SchedulePlanSupport.applySchedulingDecision(plan, decision);
+            prepareInitialPartitionStatuses(plan, decision);
+            List<JobPartitionEntity> partitions = partitionLifecycleService.createPartitions(
+                    plan, jobInstance.getId(), initialPartitionStatus(decision));
+            jobInstance.setExpectedPartitionCount(partitions.size());
+            TaskExecutionContext executionContext =
+                    new TaskExecutionContext(request, effectiveParams, traceId, jobInstance);
+            TaskSchedulingContext schedulingContext = new TaskSchedulingContext(plan, partitions, decision);
+            TaskCreationContext taskContext = new TaskCreationContext(executionContext, schedulingContext);
+            createTasksAndMaybeOutboxEvents(taskContext);
+            return new DispatchOutcome(partitions.size(), decision.isDispatchable());
+        });
+    }
+
+    private boolean isRejected(ResourceSchedulingDecision decision) {
+        return EmptyChecks.isNotNull(decision)
+                && (ResourceAdmissionAction.REJECT == decision.getAdmissionAction() || decision.isFailFast());
+    }
+
+    /**
+     * 普通 plan 的新分区、新任务和 outbox 在同一 T2 事务内落库，提交前不会被 worker 看到。
+     * 因此可派发路径直接以 READY 初始化，避免刚插入又执行 CREATED → READY 的两次冗余 UPDATE。
+     * WAITING 路径仍保留调度决策的原始状态；DAG、重试和等待队列释放仍走 releaseForDispatch CAS。
+     */
+    private void prepareInitialPartitionStatuses(SchedulePlan plan, ResourceSchedulingDecision decision) {
+        if (!decision.isDispatchable() || EmptyChecks.isEmpty(plan.getPartitions())) {
+            return;
+        }
+        for (SchedulePlan.PartitionPlan partition : plan.getPartitions()) {
+            partition.setPartitionStatus(PartitionStatus.READY.code());
+        }
+    }
+
+    private String initialPartitionStatus(ResourceSchedulingDecision decision) {
+        return decision.isDispatchable() ? PartitionStatus.READY.code() : decision.getPartitionStatus();
+    }
+
+    private void transitionInstanceToRunning(
+            JobInstanceEntity jobInstance, WorkflowRunEntity workflowRun, int partitionCount, Instant startedAt) {
+        // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
+        MarkInstanceRunningParam.MarkInstanceRunningParamBuilder updateParam = MarkInstanceRunningParam.builder();
+        updateParam.tenantId(jobInstance.getTenantId());
+        updateParam.id(jobInstance.getId());
+        String runningStatus = lifecycleEventMapper.map(jobInstance, "START").toState();
+        updateParam.instanceStatus(runningStatus);
+        updateParam.expectedPartitionCount(partitionCount);
+        updateParam.startedAt(startedAt);
+        updateParam.expectedVersion(jobInstance.getVersion());
+        int updated = jobInstanceMapper.markRunning(updateParam.build());
+        if (updated <= 0) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
+        }
+        jobInstance.setVersion((EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
+        if (EmptyChecks.isNotNull(workflowRun)) {
+            String tenantId = jobInstance.getTenantId();
+            Long workflowRunId = workflowRun.getId();
+            String workflowRunningStatus =
+                    lifecycleEventMapper.map(workflowRun, "START").toState();
+            String currentNodeCode = workflowRun.getCurrentNodeCode();
+            WorkflowRunMarkRunningParam workflowRunMarkRunningParam = WorkflowRunMarkRunningParam.builder()
+                    .tenantId(tenantId)
+                    .id(workflowRunId)
+                    .runStatus(workflowRunningStatus)
+                    .currentNodeCode(currentNodeCode)
+                    .startedAt(startedAt)
+                    .build();
+            workflowRunMapper.markRunning(workflowRunMarkRunningParam);
+        }
+    }
+
+    private void transitionInstanceToWaiting(
+            JobInstanceEntity jobInstance, WorkflowRunEntity workflowRun, int partitionCount) {
+        // 不可派发（资源不足/窗口限制等）：instance 进入 WAITING，由等待派发调度器后续推进。
+        int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
+                .tenantId(jobInstance.getTenantId())
+                .id(jobInstance.getId())
+                .instanceStatus(JobInstanceStatus.WAITING.code())
+                .expectedPartitionCount(partitionCount)
+                .startedAt(null)
+                .expectedVersion(jobInstance.getVersion())
+                .build());
+        if (updated <= 0) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_waiting_conflict");
+        }
+        jobInstance.setVersion((EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
+        if (EmptyChecks.isNotNull(workflowRun)) {
+            WorkflowRunMarkRunningParam workflowRunMarkRunningParam2 = WorkflowRunMarkRunningParam.builder()
+                    .tenantId(jobInstance.getTenantId())
+                    .id(workflowRun.getId())
+                    .runStatus(WorkflowRunStatus.CREATED.code())
+                    .currentNodeCode(workflowRun.getCurrentNodeCode())
+                    .startedAt(null)
+                    .build();
+            workflowRunMapper.markRunning(workflowRunMarkRunningParam2);
+        }
+    }
+
+    // PERF(5.1): fan-out 由“逐分区 createTask + 逐条 outbox”改为两阶段——先整批构建 task 一次多行
+    // INSERT（含 step 镜像批写），再逐分区写 outbox。可派发的新行在该事务内直接以 READY 初始化，
+    // 不再额外执行 CREATED→READY 的两次 UPDATE。outbox 保持逐条：写入被 OutboxWriteChokePointArchTest 锁死在
+    // OutboxDomainEventPublisher.publish 单入口（NOT EXISTS 去重承重点），批量化需动 common 的
+    // DomainEventPublisher 契约与该治理护栏，按任务降级方案保持逐条（见 task-5-report）。
+    private void createTasksAndMaybeOutboxEvents(TaskCreationContext context) {
+        List<JobPartitionEntity> partitions = context.scheduling().partitions();
+        if (EmptyChecks.isEmpty(partitions)) {
+            return;
+        }
+        List<JobTaskEntity> tasks = new ArrayList<>(partitions.size());
+        for (JobPartitionEntity partition : partitions) {
+            TaskBuildContext taskBuildContext = context.buildContext(partition);
+            tasks.add(buildTask(taskBuildContext));
+        }
+        taskCreationService.createTasks(tasks);
+        if (!context.scheduling().decision().isDispatchable()) {
+            return;
+        }
+        for (int i = 0; i < partitions.size(); i++) {
+            JobPartitionEntity partition = partitions.get(i);
+            JobTaskEntity task = tasks.get(i);
+            JobInstanceEntity jobInstance = context.execution().jobInstance();
+            String traceId = context.execution().traceId();
+            String tenantId = context.execution().request().tenantId();
+            Long taskId = task.getId();
+            String dispatchEventKey = OutboxEventKeyGenerator.forDispatch(tenantId, taskId);
+            taskDispatchOutboxService.writeDispatchEvent(jobInstance, task, partition, traceId, dispatchEventKey);
+        }
+    }
+
+    private JobTaskEntity buildTask(TaskBuildContext context) {
+        TaskCreationContext creation = context.creation();
+        TaskExecutionContext execution = creation.execution();
+        TaskSchedulingContext scheduling = creation.scheduling();
+        JobPartitionEntity partition = context.partition();
+        JobTaskEntity task = new JobTaskEntity();
+        task.setTenantId(execution.request().tenantId());
+        task.setJobInstanceId(execution.jobInstance().getId());
+        task.setJobInstanceBizDate(execution.jobInstance().getBizDate());
+        task.setJobPartitionId(partition.getId());
+        String taskType = resolveTaskType(scheduling.plan(), partition);
+        task.setTaskType(taskType);
+        task.setTaskSeq(1);
+        String selectedWorkerId = resolveSelectedWorkerId(scheduling.plan(), partition);
+        task.setAssignedWorkerCode(selectedWorkerId);
+        ResourceSchedulingDecision decision = scheduling.decision();
+        String taskStatus;
+        if (EmptyChecks.isNotNull(decision) && decision.isDispatchable()) {
+            taskStatus = TaskStatus.READY.code();
+        } else if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.getTaskStatus())) {
+            taskStatus = TaskStatus.READY.code();
+        } else {
+            taskStatus = decision.getTaskStatus();
+        }
+        task.setTaskStatus(taskStatus);
+        task.setVersion(0L);
+        // 演练任务保留控制面链路，并使用最低 task/outbox 优先级。
+        boolean dryRun = Boolean.TRUE.equals(execution.jobInstance().getDryRun());
+        Integer priority =
+                DryRunSchedulingPriority.resolve(dryRun, scheduling.plan().getPriority());
+        task.setPriority(priority);
+        Map<String, Object> effectiveParams = execution.effectiveParams();
+        String taskPayload = buildPayloadJson(execution.request(), execution.jobInstance(), effectiveParams, partition);
+        task.setTaskPayload(taskPayload);
+        // ORCH-P3-3 生效参数审计快照（合并后、wire 注入前），与 task_payload 解耦
+        String effectiveParametersJson = EmptyChecks.isNull(effectiveParams) ? null : JsonUtils.toJson(effectiveParams);
+        task.setEffectiveParameters(effectiveParametersJson);
+        task.setDryRun(dryRun);
+        return task;
+    }
+
+    private String resolveTaskType(SchedulePlan plan, JobPartitionEntity partition) {
+        boolean partitionHasWorkerGroupAndDefaultRoute = EmptyChecks.isNotNull(partition)
+                && EmptyChecks.isNotNull(partition.getWorkerGroup())
+                && hasDefaultRoute(plan)
+                && EmptyChecks.isNotNull(plan.getDefaultWorkerRoute().getWorkerType());
+        if (partitionHasWorkerGroupAndDefaultRoute) {
+            return plan.getDefaultWorkerRoute().getWorkerType();
+        }
+        return EmptyChecks.isNull(plan) ? null : plan.getDefaultWorkerType();
+    }
+
+    private boolean hasDefaultRoute(SchedulePlan plan) {
+        return EmptyChecks.isNotNull(plan) && EmptyChecks.isNotNull(plan.getDefaultWorkerRoute());
+    }
+
+    private String resolveSelectedWorkerId(SchedulePlan plan, JobPartitionEntity partition) {
+        String workerCode = EmptyChecks.isNull(partition) ? null : partition.getWorkerCode();
+        if (EmptyChecks.isNotBlank(workerCode)) {
+            return workerCode;
+        }
+        if (hasDefaultRoute(plan)) {
+            return plan.getDefaultWorkerRoute().getWorkerCode();
+        }
+        return null;
+    }
+
+    static Map<String, Object> enrichPayload(
+            LaunchRequest request, JobInstanceEntity jobInstance, Map<String, Object> params) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (EmptyChecks.isNotNull(params)) {
+            payload.putAll(params);
+        }
+        Object parentNodeCode = payload.get("_parentNodeCode");
+        if (payload.containsKey("_parentWorkflowRunId")
+                && parentNodeCode instanceof String nodeCode
+                && EmptyChecks.isNotBlank(nodeCode)) {
+            // 无根 Workflow 节点作为独立 Job Instance 执行。保留所属节点
+            // 标识到每个 Worker 任务，避免并行节点的结果依赖唯一活动
+            // 节点能否从 workflow_run.current_node_code 推断出来。
+            payload.put("workflowNodeCode", nodeCode);
+            payload.put("workflowNodeType", WorkflowNodeType.JOB.code());
+        }
+        if (!payload.containsKey("batchNo") && !payload.containsKey("batch_no")) {
+            String batchNo = EmptyChecks.isNull(jobInstance) ? null : jobInstance.getBatchNo();
+            if (EmptyChecks.isNotBlank(batchNo)) {
+                payload.put("batchNo", batchNo);
+            }
+        }
+        if (!payload.containsKey("bizDate")) {
+            String bizDate = EmptyChecks.isNull(request) || EmptyChecks.isNull(request.bizDate())
+                    ? null
+                    : request.bizDate().toString();
+            if (EmptyChecks.isNotBlank(bizDate)) {
+                payload.put("bizDate", bizDate);
+            }
+        }
+        if (!payload.containsKey("jobCode")) {
+            String jobCode = EmptyChecks.isNull(request) ? null : request.jobCode();
+            if (EmptyChecks.isNotBlank(jobCode)) {
+                payload.put("jobCode", jobCode);
+            }
+        }
+        // 实例是演练模式权威来源；业务参数不得让正式任务以演练方式执行。
+        if (EmptyChecks.isNotNull(jobInstance)) {
+            payload.put("dryRun", Boolean.TRUE.equals(jobInstance.getDryRun()));
+        }
+        return payload;
+    }
+
+    private String buildPayloadJson(LaunchRequest request, JobInstanceEntity jobInstance, Map<String, Object> params) {
+        Map<String, Object> payload = enrichPayload(request, jobInstance, params);
+        return JsonUtils.toJson(payload);
+    }
+
+    private String buildPayloadJson(
+            LaunchRequest request,
+            JobInstanceEntity jobInstance,
+            Map<String, Object> params,
+            JobPartitionEntity partition) {
+        Map<String, Object> payload = enrichPayload(request, jobInstance, params);
+        enrichBundleBinding(payload, partition);
+        return JsonUtils.toJson(payload);
+    }
+
+    /**
+     * ADR-046 文件束:partition 携带 source_file_id/template_code/target_ref 绑定时注入 task payload，worker
+     * claim 后据此处理指定文件、指定模板、指定目标。普通(非束)partition 这些列为空，payload 与改造前完全一致——纯加法、不影响存量导入。
+     *
+     * <p><b>键命名空间(P1-1/P1-3 防御)</b>:source_file_id / target_ref 落 payload 时用带 {@code bundle} 前缀的键
+     * {@code bundleSourceFileId} / {@code bundleTargetRef},不与业务 payload 里可能出现的泛化 {@code sourceFileId}
+     * /{@code targetRef} 冲突——避免非束任务被误注入 FILE_ID(worker-core resolveSourceFileId)或 dispatch
+     * {@code @JsonAlias} 歧义。{@code templateCode} 是 Import/ExportPayload 的真字段,保持原名(束有意复用)。
+     */
+    static void enrichBundleBinding(Map<String, Object> payload, JobPartitionEntity partition) {
+        // 清除上游输入，仅实际分区绑定可赋予文件束身份。
+        payload.remove("bundleSourceFileId");
+        payload.remove("bundleTargetRef");
+        if (EmptyChecks.isNull(partition)) {
+            return;
+        }
+        if (EmptyChecks.isNotNull(partition.getSourceFileId())) {
+            payload.put("bundleSourceFileId", partition.getSourceFileId());
+        }
+        String templateCode = partition.getTemplateCode();
+        if (EmptyChecks.isNotBlank(templateCode)) {
+            payload.put("templateCode", templateCode);
+        }
+        Object frozenTemplates = payload.remove(FrozenFileTemplateSnapshot.COLLECTION_KEY);
+        if (frozenTemplates instanceof Map<?, ?> snapshots) {
+            payload.remove(FrozenFileTemplateSnapshot.PAYLOAD_KEY);
+            if (EmptyChecks.isNotBlank(templateCode)) {
+                Object selectedSnapshot = snapshots.get(templateCode);
+                if (selectedSnapshot instanceof String ciphertext) {
+                    payload.put(FrozenFileTemplateSnapshot.PAYLOAD_KEY, ciphertext);
+                }
+            }
+        }
+        String targetRef = partition.getTargetRef();
+        if (EmptyChecks.isNotBlank(targetRef)) {
+            payload.put("bundleTargetRef", targetRef);
+        }
+    }
 }

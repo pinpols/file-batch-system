@@ -24,234 +24,225 @@ import org.springframework.dao.DataAccessException;
 @SuppressWarnings("java:S2583")
 final class SubscriptionRuleDispatchPolicy {
 
-  private static final List<String> SEVERITY_KEYS = List.of("severity");
-  private static final List<String> JOB_CODE_KEYS = List.of("jobCode", "job_code");
-  private static final int MAX_SENDS_PER_CHANNEL_PER_MINUTE = 120;
-  private static final int MAX_SENDS_PER_DESTINATION_PER_MINUTE = 60;
-  private static final int DEDUP_WINDOW_LIMIT = 1;
+    private static final List<String> SEVERITY_KEYS = List.of("severity");
+    private static final List<String> JOB_CODE_KEYS = List.of("jobCode", "job_code");
+    private static final int MAX_SENDS_PER_CHANNEL_PER_MINUTE = 120;
+    private static final int MAX_SENDS_PER_DESTINATION_PER_MINUTE = 60;
+    private static final int DEDUP_WINDOW_LIMIT = 1;
 
-  private final SlidingWindowRateLimiter sendRateLimiter;
-  private final MeterRegistry meterRegistry;
+    private final SlidingWindowRateLimiter sendRateLimiter;
+    private final MeterRegistry meterRegistry;
 
-  String normalizeEventType(String eventType) {
-    if (EmptyChecks.isNull(eventType)) {
-      return "UNKNOWN";
-    }
-    String trimmedEventType = eventType.trim();
-    return trimmedEventType.toUpperCase(Locale.ROOT);
-  }
-
-  @SuppressWarnings("unchecked")
-  Map<String, Object> asDataMap(Object data) {
-    if (data instanceof Map<?, ?> map) {
-      return (Map<String, Object>) map;
-    }
-    if (EmptyChecks.isNull(data)
-        || data instanceof CharSequence
-        || data instanceof Number
-        || data instanceof Boolean
-        || data instanceof Enum<?>) {
-      return Map.of();
-    }
-    try {
-      return JsonUtils.toMap(data);
-    } catch (RuntimeException exception) {
-      SwallowedExceptionLogger.info(
-          SubscriptionRuleDispatchPolicy.class, "event-payload-map-conversion-failed", exception);
-      return Map.of();
-    }
-  }
-
-  boolean matches(EnabledSubscriptionRuleRow rule, String eventType, Map<String, Object> dataMap) {
-    return matchesRule(rule, eventType, dataMap);
-  }
-
-  static boolean matchesRule(
-      EnabledSubscriptionRuleRow rule, String eventType, Map<String, Object> dataMap) {
-    String configuredEventTypes = rule.eventTypes();
-    boolean eventTypeIsMatched = eventTypeMatches(configuredEventTypes, eventType);
-    if (!eventTypeIsMatched) {
-      return false;
+    String normalizeEventType(String eventType) {
+        if (EmptyChecks.isNull(eventType)) {
+            return "UNKNOWN";
+        }
+        String trimmedEventType = eventType.trim();
+        return trimmedEventType.toUpperCase(Locale.ROOT);
     }
 
-    String severityFilter = rule.severityFilter();
-    boolean severityIsMatched = filterMatches(severityFilter, dataMap, SEVERITY_KEYS);
-    if (!severityIsMatched) {
-      return false;
+    @SuppressWarnings("unchecked")
+    Map<String, Object> asDataMap(Object data) {
+        if (data instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        if (EmptyChecks.isNull(data)
+                || data instanceof CharSequence
+                || data instanceof Number
+                || data instanceof Boolean
+                || data instanceof Enum<?>) {
+            return Map.of();
+        }
+        try {
+            return JsonUtils.toMap(data);
+        } catch (RuntimeException exception) {
+            SwallowedExceptionLogger.info(
+                    SubscriptionRuleDispatchPolicy.class, "event-payload-map-conversion-failed", exception);
+            return Map.of();
+        }
     }
 
-    String jobCodeFilter = rule.jobCodeFilter();
-    return filterMatches(jobCodeFilter, dataMap, JOB_CODE_KEYS);
-  }
+    boolean matches(EnabledSubscriptionRuleRow rule, String eventType, Map<String, Object> dataMap) {
+        return matchesRule(rule, eventType, dataMap);
+    }
 
-  boolean withinSendRateLimit(
-      String tenantId, String channelCode, String channelType, String eventType) {
-    try {
-      boolean allowed = sendRateLimiter.tryAcquire(
-          "notify:send:" + tenantId + ":" + channelCode, MAX_SENDS_PER_CHANNEL_PER_MINUTE);
-      if (!allowed) {
-        recordDrop("channel_ratelimit");
-        log.warn(
-            "notification send rate limit exceeded; dropping to prevent flooding: channelCode={},"
-                + " channelType={}, eventType={}, limitPerMin={}",
-            channelCode,
-            channelType,
-            eventType,
-            MAX_SENDS_PER_CHANNEL_PER_MINUTE);
-      }
-      return allowed;
-    } catch (DataAccessException ex) {
-      log.warn(
-          "notification send rate limiter unavailable — fail-open: channelCode={}, cause={}",
-          channelCode,
-          SwallowedExceptionLogger.summary(ex));
-      return true;
-    }
-  }
+    static boolean matchesRule(EnabledSubscriptionRuleRow rule, String eventType, Map<String, Object> dataMap) {
+        String configuredEventTypes = rule.eventTypes();
+        boolean eventTypeIsMatched = eventTypeMatches(configuredEventTypes, eventType);
+        if (!eventTypeIsMatched) {
+            return false;
+        }
 
-  boolean isDuplicateWithinWindow(
-      String tenantId, String channelCode, String eventType, String payloadJson) {
-    String fingerprint =
-        payloadJson == null || payloadJson.isEmpty() ? "empty" : Hashes.sha256Short(payloadJson);
-    String key =
-        "notify:dedup:" + tenantId + ":" + channelCode + ":" + eventType + ":" + fingerprint;
-    try {
-      boolean firstInWindow = sendRateLimiter.tryAcquire(key, DEDUP_WINDOW_LIMIT);
-      if (!firstInWindow) {
-        log.info(
-            "notification suppressed as duplicate within window: channelCode={}, eventType={}",
-            channelCode,
-            eventType);
-      }
-      return !firstInWindow;
-    } catch (DataAccessException ex) {
-      log.warn(
-          "notification dedup rate limiter unavailable — fail-open (not deduped):"
-              + " channelCode={}, eventType={}, cause={}",
-          channelCode,
-          eventType,
-          SwallowedExceptionLogger.summary(ex));
-      Counter.builder("notification.dedup.redis_fallback")
-          .register(meterRegistry)
-          .increment();
-      return false;
-    }
-  }
+        String severityFilter = rule.severityFilter();
+        boolean severityIsMatched = filterMatches(severityFilter, dataMap, SEVERITY_KEYS);
+        if (!severityIsMatched) {
+            return false;
+        }
 
-  boolean withinDestinationRateLimit(
-      String tenantId,
-      EnabledSubscriptionRuleRow rule,
-      String channelCode,
-      String channelType,
-      String eventType) {
-    Map<String, Object> config = parseConfig(rule.configJson());
-    String destination = firstNonBlank(
-        stringValue(config, "url"), stringValue(config, "to"), stringValue(config, "phoneNumbers"));
-    if (destination == null) {
-      return true;
+        String jobCodeFilter = rule.jobCodeFilter();
+        return filterMatches(jobCodeFilter, dataMap, JOB_CODE_KEYS);
     }
-    try {
-      String destinationFingerprint = Hashes.sha256Short(destination);
-      String destinationRateLimitKey = "notify:dest:" + tenantId + ":" + destinationFingerprint;
-      boolean allowed =
-          sendRateLimiter.tryAcquire(destinationRateLimitKey, MAX_SENDS_PER_DESTINATION_PER_MINUTE);
-      if (!allowed) {
-        recordDrop("dest_ratelimit");
-        log.warn(
-            "notification destination rate limit exceeded; dropping: channelCode={},"
-                + " channelType={}, eventType={}, limitPerMin={}",
-            channelCode,
-            channelType,
-            eventType,
-            MAX_SENDS_PER_DESTINATION_PER_MINUTE);
-      }
-      return allowed;
-    } catch (DataAccessException ex) {
-      log.warn(
-          "notification destination rate limiter unavailable — fail-open: channelCode={},"
-              + " channelType={}, eventType={}, cause={}",
-          channelCode,
-          channelType,
-          eventType,
-          SwallowedExceptionLogger.summary(ex));
-      Counter.builder("notification.ratelimit.redis_fallback")
-          .register(meterRegistry)
-          .increment();
-      return true;
-    }
-  }
 
-  void recordDrop(String reason) {
-    meterRegistry.counter("notification.dropped", "reason", reason).increment();
-  }
+    boolean withinSendRateLimit(String tenantId, String channelCode, String channelType, String eventType) {
+        try {
+            boolean allowed = sendRateLimiter.tryAcquire(
+                    "notify:send:" + tenantId + ":" + channelCode, MAX_SENDS_PER_CHANNEL_PER_MINUTE);
+            if (!allowed) {
+                recordDrop("channel_ratelimit");
+                log.warn(
+                        "notification send rate limit exceeded; dropping to prevent flooding: channelCode={},"
+                                + " channelType={}, eventType={}, limitPerMin={}",
+                        channelCode,
+                        channelType,
+                        eventType,
+                        MAX_SENDS_PER_CHANNEL_PER_MINUTE);
+            }
+            return allowed;
+        } catch (DataAccessException ex) {
+            log.warn(
+                    "notification send rate limiter unavailable — fail-open: channelCode={}, cause={}",
+                    channelCode,
+                    SwallowedExceptionLogger.summary(ex));
+            return true;
+        }
+    }
 
-  Map<String, Object> parseConfig(String configJson) {
-    if (configJson == null || configJson.isBlank()) {
-      return Map.of();
+    boolean isDuplicateWithinWindow(String tenantId, String channelCode, String eventType, String payloadJson) {
+        String fingerprint = payloadJson == null || payloadJson.isEmpty() ? "empty" : Hashes.sha256Short(payloadJson);
+        String key = "notify:dedup:" + tenantId + ":" + channelCode + ":" + eventType + ":" + fingerprint;
+        try {
+            boolean firstInWindow = sendRateLimiter.tryAcquire(key, DEDUP_WINDOW_LIMIT);
+            if (!firstInWindow) {
+                log.info(
+                        "notification suppressed as duplicate within window: channelCode={}, eventType={}",
+                        channelCode,
+                        eventType);
+            }
+            return !firstInWindow;
+        } catch (DataAccessException ex) {
+            log.warn(
+                    "notification dedup rate limiter unavailable — fail-open (not deduped):"
+                            + " channelCode={}, eventType={}, cause={}",
+                    channelCode,
+                    eventType,
+                    SwallowedExceptionLogger.summary(ex));
+            Counter.builder("notification.dedup.redis_fallback")
+                    .register(meterRegistry)
+                    .increment();
+            return false;
+        }
     }
-    try {
-      Map<String, Object> parsed =
-          JsonUtils.fromJson(configJson, new TypeReference<Map<String, Object>>() {});
-      return parsed == null ? Map.of() : parsed;
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.info(
-          SubscriptionRuleWebhookDispatcher.class, "config-json-parse-failed", ex);
-      return Map.of();
-    }
-  }
 
-  static boolean eventTypeMatches(String configuredEventTypes, String eventType) {
-    if (configuredEventTypes == null || configuredEventTypes.isBlank()) {
-      return false;
+    boolean withinDestinationRateLimit(
+            String tenantId,
+            EnabledSubscriptionRuleRow rule,
+            String channelCode,
+            String channelType,
+            String eventType) {
+        Map<String, Object> config = parseConfig(rule.configJson());
+        String destination = firstNonBlank(
+                stringValue(config, "url"), stringValue(config, "to"), stringValue(config, "phoneNumbers"));
+        if (destination == null) {
+            return true;
+        }
+        try {
+            String destinationFingerprint = Hashes.sha256Short(destination);
+            String destinationRateLimitKey = "notify:dest:" + tenantId + ":" + destinationFingerprint;
+            boolean allowed = sendRateLimiter.tryAcquire(destinationRateLimitKey, MAX_SENDS_PER_DESTINATION_PER_MINUTE);
+            if (!allowed) {
+                recordDrop("dest_ratelimit");
+                log.warn(
+                        "notification destination rate limit exceeded; dropping: channelCode={},"
+                                + " channelType={}, eventType={}, limitPerMin={}",
+                        channelCode,
+                        channelType,
+                        eventType,
+                        MAX_SENDS_PER_DESTINATION_PER_MINUTE);
+            }
+            return allowed;
+        } catch (DataAccessException ex) {
+            log.warn(
+                    "notification destination rate limiter unavailable — fail-open: channelCode={},"
+                            + " channelType={}, eventType={}, cause={}",
+                    channelCode,
+                    channelType,
+                    eventType,
+                    SwallowedExceptionLogger.summary(ex));
+            Counter.builder("notification.ratelimit.redis_fallback")
+                    .register(meterRegistry)
+                    .increment();
+            return true;
+        }
     }
-    if ("*".equals(configuredEventTypes.trim())) {
-      return true;
-    }
-    return splitUpper(configuredEventTypes).contains(eventType);
-  }
 
-  private static boolean filterMatches(
-      String filter, Map<String, Object> dataMap, List<String> dataKeys) {
-    if (filter == null || filter.isBlank()) {
-      return true;
+    void recordDrop(String reason) {
+        meterRegistry.counter("notification.dropped", "reason", reason).increment();
     }
-    Collection<String> allowed = splitUpper(filter);
-    if (allowed.isEmpty()) {
-      return true;
+
+    Map<String, Object> parseConfig(String configJson) {
+        if (configJson == null || configJson.isBlank()) {
+            return Map.of();
+        }
+        try {
+            Map<String, Object> parsed = JsonUtils.fromJson(configJson, new TypeReference<Map<String, Object>>() {});
+            return parsed == null ? Map.of() : parsed;
+        } catch (RuntimeException ex) {
+            SwallowedExceptionLogger.info(SubscriptionRuleWebhookDispatcher.class, "config-json-parse-failed", ex);
+            return Map.of();
+        }
     }
-    String actual = firstNonNull(dataMap, dataKeys);
-    return actual != null && allowed.contains(actual.toUpperCase(Locale.ROOT));
-  }
 
-  private static String firstNonNull(Map<String, Object> dataMap, List<String> keys) {
-    for (String key : keys) {
-      Object value = dataMap.get(key);
-      if (value != null) {
-        return value.toString();
-      }
+    static boolean eventTypeMatches(String configuredEventTypes, String eventType) {
+        if (configuredEventTypes == null || configuredEventTypes.isBlank()) {
+            return false;
+        }
+        if ("*".equals(configuredEventTypes.trim())) {
+            return true;
+        }
+        return splitUpper(configuredEventTypes).contains(eventType);
     }
-    return null;
-  }
 
-  private static List<String> splitUpper(String csv) {
-    return Arrays.stream(csv.split(","))
-        .map(String::trim)
-        .filter(value -> !value.isBlank())
-        .map(value -> value.toUpperCase(Locale.ROOT))
-        .toList();
-  }
-
-  private static String firstNonBlank(String... values) {
-    for (String value : values) {
-      if (value != null && !value.isBlank()) {
-        return value;
-      }
+    private static boolean filterMatches(String filter, Map<String, Object> dataMap, List<String> dataKeys) {
+        if (filter == null || filter.isBlank()) {
+            return true;
+        }
+        Collection<String> allowed = splitUpper(filter);
+        if (allowed.isEmpty()) {
+            return true;
+        }
+        String actual = firstNonNull(dataMap, dataKeys);
+        return actual != null && allowed.contains(actual.toUpperCase(Locale.ROOT));
     }
-    return null;
-  }
 
-  private static String stringValue(Map<String, Object> map, String key) {
-    Object value = map.get(key);
-    return value == null ? null : value.toString();
-  }
+    private static String firstNonNull(Map<String, Object> dataMap, List<String> keys) {
+        for (String key : keys) {
+            Object value = dataMap.get(key);
+            if (value != null) {
+                return value.toString();
+            }
+        }
+        return null;
+    }
+
+    private static List<String> splitUpper(String csv) {
+        return Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(value -> value.toUpperCase(Locale.ROOT))
+                .toList();
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static String stringValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value == null ? null : value.toString();
+    }
 }

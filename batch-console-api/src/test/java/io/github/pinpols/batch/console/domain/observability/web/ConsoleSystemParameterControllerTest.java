@@ -33,95 +33,89 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleSystemParameterControllerTest {
 
-  @Mock
-  private ConsoleSystemParameterService parameterService;
+    @Mock
+    private ConsoleSystemParameterService parameterService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSystemParameterController(
-            parameterService, responseFactory, requestMetadataResolver))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSystemParameterController(
+                        parameterService, responseFactory, requestMetadataResolver))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("系统参数列表:按租户返回参数键与值")
-  void shouldListParameters() throws Exception {
-    SystemParameterEntity entity = new SystemParameterEntity();
-    entity.setId(1L);
-    entity.setTenantId("t1");
-    entity.setParamKey("retry.max-count");
-    entity.setParamValue("3");
-    when(parameterService.list("t1")).thenReturn(List.of(entity));
+    @Test
+    @DisplayName("系统参数列表:按租户返回参数键与值")
+    void shouldListParameters() throws Exception {
+        SystemParameterEntity entity = new SystemParameterEntity();
+        entity.setId(1L);
+        entity.setTenantId("t1");
+        entity.setParamKey("retry.max-count");
+        entity.setParamValue("3");
+        when(parameterService.list("t1")).thenReturn(List.of(entity));
 
-    mockMvc
-        .perform(get("/api/console/system-parameters").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].paramKey").value("retry.max-count"))
-        .andExpect(jsonPath("$.data[0].paramValue").value("3"));
-  }
+        mockMvc.perform(get("/api/console/system-parameters").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].paramKey").value("retry.max-count"))
+                .andExpect(jsonPath("$.data[0].paramValue").value("3"));
+    }
 
-  @Test
-  @DisplayName("系统参数取值:按键返回参数键与值")
-  void shouldGetParameterByKey() throws Exception {
-    when(parameterService.getValue("t1", "retry.max-count")).thenReturn(Optional.of("3"));
+    @Test
+    @DisplayName("系统参数取值:按键返回参数键与值")
+    void shouldGetParameterByKey() throws Exception {
+        when(parameterService.getValue("t1", "retry.max-count")).thenReturn(Optional.of("3"));
 
-    mockMvc
-        .perform(get("/api/console/system-parameters/value")
-            .param("tenantId", "t1")
-            .param("key", "retry.max-count"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.key").value("retry.max-count"))
-        .andExpect(jsonPath("$.data.value").value("3"));
-  }
+        mockMvc.perform(get("/api/console/system-parameters/value")
+                        .param("tenantId", "t1")
+                        .param("key", "retry.max-count"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.key").value("retry.max-count"))
+                .andExpect(jsonPath("$.data.value").value("3"));
+    }
 
-  @Test
-  @DisplayName("系统参数写入:按当前操作人提交键值、值与描述")
-  void shouldUpsertParameter() throws Exception {
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
-    mockMvc
-        .perform(put("/api/console/system-parameters")
-            .param("tenantId", "t1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("系统参数写入:按当前操作人提交键值、值与描述")
+    void shouldUpsertParameter() throws Exception {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+        mockMvc.perform(put("/api/console/system-parameters")
+                        .param("tenantId", "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"key":"retry.max-count","value":"5","description":"Max retry count"}
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(parameterService).upsert("t1", "retry.max-count", "5", "Max retry count", "operator-1");
-  }
+        verify(parameterService).upsert("t1", "retry.max-count", "5", "Max retry count", "operator-1");
+    }
 
-  @Test
-  @DisplayName("系统参数删除:按租户与参数键执行删除")
-  void shouldDeleteParameter() throws Exception {
-    mockMvc
-        .perform(delete("/api/console/system-parameters")
-            .param("tenantId", "t1")
-            .param("key", "retry.max-count"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+    @Test
+    @DisplayName("系统参数删除:按租户与参数键执行删除")
+    void shouldDeleteParameter() throws Exception {
+        mockMvc.perform(delete("/api/console/system-parameters")
+                        .param("tenantId", "t1")
+                        .param("key", "retry.max-count"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(parameterService).delete("t1", "retry.max-count");
-  }
+        verify(parameterService).delete("t1", "retry.max-count");
+    }
 }

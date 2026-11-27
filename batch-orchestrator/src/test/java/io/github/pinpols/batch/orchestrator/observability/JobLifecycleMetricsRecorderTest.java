@@ -27,90 +27,84 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @DisplayName("作业终态指标记录,验证提交后回调复用实例快照与回查权威实例两类路径")
 class JobLifecycleMetricsRecorderTest {
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private JobDefinitionMapper jobDefinitionMapper;
+    @Mock
+    private JobDefinitionMapper jobDefinitionMapper;
 
-  @Mock
-  private JobLifecycleMetrics jobLifecycleMetrics;
+    @Mock
+    private JobLifecycleMetrics jobLifecycleMetrics;
 
-  private JobLifecycleMetricsRecorder recorder;
+    private JobLifecycleMetricsRecorder recorder;
 
-  @BeforeEach
-  void setUp() {
-    recorder = new JobLifecycleMetricsRecorder(
-        jobInstanceMapper, jobDefinitionMapper, jobLifecycleMetrics);
-    TransactionSynchronizationManager.initSynchronization();
-  }
+    @BeforeEach
+    void setUp() {
+        recorder = new JobLifecycleMetricsRecorder(jobInstanceMapper, jobDefinitionMapper, jobLifecycleMetrics);
+        TransactionSynchronizationManager.initSynchronization();
+    }
 
-  @AfterEach
-  void tearDown() {
-    TransactionSynchronizationManager.clearSynchronization();
-  }
+    @AfterEach
+    void tearDown() {
+        TransactionSynchronizationManager.clearSynchronization();
+    }
 
-  @Test
-  @DisplayName("工作节点上报终态时直接复用实例快照,按作业类型与失败分类记录完成和失败指标")
-  void shouldRecordTerminalMetricsFromSnapshot_forWorkerReportedState() {
-    JobInstanceEntity instance = instance(100L, 200L, true);
-    when(jobDefinitionMapper.selectById(200L))
-        .thenReturn(JobDefinitionView.builder().jobType("ATOMIC").build());
+    @Test
+    @DisplayName("工作节点上报终态时直接复用实例快照,按作业类型与失败分类记录完成和失败指标")
+    void shouldRecordTerminalMetricsFromSnapshot_forWorkerReportedState() {
+        JobInstanceEntity instance = instance(100L, 200L, true);
+        when(jobDefinitionMapper.selectById(200L))
+                .thenReturn(JobDefinitionView.builder().jobType("ATOMIC").build());
 
-    recorder.recordCompletionAfterCommit(
-        "ta",
-        instance,
-        JobInstanceStatus.FAILED.code(),
-        Instant.parse("2026-09-13T00:00:05Z"),
-        "TECHNICAL");
-    runAfterCommitCallbacks();
+        recorder.recordCompletionAfterCommit(
+                "ta", instance, JobInstanceStatus.FAILED.code(), Instant.parse("2026-09-13T00:00:05Z"), "TECHNICAL");
+        runAfterCommitCallbacks();
 
-    verify(jobInstanceMapper, never()).selectById(any(), any());
-    verify(jobLifecycleMetrics)
-        .recordCompletion(
-            eq("ta"),
-            eq("ATOMIC"),
-            eq(JobInstanceStatus.FAILED.code()),
-            eq(true),
-            eq(Duration.ofSeconds(5)));
-    verify(jobLifecycleMetrics).recordFailure("ta", "ATOMIC", "TECHNICAL", true);
-  }
+        verify(jobInstanceMapper, never()).selectById(any(), any());
+        verify(jobLifecycleMetrics)
+                .recordCompletion(
+                        eq("ta"),
+                        eq("ATOMIC"),
+                        eq(JobInstanceStatus.FAILED.code()),
+                        eq(true),
+                        eq(Duration.ofSeconds(5)));
+        verify(jobLifecycleMetrics).recordFailure("ta", "ATOMIC", "TECHNICAL", true);
+    }
 
-  @Test
-  @DisplayName("运维终态没有现成快照时仍在提交后读取权威实例")
-  void shouldReloadInstance_whenOperationalTerminalStateHasNoSnapshot() {
-    JobInstanceEntity instance = instance(100L, 200L, false);
-    instance.setFailureClass("BUSINESS");
-    when(jobInstanceMapper.selectById("ta", 100L)).thenReturn(instance);
-    when(jobDefinitionMapper.selectById(200L))
-        .thenReturn(JobDefinitionView.builder().jobType("PROCESS").build());
+    @Test
+    @DisplayName("运维终态没有现成快照时仍在提交后读取权威实例")
+    void shouldReloadInstance_whenOperationalTerminalStateHasNoSnapshot() {
+        JobInstanceEntity instance = instance(100L, 200L, false);
+        instance.setFailureClass("BUSINESS");
+        when(jobInstanceMapper.selectById("ta", 100L)).thenReturn(instance);
+        when(jobDefinitionMapper.selectById(200L))
+                .thenReturn(JobDefinitionView.builder().jobType("PROCESS").build());
 
-    recorder.recordCompletionAfterCommit(
-        "ta", 100L, JobInstanceStatus.PARTIAL_FAILED.code(), Instant.parse("2026-09-13T00:00:05Z"));
-    runAfterCommitCallbacks();
+        recorder.recordCompletionAfterCommit(
+                "ta", 100L, JobInstanceStatus.PARTIAL_FAILED.code(), Instant.parse("2026-09-13T00:00:05Z"));
+        runAfterCommitCallbacks();
 
-    verify(jobInstanceMapper).selectById("ta", 100L);
-    verify(jobLifecycleMetrics)
-        .recordCompletion(
-            eq("ta"),
-            eq("PROCESS"),
-            eq(JobInstanceStatus.PARTIAL_FAILED.code()),
-            eq(false),
-            eq(Duration.ofSeconds(5)));
-    verify(jobLifecycleMetrics).recordFailure("ta", "PROCESS", "BUSINESS", false);
-  }
+        verify(jobInstanceMapper).selectById("ta", 100L);
+        verify(jobLifecycleMetrics)
+                .recordCompletion(
+                        eq("ta"),
+                        eq("PROCESS"),
+                        eq(JobInstanceStatus.PARTIAL_FAILED.code()),
+                        eq(false),
+                        eq(Duration.ofSeconds(5)));
+        verify(jobLifecycleMetrics).recordFailure("ta", "PROCESS", "BUSINESS", false);
+    }
 
-  private JobInstanceEntity instance(long id, long definitionId, boolean dryRun) {
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(id);
-    instance.setJobDefinitionId(definitionId);
-    instance.setCreatedAt(Instant.parse("2026-09-13T00:00:00Z"));
-    instance.setDryRun(dryRun);
-    return instance;
-  }
+    private JobInstanceEntity instance(long id, long definitionId, boolean dryRun) {
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setId(id);
+        instance.setJobDefinitionId(definitionId);
+        instance.setCreatedAt(Instant.parse("2026-09-13T00:00:00Z"));
+        instance.setDryRun(dryRun);
+        return instance;
+    }
 
-  private void runAfterCommitCallbacks() {
-    TransactionSynchronizationManager.getSynchronizations()
-        .forEach(TransactionSynchronization::afterCommit);
-  }
+    private void runAfterCommitCallbacks() {
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+    }
 }

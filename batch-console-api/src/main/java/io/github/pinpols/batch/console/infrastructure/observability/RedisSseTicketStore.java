@@ -11,17 +11,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisSseTicketStore implements SseTicketStore {
 
-  private static final String KEY_PREFIX = "console:sse:ticket:";
+    private static final String KEY_PREFIX = "console:sse:ticket:";
 
-  private final StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-  @Override
-  public void save(String ticket, String value, Duration ttl) {
-    redisTemplate.opsForValue().set(KEY_PREFIX + ticket, value, ttl);
-  }
+    @Override
+    public void save(String ticket, String value, Duration ttl) {
+        redisTemplate.opsForValue().set(KEY_PREFIX + ticket, value, ttl);
+    }
 
-  @Override
-  public String consume(String ticket) {
-    return redisTemplate.opsForValue().getAndDelete(KEY_PREFIX + ticket);
-  }
+    @Override
+    public String consume(String ticket) {
+        return redisTemplate.opsForValue().getAndDelete(KEY_PREFIX + ticket);
+    }
 }

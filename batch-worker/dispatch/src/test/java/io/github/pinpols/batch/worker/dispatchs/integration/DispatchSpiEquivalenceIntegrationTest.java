@@ -19,59 +19,57 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /** P0 Phase 3 等价性 IT — SPI 路径 ≡ @Primary 路径(dispatch)。详见 {@code ImportSpiEquivalenceIT} 同名 doc。 */
 @SpringBootTest(
-    classes = BatchWorkerDispatchApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        classes = BatchWorkerDispatchApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("分发 SPI 等价性:注册表暴露分发任务类型,查得的执行器与主适配器共用同一实现")
 class DispatchSpiEquivalenceIT extends AbstractIntegrationTest {
 
-  @DynamicPropertySource
-  static void orchestratorStub(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
+    @DynamicPropertySource
+    static void orchestratorStub(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
-  @Autowired
-  DispatchStepExecutionAdapter primaryAdapter;
+    @Autowired
+    DispatchStepExecutionAdapter primaryAdapter;
 
-  @Autowired
-  BatchTaskExecutorRegistry registry;
+    @Autowired
+    BatchTaskExecutorRegistry registry;
 
-  @Test
-  @DisplayName("注册表列出的已注册类型包含分发任务类型")
-  void shouldContainDispatchTaskType_whenListingRegisteredTypes() {
-    assertThat(registry.registeredTypes()).contains("DISPATCH");
-  }
+    @Test
+    @DisplayName("注册表列出的已注册类型包含分发任务类型")
+    void shouldContainDispatchTaskType_whenListingRegisteredTypes() {
+        assertThat(registry.registeredTypes()).contains("DISPATCH");
+    }
 
-  @Test
-  @DisplayName("按分发任务类型查找时,返回分发任务执行器实例")
-  void shouldReturnDispatchTaskExecutor_whenFindingByType() {
-    BatchTaskExecutor exec = registry.find("DISPATCH");
-    assertThat(exec).isNotNull().isInstanceOf(DispatchTaskExecutor.class);
-  }
+    @Test
+    @DisplayName("按分发任务类型查找时,返回分发任务执行器实例")
+    void shouldReturnDispatchTaskExecutor_whenFindingByType() {
+        BatchTaskExecutor exec = registry.find("DISPATCH");
+        assertThat(exec).isNotNull().isInstanceOf(DispatchTaskExecutor.class);
+    }
 
-  @Test
-  @DisplayName("Worker 注册目录发布完整且唯一的 DISPATCH 重放能力声明")
-  void shouldPublishDispatchReplayContract_whenRegisteringWorker() {
-    assertThat(registry.replayCapabilityCatalog())
-        .filteredOn(declaration -> "DISPATCH".equals(declaration.pluginId()))
-        .singleElement()
-        .satisfies(declaration -> {
-          assertThat(declaration.pluginVersion()).isEqualTo("1");
-          assertThat(declaration.externalEffectCategories())
-              .containsExactly("FILE_CHANNEL_DELIVERY");
-          assertThat(declaration.idempotencyKeyScope()).isEqualTo("tenantId:fileId:channelCode");
-          assertThat(declaration.recoveryProtocolId())
-              .isEqualTo("file-dispatch-record-state-machine-v1");
-          assertThat(declaration.isFullyDeclared()).isTrue();
-        });
-  }
+    @Test
+    @DisplayName("Worker 注册目录发布完整且唯一的 DISPATCH 重放能力声明")
+    void shouldPublishDispatchReplayContract_whenRegisteringWorker() {
+        assertThat(registry.replayCapabilityCatalog())
+                .filteredOn(declaration -> "DISPATCH".equals(declaration.pluginId()))
+                .singleElement()
+                .satisfies(declaration -> {
+                    assertThat(declaration.pluginVersion()).isEqualTo("1");
+                    assertThat(declaration.externalEffectCategories()).containsExactly("FILE_CHANNEL_DELIVERY");
+                    assertThat(declaration.idempotencyKeyScope()).isEqualTo("tenantId:fileId:channelCode");
+                    assertThat(declaration.recoveryProtocolId()).isEqualTo("file-dispatch-record-state-machine-v1");
+                    assertThat(declaration.isFullyDeclared()).isTrue();
+                });
+    }
 
-  @Test
-  @DisplayName("执行器内部持有的委派与主适配器是同一实例,SPI 与主适配器两条路径等价")
-  void shouldShareSameDelegate_whenComparingExecutorWithPrimaryAdapter() throws Exception {
-    DispatchTaskExecutor exec = (DispatchTaskExecutor) registry.find("DISPATCH");
-    Field f = DispatchTaskExecutor.class.getDeclaredField("delegate");
-    f.setAccessible(true);
-    Object delegate = f.get(exec);
-    assertThat(delegate).isSameAs(primaryAdapter);
-  }
+    @Test
+    @DisplayName("执行器内部持有的委派与主适配器是同一实例,SPI 与主适配器两条路径等价")
+    void shouldShareSameDelegate_whenComparingExecutorWithPrimaryAdapter() throws Exception {
+        DispatchTaskExecutor exec = (DispatchTaskExecutor) registry.find("DISPATCH");
+        Field f = DispatchTaskExecutor.class.getDeclaredField("delegate");
+        f.setAccessible(true);
+        Object delegate = f.get(exec);
+        assertThat(delegate).isSameAs(primaryAdapter);
+    }
 }

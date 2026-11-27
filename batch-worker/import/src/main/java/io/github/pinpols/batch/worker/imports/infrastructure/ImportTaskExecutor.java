@@ -44,59 +44,57 @@ import org.springframework.stereotype.Component;
 @Component
 public class ImportTaskExecutor implements BatchTaskExecutor {
 
-  private final ImportStepExecutionAdapter delegate;
-  private final WorkerExecutionTimeoutProperties timeoutProperties;
+    private final ImportStepExecutionAdapter delegate;
+    private final WorkerExecutionTimeoutProperties timeoutProperties;
 
-  /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
-  public ImportTaskExecutor(ImportStepExecutionAdapter delegate) {
-    this(delegate, new WorkerExecutionTimeoutProperties());
-  }
-
-  @Autowired
-  public ImportTaskExecutor(
-      ImportStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
-    this.delegate = delegate;
-    this.timeoutProperties = timeoutProperties;
-  }
-
-  @Override
-  public String taskType() {
-    return JobType.IMPORT
-        .code(); // "IMPORT" — 跟 DefaultTaskExecutionWrapper 传的 task.getTaskType() 对齐
-  }
-
-  @Override
-  public TaskCapability capability() {
-    Set<ResourceKind> resources = Set.of(ResourceKind.DISK, ResourceKind.DB, ResourceKind.NET);
-    long timeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
-    Duration capabilityTimeout = Duration.ofSeconds(timeoutSeconds);
-    return new TaskCapability(
-        resources,
-        false, // 文件 IMPORT 通常一次性,不视为幂等
-        true,
-        capabilityTimeout);
-  }
-
-  @Override
-  public TaskResult execute(TaskContext ctx) {
-    // SPI 路径:把 TaskContext 还原为 Pipeline 语义的 StepExecutionRequest
-    // 注意:Pipeline 的 stepCode 历来 = task.getTaskType()(JobType code),不是某个具体 step
-    // 见 DefaultTaskExecutionWrapper.execute() 的 new StepExecutionRequest(...) 第 3 参数
-    StepExecutionRequest req = new StepExecutionRequest(
-        ctx.tenantId(),
-        ctx.jobCode(),
-        taskType(), // stepCode = "IMPORT"
-        ctx.workerId(),
-        ctx.runtimeAttributes() // pipelineInstanceId / traceId / bizDate 等都在这
-        );
-    StepExecutionResponse resp = delegate.execute(req);
-    if (resp.success()) {
-      String responseMessage = resp.message();
-      String resultMessage = EmptyChecks.isNull(responseMessage) ? "ok" : resp.message();
-      return TaskResult.ok(resultMessage);
+    /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
+    public ImportTaskExecutor(ImportStepExecutionAdapter delegate) {
+        this(delegate, new WorkerExecutionTimeoutProperties());
     }
-    String responseMessage = resp.message();
-    String failureMessage = EmptyChecks.isNull(responseMessage) ? resp.code() : resp.message();
-    return TaskResult.fail(failureMessage);
-  }
+
+    @Autowired
+    public ImportTaskExecutor(ImportStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
+        this.delegate = delegate;
+        this.timeoutProperties = timeoutProperties;
+    }
+
+    @Override
+    public String taskType() {
+        return JobType.IMPORT.code(); // "IMPORT" — 跟 DefaultTaskExecutionWrapper 传的 task.getTaskType() 对齐
+    }
+
+    @Override
+    public TaskCapability capability() {
+        Set<ResourceKind> resources = Set.of(ResourceKind.DISK, ResourceKind.DB, ResourceKind.NET);
+        long timeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
+        Duration capabilityTimeout = Duration.ofSeconds(timeoutSeconds);
+        return new TaskCapability(
+                resources,
+                false, // 文件 IMPORT 通常一次性,不视为幂等
+                true,
+                capabilityTimeout);
+    }
+
+    @Override
+    public TaskResult execute(TaskContext ctx) {
+        // SPI 路径:把 TaskContext 还原为 Pipeline 语义的 StepExecutionRequest
+        // 注意:Pipeline 的 stepCode 历来 = task.getTaskType()(JobType code),不是某个具体 step
+        // 见 DefaultTaskExecutionWrapper.execute() 的 new StepExecutionRequest(...) 第 3 参数
+        StepExecutionRequest req = new StepExecutionRequest(
+                ctx.tenantId(),
+                ctx.jobCode(),
+                taskType(), // stepCode = "IMPORT"
+                ctx.workerId(),
+                ctx.runtimeAttributes() // pipelineInstanceId / traceId / bizDate 等都在这
+                );
+        StepExecutionResponse resp = delegate.execute(req);
+        if (resp.success()) {
+            String responseMessage = resp.message();
+            String resultMessage = EmptyChecks.isNull(responseMessage) ? "ok" : resp.message();
+            return TaskResult.ok(resultMessage);
+        }
+        String responseMessage = resp.message();
+        String failureMessage = EmptyChecks.isNull(responseMessage) ? resp.code() : resp.message();
+        return TaskResult.fail(failureMessage);
+    }
 }

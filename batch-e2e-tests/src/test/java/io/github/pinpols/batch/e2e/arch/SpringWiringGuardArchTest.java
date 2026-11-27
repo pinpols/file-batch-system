@@ -46,104 +46,104 @@ import org.springframework.context.annotation.Import;
 @DisplayName("Spring 装配守护:校验全部 Spring Boot 应用类的组件扫描包覆盖范围与多构造器注入标注,防启动期装配失败")
 class SpringWiringGuardArchTest {
 
-  /** 项目所有生产 + 测试 class(含 e2e app)。 */
-  private static final JavaClasses ALL_CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
-      .importPackages("io.github.pinpols.batch");
+    /** 项目所有生产 + 测试 class(含 e2e app)。 */
+    private static final JavaClasses ALL_CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
+            .importPackages("io.github.pinpols.batch");
 
-  @Test
-  @DisplayName("所有 Spring Boot 应用类的组件扫描范围必须覆盖共享任务接口包与容错包,否则启动期找不到 bean")
-  void shouldCoverSharedSpiAndResiliencePackages_whenScanningSpringBootApps() {
-    CodingConventionsArchRules.componentScanCoversRule(
-            "io.github.pinpols.batch.common.spi.task", "io.github.pinpols.batch.common.resilience")
-        .check(ALL_CLASSES);
-  }
-
-  @Test
-  @DisplayName("Spring 组件类存在多个公开构造器时必须显式标注注入入口,防构造器回退导致启动失败")
-  void shouldRequireExplicitInjection_whenMultiplePublicConstructors() {
-    CodingConventionsArchRules.multipleCtorsRequireAutowiredRule().check(ALL_CLASSES);
-  }
-
-  /**
-   * 第 3 类 main-red(2026-07-09,PR #770):console-api 新增 {@code console.shared} 子包放跨域共享 bean,但 {@link
-   * io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication} 的 ComponentScan 是显式子包白名单,没扫到 →
-   * e2e 上下文 NoSuchBean 启动失败,且 pr-gate 拦不住(只有 full-ci e2e 才现形)。
-   *
-   * <p>守护:console-api 下任何含 Spring stereotype bean 的 {@code console.<sub>} 顶层子包,都必须被
-   * E2eConsoleImportApplication 的 basePackages 覆盖(mapper/web 由 MapperScan/自身包覆盖,同样计入校验)。
-   */
-  @Test
-  @DisplayName("控制台各子包中含组件注解的包必须被端到端控制台应用的组件扫描覆盖,否则端到端上下文启动期找不到 bean")
-  void shouldCoverAllConsoleComponentPackages_whenE2eConsoleAppScans() {
-    ComponentScan scan = E2eConsoleImportApplication.class.getAnnotation(ComponentScan.class);
-    List<String> scanned = List.of(scan.basePackages());
-
-    Set<String> uncovered = ALL_CLASSES.stream()
-        .filter(c -> c.getPackageName().startsWith("io.github.pinpols.batch.console."))
-        .filter(c -> c.isAnnotatedWith("org.springframework.stereotype.Component")
-            || c.isAnnotatedWith("org.springframework.stereotype.Service")
-            || c.isAnnotatedWith("org.springframework.stereotype.Repository")
-            || c.isAnnotatedWith("org.springframework.context.annotation.Configuration"))
-        .map(c -> c.getPackageName())
-        .filter(p -> scanned.stream().noneMatch(s -> p.equals(s) || p.startsWith(s + ".")))
-        // e2e 自己的测试包/console 主 app 包(被 excludeFilters 排除的入口类)不计
-        .filter(p -> !p.startsWith("io.github.pinpols.batch.console.e2e"))
-        .collect(Collectors.toCollection(TreeSet::new));
-
-    assertThat(uncovered.isEmpty())
-        .as("console 下存在含 Spring bean 但未被 E2eConsoleImportApplication @ComponentScan 覆盖的包(会"
-            + " NoSuchBean 启动失败,见 2026-07-09 main-red):" + uncovered
-            + " → 在 E2eConsoleImportApplication.basePackages 里补齐,或移动 bean 到已扫描包。")
-        .isTrue();
-  }
-
-  @Test
-  @DisplayName("端到端控制台应用必须显式引入共享的密钥载荷保护组件,因其组件扫描未覆盖公共模块服务")
-  void shouldImportSharedSecretPayloadProtector_whenE2eConsoleAppDeclaresImports() {
-    Import imports = E2eConsoleImportApplication.class.getAnnotation(Import.class);
-
-    assertThat(imports).as("E2eConsoleImportApplication must declare @Import").isNotNull();
-    assertThat(List.of(imports.value()).contains(SecretPayloadProtector.class))
-        .as("E2eConsoleImportApplication must import SecretPayloadProtector because its explicit "
-            + "ComponentScan does not include batch-common services")
-        .isTrue();
-  }
-
-  @Test
-  @DisplayName("编排端到端应用覆盖入站组件与公共 Mapper，导入应用还覆盖扫描 Mapper")
-  void shouldCoverIngressComponentsAndMappers_whenE2eAppsScan() {
-    List<Class<?>> apps = List.of(
-        E2eAtomicApplication.class,
-        E2eConsoleImportApplication.class,
-        E2eDispatchApplication.class,
-        E2eExportApplication.class,
-        E2eImportApplication.class,
-        E2eOrchestratorApplication.class,
-        E2eProcessApplication.class,
-        E2eReportRecoveryOrchestratorApplication.class);
-    String componentPackage = ImportIngressOwnershipIdentity.class.getPackageName();
-    String commonMapperPackage = ImportIngressOwnershipMapper.class.getPackageName();
-    for (Class<?> app : apps) {
-      ComponentScan scan = app.getAnnotation(ComponentScan.class);
-      assertThat(scan).as("%s 的组件扫描", app.getSimpleName()).isNotNull();
-      assertThat(List.of(scan.basePackages()))
-          .as("%s 应扫描入站组件包", app.getSimpleName())
-          .anyMatch(
-              base -> componentPackage.equals(base) || componentPackage.startsWith(base + "."));
-      assertMapperCovered(app, commonMapperPackage);
+    @Test
+    @DisplayName("所有 Spring Boot 应用类的组件扫描范围必须覆盖共享任务接口包与容错包,否则启动期找不到 bean")
+    void shouldCoverSharedSpiAndResiliencePackages_whenScanningSpringBootApps() {
+        CodingConventionsArchRules.componentScanCoversRule(
+                        "io.github.pinpols.batch.common.spi.task", "io.github.pinpols.batch.common.resilience")
+                .check(ALL_CLASSES);
     }
-    String importMapperPackage = ImportIngressScanMapper.class.getPackageName();
-    assertMapperCovered(E2eImportApplication.class, importMapperPackage);
-    assertMapperCovered(E2eConsoleImportApplication.class, importMapperPackage);
-  }
 
-  private static void assertMapperCovered(Class<?> app, String mapperPackage) {
-    assertThat(List.of(app.getAnnotationsByType(MapperScan.class)))
-        .as("%s 应使用平台 SqlSessionFactory 扫描 %s", app.getSimpleName(), mapperPackage)
-        .anyMatch(scan -> "sqlSessionFactory".equals(scan.sqlSessionFactoryRef())
-            && List.of(scan.basePackages()).stream()
-                .anyMatch(
-                    base -> mapperPackage.equals(base) || mapperPackage.startsWith(base + ".")));
-  }
+    @Test
+    @DisplayName("Spring 组件类存在多个公开构造器时必须显式标注注入入口,防构造器回退导致启动失败")
+    void shouldRequireExplicitInjection_whenMultiplePublicConstructors() {
+        CodingConventionsArchRules.multipleCtorsRequireAutowiredRule().check(ALL_CLASSES);
+    }
+
+    /**
+     * 第 3 类 main-red(2026-07-09,PR #770):console-api 新增 {@code console.shared} 子包放跨域共享 bean,但 {@link
+     * io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication} 的 ComponentScan 是显式子包白名单,没扫到 →
+     * e2e 上下文 NoSuchBean 启动失败,且 pr-gate 拦不住(只有 full-ci e2e 才现形)。
+     *
+     * <p>守护:console-api 下任何含 Spring stereotype bean 的 {@code console.<sub>} 顶层子包,都必须被
+     * E2eConsoleImportApplication 的 basePackages 覆盖(mapper/web 由 MapperScan/自身包覆盖,同样计入校验)。
+     */
+    @Test
+    @DisplayName("控制台各子包中含组件注解的包必须被端到端控制台应用的组件扫描覆盖,否则端到端上下文启动期找不到 bean")
+    void shouldCoverAllConsoleComponentPackages_whenE2eConsoleAppScans() {
+        ComponentScan scan = E2eConsoleImportApplication.class.getAnnotation(ComponentScan.class);
+        List<String> scanned = List.of(scan.basePackages());
+
+        Set<String> uncovered = ALL_CLASSES.stream()
+                .filter(c -> c.getPackageName().startsWith("io.github.pinpols.batch.console."))
+                .filter(c -> c.isAnnotatedWith("org.springframework.stereotype.Component")
+                        || c.isAnnotatedWith("org.springframework.stereotype.Service")
+                        || c.isAnnotatedWith("org.springframework.stereotype.Repository")
+                        || c.isAnnotatedWith("org.springframework.context.annotation.Configuration"))
+                .map(c -> c.getPackageName())
+                .filter(p -> scanned.stream().noneMatch(s -> p.equals(s) || p.startsWith(s + ".")))
+                // e2e 自己的测试包/console 主 app 包(被 excludeFilters 排除的入口类)不计
+                .filter(p -> !p.startsWith("io.github.pinpols.batch.console.e2e"))
+                .collect(Collectors.toCollection(TreeSet::new));
+
+        assertThat(uncovered.isEmpty())
+                .as("console 下存在含 Spring bean 但未被 E2eConsoleImportApplication @ComponentScan 覆盖的包(会"
+                        + " NoSuchBean 启动失败,见 2026-07-09 main-red):" + uncovered
+                        + " → 在 E2eConsoleImportApplication.basePackages 里补齐,或移动 bean 到已扫描包。")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("端到端控制台应用必须显式引入共享的密钥载荷保护组件,因其组件扫描未覆盖公共模块服务")
+    void shouldImportSharedSecretPayloadProtector_whenE2eConsoleAppDeclaresImports() {
+        Import imports = E2eConsoleImportApplication.class.getAnnotation(Import.class);
+
+        assertThat(imports)
+                .as("E2eConsoleImportApplication must declare @Import")
+                .isNotNull();
+        assertThat(List.of(imports.value()).contains(SecretPayloadProtector.class))
+                .as("E2eConsoleImportApplication must import SecretPayloadProtector because its explicit "
+                        + "ComponentScan does not include batch-common services")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("编排端到端应用覆盖入站组件与公共 Mapper，导入应用还覆盖扫描 Mapper")
+    void shouldCoverIngressComponentsAndMappers_whenE2eAppsScan() {
+        List<Class<?>> apps = List.of(
+                E2eAtomicApplication.class,
+                E2eConsoleImportApplication.class,
+                E2eDispatchApplication.class,
+                E2eExportApplication.class,
+                E2eImportApplication.class,
+                E2eOrchestratorApplication.class,
+                E2eProcessApplication.class,
+                E2eReportRecoveryOrchestratorApplication.class);
+        String componentPackage = ImportIngressOwnershipIdentity.class.getPackageName();
+        String commonMapperPackage = ImportIngressOwnershipMapper.class.getPackageName();
+        for (Class<?> app : apps) {
+            ComponentScan scan = app.getAnnotation(ComponentScan.class);
+            assertThat(scan).as("%s 的组件扫描", app.getSimpleName()).isNotNull();
+            assertThat(List.of(scan.basePackages()))
+                    .as("%s 应扫描入站组件包", app.getSimpleName())
+                    .anyMatch(base -> componentPackage.equals(base) || componentPackage.startsWith(base + "."));
+            assertMapperCovered(app, commonMapperPackage);
+        }
+        String importMapperPackage = ImportIngressScanMapper.class.getPackageName();
+        assertMapperCovered(E2eImportApplication.class, importMapperPackage);
+        assertMapperCovered(E2eConsoleImportApplication.class, importMapperPackage);
+    }
+
+    private static void assertMapperCovered(Class<?> app, String mapperPackage) {
+        assertThat(List.of(app.getAnnotationsByType(MapperScan.class)))
+                .as("%s 应使用平台 SqlSessionFactory 扫描 %s", app.getSimpleName(), mapperPackage)
+                .anyMatch(scan -> "sqlSessionFactory".equals(scan.sqlSessionFactoryRef())
+                        && List.of(scan.basePackages()).stream()
+                                .anyMatch(base -> mapperPackage.equals(base) || mapperPackage.startsWith(base + ".")));
+    }
 }

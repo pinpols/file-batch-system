@@ -13,19 +13,19 @@ import org.junit.jupiter.params.provider.ValueSource;
 @DisplayName("共同窗口写入规则：缺失字段的错误身份")
 class BatchWindowRulesTest {
 
-  @ParameterizedTest
-  @ValueSource(strings = {"timezone", "startTime", "endTime"})
-  @DisplayName("缺失必需时区或时间时返回固定字段上下文")
-  void shouldRejectMissingRequiredValue_withStableContext(String field) {
-    String timezone = field.equals("timezone") ? null : "UTC";
-    String start = field.equals("startTime") ? null : "01:00";
-    String end = field.equals("endTime") ? null : "02:00";
+    @ParameterizedTest
+    @ValueSource(strings = {"timezone", "startTime", "endTime"})
+    @DisplayName("缺失必需时区或时间时返回固定字段上下文")
+    void shouldRejectMissingRequiredValue_withStableContext(String field) {
+        String timezone = field.equals("timezone") ? null : "UTC";
+        String start = field.equals("startTime") ? null : "01:00";
+        String end = field.equals("endTime") ? null : "02:00";
 
-    assertThatThrownBy(() -> BatchWindowRules.validate(timezone, start, end, false))
-        .isInstanceOfSatisfying(BizException.class, failure -> {
-          assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
-          assertThat(failure.getMessageKey()).isEqualTo(ResultCode.INVALID_ARGUMENT.detailKey());
-          assertThat(failure.getMessageArgs()).containsExactly(field);
-        });
-  }
+        assertThatThrownBy(() -> BatchWindowRules.validate(timezone, start, end, false))
+                .isInstanceOfSatisfying(BizException.class, failure -> {
+                    assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+                    assertThat(failure.getMessageKey()).isEqualTo(ResultCode.INVALID_ARGUMENT.detailKey());
+                    assertThat(failure.getMessageArgs()).containsExactly(field);
+                });
+    }
 }

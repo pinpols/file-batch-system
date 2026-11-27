@@ -19,9 +19,9 @@ import java.util.Map;
  * @param templateVariables descriptor 声明支持的模板变量(如 {@code ${bizDate}});可选
  */
 public record WorkerTaskTypeDescriptorDto(
-    String code,
-    String displayName,
-    String version,
-    Map<String, Object> defaults,
-    Map<String, Object> inputSchema,
-    List<String> templateVariables) {}
+        String code,
+        String displayName,
+        String version,
+        Map<String, Object> defaults,
+        Map<String, Object> inputSchema,
+        List<String> templateVariables) {}

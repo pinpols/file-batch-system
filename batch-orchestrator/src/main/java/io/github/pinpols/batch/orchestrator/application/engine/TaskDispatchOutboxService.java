@@ -45,310 +45,300 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TaskDispatchOutboxService {
 
-  private final DomainEventPublisher domainEventPublisher;
-  private final JobTaskMapper jobTaskMapper;
-  private final BizDateArithmetic bizDateArithmetic;
+    private final DomainEventPublisher domainEventPublisher;
+    private final JobTaskMapper jobTaskMapper;
+    private final BizDateArithmetic bizDateArithmetic;
 
-  /**
-   * 写入一条“任务派发事件”到 outbox。
-   *
-   * <p>约束/语义：
-   *
-   * <ul>
-   *   <li>{@code eventKey} 是 outbox 的幂等键（同一个 eventKey 重复写入会被上层避免；DB 层也有唯一约束回退）。
-   *   <li>{@code idempotencyKey} 优先使用 partition 的幂等键（保证同分片重复派发不会导致多次执行）。
-   *   <li>当无 partition（极少数场景）时，退化使用 {@code tenantId:taskId} 作为幂等键。
-   * </ul>
-   */
-  // D-2: MANDATORY 传播级别强制 outbox 写入必须在调用方事务内执行，无事务时直接抛异常
-  @Transactional(propagation = Propagation.MANDATORY)
-  public void writeDispatchEvent(
-      JobInstanceEntity jobInstance,
-      JobTaskEntity task,
-      JobPartitionEntity partition,
-      String traceId,
-      String eventKey) {
-    writeDispatchEventInternal(jobInstance, task, partition, traceId, eventKey, null);
-  }
-
-  /**
-   * 带 {@code runModeOverride} 的写入重载：retry / reclaim 等再派发场景可把 run_mode 注入到任务 payload 中， worker
-   * 据此区分"首次执行"与"补偿/重放"行为；传 null 保留 payload 原状。
-   */
-  @Transactional(propagation = Propagation.MANDATORY)
-  public void writeDispatchEvent(TaskDispatchEventCommand command) {
-    JobInstanceEntity jobInstance = command.jobInstance();
-    JobTaskEntity task = command.task();
-    JobPartitionEntity partition = command.partition();
-    String traceId = command.traceId();
-    String eventKey = command.eventKey();
-    RunMode runModeOverride = command.runModeOverride();
-
-    writeDispatchEventInternal(jobInstance, task, partition, traceId, eventKey, runModeOverride);
-  }
-
-  /** 两个公开入口都由 {@link Propagation#MANDATORY} 守住事务；共享实现不再依赖同类代理跳转。 */
-  private void writeDispatchEventInternal(
-      JobInstanceEntity jobInstance,
-      JobTaskEntity task,
-      JobPartitionEntity partition,
-      String traceId,
-      String eventKey,
-      RunMode runModeOverride) {
-    Long jobPartitionId = EmptyChecks.isNotNull(partition) ? partition.getId() : null;
-    String idempotencyKey = EmptyChecks.isNotNull(partition)
-        ? partition.getIdempotencyKey()
-        : resolveIdempotencyKeyWithoutPartition(task, eventKey);
-    // P1-2.2:v2 消息瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn)走 worker CLAIM
-    // 时由 EffectiveTaskConfig 返回;此处只保留 task key + 路由元数据。
-    // runModeOverride 在 v1 时通过 payload 注入,v2 后改由 worker CLAIM 读 job_task.task_payload —
-    // retry/reclaim 路径需要把 run_mode 持久化到 task_payload 而非写入 message 临时透传。
-    persistRunModeOverride(jobInstance, task, runModeOverride);
-    String messageVersion = "v2";
-    String messageTenantId = task.getTenantId();
-    Long messageJobInstanceId = jobInstance.getId();
-    Long messagePartitionId = jobPartitionId;
-    Long messageTaskId = task.getId();
-    String messageInstanceNo = jobInstance.getInstanceNo();
-    String messageJobCode = jobInstance.getJobCode();
-    String messageTaskType = task.getTaskType();
-    String messageWorkerCode = task.getAssignedWorkerCode();
-    String priorityBand = resolvePriorityBand(jobInstance.getPriority());
-    String messageTraceId = traceId;
-    String messageIdempotencyKey = idempotencyKey;
-    Instant messageCreatedAt = BatchDateTimeSupport.utcNow();
-    SchedulingContext schedulingContext = buildSchedulingContext(jobInstance);
-    Integer messagePartitionNo = EmptyChecks.isNull(partition) ? null : partition.getPartitionNo();
-    Integer partitionCount = resolvePartitionCount(jobInstance);
-    W3cTraceContext traceContext = OtelTracePropagation.captureCurrent();
-    TaskDispatchMessage message = new TaskDispatchMessage(
-        messageVersion,
-        messageTenantId,
-        messageJobInstanceId,
-        messagePartitionId,
-        messageTaskId,
-        messageInstanceNo,
-        messageJobCode,
-        messageTaskType,
-        messageWorkerCode,
-        priorityBand,
-        messageTraceId,
-        messageIdempotencyKey,
-        messageCreatedAt,
-        schedulingContext,
-        messagePartitionNo,
-        partitionCount,
-        traceContext);
-
-    // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
-    // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
-    // 回退:jobInstance.priority(老逻辑);都缺走 DomainEvent 不传 → DB DEFAULT 5。
-    Integer priority =
-        EmptyChecks.isNotNull(task.getPriority()) ? task.getPriority() : jobInstance.getPriority();
-    String resolvedKey =
-        EmptyChecks.isBlank(eventKey) ? task.getTenantId() + ":" + task.getId() : eventKey;
-    DomainEvent.Builder eventBuilder = DomainEvent.builder(task.getTenantId());
-    Long eventAggregateId = task.getId();
-    eventBuilder.aggregate("JOB_TASK", eventAggregateId);
-    String eventType = task.getTaskType();
-    eventBuilder.type(eventType);
-    eventBuilder.key(resolvedKey);
-    Map<String, Object> messagePayload = JsonUtils.toMap(message);
-    eventBuilder.payload(messagePayload);
-    eventBuilder.traceId(traceId);
-    eventBuilder.priority(priority);
-    DomainEvent dispatchEvent = eventBuilder.build();
-    domainEventPublisher.publish(dispatchEvent);
-  }
-
-  /**
-   * SDK Phase 2 §2.1:构造随消息下沉的调度上下文。
-   *
-   * <p>仅填派发时刻已确定的不可变事实:
-   *
-   * <ul>
-   *   <li>bizDate / prevBizDate / nextBizDate:业务日及前后工作日(BizDateArithmetic 周末近似,暂不感知节假日);
-   *   <li>isHoliday:当前 = bizDate 是否周末(business_calendar 接入前的近似语义);
-   *   <li>attemptNo / triggerType:取自 job_instance;
-   *   <li>triggerCode / workflowRunId:平台暂无来源列,置 null,待后续补列。
-   * </ul>
-   */
-  private SchedulingContext buildSchedulingContext(JobInstanceEntity jobInstance) {
-    LocalDate bizDate = jobInstance.getBizDate();
-    LocalDate prevBizDate = bizDateArithmetic.previousBusinessDay(bizDate);
-    LocalDate nextBizDate = bizDateArithmetic.nextBusinessDay(bizDate);
-    Boolean isHoliday =
-        EmptyChecks.isNotNull(bizDate) ? bizDateArithmetic.isWeekend(bizDate) : null;
-    return SchedulingContext.builder()
-        .bizDate(bizDate)
-        .prevBizDate(prevBizDate)
-        .nextBizDate(nextBizDate)
-        .isHoliday(isHoliday)
-        .attemptNo(jobInstance.getRunAttempt())
-        .triggerType(jobInstance.getTriggerType())
-        .build();
-  }
-
-  private Integer resolvePartitionCount(JobInstanceEntity jobInstance) {
-    if (EmptyChecks.isNull(jobInstance)) {
-      return null;
+    /**
+     * 写入一条“任务派发事件”到 outbox。
+     *
+     * <p>约束/语义：
+     *
+     * <ul>
+     *   <li>{@code eventKey} 是 outbox 的幂等键（同一个 eventKey 重复写入会被上层避免；DB 层也有唯一约束回退）。
+     *   <li>{@code idempotencyKey} 优先使用 partition 的幂等键（保证同分片重复派发不会导致多次执行）。
+     *   <li>当无 partition（极少数场景）时，退化使用 {@code tenantId:taskId} 作为幂等键。
+     * </ul>
+     */
+    // D-2: MANDATORY 传播级别强制 outbox 写入必须在调用方事务内执行，无事务时直接抛异常
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void writeDispatchEvent(
+            JobInstanceEntity jobInstance,
+            JobTaskEntity task,
+            JobPartitionEntity partition,
+            String traceId,
+            String eventKey) {
+        writeDispatchEventInternal(jobInstance, task, partition, traceId, eventKey, null);
     }
-    Integer expected = jobInstance.getExpectedPartitionCount();
-    if (EmptyChecks.isNotNull(expected) && expected > 0) {
-      return expected;
-    }
-    Map<String, Object> params = parsePayloadMap(jobInstance.getParamsSnapshot());
-    Object[] partitionCountCandidates = {
-      params.get("partitionCount"),
-      params.get("estimatedPartitionCount"),
-      params.get("staticPartitionCount"),
-      params.get("shardCount"),
-      params.get("partitions"),
-      nestedValue(params, "effectiveParams", "partitionCount"),
-      nestedValue(params, "requestParams", "partitionCount"),
-      nestedValue(params, "defaultParams", "partitionCount"),
-      nestedValue(params, "effectiveParams", "estimatedPartitionCount"),
-      nestedValue(params, "requestParams", "estimatedPartitionCount"),
-      nestedValue(params, "effectiveParams", "staticPartitionCount"),
-      nestedValue(params, "requestParams", "staticPartitionCount"),
-      nestedValue(params, "effectiveParams", "shardCount"),
-      nestedValue(params, "requestParams", "shardCount"),
-      nestedValue(params, "effectiveParams", "partitions"),
-      nestedValue(params, "requestParams", "partitions")
-    };
-    return firstPositiveInt(partitionCountCandidates);
-  }
 
-  @SuppressWarnings("unchecked")
-  private Object nestedValue(Map<String, Object> params, String objectKey, String valueKey) {
-    if (EmptyChecks.isNull(params)
-        || EmptyChecks.isNull(objectKey)
-        || EmptyChecks.isNull(valueKey)) {
-      return null;
-    }
-    Object nested = params.get(objectKey);
-    if (nested instanceof Map<?, ?> nestedMap) {
-      return ((Map<String, Object>) nestedMap).get(valueKey);
-    }
-    return null;
-  }
+    /**
+     * 带 {@code runModeOverride} 的写入重载：retry / reclaim 等再派发场景可把 run_mode 注入到任务 payload 中， worker
+     * 据此区分"首次执行"与"补偿/重放"行为；传 null 保留 payload 原状。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void writeDispatchEvent(TaskDispatchEventCommand command) {
+        JobInstanceEntity jobInstance = command.jobInstance();
+        JobTaskEntity task = command.task();
+        JobPartitionEntity partition = command.partition();
+        String traceId = command.traceId();
+        String eventKey = command.eventKey();
+        RunMode runModeOverride = command.runModeOverride();
 
-  private Integer firstPositiveInt(Object... values) {
-    if (EmptyChecks.isNull(values)) {
-      return null;
+        writeDispatchEventInternal(jobInstance, task, partition, traceId, eventKey, runModeOverride);
     }
-    for (Object value : values) {
-      Integer parsed = parsePositiveInt(value);
-      if (EmptyChecks.isNotNull(parsed)) {
-        return parsed;
-      }
-    }
-    return null;
-  }
 
-  private Integer parsePositiveInt(Object value) {
-    if (value instanceof Number number) {
-      int parsed = number.intValue();
-      return parsed > 0 ? parsed : null;
+    /** 两个公开入口都由 {@link Propagation#MANDATORY} 守住事务；共享实现不再依赖同类代理跳转。 */
+    private void writeDispatchEventInternal(
+            JobInstanceEntity jobInstance,
+            JobTaskEntity task,
+            JobPartitionEntity partition,
+            String traceId,
+            String eventKey,
+            RunMode runModeOverride) {
+        Long jobPartitionId = EmptyChecks.isNotNull(partition) ? partition.getId() : null;
+        String idempotencyKey = EmptyChecks.isNotNull(partition)
+                ? partition.getIdempotencyKey()
+                : resolveIdempotencyKeyWithoutPartition(task, eventKey);
+        // P1-2.2:v2 消息瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn)走 worker CLAIM
+        // 时由 EffectiveTaskConfig 返回;此处只保留 task key + 路由元数据。
+        // runModeOverride 在 v1 时通过 payload 注入,v2 后改由 worker CLAIM 读 job_task.task_payload —
+        // retry/reclaim 路径需要把 run_mode 持久化到 task_payload 而非写入 message 临时透传。
+        persistRunModeOverride(jobInstance, task, runModeOverride);
+        String messageVersion = "v2";
+        String messageTenantId = task.getTenantId();
+        Long messageJobInstanceId = jobInstance.getId();
+        Long messagePartitionId = jobPartitionId;
+        Long messageTaskId = task.getId();
+        String messageInstanceNo = jobInstance.getInstanceNo();
+        String messageJobCode = jobInstance.getJobCode();
+        String messageTaskType = task.getTaskType();
+        String messageWorkerCode = task.getAssignedWorkerCode();
+        String priorityBand = resolvePriorityBand(jobInstance.getPriority());
+        String messageTraceId = traceId;
+        String messageIdempotencyKey = idempotencyKey;
+        Instant messageCreatedAt = BatchDateTimeSupport.utcNow();
+        SchedulingContext schedulingContext = buildSchedulingContext(jobInstance);
+        Integer messagePartitionNo = EmptyChecks.isNull(partition) ? null : partition.getPartitionNo();
+        Integer partitionCount = resolvePartitionCount(jobInstance);
+        W3cTraceContext traceContext = OtelTracePropagation.captureCurrent();
+        TaskDispatchMessage message = new TaskDispatchMessage(
+                messageVersion,
+                messageTenantId,
+                messageJobInstanceId,
+                messagePartitionId,
+                messageTaskId,
+                messageInstanceNo,
+                messageJobCode,
+                messageTaskType,
+                messageWorkerCode,
+                priorityBand,
+                messageTraceId,
+                messageIdempotencyKey,
+                messageCreatedAt,
+                schedulingContext,
+                messagePartitionNo,
+                partitionCount,
+                traceContext);
+
+        // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
+        // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
+        // 回退:jobInstance.priority(老逻辑);都缺走 DomainEvent 不传 → DB DEFAULT 5。
+        Integer priority = EmptyChecks.isNotNull(task.getPriority()) ? task.getPriority() : jobInstance.getPriority();
+        String resolvedKey = EmptyChecks.isBlank(eventKey) ? task.getTenantId() + ":" + task.getId() : eventKey;
+        DomainEvent.Builder eventBuilder = DomainEvent.builder(task.getTenantId());
+        Long eventAggregateId = task.getId();
+        eventBuilder.aggregate("JOB_TASK", eventAggregateId);
+        String eventType = task.getTaskType();
+        eventBuilder.type(eventType);
+        eventBuilder.key(resolvedKey);
+        Map<String, Object> messagePayload = JsonUtils.toMap(message);
+        eventBuilder.payload(messagePayload);
+        eventBuilder.traceId(traceId);
+        eventBuilder.priority(priority);
+        DomainEvent dispatchEvent = eventBuilder.build();
+        domainEventPublisher.publish(dispatchEvent);
     }
-    if (value instanceof String text && EmptyChecks.isNotBlank(text)) {
-      try {
-        String trimmedText = text.trim();
-        int parsed = Integer.parseInt(trimmedText);
-        return parsed > 0 ? parsed : null;
-      } catch (NumberFormatException ignored) {
+
+    /**
+     * SDK Phase 2 §2.1:构造随消息下沉的调度上下文。
+     *
+     * <p>仅填派发时刻已确定的不可变事实:
+     *
+     * <ul>
+     *   <li>bizDate / prevBizDate / nextBizDate:业务日及前后工作日(BizDateArithmetic 周末近似,暂不感知节假日);
+     *   <li>isHoliday:当前 = bizDate 是否周末(business_calendar 接入前的近似语义);
+     *   <li>attemptNo / triggerType:取自 job_instance;
+     *   <li>triggerCode / workflowRunId:平台暂无来源列,置 null,待后续补列。
+     * </ul>
+     */
+    private SchedulingContext buildSchedulingContext(JobInstanceEntity jobInstance) {
+        LocalDate bizDate = jobInstance.getBizDate();
+        LocalDate prevBizDate = bizDateArithmetic.previousBusinessDay(bizDate);
+        LocalDate nextBizDate = bizDateArithmetic.nextBusinessDay(bizDate);
+        Boolean isHoliday = EmptyChecks.isNotNull(bizDate) ? bizDateArithmetic.isWeekend(bizDate) : null;
+        return SchedulingContext.builder()
+                .bizDate(bizDate)
+                .prevBizDate(prevBizDate)
+                .nextBizDate(nextBizDate)
+                .isHoliday(isHoliday)
+                .attemptNo(jobInstance.getRunAttempt())
+                .triggerType(jobInstance.getTriggerType())
+                .build();
+    }
+
+    private Integer resolvePartitionCount(JobInstanceEntity jobInstance) {
+        if (EmptyChecks.isNull(jobInstance)) {
+            return null;
+        }
+        Integer expected = jobInstance.getExpectedPartitionCount();
+        if (EmptyChecks.isNotNull(expected) && expected > 0) {
+            return expected;
+        }
+        Map<String, Object> params = parsePayloadMap(jobInstance.getParamsSnapshot());
+        Object[] partitionCountCandidates = {
+            params.get("partitionCount"),
+            params.get("estimatedPartitionCount"),
+            params.get("staticPartitionCount"),
+            params.get("shardCount"),
+            params.get("partitions"),
+            nestedValue(params, "effectiveParams", "partitionCount"),
+            nestedValue(params, "requestParams", "partitionCount"),
+            nestedValue(params, "defaultParams", "partitionCount"),
+            nestedValue(params, "effectiveParams", "estimatedPartitionCount"),
+            nestedValue(params, "requestParams", "estimatedPartitionCount"),
+            nestedValue(params, "effectiveParams", "staticPartitionCount"),
+            nestedValue(params, "requestParams", "staticPartitionCount"),
+            nestedValue(params, "effectiveParams", "shardCount"),
+            nestedValue(params, "requestParams", "shardCount"),
+            nestedValue(params, "effectiveParams", "partitions"),
+            nestedValue(params, "requestParams", "partitions")
+        };
+        return firstPositiveInt(partitionCountCandidates);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object nestedValue(Map<String, Object> params, String objectKey, String valueKey) {
+        if (EmptyChecks.isNull(params) || EmptyChecks.isNull(objectKey) || EmptyChecks.isNull(valueKey)) {
+            return null;
+        }
+        Object nested = params.get(objectKey);
+        if (nested instanceof Map<?, ?> nestedMap) {
+            return ((Map<String, Object>) nestedMap).get(valueKey);
+        }
         return null;
-      }
     }
-    return null;
-  }
 
-  /**
-   * P1-2.2:把 RunMode 持久化到 job_task.task_payload。worker CLAIM 时 EffectiveTaskConfig 从
-   * task_payload 读取 run_mode,看到该值即可区分"首次执行"与"补偿/重放"。仅 retry/reclaim 等再派发场景调用(runModeOverride 非 null)。
-   */
-  private void persistRunModeOverride(
-      JobInstanceEntity jobInstance, JobTaskEntity task, RunMode runModeOverride) {
-    if (EmptyChecks.isNull(runModeOverride)
-        || EmptyChecks.isNull(task)
-        || EmptyChecks.isNull(task.getId())) {
-      return;
+    private Integer firstPositiveInt(Object... values) {
+        if (EmptyChecks.isNull(values)) {
+            return null;
+        }
+        for (Object value : values) {
+            Integer parsed = parsePositiveInt(value);
+            if (EmptyChecks.isNotNull(parsed)) {
+                return parsed;
+            }
+        }
+        return null;
     }
-    if (EmptyChecks.isNotNull(jobInstance.getDryRun())
-        && EmptyChecks.isNotNull(task.getDryRun())
-        && !jobInstance.getDryRun().equals(task.getDryRun())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
-    }
-    Map<String, Object> payload = requireRetryPayload(task);
-    RunModeSupport.putCanonical(payload, runModeOverride);
-    String merged = JsonUtils.toJson(payload);
-    if (jobTaskMapper.updatePayload(task.getTenantId(), task.getId(), merged) != 1) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, ResultCode.STATE_CONFLICT.detailKey());
-    }
-    // 同步内存对象,避免后续逻辑读到陈旧 payload
-    task.setTaskPayload(merged);
-  }
 
-  private Map<String, Object> requireRetryPayload(JobTaskEntity task) {
-    Object value;
-    try {
-      value = JsonUtils.fromJson(task.getTaskPayload(), Object.class);
-    } catch (IllegalArgumentException exception) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+    private Integer parsePositiveInt(Object value) {
+        if (value instanceof Number number) {
+            int parsed = number.intValue();
+            return parsed > 0 ? parsed : null;
+        }
+        if (value instanceof String text && EmptyChecks.isNotBlank(text)) {
+            try {
+                String trimmedText = text.trim();
+                int parsed = Integer.parseInt(trimmedText);
+                return parsed > 0 ? parsed : null;
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
-    if (!(value instanceof Map<?, ?> payload)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
-    }
-    Object dryRun = payload.get("dryRun");
-    boolean payloadDryRun =
-        EmptyChecks.isNotNull(dryRun) && "true".equalsIgnoreCase(dryRun.toString());
-    if (EmptyChecks.isNotNull(task.getDryRun()) && task.getDryRun() != payloadDryRun) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
-    }
-    Map<String, Object> result = new LinkedHashMap<>();
-    for (Map.Entry<?, ?> entry : payload.entrySet()) {
-      if (!(entry.getKey() instanceof String key)) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
-      }
-      result.put(key, entry.getValue());
-    }
-    return result;
-  }
 
-  @SuppressWarnings("unchecked")
-  private Map<String, Object> parsePayloadMap(String payloadJson) {
-    if (EmptyChecks.isBlank(payloadJson)) {
-      return new LinkedHashMap<>();
+    /**
+     * P1-2.2:把 RunMode 持久化到 job_task.task_payload。worker CLAIM 时 EffectiveTaskConfig 从
+     * task_payload 读取 run_mode,看到该值即可区分"首次执行"与"补偿/重放"。仅 retry/reclaim 等再派发场景调用(runModeOverride 非 null)。
+     */
+    private void persistRunModeOverride(JobInstanceEntity jobInstance, JobTaskEntity task, RunMode runModeOverride) {
+        if (EmptyChecks.isNull(runModeOverride) || EmptyChecks.isNull(task) || EmptyChecks.isNull(task.getId())) {
+            return;
+        }
+        if (EmptyChecks.isNotNull(jobInstance.getDryRun())
+                && EmptyChecks.isNotNull(task.getDryRun())
+                && !jobInstance.getDryRun().equals(task.getDryRun())) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+        }
+        Map<String, Object> payload = requireRetryPayload(task);
+        RunModeSupport.putCanonical(payload, runModeOverride);
+        String merged = JsonUtils.toJson(payload);
+        if (jobTaskMapper.updatePayload(task.getTenantId(), task.getId(), merged) != 1) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, ResultCode.STATE_CONFLICT.detailKey());
+        }
+        // 同步内存对象,避免后续逻辑读到陈旧 payload
+        task.setTaskPayload(merged);
     }
-    try {
-      Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
-      if (payloadObject instanceof Map<?, ?> payloadMap) {
-        return new LinkedHashMap<>((Map<String, Object>) payloadMap);
-      }
-    } catch (RuntimeException ignored) {
-      SwallowedExceptionLogger.warn(
-          TaskDispatchOutboxService.class, "catch:RuntimeException", ignored);
 
-      // 参数快照不可解析时保留既有空映射回退，不影响任务载荷校验。
+    private Map<String, Object> requireRetryPayload(JobTaskEntity task) {
+        Object value;
+        try {
+            value = JsonUtils.fromJson(task.getTaskPayload(), Object.class);
+        } catch (IllegalArgumentException exception) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+        }
+        if (!(value instanceof Map<?, ?> payload)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+        }
+        Object dryRun = payload.get("dryRun");
+        boolean payloadDryRun = EmptyChecks.isNotNull(dryRun) && "true".equalsIgnoreCase(dryRun.toString());
+        if (EmptyChecks.isNotNull(task.getDryRun()) && task.getDryRun() != payloadDryRun) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : payload.entrySet()) {
+            if (!(entry.getKey() instanceof String key)) {
+                throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+            }
+            result.put(key, entry.getValue());
+        }
+        return result;
     }
-    return new LinkedHashMap<>();
-  }
 
-  // C-9.1: idempotencyKey 不含 version，避免 Kafka 投递成功但 DB 回滚时因 version 变化生成新幂等键导致重复执行
-  private static String resolveIdempotencyKeyWithoutPartition(JobTaskEntity task, String eventKey) {
-    if (EmptyChecks.isNotBlank(eventKey)) {
-      return eventKey;
-    }
-    return task.getTenantId() + ":task:" + task.getId() + ":instance:" + task.getJobInstanceId();
-  }
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parsePayloadMap(String payloadJson) {
+        if (EmptyChecks.isBlank(payloadJson)) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                return new LinkedHashMap<>((Map<String, Object>) payloadMap);
+            }
+        } catch (RuntimeException ignored) {
+            SwallowedExceptionLogger.warn(TaskDispatchOutboxService.class, "catch:RuntimeException", ignored);
 
-  private String resolvePriorityBand(Integer priority) {
-    if (EmptyChecks.isNull(priority) || priority <= 3) {
-      return SchedulingPriorityBand.HIGH.code();
+            // 参数快照不可解析时保留既有空映射回退，不影响任务载荷校验。
+        }
+        return new LinkedHashMap<>();
     }
-    if (priority <= 6) {
-      return SchedulingPriorityBand.MEDIUM.code();
+
+    // C-9.1: idempotencyKey 不含 version，避免 Kafka 投递成功但 DB 回滚时因 version 变化生成新幂等键导致重复执行
+    private static String resolveIdempotencyKeyWithoutPartition(JobTaskEntity task, String eventKey) {
+        if (EmptyChecks.isNotBlank(eventKey)) {
+            return eventKey;
+        }
+        return task.getTenantId() + ":task:" + task.getId() + ":instance:" + task.getJobInstanceId();
     }
-    return SchedulingPriorityBand.LOW.code();
-  }
+
+    private String resolvePriorityBand(Integer priority) {
+        if (EmptyChecks.isNull(priority) || priority <= 3) {
+            return SchedulingPriorityBand.HIGH.code();
+        }
+        if (priority <= 6) {
+            return SchedulingPriorityBand.MEDIUM.code();
+        }
+        return SchedulingPriorityBand.LOW.code();
+    }
 }

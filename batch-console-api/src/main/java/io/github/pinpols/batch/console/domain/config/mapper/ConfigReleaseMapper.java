@@ -9,28 +9,27 @@ import org.apache.ibatis.annotations.Param;
 
 public interface ConfigReleaseMapper {
 
-  List<ConfigReleaseEntity> selectByQuery(ConfigReleaseQuery query);
+    List<ConfigReleaseEntity> selectByQuery(ConfigReleaseQuery query);
 
-  ConfigReleaseEntity selectById(
-      @Param("tenantId") String tenantId, @Param("releaseId") Long releaseId);
+    ConfigReleaseEntity selectById(@Param("tenantId") String tenantId, @Param("releaseId") Long releaseId);
 
-  Integer selectLatestVersionNo(
-      @Param("tenantId") String tenantId,
-      @Param("configType") String configType,
-      @Param("configKey") String configKey);
+    Integer selectLatestVersionNo(
+            @Param("tenantId") String tenantId,
+            @Param("configType") String configType,
+            @Param("configKey") String configKey);
 
-  int acquireVersionLock(
-      @Param("tenantId") String tenantId,
-      @Param("configType") String configType,
-      @Param("configKey") String configKey);
+    int acquireVersionLock(
+            @Param("tenantId") String tenantId,
+            @Param("configType") String configType,
+            @Param("configKey") String configKey);
 
-  ConfigReleaseEntity selectPreviousEffective(
-      @Param("tenantId") String tenantId,
-      @Param("configType") String configType,
-      @Param("configKey") String configKey,
-      @Param("versionNo") Integer versionNo);
+    ConfigReleaseEntity selectPreviousEffective(
+            @Param("tenantId") String tenantId,
+            @Param("configType") String configType,
+            @Param("configKey") String configKey,
+            @Param("versionNo") Integer versionNo);
 
-  int insertConfigRelease(ConfigReleaseInsertParam params);
+    int insertConfigRelease(ConfigReleaseInsertParam params);
 
-  int updateConfigReleaseStatus(ConfigReleaseStatusUpdateParam params);
+    int updateConfigReleaseStatus(ConfigReleaseStatusUpdateParam params);
 }

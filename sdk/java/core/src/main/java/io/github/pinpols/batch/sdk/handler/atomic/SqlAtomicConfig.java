@@ -12,18 +12,18 @@ package io.github.pinpols.batch.sdk.handler.atomic;
  * @param forbidOsCapableRole 是否在执行前跑 PG 角色闸,拒绝在具备 OS 能力的 DB 角色上跑 SQL(默认 true)
  */
 public record SqlAtomicConfig(
-    String taskType,
-    int statementTimeoutSeconds,
-    int maxResultRows,
-    int maxStatementsPerJob,
-    boolean defaultAutoCommit,
-    boolean forbidOsCapableRole) {
+        String taskType,
+        int statementTimeoutSeconds,
+        int maxResultRows,
+        int maxStatementsPerJob,
+        boolean defaultAutoCommit,
+        boolean forbidOsCapableRole) {
 
-  /**
-   * 默认值:statementTimeoutSeconds=30、maxResultRows=10000、maxStatementsPerJob=50、
-   * defaultAutoCommit=false、forbidOsCapableRole=true(全部对齐平台默认)。
-   */
-  public static SqlAtomicConfig defaults(String taskType) {
-    return new SqlAtomicConfig(taskType, 30, 10000, 50, false, true);
-  }
+    /**
+     * 默认值:statementTimeoutSeconds=30、maxResultRows=10000、maxStatementsPerJob=50、
+     * defaultAutoCommit=false、forbidOsCapableRole=true(全部对齐平台默认)。
+     */
+    public static SqlAtomicConfig defaults(String taskType) {
+        return new SqlAtomicConfig(taskType, 30, 10000, 50, false, true);
+    }
 }

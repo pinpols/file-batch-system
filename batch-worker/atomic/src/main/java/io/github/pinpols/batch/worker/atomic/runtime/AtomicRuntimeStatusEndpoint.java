@@ -19,10 +19,10 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AtomicRuntimeStatusEndpoint {
 
-  private final AtomicRuntimeStatusService runtimeStatusService;
+    private final AtomicRuntimeStatusService runtimeStatusService;
 
-  @ReadOperation
-  public AtomicRuntimeStatus status() {
-    return runtimeStatusService.snapshot();
-  }
+    @ReadOperation
+    public AtomicRuntimeStatus status() {
+        return runtimeStatusService.snapshot();
+    }
 }

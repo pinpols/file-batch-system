@@ -19,64 +19,62 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 class WaitingPartitionDispatchKick {
 
-  private final WaitingPartitionDispatchScheduler waitingPartitionDispatchScheduler;
-  private final ResourceSchedulerProperties properties;
-  private final TaskScheduler taskScheduler;
-  private final Counter requestedCounter;
-  private final Counter coalescedCounter;
-  private final Counter executedCounter;
-  private final AtomicBoolean scheduled = new AtomicBoolean();
+    private final WaitingPartitionDispatchScheduler waitingPartitionDispatchScheduler;
+    private final ResourceSchedulerProperties properties;
+    private final TaskScheduler taskScheduler;
+    private final Counter requestedCounter;
+    private final Counter coalescedCounter;
+    private final Counter executedCounter;
+    private final AtomicBoolean scheduled = new AtomicBoolean();
 
-  WaitingPartitionDispatchKick(
-      WaitingPartitionDispatchScheduler waitingPartitionDispatchScheduler,
-      ResourceSchedulerProperties properties,
-      @Qualifier("taskScheduler") TaskScheduler taskScheduler,
-      MeterRegistry meterRegistry) {
-    this.waitingPartitionDispatchScheduler = waitingPartitionDispatchScheduler;
-    this.properties = properties;
-    this.taskScheduler = taskScheduler;
-    this.requestedCounter = Counter.builder("batch.scheduler.waiting_dispatch.kick.requested")
-        .description("Committed task outcomes that scheduled a waiting-partition dispatch kick")
-        .register(meterRegistry);
-    this.coalescedCounter = Counter.builder("batch.scheduler.waiting_dispatch.kick.coalesced")
-        .description("Capacity-release events merged into an already scheduled dispatch kick")
-        .register(meterRegistry);
-    this.executedCounter = Counter.builder("batch.scheduler.waiting_dispatch.kick.executed")
-        .description("Waiting-partition dispatch kicks executed after task outcome commit")
-        .register(meterRegistry);
-  }
+    WaitingPartitionDispatchKick(
+            WaitingPartitionDispatchScheduler waitingPartitionDispatchScheduler,
+            ResourceSchedulerProperties properties,
+            @Qualifier("taskScheduler") TaskScheduler taskScheduler,
+            MeterRegistry meterRegistry) {
+        this.waitingPartitionDispatchScheduler = waitingPartitionDispatchScheduler;
+        this.properties = properties;
+        this.taskScheduler = taskScheduler;
+        this.requestedCounter = Counter.builder("batch.scheduler.waiting_dispatch.kick.requested")
+                .description("Committed task outcomes that scheduled a waiting-partition dispatch kick")
+                .register(meterRegistry);
+        this.coalescedCounter = Counter.builder("batch.scheduler.waiting_dispatch.kick.coalesced")
+                .description("Capacity-release events merged into an already scheduled dispatch kick")
+                .register(meterRegistry);
+        this.executedCounter = Counter.builder("batch.scheduler.waiting_dispatch.kick.executed")
+                .description("Waiting-partition dispatch kicks executed after task outcome commit")
+                .register(meterRegistry);
+    }
 
-  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-  void onCapacityReleased(WaitingCapacityReleasedEvent event) {
-    if (!properties.isWaitingDispatchKickEnabled()) {
-      return;
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    void onCapacityReleased(WaitingCapacityReleasedEvent event) {
+        if (!properties.isWaitingDispatchKickEnabled()) {
+            return;
+        }
+        if (!scheduled.compareAndSet(false, true)) {
+            coalescedCounter.increment();
+            return;
+        }
+        try {
+            requestedCounter.increment();
+            long delayMillis = Math.max(0L, properties.getWaitingDispatchKickDelayMillis());
+            Instant scheduleBaseTime = Instant.now();
+            Instant scheduledAt = scheduleBaseTime.plusMillis(delayMillis);
+            taskScheduler.schedule(this::dispatch, scheduledAt);
+        } catch (RuntimeException exception) {
+            scheduled.set(false);
+            SwallowedExceptionLogger.warn(
+                    WaitingPartitionDispatchKick.class, "schedule-waiting-partition-dispatch-kick-failed", exception);
+        }
     }
-    if (!scheduled.compareAndSet(false, true)) {
-      coalescedCounter.increment();
-      return;
-    }
-    try {
-      requestedCounter.increment();
-      long delayMillis = Math.max(0L, properties.getWaitingDispatchKickDelayMillis());
-      Instant scheduleBaseTime = Instant.now();
-      Instant scheduledAt = scheduleBaseTime.plusMillis(delayMillis);
-      taskScheduler.schedule(this::dispatch, scheduledAt);
-    } catch (RuntimeException exception) {
-      scheduled.set(false);
-      SwallowedExceptionLogger.warn(
-          WaitingPartitionDispatchKick.class,
-          "schedule-waiting-partition-dispatch-kick-failed",
-          exception);
-    }
-  }
 
-  private void dispatch() {
-    try {
-      // 从另一个 Spring bean 调用，@SchedulerLock AOP 仍会生效；多实例只会有一个实际执行。
-      executedCounter.increment();
-      waitingPartitionDispatchScheduler.dispatchWaitingPartitions();
-    } finally {
-      scheduled.set(false);
+    private void dispatch() {
+        try {
+            // 从另一个 Spring bean 调用，@SchedulerLock AOP 仍会生效；多实例只会有一个实际执行。
+            executedCounter.increment();
+            waitingPartitionDispatchScheduler.dispatchWaitingPartitions();
+        } finally {
+            scheduled.set(false);
+        }
     }
-  }
 }

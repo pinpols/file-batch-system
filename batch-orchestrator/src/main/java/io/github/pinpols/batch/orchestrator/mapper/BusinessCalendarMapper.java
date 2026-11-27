@@ -10,15 +10,15 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface BusinessCalendarMapper {
 
-  BusinessCalendarEntity selectFirstByTenantAndCodeAndEnabled(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("enabled") Boolean enabled);
+    BusinessCalendarEntity selectFirstByTenantAndCodeAndEnabled(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("enabled") Boolean enabled);
 
-  List<BusinessCalendarEntity> selectByTenantAndEnabled(
-      @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
+    List<BusinessCalendarEntity> selectByTenantAndEnabled(
+            @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  List<BusinessCalendarEntity> selectByEnabled(@Param("enabled") Boolean enabled);
+    List<BusinessCalendarEntity> selectByEnabled(@Param("enabled") Boolean enabled);
 
-  BusinessCalendarEntity selectById(@Param("id") Long id);
+    BusinessCalendarEntity selectById(@Param("id") Long id);
 }

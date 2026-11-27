@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface ConfigChangeLogMapper {
 
-  List<ConfigChangeLogEntity> selectByQuery(ConfigChangeLogQuery query);
+    List<ConfigChangeLogEntity> selectByQuery(ConfigChangeLogQuery query);
 
-  int insertConfigChangeLog(ConfigChangeLogInsertParam params);
+    int insertConfigChangeLog(ConfigChangeLogInsertParam params);
 }

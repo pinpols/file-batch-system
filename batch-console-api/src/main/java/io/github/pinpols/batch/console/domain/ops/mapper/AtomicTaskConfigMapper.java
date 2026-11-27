@@ -13,18 +13,15 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface AtomicTaskConfigMapper {
 
-  /** 按租户 + taskType 列配置,created_at 倒序。 */
-  List<AtomicTaskConfigEntity> selectByTenantAndTaskType(
-      @Param("tenantId") String tenantId, @Param("taskType") String taskType);
+    /** 按租户 + taskType 列配置,created_at 倒序。 */
+    List<AtomicTaskConfigEntity> selectByTenantAndTaskType(
+            @Param("tenantId") String tenantId, @Param("taskType") String taskType);
 
-  AtomicTaskConfigEntity selectByTenantAndId(
-      @Param("tenantId") String tenantId, @Param("id") Long id);
+    AtomicTaskConfigEntity selectByTenantAndId(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  AtomicTaskConfigEntity selectByTenantAndTaskTypeAndName(
-      @Param("tenantId") String tenantId,
-      @Param("taskType") String taskType,
-      @Param("name") String name);
+    AtomicTaskConfigEntity selectByTenantAndTaskTypeAndName(
+            @Param("tenantId") String tenantId, @Param("taskType") String taskType, @Param("name") String name);
 
-  /** INSERT 一条,useGeneratedKeys 回写 id 到 param。 */
-  int insertAtomicTaskConfig(@Param("p") AtomicTaskConfigCreateParam param);
+    /** INSERT 一条,useGeneratedKeys 回写 id 到 param。 */
+    int insertAtomicTaskConfig(@Param("p") AtomicTaskConfigCreateParam param);
 }

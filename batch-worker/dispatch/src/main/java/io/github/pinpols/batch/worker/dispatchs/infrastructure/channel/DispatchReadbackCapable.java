@@ -9,6 +9,6 @@ import java.util.OptionalLong;
  */
 public interface DispatchReadbackCapable {
 
-  /** 读回已投递目标对象的字节数;不可得 / 不存在返回 empty。 */
-  OptionalLong readbackSize(DispatchCommand command);
+    /** 读回已投递目标对象的字节数;不可得 / 不存在返回 empty。 */
+    OptionalLong readbackSize(DispatchCommand command);
 }

@@ -8,6 +8,6 @@ import lombok.Data;
 @Data
 public class TaskOutcomePersistenceContext {
 
-  private JobTaskEntity task;
-  private JobPartitionEntity partition;
+    private JobTaskEntity task;
+    private JobPartitionEntity partition;
 }

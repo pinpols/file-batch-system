@@ -11,49 +11,46 @@ import org.apache.ibatis.annotations.Param;
 
 public interface ConsoleUserAccountMapper {
 
-  /**
-   * 认证路径专用：lower(username) ilike 匹配，返回 entity（替代
-   * ConsoleUserAccountRepository#findByUsernameIgnoreCase）。
-   */
-  Optional<ConsoleUserAccountEntity> findByUsernameIgnoreCase(@Param("username") String username);
+    /**
+     * 认证路径专用：lower(username) ilike 匹配，返回 entity（替代
+     * ConsoleUserAccountRepository#findByUsernameIgnoreCase）。
+     */
+    Optional<ConsoleUserAccountEntity> findByUsernameIgnoreCase(@Param("username") String username);
 
-  List<ConsoleUserAccountRow> selectByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("keyword") String keyword,
-      @Param("enabled") Boolean enabled,
-      @Param("pageRequest") PageRequest pageRequest);
+    List<ConsoleUserAccountRow> selectByQuery(
+            @Param("tenantId") String tenantId,
+            @Param("keyword") String keyword,
+            @Param("enabled") Boolean enabled,
+            @Param("pageRequest") PageRequest pageRequest);
 
-  long countByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("keyword") String keyword,
-      @Param("enabled") Boolean enabled);
+    long countByQuery(
+            @Param("tenantId") String tenantId, @Param("keyword") String keyword, @Param("enabled") Boolean enabled);
 
-  ConsoleUserAccountRow selectById(@Param("id") long id);
+    ConsoleUserAccountRow selectById(@Param("id") long id);
 
-  ConsoleUserAccountRow selectByUsername(@Param("username") String username);
+    ConsoleUserAccountRow selectByUsername(@Param("username") String username);
 
-  int insert(ConsoleUserAccountInsertParam parameters);
+    int insert(ConsoleUserAccountInsertParam parameters);
 
-  int insertProvisioned(ConsoleUserAccountInsertProvisionedParam parameters);
+    int insertProvisioned(ConsoleUserAccountInsertProvisionedParam parameters);
 
-  int updateProfile(
-      @Param("id") long id,
-      @Param("displayName") String displayName,
-      @Param("authoritiesCsv") String authoritiesCsv);
+    int updateProfile(
+            @Param("id") long id,
+            @Param("displayName") String displayName,
+            @Param("authoritiesCsv") String authoritiesCsv);
 
-  int updatePasswordHash(@Param("id") long id, @Param("passwordHash") String passwordHash);
+    int updatePasswordHash(@Param("id") long id, @Param("passwordHash") String passwordHash);
 
-  int updateEnabled(@Param("id") long id, @Param("enabled") boolean enabled);
+    int updateEnabled(@Param("id") long id, @Param("enabled") boolean enabled);
 
-  /** 改密 / reset 时同步设置 must_change_password 标志(true=提示尽快改密,false=清除)。 */
-  int updatePasswordHashAndMustChange(
-      @Param("id") long id,
-      @Param("passwordHash") String passwordHash,
-      @Param("mustChangePassword") boolean mustChangePassword);
+    /** 改密 / reset 时同步设置 must_change_password 标志(true=提示尽快改密,false=清除)。 */
+    int updatePasswordHashAndMustChange(
+            @Param("id") long id,
+            @Param("passwordHash") String passwordHash,
+            @Param("mustChangePassword") boolean mustChangePassword);
 
-  /** 启动期默认密码守护:返回内置系统账号的 (username, password_hash, must_change_password)。 */
-  List<ConsoleUserAccountEntity> selectBuiltinSystemAccounts(
-      @Param("usernames") List<String> usernames);
+    /** 启动期默认密码守护:返回内置系统账号的 (username, password_hash, must_change_password)。 */
+    List<ConsoleUserAccountEntity> selectBuiltinSystemAccounts(@Param("usernames") List<String> usernames);
 
-  int deleteById(@Param("id") long id);
+    int deleteById(@Param("id") long id);
 }

@@ -36,70 +36,69 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * </ul>
  */
 @E2eSpringBootTest(
-    classes = E2eExportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.export.worker-type=EXPORT")
+        classes = E2eExportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.export.worker-type=EXPORT")
 @E2eBusinessSchema
 @DisplayName("导出失败链路端到端归因:导出模板引用不存在时快速失败并正确落库,验证任务终态为失败,作业实例按分片汇总口径收敛到失败态")
 class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+    @Autowired
+    private WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Test
-  @DisplayName("投放引用不存在导出模板的任务:验证任务终态为失败,且作业实例状态收敛到失败或部分失败")
-  void shouldMarkTaskAndInstanceFailed_whenExportTemplateMissing() {
-    final String selectTaskStatusSql = """
+    @Test
+    @DisplayName("投放引用不存在导出模板的任务:验证任务终态为失败,且作业实例状态收敛到失败或部分失败")
+    void shouldMarkTaskAndInstanceFailed_whenExportTemplateMissing() {
+        final String selectTaskStatusSql = """
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
                       """;
-    final String selectInstanceStatusSql = """
+        final String selectInstanceStatusSql = """
         select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?
     """;
 
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API, BIZ_DATE);
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API, BIZ_DATE);
 
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("batchNo", "E2E-FAIL-BATCH-001");
-    // Non-existent template — export worker fails at template resolution
-    params.put("templateCode", "EXP-TEMPLATE-DOES-NOT-EXIST");
-    params.put("bizDate", BIZ_DATE.toString());
-    params.put("bizType", "SETTLEMENT");
-    params.put("fileCode", "e2e-export-fail-file");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("batchNo", "E2E-FAIL-BATCH-001");
+        // Non-existent template — export worker fails at template resolution
+        params.put("templateCode", "EXP-TEMPLATE-DOES-NOT-EXIST");
+        params.put("bizDate", BIZ_DATE.toString());
+        params.put("bizType", "SETTLEMENT");
+        params.put("fileCode", "e2e-export-fail-file");
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-export-fail",
-        params));
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-export-fail",
+                params));
 
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(
-              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
-          assertThat(status).isEqualTo("FAILED");
-        });
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    String status =
+                            jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+                    assertThat(status).isEqualTo("FAILED");
+                });
 
-    String instanceStatus =
-        jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, seed.dedupKey());
-    assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
-  }
+        String instanceStatus =
+                jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, seed.dedupKey());
+        assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
+    }
 }

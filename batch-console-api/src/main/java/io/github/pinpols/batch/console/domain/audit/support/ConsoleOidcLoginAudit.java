@@ -17,47 +17,46 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleOidcLoginAudit {
 
-  private final OperationAuditMapper auditMapper;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final OperationAuditMapper auditMapper;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  public void succeeded(String tenantId, String username) {
-    record(tenantId, username, "SUCCESS", null);
-  }
-
-  public void failed(String tenantId, String errorCode) {
-    record(tenantId, "anonymous", "FAILED", errorCode);
-  }
-
-  private void record(String tenantId, String operatorId, String result, String errorCode) {
-    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    String errorDescription = EmptyChecks.isNull(errorCode) ? null : "OIDC authentication failed";
-    String traceId = metadata.traceId();
-    String requestId = metadata.requestId();
-    String clientIp = metadata.clientIp();
-    String clientIpHash = Hashes.sha256Short(clientIp);
-    OperationAuditEvent event = OperationAuditEvent.builder()
-        .tenantId(tenantId)
-        .aggregateType("auth")
-        .aggregateId(operatorId)
-        .action("auth.oidc.login")
-        .operatorId(operatorId)
-        .operatorRole("OIDC")
-        .result(result)
-        .errorCode(errorCode)
-        .errorMessage(errorDescription)
-        .traceId(traceId)
-        .requestId(requestId)
-        .ipHash(clientIpHash)
-        .eventVersion(1)
-        .createdAt(BatchDateTimeSupport.utcNow())
-        .build();
-    try {
-      auditMapper.insert(event);
-    } catch (RuntimeException exception) {
-      String sanitizedTenantId = LogSanitizer.value(tenantId);
-      String sanitizedResult = LogSanitizer.value(result);
-      log.warn(
-          "OIDC login audit insert failed tenant={} result={}", sanitizedTenantId, sanitizedResult);
+    public void succeeded(String tenantId, String username) {
+        record(tenantId, username, "SUCCESS", null);
     }
-  }
+
+    public void failed(String tenantId, String errorCode) {
+        record(tenantId, "anonymous", "FAILED", errorCode);
+    }
+
+    private void record(String tenantId, String operatorId, String result, String errorCode) {
+        ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+        String errorDescription = EmptyChecks.isNull(errorCode) ? null : "OIDC authentication failed";
+        String traceId = metadata.traceId();
+        String requestId = metadata.requestId();
+        String clientIp = metadata.clientIp();
+        String clientIpHash = Hashes.sha256Short(clientIp);
+        OperationAuditEvent event = OperationAuditEvent.builder()
+                .tenantId(tenantId)
+                .aggregateType("auth")
+                .aggregateId(operatorId)
+                .action("auth.oidc.login")
+                .operatorId(operatorId)
+                .operatorRole("OIDC")
+                .result(result)
+                .errorCode(errorCode)
+                .errorMessage(errorDescription)
+                .traceId(traceId)
+                .requestId(requestId)
+                .ipHash(clientIpHash)
+                .eventVersion(1)
+                .createdAt(BatchDateTimeSupport.utcNow())
+                .build();
+        try {
+            auditMapper.insert(event);
+        } catch (RuntimeException exception) {
+            String sanitizedTenantId = LogSanitizer.value(tenantId);
+            String sanitizedResult = LogSanitizer.value(result);
+            log.warn("OIDC login audit insert failed tenant={} result={}", sanitizedTenantId, sanitizedResult);
+        }
+    }
 }

@@ -43,130 +43,121 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleJobBundleControllerTest {
 
-  @Mock
-  private ConsoleJobBundleApplicationService applicationService;
+    @Mock
+    private ConsoleJobBundleApplicationService applicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleJobBundleController(applicationService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleJobBundleController(applicationService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  // @Idempotent 全局拦截器在 standalone MockMvc 不装;Idempotency 缺失场景见
-  // ConsoleIdempotencyInterceptorTest
+    // @Idempotent 全局拦截器在 standalone MockMvc 不装;Idempotency 缺失场景见
+    // ConsoleIdempotencyInterceptorTest
 
-  @Test
-  @DisplayName("创建请求转发到应用服务, 捕获到的租户与报文一致")
-  void shouldForwardCreate_whenRequestValid() throws Exception {
-    String hash = ConsoleIdempotencyRequestIdentity.requestHash(
-        null, "POST", "/api/console/jobs/bundle/create", "k1");
-    when(applicationService.create(any(JobBundleCreateRequest.class), eq(hash)))
-        .thenReturn(new ConsoleJobBundleResultResponse(
-            "t1",
-            ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
-            new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of())));
-    mockMvc
-        .perform(post("/api/console/jobs/bundle/create")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\",\"mode\":\"UPSERT\",\"bundle\":{}}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-    ArgumentCaptor<JobBundleCreateRequest> captor =
-        ArgumentCaptor.forClass(JobBundleCreateRequest.class);
-    verify(applicationService).create(captor.capture(), eq(hash));
-    JobBundleCreateRequest req = captor.getValue();
-    Assertions.assertThat(req.getTenantId()).isEqualTo("t1");
-  }
+    @Test
+    @DisplayName("创建请求转发到应用服务, 捕获到的租户与报文一致")
+    void shouldForwardCreate_whenRequestValid() throws Exception {
+        String hash =
+                ConsoleIdempotencyRequestIdentity.requestHash(null, "POST", "/api/console/jobs/bundle/create", "k1");
+        when(applicationService.create(any(JobBundleCreateRequest.class), eq(hash)))
+                .thenReturn(new ConsoleJobBundleResultResponse(
+                        "t1",
+                        ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
+                        new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of())));
+        mockMvc.perform(post("/api/console/jobs/bundle/create")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"mode\":\"UPSERT\",\"bundle\":{}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+        ArgumentCaptor<JobBundleCreateRequest> captor = ArgumentCaptor.forClass(JobBundleCreateRequest.class);
+        verify(applicationService).create(captor.capture(), eq(hash));
+        JobBundleCreateRequest req = captor.getValue();
+        Assertions.assertThat(req.getTenantId()).isEqualTo("t1");
+    }
 
-  @Test
-  @DisplayName("导出缺少必填查询参数时返回参数错误")
-  void shouldRejectExport_whenRequiredQueryParamMissing() throws Exception {
-    mockMvc
-        .perform(get("/api/console/jobs/bundle/export").param("tenantId", "t1"))
-        .andExpect(status().isBadRequest());
-  }
+    @Test
+    @DisplayName("导出缺少必填查询参数时返回参数错误")
+    void shouldRejectExport_whenRequiredQueryParamMissing() throws Exception {
+        mockMvc.perform(get("/api/console/jobs/bundle/export").param("tenantId", "t1"))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  @DisplayName("导出成功后回包携带来源租户与作业包内容")
-  void shouldReturnBundlePayload_whenExportSucceeds() throws Exception {
-    ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
-    when(applicationService.exportBundle("t1", "JOB_A"))
-        .thenReturn(new ConsoleJobBundleExportResponse(
-            "t1", "JOB_A", ConsoleJobBundleSummaryResponse.from(bundle), bundle));
-    mockMvc
-        .perform(get("/api/console/jobs/bundle/export")
-            .param("tenantId", "t1")
-            .param("jobCode", "JOB_A"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.tenantId").value("t1"));
-  }
+    @Test
+    @DisplayName("导出成功后回包携带来源租户与作业包内容")
+    void shouldReturnBundlePayload_whenExportSucceeds() throws Exception {
+        ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
+        when(applicationService.exportBundle("t1", "JOB_A"))
+                .thenReturn(new ConsoleJobBundleExportResponse(
+                        "t1", "JOB_A", ConsoleJobBundleSummaryResponse.from(bundle), bundle));
+        mockMvc.perform(get("/api/console/jobs/bundle/export")
+                        .param("tenantId", "t1")
+                        .param("jobCode", "JOB_A"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.tenantId").value("t1"));
+    }
 
-  @Test
-  @DisplayName("导入目标租户列表为空时返回参数错误")
-  void shouldRejectImport_whenTargetTenantIdsEmpty() throws Exception {
-    // BE Request 上 targetTenantIds 是 @NotEmpty;空数组 → 400
-    mockMvc
-        .perform(post("/api/console/jobs/bundle/import")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\",\"targetTenantIds\":[],\"bundle\":{}}"))
-        .andExpect(status().isBadRequest());
-  }
+    @Test
+    @DisplayName("导入目标租户列表为空时返回参数错误")
+    void shouldRejectImport_whenTargetTenantIdsEmpty() throws Exception {
+        // BE Request 上 targetTenantIds 是 @NotEmpty;空数组 → 400
+        mockMvc.perform(post("/api/console/jobs/bundle/import")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"targetTenantIds\":[],\"bundle\":{}}"))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  @DisplayName("导入请求转发到应用服务, 回包汇总目标租户数量")
-  void shouldForwardImport_whenRequestValid() throws Exception {
-    String hash = ConsoleIdempotencyRequestIdentity.requestHash(
-        null, "POST", "/api/console/jobs/bundle/import", "k1");
-    when(applicationService.importBundle(any(JobBundleImportRequest.class), eq(hash)))
-        .thenReturn(new ConsoleJobBundleResultResponse(
-            "t1",
-            ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
-            new TenantConfigBatchInitResponse("op-1", 2, 2, 0, false, List.of())));
-    mockMvc
-        .perform(
-            post("/api/console/jobs/bundle/import")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"tenantId\":\"t1\",\"targetTenantIds\":[\"t1\",\"t2\"],\"mode\":\"UPSERT\",\"bundle\":{}}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.result.totalTenants").value(2));
-    verify(applicationService).importBundle(any(JobBundleImportRequest.class), eq(hash));
-  }
+    @Test
+    @DisplayName("导入请求转发到应用服务, 回包汇总目标租户数量")
+    void shouldForwardImport_whenRequestValid() throws Exception {
+        String hash =
+                ConsoleIdempotencyRequestIdentity.requestHash(null, "POST", "/api/console/jobs/bundle/import", "k1");
+        when(applicationService.importBundle(any(JobBundleImportRequest.class), eq(hash)))
+                .thenReturn(new ConsoleJobBundleResultResponse(
+                        "t1",
+                        ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
+                        new TenantConfigBatchInitResponse("op-1", 2, 2, 0, false, List.of())));
+        mockMvc.perform(
+                        post("/api/console/jobs/bundle/import")
+                                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+                                .contentType(APPLICATION_JSON)
+                                .content(
+                                        "{\"tenantId\":\"t1\",\"targetTenantIds\":[\"t1\",\"t2\"],\"mode\":\"UPSERT\",\"bundle\":{}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result.totalTenants").value(2));
+        verify(applicationService).importBundle(any(JobBundleImportRequest.class), eq(hash));
+    }
 
-  @Test
-  @DisplayName("无幂等键的开发旁路继续使用原入口")
-  void shouldUseOriginalEntry_whenKeyIsAbsent() throws Exception {
-    when(applicationService.create(any(JobBundleCreateRequest.class)))
-        .thenReturn(new ConsoleJobBundleResultResponse(
-            "t1",
-            ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
-            new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of())));
+    @Test
+    @DisplayName("无幂等键的开发旁路继续使用原入口")
+    void shouldUseOriginalEntry_whenKeyIsAbsent() throws Exception {
+        when(applicationService.create(any(JobBundleCreateRequest.class)))
+                .thenReturn(new ConsoleJobBundleResultResponse(
+                        "t1",
+                        ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
+                        new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of())));
 
-    mockMvc
-        .perform(post("/api/console/jobs/bundle/create")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\",\"bundle\":{}}"))
-        .andExpect(status().isOk());
+        mockMvc.perform(post("/api/console/jobs/bundle/create")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"bundle\":{}}"))
+                .andExpect(status().isOk());
 
-    verify(applicationService).create(any(JobBundleCreateRequest.class));
-  }
+        verify(applicationService).create(any(JobBundleCreateRequest.class));
+    }
 }

@@ -26,566 +26,555 @@ import lombok.Builder;
  */
 @Builder
 public record JdbcMappedImportSpec(
-    String schema,
-    String table,
-    String tenantColumn,
-    List<ColumnMapping> columnMappings,
-    List<String> conflictColumns,
-    Map<String, String> systemBindings,
-    String defaultRegion,
-    List<String> allowedRegions,
-    ImportLoadStrategy loadStrategy,
-    List<String> replacePartitionColumns,
-    StageSwap stageSwap) {
-  public record ColumnMapping(String from, String to, String type, String format) {
-    public ColumnMapping(String from, String to) {
-      this(from, to, null, null);
+        String schema,
+        String table,
+        String tenantColumn,
+        List<ColumnMapping> columnMappings,
+        List<String> conflictColumns,
+        Map<String, String> systemBindings,
+        String defaultRegion,
+        List<String> allowedRegions,
+        ImportLoadStrategy loadStrategy,
+        List<String> replacePartitionColumns,
+        StageSwap stageSwap) {
+    public record ColumnMapping(String from, String to, String type, String format) {
+        public ColumnMapping(String from, String to) {
+            this(from, to, null, null);
+        }
     }
-  }
 
-  public record StageSwap(String partitionTable, String attachClause) {}
+    public record StageSwap(String partitionTable, String attachClause) {}
 
-  public JdbcMappedImportSpec {
-    columnMappings = columnMappings == null ? List.of() : List.copyOf(columnMappings);
-    conflictColumns = conflictColumns == null ? List.of() : List.copyOf(conflictColumns);
-    systemBindings = systemBindings == null ? Map.of() : new LinkedHashMap<>(systemBindings);
-    allowedRegions = allowedRegions == null ? List.of() : List.copyOf(allowedRegions);
-    loadStrategy = loadStrategy == null ? ImportLoadStrategy.BATCH_UPSERT : loadStrategy;
-    replacePartitionColumns =
-        replacePartitionColumns == null ? List.of() : List.copyOf(replacePartitionColumns);
-  }
+    public JdbcMappedImportSpec {
+        columnMappings = columnMappings == null ? List.of() : List.copyOf(columnMappings);
+        conflictColumns = conflictColumns == null ? List.of() : List.copyOf(conflictColumns);
+        systemBindings = systemBindings == null ? Map.of() : new LinkedHashMap<>(systemBindings);
+        allowedRegions = allowedRegions == null ? List.of() : List.copyOf(allowedRegions);
+        loadStrategy = loadStrategy == null ? ImportLoadStrategy.BATCH_UPSERT : loadStrategy;
+        replacePartitionColumns = replacePartitionColumns == null ? List.of() : List.copyOf(replacePartitionColumns);
+    }
 
-  public static JdbcMappedImportSpec parse(
-      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-    Map<String, Object> root = extractJdbcMappedImport(templateConfig, objectMapper);
-    if (root.isEmpty()) {
-      throw new WorkerConfigException(
-          "jdbc_mapped_import spec missing (use query_param_schema.jdbcMappedImport or"
-              + " jdbc_mapped_import)");
+    public static JdbcMappedImportSpec parse(Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+        Map<String, Object> root = extractJdbcMappedImport(templateConfig, objectMapper);
+        if (root.isEmpty()) {
+            throw new WorkerConfigException(
+                    "jdbc_mapped_import spec missing (use query_param_schema.jdbcMappedImport or"
+                            + " jdbc_mapped_import)");
+        }
+        Object schemaValue = root.getOrDefault("schema", "biz");
+        String rawSchema = String.valueOf(schemaValue);
+        String schema = rawSchema.trim();
+        String table = required(root, "table");
+        String tenantColumn = required(root, "tenantColumn");
+        // columnMappings 可缺省(不写 / 空 [] / null)——此时从模板 field_mappings 推断,
+        // 显式项按 from 覆盖推断项、并追加新项("只配置明确差异")。
+        List<ColumnMapping> explicit = parseMappings(root.get("columnMappings"));
+        List<ColumnMapping> inferred = inferFromFieldMappings(templateConfig, objectMapper);
+        List<ColumnMapping> mappings = mergeMappings(inferred, explicit);
+        if (mappings.isEmpty()) {
+            throw new WorkerConfigException(
+                    "jdbc_mapped_import.columnMappings is required and could not be inferred from"
+                            + " field_mappings (declare columnMappings or field_mappings[*].name/targetColumn)");
+        }
+        // B2:conflictColumns 非空但漏了 tenant 列时自动前置——多租隔离下幂等键几乎必含 tenant_id,
+        // 漏填基本是跨租户冲突 bug。空列表(不走 UPSERT)不动。
+        List<String> configuredConflictColumns = parseStringList(root.get("conflictColumns"));
+        List<String> conflicts = ensureTenantInConflicts(configuredConflictColumns, tenantColumn);
+        // B3:standardAuditBindings=true 一键展开标准审计绑定(用户显式 systemBindings 覆盖同名项),
+        // 省掉逐条手写 ${...} 样板。是 opt-in 开关而非默认注入,目标表是否有这些列由配置方负责。
+        Map<String, String> system = parseSystemBindings(root.get("systemBindings"));
+        Object standardAuditBindingsValue = root.get("standardAuditBindings");
+        Boolean standardAuditBindingsEnabled = toBoolean(standardAuditBindingsValue);
+        if (Boolean.TRUE.equals(standardAuditBindingsEnabled)) {
+            system = withStandardAuditBindings(system);
+        }
+        // 地区维度(per-run):defaultRegion 触发未传 region 时回退;allowedRegions 非空时作字典校验。
+        Object dr = root.get("defaultRegion");
+        String defaultRegion = null;
+        if (EmptyChecks.isNotNull(dr)) {
+            String rawDefaultRegion = String.valueOf(dr);
+            defaultRegion = rawDefaultRegion.trim();
+        }
+        List<String> allowedRegions = parseStringList(root.get("allowedRegions"));
+        ImportLoadStrategy loadStrategy = ImportLoadStrategy.parse(root.get("loadStrategy"));
+        List<String> replacePartitionColumns = parseStringList(root.get("replacePartitionColumns"));
+        if (replacePartitionColumns.isEmpty()) {
+            replacePartitionColumns = parseStringList(root.get("partitionReplaceColumns"));
+        }
+        StageSwap stageSwap = parseStageSwap(root.get("stageSwap"));
+        return JdbcMappedImportSpec.builder()
+                .schema(schema)
+                .table(table)
+                .tenantColumn(tenantColumn)
+                .columnMappings(mappings)
+                .conflictColumns(conflicts)
+                .systemBindings(system)
+                .defaultRegion(defaultRegion)
+                .allowedRegions(allowedRegions)
+                .loadStrategy(loadStrategy)
+                .replacePartitionColumns(replacePartitionColumns)
+                .stageSwap(stageSwap)
+                .build();
     }
-    Object schemaValue = root.getOrDefault("schema", "biz");
-    String rawSchema = String.valueOf(schemaValue);
-    String schema = rawSchema.trim();
-    String table = required(root, "table");
-    String tenantColumn = required(root, "tenantColumn");
-    // columnMappings 可缺省(不写 / 空 [] / null)——此时从模板 field_mappings 推断,
-    // 显式项按 from 覆盖推断项、并追加新项("只配置明确差异")。
-    List<ColumnMapping> explicit = parseMappings(root.get("columnMappings"));
-    List<ColumnMapping> inferred = inferFromFieldMappings(templateConfig, objectMapper);
-    List<ColumnMapping> mappings = mergeMappings(inferred, explicit);
-    if (mappings.isEmpty()) {
-      throw new WorkerConfigException(
-          "jdbc_mapped_import.columnMappings is required and could not be inferred from"
-              + " field_mappings (declare columnMappings or field_mappings[*].name/targetColumn)");
-    }
-    // B2:conflictColumns 非空但漏了 tenant 列时自动前置——多租隔离下幂等键几乎必含 tenant_id,
-    // 漏填基本是跨租户冲突 bug。空列表(不走 UPSERT)不动。
-    List<String> configuredConflictColumns = parseStringList(root.get("conflictColumns"));
-    List<String> conflicts = ensureTenantInConflicts(configuredConflictColumns, tenantColumn);
-    // B3:standardAuditBindings=true 一键展开标准审计绑定(用户显式 systemBindings 覆盖同名项),
-    // 省掉逐条手写 ${...} 样板。是 opt-in 开关而非默认注入,目标表是否有这些列由配置方负责。
-    Map<String, String> system = parseSystemBindings(root.get("systemBindings"));
-    Object standardAuditBindingsValue = root.get("standardAuditBindings");
-    Boolean standardAuditBindingsEnabled = toBoolean(standardAuditBindingsValue);
-    if (Boolean.TRUE.equals(standardAuditBindingsEnabled)) {
-      system = withStandardAuditBindings(system);
-    }
-    // 地区维度(per-run):defaultRegion 触发未传 region 时回退;allowedRegions 非空时作字典校验。
-    Object dr = root.get("defaultRegion");
-    String defaultRegion = null;
-    if (EmptyChecks.isNotNull(dr)) {
-      String rawDefaultRegion = String.valueOf(dr);
-      defaultRegion = rawDefaultRegion.trim();
-    }
-    List<String> allowedRegions = parseStringList(root.get("allowedRegions"));
-    ImportLoadStrategy loadStrategy = ImportLoadStrategy.parse(root.get("loadStrategy"));
-    List<String> replacePartitionColumns = parseStringList(root.get("replacePartitionColumns"));
-    if (replacePartitionColumns.isEmpty()) {
-      replacePartitionColumns = parseStringList(root.get("partitionReplaceColumns"));
-    }
-    StageSwap stageSwap = parseStageSwap(root.get("stageSwap"));
-    return JdbcMappedImportSpec.builder()
-        .schema(schema)
-        .table(table)
-        .tenantColumn(tenantColumn)
-        .columnMappings(mappings)
-        .conflictColumns(conflicts)
-        .systemBindings(system)
-        .defaultRegion(defaultRegion)
-        .allowedRegions(allowedRegions)
-        .loadStrategy(loadStrategy)
-        .replacePartitionColumns(replacePartitionColumns)
-        .stageSwap(stageSwap)
-        .build();
-  }
 
-  private static String required(Map<String, Object> root, String key) {
-    Object v = root.get(key);
-    if (EmptyChecks.isNull(v)) {
-      throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
+    private static String required(Map<String, Object> root, String key) {
+        Object v = root.get(key);
+        if (EmptyChecks.isNull(v)) {
+            throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
+        }
+        String presenceText = String.valueOf(v);
+        if (!Texts.hasText(presenceText)) {
+            throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
+        }
+        String rawValue = String.valueOf(v);
+        return rawValue.trim();
     }
-    String presenceText = String.valueOf(v);
-    if (!Texts.hasText(presenceText)) {
-      throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
-    }
-    String rawValue = String.valueOf(v);
-    return rawValue.trim();
-  }
 
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> extractJdbcMappedImport(
-      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-    if (templateConfig == null) {
-      return Map.of();
-    }
-    Object direct = templateConfig.get("jdbc_mapped_import");
-    if (direct instanceof Map<?, ?> m) {
-      return (Map<String, Object>) m;
-    }
-    Object qps = templateConfig.get("query_param_schema");
-    Map<String, Object> qpsMap = toMap(qps, objectMapper);
-    Object nested = qpsMap.get("jdbcMappedImport");
-    if (nested instanceof Map<?, ?> m) {
-      return (Map<String, Object>) m;
-    }
-    return Map.of();
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> toMap(Object raw, ObjectMapper objectMapper) {
-    if (raw instanceof Map<?, ?> m) {
-      Map<String, Object> out = new LinkedHashMap<>();
-      m.forEach((k, v) -> out.put(String.valueOf(k), v));
-      return out;
-    }
-    String jsonText = extractJsonText(raw);
-    if (Texts.hasText(jsonText)) {
-      try {
-        return objectMapper.readValue(jsonText, Map.class);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(JdbcMappedImportSpec.class, "catch:Exception", ignored);
-
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> extractJdbcMappedImport(
+            Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+        if (templateConfig == null) {
+            return Map.of();
+        }
+        Object direct = templateConfig.get("jdbc_mapped_import");
+        if (direct instanceof Map<?, ?> m) {
+            return (Map<String, Object>) m;
+        }
+        Object qps = templateConfig.get("query_param_schema");
+        Map<String, Object> qpsMap = toMap(qps, objectMapper);
+        Object nested = qpsMap.get("jdbcMappedImport");
+        if (nested instanceof Map<?, ?> m) {
+            return (Map<String, Object>) m;
+        }
         return Map.of();
-      }
     }
-    return Map.of();
-  }
 
-  /**
-   * PG JDBC 对 {@code json}/{@code jsonb} 常映射为 {@code org.postgresql.util.PGobject}；driver 为 {@code
-   * runtime} 依赖，用 {@link PostgresqlJsonbTexts} 反射取 JSON 文本后再解析。
-   */
-  private static String extractJsonText(Object raw) {
-    if (raw instanceof String text) {
-      return text;
-    }
-    return PostgresqlJsonbTexts.tryExtract(raw);
-  }
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> toMap(Object raw, ObjectMapper objectMapper) {
+        if (raw instanceof Map<?, ?> m) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            m.forEach((k, v) -> out.put(String.valueOf(k), v));
+            return out;
+        }
+        String jsonText = extractJsonText(raw);
+        if (Texts.hasText(jsonText)) {
+            try {
+                return objectMapper.readValue(jsonText, Map.class);
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(JdbcMappedImportSpec.class, "catch:Exception", ignored);
 
-  private static List<ColumnMapping> parseMappings(Object raw) {
-    if (!(raw instanceof List<?> list)) {
-      return List.of();
+                return Map.of();
+            }
+        }
+        return Map.of();
     }
-    return list.stream()
-        .map(JdbcMappedImportSpec::parseMapping)
-        .flatMap(Optional::stream)
-        .toList();
-  }
 
-  private static Optional<ColumnMapping> parseMapping(Object item) {
-    if (!(item instanceof Map<?, ?> m)) {
-      return Optional.empty();
+    /**
+     * PG JDBC 对 {@code json}/{@code jsonb} 常映射为 {@code org.postgresql.util.PGobject}；driver 为 {@code
+     * runtime} 依赖，用 {@link PostgresqlJsonbTexts} 反射取 JSON 文本后再解析。
+     */
+    private static String extractJsonText(Object raw) {
+        if (raw instanceof String text) {
+            return text;
+        }
+        return PostgresqlJsonbTexts.tryExtract(raw);
     }
-    Object from = m.get("from");
-    Object to = m.get("to");
-    if (from == null || to == null) {
-      return Optional.empty();
-    }
-    String rawSourceColumn = String.valueOf(from);
-    String sourceColumn = rawSourceColumn.trim();
-    String rawTargetColumn = String.valueOf(to);
-    String targetColumn = rawTargetColumn.trim();
-    String mappingType = textOrNull(m.get("type"));
-    String mappingFormat = textOrNull(m.get("format"));
-    ColumnMapping mapping =
-        new ColumnMapping(sourceColumn, targetColumn, mappingType, mappingFormat);
-    return Optional.of(mapping);
-  }
 
-  /**
-   * 从模板顶层 {@code field_mappings} 推断列映射:每个声明字段产出一条 {@code from(name) -> to}。{@code to} 优先取显式 {@code
-   * targetColumn},缺省则对 {@code name} 做 {@link #normalizeColumn} 归一化(驼峰/下划线/大小写 写法差异默认兼容)。{@code
-   * persist:false} 的字段只参与解析校验、不入库,故不进推断集。
-   */
-  private static List<ColumnMapping> inferFromFieldMappings(
-      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-    List<ColumnMapping> out = new ArrayList<>();
-    for (Map<String, Object> fm : extractFieldMappings(templateConfig, objectMapper)) {
-      Object nameRaw = fm.get("name");
-      if (nameRaw == null || !Texts.hasText(String.valueOf(nameRaw))) {
-        continue;
-      }
-      Object persistValue = fm.get("persist");
-      Boolean shouldPersist = toBoolean(persistValue);
-      if (Boolean.FALSE.equals(shouldPersist)) {
-        continue;
-      }
-      String rawName = String.valueOf(nameRaw);
-      String name = rawName.trim();
-      Object target = fm.get("targetColumn");
-      String to;
-      if (EmptyChecks.isNotNull(target)) {
-        String targetPresenceText = String.valueOf(target);
-        if (Texts.hasText(targetPresenceText)) {
-          String rawTarget = String.valueOf(target);
-          to = rawTarget.trim();
+    private static List<ColumnMapping> parseMappings(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .map(JdbcMappedImportSpec::parseMapping)
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    private static Optional<ColumnMapping> parseMapping(Object item) {
+        if (!(item instanceof Map<?, ?> m)) {
+            return Optional.empty();
+        }
+        Object from = m.get("from");
+        Object to = m.get("to");
+        if (from == null || to == null) {
+            return Optional.empty();
+        }
+        String rawSourceColumn = String.valueOf(from);
+        String sourceColumn = rawSourceColumn.trim();
+        String rawTargetColumn = String.valueOf(to);
+        String targetColumn = rawTargetColumn.trim();
+        String mappingType = textOrNull(m.get("type"));
+        String mappingFormat = textOrNull(m.get("format"));
+        ColumnMapping mapping = new ColumnMapping(sourceColumn, targetColumn, mappingType, mappingFormat);
+        return Optional.of(mapping);
+    }
+
+    /**
+     * 从模板顶层 {@code field_mappings} 推断列映射:每个声明字段产出一条 {@code from(name) -> to}。{@code to} 优先取显式 {@code
+     * targetColumn},缺省则对 {@code name} 做 {@link #normalizeColumn} 归一化(驼峰/下划线/大小写 写法差异默认兼容)。{@code
+     * persist:false} 的字段只参与解析校验、不入库,故不进推断集。
+     */
+    private static List<ColumnMapping> inferFromFieldMappings(
+            Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+        List<ColumnMapping> out = new ArrayList<>();
+        for (Map<String, Object> fm : extractFieldMappings(templateConfig, objectMapper)) {
+            Object nameRaw = fm.get("name");
+            if (nameRaw == null || !Texts.hasText(String.valueOf(nameRaw))) {
+                continue;
+            }
+            Object persistValue = fm.get("persist");
+            Boolean shouldPersist = toBoolean(persistValue);
+            if (Boolean.FALSE.equals(shouldPersist)) {
+                continue;
+            }
+            String rawName = String.valueOf(nameRaw);
+            String name = rawName.trim();
+            Object target = fm.get("targetColumn");
+            String to;
+            if (EmptyChecks.isNotNull(target)) {
+                String targetPresenceText = String.valueOf(target);
+                if (Texts.hasText(targetPresenceText)) {
+                    String rawTarget = String.valueOf(target);
+                    to = rawTarget.trim();
+                } else {
+                    to = normalizeColumn(name);
+                }
+            } else {
+                to = normalizeColumn(name);
+            }
+            if (Texts.hasText(to)) {
+                String mappingType = textOrNull(fm.get("type"));
+                String mappingFormat = textOrNull(fm.get("format"));
+                ColumnMapping mapping = new ColumnMapping(name, to, mappingType, mappingFormat);
+                out.add(mapping);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 合并推断项与显式项:显式按 {@code from} 覆盖同名推断项,其余显式项追加。顺序 = 未被覆盖的推断项在前、显式项在后。 不在此塌缩重复(fan-out / 碰撞),交由
+     * {@link #validateMappingCardinality} 显式拒绝。
+     */
+    private static List<ColumnMapping> mergeMappings(List<ColumnMapping> inferred, List<ColumnMapping> explicit) {
+        if (explicit.isEmpty()) {
+            return inferred;
+        }
+        Map<String, ColumnMapping> inferredByFrom = inferred.stream()
+                .collect(Collectors.toMap(ColumnMapping::from, m -> m, (left, right) -> left, LinkedHashMap::new));
+        Set<String> explicitFroms =
+                explicit.stream().map(ColumnMapping::from).collect(Collectors.toCollection(LinkedHashSet::new));
+        List<ColumnMapping> out = inferred.stream()
+                .filter(inf -> !explicitFroms.contains(inf.from()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        out.addAll(explicit.stream()
+                .map(exp -> {
+                    ColumnMapping inferredMapping = inferredByFrom.get(exp.from());
+                    return withInferredType(exp, inferredMapping);
+                })
+                .toList());
+        return out;
+    }
+
+    private static ColumnMapping withInferredType(ColumnMapping explicit, ColumnMapping inferred) {
+        if (inferred == null) {
+            return explicit;
+        }
+        String type = explicit.type() == null ? inferred.type() : explicit.type();
+        String format = explicit.format() == null ? inferred.format() : explicit.format();
+        return new ColumnMapping(explicit.from(), explicit.to(), type, format);
+    }
+
+    private static List<Map<String, Object>> extractFieldMappings(
+            Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+        if (templateConfig == null) {
+            return List.of();
+        }
+        Object raw = templateConfig.get("field_mappings");
+        if (raw == null) {
+            return List.of();
+        }
+        List<?> list;
+        if (raw instanceof List<?> l) {
+            list = l;
         } else {
-          to = normalizeColumn(name);
+            String text = extractJsonText(raw);
+            if (!Texts.hasText(text)) {
+                return List.of();
+            }
+            try {
+                list = objectMapper.readValue(text, List.class);
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(JdbcMappedImportSpec.class, "catch:Exception", ignored);
+                return List.of();
+            }
         }
-      } else {
-        to = normalizeColumn(name);
-      }
-      if (Texts.hasText(to)) {
-        String mappingType = textOrNull(fm.get("type"));
-        String mappingFormat = textOrNull(fm.get("format"));
-        ColumnMapping mapping = new ColumnMapping(name, to, mappingType, mappingFormat);
-        out.add(mapping);
-      }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> m) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                m.forEach((k, v) -> entry.put(String.valueOf(k), v));
+                out.add(entry);
+            }
+        }
+        return out;
     }
-    return out;
-  }
 
-  /**
-   * 合并推断项与显式项:显式按 {@code from} 覆盖同名推断项,其余显式项追加。顺序 = 未被覆盖的推断项在前、显式项在后。 不在此塌缩重复(fan-out / 碰撞),交由
-   * {@link #validateMappingCardinality} 显式拒绝。
-   */
-  private static List<ColumnMapping> mergeMappings(
-      List<ColumnMapping> inferred, List<ColumnMapping> explicit) {
-    if (explicit.isEmpty()) {
-      return inferred;
+    @Nullable
+    private static Boolean toBoolean(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        String rawText = String.valueOf(value);
+        String s = rawText.trim();
+        if ("false".equalsIgnoreCase(s)) {
+            return false;
+        }
+        if ("true".equalsIgnoreCase(s)) {
+            return true;
+        }
+        return null;
     }
-    Map<String, ColumnMapping> inferredByFrom = inferred.stream()
-        .collect(Collectors.toMap(
-            ColumnMapping::from, m -> m, (left, right) -> left, LinkedHashMap::new));
-    Set<String> explicitFroms = explicit.stream()
-        .map(ColumnMapping::from)
-        .collect(Collectors.toCollection(LinkedHashSet::new));
-    List<ColumnMapping> out = inferred.stream()
-        .filter(inf -> !explicitFroms.contains(inf.from()))
-        .collect(Collectors.toCollection(ArrayList::new));
-    out.addAll(explicit.stream()
-        .map(exp -> {
-          ColumnMapping inferredMapping = inferredByFrom.get(exp.from());
-          return withInferredType(exp, inferredMapping);
-        })
-        .toList());
-    return out;
-  }
 
-  private static ColumnMapping withInferredType(ColumnMapping explicit, ColumnMapping inferred) {
-    if (inferred == null) {
-      return explicit;
+    @Nullable
+    private static String textOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        return Texts.hasText(text) ? text : null;
     }
-    String type = explicit.type() == null ? inferred.type() : explicit.type();
-    String format = explicit.format() == null ? inferred.format() : explicit.format();
-    return new ColumnMapping(explicit.from(), explicit.to(), type, format);
-  }
 
-  private static List<Map<String, Object>> extractFieldMappings(
-      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-    if (templateConfig == null) {
-      return List.of();
+    /**
+     * 字段名 → snake_case 列名的确定性归一化:驼峰/连续大写边界切分 + 全小写 + 下划线/连字符/空格折叠为单下划线。 {@code customerNo}/{@code
+     * CUSTOMER_NO}/{@code customer_no} 都归一为 {@code customer_no};{@code customerHTTPUrl} → {@code
+     * customer_http_url}。仅消写法差异,不做相似度模糊匹配。
+     */
+    static String normalizeColumn(String name) {
+        if (name == null) {
+            return "";
+        }
+        String s = name.trim();
+        StringBuilder sb = new StringBuilder(s.length() + 4);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '_' || c == '-' || c == ' ') {
+                if (EmptyChecks.isNotEmpty(sb) && sb.charAt(sb.length() - 1) != '_') {
+                    sb.append('_');
+                }
+                continue;
+            }
+            if (Character.isUpperCase(c)) {
+                boolean prevLowerOrDigit =
+                        i > 0 && (Character.isLowerCase(s.charAt(i - 1)) || Character.isDigit(s.charAt(i - 1)));
+                boolean nextLower = i + 1 < s.length() && Character.isLowerCase(s.charAt(i + 1));
+                boolean wordBoundaryNeedsSeparator = EmptyChecks.isNotEmpty(sb)
+                        && sb.charAt(sb.length() - 1) != '_'
+                        && (prevLowerOrDigit || nextLower);
+                if (wordBoundaryNeedsSeparator) {
+                    sb.append('_');
+                }
+            }
+            sb.append(Character.toLowerCase(c));
+        }
+        return sb.toString();
     }
-    Object raw = templateConfig.get("field_mappings");
-    if (raw == null) {
-      return List.of();
-    }
-    List<?> list;
-    if (raw instanceof List<?> l) {
-      list = l;
-    } else {
-      String text = extractJsonText(raw);
-      if (!Texts.hasText(text)) {
+
+    private static List<String> parseStringList(Object raw) {
+        if (raw instanceof List<?> list) {
+            return list.stream()
+                    .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
+                    .map(o -> {
+                        String rawText = String.valueOf(o);
+                        return rawText.trim();
+                    })
+                    .toList();
+        }
         return List.of();
-      }
-      try {
-        list = objectMapper.readValue(text, List.class);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(JdbcMappedImportSpec.class, "catch:Exception", ignored);
-        return List.of();
-      }
     }
-    List<Map<String, Object>> out = new ArrayList<>();
-    for (Object item : list) {
-      if (item instanceof Map<?, ?> m) {
-        Map<String, Object> entry = new LinkedHashMap<>();
-        m.forEach((k, v) -> entry.put(String.valueOf(k), v));
-        out.add(entry);
-      }
-    }
-    return out;
-  }
 
-  @Nullable
-  private static Boolean toBoolean(Object value) {
-    if (value == null) {
-      return null;
-    }
-    if (value instanceof Boolean b) {
-      return b;
-    }
-    String rawText = String.valueOf(value);
-    String s = rawText.trim();
-    if ("false".equalsIgnoreCase(s)) {
-      return false;
-    }
-    if ("true".equalsIgnoreCase(s)) {
-      return true;
-    }
-    return null;
-  }
-
-  @Nullable
-  private static String textOrNull(Object value) {
-    if (value == null) {
-      return null;
-    }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    return Texts.hasText(text) ? text : null;
-  }
-
-  /**
-   * 字段名 → snake_case 列名的确定性归一化:驼峰/连续大写边界切分 + 全小写 + 下划线/连字符/空格折叠为单下划线。 {@code customerNo}/{@code
-   * CUSTOMER_NO}/{@code customer_no} 都归一为 {@code customer_no};{@code customerHTTPUrl} → {@code
-   * customer_http_url}。仅消写法差异,不做相似度模糊匹配。
-   */
-  static String normalizeColumn(String name) {
-    if (name == null) {
-      return "";
-    }
-    String s = name.trim();
-    StringBuilder sb = new StringBuilder(s.length() + 4);
-    for (int i = 0; i < s.length(); i++) {
-      char c = s.charAt(i);
-      if (c == '_' || c == '-' || c == ' ') {
-        if (EmptyChecks.isNotEmpty(sb) && sb.charAt(sb.length() - 1) != '_') {
-          sb.append('_');
+    private static Map<String, String> parseSystemBindings(Object raw) {
+        if (!(raw instanceof Map<?, ?> m)) {
+            return Map.of();
         }
-        continue;
-      }
-      if (Character.isUpperCase(c)) {
-        boolean prevLowerOrDigit =
-            i > 0 && (Character.isLowerCase(s.charAt(i - 1)) || Character.isDigit(s.charAt(i - 1)));
-        boolean nextLower = i + 1 < s.length() && Character.isLowerCase(s.charAt(i + 1));
-        boolean wordBoundaryNeedsSeparator = EmptyChecks.isNotEmpty(sb)
-            && sb.charAt(sb.length() - 1) != '_'
-            && (prevLowerOrDigit || nextLower);
-        if (wordBoundaryNeedsSeparator) {
-          sb.append('_');
+        Map<String, String> out = new LinkedHashMap<>();
+        m.forEach((k, v) -> {
+            if (k != null && v != null) {
+                String rawBindingKey = String.valueOf(k);
+                String bindingKey = rawBindingKey.trim();
+                String rawBindingValue = String.valueOf(v);
+                String bindingValue = rawBindingValue.trim();
+                out.put(bindingKey, bindingValue);
+            }
+        });
+        return out;
+    }
+
+    /** B3 标准审计绑定:平台运行时变量 → 常见审计列。用户显式 systemBindings 同名项优先。 */
+    private static final Map<String, String> STANDARD_AUDIT_BINDINGS = Map.of(
+            "source_file_name", "${sourceFileName}",
+            "source_batch_no", "${batchNo}",
+            "source_trace_id", "${traceId}",
+            "created_by", "${workerId}",
+            "updated_by", "${workerId}");
+
+    private static Map<String, String> withStandardAuditBindings(Map<String, String> explicit) {
+        Map<String, String> out = new LinkedHashMap<>(STANDARD_AUDIT_BINDINGS);
+        out.putAll(explicit); // 用户显式项覆盖标准默认
+        return out;
+    }
+
+    private static List<String> ensureTenantInConflicts(List<String> conflicts, String tenantColumn) {
+        if (conflicts.isEmpty() || conflicts.contains(tenantColumn)) {
+            return conflicts;
         }
-      }
-      sb.append(Character.toLowerCase(c));
+        List<String> out = new ArrayList<>(conflicts.size() + 1);
+        out.add(tenantColumn);
+        out.addAll(conflicts);
+        return out;
     }
-    return sb.toString();
-  }
 
-  private static List<String> parseStringList(Object raw) {
-    if (raw instanceof List<?> list) {
-      return list.stream()
-          .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
-          .map(o -> {
-            String rawText = String.valueOf(o);
-            return rawText.trim();
-          })
-          .toList();
+    private static StageSwap parseStageSwap(Object raw) {
+        if (!(raw instanceof Map<?, ?> m)) {
+            return null;
+        }
+        Object partitionTable = m.get("partitionTable");
+        Object attachClause = m.get("attachClause");
+        if (partitionTable == null && attachClause == null) {
+            return null;
+        }
+        String normalizedPartitionTable = null;
+        if (EmptyChecks.isNotNull(partitionTable)) {
+            String rawPartitionTable = String.valueOf(partitionTable);
+            normalizedPartitionTable = rawPartitionTable.trim();
+        }
+        String normalizedAttachClause = null;
+        if (EmptyChecks.isNotNull(attachClause)) {
+            String rawAttachClause = String.valueOf(attachClause);
+            normalizedAttachClause = rawAttachClause.trim();
+        }
+        return new StageSwap(normalizedPartitionTable, normalizedAttachClause);
     }
-    return List.of();
-  }
 
-  private static Map<String, String> parseSystemBindings(Object raw) {
-    if (!(raw instanceof Map<?, ?> m)) {
-      return Map.of();
+    public void validateIdentifiers(Collection<String> allowedSchemas) {
+        validateMappingCardinality();
+        if (loadStrategy == ImportLoadStrategy.BATCH_UPSERT
+                && EmptyChecks.isEmpty(Objects.requireNonNull(conflictColumns))) {
+            throw new WorkerConfigException("jdbc-mapped-import BATCH_UPSERT requires conflictColumns: schema="
+                    + schema
+                    + ", table="
+                    + table
+                    + " — declare the business unique key so replay uses ON CONFLICT");
+        }
+        JdbcMappedSqlValidator.requireInAllowlist(schema, allowedSchemas);
+        JdbcMappedSqlValidator.requireIdentifier(table, "table");
+        JdbcMappedSqlValidator.requireIdentifier(tenantColumn, "tenantColumn");
+        Set<String> allCols = new LinkedHashSet<>();
+        allCols.add(tenantColumn);
+        for (ColumnMapping m : columnMappings) {
+            JdbcMappedSqlValidator.requireIdentifier(m.to(), "column");
+            allCols.add(m.to());
+        }
+        for (String c : conflictColumns) {
+            JdbcMappedSqlValidator.requireIdentifier(c, "conflictColumn");
+            if (!allCols.contains(c)) {
+                throw new WorkerConfigException("conflictColumns must appear in tenant/mappings: " + c);
+            }
+        }
+        for (String dbCol : systemBindings.keySet()) {
+            JdbcMappedSqlValidator.requireIdentifier(dbCol, "systemBinding column");
+            allCols.add(dbCol);
+        }
+        if (loadStrategy == ImportLoadStrategy.PARTITION_REPLACE_COPY
+                || loadStrategy == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
+            validatePartitionReplaceColumns(allCols);
+        }
+        if (loadStrategy == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
+            validateStageSwap();
+        }
     }
-    Map<String, String> out = new LinkedHashMap<>();
-    m.forEach((k, v) -> {
-      if (k != null && v != null) {
-        String rawBindingKey = String.valueOf(k);
-        String bindingKey = rawBindingKey.trim();
-        String rawBindingValue = String.valueOf(v);
-        String bindingValue = rawBindingValue.trim();
-        out.put(bindingKey, bindingValue);
-      }
-    });
-    return out;
-  }
 
-  /** B3 标准审计绑定:平台运行时变量 → 常见审计列。用户显式 systemBindings 同名项优先。 */
-  private static final Map<String, String> STANDARD_AUDIT_BINDINGS = Map.of(
-      "source_file_name", "${sourceFileName}",
-      "source_batch_no", "${batchNo}",
-      "source_trace_id", "${traceId}",
-      "created_by", "${workerId}",
-      "updated_by", "${workerId}");
+    /**
+     * 列映射基数强制 1:1。fan-out(一个 {@code from} 映射多个 {@code to})与碰撞(多个 {@code from} 落同一 {@code to})都
+     * fail-fast——后者在历史实现里是静默 first-wins 丢列,这里改为显式拒绝并指明冲突双方。
+     */
+    private void validateMappingCardinality() {
+        Map<String, String> byFrom = new LinkedHashMap<>();
+        Map<String, String> byTo = new LinkedHashMap<>();
+        for (ColumnMapping m : columnMappings) {
+            String prevTo = byFrom.putIfAbsent(m.from(), m.to());
+            if (prevTo != null) {
+                throw new WorkerConfigException("columnMappings: source field '"
+                        + m.from()
+                        + "' maps to multiple columns ('"
+                        + prevTo
+                        + "', '"
+                        + m.to()
+                        + "'); fan-out is not supported");
+            }
+            String prevFrom = byTo.putIfAbsent(m.to(), m.from());
+            if (prevFrom != null) {
+                throw new WorkerConfigException("columnMappings: target column '"
+                        + m.to()
+                        + "' is mapped from multiple source fields ('"
+                        + prevFrom
+                        + "', '"
+                        + m.from()
+                        + "'); each column must have a single source");
+            }
+        }
+    }
 
-  private static Map<String, String> withStandardAuditBindings(Map<String, String> explicit) {
-    Map<String, String> out = new LinkedHashMap<>(STANDARD_AUDIT_BINDINGS);
-    out.putAll(explicit); // 用户显式项覆盖标准默认
-    return out;
-  }
+    private void validatePartitionReplaceColumns(Set<String> allCols) {
+        if (replacePartitionColumns == null || replacePartitionColumns.isEmpty()) {
+            throw new WorkerConfigException(
+                    "jdbc_mapped_import.replacePartitionColumns is required for PARTITION_REPLACE_COPY");
+        }
+        Set<String> contextResolvableCols = new LinkedHashSet<>();
+        contextResolvableCols.add(tenantColumn);
+        contextResolvableCols.addAll(systemBindings.keySet());
+        for (String c : replacePartitionColumns) {
+            JdbcMappedSqlValidator.requireIdentifier(c, "replacePartitionColumn");
+            if (!allCols.contains(c)) {
+                throw new WorkerConfigException(
+                        "replacePartitionColumns must appear in tenant/mappings/systemBindings: " + c);
+            }
+            if (!contextResolvableCols.contains(c)) {
+                throw new WorkerConfigException("replacePartitionColumns must be resolvable before reading rows: "
+                        + c
+                        + " (use tenantColumn or systemBindings)");
+            }
+        }
+    }
 
-  private static List<String> ensureTenantInConflicts(List<String> conflicts, String tenantColumn) {
-    if (conflicts.isEmpty() || conflicts.contains(tenantColumn)) {
-      return conflicts;
+    private void validateStageSwap() {
+        if (stageSwap == null) {
+            throw new WorkerConfigException("jdbc_mapped_import.stageSwap is required for PARTITION_STAGE_SWAP_COPY");
+        }
+        JdbcMappedSqlValidator.requireIdentifier(stageSwap.partitionTable(), "stageSwap.partitionTable");
+        String clause = stageSwap.attachClause();
+        if (!Texts.hasText(clause)) {
+            throw new WorkerConfigException(
+                    "jdbc_mapped_import.stageSwap.attachClause is required for PARTITION_STAGE_SWAP_COPY");
+        }
+        String trimmedClause = clause.trim();
+        String upper = trimmedClause.toUpperCase();
+        if (!upper.startsWith("FOR VALUES ")) {
+            throw new WorkerConfigException("jdbc_mapped_import.stageSwap.attachClause must start with FOR VALUES");
+        }
+        // attachClause 是运营在 Console 写入的自由文本,最终拼进 ATTACH PARTITION DDL——
+        // 用白名单字符集而非黑名单:仅允许分区边界字面量(FROM ('2026-06-09') TO (...) /
+        // IN (...) / WITH (MODULUS n, REMAINDER m) / MINVALUE / MAXVALUE)所需字符。
+        // 同时杜绝 ; 分隔、-- 行注释、/* */ 块注释、$$ dollar-quoting、双引号标识符等
+        // 一切可携带附加 DDL 语法的载体('-' 保留给日期字面量,但 '--' 仍显式拒绝)。
+        if (!clause.matches("[A-Za-z0-9_(),'.:+\\-\\s]+") || clause.contains("--")) {
+            throw new WorkerConfigException(
+                    "jdbc_mapped_import.stageSwap.attachClause contains characters outside the partition"
+                            + " bound whitelist [A-Za-z0-9_(),'.:+- and whitespace]");
+        }
     }
-    List<String> out = new ArrayList<>(conflicts.size() + 1);
-    out.add(tenantColumn);
-    out.addAll(conflicts);
-    return out;
-  }
-
-  private static StageSwap parseStageSwap(Object raw) {
-    if (!(raw instanceof Map<?, ?> m)) {
-      return null;
-    }
-    Object partitionTable = m.get("partitionTable");
-    Object attachClause = m.get("attachClause");
-    if (partitionTable == null && attachClause == null) {
-      return null;
-    }
-    String normalizedPartitionTable = null;
-    if (EmptyChecks.isNotNull(partitionTable)) {
-      String rawPartitionTable = String.valueOf(partitionTable);
-      normalizedPartitionTable = rawPartitionTable.trim();
-    }
-    String normalizedAttachClause = null;
-    if (EmptyChecks.isNotNull(attachClause)) {
-      String rawAttachClause = String.valueOf(attachClause);
-      normalizedAttachClause = rawAttachClause.trim();
-    }
-    return new StageSwap(normalizedPartitionTable, normalizedAttachClause);
-  }
-
-  public void validateIdentifiers(Collection<String> allowedSchemas) {
-    validateMappingCardinality();
-    if (loadStrategy == ImportLoadStrategy.BATCH_UPSERT
-        && EmptyChecks.isEmpty(Objects.requireNonNull(conflictColumns))) {
-      throw new WorkerConfigException(
-          "jdbc-mapped-import BATCH_UPSERT requires conflictColumns: schema="
-              + schema
-              + ", table="
-              + table
-              + " — declare the business unique key so replay uses ON CONFLICT");
-    }
-    JdbcMappedSqlValidator.requireInAllowlist(schema, allowedSchemas);
-    JdbcMappedSqlValidator.requireIdentifier(table, "table");
-    JdbcMappedSqlValidator.requireIdentifier(tenantColumn, "tenantColumn");
-    Set<String> allCols = new LinkedHashSet<>();
-    allCols.add(tenantColumn);
-    for (ColumnMapping m : columnMappings) {
-      JdbcMappedSqlValidator.requireIdentifier(m.to(), "column");
-      allCols.add(m.to());
-    }
-    for (String c : conflictColumns) {
-      JdbcMappedSqlValidator.requireIdentifier(c, "conflictColumn");
-      if (!allCols.contains(c)) {
-        throw new WorkerConfigException("conflictColumns must appear in tenant/mappings: " + c);
-      }
-    }
-    for (String dbCol : systemBindings.keySet()) {
-      JdbcMappedSqlValidator.requireIdentifier(dbCol, "systemBinding column");
-      allCols.add(dbCol);
-    }
-    if (loadStrategy == ImportLoadStrategy.PARTITION_REPLACE_COPY
-        || loadStrategy == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
-      validatePartitionReplaceColumns(allCols);
-    }
-    if (loadStrategy == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
-      validateStageSwap();
-    }
-  }
-
-  /**
-   * 列映射基数强制 1:1。fan-out(一个 {@code from} 映射多个 {@code to})与碰撞(多个 {@code from} 落同一 {@code to})都
-   * fail-fast——后者在历史实现里是静默 first-wins 丢列,这里改为显式拒绝并指明冲突双方。
-   */
-  private void validateMappingCardinality() {
-    Map<String, String> byFrom = new LinkedHashMap<>();
-    Map<String, String> byTo = new LinkedHashMap<>();
-    for (ColumnMapping m : columnMappings) {
-      String prevTo = byFrom.putIfAbsent(m.from(), m.to());
-      if (prevTo != null) {
-        throw new WorkerConfigException("columnMappings: source field '"
-            + m.from()
-            + "' maps to multiple columns ('"
-            + prevTo
-            + "', '"
-            + m.to()
-            + "'); fan-out is not supported");
-      }
-      String prevFrom = byTo.putIfAbsent(m.to(), m.from());
-      if (prevFrom != null) {
-        throw new WorkerConfigException("columnMappings: target column '"
-            + m.to()
-            + "' is mapped from multiple source fields ('"
-            + prevFrom
-            + "', '"
-            + m.from()
-            + "'); each column must have a single source");
-      }
-    }
-  }
-
-  private void validatePartitionReplaceColumns(Set<String> allCols) {
-    if (replacePartitionColumns == null || replacePartitionColumns.isEmpty()) {
-      throw new WorkerConfigException(
-          "jdbc_mapped_import.replacePartitionColumns is required for PARTITION_REPLACE_COPY");
-    }
-    Set<String> contextResolvableCols = new LinkedHashSet<>();
-    contextResolvableCols.add(tenantColumn);
-    contextResolvableCols.addAll(systemBindings.keySet());
-    for (String c : replacePartitionColumns) {
-      JdbcMappedSqlValidator.requireIdentifier(c, "replacePartitionColumn");
-      if (!allCols.contains(c)) {
-        throw new WorkerConfigException(
-            "replacePartitionColumns must appear in tenant/mappings/systemBindings: " + c);
-      }
-      if (!contextResolvableCols.contains(c)) {
-        throw new WorkerConfigException(
-            "replacePartitionColumns must be resolvable before reading rows: "
-                + c
-                + " (use tenantColumn or systemBindings)");
-      }
-    }
-  }
-
-  private void validateStageSwap() {
-    if (stageSwap == null) {
-      throw new WorkerConfigException(
-          "jdbc_mapped_import.stageSwap is required for PARTITION_STAGE_SWAP_COPY");
-    }
-    JdbcMappedSqlValidator.requireIdentifier(
-        stageSwap.partitionTable(), "stageSwap.partitionTable");
-    String clause = stageSwap.attachClause();
-    if (!Texts.hasText(clause)) {
-      throw new WorkerConfigException(
-          "jdbc_mapped_import.stageSwap.attachClause is required for PARTITION_STAGE_SWAP_COPY");
-    }
-    String trimmedClause = clause.trim();
-    String upper = trimmedClause.toUpperCase();
-    if (!upper.startsWith("FOR VALUES ")) {
-      throw new WorkerConfigException(
-          "jdbc_mapped_import.stageSwap.attachClause must start with FOR VALUES");
-    }
-    // attachClause 是运营在 Console 写入的自由文本,最终拼进 ATTACH PARTITION DDL——
-    // 用白名单字符集而非黑名单:仅允许分区边界字面量(FROM ('2026-06-09') TO (...) /
-    // IN (...) / WITH (MODULUS n, REMAINDER m) / MINVALUE / MAXVALUE)所需字符。
-    // 同时杜绝 ; 分隔、-- 行注释、/* */ 块注释、$$ dollar-quoting、双引号标识符等
-    // 一切可携带附加 DDL 语法的载体('-' 保留给日期字面量,但 '--' 仍显式拒绝)。
-    if (!clause.matches("[A-Za-z0-9_(),'.:+\\-\\s]+") || clause.contains("--")) {
-      throw new WorkerConfigException(
-          "jdbc_mapped_import.stageSwap.attachClause contains characters outside the partition"
-              + " bound whitelist [A-Za-z0-9_(),'.:+- and whitespace]");
-    }
-  }
 }

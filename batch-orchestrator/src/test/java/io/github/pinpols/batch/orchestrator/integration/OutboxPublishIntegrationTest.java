@@ -42,186 +42,179 @@ import org.springframework.test.annotation.DirtiesContext;
  * <p>调度在 application-test.yml 中已禁用（poll-interval-millis: 600000）， 本测试通过 {@link OutboxPublisher}
  * 手动驱动发布。
  */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 // 强制 BEFORE_CLASS 重建 Spring context：上游 OutboxPublishCircuitBreakerKafkaFailureIT 会 stop/start
 // KAFKA 容器，重启后端口变更；其它共享 fingerprint 的缓存 context 仍指向旧端口，发布会 60s metadata 超时。
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @DisplayName("发件箱事件发布到 Kafka 并落库投递日志的端到端验证,覆盖默认主题兜底与按租户路由的导入导出派发")
 class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-  @Autowired
-  private OutboxPublisher outboxPublisher;
+    @Autowired
+    private OutboxPublisher outboxPublisher;
 
-  @Autowired
-  private OutboxEventMapper outboxEventMapper;
+    @Autowired
+    private OutboxEventMapper outboxEventMapper;
 
-  @Autowired
-  private EventDeliveryLogMapper eventDeliveryLogMapper;
+    @Autowired
+    private EventDeliveryLogMapper eventDeliveryLogMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  static {
-    // KRaft Apache Kafka 4.x 默认 auto.create.topics.enable=false。topic 必须在 Spring context 加载前
-    // 预创建：放静态块（父类静态先跑、KAFKA 已启动），@BeforeAll 会被 producer 初始化抢跑导致 60s metadata 超时。
-    createOutboxTopicsStaticInit();
-  }
-
-  private static void createOutboxTopicsStaticInit() {
-    try (AdminClient admin = AdminClient.create(
-        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers()))) {
-      admin
-          .createTopics(List.of(
-              new NewTopic(BatchTopics.OUTBOX_EVENT, 1, (short) 1),
-              new NewTopic(BatchTopics.TASK_DISPATCH_IMPORT + ".t1", 1, (short) 1),
-              new NewTopic(BatchTopics.TASK_DISPATCH_EXPORT + ".t1", 1, (short) 1)))
-          .all()
-          .get();
-    } catch (ExecutionException e) {
-      if (!(e.getCause() instanceof TopicExistsException)) {
-        throw new IllegalStateException("failed to pre-create kafka topics", e);
-      }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException("interrupted creating kafka topics", e);
+    static {
+        // KRaft Apache Kafka 4.x 默认 auto.create.topics.enable=false。topic 必须在 Spring context 加载前
+        // 预创建：放静态块（父类静态先跑、KAFKA 已启动），@BeforeAll 会被 producer 初始化抢跑导致 60s metadata 超时。
+        createOutboxTopicsStaticInit();
     }
-  }
 
-  @Test
-  @DisplayName("自定义事件类型无法匹配派发路由时发布到默认主题,落库一条成功投递日志且消息可被消费")
-  void shouldPublishFallbackEventToDefaultTopicAndPersistDeliveryLog() throws Exception {
-    OutboxEventEntity event = pendingEvent("CUSTOM_EVENT_TYPE", "AGG_TYPE", "key-fallback-001");
-    outboxEventMapper.insert(event);
-    reloadGeneratedId(event);
-    boolean published = outboxPublisher.publish(event).get();
-    assertThat(published).isTrue();
-
-    List<EventDeliveryLogEntity> logs =
-        eventDeliveryLogMapper.selectByQuery(new EventDeliveryLogQuery(
-            "t1", OutboxPublishStatus.PUBLISHED.code(), "CUSTOM_EVENT_TYPE", "key-fallback-001"));
-    assertThat(logs).hasSize(1);
-    assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.OUTBOX_EVENT);
-
-    try (KafkaConsumer<String, String> consumer =
-        buildConsumer("fallback-test-" + BatchDateTimeSupport.utcEpochMillis())) {
-      consumer.subscribe(List.of(BatchTopics.OUTBOX_EVENT));
-      ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
-      assertThat(records.count()).isGreaterThanOrEqualTo(1);
-      ConsumerRecord<String, String> matched = null;
-      for (ConsumerRecord<String, String> consumerRecord : records) {
-        if ("key-fallback-001".equals(consumerRecord.key())) {
-          matched = consumerRecord;
-          break;
+    private static void createOutboxTopicsStaticInit() {
+        try (AdminClient admin =
+                AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers()))) {
+            admin.createTopics(List.of(
+                            new NewTopic(BatchTopics.OUTBOX_EVENT, 1, (short) 1),
+                            new NewTopic(BatchTopics.TASK_DISPATCH_IMPORT + ".t1", 1, (short) 1),
+                            new NewTopic(BatchTopics.TASK_DISPATCH_EXPORT + ".t1", 1, (short) 1)))
+                    .all()
+                    .get();
+        } catch (ExecutionException e) {
+            if (!(e.getCause() instanceof TopicExistsException)) {
+                throw new IllegalStateException("failed to pre-create kafka topics", e);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted creating kafka topics", e);
         }
-      }
-      assertThat(matched).as("should find the published record by key").isNotNull();
-      JsonNode root = OBJECT_MAPPER.readTree(matched.value());
-      assertThat(root.path("idempotencyKey").asText()).isEqualTo("key-fallback-001");
-      assertThat(root.path("eventName").asText()).isEqualTo("CUSTOM_EVENT_TYPE");
     }
-  }
 
-  @Test
-  @DisplayName("导入派发事件按租户后缀路由到导入主题,投递日志记录实际主题且消息体含导入类型与幂等键")
-  void shouldPublishImportDispatchEventToImportTopicAndPersistDeliveryLog() throws Exception {
-    OutboxEventEntity event = pendingEvent("IMPORT", "JOB_PARTITION", "key-import-001");
-    outboxEventMapper.insert(event);
-    reloadGeneratedId(event);
+    @Test
+    @DisplayName("自定义事件类型无法匹配派发路由时发布到默认主题,落库一条成功投递日志且消息可被消费")
+    void shouldPublishFallbackEventToDefaultTopicAndPersistDeliveryLog() throws Exception {
+        OutboxEventEntity event = pendingEvent("CUSTOM_EVENT_TYPE", "AGG_TYPE", "key-fallback-001");
+        outboxEventMapper.insert(event);
+        reloadGeneratedId(event);
+        boolean published = outboxPublisher.publish(event).get();
+        assertThat(published).isTrue();
 
-    boolean published = outboxPublisher.publish(event).get();
+        List<EventDeliveryLogEntity> logs = eventDeliveryLogMapper.selectByQuery(new EventDeliveryLogQuery(
+                "t1", OutboxPublishStatus.PUBLISHED.code(), "CUSTOM_EVENT_TYPE", "key-fallback-001"));
+        assertThat(logs).hasSize(1);
+        assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.OUTBOX_EVENT);
 
-    assertThat(published).isTrue();
-
-    List<EventDeliveryLogEntity> logs =
-        eventDeliveryLogMapper.selectByQuery(new EventDeliveryLogQuery(
-            "t1", OutboxPublishStatus.PUBLISHED.code(), "IMPORT", "key-import-001"));
-    assertThat(logs).hasSize(1);
-    // TENANT 路由模式（prod 默认）：base topic + ".<tenantId>" 后缀
-    assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_IMPORT + ".t1");
-
-    try (KafkaConsumer<String, String> consumer =
-        buildConsumer("import-test-" + BatchDateTimeSupport.utcEpochMillis())) {
-      consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_IMPORT + ".t1"));
-      ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
-      assertThat(records.count()).isGreaterThanOrEqualTo(1);
-      ConsumerRecord<String, String> matched = null;
-      for (ConsumerRecord<String, String> consumerRecord : records) {
-        if ("t1:IT_JOB:it-instance-001:1".equals(consumerRecord.key())) {
-          matched = consumerRecord;
-          break;
+        try (KafkaConsumer<String, String> consumer =
+                buildConsumer("fallback-test-" + BatchDateTimeSupport.utcEpochMillis())) {
+            consumer.subscribe(List.of(BatchTopics.OUTBOX_EVENT));
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
+            assertThat(records.count()).isGreaterThanOrEqualTo(1);
+            ConsumerRecord<String, String> matched = null;
+            for (ConsumerRecord<String, String> consumerRecord : records) {
+                if ("key-fallback-001".equals(consumerRecord.key())) {
+                    matched = consumerRecord;
+                    break;
+                }
+            }
+            assertThat(matched).as("should find the published record by key").isNotNull();
+            JsonNode root = OBJECT_MAPPER.readTree(matched.value());
+            assertThat(root.path("idempotencyKey").asText()).isEqualTo("key-fallback-001");
+            assertThat(root.path("eventName").asText()).isEqualTo("CUSTOM_EVENT_TYPE");
         }
-      }
-      assertThat(matched).as("should find the published record by key").isNotNull();
-      JsonNode payload = OBJECT_MAPPER.readTree(matched.value());
-      assertThat(payload.path("idempotencyKey").asText()).isEqualTo("key-import-001");
-      assertThat(payload.path("workerType").asText()).isEqualTo("IMPORT");
     }
-  }
 
-  @Test
-  @DisplayName("导出派发事件按租户后缀路由到导出主题,投递日志记录实际主题且消息体含导出类型与幂等键")
-  void shouldPublishExportDispatchEventToExportTopicAndPersistDeliveryLog() throws Exception {
-    OutboxEventEntity event = pendingEvent("EXPORT", "JOB_PARTITION", "key-export-001");
-    outboxEventMapper.insert(event);
-    reloadGeneratedId(event);
+    @Test
+    @DisplayName("导入派发事件按租户后缀路由到导入主题,投递日志记录实际主题且消息体含导入类型与幂等键")
+    void shouldPublishImportDispatchEventToImportTopicAndPersistDeliveryLog() throws Exception {
+        OutboxEventEntity event = pendingEvent("IMPORT", "JOB_PARTITION", "key-import-001");
+        outboxEventMapper.insert(event);
+        reloadGeneratedId(event);
 
-    boolean published = outboxPublisher.publish(event).get();
+        boolean published = outboxPublisher.publish(event).get();
 
-    assertThat(published).isTrue();
+        assertThat(published).isTrue();
 
-    List<EventDeliveryLogEntity> logs =
-        eventDeliveryLogMapper.selectByQuery(new EventDeliveryLogQuery(
-            "t1", OutboxPublishStatus.PUBLISHED.code(), "EXPORT", "key-export-001"));
-    assertThat(logs).hasSize(1);
-    // TENANT 路由模式（prod 默认）：base topic + ".<tenantId>" 后缀
-    assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_EXPORT + ".t1");
+        List<EventDeliveryLogEntity> logs = eventDeliveryLogMapper.selectByQuery(
+                new EventDeliveryLogQuery("t1", OutboxPublishStatus.PUBLISHED.code(), "IMPORT", "key-import-001"));
+        assertThat(logs).hasSize(1);
+        // TENANT 路由模式（prod 默认）：base topic + ".<tenantId>" 后缀
+        assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_IMPORT + ".t1");
 
-    try (KafkaConsumer<String, String> consumer =
-        buildConsumer("export-test-" + BatchDateTimeSupport.utcEpochMillis())) {
-      consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_EXPORT + ".t1"));
-      ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
-      assertThat(records.count()).isGreaterThanOrEqualTo(1);
-      ConsumerRecord<String, String> matched = null;
-      for (ConsumerRecord<String, String> consumerRecord : records) {
-        if ("t1:IT_JOB:it-instance-001:1".equals(consumerRecord.key())) {
-          matched = consumerRecord;
-          break;
+        try (KafkaConsumer<String, String> consumer =
+                buildConsumer("import-test-" + BatchDateTimeSupport.utcEpochMillis())) {
+            consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_IMPORT + ".t1"));
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
+            assertThat(records.count()).isGreaterThanOrEqualTo(1);
+            ConsumerRecord<String, String> matched = null;
+            for (ConsumerRecord<String, String> consumerRecord : records) {
+                if ("t1:IT_JOB:it-instance-001:1".equals(consumerRecord.key())) {
+                    matched = consumerRecord;
+                    break;
+                }
+            }
+            assertThat(matched).as("should find the published record by key").isNotNull();
+            JsonNode payload = OBJECT_MAPPER.readTree(matched.value());
+            assertThat(payload.path("idempotencyKey").asText()).isEqualTo("key-import-001");
+            assertThat(payload.path("workerType").asText()).isEqualTo("IMPORT");
         }
-      }
-      assertThat(matched).as("should find the published record by key").isNotNull();
-      JsonNode payload = OBJECT_MAPPER.readTree(matched.value());
-      assertThat(payload.path("idempotencyKey").asText()).isEqualTo("key-export-001");
-      assertThat(payload.path("workerType").asText()).isEqualTo("EXPORT");
     }
-  }
 
-  // --- helpers ---
+    @Test
+    @DisplayName("导出派发事件按租户后缀路由到导出主题,投递日志记录实际主题且消息体含导出类型与幂等键")
+    void shouldPublishExportDispatchEventToExportTopicAndPersistDeliveryLog() throws Exception {
+        OutboxEventEntity event = pendingEvent("EXPORT", "JOB_PARTITION", "key-export-001");
+        outboxEventMapper.insert(event);
+        reloadGeneratedId(event);
 
-  private void reloadGeneratedId(OutboxEventEntity event) {
-    String persistedOutboxEventSql = """
+        boolean published = outboxPublisher.publish(event).get();
+
+        assertThat(published).isTrue();
+
+        List<EventDeliveryLogEntity> logs = eventDeliveryLogMapper.selectByQuery(
+                new EventDeliveryLogQuery("t1", OutboxPublishStatus.PUBLISHED.code(), "EXPORT", "key-export-001"));
+        assertThat(logs).hasSize(1);
+        // TENANT 路由模式（prod 默认）：base topic + ".<tenantId>" 后缀
+        assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_EXPORT + ".t1");
+
+        try (KafkaConsumer<String, String> consumer =
+                buildConsumer("export-test-" + BatchDateTimeSupport.utcEpochMillis())) {
+            consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_EXPORT + ".t1"));
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
+            assertThat(records.count()).isGreaterThanOrEqualTo(1);
+            ConsumerRecord<String, String> matched = null;
+            for (ConsumerRecord<String, String> consumerRecord : records) {
+                if ("t1:IT_JOB:it-instance-001:1".equals(consumerRecord.key())) {
+                    matched = consumerRecord;
+                    break;
+                }
+            }
+            assertThat(matched).as("should find the published record by key").isNotNull();
+            JsonNode payload = OBJECT_MAPPER.readTree(matched.value());
+            assertThat(payload.path("idempotencyKey").asText()).isEqualTo("key-export-001");
+            assertThat(payload.path("workerType").asText()).isEqualTo("EXPORT");
+        }
+    }
+
+    // --- helpers ---
+
+    private void reloadGeneratedId(OutboxEventEntity event) {
+        String persistedOutboxEventSql = """
         select id, created_at from batch.outbox_event where tenant_id = ? and event_key = ?
         """;
-    Map<String, Object> persisted =
-        jdbcTemplate.queryForMap(persistedOutboxEventSql, event.getTenantId(), event.getEventKey());
-    Number persistedId = (Number) persisted.get("id");
-    Timestamp persistedCreatedAt = (Timestamp) persisted.get("created_at");
-    event.setId(persistedId.longValue());
-    event.setCreatedAt(persistedCreatedAt.toInstant());
-  }
+        Map<String, Object> persisted =
+                jdbcTemplate.queryForMap(persistedOutboxEventSql, event.getTenantId(), event.getEventKey());
+        Number persistedId = (Number) persisted.get("id");
+        Timestamp persistedCreatedAt = (Timestamp) persisted.get("created_at");
+        event.setId(persistedId.longValue());
+        event.setCreatedAt(persistedCreatedAt.toInstant());
+    }
 
-  private static OutboxEventEntity pendingEvent(
-      String eventType, String aggregateType, String eventKey) {
-    OutboxEventEntity e = new OutboxEventEntity();
-    e.setTenantId("t1");
-    e.setAggregateType(aggregateType);
-    e.setAggregateId(1L);
-    e.setEventType(eventType);
-    e.setEventKey(eventKey);
-    e.setPayloadJson("""
+    private static OutboxEventEntity pendingEvent(String eventType, String aggregateType, String eventKey) {
+        OutboxEventEntity e = new OutboxEventEntity();
+        e.setTenantId("t1");
+        e.setAggregateType(aggregateType);
+        e.setAggregateId(1L);
+        e.setEventType(eventType);
+        e.setEventKey(eventKey);
+        e.setPayloadJson("""
         {
           "schemaVersion":"v1",
           "tenantId":"t1",
@@ -242,24 +235,24 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
           "dispatchAt":"2026-01-15T00:00:00Z"
         }
         """.formatted(eventType, eventKey));
-    e.setPublishStatus(OutboxPublishStatus.NEW.code());
-    e.setPublishAttempt(0);
-    e.setNextPublishAt(BatchDateTimeSupport.utcNow());
-    e.setTraceId("trace-it-test");
-    return e;
-  }
+        e.setPublishStatus(OutboxPublishStatus.NEW.code());
+        e.setPublishAttempt(0);
+        e.setNextPublishAt(BatchDateTimeSupport.utcNow());
+        e.setTraceId("trace-it-test");
+        return e;
+    }
 
-  private static KafkaConsumer<String, String> buildConsumer(String groupId) {
-    return new KafkaConsumer<>(Map.of(
-        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-        kafkaBootstrapServers(),
-        ConsumerConfig.GROUP_ID_CONFIG,
-        groupId,
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-        "earliest",
-        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-        StringDeserializer.class,
-        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-        StringDeserializer.class));
-  }
+    private static KafkaConsumer<String, String> buildConsumer(String groupId) {
+        return new KafkaConsumer<>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                kafkaBootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG,
+                groupId,
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                "earliest",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class));
+    }
 }

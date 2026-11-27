@@ -13,14 +13,14 @@ import java.util.List;
  */
 public interface SmsProvider {
 
-  /** 唯一 provider 键（aliyun/tencent/twilio）。 */
-  String providerCode();
+    /** 唯一 provider 键（aliyun/tencent/twilio）。 */
+    String providerCode();
 
-  /** 是否为该 provider 名；保留为调用端便利方法。 */
-  default boolean supports(String provider) {
-    return EmptyChecks.isNotNull(provider) && providerCode().equalsIgnoreCase(provider);
-  }
+    /** 是否为该 provider 名；保留为调用端便利方法。 */
+    default boolean supports(String provider) {
+        return EmptyChecks.isNotNull(provider) && providerCode().equalsIgnoreCase(provider);
+    }
 
-  /** 向手机号列表发送一条短信(文案/模板参数由 provider 按 message 与自身约定构造)。 */
-  WebhookDeliveryResult send(List<String> phoneNumbers, NotificationMessage message);
+    /** 向手机号列表发送一条短信(文案/模板参数由 provider 按 message 与自身约定构造)。 */
+    WebhookDeliveryResult send(List<String> phoneNumbers, NotificationMessage message);
 }

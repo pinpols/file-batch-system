@@ -8,6 +8,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.replay-operation")
 public class ReplayOperationProperties {
 
-  /** 单个操作可评估的最大日历跨度，包含起止日期。 */
-  private int maxRangeDays = 31;
+    /** 单个操作可评估的最大日历跨度，包含起止日期。 */
+    private int maxRangeDays = 31;
 }

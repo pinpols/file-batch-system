@@ -28,62 +28,59 @@ import org.springframework.mock.web.MockHttpServletResponse;
 @DisplayName("OIDC 授权发起限流过滤器")
 class ConsoleOidcAuthorizationRateLimitFilterTest {
 
-  @Mock
-  private SlidingWindowRateLimiter rateLimiter;
+    @Mock
+    private SlidingWindowRateLimiter rateLimiter;
 
-  @Mock
-  private ConsoleSecurityResponseWriter responseWriter;
+    @Mock
+    private ConsoleSecurityResponseWriter responseWriter;
 
-  @Mock
-  private FilterChain filterChain;
+    @Mock
+    private FilterChain filterChain;
 
-  private ConsoleRateLimitProperties properties;
-  private ConsoleOidcAuthorizationRateLimitFilter filter;
+    private ConsoleRateLimitProperties properties;
+    private ConsoleOidcAuthorizationRateLimitFilter filter;
 
-  @BeforeEach
-  void setUp() {
-    properties = new ConsoleRateLimitProperties();
-    properties.setLoginIpLimitPerMinute(3);
-    ConsoleLoginIpRateLimiter loginIpRateLimiter = new ConsoleLoginIpRateLimiter(
-        rateLimiter,
-        properties,
-        new ConsoleSecurityProperties(),
-        RedisRateLimitCircuitBreaker.forTesting(properties));
-    filter =
-        new ConsoleOidcAuthorizationRateLimitFilter(properties, loginIpRateLimiter, responseWriter);
-  }
+    @BeforeEach
+    void setUp() {
+        properties = new ConsoleRateLimitProperties();
+        properties.setLoginIpLimitPerMinute(3);
+        ConsoleLoginIpRateLimiter loginIpRateLimiter = new ConsoleLoginIpRateLimiter(
+                rateLimiter,
+                properties,
+                new ConsoleSecurityProperties(),
+                RedisRateLimitCircuitBreaker.forTesting(properties));
+        filter = new ConsoleOidcAuthorizationRateLimitFilter(properties, loginIpRateLimiter, responseWriter);
+    }
 
-  @Test
-  @DisplayName("超限时在授权重定向前返回 429")
-  void shouldRejectAuthorizationStart_whenClientIpLimitIsReached() throws Exception {
-    when(rateLimiter.tryAcquire(contains("login:ip:10.0.0.9"), eq(3))).thenReturn(false);
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("GET", "/oauth2/authorization/pilot-tenant");
-    request.setRemoteAddr("10.0.0.9");
+    @Test
+    @DisplayName("超限时在授权重定向前返回 429")
+    void shouldRejectAuthorizationStart_whenClientIpLimitIsReached() throws Exception {
+        when(rateLimiter.tryAcquire(contains("login:ip:10.0.0.9"), eq(3))).thenReturn(false);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/oauth2/authorization/pilot-tenant");
+        request.setRemoteAddr("10.0.0.9");
 
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-    verify(rateLimiter).tryAcquire(contains("login:ip:10.0.0.9"), eq(3));
-    verify(filterChain, never()).doFilter(any(), any());
-    verify(responseWriter)
-        .write(
-            any(HttpServletResponse.class),
-            eq(HttpStatus.TOO_MANY_REQUESTS),
-            eq(ResultCode.RATE_LIMITED),
-            contains("频繁"));
-  }
+        verify(rateLimiter).tryAcquire(contains("login:ip:10.0.0.9"), eq(3));
+        verify(filterChain, never()).doFilter(any(), any());
+        verify(responseWriter)
+                .write(
+                        any(HttpServletResponse.class),
+                        eq(HttpStatus.TOO_MANY_REQUESTS),
+                        eq(ResultCode.RATE_LIMITED),
+                        contains("频繁"));
+    }
 
-  @Test
-  @DisplayName("限流关闭时不触达 Redis 并继续过滤器链")
-  void shouldPassAuthorizationStart_whenRateLimitingIsDisabled() throws Exception {
-    properties.setEnabled(false);
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("GET", "/oauth2/authorization/pilot-tenant");
-    request.setRemoteAddr("10.0.0.9");
+    @Test
+    @DisplayName("限流关闭时不触达 Redis 并继续过滤器链")
+    void shouldPassAuthorizationStart_whenRateLimitingIsDisabled() throws Exception {
+        properties.setEnabled(false);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/oauth2/authorization/pilot-tenant");
+        request.setRemoteAddr("10.0.0.9");
 
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-    verify(rateLimiter, never()).tryAcquire(any(), anyInt());
-    verify(filterChain).doFilter(any(), any());
-  }
+        verify(rateLimiter, never()).tryAcquire(any(), anyInt());
+        verify(filterChain).doFilter(any(), any());
+    }
 }

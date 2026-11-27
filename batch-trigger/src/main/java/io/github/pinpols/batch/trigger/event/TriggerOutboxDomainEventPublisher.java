@@ -46,44 +46,42 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TriggerOutboxDomainEventPublisher implements DomainEventPublisher {
 
-  /** V80 默认 topic;trigger 当前唯一事件类型 = trigger.launch.v1。 */
-  private static final String DEFAULT_TOPIC = BatchTopics.TRIGGER_LAUNCH_V1;
+    /** V80 默认 topic;trigger 当前唯一事件类型 = trigger.launch.v1。 */
+    private static final String DEFAULT_TOPIC = BatchTopics.TRIGGER_LAUNCH_V1;
 
-  private final TriggerOutboxEventMapper triggerOutboxEventMapper;
-  private final BatchKafkaTopicNamespace topicNamespace;
+    private final TriggerOutboxEventMapper triggerOutboxEventMapper;
+    private final BatchKafkaTopicNamespace topicNamespace;
 
-  @Override
-  @Transactional(propagation = Propagation.MANDATORY)
-  public Long publish(DomainEvent event) {
-    String tenantId = event.tenantId();
-    String eventKey = event.eventKey();
-    String traceId = event.traceId();
-    String payloadJson = JsonUtils.toJson(event.payload());
-    return insertOutboxEvent(tenantId, eventKey, traceId, payloadJson);
-  }
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Long publish(DomainEvent event) {
+        String tenantId = event.tenantId();
+        String eventKey = event.eventKey();
+        String traceId = event.traceId();
+        String payloadJson = JsonUtils.toJson(event.payload());
+        return insertOutboxEvent(tenantId, eventKey, traceId, payloadJson);
+    }
 
-  /** 写入 trigger launch 信封，并在持久化异步边界捕获当前 W3C 链路上下文。 */
-  @Transactional(propagation = Propagation.MANDATORY)
-  public Long publishLaunch(
-      String tenantId, String requestId, String traceId, LaunchEnvelope envelope) {
-    W3cTraceContext capturedTraceContext = OtelTracePropagation.captureCurrent();
-    LaunchEnvelope persisted = envelope.withTraceContext(capturedTraceContext);
-    String payloadJson = JsonUtils.toJson(persisted);
-    return insertOutboxEvent(tenantId, requestId, traceId, payloadJson);
-  }
+    /** 写入 trigger launch 信封，并在持久化异步边界捕获当前 W3C 链路上下文。 */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Long publishLaunch(String tenantId, String requestId, String traceId, LaunchEnvelope envelope) {
+        W3cTraceContext capturedTraceContext = OtelTracePropagation.captureCurrent();
+        LaunchEnvelope persisted = envelope.withTraceContext(capturedTraceContext);
+        String payloadJson = JsonUtils.toJson(persisted);
+        return insertOutboxEvent(tenantId, requestId, traceId, payloadJson);
+    }
 
-  private Long insertOutboxEvent(
-      String tenantId, String requestId, String traceId, String payloadJson) {
-    TriggerOutboxEventEntity entity = new TriggerOutboxEventEntity();
-    entity.setTenantId(tenantId);
-    entity.setRequestId(requestId);
-    entity.setTopic(topicNamespace.topic(DEFAULT_TOPIC));
-    entity.setPayload(payloadJson);
-    entity.setPublishStatus(OutboxPublishStatus.NEW.code());
-    entity.setPublishAttempt(0);
-    entity.setTraceId(traceId);
-    entity.setNextPublishAt(BatchDateTimeSupport.utcNow());
-    triggerOutboxEventMapper.insert(entity);
-    return entity.getId();
-  }
+    private Long insertOutboxEvent(String tenantId, String requestId, String traceId, String payloadJson) {
+        TriggerOutboxEventEntity entity = new TriggerOutboxEventEntity();
+        entity.setTenantId(tenantId);
+        entity.setRequestId(requestId);
+        entity.setTopic(topicNamespace.topic(DEFAULT_TOPIC));
+        entity.setPayload(payloadJson);
+        entity.setPublishStatus(OutboxPublishStatus.NEW.code());
+        entity.setPublishAttempt(0);
+        entity.setTraceId(traceId);
+        entity.setNextPublishAt(BatchDateTimeSupport.utcNow());
+        triggerOutboxEventMapper.insert(entity);
+        return entity.getId();
+    }
 }

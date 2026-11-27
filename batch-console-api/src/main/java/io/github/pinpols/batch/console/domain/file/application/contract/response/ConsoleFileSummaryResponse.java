@@ -12,5 +12,4 @@ package io.github.pinpols.batch.console.domain.file.application.contract.respons
  *   <li>{@code failed} — file_status = FAILED(失败)。
  * </ul>
  */
-public record ConsoleFileSummaryResponse(
-    long arrivedToday, long pending, long processed, long failed) {}
+public record ConsoleFileSummaryResponse(long arrivedToday, long pending, long processed, long failed) {}

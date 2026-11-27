@@ -30,118 +30,113 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ResultVersionRetentionScheduler {
 
-  private final ResultVersionMapper resultVersionMapper;
-  private final ResultVersionRetentionProperties properties;
-  private final BatchDayDryRunProperties dryRunProperties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final BatchDateTimeSupport dateTimeSupport;
+    private final ResultVersionMapper resultVersionMapper;
+    private final ResultVersionRetentionProperties properties;
+    private final BatchDayDryRunProperties dryRunProperties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final BatchDateTimeSupport dateTimeSupport;
 
-  @Scheduled(fixedDelayString = "${batch.result-version.retention.poll-interval-millis:3600000}")
-  @SchedulerLock(
-      name = "result_version_retention",
-      lockAtMostFor = "PT15M",
-      lockAtLeastFor = "PT1M")
-  public void scheduledScan() {
-    if (!properties.isEnabled()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.result-version.retention.poll-interval-millis:3600000}")
+    @SchedulerLock(name = "result_version_retention", lockAtMostFor = "PT15M", lockAtLeastFor = "PT1M")
+    public void scheduledScan() {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        Instant now = dateTimeSupport.nowInstant();
+        int archived = demoteSupersededBatch(now);
+        int deleted = purgeArchivedBatch(now);
+        int dryRunArchived = archiveDryRunBatch(now);
+        boolean retentionChangedVersions = archived > 0 || deleted > 0 || dryRunArchived > 0;
+        if (retentionChangedVersions) {
+            log.info(
+                    "result_version retention completed: archived={}, deleted={}, dryRunArchived={}, at={}",
+                    archived,
+                    deleted,
+                    dryRunArchived,
+                    now);
+        }
     }
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    Instant now = dateTimeSupport.nowInstant();
-    int archived = demoteSupersededBatch(now);
-    int deleted = purgeArchivedBatch(now);
-    int dryRunArchived = archiveDryRunBatch(now);
-    boolean retentionChangedVersions = archived > 0 || deleted > 0 || dryRunArchived > 0;
-    if (retentionChangedVersions) {
-      log.info(
-          "result_version retention completed: archived={}, deleted={}, dryRunArchived={}, at={}",
-          archived,
-          deleted,
-          dryRunArchived,
-          now);
-    }
-  }
 
-  /**
-   * 单轮把过期的 SUPERSEDED 行推到 ARCHIVED；每条 {@link ResultVersionMapper#archiveSuperseded} 都是单条 UPDATE，
-   * 数据库层原子；本方法不再包裹外层事务（之前的 {@code @Transactional} 在 @Scheduled 自调用路径下根本不会生效， 且与
-   * {@code @SchedulerLock} 嵌套顺序歧义）。返回真正成功 archived 的行数。
-   */
-  public int demoteSupersededBatch(Instant now) {
-    int supersededRetentionDays = properties.getSupersededDays();
-    Duration supersededRetention = Duration.ofDays(supersededRetentionDays);
-    Instant cutoff = now.minus(supersededRetention);
-    List<ResultVersionEntity> stale =
-        resultVersionMapper.selectSupersededOlderThan(cutoff, properties.getBatchSize());
-    if (EmptyChecks.isEmpty(stale)) {
-      return 0;
+    /**
+     * 单轮把过期的 SUPERSEDED 行推到 ARCHIVED；每条 {@link ResultVersionMapper#archiveSuperseded} 都是单条 UPDATE，
+     * 数据库层原子；本方法不再包裹外层事务（之前的 {@code @Transactional} 在 @Scheduled 自调用路径下根本不会生效， 且与
+     * {@code @SchedulerLock} 嵌套顺序歧义）。返回真正成功 archived 的行数。
+     */
+    public int demoteSupersededBatch(Instant now) {
+        int supersededRetentionDays = properties.getSupersededDays();
+        Duration supersededRetention = Duration.ofDays(supersededRetentionDays);
+        Instant cutoff = now.minus(supersededRetention);
+        List<ResultVersionEntity> stale =
+                resultVersionMapper.selectSupersededOlderThan(cutoff, properties.getBatchSize());
+        if (EmptyChecks.isEmpty(stale)) {
+            return 0;
+        }
+        int archived = 0;
+        for (ResultVersionEntity row : stale) {
+            if (row == null || row.id() == null || row.tenantId() == null) {
+                continue;
+            }
+            String tenantId = row.tenantId();
+            if (tenantId.isBlank()) {
+                continue;
+            }
+            // RLS Phase B：archiveSuperseded 是 UPDATE batch.result_version SET status='ARCHIVED'，
+            // 严格策略下必须显式绑定 app.tenant_id 才能命中行。
+            int updated = RlsTenantContextHolder.runWithTenant(
+                    tenantId, () -> resultVersionMapper.archiveSuperseded(tenantId, row.id(), now, true));
+            if (updated > 0) {
+                archived++;
+            }
+        }
+        return archived;
     }
-    int archived = 0;
-    for (ResultVersionEntity row : stale) {
-      if (row == null || row.id() == null || row.tenantId() == null) {
-        continue;
-      }
-      String tenantId = row.tenantId();
-      if (tenantId.isBlank()) {
-        continue;
-      }
-      // RLS Phase B：archiveSuperseded 是 UPDATE batch.result_version SET status='ARCHIVED'，
-      // 严格策略下必须显式绑定 app.tenant_id 才能命中行。
-      int updated = RlsTenantContextHolder.runWithTenant(
-          tenantId, () -> resultVersionMapper.archiveSuperseded(tenantId, row.id(), now, true));
-      if (updated > 0) {
-        archived++;
-      }
-    }
-    return archived;
-  }
 
-  /** 删除超过 archived-days 的 batch 热表历史行；仍被 readiness 物化结果引用的行会保留。 */
-  public int purgeArchivedBatch(Instant now) {
-    int archivedRetentionDays = properties.getArchivedDays();
-    Duration archivedRetention = Duration.ofDays(archivedRetentionDays);
-    Instant cutoff = now.minus(archivedRetention);
-    List<ResultVersionEntity> stale =
-        resultVersionMapper.selectArchivedOlderThan(cutoff, properties.getBatchSize());
-    if (EmptyChecks.isEmpty(stale)) {
-      return 0;
+    /** 删除超过 archived-days 的 batch 热表历史行；仍被 readiness 物化结果引用的行会保留。 */
+    public int purgeArchivedBatch(Instant now) {
+        int archivedRetentionDays = properties.getArchivedDays();
+        Duration archivedRetention = Duration.ofDays(archivedRetentionDays);
+        Instant cutoff = now.minus(archivedRetention);
+        List<ResultVersionEntity> stale =
+                resultVersionMapper.selectArchivedOlderThan(cutoff, properties.getBatchSize());
+        if (EmptyChecks.isEmpty(stale)) {
+            return 0;
+        }
+        int deleted = 0;
+        for (ResultVersionEntity row : stale) {
+            if (row == null || row.id() == null || EmptyChecks.isBlank(row.tenantId())) {
+                continue;
+            }
+            int affected = RlsTenantContextHolder.runWithTenant(
+                    row.tenantId(), () -> resultVersionMapper.deleteArchived(row.tenantId(), row.id()));
+            if (affected > 0) {
+                deleted++;
+            }
+        }
+        return deleted;
     }
-    int deleted = 0;
-    for (ResultVersionEntity row : stale) {
-      if (row == null || row.id() == null || EmptyChecks.isBlank(row.tenantId())) {
-        continue;
-      }
-      int affected = RlsTenantContextHolder.runWithTenant(
-          row.tenantId(), () -> resultVersionMapper.deleteArchived(row.tenantId(), row.id()));
-      if (affected > 0) {
-        deleted++;
-      }
-    }
-    return deleted;
-  }
 
-  /** 超过独立保留期的 DRY_RUN 结果先归档后从热表删除。 */
-  public int archiveDryRunBatch(Instant now) {
-    int retentionDays = Math.max(1, dryRunProperties.getRetentionDays());
-    Instant cutoff = now.minus(Duration.ofDays(retentionDays));
-    List<ResultVersionEntity> stale =
-        resultVersionMapper.selectDryRunOlderThan(cutoff, properties.getBatchSize());
-    if (EmptyChecks.isEmpty(stale)) {
-      return 0;
+    /** 超过独立保留期的 DRY_RUN 结果先归档后从热表删除。 */
+    public int archiveDryRunBatch(Instant now) {
+        int retentionDays = Math.max(1, dryRunProperties.getRetentionDays());
+        Instant cutoff = now.minus(Duration.ofDays(retentionDays));
+        List<ResultVersionEntity> stale = resultVersionMapper.selectDryRunOlderThan(cutoff, properties.getBatchSize());
+        if (EmptyChecks.isEmpty(stale)) {
+            return 0;
+        }
+        int archived = 0;
+        for (ResultVersionEntity row : stale) {
+            if (row == null || row.id() == null || EmptyChecks.isBlank(row.tenantId())) {
+                continue;
+            }
+            int affected = RlsTenantContextHolder.runWithTenant(
+                    row.tenantId(), () -> resultVersionMapper.archiveAndDeleteDryRun(row.tenantId(), row.id(), now));
+            if (affected > 0) {
+                archived++;
+            }
+        }
+        return archived;
     }
-    int archived = 0;
-    for (ResultVersionEntity row : stale) {
-      if (row == null || row.id() == null || EmptyChecks.isBlank(row.tenantId())) {
-        continue;
-      }
-      int affected = RlsTenantContextHolder.runWithTenant(
-          row.tenantId(),
-          () -> resultVersionMapper.archiveAndDeleteDryRun(row.tenantId(), row.id(), now));
-      if (affected > 0) {
-        archived++;
-      }
-    }
-    return archived;
-  }
 }

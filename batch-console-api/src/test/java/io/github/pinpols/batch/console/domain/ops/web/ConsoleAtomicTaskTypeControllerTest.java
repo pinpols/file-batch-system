@@ -19,25 +19,25 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("原子任务类型接口:目录查询透传服务层结果, 并以任务类型字段返回")
 class ConsoleAtomicTaskTypeControllerTest {
 
-  @Mock
-  private ConsoleAtomicTaskTypeSchemaService schemaService;
+    @Mock
+    private ConsoleAtomicTaskTypeSchemaService schemaService;
 
-  @Mock
-  private ConsoleResponseFactory responseFactory;
+    @Mock
+    private ConsoleResponseFactory responseFactory;
 
-  @InjectMocks
-  private ConsoleAtomicTaskTypeController controller;
+    @InjectMocks
+    private ConsoleAtomicTaskTypeController controller;
 
-  @Test
-  @DisplayName("目录查询:返回的服务层目录原样透传, 任务类型字段与入参一致")
-  void shouldReturnCatalog_whenSchemaQueried() {
-    List<AtomicTaskTypeSchema> catalog =
-        List.of(new AtomicTaskTypeSchema("sql", "SQL", true, List.of(), List.of()));
-    when(schemaService.schema()).thenReturn(catalog);
-    when(responseFactory.success(catalog)).thenReturn(CommonResponse.success(catalog));
+    @Test
+    @DisplayName("目录查询:返回的服务层目录原样透传, 任务类型字段与入参一致")
+    void shouldReturnCatalog_whenSchemaQueried() {
+        List<AtomicTaskTypeSchema> catalog =
+                List.of(new AtomicTaskTypeSchema("sql", "SQL", true, List.of(), List.of()));
+        when(schemaService.schema()).thenReturn(catalog);
+        when(responseFactory.success(catalog)).thenReturn(CommonResponse.success(catalog));
 
-    assertThat(controller.schema().data())
-        .extracting(AtomicTaskTypeSchema::taskType)
-        .containsExactly("sql");
-  }
+        assertThat(controller.schema().data())
+                .extracting(AtomicTaskTypeSchema::taskType)
+                .containsExactly("sql");
+    }
 }

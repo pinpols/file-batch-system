@@ -30,86 +30,83 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleSchedulerSnapshotControllerTest {
 
-  @Mock
-  private ConsoleOrchestratorPort orchestratorProxyService;
+    @Mock
+    private ConsoleOrchestratorPort orchestratorProxyService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleSchedulerSnapshotController(orchestratorProxyService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleSchedulerSnapshotController(orchestratorProxyService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("查询实时快照返回成功, 回包携带租户与快照内容")
-  void shouldReturn200WhenGetLiveSnapshot() throws Exception {
-    Instant windowStartedAt = Instant.parse("2026-10-21T00:00:00Z");
-    Instant windowExpiresAt = Instant.parse("2026-10-22T00:00:00Z");
-    ConsoleSchedulerSnapshotResponse.PolicySnapshot policy =
-        new ConsoleSchedulerSnapshotResponse.PolicySnapshot(
-            "settlement-policy",
-            "settlement",
-            2,
-            3,
-            1,
-            4,
-            "SLIDING",
-            1,
-            2,
-            windowStartedAt,
-            windowExpiresAt,
-            8,
-            4,
-            6,
-            7,
-            4,
-            14);
-    when(orchestratorProxyService.schedulerSnapshot(anyString()))
-        .thenReturn(new ConsoleSchedulerSnapshotResponse(
-            BatchDateTimeSupport.utcNow(), "t1", List.of(policy), List.of(), List.of()));
+    @Test
+    @DisplayName("查询实时快照返回成功, 回包携带租户与快照内容")
+    void shouldReturn200WhenGetLiveSnapshot() throws Exception {
+        Instant windowStartedAt = Instant.parse("2026-10-21T00:00:00Z");
+        Instant windowExpiresAt = Instant.parse("2026-10-22T00:00:00Z");
+        ConsoleSchedulerSnapshotResponse.PolicySnapshot policy = new ConsoleSchedulerSnapshotResponse.PolicySnapshot(
+                "settlement-policy",
+                "settlement",
+                2,
+                3,
+                1,
+                4,
+                "SLIDING",
+                1,
+                2,
+                windowStartedAt,
+                windowExpiresAt,
+                8,
+                4,
+                6,
+                7,
+                4,
+                14);
+        when(orchestratorProxyService.schedulerSnapshot(anyString()))
+                .thenReturn(new ConsoleSchedulerSnapshotResponse(
+                        BatchDateTimeSupport.utcNow(), "t1", List.of(policy), List.of(), List.of()));
 
-    mockMvc
-        .perform(get("/api/console/scheduler/snapshot").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.tenantId").value("t1"))
-        .andExpect(jsonPath("$.data.policies[0].activeJobs").value(4))
-        .andExpect(jsonPath("$.data.policies[0].activePartitions").value(6))
-        .andExpect(jsonPath("$.data.policies[0].groupActiveJobs").value(7))
-        .andExpect(jsonPath("$.data.policies[0].effectiveTenantJobCap").value(4))
-        .andExpect(jsonPath("$.data.policies[0].effectiveTenantPartitionCap").value(14))
-        .andExpect(
-            jsonPath("$.data.policies[0].quotaResetWindowExpiresAt").value("2026-10-22T00:00:00Z"));
-  }
+        mockMvc.perform(get("/api/console/scheduler/snapshot").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.tenantId").value("t1"))
+                .andExpect(jsonPath("$.data.policies[0].activeJobs").value(4))
+                .andExpect(jsonPath("$.data.policies[0].activePartitions").value(6))
+                .andExpect(jsonPath("$.data.policies[0].groupActiveJobs").value(7))
+                .andExpect(jsonPath("$.data.policies[0].effectiveTenantJobCap").value(4))
+                .andExpect(jsonPath("$.data.policies[0].effectiveTenantPartitionCap")
+                        .value(14))
+                .andExpect(
+                        jsonPath("$.data.policies[0].quotaResetWindowExpiresAt").value("2026-10-22T00:00:00Z"));
+    }
 
-  @Test
-  @DisplayName("查询历史快照返回成功, 支持租户与条数参数")
-  void shouldReturn200WhenGetSnapshotHistory() throws Exception {
-    when(orchestratorProxyService.schedulerSnapshotHistory(anyString(), anyInt()))
-        .thenReturn(List.of());
+    @Test
+    @DisplayName("查询历史快照返回成功, 支持租户与条数参数")
+    void shouldReturn200WhenGetSnapshotHistory() throws Exception {
+        when(orchestratorProxyService.schedulerSnapshotHistory(anyString(), anyInt()))
+                .thenReturn(List.of());
 
-    mockMvc
-        .perform(get("/api/console/scheduler/snapshot/history")
-            .param("tenantId", "t1")
-            .param("limit", "10"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-  }
+        mockMvc.perform(get("/api/console/scheduler/snapshot/history")
+                        .param("tenantId", "t1")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+    }
 }

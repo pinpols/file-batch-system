@@ -5,17 +5,17 @@ import lombok.Builder;
 
 @Builder
 public record ConsoleRetryScheduleResponse(
-    Long id,
-    String tenantId,
-    String relatedType,
-    Long relatedId,
-    String retryPolicy,
-    Integer retryCount,
-    Integer maxRetryCount,
-    Instant nextRetryAt,
-    String retryStatus,
-    String dedupKey,
-    String lastErrorCode,
-    String lastErrorMessage,
-    Instant createdAt,
-    Instant updatedAt) {}
+        Long id,
+        String tenantId,
+        String relatedType,
+        Long relatedId,
+        String retryPolicy,
+        Integer retryCount,
+        Integer maxRetryCount,
+        Instant nextRetryAt,
+        String retryStatus,
+        String dedupKey,
+        String lastErrorCode,
+        String lastErrorMessage,
+        Instant createdAt,
+        Instant updatedAt) {}

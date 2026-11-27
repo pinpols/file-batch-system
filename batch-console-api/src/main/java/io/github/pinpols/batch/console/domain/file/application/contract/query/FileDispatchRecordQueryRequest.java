@@ -9,15 +9,15 @@ import lombok.EqualsAndHashCode;
 @Data
 public class FileDispatchRecordQueryRequest extends PageQueryRequest {
 
-  private String tenantId;
+    private String tenantId;
 
-  @Size(max = 128)
-  private String keyword;
+    @Size(max = 128)
+    private String keyword;
 
-  private Long fileId;
-  private String channelCode;
-  private String dispatchStatus;
-  private String receiptStatus;
-  private String fromTime;
-  private String toTime;
+    private Long fileId;
+    private String channelCode;
+    private String dispatchStatus;
+    private String receiptStatus;
+    private String fromTime;
+    private String toTime;
 }

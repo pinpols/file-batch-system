@@ -50,144 +50,143 @@ import org.springframework.transaction.TransactionStatus;
 @DisplayName("死信自动重试调度: 到期判定, 次数耗尽与空批次口径")
 class DeadLetterAutoRetryTest {
 
-  private DeadLetterTaskMapper deadLetterTaskMapper;
-  private DefaultRetryGovernanceService service;
+    private DeadLetterTaskMapper deadLetterTaskMapper;
+    private DefaultRetryGovernanceService service;
 
-  @BeforeEach
-  void setUp() {
-    RetryScheduleMapper retryScheduleMapper = mock(RetryScheduleMapper.class);
-    deadLetterTaskMapper = mock(DeadLetterTaskMapper.class);
-    JobDefinitionMapper jobDefinitionMapper = mock(JobDefinitionMapper.class);
-    JobTaskMapper jobTaskMapper = mock(JobTaskMapper.class);
-    JobPartitionMapper jobPartitionMapper = mock(JobPartitionMapper.class);
-    JobInstanceMapper jobInstanceMapper = mock(JobInstanceMapper.class);
-    JobStepInstanceMapper jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
-    TaskDispatchOutboxService taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
-    RetryGovernanceProperties properties = new RetryGovernanceProperties();
-    properties.setBatchSize(50);
-    properties.setDefaultMaxRetryCount(3);
-    properties.setFixedDelaySeconds(60L);
-    BatchOrchestratorGovernanceProperties governance =
-        mock(BatchOrchestratorGovernanceProperties.class);
-    when(governance.retry()).thenReturn(properties);
-    PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
-    when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+    @BeforeEach
+    void setUp() {
+        RetryScheduleMapper retryScheduleMapper = mock(RetryScheduleMapper.class);
+        deadLetterTaskMapper = mock(DeadLetterTaskMapper.class);
+        JobDefinitionMapper jobDefinitionMapper = mock(JobDefinitionMapper.class);
+        JobTaskMapper jobTaskMapper = mock(JobTaskMapper.class);
+        JobPartitionMapper jobPartitionMapper = mock(JobPartitionMapper.class);
+        JobInstanceMapper jobInstanceMapper = mock(JobInstanceMapper.class);
+        JobStepInstanceMapper jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
+        TaskDispatchOutboxService taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+        RetryGovernanceProperties properties = new RetryGovernanceProperties();
+        properties.setBatchSize(50);
+        properties.setDefaultMaxRetryCount(3);
+        properties.setFixedDelaySeconds(60L);
+        BatchOrchestratorGovernanceProperties governance = mock(BatchOrchestratorGovernanceProperties.class);
+        when(governance.retry()).thenReturn(properties);
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
 
-    RetryRequeueCoordinator retryRequeueCoordinator = new RetryRequeueCoordinator(
-        retryScheduleMapper,
-        jobTaskMapper,
-        jobPartitionMapper,
-        jobInstanceMapper,
-        jobStepInstanceMapper,
-        taskDispatchOutboxService,
-        mock(WorkflowRunMapper.class));
+        RetryRequeueCoordinator retryRequeueCoordinator = new RetryRequeueCoordinator(
+                retryScheduleMapper,
+                jobTaskMapper,
+                jobPartitionMapper,
+                jobInstanceMapper,
+                jobStepInstanceMapper,
+                taskDispatchOutboxService,
+                mock(WorkflowRunMapper.class));
 
-    service = new DefaultRetryGovernanceService(
-        retryScheduleMapper,
-        deadLetterTaskMapper,
-        jobDefinitionMapper,
-        jobTaskMapper,
-        retryRequeueCoordinator,
-        governance,
-        mock(JobExecutionLogMapper.class),
-        transactionManager,
-        mock(UnknownExternalOutcomeCloser.class));
-  }
+        service = new DefaultRetryGovernanceService(
+                retryScheduleMapper,
+                deadLetterTaskMapper,
+                jobDefinitionMapper,
+                jobTaskMapper,
+                retryRequeueCoordinator,
+                governance,
+                mock(JobExecutionLogMapper.class),
+                transactionManager,
+                mock(UnknownExternalOutcomeCloser.class));
+    }
 
-  /**
-   * 入口边界保护：理论上 selectDueAutoRetries 的 SQL where 子句已过滤 replay_count &lt; max_replay_count， 但配置漂移 /
-   * 数据迁移可能让 max=0 漏进来；scheduler 必须主动转 GIVE_UP, 不允许进入 replayDeadLetter 无限循环.
-   */
-  @Test
-  @DisplayName("重试次数已达上限时直接放弃, 不再重放")
-  void recordWithMaxAlreadyReached_shouldGiveUpWithoutReplay() {
-    DeadLetterTaskEntity dl = entity(7L, "tA", 3, 3);
-    when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
+    /**
+     * 入口边界保护：理论上 selectDueAutoRetries 的 SQL where 子句已过滤 replay_count &lt; max_replay_count， 但配置漂移 /
+     * 数据迁移可能让 max=0 漏进来；scheduler 必须主动转 GIVE_UP, 不允许进入 replayDeadLetter 无限循环.
+     */
+    @Test
+    @DisplayName("重试次数已达上限时直接放弃, 不再重放")
+    void recordWithMaxAlreadyReached_shouldGiveUpWithoutReplay() {
+        DeadLetterTaskEntity dl = entity(7L, "tA", 3, 3);
+        when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
 
-    service.autoRetryDueDeadLetters();
+        service.autoRetryDueDeadLetters();
 
-    verify(deadLetterTaskMapper).markGiveUp("tA", 7L);
-    verify(deadLetterTaskMapper, never()).selectById(anyString(), anyLong());
-  }
+        verify(deadLetterTaskMapper).markGiveUp("tA", 7L);
+        verify(deadLetterTaskMapper, never()).selectById(anyString(), anyLong());
+    }
 
-  /** replay 抛异常 + 新 replayCount 已用尽预算 → 转 GIVE_UP（关闭后续自动重放）. */
-  @Test
-  @DisplayName("重放失败后次数达到上限时标记放弃")
-  void exhaustedAfterReplayFailure_shouldGiveUp() {
-    DeadLetterTaskEntity dl = entity(8L, "tB", 2, 3); // 重放后会变 3 = max
-    when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
-    // replayDeadLetter 内部第一步 selectById：返回不存在，触发 BizException(NOT_FOUND)
-    when(deadLetterTaskMapper.selectById("tB", 8L)).thenReturn(null);
+    /** replay 抛异常 + 新 replayCount 已用尽预算 → 转 GIVE_UP（关闭后续自动重放）. */
+    @Test
+    @DisplayName("重放失败后次数达到上限时标记放弃")
+    void exhaustedAfterReplayFailure_shouldGiveUp() {
+        DeadLetterTaskEntity dl = entity(8L, "tB", 2, 3); // 重放后会变 3 = max
+        when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
+        // replayDeadLetter 内部第一步 selectById：返回不存在，触发 BizException(NOT_FOUND)
+        when(deadLetterTaskMapper.selectById("tB", 8L)).thenReturn(null);
 
-    service.autoRetryDueDeadLetters();
+        service.autoRetryDueDeadLetters();
 
-    verify(deadLetterTaskMapper).markGiveUp("tB", 8L);
-  }
+        verify(deadLetterTaskMapper).markGiveUp("tB", 8L);
+    }
 
-  /** replay 抛异常但还有自动重放预算 → scheduler 不额外动 status，保留 markReplayFailure 内部已写入的 next_replay_at. */
-  @Test
-  @DisplayName("重试次数未达上限时保持失败状态等待退避")
-  void notExhausted_shouldKeepFailedStatusForBackoff() {
-    DeadLetterTaskEntity dl = entity(9L, "tC", 0, 3); // 重放后会变 1 < 3
-    when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
-    when(deadLetterTaskMapper.selectById("tC", 9L)).thenReturn(null);
+    /** replay 抛异常但还有自动重放预算 → scheduler 不额外动 status，保留 markReplayFailure 内部已写入的 next_replay_at. */
+    @Test
+    @DisplayName("重试次数未达上限时保持失败状态等待退避")
+    void notExhausted_shouldKeepFailedStatusForBackoff() {
+        DeadLetterTaskEntity dl = entity(9L, "tC", 0, 3); // 重放后会变 1 < 3
+        when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
+        when(deadLetterTaskMapper.selectById("tC", 9L)).thenReturn(null);
 
-    service.autoRetryDueDeadLetters();
+        service.autoRetryDueDeadLetters();
 
-    verify(deadLetterTaskMapper, never()).markGiveUp("tC", 9L);
-  }
+        verify(deadLetterTaskMapper, never()).markGiveUp("tC", 9L);
+    }
 
-  /** 一批 0 条 → 不调用任何下游. */
-  @Test
-  @DisplayName("没有到期的死信时不做任何处理")
-  void emptyBatch_shouldDoNothing() {
-    when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of());
+    /** 一批 0 条 → 不调用任何下游. */
+    @Test
+    @DisplayName("没有到期的死信时不做任何处理")
+    void emptyBatch_shouldDoNothing() {
+        when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of());
 
-    service.autoRetryDueDeadLetters();
+        service.autoRetryDueDeadLetters();
 
-    verify(deadLetterTaskMapper, never()).markGiveUp(anyString(), anyLong());
-    verify(deadLetterTaskMapper, never())
-        .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.targetStatus() != null
-            && parameters.lastReplayResult() != null));
-  }
+        verify(deadLetterTaskMapper, never()).markGiveUp(anyString(), anyLong());
+        verify(deadLetterTaskMapper, never())
+                .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.targetStatus() != null
+                        && parameters.lastReplayResult() != null));
+    }
 
-  @Test
-  @DisplayName("自动死信重放事务和耗尽预算处置均在死信租户上下文中")
-  void shouldProcessReplayAndGiveUpUnderDeadLetterTenantContext() {
-    DeadLetterTaskEntity exhausted = entity(10L, "tA", 3, 3);
-    DeadLetterTaskEntity retry = entity(11L, "tB", 2, 3);
-    when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(exhausted, retry));
-    doAnswer(invocation -> {
-          String tenantId = invocation.getArgument(0);
-          assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
-          return 1;
-        })
-        .when(deadLetterTaskMapper)
-        .markGiveUp(anyString(), anyLong());
-    when(deadLetterTaskMapper.selectById("tB", 11L)).thenAnswer(invocation -> {
-      assertThat(RlsTenantContextHolder.get()).isEqualTo("tB");
-      return null;
-    });
+    @Test
+    @DisplayName("自动死信重放事务和耗尽预算处置均在死信租户上下文中")
+    void shouldProcessReplayAndGiveUpUnderDeadLetterTenantContext() {
+        DeadLetterTaskEntity exhausted = entity(10L, "tA", 3, 3);
+        DeadLetterTaskEntity retry = entity(11L, "tB", 2, 3);
+        when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(exhausted, retry));
+        doAnswer(invocation -> {
+                    String tenantId = invocation.getArgument(0);
+                    assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
+                    return 1;
+                })
+                .when(deadLetterTaskMapper)
+                .markGiveUp(anyString(), anyLong());
+        when(deadLetterTaskMapper.selectById("tB", 11L)).thenAnswer(invocation -> {
+            assertThat(RlsTenantContextHolder.get()).isEqualTo("tB");
+            return null;
+        });
 
-    service.autoRetryDueDeadLetters();
+        service.autoRetryDueDeadLetters();
 
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+    // ── helpers ────────────────────────────────────────────────────────────────
 
-  private static DeadLetterTaskEntity entity(Long id, String tenantId, int replayCount, int max) {
-    DeadLetterTaskEntity dl = new DeadLetterTaskEntity();
-    dl.setId(id);
-    dl.setTenantId(tenantId);
-    dl.setReplayStatus("FAILED");
-    dl.setReplayCount(replayCount);
-    dl.setMaxReplayCount(max);
-    dl.setErrorClass("SYSTEM");
-    dl.setSourceType("JOB_PARTITION");
-    dl.setSourceId(100L);
-    return dl;
-  }
+    private static DeadLetterTaskEntity entity(Long id, String tenantId, int replayCount, int max) {
+        DeadLetterTaskEntity dl = new DeadLetterTaskEntity();
+        dl.setId(id);
+        dl.setTenantId(tenantId);
+        dl.setReplayStatus("FAILED");
+        dl.setReplayCount(replayCount);
+        dl.setMaxReplayCount(max);
+        dl.setErrorClass("SYSTEM");
+        dl.setSourceType("JOB_PARTITION");
+        dl.setSourceId(100L);
+        return dl;
+    }
 }

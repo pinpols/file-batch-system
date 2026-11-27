@@ -31,183 +31,180 @@ import org.springframework.stereotype.Component;
 @Component
 public class RetryDispatchStep implements DispatchStageStep {
 
-  private static final String ERROR_CODE_RETRY_FAILED = "DISPATCH_RETRY_FAILED";
+    private static final String ERROR_CODE_RETRY_FAILED = "DISPATCH_RETRY_FAILED";
 
-  private final FileDispatchRepository fileDispatchRepository;
-  private final DispatchChannelGateway dispatchChannelGateway;
-  private final DispatchSecretResolver dispatchSecretResolver;
+    private final FileDispatchRepository fileDispatchRepository;
+    private final DispatchChannelGateway dispatchChannelGateway;
+    private final DispatchSecretResolver dispatchSecretResolver;
 
-  public RetryDispatchStep(
-      FileDispatchRepository fileDispatchRepository,
-      DispatchChannelGateway dispatchChannelGateway,
-      DispatchSecretResolver dispatchSecretResolver) {
-    this.fileDispatchRepository = fileDispatchRepository;
-    this.dispatchChannelGateway = dispatchChannelGateway;
-    this.dispatchSecretResolver = dispatchSecretResolver;
-  }
+    public RetryDispatchStep(
+            FileDispatchRepository fileDispatchRepository,
+            DispatchChannelGateway dispatchChannelGateway,
+            DispatchSecretResolver dispatchSecretResolver) {
+        this.fileDispatchRepository = fileDispatchRepository;
+        this.dispatchChannelGateway = dispatchChannelGateway;
+        this.dispatchSecretResolver = dispatchSecretResolver;
+    }
 
-  @Override
-  public DispatchStage stage() {
-    return DispatchStage.RETRY;
-  }
+    @Override
+    public DispatchStage stage() {
+        return DispatchStage.RETRY;
+    }
 
-  @Override
-  public DispatchStageResult execute(DispatchJobContext context) {
-    // ADR-026: 演练模式不重试外部投递（无副作用 → 也不需要 retry）。
-    Map<String, Object> dryRunAttributes =
-        EmptyChecks.isNull(context) ? null : context.getAttributes();
-    if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
-      return DispatchStageResult.success(stage());
+    @Override
+    public DispatchStageResult execute(DispatchJobContext context) {
+        // ADR-026: 演练模式不重试外部投递（无副作用 → 也不需要 retry）。
+        Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+        if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
+            return DispatchStageResult.success(stage());
+        }
+        if (context == null) {
+            return DispatchStageResult.failure(
+                    stage(),
+                    "DISPATCH_RETRY_NO_CONTEXT",
+                    "error.dispatch.payload_missing",
+                    new Object[0],
+                    "dispatch context missing",
+                    ERROR_OBJECT_MAPPER);
+        }
+        Map<String, Object> attrs = context.getAttributes();
+        Object payload = attrs.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+        if (!(payload instanceof DispatchPayload dispatchPayload)) {
+            attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
+            return DispatchStageResult.failure(
+                    stage(),
+                    "DISPATCH_RETRY_NO_PAYLOAD",
+                    "error.dispatch.payload_missing",
+                    new Object[0],
+                    "dispatch payload missing",
+                    ERROR_OBJECT_MAPPER);
+        }
+        if (!Boolean.TRUE.equals(attrs.get(DispatchRuntimeKeys.RETRY_REQUESTED))) {
+            attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
+            return DispatchStageResult.success(stage());
+        }
+        Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> fileRecord = (Map<String, Object>) attrs.get(PipelineRuntimeKeys.FILE_RECORD);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> channelConfig = (Map<String, Object>) attrs.get(PipelineRuntimeKeys.CHANNEL_CONFIG);
+        Object rawBindings = attrs.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
+        Map<String, Object> secretPayload = rawBindings instanceof Map<?, ?>
+                ? Map.of(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS, rawBindings)
+                : Map.of();
+        Set<String> resolvedSecretKeys;
+        try {
+            resolvedSecretKeys = dispatchSecretResolver.resolveInto(
+                    context.getTenantId(), dispatchPayload.channelCode(), secretPayload, channelConfig);
+        } catch (DispatchSecretBlockedException exception) {
+            attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
+            attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+            return DispatchStageResult.failure(
+                    stage(),
+                    exception.errorCode(),
+                    "error.dispatch.secret.blocked",
+                    new Object[0],
+                    exception.errorCode(),
+                    ERROR_OBJECT_MAPPER);
+        }
+        try {
+            return retry(context, dispatchPayload, attrs, fileId, fileRecord, channelConfig);
+        } finally {
+            resolvedSecretKeys.forEach(channelConfig::remove);
+        }
     }
-    if (context == null) {
-      return DispatchStageResult.failure(
-          stage(),
-          "DISPATCH_RETRY_NO_CONTEXT",
-          "error.dispatch.payload_missing",
-          new Object[0],
-          "dispatch context missing",
-          ERROR_OBJECT_MAPPER);
-    }
-    Map<String, Object> attrs = context.getAttributes();
-    Object payload = attrs.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
-    if (!(payload instanceof DispatchPayload dispatchPayload)) {
-      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
-      return DispatchStageResult.failure(
-          stage(),
-          "DISPATCH_RETRY_NO_PAYLOAD",
-          "error.dispatch.payload_missing",
-          new Object[0],
-          "dispatch payload missing",
-          ERROR_OBJECT_MAPPER);
-    }
-    if (!Boolean.TRUE.equals(attrs.get(DispatchRuntimeKeys.RETRY_REQUESTED))) {
-      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
-      return DispatchStageResult.success(stage());
-    }
-    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    @SuppressWarnings("unchecked")
-    Map<String, Object> fileRecord =
-        (Map<String, Object>) attrs.get(PipelineRuntimeKeys.FILE_RECORD);
-    @SuppressWarnings("unchecked")
-    Map<String, Object> channelConfig =
-        (Map<String, Object>) attrs.get(PipelineRuntimeKeys.CHANNEL_CONFIG);
-    Object rawBindings = attrs.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
-    Map<String, Object> secretPayload = rawBindings instanceof Map<?, ?>
-        ? Map.of(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS, rawBindings)
-        : Map.of();
-    Set<String> resolvedSecretKeys;
-    try {
-      resolvedSecretKeys = dispatchSecretResolver.resolveInto(
-          context.getTenantId(), dispatchPayload.channelCode(), secretPayload, channelConfig);
-    } catch (DispatchSecretBlockedException exception) {
-      attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
-      attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
-      return DispatchStageResult.failure(
-          stage(),
-          exception.errorCode(),
-          "error.dispatch.secret.blocked",
-          new Object[0],
-          exception.errorCode(),
-          ERROR_OBJECT_MAPPER);
-    }
-    try {
-      return retry(context, dispatchPayload, attrs, fileId, fileRecord, channelConfig);
-    } finally {
-      resolvedSecretKeys.forEach(channelConfig::remove);
-    }
-  }
 
-  private DispatchStageResult retry(
-      DispatchJobContext context,
-      DispatchPayload dispatchPayload,
-      Map<String, Object> attrs,
-      Long fileId,
-      Map<String, Object> fileRecord,
-      Map<String, Object> channelConfig) {
-    int attemptStarted = fileDispatchRepository.beginAttempt(
-        context.getTenantId(), fileId, dispatchPayload.channelCode());
-    if (attemptStarted <= 0) {
-      attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
-      attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
-      return DispatchStageResult.failure(
-          stage(),
-          "DISPATCH_ATTEMPT_STATE_CONFLICT",
-          "error.dispatch.retry.failed",
-          new Object[] {"dispatch attempt state changed before retry"},
-          "dispatch attempt state changed before retry",
-          ERROR_OBJECT_MAPPER);
+    private DispatchStageResult retry(
+            DispatchJobContext context,
+            DispatchPayload dispatchPayload,
+            Map<String, Object> attrs,
+            Long fileId,
+            Map<String, Object> fileRecord,
+            Map<String, Object> channelConfig) {
+        int attemptStarted =
+                fileDispatchRepository.beginAttempt(context.getTenantId(), fileId, dispatchPayload.channelCode());
+        if (attemptStarted <= 0) {
+            attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
+            attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+            return DispatchStageResult.failure(
+                    stage(),
+                    "DISPATCH_ATTEMPT_STATE_CONFLICT",
+                    "error.dispatch.retry.failed",
+                    new Object[] {"dispatch attempt state changed before retry"},
+                    "dispatch attempt state changed before retry",
+                    ERROR_OBJECT_MAPPER);
+        }
+        DispatchResult dispatchResult = DispatchInvocationSupport.invokeAndRecordIdentifiers(
+                dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload);
+        if (!dispatchResult.success()) {
+            if (dispatchResult.externalOutcomeUnknown()) {
+                fileDispatchRepository.markAttemptFailed(
+                        context.getTenantId(),
+                        fileId,
+                        dispatchPayload.channelCode(),
+                        TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+                        dispatchResult.message());
+                attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
+                attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+                String messageForArguments = dispatchResult.message();
+                String fallbackMessage = dispatchResult.message();
+                return DispatchStageResult.failure(
+                        stage(),
+                        TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+                        "error.dispatch.retry.failed",
+                        new Object[] {messageForArguments},
+                        fallbackMessage,
+                        ERROR_OBJECT_MAPPER);
+            }
+            int updated = fileDispatchRepository.markAttemptFailed(
+                    context.getTenantId(),
+                    fileId,
+                    dispatchPayload.channelCode(),
+                    "DISPATCH_RETRY",
+                    dispatchResult.message());
+            if (updated <= 0) {
+                attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
+                attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+                return DispatchStageResult.failure(
+                        stage(),
+                        TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+                        "error.dispatch.retry.failed",
+                        new Object[] {"retry result could not be committed after the external call"},
+                        "retry result could not be committed after the external call",
+                        ERROR_OBJECT_MAPPER);
+            }
+            attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
+            String messageForArguments = dispatchResult.message();
+            String fallbackMessage = dispatchResult.message();
+            return DispatchStageResult.failure(
+                    stage(),
+                    ERROR_CODE_RETRY_FAILED,
+                    "error.dispatch.retry.failed",
+                    new Object[] {messageForArguments},
+                    fallbackMessage,
+                    ERROR_OBJECT_MAPPER);
+        }
+        int updated = DispatchInvocationSupport.markSent(
+                fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
+        if (updated <= 0) {
+            fileDispatchRepository.markAttemptFailed(
+                    context.getTenantId(),
+                    fileId,
+                    dispatchPayload.channelCode(),
+                    TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+                    "external delivery succeeded but the SENT state could not be committed");
+            attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
+            attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+            return DispatchStageResult.failure(
+                    stage(),
+                    TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+                    "error.dispatch.retry.failed",
+                    new Object[] {"external delivery succeeded but the SENT state could not be committed"},
+                    "external delivery succeeded but the SENT state could not be committed",
+                    ERROR_OBJECT_MAPPER);
+        }
+        attrs.put(DispatchRuntimeKeys.RETRY_RECOVERED, Boolean.TRUE);
+        attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.ACK.name());
+        return DispatchStageResult.success(stage());
     }
-    DispatchResult dispatchResult = DispatchInvocationSupport.invokeAndRecordIdentifiers(
-        dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload);
-    if (!dispatchResult.success()) {
-      if (dispatchResult.externalOutcomeUnknown()) {
-        fileDispatchRepository.markAttemptFailed(
-            context.getTenantId(),
-            fileId,
-            dispatchPayload.channelCode(),
-            TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
-            dispatchResult.message());
-        attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
-        attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
-        String messageForArguments = dispatchResult.message();
-        String fallbackMessage = dispatchResult.message();
-        return DispatchStageResult.failure(
-            stage(),
-            TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
-            "error.dispatch.retry.failed",
-            new Object[] {messageForArguments},
-            fallbackMessage,
-            ERROR_OBJECT_MAPPER);
-      }
-      int updated = fileDispatchRepository.markAttemptFailed(
-          context.getTenantId(),
-          fileId,
-          dispatchPayload.channelCode(),
-          "DISPATCH_RETRY",
-          dispatchResult.message());
-      if (updated <= 0) {
-        attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
-        attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
-        return DispatchStageResult.failure(
-            stage(),
-            TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
-            "error.dispatch.retry.failed",
-            new Object[] {"retry result could not be committed after the external call"},
-            "retry result could not be committed after the external call",
-            ERROR_OBJECT_MAPPER);
-      }
-      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
-      String messageForArguments = dispatchResult.message();
-      String fallbackMessage = dispatchResult.message();
-      return DispatchStageResult.failure(
-          stage(),
-          ERROR_CODE_RETRY_FAILED,
-          "error.dispatch.retry.failed",
-          new Object[] {messageForArguments},
-          fallbackMessage,
-          ERROR_OBJECT_MAPPER);
-    }
-    int updated = DispatchInvocationSupport.markSent(
-        fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
-    if (updated <= 0) {
-      fileDispatchRepository.markAttemptFailed(
-          context.getTenantId(),
-          fileId,
-          dispatchPayload.channelCode(),
-          TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
-          "external delivery succeeded but the SENT state could not be committed");
-      attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
-      attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
-      return DispatchStageResult.failure(
-          stage(),
-          TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
-          "error.dispatch.retry.failed",
-          new Object[] {"external delivery succeeded but the SENT state could not be committed"},
-          "external delivery succeeded but the SENT state could not be committed",
-          ERROR_OBJECT_MAPPER);
-    }
-    attrs.put(DispatchRuntimeKeys.RETRY_RECOVERED, Boolean.TRUE);
-    attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.ACK.name());
-    return DispatchStageResult.success(stage());
-  }
 }

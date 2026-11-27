@@ -6,11 +6,11 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 public interface DailyProgressMapper {
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  List<DailyProgressResponse.StatusCount> selectCounts(
-      @Param("tenantId") String tenantId, @Param("bizDate") LocalDate bizDate);
+    List<DailyProgressResponse.StatusCount> selectCounts(
+            @Param("tenantId") String tenantId, @Param("bizDate") LocalDate bizDate);
 
-  DailyProgressResponse.Coverage selectCoverage(
-      @Param("tenantId") String tenantId, @Param("bizDate") LocalDate bizDate);
+    DailyProgressResponse.Coverage selectCoverage(
+            @Param("tenantId") String tenantId, @Param("bizDate") LocalDate bizDate);
 }

@@ -46,166 +46,161 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConsoleSessionRegistry {
 
-  /** 本地会话镜像最多缓存的会话数。 */
-  private static final int LOCAL_MIRROR_MAX_ENTRIES = 100_000;
+    /** 本地会话镜像最多缓存的会话数。 */
+    private static final int LOCAL_MIRROR_MAX_ENTRIES = 100_000;
 
-  /**
-   * 未配置或配置非正时的会话状态 TTL，
-   * 与 batch.console.security.session-state-ttl 默认值 P30D 一致。
-   */
-  private static final Duration DEFAULT_SESSION_STATE_TTL = Duration.ofDays(30);
+    /**
+     * 未配置或配置非正时的会话状态 TTL，
+     * 与 batch.console.security.session-state-ttl 默认值 P30D 一致。
+     */
+    private static final Duration DEFAULT_SESSION_STATE_TTL = Duration.ofDays(30);
 
-  private static final String KEY_PREFIX = "batch:console:auth:session:";
+    private static final String KEY_PREFIX = "batch:console:auth:session:";
 
-  private final ConsoleSessionStore sessionStore;
-  private final ConsoleSecurityProperties securityProperties;
+    private final ConsoleSessionStore sessionStore;
+    private final ConsoleSecurityProperties securityProperties;
 
-  /** 进程内会话版本镜像，Redis 抖动时回退。TTL 与 Redis 一致，防止内存累积。 */
-  private final Cache<String, Long> localMirror;
+    /** 进程内会话版本镜像，Redis 抖动时回退。TTL 与 Redis 一致，防止内存累积。 */
+    private final Cache<String, Long> localMirror;
 
-  public ConsoleSessionRegistry(
-      ConsoleSessionStore sessionStore,
-      ConsoleSecurityProperties securityProperties,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this.sessionStore = sessionStore;
-    this.securityProperties = securityProperties;
-    // R-4.7：显式开 recordStats 让 Caffeine 的命中率 / 驱逐计数可观测；
-    // expireAfterWrite + maximumSize 原有语义保留，运维可通过 actuator /
-    // batch.console.session.* 指标判断容量是否需要调整。
-    this.localMirror = Caffeine.newBuilder()
-        .expireAfterWrite(resolveTtl(securityProperties))
-        .maximumSize(LOCAL_MIRROR_MAX_ENTRIES)
-        .recordStats()
-        .build();
-    registerCacheMetrics(meterRegistryProvider);
-  }
-
-  private void registerCacheMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry == null) {
-      return;
+    public ConsoleSessionRegistry(
+            ConsoleSessionStore sessionStore,
+            ConsoleSecurityProperties securityProperties,
+            ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        this.sessionStore = sessionStore;
+        this.securityProperties = securityProperties;
+        // R-4.7：显式开 recordStats 让 Caffeine 的命中率 / 驱逐计数可观测；
+        // expireAfterWrite + maximumSize 原有语义保留，运维可通过 actuator /
+        // batch.console.session.* 指标判断容量是否需要调整。
+        this.localMirror = Caffeine.newBuilder()
+                .expireAfterWrite(resolveTtl(securityProperties))
+                .maximumSize(LOCAL_MIRROR_MAX_ENTRIES)
+                .recordStats()
+                .build();
+        registerCacheMetrics(meterRegistryProvider);
     }
-    // 基础计数 gauge；更完整的 CaffeineStats / tagged metrics 可后续接 micrometer-caffeine
-    registry.gauge("batch.console.session.cache.size", localMirror, Cache::estimatedSize);
-    registry.gauge(
-        "batch.console.session.cache.hit_count", localMirror, c -> c.stats().hitCount());
-    registry.gauge(
-        "batch.console.session.cache.miss_count", localMirror, c -> c.stats().missCount());
-    registry.gauge(
-        "batch.console.session.cache.eviction_count",
-        localMirror,
-        c -> c.stats().evictionCount());
-  }
 
-  public long nextSessionVersion(String username, String tenantId) {
-    if (!securityProperties.isSingleSessionEnabled()) {
-      return 0L;
+    private void registerCacheMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry == null) {
+            return;
+        }
+        // 基础计数 gauge；更完整的 CaffeineStats / tagged metrics 可后续接 micrometer-caffeine
+        registry.gauge("batch.console.session.cache.size", localMirror, Cache::estimatedSize);
+        registry.gauge(
+                "batch.console.session.cache.hit_count",
+                localMirror,
+                c -> c.stats().hitCount());
+        registry.gauge(
+                "batch.console.session.cache.miss_count",
+                localMirror,
+                c -> c.stats().missCount());
+        registry.gauge(
+                "batch.console.session.cache.eviction_count",
+                localMirror,
+                c -> c.stats().evictionCount());
     }
-    String key = key(username, tenantId);
-    try {
-      Long version = sessionStore.increment(key);
-      // C-2.9: INCR 返回权威新值后立即同步到 Caffeine，再做 expire。
-      // 之前顺序是 INCR → expire → put mirror，若 expire 抛异常会走 catch 分支
-      // 用本地旧值 +1（可能落后 Redis 真实值），导致单会话判断错乱。
-      long v = version == null ? 1L : version;
-      localMirror.put(key, v);
-      try {
-        sessionStore.expire(key, resolveTtl(securityProperties));
-      } catch (DataAccessException expireEx) {
-        // TTL 刷失败不影响版本号正确性，仅可能让 key 提前 / 延后到期。记 warn 不抛。
-        String causeSummary = SwallowedExceptionLogger.summary(expireEx);
-        log.warn(
-            "Redis expire() failed for session key (value already incremented): {}", causeSummary);
-      }
-      return v;
-    } catch (DataAccessException ex) {
-      // Redis INCR 不可达：本地自增并返回，保证登录不被阻断。
-      // 注意：跨 Pod 单会话语义在此降级期失效，Grafana 报警应能发现。
-      Long current = localMirror.getIfPresent(key);
-      long v = current == null ? 1L : current + 1L;
-      localMirror.put(key, v);
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "Redis unavailable during nextSessionVersion; falling back to local mirror: {}",
-          causeSummary);
-      return v;
-    }
-  }
 
-  public long currentSessionVersion(String username, String tenantId) {
-    if (!securityProperties.isSingleSessionEnabled()) {
-      return 0L;
+    public long nextSessionVersion(String username, String tenantId) {
+        if (!securityProperties.isSingleSessionEnabled()) {
+            return 0L;
+        }
+        String key = key(username, tenantId);
+        try {
+            Long version = sessionStore.increment(key);
+            // C-2.9: INCR 返回权威新值后立即同步到 Caffeine，再做 expire。
+            // 之前顺序是 INCR → expire → put mirror，若 expire 抛异常会走 catch 分支
+            // 用本地旧值 +1（可能落后 Redis 真实值），导致单会话判断错乱。
+            long v = version == null ? 1L : version;
+            localMirror.put(key, v);
+            try {
+                sessionStore.expire(key, resolveTtl(securityProperties));
+            } catch (DataAccessException expireEx) {
+                // TTL 刷失败不影响版本号正确性，仅可能让 key 提前 / 延后到期。记 warn 不抛。
+                String causeSummary = SwallowedExceptionLogger.summary(expireEx);
+                log.warn("Redis expire() failed for session key (value already incremented): {}", causeSummary);
+            }
+            return v;
+        } catch (DataAccessException ex) {
+            // Redis INCR 不可达：本地自增并返回，保证登录不被阻断。
+            // 注意：跨 Pod 单会话语义在此降级期失效，Grafana 报警应能发现。
+            Long current = localMirror.getIfPresent(key);
+            long v = current == null ? 1L : current + 1L;
+            localMirror.put(key, v);
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("Redis unavailable during nextSessionVersion; falling back to local mirror: {}", causeSummary);
+            return v;
+        }
     }
-    String key = key(username, tenantId);
-    try {
-      String raw = sessionStore.get(key);
-      if (!Texts.hasText(raw)) {
-        return 0L;
-      }
-      try {
-        long v = Long.parseLong(raw);
-        localMirror.put(key, v);
-        return v;
-      } catch (NumberFormatException ignored) {
-        SwallowedExceptionLogger.info(
-            ConsoleSessionRegistry.class, "catch:NumberFormatException", ignored);
 
-        return 0L;
-      }
-    } catch (DataAccessException ex) {
-      Long cached = localMirror.getIfPresent(key);
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "Redis unavailable during currentSessionVersion; local mirror={}, cause={}",
-          cached,
-          causeSummary);
-      return cached == null ? 0L : cached;
+    public long currentSessionVersion(String username, String tenantId) {
+        if (!securityProperties.isSingleSessionEnabled()) {
+            return 0L;
+        }
+        String key = key(username, tenantId);
+        try {
+            String raw = sessionStore.get(key);
+            if (!Texts.hasText(raw)) {
+                return 0L;
+            }
+            try {
+                long v = Long.parseLong(raw);
+                localMirror.put(key, v);
+                return v;
+            } catch (NumberFormatException ignored) {
+                SwallowedExceptionLogger.info(ConsoleSessionRegistry.class, "catch:NumberFormatException", ignored);
+
+                return 0L;
+            }
+        } catch (DataAccessException ex) {
+            Long cached = localMirror.getIfPresent(key);
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("Redis unavailable during currentSessionVersion; local mirror={}, cause={}", cached, causeSummary);
+            return cached == null ? 0L : cached;
+        }
     }
-  }
 
-  /** 使指定用户的当前会话立即失效（删除 Redis key，已有 JWT 在下次请求时失败）。 */
-  public void invalidateSession(String username, String tenantId) {
-    String key = key(username, tenantId);
-    try {
-      sessionStore.delete(key);
-    } catch (DataAccessException ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("Redis unavailable during invalidateSession; local-only eviction: {}", causeSummary);
+    /** 使指定用户的当前会话立即失效（删除 Redis key，已有 JWT 在下次请求时失败）。 */
+    public void invalidateSession(String username, String tenantId) {
+        String key = key(username, tenantId);
+        try {
+            sessionStore.delete(key);
+        } catch (DataAccessException ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("Redis unavailable during invalidateSession; local-only eviction: {}", causeSummary);
+        }
+        localMirror.invalidate(key);
     }
-    localMirror.invalidate(key);
-  }
 
-  public boolean isCurrentSession(String username, String tenantId, long sessionVersion) {
-    if (!securityProperties.isSingleSessionEnabled()) {
-      return true;
+    public boolean isCurrentSession(String username, String tenantId, long sessionVersion) {
+        if (!securityProperties.isSingleSessionEnabled()) {
+            return true;
+        }
+        try {
+            long current = currentSessionVersion(username, tenantId);
+            return current > 0L && current == sessionVersion;
+        } catch (DataAccessException ex) {
+            // 非预期场景（currentSessionVersion 自身已回退），额外 fail-open
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("Unexpected Redis failure in isCurrentSession; fail-open: {}", causeSummary);
+            return true;
+        }
     }
-    try {
-      long current = currentSessionVersion(username, tenantId);
-      return current > 0L && current == sessionVersion;
-    } catch (DataAccessException ex) {
-      // 非预期场景（currentSessionVersion 自身已回退），额外 fail-open
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("Unexpected Redis failure in isCurrentSession; fail-open: {}", causeSummary);
-      return true;
+
+    private static Duration resolveTtl(ConsoleSecurityProperties props) {
+        Duration ttl = props == null ? null : props.getSessionStateTtl();
+        return EmptyChecks.isNull(ttl) || ttl.isNegative() || ttl.isZero() ? DEFAULT_SESSION_STATE_TTL : ttl;
     }
-  }
 
-  private static Duration resolveTtl(ConsoleSecurityProperties props) {
-    Duration ttl = props == null ? null : props.getSessionStateTtl();
-    return EmptyChecks.isNull(ttl) || ttl.isNegative() || ttl.isZero()
-        ? DEFAULT_SESSION_STATE_TTL
-        : ttl;
-  }
-
-  private String key(String username, String tenantId) {
-    return KEY_PREFIX + normalize(tenantId) + ":" + normalize(username);
-  }
-
-  private String normalize(String value) {
-    if (EmptyChecks.isNull(value)) {
-      return "unknown";
+    private String key(String username, String tenantId) {
+        return KEY_PREFIX + normalize(tenantId) + ":" + normalize(username);
     }
-    String trimmedValue = value.trim();
-    return trimmedValue.toLowerCase(Locale.ROOT);
-  }
+
+    private String normalize(String value) {
+        if (EmptyChecks.isNull(value)) {
+            return "unknown";
+        }
+        String trimmedValue = value.trim();
+        return trimmedValue.toLowerCase(Locale.ROOT);
+    }
 }

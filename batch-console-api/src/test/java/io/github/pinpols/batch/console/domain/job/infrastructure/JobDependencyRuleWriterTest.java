@@ -21,44 +21,43 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class JobDependencyRuleWriterTest {
 
-  @Mock
-  private JobDefinitionMapper mapper;
+    @Mock
+    private JobDefinitionMapper mapper;
 
-  private JobDependencyRuleWriter writer;
+    private JobDependencyRuleWriter writer;
 
-  @Test
-  @DisplayName("缺少规则集合时先拒绝，不删除已有依赖")
-  void shouldRejectBeforeDeletingDependencies_whenRulesAreMissing() {
-    assertThatNullPointerException().isThrownBy(() -> writer.replace("tenant", "downstream", null));
+    @Test
+    @DisplayName("缺少规则集合时先拒绝，不删除已有依赖")
+    void shouldRejectBeforeDeletingDependencies_whenRulesAreMissing() {
+        assertThatNullPointerException().isThrownBy(() -> writer.replace("tenant", "downstream", null));
 
-    verifyNoInteractions(mapper);
-  }
+        verifyNoInteractions(mapper);
+    }
 
-  @Test
-  @DisplayName("显式空规则集合仅清空已有依赖")
-  void shouldClearDependencies_whenRulesAreExplicitlyEmpty() {
-    writer.replace("tenant", "downstream", List.of());
+    @Test
+    @DisplayName("显式空规则集合仅清空已有依赖")
+    void shouldClearDependencies_whenRulesAreExplicitlyEmpty() {
+        writer.replace("tenant", "downstream", List.of());
 
-    verify(mapper).deleteDependencies("tenant", "downstream");
-    verifyNoMoreInteractions(mapper);
-  }
+        verify(mapper).deleteDependencies("tenant", "downstream");
+        verifyNoMoreInteractions(mapper);
+    }
 
-  @Test
-  @DisplayName("非空规则集合先删除后写入，并保留业务日对齐方式")
-  void shouldReplaceRulesInOrder_whenRulesArePresent() {
-    List<JobDependencyRuleRequest> rules =
-        List.of(new JobDependencyRuleRequest("upstream", "PREVIOUS_BIZ_DAY"));
+    @Test
+    @DisplayName("非空规则集合先删除后写入，并保留业务日对齐方式")
+    void shouldReplaceRulesInOrder_whenRulesArePresent() {
+        List<JobDependencyRuleRequest> rules = List.of(new JobDependencyRuleRequest("upstream", "PREVIOUS_BIZ_DAY"));
 
-    writer.replace("tenant", "downstream", rules);
+        writer.replace("tenant", "downstream", rules);
 
-    InOrder order = inOrder(mapper);
-    order.verify(mapper).deleteDependencies("tenant", "downstream");
-    order.verify(mapper).insertDependencyRules("tenant", "downstream", rules);
-    verifyNoMoreInteractions(mapper);
-  }
+        InOrder order = inOrder(mapper);
+        order.verify(mapper).deleteDependencies("tenant", "downstream");
+        order.verify(mapper).insertDependencyRules("tenant", "downstream", rules);
+        verifyNoMoreInteractions(mapper);
+    }
 
-  @BeforeEach
-  void initializeSubject() {
-    writer = new JobDependencyRuleWriter(mapper);
-  }
+    @BeforeEach
+    void initializeSubject() {
+        writer = new JobDependencyRuleWriter(mapper);
+    }
 }

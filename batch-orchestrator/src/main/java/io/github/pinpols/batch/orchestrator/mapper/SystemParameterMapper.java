@@ -10,12 +10,12 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface SystemParameterMapper {
 
-  /**
-   * 按 (tenantId, paramKey) 读单个 param_value;未配置返 {@code null}(调用方据此 opt-in 放行)。
-   *
-   * @param tenantId 租户 id(非空,租户维度过滤)
-   * @param paramKey 参数键(如 {@code "worker.min_sdk_version"})
-   * @return param_value 字符串;未命中返 null
-   */
-  String selectParamValue(@Param("tenantId") String tenantId, @Param("paramKey") String paramKey);
+    /**
+     * 按 (tenantId, paramKey) 读单个 param_value;未配置返 {@code null}(调用方据此 opt-in 放行)。
+     *
+     * @param tenantId 租户 id(非空,租户维度过滤)
+     * @param paramKey 参数键(如 {@code "worker.min_sdk_version"})
+     * @return param_value 字符串;未命中返 null
+     */
+    String selectParamValue(@Param("tenantId") String tenantId, @Param("paramKey") String paramKey);
 }

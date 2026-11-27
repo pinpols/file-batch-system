@@ -33,91 +33,85 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("launch-wait 恢复: 同一轮按并发度并行启动")
 class WorkflowLaunchWaitReconcilerParallelismTest {
 
-  @Mock
-  private TenantDirectoryMapper tenantDirectoryMapper;
+    @Mock
+    private TenantDirectoryMapper tenantDirectoryMapper;
 
-  @Mock
-  private WorkflowLaunchWaitService waitingService;
+    @Mock
+    private WorkflowLaunchWaitService waitingService;
 
-  @Mock
-  private WorkflowRunLaunchService launchService;
+    @Mock
+    private WorkflowRunLaunchService launchService;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Test
-  @DisplayName("并发度大于一时两条等待同时进入 launch")
-  void shouldLaunchClaimedEntriesConcurrently() {
-    when(waitingService.claimDue(eq("ta"), eq(2), any()))
-        .thenReturn(List.of(claim("req-a", 1L), claim("req-b", 2L)));
-    when(waitingService.restoreRequest(eq("ta"), any()))
-        .thenAnswer(invocation -> restored(invocation.getArgument(1)));
-    CyclicBarrier barrier = new CyclicBarrier(2);
-    when(launchService.launch(any())).thenAnswer(ignored -> {
-      // 串行实现下第二个 launch 进不来，第一轮 await 超时并被当作可重试失败释放。
-      barrier.await(5, TimeUnit.SECONDS);
-      return new LaunchResponse("instance", "trace");
-    });
+    @Test
+    @DisplayName("并发度大于一时两条等待同时进入 launch")
+    void shouldLaunchClaimedEntriesConcurrently() {
+        when(waitingService.claimDue(eq("ta"), eq(2), any()))
+                .thenReturn(List.of(claim("req-a", 1L), claim("req-b", 2L)));
+        when(waitingService.restoreRequest(eq("ta"), any()))
+                .thenAnswer(invocation -> restored(invocation.getArgument(1)));
+        CyclicBarrier barrier = new CyclicBarrier(2);
+        when(launchService.launch(any())).thenAnswer(ignored -> {
+            // 串行实现下第二个 launch 进不来，第一轮 await 超时并被当作可重试失败释放。
+            barrier.await(5, TimeUnit.SECONDS);
+            return new LaunchResponse("instance", "trace");
+        });
 
-    ExecutorService pool = Executors.newFixedThreadPool(2);
-    try {
-      reconciler(pool).reconcileTenant("ta", 2);
-    } finally {
-      pool.shutdownNow();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            reconciler(pool).reconcileTenant("ta", 2);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        verify(launchService, times(2)).launch(any());
+        verify(waitingService, never()).release(any(), any(), any());
     }
 
-    verify(launchService, times(2)).launch(any());
-    verify(waitingService, never()).release(any(), any(), any());
-  }
+    @Test
+    @DisplayName("单条失败只释放该条，同轮其他条目照常启动")
+    void shouldIsolateEntryFailure() {
+        when(waitingService.claimDue(eq("ta"), eq(2), any()))
+                .thenReturn(List.of(claim("req-a", 1L), claim("req-b", 2L)));
+        when(waitingService.restoreRequest(eq("ta"), any()))
+                .thenAnswer(invocation -> restored(invocation.getArgument(1)));
+        doAnswer(invocation -> {
+                    LaunchRequest request = invocation.getArgument(0);
+                    if ("req-a".equals(request.requestId())) {
+                        throw new IllegalStateException("launch boom");
+                    }
+                    return new LaunchResponse("instance", "trace");
+                })
+                .when(launchService)
+                .launch(any());
 
-  @Test
-  @DisplayName("单条失败只释放该条，同轮其他条目照常启动")
-  void shouldIsolateEntryFailure() {
-    when(waitingService.claimDue(eq("ta"), eq(2), any()))
-        .thenReturn(List.of(claim("req-a", 1L), claim("req-b", 2L)));
-    when(waitingService.restoreRequest(eq("ta"), any()))
-        .thenAnswer(invocation -> restored(invocation.getArgument(1)));
-    doAnswer(invocation -> {
-          LaunchRequest request = invocation.getArgument(0);
-          if ("req-a".equals(request.requestId())) {
-            throw new IllegalStateException("launch boom");
-          }
-          return new LaunchResponse("instance", "trace");
-        })
-        .when(launchService)
-        .launch(any());
+        reconciler(Runnable::run).reconcileTenant("ta", 2);
 
-    reconciler(Runnable::run).reconcileTenant("ta", 2);
+        verify(launchService, times(2)).launch(any());
+        verify(waitingService).release(eq("ta"), eq("req-a"), any());
+    }
 
-    verify(launchService, times(2)).launch(any());
-    verify(waitingService).release(eq("ta"), eq("req-a"), any());
-  }
+    private WorkflowLaunchWaitReconciler reconciler(Executor executor) {
+        WorkflowLaunchWaitProperties properties = new WorkflowLaunchWaitProperties();
+        properties.setBatchSize(100);
+        properties.setResumeBatchSize(8);
+        properties.setParallelism(4);
+        return new WorkflowLaunchWaitReconciler(
+                tenantDirectoryMapper, waitingService, launchService, properties, gracefulShutdown, executor);
+    }
 
-  private WorkflowLaunchWaitReconciler reconciler(Executor executor) {
-    WorkflowLaunchWaitProperties properties = new WorkflowLaunchWaitProperties();
-    properties.setBatchSize(100);
-    properties.setResumeBatchSize(8);
-    properties.setParallelism(4);
-    return new WorkflowLaunchWaitReconciler(
-        tenantDirectoryMapper,
-        waitingService,
-        launchService,
-        properties,
-        gracefulShutdown,
-        executor);
-  }
+    private static LaunchRequest restored(Object claim) {
+        WorkflowLaunchWaitClaim entry = (WorkflowLaunchWaitClaim) claim;
+        return LaunchRequest.builder()
+                .tenantId(entry.tenantId())
+                .requestId(entry.requestId())
+                .traceId("trace")
+                .build();
+    }
 
-  private static LaunchRequest restored(Object claim) {
-    WorkflowLaunchWaitClaim entry = (WorkflowLaunchWaitClaim) claim;
-    return LaunchRequest.builder()
-        .tenantId(entry.tenantId())
-        .requestId(entry.requestId())
-        .traceId("trace")
-        .build();
-  }
-
-  private static WorkflowLaunchWaitClaim claim(String requestId, long workflowId) {
-    return new WorkflowLaunchWaitClaim(
-        "ta", requestId, workflowId, LocalDate.of(2026, 1, 15), false, "{}");
-  }
+    private static WorkflowLaunchWaitClaim claim(String requestId, long workflowId) {
+        return new WorkflowLaunchWaitClaim("ta", requestId, workflowId, LocalDate.of(2026, 1, 15), false, "{}");
+    }
 }

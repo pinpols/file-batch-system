@@ -40,181 +40,178 @@ import org.slf4j.LoggerFactory;
 @DisplayName("KafkaTaskConsumer 关闭 — 唤醒并收拢消费线程,超时告警且重复关闭幂等")
 class KafkaConsumerCloseJoinTest {
 
-  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
-      .baseUrl("http://localhost:0")
-      .tenantId("tx")
-      .workerCode("w-1")
-      .kafkaBootstrap("kafka:9092")
-      .kafkaTopicPattern("batch.task.dispatch.tx.*")
-      .kafkaGroupId("g")
-      .maxConcurrentTasks(2)
-      .build();
+    private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+            .baseUrl("http://localhost:0")
+            .tenantId("tx")
+            .workerCode("w-1")
+            .kafkaBootstrap("kafka:9092")
+            .kafkaTopicPattern("batch.task.dispatch.tx.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(2)
+            .build();
 
-  private TaskDispatcher dispatcher;
-  private Thread runner;
-  private ListAppender<ILoggingEvent> appender;
-  private Logger logger;
+    private TaskDispatcher dispatcher;
+    private Thread runner;
+    private ListAppender<ILoggingEvent> appender;
+    private Logger logger;
 
-  @AfterEach
-  void tearDown() throws Exception {
-    if (runner != null && runner.isAlive()) {
-      runner.interrupt();
-      runner.join(2_000);
+    @AfterEach
+    void tearDown() throws Exception {
+        if (runner != null && runner.isAlive()) {
+            runner.interrupt();
+            runner.join(2_000);
+        }
+        if (dispatcher != null) dispatcher.stop();
+        if (logger != null && appender != null) logger.detachAppender(appender);
     }
-    if (dispatcher != null) dispatcher.stop();
-    if (logger != null && appender != null) logger.detachAppender(appender);
-  }
 
-  @SuppressWarnings("unchecked")
-  private Consumer<String, byte[]> mockConsumer() {
-    return mock(Consumer.class);
-  }
-
-  private void attachCapture() {
-    logger = (Logger) LoggerFactory.getLogger(KafkaTaskConsumer.class);
-    appender = new ListAppender<>();
-    appender.start();
-    logger.addAppender(appender);
-  }
-
-  private List<String> warnMessages() {
-    return appender.list.stream()
-        .filter(e -> e.getLevel() == Level.WARN)
-        .map(ILoggingEvent::getFormattedMessage)
-        .toList();
-  }
-
-  /** close(Duration) 在 join 超时时返回 + 打 WARN,且仍触发 wakeup;poll 线程未及时退出场景。 */
-  @Test
-  @DisplayName("消费线程卡住时关闭在超时预算内返回,唤醒消费端并告警提示位移可能未提交")
-  void shouldReturnWithinTimeoutAndWarn_whenPollLoopStuck() throws Exception {
-    attachCapture();
-    dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
-    Consumer<String, byte[]> consumer = mockConsumer();
-    doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
-    when(consumer.assignment()).thenReturn(Set.of());
-    doNothing().when(consumer).pause(anyCollection());
-    doNothing().when(consumer).resume(anyCollection());
-    // poll 长 sleep —— 模拟卡在 broker 不响应,wakeup 也"假装"被忽略(测 join 超时路径)
-    doAnswer(inv -> {
-          Thread.sleep(2_000);
-          return ConsumerRecords.<String, byte[]>empty();
-        })
-        .when(consumer)
-        .poll(any());
-    doNothing().when(consumer).wakeup(); // 故意不联动让 poll 抛 — 测 join 超时
-
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      runner = new Thread(kafka, "test-kafka-stuck");
-      runner.setDaemon(true);
-      runner.start();
-      Thread.sleep(150); // 让 poll loop 进入 sleep
-
-      long t0 = System.nanoTime();
-      kafka.close(Duration.ofMillis(500));
-      long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
-
-      assertThat(elapsedMs)
-          .as("close should return close to 500ms join timeout, not block on stuck poll")
-          .isLessThan(1_200L);
-      verify(consumer, atLeastOnce()).wakeup();
-      assertThat(warnMessages())
-          .anySatisfy(m -> assertThat(m).contains("did not exit within").contains("500"));
+    @SuppressWarnings("unchecked")
+    private Consumer<String, byte[]> mockConsumer() {
+        return mock(Consumer.class);
     }
-  }
 
-  @Test
-  @DisplayName("关闭预算为零时只唤醒消费端,不等待消费线程退出")
-  void shouldWakeConsumerWithoutWaiting_whenCloseBudgetZero() throws Exception {
-    dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
-    Consumer<String, byte[]> consumer = mockConsumer();
-    doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
-    when(consumer.assignment()).thenReturn(Set.of());
-    CountDownLatch pollEntered = new CountDownLatch(1);
-    doAnswer(invocation -> {
-          pollEntered.countDown();
-          Thread.sleep(5_000L);
-          return ConsumerRecords.<String, byte[]>empty();
-        })
-        .when(consumer)
-        .poll(any());
-
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      runner = new Thread(kafka, "test-kafka-zero-budget");
-      runner.setDaemon(true);
-      runner.start();
-      assertThat(pollEntered.await(1, TimeUnit.SECONDS)).isTrue();
-
-      long startedAt = System.nanoTime();
-      kafka.close(Duration.ZERO);
-      long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
-
-      assertThat(elapsedMillis).isLessThan(100L);
-      verify(consumer).wakeup();
-      runner.interrupt();
-      runner.join(1_000L);
+    private void attachCapture() {
+        logger = (Logger) LoggerFactory.getLogger(KafkaTaskConsumer.class);
+        appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
     }
-  }
 
-  /** close(Duration) 在 poll 线程已退出时立刻返回,不打 WARN。 */
-  @Test
-  @DisplayName("消费线程已正常退出时关闭迅速返回且不产生告警")
-  void shouldReturnImmediately_whenPollLoopExited() throws Exception {
-    attachCapture();
-    dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
-    Consumer<String, byte[]> consumer = mockConsumer();
-    doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
-    when(consumer.assignment()).thenReturn(Set.of());
-    doNothing().when(consumer).pause(anyCollection());
-    doNothing().when(consumer).resume(anyCollection());
-    // 正常 wakeup 联动 —— poll 抛 WakeupException 让 run() 退出
-    doAnswer(inv -> {
-          Thread.sleep(50);
-          return ConsumerRecords.<String, byte[]>empty();
-        })
-        .when(consumer)
-        .poll(any());
-    doAnswer(inv -> {
-          when(consumer.poll(any())).thenThrow(new WakeupException());
-          return null;
-        })
-        .when(consumer)
-        .wakeup();
-
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      runner = new Thread(kafka, "test-kafka-clean");
-      runner.setDaemon(true);
-      runner.start();
-      Thread.sleep(100);
-
-      long t0 = System.nanoTime();
-      kafka.close(Duration.ofMillis(1_000));
-      long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
-
-      assertThat(elapsedMs).as("clean exit should return quickly").isLessThan(800L);
-      runner.join(1_000);
-      assertThat(runner.isAlive()).isFalse();
-      assertThat(warnMessages()).noneSatisfy(m -> assertThat(m).contains("did not exit within"));
+    private List<String> warnMessages() {
+        return appender.list.stream()
+                .filter(e -> e.getLevel() == Level.WARN)
+                .map(ILoggingEvent::getFormattedMessage)
+                .toList();
     }
-  }
 
-  /** 二次调用 close() 幂等,不重复 wakeup / 不阻塞。 */
-  @Test
-  @DisplayName("重复关闭不重复唤醒也不阻塞,运行标记为假")
-  void shouldBeIdempotent_whenCloseCalledTwice() {
-    dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
-    Consumer<String, byte[]> consumer = mockConsumer();
-    doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
-    when(consumer.assignment()).thenReturn(Set.of());
-    try (KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      // 不启动 run 线程 — close 也应直接返回
-      kafka.close(Duration.ofMillis(100));
-      kafka.close(Duration.ofMillis(100));
-      assertThat(kafka.isRunning()).isFalse();
+    /** close(Duration) 在 join 超时时返回 + 打 WARN,且仍触发 wakeup;poll 线程未及时退出场景。 */
+    @Test
+    @DisplayName("消费线程卡住时关闭在超时预算内返回,唤醒消费端并告警提示位移可能未提交")
+    void shouldReturnWithinTimeoutAndWarn_whenPollLoopStuck() throws Exception {
+        attachCapture();
+        dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
+        Consumer<String, byte[]> consumer = mockConsumer();
+        doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
+        when(consumer.assignment()).thenReturn(Set.of());
+        doNothing().when(consumer).pause(anyCollection());
+        doNothing().when(consumer).resume(anyCollection());
+        // poll 长 sleep —— 模拟卡在 broker 不响应,wakeup 也"假装"被忽略(测 join 超时路径)
+        doAnswer(inv -> {
+                    Thread.sleep(2_000);
+                    return ConsumerRecords.<String, byte[]>empty();
+                })
+                .when(consumer)
+                .poll(any());
+        doNothing().when(consumer).wakeup(); // 故意不联动让 poll 抛 — 测 join 超时
+
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            runner = new Thread(kafka, "test-kafka-stuck");
+            runner.setDaemon(true);
+            runner.start();
+            Thread.sleep(150); // 让 poll loop 进入 sleep
+
+            long t0 = System.nanoTime();
+            kafka.close(Duration.ofMillis(500));
+            long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
+
+            assertThat(elapsedMs)
+                    .as("close should return close to 500ms join timeout, not block on stuck poll")
+                    .isLessThan(1_200L);
+            verify(consumer, atLeastOnce()).wakeup();
+            assertThat(warnMessages())
+                    .anySatisfy(
+                            m -> assertThat(m).contains("did not exit within").contains("500"));
+        }
     }
-  }
+
+    @Test
+    @DisplayName("关闭预算为零时只唤醒消费端,不等待消费线程退出")
+    void shouldWakeConsumerWithoutWaiting_whenCloseBudgetZero() throws Exception {
+        dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
+        Consumer<String, byte[]> consumer = mockConsumer();
+        doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
+        when(consumer.assignment()).thenReturn(Set.of());
+        CountDownLatch pollEntered = new CountDownLatch(1);
+        doAnswer(invocation -> {
+                    pollEntered.countDown();
+                    Thread.sleep(5_000L);
+                    return ConsumerRecords.<String, byte[]>empty();
+                })
+                .when(consumer)
+                .poll(any());
+
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            runner = new Thread(kafka, "test-kafka-zero-budget");
+            runner.setDaemon(true);
+            runner.start();
+            assertThat(pollEntered.await(1, TimeUnit.SECONDS)).isTrue();
+
+            long startedAt = System.nanoTime();
+            kafka.close(Duration.ZERO);
+            long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+
+            assertThat(elapsedMillis).isLessThan(100L);
+            verify(consumer).wakeup();
+            runner.interrupt();
+            runner.join(1_000L);
+        }
+    }
+
+    /** close(Duration) 在 poll 线程已退出时立刻返回,不打 WARN。 */
+    @Test
+    @DisplayName("消费线程已正常退出时关闭迅速返回且不产生告警")
+    void shouldReturnImmediately_whenPollLoopExited() throws Exception {
+        attachCapture();
+        dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
+        Consumer<String, byte[]> consumer = mockConsumer();
+        doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
+        when(consumer.assignment()).thenReturn(Set.of());
+        doNothing().when(consumer).pause(anyCollection());
+        doNothing().when(consumer).resume(anyCollection());
+        // 正常 wakeup 联动 —— poll 抛 WakeupException 让 run() 退出
+        doAnswer(inv -> {
+                    Thread.sleep(50);
+                    return ConsumerRecords.<String, byte[]>empty();
+                })
+                .when(consumer)
+                .poll(any());
+        doAnswer(inv -> {
+                    when(consumer.poll(any())).thenThrow(new WakeupException());
+                    return null;
+                })
+                .when(consumer)
+                .wakeup();
+
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            runner = new Thread(kafka, "test-kafka-clean");
+            runner.setDaemon(true);
+            runner.start();
+            Thread.sleep(100);
+
+            long t0 = System.nanoTime();
+            kafka.close(Duration.ofMillis(1_000));
+            long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
+
+            assertThat(elapsedMs).as("clean exit should return quickly").isLessThan(800L);
+            runner.join(1_000);
+            assertThat(runner.isAlive()).isFalse();
+            assertThat(warnMessages()).noneSatisfy(m -> assertThat(m).contains("did not exit within"));
+        }
+    }
+
+    /** 二次调用 close() 幂等,不重复 wakeup / 不阻塞。 */
+    @Test
+    @DisplayName("重复关闭不重复唤醒也不阻塞,运行标记为假")
+    void shouldBeIdempotent_whenCloseCalledTwice() {
+        dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
+        Consumer<String, byte[]> consumer = mockConsumer();
+        doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
+        when(consumer.assignment()).thenReturn(Set.of());
+        try (KafkaTaskConsumer kafka = new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+            // 不启动 run 线程 — close 也应直接返回
+            kafka.close(Duration.ofMillis(100));
+            kafka.close(Duration.ofMillis(100));
+            assertThat(kafka.isRunning()).isFalse();
+        }
+    }
 }

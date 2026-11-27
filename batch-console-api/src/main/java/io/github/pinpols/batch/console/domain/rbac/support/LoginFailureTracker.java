@@ -26,57 +26,56 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class LoginFailureTracker {
 
-  private static final String ACCOUNT_KEY_PREFIX = "login:fail:account:";
-  private static final String IP_KEY_PREFIX = "login:fail:ip:";
-  private static final String RATE_LIMIT_KEY_PREFIX = "rate_limit:";
+    private static final String ACCOUNT_KEY_PREFIX = "login:fail:account:";
+    private static final String IP_KEY_PREFIX = "login:fail:ip:";
+    private static final String RATE_LIMIT_KEY_PREFIX = "rate_limit:";
 
-  private final LoginFailureStore failureStore;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final LoginProtectionProperties properties;
+    private final LoginFailureStore failureStore;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final LoginProtectionProperties properties;
 
-  /** 记一次失败(账号 + IP 各 +1),返回两维度中较大的窗口内计数(供阈值判定)。 */
-  public long recordFailure(String username, String clientIp) {
-    long accountCount = recordFailureAttempt(ACCOUNT_KEY_PREFIX + normalize(username));
-    long ipCount = recordFailureAttempt(IP_KEY_PREFIX + normalize(clientIp));
-    return Math.max(accountCount, ipCount);
-  }
-
-  /** 读账号 + IP 两维度窗口内失败计数的较大者(只读)。 */
-  public long currentFailures(String username, String clientIp) {
-    long accountCount = count(ACCOUNT_KEY_PREFIX + normalize(username));
-    long ipCount = count(IP_KEY_PREFIX + normalize(clientIp));
-    return Math.max(accountCount, ipCount);
-  }
-
-  /** 登录成功:清零该账号失败计数(IP 计数保留——IP 是共享资源)。 */
-  public void clearAccount(String username) {
-    failureStore.delete(RATE_LIMIT_KEY_PREFIX + ACCOUNT_KEY_PREFIX + normalize(username));
-  }
-
-  private long recordFailureAttempt(String key) {
-    long now = dateTimeSupport.currentEpochMillis();
-    long windowStart = now - windowMillis();
-    long ttlSeconds = (windowMillis() / 1000) + 1;
-    UUID attemptId = UUID.randomUUID();
-    String attemptIdText = attemptId.toString();
-    return failureStore.recordFailure(
-        RATE_LIMIT_KEY_PREFIX + key, now, windowStart, attemptIdText, ttlSeconds);
-  }
-
-  private long count(String key) {
-    long windowStart = dateTimeSupport.currentEpochMillis() - windowMillis();
-    return failureStore.count(RATE_LIMIT_KEY_PREFIX + key, windowStart);
-  }
-
-  private long windowMillis() {
-    return properties.getFailWindowMinutes() * 60_000L;
-  }
-
-  private static String normalize(String raw) {
-    if (EmptyChecks.isNull(raw)) {
-      return "";
+    /** 记一次失败(账号 + IP 各 +1),返回两维度中较大的窗口内计数(供阈值判定)。 */
+    public long recordFailure(String username, String clientIp) {
+        long accountCount = recordFailureAttempt(ACCOUNT_KEY_PREFIX + normalize(username));
+        long ipCount = recordFailureAttempt(IP_KEY_PREFIX + normalize(clientIp));
+        return Math.max(accountCount, ipCount);
     }
-    String trimmedRaw = raw.trim();
-    return trimmedRaw.toLowerCase(Locale.ROOT);
-  }
+
+    /** 读账号 + IP 两维度窗口内失败计数的较大者(只读)。 */
+    public long currentFailures(String username, String clientIp) {
+        long accountCount = count(ACCOUNT_KEY_PREFIX + normalize(username));
+        long ipCount = count(IP_KEY_PREFIX + normalize(clientIp));
+        return Math.max(accountCount, ipCount);
+    }
+
+    /** 登录成功:清零该账号失败计数(IP 计数保留——IP 是共享资源)。 */
+    public void clearAccount(String username) {
+        failureStore.delete(RATE_LIMIT_KEY_PREFIX + ACCOUNT_KEY_PREFIX + normalize(username));
+    }
+
+    private long recordFailureAttempt(String key) {
+        long now = dateTimeSupport.currentEpochMillis();
+        long windowStart = now - windowMillis();
+        long ttlSeconds = (windowMillis() / 1000) + 1;
+        UUID attemptId = UUID.randomUUID();
+        String attemptIdText = attemptId.toString();
+        return failureStore.recordFailure(RATE_LIMIT_KEY_PREFIX + key, now, windowStart, attemptIdText, ttlSeconds);
+    }
+
+    private long count(String key) {
+        long windowStart = dateTimeSupport.currentEpochMillis() - windowMillis();
+        return failureStore.count(RATE_LIMIT_KEY_PREFIX + key, windowStart);
+    }
+
+    private long windowMillis() {
+        return properties.getFailWindowMinutes() * 60_000L;
+    }
+
+    private static String normalize(String raw) {
+        if (EmptyChecks.isNull(raw)) {
+            return "";
+        }
+        String trimmedRaw = raw.trim();
+        return trimmedRaw.toLowerCase(Locale.ROOT);
+    }
 }

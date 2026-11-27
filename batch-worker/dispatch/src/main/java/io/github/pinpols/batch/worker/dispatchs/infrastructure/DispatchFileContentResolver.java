@@ -21,62 +21,62 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DispatchFileContentResolver {
 
-  private final S3StorageProperties s3Properties;
-  private final BatchObjectCryptoService cryptoService;
-  // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配对象存储时保持 null(同历史行为)。
-  private final ObjectProvider<BatchObjectStore> objectStoreProvider;
-  private BatchObjectStore objectStore;
+    private final S3StorageProperties s3Properties;
+    private final BatchObjectCryptoService cryptoService;
+    // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配对象存储时保持 null(同历史行为)。
+    private final ObjectProvider<BatchObjectStore> objectStoreProvider;
+    private BatchObjectStore objectStore;
 
-  @PostConstruct
-  void init() {
-    // 对象存储 bean 仅在存储配置有效时装配;未配则 null
-    // (LOCAL 路径无需对象存储;远程路径在 openInputStream 里按 null 抛 ObjectStoreException)。
-    this.objectStore = objectStoreProvider.getIfAvailable();
-  }
+    @PostConstruct
+    void init() {
+        // 对象存储 bean 仅在存储配置有效时装配;未配则 null
+        // (LOCAL 路径无需对象存储;远程路径在 openInputStream 里按 null 抛 ObjectStoreException)。
+        this.objectStore = objectStoreProvider.getIfAvailable();
+    }
 
-  /** 打开文件内容流（调用方负责关闭）；大文件建议使用 {@link #streamToConsumer}。 */
-  public InputStream openInputStream(Map<String, Object> fileRecord) throws IOException {
-    Object storageTypeValue = fileRecord.getOrDefault("storage_type", "");
-    String rawStorageType = String.valueOf(storageTypeValue);
-    String storageType = rawStorageType.toUpperCase(Locale.ROOT);
-    String storagePath = String.valueOf(fileRecord.getOrDefault("storage_path", ""));
-    if (!Texts.hasText(storagePath)) {
-      throw new IllegalStateException("storage_path missing");
+    /** 打开文件内容流（调用方负责关闭）；大文件建议使用 {@link #streamToConsumer}。 */
+    public InputStream openInputStream(Map<String, Object> fileRecord) throws IOException {
+        Object storageTypeValue = fileRecord.getOrDefault("storage_type", "");
+        String rawStorageType = String.valueOf(storageTypeValue);
+        String storageType = rawStorageType.toUpperCase(Locale.ROOT);
+        String storagePath = String.valueOf(fileRecord.getOrDefault("storage_path", ""));
+        if (!Texts.hasText(storagePath)) {
+            throw new IllegalStateException("storage_path missing");
+        }
+        // C-4: 规范化前拒绝路径遍历序列
+        if (storagePath.contains("..")) {
+            throw new SecurityException("storage_path contains path traversal sequence: " + storagePath);
+        }
+        Path rawLocalPath = Path.of(storagePath);
+        Path absoluteLocalPath = rawLocalPath.toAbsolutePath();
+        Path local = absoluteLocalPath.normalize();
+        if ("LOCAL".equals(storageType) || Files.isRegularFile(local)) {
+            return Files.newInputStream(local);
+        }
+        if (objectStore == null) {
+            // 走项目存储异常体系,上层可区分「存储未配置」与其他技术错误(而非被通用 500 捕获并抑制)。
+            throw new ObjectStoreException("object store not configured for remote storage");
+        }
+        String defaultBucket = s3Properties.getBucket();
+        Object storageBucketValue = fileRecord.getOrDefault("storage_bucket", defaultBucket);
+        String bucket = String.valueOf(storageBucketValue);
+        if (!Texts.hasText(bucket)) {
+            bucket = s3Properties.getBucket();
+        }
+        // M-7: 若 decryptIfNeeded 抛异常，确保对象存储流被关闭
+        InputStream inputStream = objectStore.get(bucket, storagePath);
+        try {
+            if (cryptoService.isBypassMode()) {
+                return inputStream;
+            }
+            return cryptoService.decryptIfNeeded(inputStream);
+        } catch (Exception e) {
+            try {
+                inputStream.close();
+            } catch (Exception ignored) {
+                // 解密已失败并会重新抛出原异常 e；关闭流的失败不能覆盖它，这里只做尽力释放
+            }
+            throw e;
+        }
     }
-    // C-4: 规范化前拒绝路径遍历序列
-    if (storagePath.contains("..")) {
-      throw new SecurityException("storage_path contains path traversal sequence: " + storagePath);
-    }
-    Path rawLocalPath = Path.of(storagePath);
-    Path absoluteLocalPath = rawLocalPath.toAbsolutePath();
-    Path local = absoluteLocalPath.normalize();
-    if ("LOCAL".equals(storageType) || Files.isRegularFile(local)) {
-      return Files.newInputStream(local);
-    }
-    if (objectStore == null) {
-      // 走项目存储异常体系,上层可区分「存储未配置」与其他技术错误(而非被通用 500 捕获并抑制)。
-      throw new ObjectStoreException("object store not configured for remote storage");
-    }
-    String defaultBucket = s3Properties.getBucket();
-    Object storageBucketValue = fileRecord.getOrDefault("storage_bucket", defaultBucket);
-    String bucket = String.valueOf(storageBucketValue);
-    if (!Texts.hasText(bucket)) {
-      bucket = s3Properties.getBucket();
-    }
-    // M-7: 若 decryptIfNeeded 抛异常，确保对象存储流被关闭
-    InputStream inputStream = objectStore.get(bucket, storagePath);
-    try {
-      if (cryptoService.isBypassMode()) {
-        return inputStream;
-      }
-      return cryptoService.decryptIfNeeded(inputStream);
-    } catch (Exception e) {
-      try {
-        inputStream.close();
-      } catch (Exception ignored) {
-        // 解密已失败并会重新抛出原异常 e；关闭流的失败不能覆盖它，这里只做尽力释放
-      }
-      throw e;
-    }
-  }
 }

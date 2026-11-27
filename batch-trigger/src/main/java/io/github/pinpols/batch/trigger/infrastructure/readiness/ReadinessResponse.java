@@ -13,7 +13,7 @@ import java.time.Instant;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ReadinessResponse(boolean ready, String reason, Instant readyAt) {
 
-  public ReadinessResponse(boolean ready, String reason) {
-    this(ready, reason, null);
-  }
+    public ReadinessResponse(boolean ready, String reason) {
+        this(ready, reason, null);
+    }
 }

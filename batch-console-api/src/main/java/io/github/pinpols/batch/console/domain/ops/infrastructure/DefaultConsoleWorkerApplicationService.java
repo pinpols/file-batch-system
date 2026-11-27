@@ -42,114 +42,107 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerApplicationService {
 
-  // ── duplicate literal constants ─────────────────────────────────────────
-  private static final String KEY_WORKERS = "workers";
-  private static final String KEY_TENANT_ID = "tenantId";
+    // ── duplicate literal constants ─────────────────────────────────────────
+    private static final String KEY_WORKERS = "workers";
+    private static final String KEY_TENANT_ID = "tenantId";
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final TenantIdResolver tenantGuard;
-  private final ConsoleRealtimeEventPort domainEventPublisher;
+    private final OrchestratorInternalRestClient orchestratorInternalRestClient;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final TenantIdResolver tenantGuard;
+    private final ConsoleRealtimeEventPort domainEventPublisher;
 
-  @Override
-  public ConsoleWorkerRegistryResponse drain(
-      String workerCode, DrainWorkerRequest request, String idempotencyKey) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.client();
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put(KEY_TENANT_ID, tenantId);
-    if (request.getTimeoutSeconds() != null) {
-      body.put("timeoutSeconds", request.getTimeoutSeconds());
+    @Override
+    public ConsoleWorkerRegistryResponse drain(String workerCode, DrainWorkerRequest request, String idempotencyKey) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        ConsoleRequestMetadata meta = requestMetadataResolver.current();
+        RestClient client = orchestratorInternalRestClient.client();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put(KEY_TENANT_ID, tenantId);
+        if (request.getTimeoutSeconds() != null) {
+            body.put("timeoutSeconds", request.getTimeoutSeconds());
+        }
+        ConsoleWorkerRegistryResponse response = client.post()
+                .uri("/internal/workers/{workerCode}/drain", workerCode)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+                .body(body)
+                .retrieve()
+                .body(ConsoleWorkerRegistryResponse.class);
+        domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
+        return response;
     }
-    ConsoleWorkerRegistryResponse response = client
-        .post()
-        .uri("/internal/workers/{workerCode}/drain", workerCode)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-        .body(body)
-        .retrieve()
-        .body(ConsoleWorkerRegistryResponse.class);
-    domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
-    domainEventPublisher.publishSummaryRefresh(tenantId);
-    return response;
-  }
 
-  @Override
-  public ConsoleWorkerRegistryResponse forceOffline(
-      String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.client();
-    ConsoleWorkerRegistryResponse response = client
-        .post()
-        .uri("/internal/workers/{workerCode}/force-offline", workerCode)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-        .body(Map.of(KEY_TENANT_ID, tenantId))
-        .retrieve()
-        .body(ConsoleWorkerRegistryResponse.class);
-    domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
-    domainEventPublisher.publishSummaryRefresh(tenantId);
-    return response;
-  }
+    @Override
+    public ConsoleWorkerRegistryResponse forceOffline(
+            String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        ConsoleRequestMetadata meta = requestMetadataResolver.current();
+        RestClient client = orchestratorInternalRestClient.client();
+        ConsoleWorkerRegistryResponse response = client.post()
+                .uri("/internal/workers/{workerCode}/force-offline", workerCode)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+                .body(Map.of(KEY_TENANT_ID, tenantId))
+                .retrieve()
+                .body(ConsoleWorkerRegistryResponse.class);
+        domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
+        return response;
+    }
 
-  @Override
-  public ConsoleWorkerRegistryResponse takeover(
-      String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.client();
-    ConsoleWorkerRegistryResponse response = client
-        .post()
-        .uri("/internal/workers/{workerCode}/takeover", workerCode)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-        .body(Map.of(KEY_TENANT_ID, tenantId))
-        .retrieve()
-        .body(ConsoleWorkerRegistryResponse.class);
-    domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
-    domainEventPublisher.publishSummaryRefresh(tenantId);
-    return response;
-  }
+    @Override
+    public ConsoleWorkerRegistryResponse takeover(
+            String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        ConsoleRequestMetadata meta = requestMetadataResolver.current();
+        RestClient client = orchestratorInternalRestClient.client();
+        ConsoleWorkerRegistryResponse response = client.post()
+                .uri("/internal/workers/{workerCode}/takeover", workerCode)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+                .body(Map.of(KEY_TENANT_ID, tenantId))
+                .retrieve()
+                .body(ConsoleWorkerRegistryResponse.class);
+        domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
+        return response;
+    }
 
-  @Override
-  public List<ConsoleWorkerClaimedTaskResponse> claimedTasks(String tenantId, String workerCode) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.client();
-    List<ConsoleWorkerClaimedTaskResponse> tasks = client
-        .get()
-        .uri(uriBuilder -> uriBuilder
-            .path("/internal/workers/{workerCode}/claimed-tasks")
-            .queryParam(KEY_TENANT_ID, resolved)
-            .build(workerCode))
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-        .retrieve()
-        .body(new ParameterizedTypeReference<List<ConsoleWorkerClaimedTaskResponse>>() {});
-    return tasks == null ? List.of() : tasks;
-  }
+    @Override
+    public List<ConsoleWorkerClaimedTaskResponse> claimedTasks(String tenantId, String workerCode) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        ConsoleRequestMetadata meta = requestMetadataResolver.current();
+        RestClient client = orchestratorInternalRestClient.client();
+        List<ConsoleWorkerClaimedTaskResponse> tasks = client.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/internal/workers/{workerCode}/claimed-tasks")
+                        .queryParam(KEY_TENANT_ID, resolved)
+                        .build(workerCode))
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<ConsoleWorkerClaimedTaskResponse>>() {});
+        return tasks == null ? List.of() : tasks;
+    }
 
-  @Override
-  public ConsoleWorkerRegistryResponse warmup(
-      String workerCode, String tenantId, String idempotencyKey) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.client();
-    ConsoleWorkerRegistryResponse response = client
-        .post()
-        .uri("/internal/workers/{workerCode}/warmup", workerCode)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-        .body(Map.of(KEY_TENANT_ID, resolved))
-        .retrieve()
-        .body(ConsoleWorkerRegistryResponse.class);
-    domainEventPublisher.publishChanged(resolved, KEY_WORKERS, "worker-warmup");
-    return response;
-  }
+    @Override
+    public ConsoleWorkerRegistryResponse warmup(String workerCode, String tenantId, String idempotencyKey) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        ConsoleRequestMetadata meta = requestMetadataResolver.current();
+        RestClient client = orchestratorInternalRestClient.client();
+        ConsoleWorkerRegistryResponse response = client.post()
+                .uri("/internal/workers/{workerCode}/warmup", workerCode)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+                .body(Map.of(KEY_TENANT_ID, resolved))
+                .retrieve()
+                .body(ConsoleWorkerRegistryResponse.class);
+        domainEventPublisher.publishChanged(resolved, KEY_WORKERS, "worker-warmup");
+        return response;
+    }
 }

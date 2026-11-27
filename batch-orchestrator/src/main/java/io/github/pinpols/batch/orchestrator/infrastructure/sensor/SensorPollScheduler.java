@@ -31,68 +31,64 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SensorPollScheduler {
 
-  private static final int MAX_PER_TICK = 50;
+    private static final int MAX_PER_TICK = 50;
 
-  private final SensorProbeTransactionExecutor transactionExecutor;
-  private final SensorProperties props;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  // RLS Phase B：workflow_node_run 实体没 tenantId，先通过 workflow_run（selectByIdAnyTenant
-  // RLS-bypass）解出 tenant，再绑定 holder 跑 probeOne。
-  private final WorkflowRunMapper workflowRunMapper;
+    private final SensorProbeTransactionExecutor transactionExecutor;
+    private final SensorProperties props;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    // RLS Phase B：workflow_node_run 实体没 tenantId，先通过 workflow_run（selectByIdAnyTenant
+    // RLS-bypass）解出 tenant，再绑定 holder 跑 probeOne。
+    private final WorkflowRunMapper workflowRunMapper;
 
-  // fixedDelay 的第一次会在启动后立刻执行。默认 PT0S 保持该行为；测试把首次扫描推迟，
-  // 才能按显式 scan() 观察仍在 RUNNING 的 WAIT，而不是被启动 tick 提前终结。
-  @Scheduled(
-      initialDelayString = "${batch.sensor.scan-initial-delay:PT0S}",
-      fixedDelayString = "${batch.sensor.scan-interval:PT10S}")
-  @SchedulerLock(name = "sensor_poll", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1S")
-  public void scheduledScan() {
-    scan();
-  }
-
-  /** 业务入口：scheduled / 手工调用都走此方法；测试时直接调可绕开 ShedLock。 */
-  public void scan() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    // fixedDelay 的第一次会在启动后立刻执行。默认 PT0S 保持该行为；测试把首次扫描推迟，
+    // 才能按显式 scan() 观察仍在 RUNNING 的 WAIT，而不是被启动 tick 提前终结。
+    @Scheduled(
+            initialDelayString = "${batch.sensor.scan-initial-delay:PT0S}",
+            fixedDelayString = "${batch.sensor.scan-interval:PT10S}")
+    @SchedulerLock(name = "sensor_poll", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1S")
+    public void scheduledScan() {
+        scan();
     }
-    Instant now = BatchDateTimeSupport.utcNow();
-    List<WorkflowNodeRunEntity> due = transactionExecutor.fetchDue(now, MAX_PER_TICK);
-    if (due.isEmpty()) {
-      return;
-    }
-    log.debug(
-        "Sensor scheduler tick: {} due WAIT nodes (interval={})",
-        due.size(),
-        props.getScanInterval());
-    for (WorkflowNodeRunEntity nodeRun : due) {
-      try {
-        // 先解 tenantId（workflow_run.selectByIdAnyTenant 走 RLS-bypass，安全）。
-        String tenantId = resolveTenantId(nodeRun);
-        if (tenantId == null || tenantId.isBlank()) {
-          // 所属工作流缺失或租户不可解析时不能在无租户上下文下执行状态变更。
-          log.warn(
-              "Skipping WAIT sensor probe because owning tenant could not be resolved:"
-                  + " nodeRunId={}, workflowRunId={}",
-              nodeRun.getId(),
-              nodeRun.getWorkflowRunId());
-          continue;
+
+    /** 业务入口：scheduled / 手工调用都走此方法；测试时直接调可绕开 ShedLock。 */
+    public void scan() {
+        if (gracefulShutdown.isDraining()) {
+            return;
         }
-        RlsTenantContextHolder.runWithTenant(
-            tenantId, () -> transactionExecutor.probeOne(nodeRun, now));
-      } catch (Exception e) {
-        // R2-P2-6：e.toString() 只给类名 + message 不带 stack；sensor policy 内部 NPE 等代码缺陷
-        // 会留下数千行无 actionable 信息的 warn。带 stack 让运维能直接定位根因。
-        log.warn("Sensor probe tick failed nodeRunId={}", nodeRun.getId(), e);
-      }
+        Instant now = BatchDateTimeSupport.utcNow();
+        List<WorkflowNodeRunEntity> due = transactionExecutor.fetchDue(now, MAX_PER_TICK);
+        if (due.isEmpty()) {
+            return;
+        }
+        log.debug("Sensor scheduler tick: {} due WAIT nodes (interval={})", due.size(), props.getScanInterval());
+        for (WorkflowNodeRunEntity nodeRun : due) {
+            try {
+                // 先解 tenantId（workflow_run.selectByIdAnyTenant 走 RLS-bypass，安全）。
+                String tenantId = resolveTenantId(nodeRun);
+                if (tenantId == null || tenantId.isBlank()) {
+                    // 所属工作流缺失或租户不可解析时不能在无租户上下文下执行状态变更。
+                    log.warn(
+                            "Skipping WAIT sensor probe because owning tenant could not be resolved:"
+                                    + " nodeRunId={}, workflowRunId={}",
+                            nodeRun.getId(),
+                            nodeRun.getWorkflowRunId());
+                    continue;
+                }
+                RlsTenantContextHolder.runWithTenant(tenantId, () -> transactionExecutor.probeOne(nodeRun, now));
+            } catch (Exception e) {
+                // R2-P2-6：e.toString() 只给类名 + message 不带 stack；sensor policy 内部 NPE 等代码缺陷
+                // 会留下数千行无 actionable 信息的 warn。带 stack 让运维能直接定位根因。
+                log.warn("Sensor probe tick failed nodeRunId={}", nodeRun.getId(), e);
+            }
+        }
     }
-  }
 
-  /** 通过 selectByIdAnyTenant 解出 nodeRun 所属 workflow_run 的 tenantId；找不到返回 null。 */
-  private String resolveTenantId(WorkflowNodeRunEntity nodeRun) {
-    if (nodeRun == null || nodeRun.getWorkflowRunId() == null) {
-      return null;
+    /** 通过 selectByIdAnyTenant 解出 nodeRun 所属 workflow_run 的 tenantId；找不到返回 null。 */
+    private String resolveTenantId(WorkflowNodeRunEntity nodeRun) {
+        if (nodeRun == null || nodeRun.getWorkflowRunId() == null) {
+            return null;
+        }
+        WorkflowRunEntity wfRun = workflowRunMapper.selectByIdAnyTenant(nodeRun.getWorkflowRunId());
+        return wfRun == null ? null : wfRun.getTenantId();
     }
-    WorkflowRunEntity wfRun = workflowRunMapper.selectByIdAnyTenant(nodeRun.getWorkflowRunId());
-    return wfRun == null ? null : wfRun.getTenantId();
-  }
 }

@@ -14,21 +14,21 @@ import java.util.List;
  * 一份字段列表。
  */
 public record BaseWorkerProperties(
-    String workerCode,
-    String workerType,
-    String tenantId,
-    Long heartbeatIntervalMillis,
-    String topic,
-    String consumerGroupId,
-    List<String> capabilityTags)
-    implements WorkerConfiguration {
+        String workerCode,
+        String workerType,
+        String tenantId,
+        Long heartbeatIntervalMillis,
+        String topic,
+        String consumerGroupId,
+        List<String> capabilityTags)
+        implements WorkerConfiguration {
 
-  public BaseWorkerProperties {
-    capabilityTags = normalizeCapabilityTags(capabilityTags);
-  }
+    public BaseWorkerProperties {
+        capabilityTags = normalizeCapabilityTags(capabilityTags);
+    }
 
-  /** Spring 绑定缺省时 capabilityTags 为 null，这里统一替换为不可变空列表，业务侧 forEach 安全。 */
-  public static List<String> normalizeCapabilityTags(List<String> capabilityTags) {
-    return capabilityTags == null ? List.of() : capabilityTags;
-  }
+    /** Spring 绑定缺省时 capabilityTags 为 null，这里统一替换为不可变空列表，业务侧 forEach 安全。 */
+    public static List<String> normalizeCapabilityTags(List<String> capabilityTags) {
+        return capabilityTags == null ? List.of() : capabilityTags;
+    }
 }

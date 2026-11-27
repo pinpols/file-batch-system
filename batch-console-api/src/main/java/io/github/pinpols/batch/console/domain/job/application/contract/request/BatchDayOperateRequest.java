@@ -17,28 +17,28 @@ import lombok.Data;
 @Data
 public class BatchDayOperateRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  private String calendarCode;
+    @NotBlank
+    @Size(max = 128)
+    private String calendarCode;
 
-  @NotNull
-  private LocalDate bizDate;
+    @NotNull
+    private LocalDate bizDate;
 
-  /** FREEZE / RELEASE / SKIP / REOPEN / CLOSE / SETTLE_EMPTY。 */
-  @NotBlank
-  @Pattern(
-      regexp = "^(FREEZE|RELEASE|SKIP|REOPEN|CLOSE|SETTLE_EMPTY)$",
-      message = "action must be FREEZE / RELEASE / SKIP / REOPEN / CLOSE / SETTLE_EMPTY")
-  private String action;
+    /** FREEZE / RELEASE / SKIP / REOPEN / CLOSE / SETTLE_EMPTY。 */
+    @NotBlank
+    @Pattern(
+            regexp = "^(FREEZE|RELEASE|SKIP|REOPEN|CLOSE|SETTLE_EMPTY)$",
+            message = "action must be FREEZE / RELEASE / SKIP / REOPEN / CLOSE / SETTLE_EMPTY")
+    private String action;
 
-  /** 兼容旧客户端保留；服务端忽略此值，审计操作者始终取认证上下文。 */
-  @Size(max = 128)
-  private String operatorId;
+    /** 兼容旧客户端保留；服务端忽略此值，审计操作者始终取认证上下文。 */
+    @Size(max = 128)
+    private String operatorId;
 
-  /** 操作原因（SKIP、REOPEN、SETTLE_EMPTY 必填；写入批量日操作审计）。 */
-  @Size(max = 1024)
-  private String reason;
+    /** 操作原因（SKIP、REOPEN、SETTLE_EMPTY 必填；写入批量日操作审计）。 */
+    @Size(max = 1024)
+    private String reason;
 }

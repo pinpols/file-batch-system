@@ -5,11 +5,11 @@ package io.github.pinpols.batch.common.storage;
  */
 public class ObjectStoreAccessException extends ObjectStoreException {
 
-  public ObjectStoreAccessException(String message) {
-    super(message);
-  }
+    public ObjectStoreAccessException(String message) {
+        super(message);
+    }
 
-  public ObjectStoreAccessException(String message, Throwable cause) {
-    super(message, cause);
-  }
+    public ObjectStoreAccessException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

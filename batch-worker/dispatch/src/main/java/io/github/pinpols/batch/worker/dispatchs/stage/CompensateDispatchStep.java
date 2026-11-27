@@ -28,85 +28,77 @@ import org.springframework.stereotype.Component;
 @Component
 public class CompensateDispatchStep implements DispatchStageStep {
 
-  private final FileDispatchRepository fileDispatchRepository;
-  private final PlatformFileRecordRepository fileRecords;
-  private final PlatformFileAuditRepository fileAudits;
+    private final FileDispatchRepository fileDispatchRepository;
+    private final PlatformFileRecordRepository fileRecords;
+    private final PlatformFileAuditRepository fileAudits;
 
-  public CompensateDispatchStep(
-      FileDispatchRepository fileDispatchRepository,
-      PlatformFileRecordRepository fileRecords,
-      PlatformFileAuditRepository fileAudits) {
-    this.fileDispatchRepository = fileDispatchRepository;
-    this.fileRecords = fileRecords;
-    this.fileAudits = fileAudits;
-  }
+    public CompensateDispatchStep(
+            FileDispatchRepository fileDispatchRepository,
+            PlatformFileRecordRepository fileRecords,
+            PlatformFileAuditRepository fileAudits) {
+        this.fileDispatchRepository = fileDispatchRepository;
+        this.fileRecords = fileRecords;
+        this.fileAudits = fileAudits;
+    }
 
-  @Override
-  public DispatchStage stage() {
-    return DispatchStage.COMPENSATE;
-  }
+    @Override
+    public DispatchStage stage() {
+        return DispatchStage.COMPENSATE;
+    }
 
-  @Override
-  public DispatchStageResult execute(DispatchJobContext context) {
-    // ADR-026: 演练模式不发外部补偿（也没真投递过），跳过即可。
-    Map<String, Object> dryRunAttributes =
-        EmptyChecks.isNull(context) ? null : context.getAttributes();
-    if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
-      return DispatchStageResult.success(stage());
+    @Override
+    public DispatchStageResult execute(DispatchJobContext context) {
+        // ADR-026: 演练模式不发外部补偿（也没真投递过），跳过即可。
+        Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+        if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
+            return DispatchStageResult.success(stage());
+        }
+        Object payload =
+                EmptyChecks.isNull(context) ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+        if (!(payload instanceof DispatchPayload dispatchPayload)) {
+            return DispatchStageResult.failure(
+                    stage(),
+                    "DISPATCH_COMPENSATE_NO_PAYLOAD",
+                    "error.dispatch.payload_missing",
+                    new Object[0],
+                    "dispatch payload missing",
+                    ERROR_OBJECT_MAPPER);
+        }
+        Map<String, Object> attrs = context.getAttributes();
+        Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+        int updated = fileDispatchRepository.markCompensated(
+                context.getTenantId(), fileId, dispatchPayload.channelCode(), "DISPATCH_COMPENSATED", "compensated");
+        if (updated <= 0) {
+            return DispatchStageResult.failure(
+                    stage(),
+                    "DISPATCH_COMPENSATE_FAILED",
+                    "error.dispatch.compensate.failed",
+                    new Object[0],
+                    "failed to mark compensated",
+                    ERROR_OBJECT_MAPPER);
+        }
+        String channelCode = Objects.requireNonNullElse(dispatchPayload.channelCode(), "");
+        fileRecords.updateFileStatus(
+                fileId, FileStatus.FAILED.code(), Map.of(DispatchRuntimeKeys.CHANNEL_CODE, channelCode));
+        Map<String, Object> detailSummary = new LinkedHashMap<>();
+        detailSummary.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
+        detailSummary.put(DispatchRuntimeKeys.DISPATCH_TARGET, dispatchPayload.dispatchTarget());
+        detailSummary.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, attrs.get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
+        FileAuditParam.FileAuditParamBuilder auditParam = FileAuditParam.builder()
+                .fileId(fileId)
+                .tenantId(context.getTenantId())
+                .operationType(FileAuditOperationType.DISPATCH_COMPENSATE.code())
+                .operationResult(OperationResult.FAILED.code())
+                .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
+                .operatorId(context.getWorkerId());
+        Object traceId = attrs.get(PipelineRuntimeKeys.TRACE_ID);
+        String traceIdText = String.valueOf(traceId);
+        FileAuditParam audit = auditParam
+                .traceId(traceIdText)
+                .evidenceRef(null)
+                .detailSummary(detailSummary)
+                .build();
+        fileAudits.appendAudit(audit);
+        return DispatchStageResult.success(stage());
     }
-    Object payload = EmptyChecks.isNull(context)
-        ? null
-        : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
-    if (!(payload instanceof DispatchPayload dispatchPayload)) {
-      return DispatchStageResult.failure(
-          stage(),
-          "DISPATCH_COMPENSATE_NO_PAYLOAD",
-          "error.dispatch.payload_missing",
-          new Object[0],
-          "dispatch payload missing",
-          ERROR_OBJECT_MAPPER);
-    }
-    Map<String, Object> attrs = context.getAttributes();
-    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    int updated = fileDispatchRepository.markCompensated(
-        context.getTenantId(),
-        fileId,
-        dispatchPayload.channelCode(),
-        "DISPATCH_COMPENSATED",
-        "compensated");
-    if (updated <= 0) {
-      return DispatchStageResult.failure(
-          stage(),
-          "DISPATCH_COMPENSATE_FAILED",
-          "error.dispatch.compensate.failed",
-          new Object[0],
-          "failed to mark compensated",
-          ERROR_OBJECT_MAPPER);
-    }
-    String channelCode = Objects.requireNonNullElse(dispatchPayload.channelCode(), "");
-    fileRecords.updateFileStatus(
-        fileId, FileStatus.FAILED.code(), Map.of(DispatchRuntimeKeys.CHANNEL_CODE, channelCode));
-    Map<String, Object> detailSummary = new LinkedHashMap<>();
-    detailSummary.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
-    detailSummary.put(DispatchRuntimeKeys.DISPATCH_TARGET, dispatchPayload.dispatchTarget());
-    detailSummary.put(
-        DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
-        attrs.get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
-    FileAuditParam.FileAuditParamBuilder auditParam = FileAuditParam.builder()
-        .fileId(fileId)
-        .tenantId(context.getTenantId())
-        .operationType(FileAuditOperationType.DISPATCH_COMPENSATE.code())
-        .operationResult(OperationResult.FAILED.code())
-        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .operatorId(context.getWorkerId());
-    Object traceId = attrs.get(PipelineRuntimeKeys.TRACE_ID);
-    String traceIdText = String.valueOf(traceId);
-    FileAuditParam audit = auditParam
-        .traceId(traceIdText)
-        .evidenceRef(null)
-        .detailSummary(detailSummary)
-        .build();
-    fileAudits.appendAudit(audit);
-    return DispatchStageResult.success(stage());
-  }
 }

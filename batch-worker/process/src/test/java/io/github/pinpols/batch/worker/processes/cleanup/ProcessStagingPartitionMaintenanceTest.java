@@ -26,72 +26,72 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("处理暂存区分区维护:只预建分区，删除需单独完成生命周期验证")
 class ProcessStagingPartitionMaintenanceTest {
 
-  @Mock
-  private ProcessStagingMapper mapper;
+    @Mock
+    private ProcessStagingMapper mapper;
 
-  @Mock
-  private ObjectProvider<MeterRegistry> meterRegistryProvider;
+    @Mock
+    private ObjectProvider<MeterRegistry> meterRegistryProvider;
 
-  private ProcessStagingCleanupProperties properties;
-  private ProcessStagingOrphanCleaner cleaner;
+    private ProcessStagingCleanupProperties properties;
+    private ProcessStagingOrphanCleaner cleaner;
 
-  @BeforeEach
-  void setUp() {
-    when(meterRegistryProvider.getIfAvailable()).thenReturn(null);
-    properties = new ProcessStagingCleanupProperties();
-    cleaner = new ProcessStagingOrphanCleaner(mapper, properties, meterRegistryProvider);
-  }
+    @BeforeEach
+    void setUp() {
+        when(meterRegistryProvider.getIfAvailable()).thenReturn(null);
+        properties = new ProcessStagingCleanupProperties();
+        cleaner = new ProcessStagingOrphanCleaner(mapper, properties, meterRegistryProvider);
+    }
 
-  @Test
-  @DisplayName("预建今天 + preCreateDays 天的日分区")
-  void shouldPreCreateTodayAndFutureDays() {
-    // 准备
-    properties.setPreCreateDays(2);
+    @Test
+    @DisplayName("预建今天 + preCreateDays 天的日分区")
+    void shouldPreCreateTodayAndFutureDays() {
+        // 准备
+        properties.setPreCreateDays(2);
 
-    // 执行
-    cleaner.maintainPartitions();
+        // 执行
+        cleaner.maintainPartitions();
 
-    // 断言:今天 + 未来 2 天 = 3 个分区
-    verify(mapper, times(3)).createDailyPartition(anyString(), anyString(), anyString());
-    verify(mapper, never()).deleteGenerationRows(ArgumentMatchers.any(), anyInt());
-  }
+        // 断言:今天 + 未来 2 天 = 3 个分区
+        verify(mapper, times(3)).createDailyPartition(anyString(), anyString(), anyString());
+        verify(mapper, never()).deleteGenerationRows(ArgumentMatchers.any(), anyInt());
+    }
 
-  @Test
-  @DisplayName("过期分区不因 deletion-enabled 被直接 DROP")
-  void shouldNeverDropPartitionsFromCalendarAgeAlone() {
-    properties.setPreCreateDays(0);
-    properties.setDeletionEnabled(true);
+    @Test
+    @DisplayName("过期分区不因 deletion-enabled 被直接 DROP")
+    void shouldNeverDropPartitionsFromCalendarAgeAlone() {
+        properties.setPreCreateDays(0);
+        properties.setDeletionEnabled(true);
 
-    cleaner.maintainPartitions();
+        cleaner.maintainPartitions();
 
-    verify(mapper).createDailyPartition(anyString(), anyString(), anyString());
-    verify(mapper, never()).deleteGenerationRows(ArgumentMatchers.any(), anyInt());
-  }
+        verify(mapper).createDailyPartition(anyString(), anyString(), anyString());
+        verify(mapper, never()).deleteGenerationRows(ArgumentMatchers.any(), anyInt());
+    }
 
-  @Test
-  @DisplayName("默认不按年龄删除 staging 行")
-  void shouldKeepRowsUntilDeletionIsEnabled() {
-    assertThat(properties.isDeletionEnabled()).isFalse();
-    assertThat(cleaner.cleanOnce()).isZero();
-    verifyNoInteractions(mapper);
-  }
+    @Test
+    @DisplayName("默认不按年龄删除 staging 行")
+    void shouldKeepRowsUntilDeletionIsEnabled() {
+        assertThat(properties.isDeletionEnabled()).isFalse();
+        assertThat(cleaner.cleanOnce()).isZero();
+        verifyNoInteractions(mapper);
+    }
 
-  @Test
-  @DisplayName("日分区名 + UTC 整天边界格式正确")
-  void shouldCreatePartitionWithUtcDayBounds() {
-    // 准备
-    properties.setPreCreateDays(0);
-    ArgumentCaptor<String> name = ArgumentCaptor.forClass(String.class);
-    ArgumentCaptor<String> from = ArgumentCaptor.forClass(String.class);
-    ArgumentCaptor<String> to = ArgumentCaptor.forClass(String.class);
+    @Test
+    @DisplayName("日分区名 + UTC 整天边界格式正确")
+    void shouldCreatePartitionWithUtcDayBounds() {
+        // 准备
+        properties.setPreCreateDays(0);
+        ArgumentCaptor<String> name = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> from = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> to = ArgumentCaptor.forClass(String.class);
 
-    // 执行
-    cleaner.maintainPartitions();
+        // 执行
+        cleaner.maintainPartitions();
 
-    // 断言
-    verify(mapper).createDailyPartition(name.capture(), from.capture(), to.capture());
-    assertThat(name.getValue()).matches("process_staging_p\\d{8}");
-    assertThat(from.getValue()).matches("\\d{4}-\\d{2}-\\d{2} 00:00:00\\+00");
-    assertThat(to.getValue()).matches("\\d{4}-\\d{2}-\\d{2} 00:00:00\\+00");
-  }
+        // 断言
+        verify(mapper).createDailyPartition(name.capture(), from.capture(), to.capture());
+        assertThat(name.getValue()).matches("process_staging_p\\d{8}");
+        assertThat(from.getValue()).matches("\\d{4}-\\d{2}-\\d{2} 00:00:00\\+00");
+        assertThat(to.getValue()).matches("\\d{4}-\\d{2}-\\d{2} 00:00:00\\+00");
+    }
 }

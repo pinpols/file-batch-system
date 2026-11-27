@@ -13,9 +13,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.trigger.launch.created-recovery")
 public class StaleCreatedLaunchRecoveryProperties {
 
-  /** 实例创建后需静默多久才纳入恢复扫描（秒）。默认 60。 */
-  private long minAgeSeconds = 60L;
+    /** 实例创建后需静默多久才纳入恢复扫描（秒）。默认 60。 */
+    private long minAgeSeconds = 60L;
 
-  /** 单批扫描的最大记录数。默认 50。 */
-  private int batchSize = 50;
+    /** 单批扫描的最大记录数。默认 50。 */
+    private int batchSize = 50;
 }

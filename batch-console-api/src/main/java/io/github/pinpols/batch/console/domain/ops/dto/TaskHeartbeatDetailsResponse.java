@@ -12,4 +12,4 @@ import java.time.Instant;
  * @param cancelRequested 平台是否已请求取消
  */
 public record TaskHeartbeatDetailsResponse(
-    Long taskId, String taskStatus, Object details, Instant heartbeatAt, boolean cancelRequested) {}
+        Long taskId, String taskStatus, Object details, Instant heartbeatAt, boolean cancelRequested) {}

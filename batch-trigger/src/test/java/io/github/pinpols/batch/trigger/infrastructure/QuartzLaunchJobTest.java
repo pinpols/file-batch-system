@@ -48,378 +48,361 @@ import org.springframework.dao.DataAccessResourceFailureException;
 @DisplayName("Quartz 触发入口 misfire 决策:按漂移时长与补跑策略分派人工审批、自动补跑、降级或未就绪重试")
 class QuartzLaunchJobTest {
 
-  @Mock
-  private TriggerService triggerService;
+    @Mock
+    private TriggerService triggerService;
 
-  @Mock
-  private MisfireHandler misfireHandler;
+    @Mock
+    private MisfireHandler misfireHandler;
 
-  @Mock
-  private TriggerRegistrationService triggerRegistrationService;
+    @Mock
+    private TriggerRegistrationService triggerRegistrationService;
 
-  @Mock
-  private ScheduledOccurrenceRecorder occurrenceRecorder;
+    @Mock
+    private ScheduledOccurrenceRecorder occurrenceRecorder;
 
-  @Mock
-  private JobExecutionContext context;
+    @Mock
+    private JobExecutionContext context;
 
-  @Mock
-  private Scheduler scheduler;
+    @Mock
+    private Scheduler scheduler;
 
-  @Mock
-  private JobDetail jobDetail;
+    @Mock
+    private JobDetail jobDetail;
 
-  private QuartzLaunchJob job;
+    private QuartzLaunchJob job;
 
-  @BeforeEach
-  void setUp() {
-    lenient()
-        .when(occurrenceRecorder.recordWaitingReadiness(any(), any(), any(), any(), any()))
-        .thenReturn(true);
-    lenient().when(occurrenceRecorder.readinessWaitWindow(any(), any())).thenAnswer(invocation -> {
-      JobDataMap data = context.getMergedJobDataMap();
-      Instant since = data.containsKey(QuartzLaunchJob.READINESS_DEFERRED_SINCE)
-          ? Instant.ofEpochMilli(data.getLongValue(QuartzLaunchJob.READINESS_DEFERRED_SINCE))
-          : context.getFireTime().toInstant();
-      return new ReadinessWaitWindow(since, since.plusSeconds(7200));
-    });
-    TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
-    properties.setMisfireCatchUpThresholdSeconds(60L);
-    job = new QuartzLaunchJob(
-        triggerService,
-        misfireHandler,
-        properties,
-        triggerRegistrationService,
-        new SimpleMeterRegistry(),
-        occurrenceRecorder,
-        mock(ReadinessWaitHandoverClient.class));
-  }
+    @BeforeEach
+    void setUp() {
+        lenient()
+                .when(occurrenceRecorder.recordWaitingReadiness(any(), any(), any(), any(), any()))
+                .thenReturn(true);
+        lenient().when(occurrenceRecorder.readinessWaitWindow(any(), any())).thenAnswer(invocation -> {
+            JobDataMap data = context.getMergedJobDataMap();
+            Instant since = data.containsKey(QuartzLaunchJob.READINESS_DEFERRED_SINCE)
+                    ? Instant.ofEpochMilli(data.getLongValue(QuartzLaunchJob.READINESS_DEFERRED_SINCE))
+                    : context.getFireTime().toInstant();
+            return new ReadinessWaitWindow(since, since.plusSeconds(7200));
+        });
+        TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
+        properties.setMisfireCatchUpThresholdSeconds(60L);
+        job = new QuartzLaunchJob(
+                triggerService,
+                misfireHandler,
+                properties,
+                triggerRegistrationService,
+                new SimpleMeterRegistry(),
+                occurrenceRecorder,
+                mock(ReadinessWaitHandoverClient.class));
+    }
 
-  @Test
-  @DisplayName("缺少 Workflow 身份的旧 Quartz Job 失败关闭,不提交 Trigger")
-  void shouldRejectQuartzTaskWithoutWorkflowIdentity() {
-    JobDataMap legacyJobData = new JobDataMap();
-    legacyJobData.put(QuartzLaunchJob.TENANT_ID, "t1");
-    legacyJobData.put(QuartzLaunchJob.JOB_CODE, "IMPORT_JOB");
-    when(context.getMergedJobDataMap()).thenReturn(legacyJobData);
+    @Test
+    @DisplayName("缺少 Workflow 身份的旧 Quartz Job 失败关闭,不提交 Trigger")
+    void shouldRejectQuartzTaskWithoutWorkflowIdentity() {
+        JobDataMap legacyJobData = new JobDataMap();
+        legacyJobData.put(QuartzLaunchJob.TENANT_ID, "t1");
+        legacyJobData.put(QuartzLaunchJob.JOB_CODE, "IMPORT_JOB");
+        when(context.getMergedJobDataMap()).thenReturn(legacyJobData);
 
-    assertThatThrownBy(() -> job.execute(context))
-        .isInstanceOf(JobExecutionException.class)
-        .hasMessageContaining("explicit tenant and Workflow identity");
+        assertThatThrownBy(() -> job.execute(context))
+                .isInstanceOf(JobExecutionException.class)
+                .hasMessageContaining("explicit tenant and Workflow identity");
 
-    verify(triggerService, never()).launchScheduled(any());
-    verify(triggerService, never()).createPendingCatchUp(any());
-    verify(misfireHandler, never()).handle(any());
-  }
+        verify(triggerService, never()).launchScheduled(any());
+        verify(triggerService, never()).createPendingCatchUp(any());
+        verify(misfireHandler, never()).handle(any());
+    }
 
-  @Test
-  @DisplayName("记录计划身份与实际回调时刻，重试保留各自 fire 身份")
-  void shouldRecordActualQuartzFireForReadinessRetry() throws Exception {
-    Instant planned = Instant.parse("2026-03-27T00:00:00Z");
-    Instant actual = Instant.parse("2026-03-27T00:05:00Z");
-    JobDataMap data = jobDataMap(CatchUpPolicyType.AUTO.code(), 2);
-    data.put(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME, planned.toEpochMilli());
-    data.put(QuartzLaunchJob.READINESS_TRIGGER_TYPE, TriggerType.CATCH_UP.name());
-    when(context.getMergedJobDataMap()).thenReturn(data);
-    when(context.getFireTime()).thenReturn(Date.from(actual));
-    when(context.getFireInstanceId()).thenReturn("fire-retry-1");
-    when(context.getRefireCount()).thenReturn(2);
+    @Test
+    @DisplayName("记录计划身份与实际回调时刻，重试保留各自 fire 身份")
+    void shouldRecordActualQuartzFireForReadinessRetry() throws Exception {
+        Instant planned = Instant.parse("2026-03-27T00:00:00Z");
+        Instant actual = Instant.parse("2026-03-27T00:05:00Z");
+        JobDataMap data = jobDataMap(CatchUpPolicyType.AUTO.code(), 2);
+        data.put(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME, planned.toEpochMilli());
+        data.put(QuartzLaunchJob.READINESS_TRIGGER_TYPE, TriggerType.CATCH_UP.name());
+        when(context.getMergedJobDataMap()).thenReturn(data);
+        when(context.getFireTime()).thenReturn(Date.from(actual));
+        when(context.getFireInstanceId()).thenReturn("fire-retry-1");
+        when(context.getRefireCount()).thenReturn(2);
 
-    job.execute(context);
+        job.execute(context);
 
-    verify(occurrenceRecorder)
-        .recordActualFire(new ScheduledOccurrenceFireParam(
-            "t1", 71L, planned, "fire-retry-1", 2, actual, "READINESS_RETRY"));
-  }
+        verify(occurrenceRecorder)
+                .recordActualFire(new ScheduledOccurrenceFireParam(
+                        "t1", 71L, planned, "fire-retry-1", 2, actual, "READINESS_RETRY"));
+    }
 
-  @Test
-  @DisplayName("实际触发观察写入失败不阻断原有调度")
-  void shouldContinueSchedulingWhenActualFireObservationFails() throws Exception {
-    when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
-    Instant planned = Instant.parse("2026-03-27T00:00:00Z");
-    when(context.getScheduledFireTime()).thenReturn(Date.from(planned));
-    when(context.getFireTime()).thenReturn(Date.from(planned.plusSeconds(1)));
-    doThrow(new DataAccessResourceFailureException("unavailable"))
-        .when(occurrenceRecorder)
-        .recordActualFire(any());
+    @Test
+    @DisplayName("实际触发观察写入失败不阻断原有调度")
+    void shouldContinueSchedulingWhenActualFireObservationFails() throws Exception {
+        when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
+        Instant planned = Instant.parse("2026-03-27T00:00:00Z");
+        when(context.getScheduledFireTime()).thenReturn(Date.from(planned));
+        when(context.getFireTime()).thenReturn(Date.from(planned.plusSeconds(1)));
+        doThrow(new DataAccessResourceFailureException("unavailable"))
+                .when(occurrenceRecorder)
+                .recordActualFire(any());
 
-    job.execute(context);
+        job.execute(context);
 
-    verify(triggerService).launchScheduled(any());
-  }
+        verify(triggerService).launchScheduled(any());
+    }
 
-  @Test
-  @DisplayName("MANUAL_APPROVAL 策略发生 misfire 时只登记待审批补跑,不直接启动并由人工确认")
-  void shouldCreatePendingCatchUpWhenManualApprovalPolicyMisfires() throws Exception {
-    when(context.getMergedJobDataMap())
-        .thenReturn(jobDataMap(CatchUpPolicyType.MANUAL_APPROVAL.code(), 2));
-    when(context.getScheduledFireTime())
-        .thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
-    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:10:00Z")));
+    @Test
+    @DisplayName("MANUAL_APPROVAL 策略发生 misfire 时只登记待审批补跑,不直接启动并由人工确认")
+    void shouldCreatePendingCatchUpWhenManualApprovalPolicyMisfires() throws Exception {
+        when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.MANUAL_APPROVAL.code(), 2));
+        when(context.getScheduledFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
+        when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:10:00Z")));
 
-    job.execute(context);
+        job.execute(context);
 
-    ArgumentCaptor<ScheduledOccurrenceFireParam> fireCaptor =
-        ArgumentCaptor.forClass(ScheduledOccurrenceFireParam.class);
-    verify(occurrenceRecorder).recordActualFire(fireCaptor.capture());
-    assertThat(fireCaptor.getValue().fireKind()).isEqualTo("MISFIRE_APPROVAL");
-    assertThat(fireCaptor.getValue().scheduledFireTime())
-        .isEqualTo(Instant.parse("2026-03-27T00:00:00Z"));
-    assertThat(fireCaptor.getValue().actualFireTime())
-        .isEqualTo(Instant.parse("2026-03-27T00:10:00Z"));
+        ArgumentCaptor<ScheduledOccurrenceFireParam> fireCaptor =
+                ArgumentCaptor.forClass(ScheduledOccurrenceFireParam.class);
+        verify(occurrenceRecorder).recordActualFire(fireCaptor.capture());
+        assertThat(fireCaptor.getValue().fireKind()).isEqualTo("MISFIRE_APPROVAL");
+        assertThat(fireCaptor.getValue().scheduledFireTime()).isEqualTo(Instant.parse("2026-03-27T00:00:00Z"));
+        assertThat(fireCaptor.getValue().actualFireTime()).isEqualTo(Instant.parse("2026-03-27T00:10:00Z"));
 
-    ArgumentCaptor<ScheduledTriggerCommand> captor =
-        ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
-    verify(triggerService).createPendingCatchUp(captor.capture());
-    assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
-    assertThat(captor.getValue().descriptor().getCatchUpPolicy())
-        .isEqualTo(CatchUpPolicyType.MANUAL_APPROVAL.code());
-    assertThat(captor.getValue().descriptor().getCatchUpMaxDays()).isEqualTo(2);
-    verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
-    verify(triggerService, never()).launchScheduled(any());
-  }
+        ArgumentCaptor<ScheduledTriggerCommand> captor = ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
+        verify(triggerService).createPendingCatchUp(captor.capture());
+        assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
+        assertThat(captor.getValue().descriptor().getCatchUpPolicy())
+                .isEqualTo(CatchUpPolicyType.MANUAL_APPROVAL.code());
+        assertThat(captor.getValue().descriptor().getCatchUpMaxDays()).isEqualTo(2);
+        verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
+        verify(triggerService, never()).launchScheduled(any());
+    }
 
-  @Test
-  @DisplayName("misfire 恢复触发器带回原始计划时刻时,待审批补跑沿用该时刻而非当前触发时间")
-  void shouldUsePreservedFireTimeFromMisfireRecoveryTrigger() throws Exception {
-    Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
-    JobDataMap data = jobDataMap(CatchUpPolicyType.MANUAL_APPROVAL.code(), 2);
-    data.put(QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME, originalFireTime.toEpochMilli());
-    when(context.getMergedJobDataMap()).thenReturn(data);
-    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:10:00Z")));
+    @Test
+    @DisplayName("misfire 恢复触发器带回原始计划时刻时,待审批补跑沿用该时刻而非当前触发时间")
+    void shouldUsePreservedFireTimeFromMisfireRecoveryTrigger() throws Exception {
+        Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
+        JobDataMap data = jobDataMap(CatchUpPolicyType.MANUAL_APPROVAL.code(), 2);
+        data.put(QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME, originalFireTime.toEpochMilli());
+        when(context.getMergedJobDataMap()).thenReturn(data);
+        when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:10:00Z")));
 
-    job.execute(context);
+        job.execute(context);
 
-    ArgumentCaptor<ScheduledTriggerCommand> captor =
-        ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
-    verify(triggerService).createPendingCatchUp(captor.capture());
-    assertThat(captor.getValue().fireTime()).isEqualTo(originalFireTime);
-    verify(triggerService, never()).launchScheduled(any());
-  }
+        ArgumentCaptor<ScheduledTriggerCommand> captor = ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
+        verify(triggerService).createPendingCatchUp(captor.capture());
+        assertThat(captor.getValue().fireTime()).isEqualTo(originalFireTime);
+        verify(triggerService, never()).launchScheduled(any());
+    }
 
-  @Test
-  @DisplayName("AUTO 策略且漂移未超最大天数时直接以 CATCH_UP 类型补跑,并保留上游依赖作业")
-  void shouldLaunchCatchUpWhenAutoPolicyIsWithinMaxDays() throws Exception {
-    JobDataMap data = jobDataMap(CatchUpPolicyType.AUTO.code(), 2);
-    data.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODES, List.of("UPSTREAM_JOB", "UPSTREAM_AUDIT"));
-    when(context.getMergedJobDataMap()).thenReturn(data);
-    when(context.getScheduledFireTime())
-        .thenReturn(Date.from(Instant.parse("2026-03-25T00:00:00Z")));
-    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-26T00:01:00Z")));
+    @Test
+    @DisplayName("AUTO 策略且漂移未超最大天数时直接以 CATCH_UP 类型补跑,并保留上游依赖作业")
+    void shouldLaunchCatchUpWhenAutoPolicyIsWithinMaxDays() throws Exception {
+        JobDataMap data = jobDataMap(CatchUpPolicyType.AUTO.code(), 2);
+        data.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODES, List.of("UPSTREAM_JOB", "UPSTREAM_AUDIT"));
+        when(context.getMergedJobDataMap()).thenReturn(data);
+        when(context.getScheduledFireTime()).thenReturn(Date.from(Instant.parse("2026-03-25T00:00:00Z")));
+        when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-26T00:01:00Z")));
 
-    job.execute(context);
+        job.execute(context);
 
-    ArgumentCaptor<ScheduledTriggerCommand> captor =
-        ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
-    verify(triggerService).launchScheduled(captor.capture());
-    assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
-    assertThat(captor.getValue().descriptor().getCatchUpPolicy())
-        .isEqualTo(CatchUpPolicyType.AUTO.code());
-    assertThat(captor.getValue().descriptor().getDependsOnJobCode()).isEqualTo("UPSTREAM_JOB");
-    assertThat(captor.getValue().descriptor().getDependsOnJobCodes())
-        .containsExactly("UPSTREAM_JOB", "UPSTREAM_AUDIT");
-    verify(triggerService, never()).createPendingCatchUp(any());
-    verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
-  }
+        ArgumentCaptor<ScheduledTriggerCommand> captor = ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
+        verify(triggerService).launchScheduled(captor.capture());
+        assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
+        assertThat(captor.getValue().descriptor().getCatchUpPolicy()).isEqualTo(CatchUpPolicyType.AUTO.code());
+        assertThat(captor.getValue().descriptor().getDependsOnJobCode()).isEqualTo("UPSTREAM_JOB");
+        assertThat(captor.getValue().descriptor().getDependsOnJobCodes())
+                .containsExactly("UPSTREAM_JOB", "UPSTREAM_AUDIT");
+        verify(triggerService, never()).createPendingCatchUp(any());
+        verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
+    }
 
-  @Test
-  @DisplayName("NONE 策略即使漂移很大也只按 SCHEDULED 正常触发,不产生任何补跑记录")
-  void shouldSkipApplicationCatchUpWhenPolicyIsNoneDespiteDrift() throws Exception {
-    when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
-    when(context.getScheduledFireTime())
-        .thenReturn(Date.from(Instant.parse("2026-03-25T00:00:00Z")));
-    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-26T00:10:00Z")));
+    @Test
+    @DisplayName("NONE 策略即使漂移很大也只按 SCHEDULED 正常触发,不产生任何补跑记录")
+    void shouldSkipApplicationCatchUpWhenPolicyIsNoneDespiteDrift() throws Exception {
+        when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
+        when(context.getScheduledFireTime()).thenReturn(Date.from(Instant.parse("2026-03-25T00:00:00Z")));
+        when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-26T00:10:00Z")));
 
-    job.execute(context);
+        job.execute(context);
 
-    ArgumentCaptor<ScheduledTriggerCommand> captor =
-        ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
-    verify(triggerService).launchScheduled(captor.capture());
-    assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.SCHEDULED);
-    verify(triggerService, never()).createPendingCatchUp(any());
-    verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
-  }
+        ArgumentCaptor<ScheduledTriggerCommand> captor = ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
+        verify(triggerService).launchScheduled(captor.capture());
+        assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.SCHEDULED);
+        verify(triggerService, never()).createPendingCatchUp(any());
+        verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
+    }
 
-  @Test
-  @DisplayName("AUTO 策略漂移超过最大补跑天数时降级为 SCHEDULED,避免无边界追赶历史数据")
-  void shouldFallBackToScheduledWhenMisfireExceedsMaxDays() throws Exception {
-    when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.AUTO.code(), 1));
-    when(context.getScheduledFireTime())
-        .thenReturn(Date.from(Instant.parse("2026-03-23T00:00:00Z")));
-    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-26T00:01:00Z")));
+    @Test
+    @DisplayName("AUTO 策略漂移超过最大补跑天数时降级为 SCHEDULED,避免无边界追赶历史数据")
+    void shouldFallBackToScheduledWhenMisfireExceedsMaxDays() throws Exception {
+        when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.AUTO.code(), 1));
+        when(context.getScheduledFireTime()).thenReturn(Date.from(Instant.parse("2026-03-23T00:00:00Z")));
+        when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-26T00:01:00Z")));
 
-    job.execute(context);
+        job.execute(context);
 
-    ArgumentCaptor<ScheduledTriggerCommand> captor =
-        ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
-    verify(triggerService).launchScheduled(captor.capture());
-    assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.SCHEDULED);
-    verify(triggerService, never()).createPendingCatchUp(any());
-    verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
-  }
+        ArgumentCaptor<ScheduledTriggerCommand> captor = ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
+        verify(triggerService).launchScheduled(captor.capture());
+        assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.SCHEDULED);
+        verify(triggerService, never()).createPendingCatchUp(any());
+        verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
+    }
 
-  @Test
-  @DisplayName("Quartz scheduled fire 以 Workflow ID 为唯一启动目标，不伪造 JobCode")
-  void shouldLaunchScheduledWorkflowAsRootTarget() throws Exception {
-    JobDataMap data = jobDataMap(CatchUpPolicyType.NONE.code(), 2);
-    data.remove(QuartzLaunchJob.JOB_CODE);
-    data.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, 79L);
-    data.put(QuartzLaunchJob.WORKFLOW_CODE, "FLOW_ROOT");
-    data.put(QuartzLaunchJob.WORKFLOW_VERSION, 4);
-    when(context.getMergedJobDataMap()).thenReturn(data);
-    when(context.getScheduledFireTime())
-        .thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
-    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:01Z")));
+    @Test
+    @DisplayName("Quartz scheduled fire 以 Workflow ID 为唯一启动目标，不伪造 JobCode")
+    void shouldLaunchScheduledWorkflowAsRootTarget() throws Exception {
+        JobDataMap data = jobDataMap(CatchUpPolicyType.NONE.code(), 2);
+        data.remove(QuartzLaunchJob.JOB_CODE);
+        data.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, 79L);
+        data.put(QuartzLaunchJob.WORKFLOW_CODE, "FLOW_ROOT");
+        data.put(QuartzLaunchJob.WORKFLOW_VERSION, 4);
+        when(context.getMergedJobDataMap()).thenReturn(data);
+        when(context.getScheduledFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
+        when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:01Z")));
 
-    job.execute(context);
+        job.execute(context);
 
-    ArgumentCaptor<ScheduledTriggerCommand> captor =
-        ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
-    verify(triggerService).launchScheduled(captor.capture());
-    assertThat(captor.getValue().descriptor().getWorkflowDefinitionId()).isEqualTo(79L);
-    assertThat(captor.getValue().descriptor().getWorkflowCode()).isEqualTo("FLOW_ROOT");
-    assertThat(captor.getValue().descriptor().getWorkflowVersion()).isEqualTo(4);
-    assertThat(captor.getValue().descriptor().getJobCode()).isNull();
-  }
+        ArgumentCaptor<ScheduledTriggerCommand> captor = ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
+        verify(triggerService).launchScheduled(captor.capture());
+        assertThat(captor.getValue().descriptor().getWorkflowDefinitionId()).isEqualTo(79L);
+        assertThat(captor.getValue().descriptor().getWorkflowCode()).isEqualTo("FLOW_ROOT");
+        assertThat(captor.getValue().descriptor().getWorkflowVersion()).isEqualTo(4);
+        assertThat(captor.getValue().descriptor().getJobCode()).isNull();
+    }
 
-  @Test
-  @DisplayName("上游未就绪时注册 30 秒后的 Quartz 重试触发器,并携带原始计划时刻与触发类型续跑")
-  void shouldScheduleQuartzRetryWhenUpstreamIsNotReady() throws Exception {
-    Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
-    Instant actualFireTime = Instant.parse("2026-03-27T00:00:05Z");
-    when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
-    when(context.getScheduledFireTime()).thenReturn(Date.from(originalFireTime));
-    when(context.getFireTime()).thenReturn(Date.from(actualFireTime));
-    when(context.getScheduler()).thenReturn(scheduler);
-    when(context.getJobDetail()).thenReturn(jobDetail);
-    when(jobDetail.getKey()).thenReturn(JobKey.jobKey("t1:IMPORT_JOB", "batch-trigger"));
-    doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
-        .when(triggerService)
-        .launchScheduled(any());
+    @Test
+    @DisplayName("上游未就绪时注册 30 秒后的 Quartz 重试触发器,并携带原始计划时刻与触发类型续跑")
+    void shouldScheduleQuartzRetryWhenUpstreamIsNotReady() throws Exception {
+        Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
+        Instant actualFireTime = Instant.parse("2026-03-27T00:00:05Z");
+        when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
+        when(context.getScheduledFireTime()).thenReturn(Date.from(originalFireTime));
+        when(context.getFireTime()).thenReturn(Date.from(actualFireTime));
+        when(context.getScheduler()).thenReturn(scheduler);
+        when(context.getJobDetail()).thenReturn(jobDetail);
+        when(jobDetail.getKey()).thenReturn(JobKey.jobKey("t1:IMPORT_JOB", "batch-trigger"));
+        doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
+                .when(triggerService)
+                .launchScheduled(any());
 
-    job.execute(context);
+        job.execute(context);
 
-    ArgumentCaptor<Trigger> triggerCaptor = ArgumentCaptor.forClass(Trigger.class);
-    verify(scheduler).scheduleJob(triggerCaptor.capture());
-    Trigger retry = triggerCaptor.getValue();
-    assertThat(retry.getStartTime()).isEqualTo(Date.from(actualFireTime.plusSeconds(30)));
-    assertThat(retry.getJobDataMap().getLongValue(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME))
-        .isEqualTo(originalFireTime.toEpochMilli());
-    assertThat(retry.getJobDataMap().getString(QuartzLaunchJob.READINESS_TRIGGER_TYPE))
-        .isEqualTo(TriggerType.SCHEDULED.name());
-    verify(occurrenceRecorder)
-        .recordWaitingReadiness(
-            any(),
-            ArgumentMatchers.eq(originalFireTime),
-            ArgumentMatchers.isNull(),
-            ArgumentMatchers.any(),
-            ArgumentMatchers.any());
-  }
+        ArgumentCaptor<Trigger> triggerCaptor = ArgumentCaptor.forClass(Trigger.class);
+        verify(scheduler).scheduleJob(triggerCaptor.capture());
+        Trigger retry = triggerCaptor.getValue();
+        assertThat(retry.getStartTime()).isEqualTo(Date.from(actualFireTime.plusSeconds(30)));
+        assertThat(retry.getJobDataMap().getLongValue(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME))
+                .isEqualTo(originalFireTime.toEpochMilli());
+        assertThat(retry.getJobDataMap().getString(QuartzLaunchJob.READINESS_TRIGGER_TYPE))
+                .isEqualTo(TriggerType.SCHEDULED.name());
+        verify(occurrenceRecorder)
+                .recordWaitingReadiness(
+                        any(),
+                        ArgumentMatchers.eq(originalFireTime),
+                        ArgumentMatchers.isNull(),
+                        ArgumentMatchers.any(),
+                        ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("日程准入撤销后,上游未就绪也不能创建新的 Quartz 等待重试")
-  void shouldNotScheduleReadinessWhenAdmissionWasWithdrawn() throws Exception {
-    when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
-    when(context.getScheduledFireTime())
-        .thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
-    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:05Z")));
-    doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
-        .when(triggerService)
-        .launchScheduled(any());
-    when(occurrenceRecorder.recordWaitingReadiness(any(), any(), any(), any(), any()))
-        .thenReturn(false);
-    job.execute(context);
-    verify(scheduler, never()).scheduleJob(any(Trigger.class));
-  }
+    @Test
+    @DisplayName("日程准入撤销后,上游未就绪也不能创建新的 Quartz 等待重试")
+    void shouldNotScheduleReadinessWhenAdmissionWasWithdrawn() throws Exception {
+        when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
+        when(context.getScheduledFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
+        when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:05Z")));
+        doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
+                .when(triggerService)
+                .launchScheduled(any());
+        when(occurrenceRecorder.recordWaitingReadiness(any(), any(), any(), any(), any()))
+                .thenReturn(false);
+        job.execute(context);
+        verify(scheduler, never()).scheduleJob(any(Trigger.class));
+    }
 
-  @Test
-  @DisplayName("未就绪等待超过 readiness 窗口 2 小时后放弃本轮触发,不再注册新的重试触发器")
-  void shouldStopReadinessRetryAfterWindowExpires() throws Exception {
-    Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
-    Instant deferredSince = Instant.parse("2026-03-27T00:00:05Z");
-    Instant actualFireTime = deferredSince.plusSeconds(7200);
-    JobDataMap data = jobDataMap(CatchUpPolicyType.NONE.code(), 2);
-    data.put(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME, originalFireTime.toEpochMilli());
-    data.put(QuartzLaunchJob.READINESS_DEFERRED_SINCE, deferredSince.toEpochMilli());
-    data.put(QuartzLaunchJob.READINESS_TRIGGER_TYPE, TriggerType.SCHEDULED.name());
-    when(context.getMergedJobDataMap()).thenReturn(data);
-    when(context.getFireTime()).thenReturn(Date.from(actualFireTime));
-    doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
-        .when(triggerService)
-        .launchScheduled(any());
+    @Test
+    @DisplayName("未就绪等待超过 readiness 窗口 2 小时后放弃本轮触发,不再注册新的重试触发器")
+    void shouldStopReadinessRetryAfterWindowExpires() throws Exception {
+        Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
+        Instant deferredSince = Instant.parse("2026-03-27T00:00:05Z");
+        Instant actualFireTime = deferredSince.plusSeconds(7200);
+        JobDataMap data = jobDataMap(CatchUpPolicyType.NONE.code(), 2);
+        data.put(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME, originalFireTime.toEpochMilli());
+        data.put(QuartzLaunchJob.READINESS_DEFERRED_SINCE, deferredSince.toEpochMilli());
+        data.put(QuartzLaunchJob.READINESS_TRIGGER_TYPE, TriggerType.SCHEDULED.name());
+        when(context.getMergedJobDataMap()).thenReturn(data);
+        when(context.getFireTime()).thenReturn(Date.from(actualFireTime));
+        doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
+                .when(triggerService)
+                .launchScheduled(any());
 
-    job.execute(context);
+        job.execute(context);
 
-    verify(context, never()).getScheduler();
-    verify(occurrenceRecorder)
-        .record(
-            any(),
-            ArgumentMatchers.eq(originalFireTime),
-            ArgumentMatchers.isNull(),
-            ArgumentMatchers.eq(ScheduledOccurrenceStatus.READINESS_TIMEOUT),
-            ArgumentMatchers.isNull());
-  }
+        verify(context, never()).getScheduler();
+        verify(occurrenceRecorder)
+                .record(
+                        any(),
+                        ArgumentMatchers.eq(originalFireTime),
+                        ArgumentMatchers.isNull(),
+                        ArgumentMatchers.eq(ScheduledOccurrenceStatus.READINESS_TIMEOUT),
+                        ArgumentMatchers.isNull());
+    }
 
-  @Test
-  @DisplayName("重试以持久窗口为准，不被新的运行配置延长")
-  void shouldUsePersistedDeadlineWhenRetrying() throws Exception {
-    Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
-    Instant deferredSince = originalFireTime.plusSeconds(5);
-    Instant frozenDeadline = deferredSince.plusSeconds(3600);
-    JobDataMap data = jobDataMap(CatchUpPolicyType.NONE.code(), 2);
-    data.put(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME, originalFireTime.toEpochMilli());
-    data.put(QuartzLaunchJob.READINESS_DEFERRED_SINCE, deferredSince.toEpochMilli());
-    data.put(QuartzLaunchJob.READINESS_TRIGGER_TYPE, TriggerType.SCHEDULED.name());
-    when(context.getMergedJobDataMap()).thenReturn(data);
-    when(context.getFireTime()).thenReturn(Date.from(frozenDeadline));
-    when(occurrenceRecorder.readinessWaitWindow(any(), any()))
-        .thenReturn(new ReadinessWaitWindow(deferredSince, frozenDeadline));
-    doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
-        .when(triggerService)
-        .launchScheduled(any());
+    @Test
+    @DisplayName("重试以持久窗口为准，不被新的运行配置延长")
+    void shouldUsePersistedDeadlineWhenRetrying() throws Exception {
+        Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
+        Instant deferredSince = originalFireTime.plusSeconds(5);
+        Instant frozenDeadline = deferredSince.plusSeconds(3600);
+        JobDataMap data = jobDataMap(CatchUpPolicyType.NONE.code(), 2);
+        data.put(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME, originalFireTime.toEpochMilli());
+        data.put(QuartzLaunchJob.READINESS_DEFERRED_SINCE, deferredSince.toEpochMilli());
+        data.put(QuartzLaunchJob.READINESS_TRIGGER_TYPE, TriggerType.SCHEDULED.name());
+        when(context.getMergedJobDataMap()).thenReturn(data);
+        when(context.getFireTime()).thenReturn(Date.from(frozenDeadline));
+        when(occurrenceRecorder.readinessWaitWindow(any(), any()))
+                .thenReturn(new ReadinessWaitWindow(deferredSince, frozenDeadline));
+        doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
+                .when(triggerService)
+                .launchScheduled(any());
 
-    job.execute(context);
+        job.execute(context);
 
-    verify(context, never()).getScheduler();
-    verify(occurrenceRecorder)
-        .record(
-            any(),
-            ArgumentMatchers.eq(originalFireTime),
-            ArgumentMatchers.isNull(),
-            ArgumentMatchers.eq(ScheduledOccurrenceStatus.READINESS_TIMEOUT),
-            ArgumentMatchers.isNull());
-  }
+        verify(context, never()).getScheduler();
+        verify(occurrenceRecorder)
+                .record(
+                        any(),
+                        ArgumentMatchers.eq(originalFireTime),
+                        ArgumentMatchers.isNull(),
+                        ArgumentMatchers.eq(ScheduledOccurrenceStatus.READINESS_TIMEOUT),
+                        ArgumentMatchers.isNull());
+    }
 
-  @Test
-  @DisplayName("等待在窗口读取前已被推进时不再安排 Quartz 重试")
-  void shouldNotRescheduleWhenWaitAlreadyAdvanced() throws Exception {
-    when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
-    when(context.getScheduledFireTime())
-        .thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
-    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:05Z")));
-    when(occurrenceRecorder.readinessWaitWindow(any(), any())).thenReturn(null);
-    doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
-        .when(triggerService)
-        .launchScheduled(any());
-    job.execute(context);
-    verify(context, never()).getScheduler();
-  }
+    @Test
+    @DisplayName("等待在窗口读取前已被推进时不再安排 Quartz 重试")
+    void shouldNotRescheduleWhenWaitAlreadyAdvanced() throws Exception {
+        when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
+        when(context.getScheduledFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
+        when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:05Z")));
+        when(occurrenceRecorder.readinessWaitWindow(any(), any())).thenReturn(null);
+        doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
+                .when(triggerService)
+                .launchScheduled(any());
+        job.execute(context);
+        verify(context, never()).getScheduler();
+    }
 
-  private JobDataMap jobDataMap(String catchUpPolicy, Integer catchUpMaxDays) {
-    JobDataMap jobDataMap = new JobDataMap();
-    jobDataMap.put(QuartzLaunchJob.TENANT_ID, "t1");
-    jobDataMap.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, 71L);
-    jobDataMap.put(QuartzLaunchJob.WORKFLOW_CODE, "WF_IMPORT_JOB");
-    jobDataMap.put(QuartzLaunchJob.WORKFLOW_VERSION, 4);
-    jobDataMap.put(QuartzLaunchJob.JOB_CODE, "IMPORT_JOB");
-    jobDataMap.put(QuartzLaunchJob.SCHEDULE_TYPE, "CRON");
-    jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, "0 0 1 * * ?");
-    jobDataMap.put(QuartzLaunchJob.TIMEZONE, "UTC");
-    jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, "SCHEDULED");
-    jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, "BIZ_CAL");
-    jobDataMap.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, "UPSTREAM_JOB");
-    jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, catchUpPolicy);
-    jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, catchUpMaxDays);
-    return jobDataMap;
-  }
+    private JobDataMap jobDataMap(String catchUpPolicy, Integer catchUpMaxDays) {
+        JobDataMap jobDataMap = new JobDataMap();
+        jobDataMap.put(QuartzLaunchJob.TENANT_ID, "t1");
+        jobDataMap.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, 71L);
+        jobDataMap.put(QuartzLaunchJob.WORKFLOW_CODE, "WF_IMPORT_JOB");
+        jobDataMap.put(QuartzLaunchJob.WORKFLOW_VERSION, 4);
+        jobDataMap.put(QuartzLaunchJob.JOB_CODE, "IMPORT_JOB");
+        jobDataMap.put(QuartzLaunchJob.SCHEDULE_TYPE, "CRON");
+        jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, "0 0 1 * * ?");
+        jobDataMap.put(QuartzLaunchJob.TIMEZONE, "UTC");
+        jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, "SCHEDULED");
+        jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, "BIZ_CAL");
+        jobDataMap.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, "UPSTREAM_JOB");
+        jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, catchUpPolicy);
+        jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, catchUpMaxDays);
+        return jobDataMap;
+    }
 }

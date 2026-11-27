@@ -8,9 +8,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /** Console 调用 Trigger 内部接口的连接参数。 */
 public class ConsoleTriggerClientProperties {
 
-  private String baseUrl = "";
+    private String baseUrl = "";
 
-  private long connectTimeoutMillis = 5000L;
+    private long connectTimeoutMillis = 5000L;
 
-  private long readTimeoutMillis = 30000L;
+    private long readTimeoutMillis = 30000L;
 }

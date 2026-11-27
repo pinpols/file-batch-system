@@ -18,14 +18,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.batch-claim")
 public class WorkerBatchClaimProperties {
 
-  /** 认领开关；false（默认）表示使用 per-record 单条认领。 */
-  private boolean enabled = false;
+    /** 认领开关；false（默认）表示使用 per-record 单条认领。 */
+    private boolean enabled = false;
 
-  /** 单次 claim-batch 的最大 partition 数(HTTP chunk 大小)。 */
-  private int maxBatchSize = 32;
+    /** 单次 claim-batch 的最大 partition 数(HTTP chunk 大小)。 */
+    private int maxBatchSize = 32;
 
-  /** 规整批大小至少为 1；是否启用批量 listener 仍由 enabled 决定。 */
-  public int effectiveBatchSize() {
-    return Math.max(1, maxBatchSize);
-  }
+    /** 规整批大小至少为 1；是否启用批量 listener 仍由 enabled 决定。 */
+    public int effectiveBatchSize() {
+        return Math.max(1, maxBatchSize);
+    }
 }

@@ -15,47 +15,45 @@ import lombok.Builder;
  */
 @Builder(toBuilder = true)
 public record QuotaRuntimeStateEntity(
-    Long id,
-    String tenantId,
-    String quotaScope,
-    String ownerCode,
-    String quotaResetPolicy,
-    Instant windowStartedAt,
-    Instant windowExpiresAt,
-    Integer peakBorrowedCount,
-    Instant lastResetAt,
-    Instant createdAt,
-    Instant updatedAt,
-    Long version) {
-  /** 更新峰值和最后时间戳（由 evaluateAndReserve 调用）。 */
-  public QuotaRuntimeStateEntity withPeakAndTimestamps(
-      int newPeak, Instant lastResetAt, Instant updatedAt) {
-    return toBuilder()
-        .peakBorrowedCount(newPeak)
-        .lastResetAt(lastResetAt)
-        .updatedAt(updatedAt)
-        .build();
-  }
+        Long id,
+        String tenantId,
+        String quotaScope,
+        String ownerCode,
+        String quotaResetPolicy,
+        Instant windowStartedAt,
+        Instant windowExpiresAt,
+        Integer peakBorrowedCount,
+        Instant lastResetAt,
+        Instant createdAt,
+        Instant updatedAt,
+        Long version) {
+    /** 更新峰值和最后时间戳（由 evaluateAndReserve 调用）。 */
+    public QuotaRuntimeStateEntity withPeakAndTimestamps(int newPeak, Instant lastResetAt, Instant updatedAt) {
+        return toBuilder()
+                .peakBorrowedCount(newPeak)
+                .lastResetAt(lastResetAt)
+                .updatedAt(updatedAt)
+                .build();
+    }
 
-  /** 完整窗口刷新（由 reconcileExpiredStates / refreshState 调用）。 */
-  public QuotaRuntimeStateEntity withRefresh(
-      String quotaResetPolicy,
-      Instant windowStartedAt,
-      Instant windowExpiresAt,
-      int peakBorrowedCount,
-      Instant lastResetAt) {
-    return toBuilder()
-        .quotaResetPolicy(quotaResetPolicy)
-        .windowStartedAt(windowStartedAt)
-        .windowExpiresAt(windowExpiresAt)
-        .peakBorrowedCount(peakBorrowedCount)
-        .lastResetAt(lastResetAt)
-        .updatedAt(BatchDateTimeSupport.utcNow())
-        .build();
-  }
+    /** 完整窗口刷新（由 reconcileExpiredStates / refreshState 调用）。 */
+    public QuotaRuntimeStateEntity withRefresh(
+            String quotaResetPolicy,
+            Instant windowStartedAt,
+            Instant windowExpiresAt,
+            int peakBorrowedCount,
+            Instant lastResetAt) {
+        return toBuilder()
+                .quotaResetPolicy(quotaResetPolicy)
+                .windowStartedAt(windowStartedAt)
+                .windowExpiresAt(windowExpiresAt)
+                .peakBorrowedCount(peakBorrowedCount)
+                .lastResetAt(lastResetAt)
+                .updatedAt(BatchDateTimeSupport.utcNow())
+                .build();
+    }
 
-  public QuotaRuntimeStateEntity withoutRuntimeWindow(
-      String quotaResetPolicy, Instant lastResetAt) {
-    return withRefresh(quotaResetPolicy, null, null, 0, lastResetAt);
-  }
+    public QuotaRuntimeStateEntity withoutRuntimeWindow(String quotaResetPolicy, Instant lastResetAt) {
+        return withRefresh(quotaResetPolicy, null, null, 0, lastResetAt);
+    }
 }

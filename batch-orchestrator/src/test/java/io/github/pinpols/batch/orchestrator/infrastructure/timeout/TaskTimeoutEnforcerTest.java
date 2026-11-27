@@ -29,92 +29,91 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("任务超时执行器:关闭中跳过扫描,无候选时不取消,对每个超时任务各发起一次取消并累计取消计数")
 class TaskTimeoutEnforcerTest {
 
-  @Mock
-  private JobTaskMapper jobTaskMapper;
+    @Mock
+    private JobTaskMapper jobTaskMapper;
 
-  @Mock
-  private BatchOrchestratorGovernanceProperties governance;
+    @Mock
+    private BatchOrchestratorGovernanceProperties governance;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-  private final TimeoutEnforcerProperties timeoutProps = new TimeoutEnforcerProperties();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final TimeoutEnforcerProperties timeoutProps = new TimeoutEnforcerProperties();
 
-  private TaskTimeoutEnforcer enforcer;
+    private TaskTimeoutEnforcer enforcer;
 
-  @BeforeEach
-  void setUp() {
-    enforcer = new TaskTimeoutEnforcer(jobTaskMapper, governance, gracefulShutdown, meterRegistry);
-  }
+    @BeforeEach
+    void setUp() {
+        enforcer = new TaskTimeoutEnforcer(jobTaskMapper, governance, gracefulShutdown, meterRegistry);
+    }
 
-  private static JobTaskEntity task(Long id, String tenantId) {
-    JobTaskEntity t = new JobTaskEntity();
-    t.setId(id);
-    t.setTenantId(tenantId);
-    t.setTaskTimeoutSeconds(60);
-    t.setVersion(0L);
-    return t;
-  }
+    private static JobTaskEntity task(Long id, String tenantId) {
+        JobTaskEntity t = new JobTaskEntity();
+        t.setId(id);
+        t.setTenantId(tenantId);
+        t.setTaskTimeoutSeconds(60);
+        t.setVersion(0L);
+        return t;
+    }
 
-  @Test
-  @DisplayName("优雅关闭进行中时跳过本轮扫描,不查询任何超时任务候选")
-  void shouldSkipScan_whenDraining() {
-    when(gracefulShutdown.isDraining()).thenReturn(true);
+    @Test
+    @DisplayName("优雅关闭进行中时跳过本轮扫描,不查询任何超时任务候选")
+    void shouldSkipScan_whenDraining() {
+        when(gracefulShutdown.isDraining()).thenReturn(true);
 
-    enforcer.enforce();
+        enforcer.enforce();
 
-    verify(jobTaskMapper, never()).selectTaskTimeoutCandidates(anyInt());
-  }
+        verify(jobTaskMapper, never()).selectTaskTimeoutCandidates(anyInt());
+    }
 
-  @Test
-  @DisplayName("没有超时任务候选时不做任何取消操作")
-  void shouldNotRequestCancel_whenNoTimeoutCandidates() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(governance.timeout()).thenReturn(timeoutProps);
-    when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt())).thenReturn(List.of());
+    @Test
+    @DisplayName("没有超时任务候选时不做任何取消操作")
+    void shouldNotRequestCancel_whenNoTimeoutCandidates() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        when(governance.timeout()).thenReturn(timeoutProps);
+        when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt())).thenReturn(List.of());
 
-    enforcer.enforce();
+        enforcer.enforce();
 
-    verify(jobTaskMapper, never()).requestCancelIfTimedOut(anyString(), anyLong(), anyLong());
-  }
+        verify(jobTaskMapper, never()).requestCancelIfTimedOut(anyString(), anyLong(), anyLong());
+    }
 
-  @Test
-  @DisplayName("每个超时任务各发起一次取消请求,取消计数等于超时任务数量")
-  void shouldRequestCancelForEachTimedOutTask_whenCandidatesPresent() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(governance.timeout()).thenReturn(timeoutProps);
-    when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt()))
-        .thenReturn(List.of(task(1L, "t1"), task(2L, "t1")));
-    when(jobTaskMapper.requestCancelIfTimedOut("t1", 1L, 0L)).thenReturn(1);
-    when(jobTaskMapper.requestCancelIfTimedOut("t1", 2L, 0L)).thenReturn(1);
+    @Test
+    @DisplayName("每个超时任务各发起一次取消请求,取消计数等于超时任务数量")
+    void shouldRequestCancelForEachTimedOutTask_whenCandidatesPresent() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        when(governance.timeout()).thenReturn(timeoutProps);
+        when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt())).thenReturn(List.of(task(1L, "t1"), task(2L, "t1")));
+        when(jobTaskMapper.requestCancelIfTimedOut("t1", 1L, 0L)).thenReturn(1);
+        when(jobTaskMapper.requestCancelIfTimedOut("t1", 2L, 0L)).thenReturn(1);
 
-    enforcer.enforce();
+        enforcer.enforce();
 
-    verify(jobTaskMapper).requestCancelIfTimedOut("t1", 1L, 0L);
-    verify(jobTaskMapper).requestCancelIfTimedOut("t1", 2L, 0L);
-    assertThat(meterRegistry.counter("batch.task.timeout.cancel.total").count()).isEqualTo(2.0);
-  }
+        verify(jobTaskMapper).requestCancelIfTimedOut("t1", 1L, 0L);
+        verify(jobTaskMapper).requestCancelIfTimedOut("t1", 2L, 0L);
+        assertThat(meterRegistry.counter("batch.task.timeout.cancel.total").count())
+                .isEqualTo(2.0);
+    }
 
-  @Test
-  @DisplayName("跨租户候选逐条在各自租户上下文中请求取消并清理上下文")
-  void shouldScopeCancelRequestToCandidateTenant() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(governance.timeout()).thenReturn(timeoutProps);
-    when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt()))
-        .thenReturn(List.of(task(1L, "t1"), task(2L, "t2")));
-    doAnswer(invocation -> {
-          String tenantId = invocation.getArgument(0);
-          assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
-          return 1;
-        })
-        .when(jobTaskMapper)
-        .requestCancelIfTimedOut(anyString(), anyLong(), anyLong());
+    @Test
+    @DisplayName("跨租户候选逐条在各自租户上下文中请求取消并清理上下文")
+    void shouldScopeCancelRequestToCandidateTenant() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        when(governance.timeout()).thenReturn(timeoutProps);
+        when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt())).thenReturn(List.of(task(1L, "t1"), task(2L, "t2")));
+        doAnswer(invocation -> {
+                    String tenantId = invocation.getArgument(0);
+                    assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
+                    return 1;
+                })
+                .when(jobTaskMapper)
+                .requestCancelIfTimedOut(anyString(), anyLong(), anyLong());
 
-    enforcer.enforce();
+        enforcer.enforce();
 
-    verify(jobTaskMapper).requestCancelIfTimedOut("t1", 1L, 0L);
-    verify(jobTaskMapper).requestCancelIfTimedOut("t2", 2L, 0L);
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        verify(jobTaskMapper).requestCancelIfTimedOut("t1", 1L, 0L);
+        verify(jobTaskMapper).requestCancelIfTimedOut("t2", 2L, 0L);
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 }

@@ -19,27 +19,28 @@ import org.springframework.test.context.DynamicPropertySource;
  * route adapter / datasource / kafka 全部正确装配。executor 默认全关(@ConditionalOnProperty),本测 只验运行时骨架能起来。
  */
 @SpringBootTest(
-    classes = BatchWorkerAtomicApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        classes = BatchWorkerAtomicApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("原子 Worker 应用上下文: 真实中间件下的启动装配冒烟")
 class BatchWorkerAtomicApplicationIntegrationTest extends AbstractIntegrationTest {
 
-  @DynamicPropertySource
-  static void orchestratorStub(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
+    @DynamicPropertySource
+    static void orchestratorStub(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
-  @Autowired
-  ApplicationContext applicationContext;
+    @Autowired
+    ApplicationContext applicationContext;
 
-  @Test
-  @DisplayName("Worker 注册端口与主服务真实绑定端口一致")
-  void shouldRegisterActualBoundPort() {
-    Integer boundPort =
-        applicationContext.getEnvironment().getProperty("local.server.port", Integer.class);
-    assertThat(boundPort).isNotNull().isPositive();
-    assertThat(
-            applicationContext.getBean(AbstractWorkerLoop.class).ensureStarted().getPort())
-        .isEqualTo(boundPort);
-  }
+    @Test
+    @DisplayName("Worker 注册端口与主服务真实绑定端口一致")
+    void shouldRegisterActualBoundPort() {
+        Integer boundPort = applicationContext.getEnvironment().getProperty("local.server.port", Integer.class);
+        assertThat(boundPort).isNotNull().isPositive();
+        assertThat(applicationContext
+                        .getBean(AbstractWorkerLoop.class)
+                        .ensureStarted()
+                        .getPort())
+                .isEqualTo(boundPort);
+    }
 }

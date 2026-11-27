@@ -10,31 +10,28 @@ package io.github.pinpols.batch.worker.atomic.runtime;
  * <p>纯只读快照,不含密钥 / 连接串 / 主机名等敏感信息。
  */
 public record AtomicRuntimeStatus(
-    String workerCode,
-    String workerType,
-    ShellStatus shell,
-    SqlStatus sql,
-    HttpStatus http,
-    StoredProcStatus storedProc) {
+        String workerCode,
+        String workerType,
+        ShellStatus shell,
+        SqlStatus sql,
+        HttpStatus http,
+        StoredProcStatus storedProc) {
 
-  /** Shell executor 状态:开关 + 程序白名单大小。 */
-  public record ShellStatus(boolean enabled, int commandWhitelistSize) {}
+    /** Shell executor 状态:开关 + 程序白名单大小。 */
+    public record ShellStatus(boolean enabled, int commandWhitelistSize) {}
 
-  /** SQL executor 状态:开关 + 当前连接方言(DB product name,JDBC 探测)。 */
-  public record SqlStatus(boolean enabled, String dialect) {}
+    /** SQL executor 状态:开关 + 当前连接方言(DB product name,JDBC 探测)。 */
+    public record SqlStatus(boolean enabled, String dialect) {}
 
-  /**
-   * HTTP executor 状态:开关 + enforceAllowlist 当前 effective 值 + 出口白名单 host pattern 数量。
-   *
-   * <p>{@code enforceAllowlistSource} = explicit / prod-default / dev-default,标识当前 effective 值的来源,
-   * Console UI 可据此提示运维"prod-default = 隐式翻 true,可显式配以覆盖"。
-   */
-  public record HttpStatus(
-      boolean enabled,
-      boolean enforceAllowlist,
-      String enforceAllowlistSource,
-      int allowlistHostsSize) {}
+    /**
+     * HTTP executor 状态:开关 + enforceAllowlist 当前 effective 值 + 出口白名单 host pattern 数量。
+     *
+     * <p>{@code enforceAllowlistSource} = explicit / prod-default / dev-default,标识当前 effective 值的来源,
+     * Console UI 可据此提示运维"prod-default = 隐式翻 true,可显式配以覆盖"。
+     */
+    public record HttpStatus(
+            boolean enabled, boolean enforceAllowlist, String enforceAllowlistSource, int allowlistHostsSize) {}
 
-  /** Stored Proc executor 状态:开关 + 允许 schema 数量。 */
-  public record StoredProcStatus(boolean enabled, int allowedSchemasSize) {}
+    /** Stored Proc executor 状态:开关 + 允许 schema 数量。 */
+    public record StoredProcStatus(boolean enabled, int allowedSchemasSize) {}
 }

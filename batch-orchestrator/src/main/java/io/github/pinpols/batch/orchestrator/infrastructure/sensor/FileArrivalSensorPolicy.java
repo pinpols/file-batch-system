@@ -50,156 +50,147 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class FileArrivalSensorPolicy implements SensorPolicy {
-  private static final String SENSOR_SPEC_INVALID = "error.workflow.sensor_spec_invalid";
+    private static final String SENSOR_SPEC_INVALID = "error.workflow.sensor_spec_invalid";
 
-  private static final String SENSOR_TYPE_CODE = SensorType.FILE_ARRIVAL.code();
-  private static final ObjectMapper OWNERSHIP_IDENTITY_MAPPER = JsonUtils.newDefaultMapper();
+    private static final String SENSOR_TYPE_CODE = SensorType.FILE_ARRIVAL.code();
+    private static final ObjectMapper OWNERSHIP_IDENTITY_MAPPER = JsonUtils.newDefaultMapper();
 
-  private final SensorFileArrivalMapper mapper;
-  private final ImportIngressOwnershipIdentity ownershipIdentity;
-  private final S3StorageProperties storageProperties;
+    private final SensorFileArrivalMapper mapper;
+    private final ImportIngressOwnershipIdentity ownershipIdentity;
+    private final S3StorageProperties storageProperties;
 
-  @Override
-  public SensorType type() {
-    return SensorType.FILE_ARRIVAL;
-  }
-
-  @Override
-  public SensorProbeResult probe(SensorContext ctx) {
-    Map<String, Object> spec = ctx.sensorSpec();
-    String pattern = SensorSpecs.string(spec, "pattern");
-    Long maxAgeSeconds = SensorSpecs.longValue(spec, "maxAgeSeconds");
-    String fileGroupCode = SensorSpecs.string(spec, "fileGroupCode");
-    boolean requireCompleteGroup = Boolean.TRUE.equals(spec.get("requireCompleteGroup"));
-    boolean bindWorkflowBizDate = Boolean.TRUE.equals(spec.get("bindWorkflowBizDate"));
-    boolean fileArrivalFreshnessCheckIsUnavailable =
-        !Texts.hasText(pattern) || EmptyChecks.isNull(maxAgeSeconds) || maxAgeSeconds <= 0;
-    if (fileArrivalFreshnessCheckIsUnavailable) {
-      return specError("pattern/maxAgeSeconds required");
+    @Override
+    public SensorType type() {
+        return SensorType.FILE_ARRIVAL;
     }
 
-    String configuredBizDate = SensorSpecs.string(spec, "bizDate");
-    if (bindWorkflowBizDate && Texts.hasText(configuredBizDate)) {
-      return specError("configure either bizDate or bindWorkflowBizDate");
-    }
-    String workflowBizDate =
-        bindWorkflowBizDate ? Objects.toString(ctx.workflowRunVars().get("bizDate"), null) : null;
-    if (bindWorkflowBizDate && !Texts.hasText(workflowBizDate)) {
-      return specError("Workflow run bizDate is required");
-    }
-    LocalDate bizDate;
-    try {
-      String effectiveBizDate =
-          Texts.hasText(configuredBizDate) ? configuredBizDate : workflowBizDate;
-      bizDate = Texts.hasText(effectiveBizDate) ? LocalDate.parse(effectiveBizDate) : null;
-    } catch (DateTimeParseException invalidDate) {
-      return specError("bizDate must be ISO-8601");
-    }
-    if (requireCompleteGroup && !Texts.hasText(fileGroupCode)) {
-      return specError("fileGroupCode required when requireCompleteGroup=true");
-    }
-    if (requireCompleteGroup && EmptyChecks.isNull(bizDate)) {
-      return specError("bizDate or bindWorkflowBizDate required when requireCompleteGroup=true");
-    }
-    if (requireCompleteGroup && EmptyChecks.isNull(ctx.workflowDefinitionId())) {
-      return specError("Workflow definition is required for a complete file group");
+    @Override
+    public SensorProbeResult probe(SensorContext ctx) {
+        Map<String, Object> spec = ctx.sensorSpec();
+        String pattern = SensorSpecs.string(spec, "pattern");
+        Long maxAgeSeconds = SensorSpecs.longValue(spec, "maxAgeSeconds");
+        String fileGroupCode = SensorSpecs.string(spec, "fileGroupCode");
+        boolean requireCompleteGroup = Boolean.TRUE.equals(spec.get("requireCompleteGroup"));
+        boolean bindWorkflowBizDate = Boolean.TRUE.equals(spec.get("bindWorkflowBizDate"));
+        boolean fileArrivalFreshnessCheckIsUnavailable =
+                !Texts.hasText(pattern) || EmptyChecks.isNull(maxAgeSeconds) || maxAgeSeconds <= 0;
+        if (fileArrivalFreshnessCheckIsUnavailable) {
+            return specError("pattern/maxAgeSeconds required");
+        }
+
+        String configuredBizDate = SensorSpecs.string(spec, "bizDate");
+        if (bindWorkflowBizDate && Texts.hasText(configuredBizDate)) {
+            return specError("configure either bizDate or bindWorkflowBizDate");
+        }
+        String workflowBizDate =
+                bindWorkflowBizDate ? Objects.toString(ctx.workflowRunVars().get("bizDate"), null) : null;
+        if (bindWorkflowBizDate && !Texts.hasText(workflowBizDate)) {
+            return specError("Workflow run bizDate is required");
+        }
+        LocalDate bizDate;
+        try {
+            String effectiveBizDate = Texts.hasText(configuredBizDate) ? configuredBizDate : workflowBizDate;
+            bizDate = Texts.hasText(effectiveBizDate) ? LocalDate.parse(effectiveBizDate) : null;
+        } catch (DateTimeParseException invalidDate) {
+            return specError("bizDate must be ISO-8601");
+        }
+        if (requireCompleteGroup && !Texts.hasText(fileGroupCode)) {
+            return specError("fileGroupCode required when requireCompleteGroup=true");
+        }
+        if (requireCompleteGroup && EmptyChecks.isNull(bizDate)) {
+            return specError("bizDate or bindWorkflowBizDate required when requireCompleteGroup=true");
+        }
+        if (requireCompleteGroup && EmptyChecks.isNull(ctx.workflowDefinitionId())) {
+            return specError("Workflow definition is required for a complete file group");
+        }
+
+        // SQL LIKE 的通配符和转义符必须按字面处理,只有 sensor 的星号表示任意字符。
+        String sqlPattern =
+                pattern.replace("!", "!!").replace("%", "!%").replace("_", "!_").replace('*', '%');
+        Object configuredChannelCode = spec.get("channelCode");
+        if (!FileArrivalChannelCode.isValid(configuredChannelCode)) {
+            return specError("channelCode must be a string up to 128 characters");
+        }
+        String channelCode = (String) configuredChannelCode;
+        channelCode = Texts.hasText(channelCode) ? channelCode : null;
+        String sourceType = mapChannelToSourceType(channelCode);
+        OffsetDateTime since =
+                BatchDateTimeSupport.utcNow().minusSeconds(maxAgeSeconds).atOffset(ZoneOffset.UTC);
+        ResolvedArrivalSpec resolved = new ResolvedArrivalSpec(
+                pattern, sqlPattern, channelCode, sourceType, since, bizDate, fileGroupCode, requireCompleteGroup);
+        return selectLatestArrival(ctx, resolved);
     }
 
-    // SQL LIKE 的通配符和转义符必须按字面处理,只有 sensor 的星号表示任意字符。
-    String sqlPattern =
-        pattern.replace("!", "!!").replace("%", "!%").replace("_", "!_").replace('*', '%');
-    Object configuredChannelCode = spec.get("channelCode");
-    if (!FileArrivalChannelCode.isValid(configuredChannelCode)) {
-      return specError("channelCode must be a string up to 128 characters");
+    private SensorProbeResult selectLatestArrival(SensorContext ctx, ResolvedArrivalSpec resolved) {
+        try {
+            SensorFileArrivalLatestArrivalQuery sensorFileArrivalLatestArrivalQuery =
+                    SensorFileArrivalLatestArrivalQuery.builder()
+                            .tenantId(ctx.tenantId())
+                            .namePattern(resolved.sqlPattern())
+                            .sourceType(resolved.sourceType())
+                            .channelCode(resolved.channelCode())
+                            .since(resolved.since())
+                            .bizDate(resolved.bizDate())
+                            .fileGroupCode(resolved.fileGroupCode())
+                            .workflowDefinitionId(ctx.workflowDefinitionId())
+                            .storageId(ownershipIdentity.storageId(storageProperties, OWNERSHIP_IDENTITY_MAPPER))
+                            .requireCompleteGroup(resolved.requireCompleteGroup())
+                            .build();
+            SensorFileArrivalView hit = mapper.selectLatestArrival(sensorFileArrivalLatestArrivalQuery);
+            if (hit == null) {
+                return SensorProbeResult.notYet();
+            }
+            Map<String, Object> output = hit.toProbeOutput();
+            if (EmptyChecks.isNotNull(resolved.channelCode()) && Boolean.TRUE.equals(hit.legacyChannelFallback())) {
+                log.warn(
+                        "FILE_ARRIVAL matched a legacy file without verified channel tenant={} fileId={}",
+                        ctx.tenantId(),
+                        hit.fileId());
+                output.put("legacyChannelFallback", true);
+            }
+            return SensorProbeResult.matched(output);
+        } catch (Exception e) {
+            log.warn(
+                    "FILE_ARRIVAL probe error tenant={} pattern={} err={}",
+                    ctx.tenantId(),
+                    resolved.pattern(),
+                    SwallowedExceptionLogger.summary(e));
+            String failureDetail =
+                    Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName());
+            return SensorProbeResult.error(
+                    "error.workflow.sensor_probe_failed", List.of(SENSOR_TYPE_CODE, failureDetail));
+        }
     }
-    String channelCode = (String) configuredChannelCode;
-    channelCode = Texts.hasText(channelCode) ? channelCode : null;
-    String sourceType = mapChannelToSourceType(channelCode);
-    OffsetDateTime since =
-        BatchDateTimeSupport.utcNow().minusSeconds(maxAgeSeconds).atOffset(ZoneOffset.UTC);
-    ResolvedArrivalSpec resolved = new ResolvedArrivalSpec(
-        pattern,
-        sqlPattern,
-        channelCode,
-        sourceType,
-        since,
-        bizDate,
-        fileGroupCode,
-        requireCompleteGroup);
-    return selectLatestArrival(ctx, resolved);
-  }
 
-  private SensorProbeResult selectLatestArrival(SensorContext ctx, ResolvedArrivalSpec resolved) {
-    try {
-      SensorFileArrivalLatestArrivalQuery sensorFileArrivalLatestArrivalQuery =
-          SensorFileArrivalLatestArrivalQuery.builder()
-              .tenantId(ctx.tenantId())
-              .namePattern(resolved.sqlPattern())
-              .sourceType(resolved.sourceType())
-              .channelCode(resolved.channelCode())
-              .since(resolved.since())
-              .bizDate(resolved.bizDate())
-              .fileGroupCode(resolved.fileGroupCode())
-              .workflowDefinitionId(ctx.workflowDefinitionId())
-              .storageId(ownershipIdentity.storageId(storageProperties, OWNERSHIP_IDENTITY_MAPPER))
-              .requireCompleteGroup(resolved.requireCompleteGroup())
-              .build();
-      SensorFileArrivalView hit = mapper.selectLatestArrival(sensorFileArrivalLatestArrivalQuery);
-      if (hit == null) {
-        return SensorProbeResult.notYet();
-      }
-      Map<String, Object> output = hit.toProbeOutput();
-      if (EmptyChecks.isNotNull(resolved.channelCode())
-          && Boolean.TRUE.equals(hit.legacyChannelFallback())) {
-        log.warn(
-            "FILE_ARRIVAL matched a legacy file without verified channel tenant={} fileId={}",
-            ctx.tenantId(),
-            hit.fileId());
-        output.put("legacyChannelFallback", true);
-      }
-      return SensorProbeResult.matched(output);
-    } catch (Exception e) {
-      log.warn(
-          "FILE_ARRIVAL probe error tenant={} pattern={} err={}",
-          ctx.tenantId(),
-          resolved.pattern(),
-          SwallowedExceptionLogger.summary(e));
-      String failureDetail =
-          Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName());
-      return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed", List.of(SENSOR_TYPE_CODE, failureDetail));
+    private static SensorProbeResult specError(String detail) {
+        return SensorProbeResult.error(SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE_CODE, detail));
     }
-  }
 
-  private static SensorProbeResult specError(String detail) {
-    return SensorProbeResult.error(SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE_CODE, detail));
-  }
+    private record ResolvedArrivalSpec(
+            String pattern,
+            String sqlPattern,
+            String channelCode,
+            String sourceType,
+            OffsetDateTime since,
+            LocalDate bizDate,
+            String fileGroupCode,
+            boolean requireCompleteGroup) {}
 
-  private record ResolvedArrivalSpec(
-      String pattern,
-      String sqlPattern,
-      String channelCode,
-      String sourceType,
-      OffsetDateTime since,
-      LocalDate bizDate,
-      String fileGroupCode,
-      boolean requireCompleteGroup) {}
-
-  /** 仅供迁移前历史文件沿用原来源类型回退语义。 */
-  private static String mapChannelToSourceType(String channelCode) {
-    if (!Texts.hasText(channelCode)) {
-      return null;
+    /** 仅供迁移前历史文件沿用原来源类型回退语义。 */
+    private static String mapChannelToSourceType(String channelCode) {
+        if (!Texts.hasText(channelCode)) {
+            return null;
+        }
+        String lower = channelCode.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("sftp")) {
+            return "SFTP";
+        }
+        if (lower.startsWith("api")) {
+            return "API";
+        }
+        if (lower.startsWith("upload")) {
+            return "UPLOAD";
+        }
+        return null;
     }
-    String lower = channelCode.toLowerCase(Locale.ROOT);
-    if (lower.startsWith("sftp")) {
-      return "SFTP";
-    }
-    if (lower.startsWith("api")) {
-      return "API";
-    }
-    if (lower.startsWith("upload")) {
-      return "UPLOAD";
-    }
-    return null;
-  }
 }

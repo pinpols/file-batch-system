@@ -42,232 +42,229 @@ import org.junit.jupiter.api.Test;
 @DisplayName("导入解析阶段分片切分单测:零重叠全覆盖与各类直通条件语义")
 class ParseStepPartitionSliceTest {
 
-  private ParseStep parseStep;
+    private ParseStep parseStep;
 
-  @BeforeEach
-  void setUp() {
-    PlatformFileRecordRepository runtimeRepository = mock(PlatformFileRecordRepository.class);
-    ImportRecordGovernanceService recordGovernanceService =
-        mock(ImportRecordGovernanceService.class);
-    when(recordGovernanceService.withinThreshold(any())).thenReturn(true);
-    when(recordGovernanceService.isSkippable(any())).thenReturn(false);
-    parseStep = new ParseStep(new ObjectMapper(), runtimeRepository, recordGovernanceService);
-  }
-
-  // ── 直通场景 ──────────────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("仅 1 个分片时全量直通,总数与明细行数一致")
-  void shouldKeepAllRowsWhenPartitionCountIsOne() {
-    String json = buildJsonArray(9);
-    ImportJobContext context = buildContext(json, /*partitionNo*/ 1, /*partitionCount*/ 1, true);
-
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 9L);
-    assertThat(((Number) context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT))
-            .longValue())
-        .isEqualTo(9L);
-    assertNdjsonLineCount(context, 9);
-  }
-
-  @Test
-  @DisplayName("关闭感知分片开关后不切分,总数与行数仍为全量")
-  void shouldKeepAllRowsWhenPartitionAwareParseDisabled() {
-    String json = buildJsonArray(9);
-    ImportJobContext context = buildContext(json, 2, 3, /*partitionAware*/ false);
-
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    // 关闭后 totalCount = parsedCount = 9(完整文件,不切分)
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 9L);
-    assertNdjsonLineCount(context, 9);
-  }
-
-  // ── 切分场景 ──────────────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("文件束两片各绑定独立文件时完整保留十行与十五行,不再次按行切分")
-  void shouldKeepAllRowsForIndependentBundleFiles() {
-    ImportJobContext first = buildContext(buildJsonArray(10), 1, 2, true);
-    ImportJobContext second = buildContext(buildJsonArray(15), 2, 2, true);
-    first.getAttributes().put(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, 80L);
-    second.getAttributes().put(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, 81L);
-
-    assertThat(parseStep.execute(first).success()).isTrue();
-    assertThat(parseStep.execute(second).success()).isTrue();
-
-    assertNdjsonLineCount(first, 10);
-    assertNdjsonLineCount(second, 15);
-    assertThat(first.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 10L);
-    assertThat(second.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 15L);
-  }
-
-  @Test
-  @DisplayName("3 个分片各取三分之一:两两不重叠且并集等于原始全集")
-  void shouldSliceWithoutOverlapAcrossPartitions() {
-    String json = buildJsonArray(9);
-
-    // 跑 3 个 partition,各自捕获 NDJSON 行集合
-    Set<String> partition1 = runAndCaptureRecords(json, 1, 3);
-    Set<String> partition2 = runAndCaptureRecords(json, 2, 3);
-    Set<String> partition3 = runAndCaptureRecords(json, 3, 3);
-
-    // 各自处理 9/3 = 3 行
-    assertThat(partition1).hasSize(3);
-    assertThat(partition2).hasSize(3);
-    assertThat(partition3).hasSize(3);
-
-    // 两两不交(零重叠)
-    assertThat(partition1)
-        .doesNotContainAnyElementsOf(partition2)
-        .doesNotContainAnyElementsOf(partition3);
-    assertThat(partition2).doesNotContainAnyElementsOf(partition3);
-
-    // 并集 = 完整原始集(全覆盖)
-    Set<String> union = new HashSet<>();
-    union.addAll(partition1);
-    union.addAll(partition2);
-    union.addAll(partition3);
-    assertThat(union).hasSize(9);
-    Set<String> expected = IntStream.rangeClosed(1, 9)
-        .mapToObj(i -> "C" + String.format("%03d", i))
-        .collect(Collectors.toSet());
-    Set<String> actualNos = union.stream()
-        .map(ParseStepPartitionSliceTest::extractCustomerNo)
-        .collect(Collectors.toSet());
-    assertThat(actualNos).isEqualTo(expected);
-  }
-
-  @Test
-  @DisplayName("前序已按字节切片时不再按行取模,避免二次切分丢数据")
-  void shouldKeepAllRowsWhenPreslicedByPreprocess() {
-    // range-slice 优化:PREPROCESS 已只下本片字节并置 PARTITION_PRESLICED;
-    // ParseStep 必须跳过 line-mod(否则二次切分丢数据),staging 全量即本片。
-    String json = buildJsonArray(9);
-    ImportJobContext context = buildContext(json, /*partitionNo*/ 2, /*partitionCount*/ 3, true);
-    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_PRESLICED, Boolean.TRUE);
-
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    // 不再按 lineNo%3 过滤 → 9 行全保留(本片内容由 PREPROCESS 的 range 切分决定,这里输入即全量)
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 9L);
-    assertNdjsonLineCount(context, 9);
-  }
-
-  @Test
-  @DisplayName("分片序号越界时告警并全量直通")
-  void shouldKeepAllRowsWhenPartitionNoOutOfRange() {
-    String json = buildJsonArray(5);
-    // partitionNo=4 超过 count=3 → 警告 + 直通
-    ImportJobContext context = buildContext(json, 4, 3, true);
-
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
-    assertNdjsonLineCount(context, 5);
-  }
-
-  // ── helpers ──────────────────────────────────────────────────────────────
-
-  private Set<String> runAndCaptureRecords(String json, int partitionNo, int partitionCount) {
-    ImportJobContext context = buildContext(json, partitionNo, partitionCount, true);
-    ImportStageResult result = parseStep.execute(context);
-    assertThat(result.success())
-        .as("partition %d/%d should succeed", partitionNo, partitionCount)
-        .isTrue();
-    return readNdjsonLines(context);
-  }
-
-  private static String buildJsonArray(int n) {
-    return "["
-        + IntStream.rangeClosed(1, n)
-            .mapToObj(i -> "{\"customerNo\":\"C"
-                + String.format("%03d", i)
-                + "\",\"customerName\":\"Name"
-                + i
-                + "\"}")
-            .collect(Collectors.joining(","))
-        + "]";
-  }
-
-  private ImportJobContext buildContext(
-      String rawPayload, int partitionNo, int partitionCount, boolean partitionAware) {
-    ImportPayload importPayload = new ImportPayload(
-        null,
-        null,
-        null,
-        null,
-        "JSON",
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        rawPayload,
-        null,
-        null,
-        null,
-        null,
-        Boolean.TRUE,
-        Map.of());
-    ImportJobContext context = new ImportJobContext();
-    context.setTenantId("tenant-partition-slice");
-    context.setJobCode("PARSE_PARTITION");
-    context.setWorkerId("worker-1");
-    context.setFileId("99");
-    context.setRawPayload(rawPayload);
-    Map<String, Object> attrs = new HashMap<>();
-    attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
-    attrs.put(PipelineRuntimeKeys.TASK_ID, 999L);
-    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
-    Map<String, Object> templateConfig = new HashMap<>();
-    templateConfig.put("jdbc_mapped_import", Map.of());
-    if (!partitionAware) {
-      templateConfig.put("partition_aware_parse", "false");
+    @BeforeEach
+    void setUp() {
+        PlatformFileRecordRepository runtimeRepository = mock(PlatformFileRecordRepository.class);
+        ImportRecordGovernanceService recordGovernanceService = mock(ImportRecordGovernanceService.class);
+        when(recordGovernanceService.withinThreshold(any())).thenReturn(true);
+        when(recordGovernanceService.isSkippable(any())).thenReturn(false);
+        parseStep = new ParseStep(new ObjectMapper(), runtimeRepository, recordGovernanceService);
     }
-    attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
-    attrs.put(PipelineRuntimeKeys.PARTITION_NO, partitionNo);
-    attrs.put(PipelineRuntimeKeys.PARTITION_COUNT, partitionCount);
-    context.setAttributes(attrs);
-    return context;
-  }
 
-  private static Set<String> readNdjsonLines(ImportJobContext context) {
-    Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
-    if (path == null) {
-      return Set.of();
-    }
-    try {
-      List<String> lines =
-          Files.lines(Path.of(path.toString())).filter(l -> !l.isBlank()).toList();
-      return new HashSet<>(lines);
-    } catch (Exception e) {
-      throw new AssertionError("Could not read NDJSON: " + e.getMessage(), e);
-    }
-  }
+    // ── 直通场景 ──────────────────────────────────────────────────────────────
 
-  private static void assertNdjsonLineCount(ImportJobContext context, int expected) {
-    assertThat(readNdjsonLines(context)).hasSize(expected);
-  }
+    @Test
+    @DisplayName("仅 1 个分片时全量直通,总数与明细行数一致")
+    void shouldKeepAllRowsWhenPartitionCountIsOne() {
+        String json = buildJsonArray(9);
+        ImportJobContext context = buildContext(json, /*partitionNo*/ 1, /*partitionCount*/ 1, true);
 
-  private static String extractCustomerNo(String ndjsonLine) {
-    int start = ndjsonLine.indexOf("\"customerNo\":\"");
-    if (start < 0) {
-      return null;
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 9L);
+        assertThat(((Number) context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT)).longValue())
+                .isEqualTo(9L);
+        assertNdjsonLineCount(context, 9);
     }
-    start += "\"customerNo\":\"".length();
-    int end = ndjsonLine.indexOf('"', start);
-    return end < 0 ? null : ndjsonLine.substring(start, end);
-  }
+
+    @Test
+    @DisplayName("关闭感知分片开关后不切分,总数与行数仍为全量")
+    void shouldKeepAllRowsWhenPartitionAwareParseDisabled() {
+        String json = buildJsonArray(9);
+        ImportJobContext context = buildContext(json, 2, 3, /*partitionAware*/ false);
+
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        // 关闭后 totalCount = parsedCount = 9(完整文件,不切分)
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 9L);
+        assertNdjsonLineCount(context, 9);
+    }
+
+    // ── 切分场景 ──────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("文件束两片各绑定独立文件时完整保留十行与十五行,不再次按行切分")
+    void shouldKeepAllRowsForIndependentBundleFiles() {
+        ImportJobContext first = buildContext(buildJsonArray(10), 1, 2, true);
+        ImportJobContext second = buildContext(buildJsonArray(15), 2, 2, true);
+        first.getAttributes().put(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, 80L);
+        second.getAttributes().put(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, 81L);
+
+        assertThat(parseStep.execute(first).success()).isTrue();
+        assertThat(parseStep.execute(second).success()).isTrue();
+
+        assertNdjsonLineCount(first, 10);
+        assertNdjsonLineCount(second, 15);
+        assertThat(first.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 10L);
+        assertThat(second.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 15L);
+    }
+
+    @Test
+    @DisplayName("3 个分片各取三分之一:两两不重叠且并集等于原始全集")
+    void shouldSliceWithoutOverlapAcrossPartitions() {
+        String json = buildJsonArray(9);
+
+        // 跑 3 个 partition,各自捕获 NDJSON 行集合
+        Set<String> partition1 = runAndCaptureRecords(json, 1, 3);
+        Set<String> partition2 = runAndCaptureRecords(json, 2, 3);
+        Set<String> partition3 = runAndCaptureRecords(json, 3, 3);
+
+        // 各自处理 9/3 = 3 行
+        assertThat(partition1).hasSize(3);
+        assertThat(partition2).hasSize(3);
+        assertThat(partition3).hasSize(3);
+
+        // 两两不交(零重叠)
+        assertThat(partition1).doesNotContainAnyElementsOf(partition2).doesNotContainAnyElementsOf(partition3);
+        assertThat(partition2).doesNotContainAnyElementsOf(partition3);
+
+        // 并集 = 完整原始集(全覆盖)
+        Set<String> union = new HashSet<>();
+        union.addAll(partition1);
+        union.addAll(partition2);
+        union.addAll(partition3);
+        assertThat(union).hasSize(9);
+        Set<String> expected = IntStream.rangeClosed(1, 9)
+                .mapToObj(i -> "C" + String.format("%03d", i))
+                .collect(Collectors.toSet());
+        Set<String> actualNos = union.stream()
+                .map(ParseStepPartitionSliceTest::extractCustomerNo)
+                .collect(Collectors.toSet());
+        assertThat(actualNos).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("前序已按字节切片时不再按行取模,避免二次切分丢数据")
+    void shouldKeepAllRowsWhenPreslicedByPreprocess() {
+        // range-slice 优化:PREPROCESS 已只下本片字节并置 PARTITION_PRESLICED;
+        // ParseStep 必须跳过 line-mod(否则二次切分丢数据),staging 全量即本片。
+        String json = buildJsonArray(9);
+        ImportJobContext context = buildContext(json, /*partitionNo*/ 2, /*partitionCount*/ 3, true);
+        context.getAttributes().put(PipelineRuntimeKeys.PARTITION_PRESLICED, Boolean.TRUE);
+
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        // 不再按 lineNo%3 过滤 → 9 行全保留(本片内容由 PREPROCESS 的 range 切分决定,这里输入即全量)
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 9L);
+        assertNdjsonLineCount(context, 9);
+    }
+
+    @Test
+    @DisplayName("分片序号越界时告警并全量直通")
+    void shouldKeepAllRowsWhenPartitionNoOutOfRange() {
+        String json = buildJsonArray(5);
+        // partitionNo=4 超过 count=3 → 警告 + 直通
+        ImportJobContext context = buildContext(json, 4, 3, true);
+
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
+        assertNdjsonLineCount(context, 5);
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    private Set<String> runAndCaptureRecords(String json, int partitionNo, int partitionCount) {
+        ImportJobContext context = buildContext(json, partitionNo, partitionCount, true);
+        ImportStageResult result = parseStep.execute(context);
+        assertThat(result.success())
+                .as("partition %d/%d should succeed", partitionNo, partitionCount)
+                .isTrue();
+        return readNdjsonLines(context);
+    }
+
+    private static String buildJsonArray(int n) {
+        return "["
+                + IntStream.rangeClosed(1, n)
+                        .mapToObj(i -> "{\"customerNo\":\"C"
+                                + String.format("%03d", i)
+                                + "\",\"customerName\":\"Name"
+                                + i
+                                + "\"}")
+                        .collect(Collectors.joining(","))
+                + "]";
+    }
+
+    private ImportJobContext buildContext(
+            String rawPayload, int partitionNo, int partitionCount, boolean partitionAware) {
+        ImportPayload importPayload = new ImportPayload(
+                null,
+                null,
+                null,
+                null,
+                "JSON",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                rawPayload,
+                null,
+                null,
+                null,
+                null,
+                Boolean.TRUE,
+                Map.of());
+        ImportJobContext context = new ImportJobContext();
+        context.setTenantId("tenant-partition-slice");
+        context.setJobCode("PARSE_PARTITION");
+        context.setWorkerId("worker-1");
+        context.setFileId("99");
+        context.setRawPayload(rawPayload);
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
+        attrs.put(PipelineRuntimeKeys.TASK_ID, 999L);
+        attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
+        Map<String, Object> templateConfig = new HashMap<>();
+        templateConfig.put("jdbc_mapped_import", Map.of());
+        if (!partitionAware) {
+            templateConfig.put("partition_aware_parse", "false");
+        }
+        attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+        attrs.put(PipelineRuntimeKeys.PARTITION_NO, partitionNo);
+        attrs.put(PipelineRuntimeKeys.PARTITION_COUNT, partitionCount);
+        context.setAttributes(attrs);
+        return context;
+    }
+
+    private static Set<String> readNdjsonLines(ImportJobContext context) {
+        Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+        if (path == null) {
+            return Set.of();
+        }
+        try {
+            List<String> lines = Files.lines(Path.of(path.toString()))
+                    .filter(l -> !l.isBlank())
+                    .toList();
+            return new HashSet<>(lines);
+        } catch (Exception e) {
+            throw new AssertionError("Could not read NDJSON: " + e.getMessage(), e);
+        }
+    }
+
+    private static void assertNdjsonLineCount(ImportJobContext context, int expected) {
+        assertThat(readNdjsonLines(context)).hasSize(expected);
+    }
+
+    private static String extractCustomerNo(String ndjsonLine) {
+        int start = ndjsonLine.indexOf("\"customerNo\":\"");
+        if (start < 0) {
+            return null;
+        }
+        start += "\"customerNo\":\"".length();
+        int end = ndjsonLine.indexOf('"', start);
+        return end < 0 ? null : ndjsonLine.substring(start, end);
+    }
 }

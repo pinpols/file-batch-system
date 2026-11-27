@@ -26,83 +26,81 @@ import org.springframework.stereotype.Component;
 @Component
 public class StaleTempFileCleanup {
 
-  private final WorkerTempFileProperties workerTempFileProperties;
+    private final WorkerTempFileProperties workerTempFileProperties;
 
-  public StaleTempFileCleanup(WorkerTempFileProperties workerTempFileProperties) {
-    this.workerTempFileProperties = workerTempFileProperties;
-  }
+    public StaleTempFileCleanup(WorkerTempFileProperties workerTempFileProperties) {
+        this.workerTempFileProperties = workerTempFileProperties;
+    }
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void cleanOnReady() {
-    cleanStaleTempFiles();
-  }
+    @EventListener(ApplicationReadyEvent.class)
+    public void cleanOnReady() {
+        cleanStaleTempFiles();
+    }
 
-  // M-6: 运行期定时清理，防止长时间运行的 worker 累积过多过期临时文件（默认 4 小时一次）
-  @Scheduled(fixedDelayString = "${batch.worker.stale-temp-cleanup-interval:PT4H}")
-  public void cleanPeriodically() {
-    cleanStaleTempFiles();
-  }
+    // M-6: 运行期定时清理，防止长时间运行的 worker 累积过多过期临时文件（默认 4 小时一次）
+    @Scheduled(fixedDelayString = "${batch.worker.stale-temp-cleanup-interval:PT4H}")
+    public void cleanPeriodically() {
+        cleanStaleTempFiles();
+    }
 
-  void cleanStaleTempFiles() {
-    long hours = Math.max(0L, workerTempFileProperties.getStaleTempFileHours());
-    Instant cleanupTime = BatchDateTimeSupport.utcNow();
-    Duration staleFileAge = Duration.ofHours(hours);
-    Instant cutoff = cleanupTime.minus(staleFileAge);
-    Path tempDir = PrivateTempFiles.tempRoot();
-    int cleaned = 0;
-    try (DirectoryStream<Path> stream = Files.newDirectoryStream(tempDir)) {
-      for (Path p : stream) {
-        if (p == null) {
-          continue;
+    void cleanStaleTempFiles() {
+        long hours = Math.max(0L, workerTempFileProperties.getStaleTempFileHours());
+        Instant cleanupTime = BatchDateTimeSupport.utcNow();
+        Duration staleFileAge = Duration.ofHours(hours);
+        Instant cutoff = cleanupTime.minus(staleFileAge);
+        Path tempDir = PrivateTempFiles.tempRoot();
+        int cleaned = 0;
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(tempDir)) {
+            for (Path p : stream) {
+                if (p == null) {
+                    continue;
+                }
+                try {
+                    if (!Files.isRegularFile(p)) {
+                        continue;
+                    }
+                    String name = p.getFileName() == null ? "" : p.getFileName().toString();
+                    if (!name.startsWith("batch-")) {
+                        continue;
+                    }
+                    // 只清理明确约定的 batch-* 前缀，避免误删系统/用户其他临时文件。
+                    // 若未来 prefix 规则更细（如 batch-import-/batch-export-），建议在这里进一步收紧匹配。
+                    Instant lastModified = Files.getLastModifiedTime(p).toInstant();
+                    if (!lastModified.isBefore(cutoff)) {
+                        continue;
+                    }
+                    if (Files.deleteIfExists(p)) {
+                        cleaned++;
+                    }
+                } catch (RuntimeException ex) {
+                    log.warn(
+                            "failed to delete stale temp file: path={}, error={}",
+                            p,
+                            SwallowedExceptionLogger.summary(ex));
+                } catch (Exception ex) {
+                    log.warn(
+                            "failed to delete stale temp file: path={}, error={}",
+                            p,
+                            SwallowedExceptionLogger.summary(ex));
+                }
+            }
+        } catch (Exception ex) {
+            log.warn(
+                    "failed to scan temp dir for stale files: tempDir={}, error={}",
+                    tempDir,
+                    SwallowedExceptionLogger.summary(ex));
+            return;
         }
         try {
-          if (!Files.isRegularFile(p)) {
-            continue;
-          }
-          String name = p.getFileName() == null ? "" : p.getFileName().toString();
-          if (!name.startsWith("batch-")) {
-            continue;
-          }
-          // 只清理明确约定的 batch-* 前缀，避免误删系统/用户其他临时文件。
-          // 若未来 prefix 规则更细（如 batch-import-/batch-export-），建议在这里进一步收紧匹配。
-          Instant lastModified = Files.getLastModifiedTime(p).toInstant();
-          if (!lastModified.isBefore(cutoff)) {
-            continue;
-          }
-          if (Files.deleteIfExists(p)) {
-            cleaned++;
-          }
-        } catch (RuntimeException ex) {
-          log.warn(
-              "failed to delete stale temp file: path={}, error={}",
-              p,
-              SwallowedExceptionLogger.summary(ex));
+            cleaned += PrivateTempFiles.deleteStaleUnlockedFiles(BatchFileConstants.IMPORT_STAGE_PREFIX, cutoff);
         } catch (Exception ex) {
-          log.warn(
-              "failed to delete stale temp file: path={}, error={}",
-              p,
-              SwallowedExceptionLogger.summary(ex));
+            log.warn("failed to clean stale import stage files", ex);
         }
-      }
-    } catch (Exception ex) {
-      log.warn(
-          "failed to scan temp dir for stale files: tempDir={}, error={}",
-          tempDir,
-          SwallowedExceptionLogger.summary(ex));
-      return;
+        try {
+            cleaned += PrivateTempFiles.deleteStaleUnlockedFiles(BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, cutoff);
+        } catch (Exception ex) {
+            log.warn("failed to clean stale encrypted export files", ex);
+        }
+        log.info("Cleaned {} stale temp files older than {}h", cleaned, hours);
     }
-    try {
-      cleaned +=
-          PrivateTempFiles.deleteStaleUnlockedFiles(BatchFileConstants.IMPORT_STAGE_PREFIX, cutoff);
-    } catch (Exception ex) {
-      log.warn("failed to clean stale import stage files", ex);
-    }
-    try {
-      cleaned += PrivateTempFiles.deleteStaleUnlockedFiles(
-          BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, cutoff);
-    } catch (Exception ex) {
-      log.warn("failed to clean stale encrypted export files", ex);
-    }
-    log.info("Cleaned {} stale temp files older than {}h", cleaned, hours);
-  }
 }

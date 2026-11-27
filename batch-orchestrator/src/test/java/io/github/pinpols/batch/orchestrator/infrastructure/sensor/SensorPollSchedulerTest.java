@@ -27,70 +27,70 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("传感器探测轮询调度,验证排空期间跳过扫描与探测期间租户上下文的建立和清理")
 class SensorPollSchedulerTest {
 
-  @Mock
-  private SensorProbeTransactionExecutor transactionExecutor;
+    @Mock
+    private SensorProbeTransactionExecutor transactionExecutor;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Mock
-  private WorkflowRunMapper workflowRunMapper;
+    @Mock
+    private WorkflowRunMapper workflowRunMapper;
 
-  @AfterEach
-  void clearTenantContext() {
-    RlsTenantContextHolder.clear();
-  }
+    @AfterEach
+    void clearTenantContext() {
+        RlsTenantContextHolder.clear();
+    }
 
-  @Test
-  @DisplayName("编排器处于排空状态时跳过待探测任务扫描,不触发数据库取数")
-  void shouldSkipDatabaseScan_whenDraining() {
-    when(gracefulShutdown.isDraining()).thenReturn(true);
+    @Test
+    @DisplayName("编排器处于排空状态时跳过待探测任务扫描,不触发数据库取数")
+    void shouldSkipDatabaseScan_whenDraining() {
+        when(gracefulShutdown.isDraining()).thenReturn(true);
 
-    scheduler().scan();
+        scheduler().scan();
 
-    verify(transactionExecutor, never()).fetchDue(any(), anyInt());
-  }
+        verify(transactionExecutor, never()).fetchDue(any(), anyInt());
+    }
 
-  @Test
-  @DisplayName("探测执行期间使用工作流运行归属的租户上下文,轮询结束后清理该上下文")
-  void shouldProbeWithinOwnedTenantContext_andClearItAfterPolling() {
-    WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
-    nodeRun.setId(7L);
-    nodeRun.setWorkflowRunId(11L);
-    WorkflowRunEntity workflowRun = new WorkflowRunEntity();
-    workflowRun.setTenantId("tenant-a");
-    when(transactionExecutor.fetchDue(any(Instant.class), anyInt())).thenReturn(List.of(nodeRun));
-    when(workflowRunMapper.selectByIdAnyTenant(11L)).thenReturn(workflowRun);
-    doAnswer(invocation -> {
-          assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-a");
-          return null;
-        })
-        .when(transactionExecutor)
-        .probeOne(any(), any());
+    @Test
+    @DisplayName("探测执行期间使用工作流运行归属的租户上下文,轮询结束后清理该上下文")
+    void shouldProbeWithinOwnedTenantContext_andClearItAfterPolling() {
+        WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
+        nodeRun.setId(7L);
+        nodeRun.setWorkflowRunId(11L);
+        WorkflowRunEntity workflowRun = new WorkflowRunEntity();
+        workflowRun.setTenantId("tenant-a");
+        when(transactionExecutor.fetchDue(any(Instant.class), anyInt())).thenReturn(List.of(nodeRun));
+        when(workflowRunMapper.selectByIdAnyTenant(11L)).thenReturn(workflowRun);
+        doAnswer(invocation -> {
+                    assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-a");
+                    return null;
+                })
+                .when(transactionExecutor)
+                .probeOne(any(), any());
 
-    scheduler().scan();
+        scheduler().scan();
 
-    verify(transactionExecutor).probeOne(any(), any());
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        verify(transactionExecutor).probeOne(any(), any());
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 
-  @Test
-  @DisplayName("无法解析 WAIT 节点的工作流租户时失败关闭,不在无租户上下文下探测")
-  void shouldSkipProbe_whenOwningTenantCannotBeResolved() {
-    WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
-    nodeRun.setId(7L);
-    nodeRun.setWorkflowRunId(11L);
-    when(transactionExecutor.fetchDue(any(Instant.class), anyInt())).thenReturn(List.of(nodeRun));
-    when(workflowRunMapper.selectByIdAnyTenant(11L)).thenReturn(null);
+    @Test
+    @DisplayName("无法解析 WAIT 节点的工作流租户时失败关闭,不在无租户上下文下探测")
+    void shouldSkipProbe_whenOwningTenantCannotBeResolved() {
+        WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
+        nodeRun.setId(7L);
+        nodeRun.setWorkflowRunId(11L);
+        when(transactionExecutor.fetchDue(any(Instant.class), anyInt())).thenReturn(List.of(nodeRun));
+        when(workflowRunMapper.selectByIdAnyTenant(11L)).thenReturn(null);
 
-    scheduler().scan();
+        scheduler().scan();
 
-    verify(transactionExecutor, never()).probeOne(any(), any());
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        verify(transactionExecutor, never()).probeOne(any(), any());
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 
-  private SensorPollScheduler scheduler() {
-    return new SensorPollScheduler(
-        transactionExecutor, new SensorProperties(), gracefulShutdown, workflowRunMapper);
-  }
+    private SensorPollScheduler scheduler() {
+        return new SensorPollScheduler(
+                transactionExecutor, new SensorProperties(), gracefulShutdown, workflowRunMapper);
+    }
 }

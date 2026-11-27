@@ -29,241 +29,237 @@ import org.springframework.context.support.StaticMessageSource;
 @DisplayName("配置包 Excel 写出器:导出与预览工作簿的行为基线")
 class ConfigPackageExcelWorkbookWriterExportPreviewTest {
 
-  private static final List<String> DATA_SHEET_NAMES = List.of(
-      ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET,
-      ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
-      ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
-      ConfigPackageExcelValidator.JOB_SHEET,
-      ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
-      ConfigPackageExcelValidator.CHANNEL_SHEET,
-      ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-      ConfigPackageExcelValidator.WF_DEF_SHEET,
-      ConfigPackageExcelValidator.WF_NODE_SHEET,
-      ConfigPackageExcelValidator.WF_EDGE_SHEET,
-      ConfigPackageExcelValidator.WORKFLOW_MONITORING_POLICY_SHEET);
+    private static final List<String> DATA_SHEET_NAMES = List.of(
+            ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET,
+            ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
+            ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
+            ConfigPackageExcelValidator.JOB_SHEET,
+            ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
+            ConfigPackageExcelValidator.CHANNEL_SHEET,
+            ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+            ConfigPackageExcelValidator.WF_DEF_SHEET,
+            ConfigPackageExcelValidator.WF_NODE_SHEET,
+            ConfigPackageExcelValidator.WF_EDGE_SHEET,
+            ConfigPackageExcelValidator.WORKFLOW_MONITORING_POLICY_SHEET);
 
-  private static final int LEGACY_IMPORT_SHEET_COUNT = 12;
+    private static final int LEGACY_IMPORT_SHEET_COUNT = 12;
 
-  private static final List<String> SUPPLEMENT_SHEET_NAMES = List.of(
-      ConsoleExcelStyles.SHEET_NAME_README,
-      ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FILL_ORDER,
-      ConfigPackageWorkbookSupplementWriter.SHEET_NAME_DEPENDENCY,
-      ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FIVE_WORKER,
-      ConfigPackageWorkbookSupplementWriter.SHEET_NAME_BUNDLE,
-      ConsoleExcelStyles.SHEET_NAME_DICT,
-      ConsoleExcelStyles.SHEET_NAME_GUIDE,
-      ConsoleExcelStyles.SHEET_NAME_VALIDATION);
+    private static final List<String> SUPPLEMENT_SHEET_NAMES = List.of(
+            ConsoleExcelStyles.SHEET_NAME_README,
+            ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FILL_ORDER,
+            ConfigPackageWorkbookSupplementWriter.SHEET_NAME_DEPENDENCY,
+            ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FIVE_WORKER,
+            ConfigPackageWorkbookSupplementWriter.SHEET_NAME_BUNDLE,
+            ConsoleExcelStyles.SHEET_NAME_DICT,
+            ConsoleExcelStyles.SHEET_NAME_GUIDE,
+            ConsoleExcelStyles.SHEET_NAME_VALIDATION);
 
-  @Test
-  @DisplayName("导出工作簿:数据与说明 sheet 的数量和顺序保持稳定")
-  void shouldKeepStableSheetOrder_whenBuildingExportWorkbook() throws Exception {
-    List<List<Map<String, Object>>> sheetData = exportDataRows();
-    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
-      assertThat(sheetNames(wb))
-          .containsExactlyElementsOf(concat(DATA_SHEET_NAMES, SUPPLEMENT_SHEET_NAMES));
-      for (int i = 0; i < DATA_SHEET_NAMES.size(); i++) {
-        assertThat(wb.getSheetAt(i).getSheetName()).isEqualTo(DATA_SHEET_NAMES.get(i));
-      }
-    }
-  }
-
-  @Test
-  @DisplayName("导出工作簿:表头取自列定义,公式注入内容被转义为文本")
-  void shouldWriteHeadersAndEscapeFormulas_whenBuildingExportWorkbook() throws Exception {
-    List<Map<String, Object>> jobRows = List.of(
-        row("job_code", "JOB_IMPORT_CUSTOMER", "job_name", "导入客户", "default_params", "=1+1"));
-    List<List<Map<String, Object>>> sheetData = emptyExportData();
-    sheetData.set(3, jobRows);
-
-    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
-      Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
-      // 表头 = schema 列
-      assertThat(jobSheet.getRow(0).getCell(0).getStringCellValue())
-          .isEqualTo(ConfigPackageExcelValidator.COL_TENANT_ID);
-      // 数据行单元格按列写入
-      assertThat(jobSheet.getRow(1).getCell(1).getStringCellValue())
-          .isEqualTo("JOB_IMPORT_CUSTOMER");
-      // 公式注入被转义（不产生可执行公式）
-      int defaultParamsColumn = headerColumnIndex(jobSheet.getRow(0), "default_params");
-      assertThat(jobSheet.getRow(1).getCell(defaultParamsColumn).getStringCellValue())
-          .isNotEqualTo("=1+1")
-          .contains("1+1");
-    }
-  }
-
-  @Test
-  @DisplayName("导出工作簿:监控阈值仅出现在独立策略 sheet")
-  void shouldWriteMonitoringPolicyToDedicatedSheet() throws Exception {
-    List<List<Map<String, Object>>> sheetData = emptyExportData();
-    sheetData.set(
-        4,
-        List.of(row(
-            "job_code", "JOB_IMPORT_CUSTOMER",
-            "soft_runtime_seconds", 900,
-            "soft_runtime_severity", "ERROR")));
-
-    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
-      Sheet policySheet = wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
-      assertThat(policySheet.getRow(0).getCell(2).getStringCellValue())
-          .isEqualTo("soft_runtime_seconds");
-      assertThat(policySheet.getRow(1).getCell(1).getStringCellValue())
-          .isEqualTo("JOB_IMPORT_CUSTOMER");
-      assertThat(policySheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("ERROR");
-    }
-  }
-
-  @Test
-  @DisplayName("监控策略模板:严重级别下拉只应用到三个级别列")
-  void shouldApplySeverityDropdownsToSeverityColumns() throws Exception {
-    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(emptyExportData()))) {
-      Sheet policySheet = wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
-      List<Integer> validatedColumns = new ArrayList<>();
-      for (DataValidation validation : policySheet.getDataValidations()) {
-        if (!validation.getValidationConstraint().getFormula1().contains("CRITICAL")) {
-          continue;
+    @Test
+    @DisplayName("导出工作簿:数据与说明 sheet 的数量和顺序保持稳定")
+    void shouldKeepStableSheetOrder_whenBuildingExportWorkbook() throws Exception {
+        List<List<Map<String, Object>>> sheetData = exportDataRows();
+        try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
+            assertThat(sheetNames(wb)).containsExactlyElementsOf(concat(DATA_SHEET_NAMES, SUPPLEMENT_SHEET_NAMES));
+            for (int i = 0; i < DATA_SHEET_NAMES.size(); i++) {
+                assertThat(wb.getSheetAt(i).getSheetName()).isEqualTo(DATA_SHEET_NAMES.get(i));
+            }
         }
-        validatedColumns.add(validation.getRegions().getCellRangeAddress(0).getFirstColumn());
-      }
-
-      assertThat(validatedColumns).containsExactly(3, 5, 9);
     }
-  }
 
-  @Test
-  @DisplayName("导出工作簿:不再提供可编辑的 Pipeline 定义和步骤表")
-  void shouldOmitLegacyPipelineConfigurationSheetsFromExports() throws Exception {
-    List<List<Map<String, Object>>> sheetData = emptyExportData();
-    sheetData.set(
-        8, List.of(row("job_code", "JOB_PROCESS", "version", "1", "impl_code", "sqlCompute")));
+    @Test
+    @DisplayName("导出工作簿:表头取自列定义,公式注入内容被转义为文本")
+    void shouldWriteHeadersAndEscapeFormulas_whenBuildingExportWorkbook() throws Exception {
+        List<Map<String, Object>> jobRows =
+                List.of(row("job_code", "JOB_IMPORT_CUSTOMER", "job_name", "导入客户", "default_params", "=1+1"));
+        List<List<Map<String, Object>>> sheetData = emptyExportData();
+        sheetData.set(3, jobRows);
 
-    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
-      assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
-      assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
+        try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
+            Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+            // 表头 = schema 列
+            assertThat(jobSheet.getRow(0).getCell(0).getStringCellValue())
+                    .isEqualTo(ConfigPackageExcelValidator.COL_TENANT_ID);
+            // 数据行单元格按列写入
+            assertThat(jobSheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("JOB_IMPORT_CUSTOMER");
+            // 公式注入被转义（不产生可执行公式）
+            int defaultParamsColumn = headerColumnIndex(jobSheet.getRow(0), "default_params");
+            assertThat(jobSheet.getRow(1).getCell(defaultParamsColumn).getStringCellValue())
+                    .isNotEqualTo("=1+1")
+                    .contains("1+1");
+        }
     }
-  }
 
-  @Test
-  @DisplayName("预览工作簿:写入会话数据行、单元格批注与校验明细")
-  void shouldWriteRowsAndIssueComments_whenBuildingPreviewWorkbook() throws Exception {
-    Map<String, String> badJob = new LinkedHashMap<>();
-    badJob.put("tenant_id", "t1");
-    badJob.put("job_code", "JOB_MISSING_QUEUE");
-    badJob.put("job_name", "缺队列作业");
-    badJob.put("job_type", "IMPORT");
-    badJob.put("schedule_type", "MANUAL");
-    badJob.put("queue_code", "no-such-queue");
-    PackageExcelSession session = new PackageExcelSession(
-        "tenant-package.xlsx",
-        "t1",
-        Instant.parse("2026-08-09T00:00:00Z"),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(badJob),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of());
-    WorkbookIssue queueIssue = new WorkbookIssue(
-        ConfigPackageExcelValidator.JOB_SHEET,
-        2,
-        ConfigPackageExcelValidator.COL_QUEUE_CODE,
-        "queue_code references unknown resource_queue: no-such-queue");
-    // 单元格批注来自 sheet 自身 issue；跨表 issue 只进入校验明细 sheet（锁定现状，避免重构漂移）。
-    List<WorkbookIssue> crossRefIssues = List.of();
-    PackageValidationResult result = new PackageValidationResult(
-        emptySheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET),
-        emptySheet(ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET),
-        emptySheet(ConfigPackageExcelValidator.BATCH_WINDOW_SHEET),
-        new SheetResult(ConfigPackageExcelValidator.JOB_SHEET, 1, List.of(), List.of(queueIssue)),
-        emptySheet(ConfigPackageExcelValidator.CHANNEL_SHEET),
-        emptySheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET),
-        emptySheet(ConfigPackageExcelValidator.PIPELINE_SHEET),
-        emptySheet(ConfigPackageExcelValidator.STEP_SHEET),
-        emptySheet(ConfigPackageExcelValidator.WF_DEF_SHEET),
-        emptySheet(ConfigPackageExcelValidator.WF_NODE_SHEET),
-        emptySheet(ConfigPackageExcelValidator.WF_EDGE_SHEET),
-        crossRefIssues);
+    @Test
+    @DisplayName("导出工作簿:监控阈值仅出现在独立策略 sheet")
+    void shouldWriteMonitoringPolicyToDedicatedSheet() throws Exception {
+        List<List<Map<String, Object>>> sheetData = emptyExportData();
+        sheetData.set(
+                4,
+                List.of(row(
+                        "job_code", "JOB_IMPORT_CUSTOMER",
+                        "soft_runtime_seconds", 900,
+                        "soft_runtime_severity", "ERROR")));
 
-    try (XSSFWorkbook wb = read(workbookWriter().buildPreviewWorkbook(session, result))) {
-      Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
-      assertThat(jobSheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("JOB_MISSING_QUEUE");
-      Comment comment = jobSheet.getRow(1).getCell(5).getCellComment();
-      assertThat(comment).isNotNull();
-      assertThat(comment.getString().getString()).contains("no-such-queue");
-
-      Sheet validationSheet = wb.getSheet(ConsoleExcelStyles.SHEET_NAME_VALIDATION);
-      assertThat(validationSheet).isNotNull();
-      assertThat(validationSheet.getRow(1).getCell(0).getStringCellValue())
-          .isEqualTo(ConfigPackageExcelValidator.JOB_SHEET);
-      assertThat(validationSheet.getRow(1).getCell(3).getStringCellValue())
-          .contains("no-such-queue");
-      assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET))
-          .as("retired tenant Pipeline sheets are excluded from new previews")
-          .isNull();
-      assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
+        try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
+            Sheet policySheet = wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
+            assertThat(policySheet.getRow(0).getCell(2).getStringCellValue()).isEqualTo("soft_runtime_seconds");
+            assertThat(policySheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("JOB_IMPORT_CUSTOMER");
+            assertThat(policySheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("ERROR");
+        }
     }
-  }
 
-  private static ConfigPackageExcelWorkbookWriter workbookWriter() {
-    StaticMessageSource ms = new StaticMessageSource();
-    ms.setUseCodeAsDefaultMessage(true);
-    return new ConfigPackageExcelWorkbookWriter(ms);
-  }
+    @Test
+    @DisplayName("监控策略模板:严重级别下拉只应用到三个级别列")
+    void shouldApplySeverityDropdownsToSeverityColumns() throws Exception {
+        try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(emptyExportData()))) {
+            Sheet policySheet = wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
+            List<Integer> validatedColumns = new ArrayList<>();
+            for (DataValidation validation : policySheet.getDataValidations()) {
+                if (!validation.getValidationConstraint().getFormula1().contains("CRITICAL")) {
+                    continue;
+                }
+                validatedColumns.add(
+                        validation.getRegions().getCellRangeAddress(0).getFirstColumn());
+            }
 
-  private static XSSFWorkbook read(byte[] bytes) throws Exception {
-    return new XSSFWorkbook(new ByteArrayInputStream(bytes));
-  }
-
-  private static List<String> sheetNames(XSSFWorkbook wb) {
-    ArrayList<String> names = new ArrayList<>();
-    for (int i = 0; i < wb.getNumberOfSheets(); i++) {
-      names.add(wb.getSheetName(i));
+            assertThat(validatedColumns).containsExactly(3, 5, 9);
+        }
     }
-    return names;
-  }
 
-  private static List<String> concat(List<String> a, List<String> b) {
-    ArrayList<String> out = new ArrayList<>(a);
-    out.addAll(b);
-    return out;
-  }
+    @Test
+    @DisplayName("导出工作簿:不再提供可编辑的 Pipeline 定义和步骤表")
+    void shouldOmitLegacyPipelineConfigurationSheetsFromExports() throws Exception {
+        List<List<Map<String, Object>>> sheetData = emptyExportData();
+        sheetData.set(8, List.of(row("job_code", "JOB_PROCESS", "version", "1", "impl_code", "sqlCompute")));
 
-  private static List<List<Map<String, Object>>> emptyExportData() {
-    List<List<Map<String, Object>>> data = new ArrayList<>();
-    for (int i = 0; i < LEGACY_IMPORT_SHEET_COUNT; i++) {
-      data.add(List.of());
+        try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
+            assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
+            assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
+        }
     }
-    return data;
-  }
 
-  private static List<List<Map<String, Object>>> exportDataRows() {
-    List<List<Map<String, Object>>> data = emptyExportData();
-    data.set(3, List.of(row("job_code", "JOB_IMPORT_CUSTOMER", "job_name", "导入客户")));
-    return data;
-  }
+    @Test
+    @DisplayName("预览工作簿:写入会话数据行、单元格批注与校验明细")
+    void shouldWriteRowsAndIssueComments_whenBuildingPreviewWorkbook() throws Exception {
+        Map<String, String> badJob = new LinkedHashMap<>();
+        badJob.put("tenant_id", "t1");
+        badJob.put("job_code", "JOB_MISSING_QUEUE");
+        badJob.put("job_name", "缺队列作业");
+        badJob.put("job_type", "IMPORT");
+        badJob.put("schedule_type", "MANUAL");
+        badJob.put("queue_code", "no-such-queue");
+        PackageExcelSession session = new PackageExcelSession(
+                "tenant-package.xlsx",
+                "t1",
+                Instant.parse("2026-08-09T00:00:00Z"),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(badJob),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of());
+        WorkbookIssue queueIssue = new WorkbookIssue(
+                ConfigPackageExcelValidator.JOB_SHEET,
+                2,
+                ConfigPackageExcelValidator.COL_QUEUE_CODE,
+                "queue_code references unknown resource_queue: no-such-queue");
+        // 单元格批注来自 sheet 自身 issue；跨表 issue 只进入校验明细 sheet（锁定现状，避免重构漂移）。
+        List<WorkbookIssue> crossRefIssues = List.of();
+        PackageValidationResult result = new PackageValidationResult(
+                emptySheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET),
+                emptySheet(ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET),
+                emptySheet(ConfigPackageExcelValidator.BATCH_WINDOW_SHEET),
+                new SheetResult(ConfigPackageExcelValidator.JOB_SHEET, 1, List.of(), List.of(queueIssue)),
+                emptySheet(ConfigPackageExcelValidator.CHANNEL_SHEET),
+                emptySheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET),
+                emptySheet(ConfigPackageExcelValidator.PIPELINE_SHEET),
+                emptySheet(ConfigPackageExcelValidator.STEP_SHEET),
+                emptySheet(ConfigPackageExcelValidator.WF_DEF_SHEET),
+                emptySheet(ConfigPackageExcelValidator.WF_NODE_SHEET),
+                emptySheet(ConfigPackageExcelValidator.WF_EDGE_SHEET),
+                crossRefIssues);
 
-  private static Map<String, Object> row(Object... kv) {
-    Map<String, Object> m = new LinkedHashMap<>();
-    for (int i = 0; i < kv.length; i += 2) {
-      m.put((String) kv[i], kv[i + 1]);
+        try (XSSFWorkbook wb = read(workbookWriter().buildPreviewWorkbook(session, result))) {
+            Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+            assertThat(jobSheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("JOB_MISSING_QUEUE");
+            Comment comment = jobSheet.getRow(1).getCell(5).getCellComment();
+            assertThat(comment).isNotNull();
+            assertThat(comment.getString().getString()).contains("no-such-queue");
+
+            Sheet validationSheet = wb.getSheet(ConsoleExcelStyles.SHEET_NAME_VALIDATION);
+            assertThat(validationSheet).isNotNull();
+            assertThat(validationSheet.getRow(1).getCell(0).getStringCellValue())
+                    .isEqualTo(ConfigPackageExcelValidator.JOB_SHEET);
+            assertThat(validationSheet.getRow(1).getCell(3).getStringCellValue())
+                    .contains("no-such-queue");
+            assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET))
+                    .as("retired tenant Pipeline sheets are excluded from new previews")
+                    .isNull();
+            assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
+        }
     }
-    return m;
-  }
 
-  private static SheetResult emptySheet(String sheetName) {
-    return new SheetResult(sheetName, 0, List.of(), List.of());
-  }
-
-  private static int headerColumnIndex(Row header, String columnName) {
-    for (int column = 0; column < header.getLastCellNum(); column++) {
-      if (columnName.equals(header.getCell(column).getStringCellValue())) {
-        return column;
-      }
+    private static ConfigPackageExcelWorkbookWriter workbookWriter() {
+        StaticMessageSource ms = new StaticMessageSource();
+        ms.setUseCodeAsDefaultMessage(true);
+        return new ConfigPackageExcelWorkbookWriter(ms);
     }
-    throw new AssertionError("missing column: " + columnName);
-  }
+
+    private static XSSFWorkbook read(byte[] bytes) throws Exception {
+        return new XSSFWorkbook(new ByteArrayInputStream(bytes));
+    }
+
+    private static List<String> sheetNames(XSSFWorkbook wb) {
+        ArrayList<String> names = new ArrayList<>();
+        for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+            names.add(wb.getSheetName(i));
+        }
+        return names;
+    }
+
+    private static List<String> concat(List<String> a, List<String> b) {
+        ArrayList<String> out = new ArrayList<>(a);
+        out.addAll(b);
+        return out;
+    }
+
+    private static List<List<Map<String, Object>>> emptyExportData() {
+        List<List<Map<String, Object>>> data = new ArrayList<>();
+        for (int i = 0; i < LEGACY_IMPORT_SHEET_COUNT; i++) {
+            data.add(List.of());
+        }
+        return data;
+    }
+
+    private static List<List<Map<String, Object>>> exportDataRows() {
+        List<List<Map<String, Object>>> data = emptyExportData();
+        data.set(3, List.of(row("job_code", "JOB_IMPORT_CUSTOMER", "job_name", "导入客户")));
+        return data;
+    }
+
+    private static Map<String, Object> row(Object... kv) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        for (int i = 0; i < kv.length; i += 2) {
+            m.put((String) kv[i], kv[i + 1]);
+        }
+        return m;
+    }
+
+    private static SheetResult emptySheet(String sheetName) {
+        return new SheetResult(sheetName, 0, List.of(), List.of());
+    }
+
+    private static int headerColumnIndex(Row header, String columnName) {
+        for (int column = 0; column < header.getLastCellNum(); column++) {
+            if (columnName.equals(header.getCell(column).getStringCellValue())) {
+                return column;
+            }
+        }
+        throw new AssertionError("missing column: " + columnName);
+    }
 }

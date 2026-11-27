@@ -14,35 +14,35 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class JobDefinitionView extends JobDefinitionEntity {
-  private static final String DEPENDENCY_CODE_DELIMITER = String.valueOf((char) 31);
+    private static final String DEPENDENCY_CODE_DELIMITER = String.valueOf((char) 31);
 
-  private List<String> dependsOnJobCodes;
-  private String dependsOnJobCodesCsv;
-  private List<JobDependencyRuleView> jobDependencyRules = List.of();
-  private Long defaultWorkflowDefinitionId;
-  private Integer softRuntimeSeconds;
-  private String softRuntimeSeverity;
-  private Integer startGraceSeconds;
-  private String startGraceSeverity;
-  private Boolean completionDeadlineEnabled;
-  private LocalTime completionDeadlineLocalTime;
-  private Integer completionDeadlineDayOffset;
-  private String completionDeadlineSeverity;
-  private Integer dependencyCompletionWindowSeconds;
+    private List<String> dependsOnJobCodes;
+    private String dependsOnJobCodesCsv;
+    private List<JobDependencyRuleView> jobDependencyRules = List.of();
+    private Long defaultWorkflowDefinitionId;
+    private Integer softRuntimeSeconds;
+    private String softRuntimeSeverity;
+    private Integer startGraceSeconds;
+    private String startGraceSeverity;
+    private Boolean completionDeadlineEnabled;
+    private LocalTime completionDeadlineLocalTime;
+    private Integer completionDeadlineDayOffset;
+    private String completionDeadlineSeverity;
+    private Integer dependencyCompletionWindowSeconds;
 
-  public void setDependencyRulesJson(String value) {
-    jobDependencyRules = EmptyChecks.isBlank(value)
-        ? List.of()
-        : JsonUtils.fromJson(value, new TypeReference<List<JobDependencyRuleView>>() {});
-  }
+    public void setDependencyRulesJson(String value) {
+        jobDependencyRules = EmptyChecks.isBlank(value)
+                ? List.of()
+                : JsonUtils.fromJson(value, new TypeReference<List<JobDependencyRuleView>>() {});
+    }
 
-  public void setDependsOnJobCodesCsv(String value) {
-    dependsOnJobCodesCsv = value;
-    dependsOnJobCodes = EmptyChecks.isBlank(value)
-        ? List.of()
-        : Arrays.stream(value.split(DEPENDENCY_CODE_DELIMITER))
-            .map(String::trim)
-            .filter(code -> EmptyChecks.isNotEmpty(code))
-            .toList();
-  }
+    public void setDependsOnJobCodesCsv(String value) {
+        dependsOnJobCodesCsv = value;
+        dependsOnJobCodes = EmptyChecks.isBlank(value)
+                ? List.of()
+                : Arrays.stream(value.split(DEPENDENCY_CODE_DELIMITER))
+                        .map(String::trim)
+                        .filter(code -> EmptyChecks.isNotEmpty(code))
+                        .toList();
+    }
 }

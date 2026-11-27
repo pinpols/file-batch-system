@@ -24,45 +24,43 @@ import org.springframework.stereotype.Component;
 @Component
 public class BuiltinTaskTypeGuard {
 
-  /**
-   * Builtin SPI taskType 集合(全小写,跟 P0 Phase 2 各 ExecutorProperties.taskType 默认值对齐)。永远不许出现在租户创建的
-   * job_definition.job_type 字段里。
-   */
-  public static final Set<String> RESERVED_BUILTIN_TASK_TYPES =
-      Set.of("shell", "sql", "stored_proc", "http");
+    /**
+     * Builtin SPI taskType 集合(全小写,跟 P0 Phase 2 各 ExecutorProperties.taskType 默认值对齐)。永远不许出现在租户创建的
+     * job_definition.job_type 字段里。
+     */
+    public static final Set<String> RESERVED_BUILTIN_TASK_TYPES = Set.of("shell", "sql", "stored_proc", "http");
 
-  private static final String PLATFORM_ADMIN_AUTHORITY = "ROLE_ADMIN";
+    private static final String PLATFORM_ADMIN_AUTHORITY = "ROLE_ADMIN";
 
-  /**
-   * 校验 jobType 是否允许当前用户创建 / 更新。违规抛 {@link BizException} ({@link ResultCode#FORBIDDEN})。
-   *
-   * @param jobType 用户提交的 jobType 字段(可空 / 任意大小写)
-   */
-  public void assertAllowed(String jobType) {
-    if (jobType == null) {
-      return;
+    /**
+     * 校验 jobType 是否允许当前用户创建 / 更新。违规抛 {@link BizException} ({@link ResultCode#FORBIDDEN})。
+     *
+     * @param jobType 用户提交的 jobType 字段(可空 / 任意大小写)
+     */
+    public void assertAllowed(String jobType) {
+        if (jobType == null) {
+            return;
+        }
+        String trimmedJobType = jobType.trim();
+        String normalized = trimmedJobType.toLowerCase(Locale.ROOT);
+        if (!RESERVED_BUILTIN_TASK_TYPES.contains(normalized)) {
+            return;
+        }
+        if (currentUserIsPlatformAdmin()) {
+            return;
+        }
+        throw BizException.of(
+                ResultCode.FORBIDDEN,
+                "error.job.builtin_task_type_reserved",
+                normalized,
+                String.join(", ", RESERVED_BUILTIN_TASK_TYPES));
     }
-    String trimmedJobType = jobType.trim();
-    String normalized = trimmedJobType.toLowerCase(Locale.ROOT);
-    if (!RESERVED_BUILTIN_TASK_TYPES.contains(normalized)) {
-      return;
-    }
-    if (currentUserIsPlatformAdmin()) {
-      return;
-    }
-    throw BizException.of(
-        ResultCode.FORBIDDEN,
-        "error.job.builtin_task_type_reserved",
-        normalized,
-        String.join(", ", RESERVED_BUILTIN_TASK_TYPES));
-  }
 
-  private boolean currentUserIsPlatformAdmin() {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null || !auth.isAuthenticated()) {
-      return false;
+    private boolean currentUserIsPlatformAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return false;
+        }
+        return auth.getAuthorities().stream().anyMatch(g -> PLATFORM_ADMIN_AUTHORITY.equals(g.getAuthority()));
     }
-    return auth.getAuthorities().stream()
-        .anyMatch(g -> PLATFORM_ADMIN_AUTHORITY.equals(g.getAuthority()));
-  }
 }

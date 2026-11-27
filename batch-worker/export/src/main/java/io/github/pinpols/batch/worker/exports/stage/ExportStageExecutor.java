@@ -9,12 +9,12 @@ import java.util.List;
 
 public interface ExportStageExecutor extends PipelineStepTemplateProvider {
 
-  List<ExportStageResult> execute(ExportJobContext context);
+    List<ExportStageResult> execute(ExportJobContext context);
 
-  default ReplayCapabilityDeclaration resolveReplayCapability(ExportJobContext context) {
-    return ReplayCapabilityDeclaration.unknown("EXPORT");
-  }
+    default ReplayCapabilityDeclaration resolveReplayCapability(ExportJobContext context) {
+        return ReplayCapabilityDeclaration.unknown("EXPORT");
+    }
 
-  @Override
-  List<PipelineStepTemplate> defaultStepDefinitions();
+    @Override
+    List<PipelineStepTemplate> defaultStepDefinitions();
 }

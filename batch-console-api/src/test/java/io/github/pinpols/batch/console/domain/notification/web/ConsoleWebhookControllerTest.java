@@ -36,75 +36,71 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleWebhookControllerTest {
 
-  @Mock
-  private ConsoleWebhookService webhookService;
+    @Mock
+    private ConsoleWebhookService webhookService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleWebhookController(webhookService, responseFactory, requestMetadataResolver))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleWebhookController(webhookService, responseFactory, requestMetadataResolver))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("按租户返回订阅清单, 含名称与回调地址")
-  void shouldListWebhookSubscriptions() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
-    entity.setId(1L);
-    entity.setTenantId("t1");
-    entity.setName("job-events");
-    entity.setCallbackUrl("https://callback.example/webhook");
-    entity.setEventTypes("JOB-INSTANCE-UPDATED");
-    entity.setEnabled(true);
-    when(webhookService.listSubscriptions("t1")).thenReturn(List.of(entity));
+    @Test
+    @DisplayName("按租户返回订阅清单, 含名称与回调地址")
+    void shouldListWebhookSubscriptions() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
+        entity.setId(1L);
+        entity.setTenantId("t1");
+        entity.setName("job-events");
+        entity.setCallbackUrl("https://callback.example/webhook");
+        entity.setEventTypes("JOB-INSTANCE-UPDATED");
+        entity.setEnabled(true);
+        when(webhookService.listSubscriptions("t1")).thenReturn(List.of(entity));
 
-    mockMvc
-        .perform(get("/api/console/webhooks").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].name").value("job-events"))
-        .andExpect(jsonPath("$.data[0].callbackUrl").value("https://callback.example/webhook"));
-  }
+        mockMvc.perform(get("/api/console/webhooks").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].name").value("job-events"))
+                .andExpect(jsonPath("$.data[0].callbackUrl").value("https://callback.example/webhook"));
+    }
 
-  @Test
-  @DisplayName("创建订阅返回成功, 事件类型统一大写后透出")
-  void shouldCreateWebhookSubscription() throws Exception {
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
-    WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
-    entity.setId(1L);
-    entity.setTenantId("t1");
-    entity.setName("job-events");
-    entity.setCallbackUrl("https://callback.example/webhook");
-    entity.setEventTypes("JOB-INSTANCE-UPDATED");
-    entity.setEnabled(true);
-    when(webhookService.createSubscription(any(CreateSubscriptionCommand.class)))
-        .thenReturn(entity);
+    @Test
+    @DisplayName("创建订阅返回成功, 事件类型统一大写后透出")
+    void shouldCreateWebhookSubscription() throws Exception {
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+        WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
+        entity.setId(1L);
+        entity.setTenantId("t1");
+        entity.setName("job-events");
+        entity.setCallbackUrl("https://callback.example/webhook");
+        entity.setEventTypes("JOB-INSTANCE-UPDATED");
+        entity.setEnabled(true);
+        when(webhookService.createSubscription(any(CreateSubscriptionCommand.class)))
+                .thenReturn(entity);
 
-    mockMvc
-        .perform(post("/api/console/webhooks")
-            .param("tenantId", "t1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/webhooks")
+                        .param("tenantId", "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "name":"job-events",
                       "callbackUrl":"https://callback.example/webhook",
@@ -113,28 +109,28 @@ class ConsoleWebhookControllerTest {
                       "enabled":true
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.name").value("job-events"))
-        .andExpect(jsonPath("$.data.eventTypes").value("JOB-INSTANCE-UPDATED"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.name").value("job-events"))
+                .andExpect(jsonPath("$.data.eventTypes").value("JOB-INSTANCE-UPDATED"));
+    }
 
-  @Test
-  @DisplayName("新增, 更新与删除仅管理员或租户管理员可写, 清单查询含租户用户")
-  void shouldRestrictWebhookWritesToAdminOrTenantAdmin() throws Exception {
-    assertThat(preAuthorize("create", String.class, CreateWebhookRequest.class))
-        .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");
-    assertThat(preAuthorize("update", String.class, Long.class, UpdateWebhookRequest.class))
-        .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");
-    assertThat(preAuthorize("delete", String.class, Long.class))
-        .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");
-    assertThat(preAuthorize("list", String.class)).contains("ROLE_TENANT_USER");
-  }
+    @Test
+    @DisplayName("新增, 更新与删除仅管理员或租户管理员可写, 清单查询含租户用户")
+    void shouldRestrictWebhookWritesToAdminOrTenantAdmin() throws Exception {
+        assertThat(preAuthorize("create", String.class, CreateWebhookRequest.class))
+                .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");
+        assertThat(preAuthorize("update", String.class, Long.class, UpdateWebhookRequest.class))
+                .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");
+        assertThat(preAuthorize("delete", String.class, Long.class))
+                .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");
+        assertThat(preAuthorize("list", String.class)).contains("ROLE_TENANT_USER");
+    }
 
-  private String preAuthorize(String methodName, Class<?>... parameterTypes) throws Exception {
-    return ConsoleWebhookController.class
-        .getMethod(methodName, parameterTypes)
-        .getAnnotation(PreAuthorize.class)
-        .value();
-  }
+    private String preAuthorize(String methodName, Class<?>... parameterTypes) throws Exception {
+        return ConsoleWebhookController.class
+                .getMethod(methodName, parameterTypes)
+                .getAnnotation(PreAuthorize.class)
+                .value();
+    }
 }

@@ -32,37 +32,39 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsolePersistentWaitController {
 
-  /** 请求未指定 pageSize 时的默认每页条数，与列表默认分页 15 条一致。 */
-  private static final int DEFAULT_PAGE_SIZE = 15;
+    /** 请求未指定 pageSize 时的默认每页条数，与列表默认分页 15 条一致。 */
+    private static final int DEFAULT_PAGE_SIZE = 15;
 
-  private final ConsoleOrchestratorPort orchestrator;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestrator;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<ConsolePersistentWaitPageResponse> list(
-      @Valid @ModelAttribute PersistentWaitRequest request) {
-    ConsolePersistentWaitQuery query = new ConsolePersistentWaitQuery(
-        request.tenantId(),
-        request.waitType(),
-        request.waitStatus(),
-        request.workflowDefinitionId(),
-        request.bizDateFrom(),
-        request.bizDateTo(),
-        EmptyChecks.isNull(request.pageNo()) ? 1 : request.pageNo(),
-        EmptyChecks.isNull(request.pageSize()) ? DEFAULT_PAGE_SIZE : request.pageSize());
-    return responseFactory.success(orchestrator.listPersistentWaits(query));
-  }
+    @GetMapping
+    public CommonResponse<ConsolePersistentWaitPageResponse> list(
+            @Valid @ModelAttribute PersistentWaitRequest request) {
+        ConsolePersistentWaitQuery query = new ConsolePersistentWaitQuery(
+                request.tenantId(),
+                request.waitType(),
+                request.waitStatus(),
+                request.workflowDefinitionId(),
+                request.bizDateFrom(),
+                request.bizDateTo(),
+                EmptyChecks.isNull(request.pageNo()) ? 1 : request.pageNo(),
+                EmptyChecks.isNull(request.pageSize()) ? DEFAULT_PAGE_SIZE : request.pageSize());
+        return responseFactory.success(orchestrator.listPersistentWaits(query));
+    }
 
-  public record PersistentWaitRequest(
-      @NotBlank @Size(max = 64) String tenantId,
-      @Pattern(regexp = "^(READINESS|CAPACITY_ADMISSION)$") String waitType,
+    public record PersistentWaitRequest(
+            @NotBlank @Size(max = 64) String tenantId,
 
-      @Pattern(regexp = "^(PENDING|RELEASED|TIMED_OUT|CANCELLED|WAITING|RESUMED|REJECTED)$")
-      String waitStatus,
+            @Pattern(regexp = "^(READINESS|CAPACITY_ADMISSION)$")
+            String waitType,
 
-      @Positive Long workflowDefinitionId,
-      @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDateFrom,
-      @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDateTo,
-      @Min(1) Integer pageNo,
-      @Min(1) @Max(100) Integer pageSize) {}
+            @Pattern(regexp = "^(PENDING|RELEASED|TIMED_OUT|CANCELLED|WAITING|RESUMED|REJECTED)$")
+            String waitStatus,
+
+            @Positive Long workflowDefinitionId,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDateFrom,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDateTo,
+            @Min(1) Integer pageNo,
+            @Min(1) @Max(100) Integer pageSize) {}
 }

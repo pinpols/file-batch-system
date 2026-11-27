@@ -7,19 +7,19 @@ import lombok.Data;
 @Data
 public class NotificationChannelUpsertRequest {
 
-  @NotBlank
-  @Size(max = 64)
-  private String channelCode;
+    @NotBlank
+    @Size(max = 64)
+    private String channelCode;
 
-  @NotBlank
-  @Size(max = 128)
-  private String channelName;
+    @NotBlank
+    @Size(max = 128)
+    private String channelName;
 
-  @NotBlank
-  @Size(max = 32)
-  private String channelType;
+    @NotBlank
+    @Size(max = 32)
+    private String channelType;
 
-  private String configJson;
+    private String configJson;
 
-  private Boolean enabled = Boolean.TRUE;
+    private Boolean enabled = Boolean.TRUE;
 }

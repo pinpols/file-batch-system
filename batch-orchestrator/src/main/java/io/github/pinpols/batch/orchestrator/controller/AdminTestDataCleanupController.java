@@ -24,32 +24,31 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AdminTestDataCleanupController {
 
-  private static final String PREFIX_PATTERN = "^[a-zA-Z][a-zA-Z0-9-]{2,32}$";
+    private static final String PREFIX_PATTERN = "^[a-zA-Z][a-zA-Z0-9-]{2,32}$";
 
-  private final AdminTestDataCleanupService cleanupService;
+    private final AdminTestDataCleanupService cleanupService;
 
-  @DeleteMapping
-  public Map<String, Integer> cleanup(
-      @RequestParam
-          @Pattern(
-              regexp = PREFIX_PATTERN,
-              message =
-                  "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
-          String prefix) {
-    if (prefix == null || prefix.isBlank()) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+    @DeleteMapping
+    public Map<String, Integer> cleanup(
+            @RequestParam
+                    @Pattern(
+                            regexp = PREFIX_PATTERN,
+                            message =
+                                    "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
+                    String prefix) {
+        if (prefix == null || prefix.isBlank()) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+        }
+        return cleanupService.cleanupByPrefix(prefix);
     }
-    return cleanupService.cleanupByPrefix(prefix);
-  }
 
-  @DeleteMapping("/by-ids")
-  public Map<String, Integer> cleanupByExactIds(
-      @RequestParam
-          @Pattern(
-              regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$",
-              message =
-                  "ids must start with a letter, be comma-separated, and contain 3-256 characters")
-          String ids) {
-    return cleanupService.cleanupByExactTenantIds(ids);
-  }
+    @DeleteMapping("/by-ids")
+    public Map<String, Integer> cleanupByExactIds(
+            @RequestParam
+                    @Pattern(
+                            regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$",
+                            message = "ids must start with a letter, be comma-separated, and contain 3-256 characters")
+                    String ids) {
+        return cleanupService.cleanupByExactTenantIds(ids);
+    }
 }

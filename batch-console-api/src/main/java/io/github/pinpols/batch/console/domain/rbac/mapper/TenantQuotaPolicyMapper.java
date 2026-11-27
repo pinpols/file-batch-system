@@ -9,28 +9,26 @@ import org.apache.ibatis.annotations.Param;
 
 public interface TenantQuotaPolicyMapper {
 
-  List<TenantQuotaPolicyRow> selectByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("policyCode") String policyCode,
-      @Param("enabled") Boolean enabled,
-      @Param("pageRequest") PageRequest pageRequest);
+    List<TenantQuotaPolicyRow> selectByQuery(
+            @Param("tenantId") String tenantId,
+            @Param("policyCode") String policyCode,
+            @Param("enabled") Boolean enabled,
+            @Param("pageRequest") PageRequest pageRequest);
 
-  long countByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("policyCode") String policyCode,
-      @Param("enabled") Boolean enabled);
+    long countByQuery(
+            @Param("tenantId") String tenantId,
+            @Param("policyCode") String policyCode,
+            @Param("enabled") Boolean enabled);
 
-  TenantQuotaPolicyRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    TenantQuotaPolicyRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  TenantQuotaPolicyRow selectByUniqueKey(
-      @Param("tenantId") String tenantId, @Param("policyCode") String policyCode);
+    TenantQuotaPolicyRow selectByUniqueKey(@Param("tenantId") String tenantId, @Param("policyCode") String policyCode);
 
-  int upsertTenantQuotaPolicy(TenantQuotaPolicyUpsertParam param);
+    int upsertTenantQuotaPolicy(TenantQuotaPolicyUpsertParam param);
 
-  int insert(TenantQuotaPolicyUpsertParam param);
+    int insert(TenantQuotaPolicyUpsertParam param);
 
-  int update(TenantQuotaPolicyUpdateParam param);
+    int update(TenantQuotaPolicyUpdateParam param);
 
-  int toggleEnabled(
-      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
+    int toggleEnabled(@Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 }

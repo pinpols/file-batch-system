@@ -15,38 +15,37 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableAsync
 public class InternalSecurityConfiguration {
 
-  @Bean
-  public FilterRegistrationBean<InternalAuthFilter> internalAuthFilter(
-      BatchSecurityProperties securityProperties, ApiKeyVerifier apiKeyVerifier) {
-    FilterRegistrationBean<InternalAuthFilter> registration = new FilterRegistrationBean<>();
-    registration.setFilter(new InternalAuthFilter(securityProperties, apiKeyVerifier));
-    registration.addUrlPatterns("/internal/*");
-    registration.setOrder(1);
-    return registration;
-  }
+    @Bean
+    public FilterRegistrationBean<InternalAuthFilter> internalAuthFilter(
+            BatchSecurityProperties securityProperties, ApiKeyVerifier apiKeyVerifier) {
+        FilterRegistrationBean<InternalAuthFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new InternalAuthFilter(securityProperties, apiKeyVerifier));
+        registration.addUrlPatterns("/internal/*");
+        registration.setOrder(1);
+        return registration;
+    }
 
-  /** 请求签名校验(方案 A,opt-in)order=2,排在鉴权后:此时 api_key 已校验、resolvedTenantId 已就绪。 */
-  @Bean
-  public FilterRegistrationBean<RequestSignatureFilter> requestSignatureFilter(
-      RequestSigningProperties signingProperties,
-      RequestSignatureVerifier verifier,
-      InternalRequestProperties internalRequestProperties) {
-    FilterRegistrationBean<RequestSignatureFilter> registration = new FilterRegistrationBean<>();
-    registration.setFilter(
-        new RequestSignatureFilter(signingProperties, verifier, internalRequestProperties));
-    registration.addUrlPatterns("/internal/*");
-    registration.setOrder(2);
-    return registration;
-  }
+    /** 请求签名校验(方案 A,opt-in)order=2,排在鉴权后:此时 api_key 已校验、resolvedTenantId 已就绪。 */
+    @Bean
+    public FilterRegistrationBean<RequestSignatureFilter> requestSignatureFilter(
+            RequestSigningProperties signingProperties,
+            RequestSignatureVerifier verifier,
+            InternalRequestProperties internalRequestProperties) {
+        FilterRegistrationBean<RequestSignatureFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new RequestSignatureFilter(signingProperties, verifier, internalRequestProperties));
+        registration.addUrlPatterns("/internal/*");
+        registration.setOrder(2);
+        return registration;
+    }
 
-  /** 缺口③:内部端点请求体大小上限过滤器,order=0 排在鉴权前,让超大体在鉴权前即被廉价拦掉。 */
-  @Bean
-  public FilterRegistrationBean<InternalRequestSizeFilter> internalRequestSizeFilter(
-      InternalRequestProperties internalRequestProperties) {
-    FilterRegistrationBean<InternalRequestSizeFilter> registration = new FilterRegistrationBean<>();
-    registration.setFilter(new InternalRequestSizeFilter(internalRequestProperties));
-    registration.addUrlPatterns("/internal/*");
-    registration.setOrder(0);
-    return registration;
-  }
+    /** 缺口③:内部端点请求体大小上限过滤器,order=0 排在鉴权前,让超大体在鉴权前即被廉价拦掉。 */
+    @Bean
+    public FilterRegistrationBean<InternalRequestSizeFilter> internalRequestSizeFilter(
+            InternalRequestProperties internalRequestProperties) {
+        FilterRegistrationBean<InternalRequestSizeFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new InternalRequestSizeFilter(internalRequestProperties));
+        registration.addUrlPatterns("/internal/*");
+        registration.setOrder(0);
+        return registration;
+    }
 }

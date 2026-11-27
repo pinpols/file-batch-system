@@ -25,169 +25,164 @@ import org.junit.jupiter.api.Test;
 @DisplayName("BatchPlatformClientConfig 时序校验严格度开关 — 违反规则时抛错或降级为告警")
 class BatchPlatformClientConfigWarnModeTest {
 
-  private static BatchPlatformClientConfig.BatchPlatformClientConfigBuilder valid() {
-    return BatchPlatformClientConfig.builder()
-        .baseUrl("https://batch.example.com")
-        .tenantId("tx")
-        .workerCode("w-1")
-        .kafkaBootstrap("kafka:9092")
-        .kafkaTopicPattern("batch.task.dispatch.tx.*")
-        .kafkaGroupId("tx-workers");
-  }
+    private static BatchPlatformClientConfig.BatchPlatformClientConfigBuilder valid() {
+        return BatchPlatformClientConfig.builder()
+                .baseUrl("https://batch.example.com")
+                .tenantId("tx")
+                .workerCode("w-1")
+                .kafkaBootstrap("kafka:9092")
+                .kafkaTopicPattern("batch.task.dispatch.tx.*")
+                .kafkaGroupId("tx-workers");
+    }
 
-  // ─── strict=true(默认)行为不变 ───────────────────────────────────────────
-  @Test
-  @DisplayName("strict=true(默认)违反时序 → 仍 fail-fast IllegalStateException")
-  void shouldThrowWhenStrictTrueAndViolated() {
-    BatchPlatformClientConfig c =
-        valid().heartbeatInterval(Duration.ofMillis(500)).build(); // hb < 1s
-    assertThat(c.isStrictTimingValidation()).isTrue();
-    assertThatThrownBy(c::validate)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("heartbeatInterval");
-  }
+    // ─── strict=true(默认)行为不变 ───────────────────────────────────────────
+    @Test
+    @DisplayName("strict=true(默认)违反时序 → 仍 fail-fast IllegalStateException")
+    void shouldThrowWhenStrictTrueAndViolated() {
+        BatchPlatformClientConfig c =
+                valid().heartbeatInterval(Duration.ofMillis(500)).build(); // hb < 1s
+        assertThat(c.isStrictTimingValidation()).isTrue();
+        assertThatThrownBy(c::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("heartbeatInterval");
+    }
 
-  // ─── strict=false 降级 WARN ───────────────────────────────────────────────
-  @Test
-  @DisplayName("strict=false 违反 hb<1s → 不抛,validate 通过")
-  void shouldWarnInsteadOfThrowWhenStrictFalse_heartbeat() {
-    BatchPlatformClientConfig c = valid()
-        .strictTimingValidation(false)
-        .heartbeatInterval(Duration.ofMillis(500))
-        .build();
-    assertThat(c.isStrictTimingValidation()).isFalse();
-    assertThatCode(c::validate).doesNotThrowAnyException();
-  }
+    // ─── strict=false 降级 WARN ───────────────────────────────────────────────
+    @Test
+    @DisplayName("strict=false 违反 hb<1s → 不抛,validate 通过")
+    void shouldWarnInsteadOfThrowWhenStrictFalse_heartbeat() {
+        BatchPlatformClientConfig c = valid().strictTimingValidation(false)
+                .heartbeatInterval(Duration.ofMillis(500))
+                .build();
+        assertThat(c.isStrictTimingValidation()).isFalse();
+        assertThatCode(c::validate).doesNotThrowAnyException();
+    }
 
-  @Test
-  @DisplayName("strict=false 仍拒绝零或负调度周期,避免调度器启动后失败")
-  void shouldRejectNonPositiveSchedulerIntervals_evenWhenStrictFalse() {
-    BatchPlatformClientConfig zeroHeartbeat =
-        valid().strictTimingValidation(false).heartbeatInterval(Duration.ZERO).build();
-    BatchPlatformClientConfig negativeLease = valid()
-        .strictTimingValidation(false)
-        .leaseRenewInterval(Duration.ofMillis(-1))
-        .build();
+    @Test
+    @DisplayName("strict=false 仍拒绝零或负调度周期,避免调度器启动后失败")
+    void shouldRejectNonPositiveSchedulerIntervals_evenWhenStrictFalse() {
+        BatchPlatformClientConfig zeroHeartbeat = valid().strictTimingValidation(false)
+                .heartbeatInterval(Duration.ZERO)
+                .build();
+        BatchPlatformClientConfig negativeLease = valid().strictTimingValidation(false)
+                .leaseRenewInterval(Duration.ofMillis(-1))
+                .build();
 
-    assertThatThrownBy(zeroHeartbeat::validate)
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("heartbeatInterval must be > 0");
-    assertThatThrownBy(negativeLease::validate)
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("leaseRenewInterval must be > 0");
-  }
+        assertThatThrownBy(zeroHeartbeat::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("heartbeatInterval must be > 0");
+        assertThatThrownBy(negativeLease::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("leaseRenewInterval must be > 0");
+    }
 
-  @Test
-  @DisplayName("strict=false 违反 lease > hb×3 → 不抛")
-  void shouldWarnWhenStrictFalse_leaseUpperBound() {
-    BatchPlatformClientConfig c = valid()
-        .strictTimingValidation(false)
-        .heartbeatInterval(Duration.ofSeconds(10))
-        .leaseRenewInterval(Duration.ofSeconds(40))
-        .httpTimeout(Duration.ofSeconds(5))
-        .build();
-    assertThatCode(c::validate).doesNotThrowAnyException();
-  }
+    @Test
+    @DisplayName("strict=false 违反 lease > hb×3 → 不抛")
+    void shouldWarnWhenStrictFalse_leaseUpperBound() {
+        BatchPlatformClientConfig c = valid().strictTimingValidation(false)
+                .heartbeatInterval(Duration.ofSeconds(10))
+                .leaseRenewInterval(Duration.ofSeconds(40))
+                .httpTimeout(Duration.ofSeconds(5))
+                .build();
+        assertThatCode(c::validate).doesNotThrowAnyException();
+    }
 
-  @Test
-  @DisplayName("strict=false 违反 httpTimeout > hb/2 → 不抛")
-  void shouldWarnWhenStrictFalse_httpTimeout() {
-    BatchPlatformClientConfig c = valid()
-        .strictTimingValidation(false)
-        .heartbeatInterval(Duration.ofSeconds(10))
-        .leaseRenewInterval(Duration.ofSeconds(20))
-        .httpTimeout(Duration.ofSeconds(8))
-        .build();
-    assertThatCode(c::validate).doesNotThrowAnyException();
-  }
+    @Test
+    @DisplayName("strict=false 违反 httpTimeout > hb/2 → 不抛")
+    void shouldWarnWhenStrictFalse_httpTimeout() {
+        BatchPlatformClientConfig c = valid().strictTimingValidation(false)
+                .heartbeatInterval(Duration.ofSeconds(10))
+                .leaseRenewInterval(Duration.ofSeconds(20))
+                .httpTimeout(Duration.ofSeconds(8))
+                .build();
+        assertThatCode(c::validate).doesNotThrowAnyException();
+    }
 
-  @Test
-  @DisplayName("strict=false + 配置稍偏 → BatchPlatformClient.builder 仍可 build(避免 K8s 重启循环)")
-  void shouldAllowClientBuildWhenStrictFalse() {
-    BatchPlatformClientConfig bad = valid()
-        .strictTimingValidation(false)
-        .heartbeatInterval(Duration.ofMillis(500))
-        .build();
-    assertThatCode(() -> BatchPlatformClient.builder(bad)
-            .register(new SdkTaskHandler() {
-              @Override
-              public String taskType() {
-                return "t";
-              }
+    @Test
+    @DisplayName("strict=false + 配置稍偏 → BatchPlatformClient.builder 仍可 build(避免 K8s 重启循环)")
+    void shouldAllowClientBuildWhenStrictFalse() {
+        BatchPlatformClientConfig bad = valid().strictTimingValidation(false)
+                .heartbeatInterval(Duration.ofMillis(500))
+                .build();
+        assertThatCode(() -> BatchPlatformClient.builder(bad)
+                        .register(new SdkTaskHandler() {
+                            @Override
+                            public String taskType() {
+                                return "t";
+                            }
 
-              @Override
-              public SdkTaskResult execute(SdkTaskContext ctx) {
-                return SdkTaskResult.ok();
-              }
-            })
-            .build())
-        .doesNotThrowAnyException();
-  }
+                            @Override
+                            public SdkTaskResult execute(SdkTaskContext ctx) {
+                                return SdkTaskResult.ok();
+                            }
+                        })
+                        .build())
+                .doesNotThrowAnyException();
+    }
 
-  // ─── 默认值 + strict=false 也 OK(确保不引入新断言) ────────────────────────
-  @Test
-  @DisplayName("strict=false 但默认值合法 → 不抛,无 WARN 也合理")
-  void shouldStayCleanWhenStrictFalseAndDefaultsValid() {
-    BatchPlatformClientConfig c = valid().strictTimingValidation(false).build();
-    assertThatCode(c::validate).doesNotThrowAnyException();
-  }
+    // ─── 默认值 + strict=false 也 OK(确保不引入新断言) ────────────────────────
+    @Test
+    @DisplayName("strict=false 但默认值合法 → 不抛,无 WARN 也合理")
+    void shouldStayCleanWhenStrictFalseAndDefaultsValid() {
+        BatchPlatformClientConfig c = valid().strictTimingValidation(false).build();
+        assertThatCode(c::validate).doesNotThrowAnyException();
+    }
 
-  // ─── fromEnv: BATCH_SDK_STRICT_TIMING ─────────────────────────────────────
-  private Map<String, String> minimalEnv() {
-    Map<String, String> env = new HashMap<>();
-    env.put("BATCH_SDK_BASE_URL", "http://platform:8080");
-    env.put("BATCH_SDK_TENANT_ID", "t1");
-    env.put("BATCH_SDK_WORKER_CODE", "w1");
-    env.put("BATCH_SDK_KAFKA_BOOTSTRAP", "kafka:9092");
-    env.put("BATCH_SDK_KAFKA_TOPIC_PATTERN", "batch.task.dispatch.t1.*");
-    env.put("BATCH_SDK_KAFKA_GROUP_ID", "g1");
-    return env;
-  }
+    // ─── fromEnv: BATCH_SDK_STRICT_TIMING ─────────────────────────────────────
+    private Map<String, String> minimalEnv() {
+        Map<String, String> env = new HashMap<>();
+        env.put("BATCH_SDK_BASE_URL", "http://platform:8080");
+        env.put("BATCH_SDK_TENANT_ID", "t1");
+        env.put("BATCH_SDK_WORKER_CODE", "w1");
+        env.put("BATCH_SDK_KAFKA_BOOTSTRAP", "kafka:9092");
+        env.put("BATCH_SDK_KAFKA_TOPIC_PATTERN", "batch.task.dispatch.t1.*");
+        env.put("BATCH_SDK_KAFKA_GROUP_ID", "g1");
+        return env;
+    }
 
-  @Test
-  @DisplayName("env 未设 STRICT_TIMING → 默认 strictTimingValidation=true")
-  void shouldDefaultStrictTrueWhenEnvAbsent() {
-    BatchPlatformClientConfig c =
-        BatchPlatformClientConfig.fromEnv("BATCH_SDK_", minimalEnv()::get);
-    assertThat(c.isStrictTimingValidation()).isTrue();
-  }
+    @Test
+    @DisplayName("env 未设 STRICT_TIMING → 默认 strictTimingValidation=true")
+    void shouldDefaultStrictTrueWhenEnvAbsent() {
+        BatchPlatformClientConfig c = BatchPlatformClientConfig.fromEnv("BATCH_SDK_", minimalEnv()::get);
+        assertThat(c.isStrictTimingValidation()).isTrue();
+    }
 
-  @Test
-  @DisplayName("env BATCH_SDK_STRICT_TIMING=false → strictTimingValidation=false 且违反时序 fromEnv 不抛")
-  void shouldDowngradeWhenEnvFalse() {
-    Map<String, String> env = minimalEnv();
-    env.put("BATCH_SDK_STRICT_TIMING", "false");
-    // 1s 是调度器可执行的正周期，但违反 lease >= 5s 的运维阈值；WARN 模式仍可降级。
-    env.put("BATCH_SDK_LEASE_RENEW_INTERVAL_SECONDS", "1");
-    BatchPlatformClientConfig c = BatchPlatformClientConfig.fromEnv("BATCH_SDK_", env::get);
-    assertThat(c.isStrictTimingValidation()).isFalse();
-    assertThat(c.getLeaseRenewInterval()).isEqualTo(Duration.ofSeconds(1));
-  }
+    @Test
+    @DisplayName("env BATCH_SDK_STRICT_TIMING=false → strictTimingValidation=false 且违反时序 fromEnv 不抛")
+    void shouldDowngradeWhenEnvFalse() {
+        Map<String, String> env = minimalEnv();
+        env.put("BATCH_SDK_STRICT_TIMING", "false");
+        // 1s 是调度器可执行的正周期，但违反 lease >= 5s 的运维阈值；WARN 模式仍可降级。
+        env.put("BATCH_SDK_LEASE_RENEW_INTERVAL_SECONDS", "1");
+        BatchPlatformClientConfig c = BatchPlatformClientConfig.fromEnv("BATCH_SDK_", env::get);
+        assertThat(c.isStrictTimingValidation()).isFalse();
+        assertThat(c.getLeaseRenewInterval()).isEqualTo(Duration.ofSeconds(1));
+    }
 
-  @Test
-  @DisplayName("env BATCH_SDK_STRICT_TIMING=true → 保持 strict,违反时序 fromEnv 抛 IllegalStateException")
-  void shouldStayStrictWhenEnvTrue() {
-    Map<String, String> env = minimalEnv();
-    env.put("BATCH_SDK_STRICT_TIMING", "true");
-    env.put("BATCH_SDK_LEASE_RENEW_INTERVAL_SECONDS", "1");
-    assertThatThrownBy(() -> BatchPlatformClientConfig.fromEnv("BATCH_SDK_", env::get))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("leaseRenewInterval");
-  }
+    @Test
+    @DisplayName("env BATCH_SDK_STRICT_TIMING=true → 保持 strict,违反时序 fromEnv 抛 IllegalStateException")
+    void shouldStayStrictWhenEnvTrue() {
+        Map<String, String> env = minimalEnv();
+        env.put("BATCH_SDK_STRICT_TIMING", "true");
+        env.put("BATCH_SDK_LEASE_RENEW_INTERVAL_SECONDS", "1");
+        assertThatThrownBy(() -> BatchPlatformClientConfig.fromEnv("BATCH_SDK_", env::get))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("leaseRenewInterval");
+    }
 
-  @Test
-  @DisplayName("parseBoolean: 各种取值")
-  void shouldParseBooleanForms() {
-    // 显式 false 系列 → false
-    assertThat(BatchPlatformClientConfig.parseBoolean("false")).isFalse();
-    assertThat(BatchPlatformClientConfig.parseBoolean("FALSE")).isFalse();
-    assertThat(BatchPlatformClientConfig.parseBoolean("0")).isFalse();
-    assertThat(BatchPlatformClientConfig.parseBoolean("no")).isFalse();
-    assertThat(BatchPlatformClientConfig.parseBoolean("off")).isFalse();
-    // 其余(含非法值)→ true(默认 strict 安全偏好)
-    assertThat(BatchPlatformClientConfig.parseBoolean("true")).isTrue();
-    assertThat(BatchPlatformClientConfig.parseBoolean("1")).isTrue();
-    assertThat(BatchPlatformClientConfig.parseBoolean("yes")).isTrue();
-    assertThat(BatchPlatformClientConfig.parseBoolean("garbage")).isTrue();
-  }
+    @Test
+    @DisplayName("parseBoolean: 各种取值")
+    void shouldParseBooleanForms() {
+        // 显式 false 系列 → false
+        assertThat(BatchPlatformClientConfig.parseBoolean("false")).isFalse();
+        assertThat(BatchPlatformClientConfig.parseBoolean("FALSE")).isFalse();
+        assertThat(BatchPlatformClientConfig.parseBoolean("0")).isFalse();
+        assertThat(BatchPlatformClientConfig.parseBoolean("no")).isFalse();
+        assertThat(BatchPlatformClientConfig.parseBoolean("off")).isFalse();
+        // 其余(含非法值)→ true(默认 strict 安全偏好)
+        assertThat(BatchPlatformClientConfig.parseBoolean("true")).isTrue();
+        assertThat(BatchPlatformClientConfig.parseBoolean("1")).isTrue();
+        assertThat(BatchPlatformClientConfig.parseBoolean("yes")).isTrue();
+        assertThat(BatchPlatformClientConfig.parseBoolean("garbage")).isTrue();
+    }
 }

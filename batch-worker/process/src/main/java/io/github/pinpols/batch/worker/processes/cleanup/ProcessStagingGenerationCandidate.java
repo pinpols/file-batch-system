@@ -11,14 +11,13 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ProcessStagingGenerationCandidate {
 
-  private String tenantId;
-  private Long taskId;
-  private String generationId;
-  private String batchKey;
-  private Instant createdAt;
+    private String tenantId;
+    private Long taskId;
+    private String generationId;
+    private String batchKey;
+    private Instant createdAt;
 
-  public ProcessStagingGenerationCandidate(
-      String tenantId, Long taskId, String generationId, String batchKey) {
-    this(tenantId, taskId, generationId, batchKey, null);
-  }
+    public ProcessStagingGenerationCandidate(String tenantId, Long taskId, String generationId, String batchKey) {
+        this(tenantId, taskId, generationId, batchKey, null);
+    }
 }

@@ -28,149 +28,151 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class TaskConsumerBatchExecutionCoordinator {
 
-  private final Supplier<String> workerTypeSupplier;
-  private final Supplier<TaskDispatchExecutor> executorSupplier;
-  private final BiPredicate<TaskDispatchMessage, WorkerRegistration> acceptsMessage;
-  private final BiFunction<String, String, Boolean> publishToDlq;
+    private final Supplier<String> workerTypeSupplier;
+    private final Supplier<TaskDispatchExecutor> executorSupplier;
+    private final BiPredicate<TaskDispatchMessage, WorkerRegistration> acceptsMessage;
+    private final BiFunction<String, String, Boolean> publishToDlq;
 
-  TaskConsumerBatchExecutionCoordinator(
-      Supplier<String> workerTypeSupplier,
-      Supplier<TaskDispatchExecutor> executorSupplier,
-      BiPredicate<TaskDispatchMessage, WorkerRegistration> acceptsMessage,
-      BiFunction<String, String, Boolean> publishToDlq) {
-    this.workerTypeSupplier = workerTypeSupplier;
-    this.executorSupplier = executorSupplier;
-    this.acceptsMessage = acceptsMessage;
-    this.publishToDlq = publishToDlq;
-  }
-
-  /** 解码并执行一批消息，返回值表示整批是否可以提交 offset。 */
-  boolean process(List<String> payloads, WorkerRegistration registration) {
-    Map<String, List<BatchPayload>> byTenant = new LinkedHashMap<>();
-    for (String payload : payloads) {
-      TaskDispatchMessage message;
-      try {
-        message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
-      } catch (Exception parseEx) {
-        String workerType = workerTypeSupplier.get();
-        String errorSummary = SwallowedExceptionLogger.summary(parseEx);
-        log.error(
-            "{} batch payload parse failed — publishing only this payload to DLQ: error={}",
-            workerType,
-            errorSummary);
-        BiFunction<String, String, Boolean> deadLetterPublisher = publishToDlq;
-        String safeError = SwallowedExceptionLogger.safeMessage(
-            parseEx.getMessage(), AbstractTaskConsumer.DLQ_ERROR_MESSAGE_MAX_LENGTH);
-        if (!deadLetterPublisher.apply(payload, safeError)) {
-          return false;
-        }
-        continue;
-      }
-      if (!acceptsMessage.test(message, registration)) {
-        continue;
-      }
-      byTenant
-          .computeIfAbsent(message.tenantId(), ignored -> new ArrayList<>())
-          .add(new BatchPayload(payload, message));
+    TaskConsumerBatchExecutionCoordinator(
+            Supplier<String> workerTypeSupplier,
+            Supplier<TaskDispatchExecutor> executorSupplier,
+            BiPredicate<TaskDispatchMessage, WorkerRegistration> acceptsMessage,
+            BiFunction<String, String, Boolean> publishToDlq) {
+        this.workerTypeSupplier = workerTypeSupplier;
+        this.executorSupplier = executorSupplier;
+        this.acceptsMessage = acceptsMessage;
+        this.publishToDlq = publishToDlq;
     }
-    return processBatchGroups(byTenant, registration.getWorkerId());
-  }
 
-  private boolean processBatchGroups(Map<String, List<BatchPayload>> byTenant, String workerId) {
-    boolean allDlq = true;
-    for (Map.Entry<String, List<BatchPayload>> entry : byTenant.entrySet()) {
-      String tenantId = entry.getKey();
-      List<BatchPayload> group = entry.getValue();
-      List<TaskDispatchMessage> messages =
-          group.stream().map(BatchPayload::message).toList();
-      List<BatchItemExecution> executions = executeBatchForTenant(tenantId, messages, workerId);
-      for (BatchItemExecution execution : executions) {
-        if (execution == null || execution.skipped()) {
-          continue;
+    /** 解码并执行一批消息，返回值表示整批是否可以提交 offset。 */
+    boolean process(List<String> payloads, WorkerRegistration registration) {
+        Map<String, List<BatchPayload>> byTenant = new LinkedHashMap<>();
+        for (String payload : payloads) {
+            TaskDispatchMessage message;
+            try {
+                message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
+            } catch (Exception parseEx) {
+                String workerType = workerTypeSupplier.get();
+                String errorSummary = SwallowedExceptionLogger.summary(parseEx);
+                log.error(
+                        "{} batch payload parse failed — publishing only this payload to DLQ: error={}",
+                        workerType,
+                        errorSummary);
+                BiFunction<String, String, Boolean> deadLetterPublisher = publishToDlq;
+                String safeError = SwallowedExceptionLogger.safeMessage(
+                        parseEx.getMessage(), AbstractTaskConsumer.DLQ_ERROR_MESSAGE_MAX_LENGTH);
+                if (!deadLetterPublisher.apply(payload, safeError)) {
+                    return false;
+                }
+                continue;
+            }
+            if (!acceptsMessage.test(message, registration)) {
+                continue;
+            }
+            byTenant.computeIfAbsent(message.tenantId(), ignored -> new ArrayList<>())
+                    .add(new BatchPayload(payload, message));
         }
-        if (execution.error() == null) {
-          logBatchSuccess(execution.result());
-          continue;
-        }
-        if (TaskConsumerFailurePolicy.isTransientOrchestratorFailure(execution.error())) {
-          String workerType = workerTypeSupplier.get();
-          Long taskId = EmptyChecks.isNull(execution.message())
-              ? null
-              : execution.message().taskId();
-          String errorSummary = SwallowedExceptionLogger.summary(execution.error());
-          log.warn(
-              "{} batch item transient failure (5xx/network) — NOT committing, will retry whole"
-                  + " batch: taskId={}, error={}",
-              workerType,
-              taskId,
-              errorSummary);
-          return false;
-        }
-        String payload = originalPayload(execution, group);
-        if (payload == null) {
-          log.error(
-              "{} batch item has no matching original payload — refusing to commit offset:"
-                  + " messageIndex={}, taskId={}",
-              workerTypeSupplier.get(),
-              execution.messageIndex(),
-              execution.message() == null ? null : execution.message().taskId());
-          allDlq = false;
-          continue;
-        }
-        String workerType = workerTypeSupplier.get();
-        Long taskId =
-            EmptyChecks.isNull(execution.message()) ? null : execution.message().taskId();
-        String errorSummary = SwallowedExceptionLogger.summary(execution.error());
-        log.error(
-            "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
-                + " error={}",
-            workerType,
-            taskId,
-            errorSummary);
-        BiFunction<String, String, Boolean> deadLetterPublisher = publishToDlq;
-        String safeError = SwallowedExceptionLogger.safeMessage(
-            execution.error().getMessage(), AbstractTaskConsumer.DLQ_ERROR_MESSAGE_MAX_LENGTH);
-        if (!deadLetterPublisher.apply(payload, safeError)) {
-          allDlq = false;
-        }
-      }
+        return processBatchGroups(byTenant, registration.getWorkerId());
     }
-    return allDlq;
-  }
 
-  private List<BatchItemExecution> executeBatchForTenant(
-      String tenantId, List<TaskDispatchMessage> messages, String workerId) {
-    if (EmptyChecks.isNotBlank(tenantId) && !"unknown".equals(tenantId)) {
-      return RlsTenantContextHolder.runWithTenant(
-          tenantId, () -> executorSupplier.get().executeBatchDetailed(messages, workerId));
+    private boolean processBatchGroups(Map<String, List<BatchPayload>> byTenant, String workerId) {
+        boolean allDlq = true;
+        for (Map.Entry<String, List<BatchPayload>> entry : byTenant.entrySet()) {
+            String tenantId = entry.getKey();
+            List<BatchPayload> group = entry.getValue();
+            List<TaskDispatchMessage> messages =
+                    group.stream().map(BatchPayload::message).toList();
+            List<BatchItemExecution> executions = executeBatchForTenant(tenantId, messages, workerId);
+            for (BatchItemExecution execution : executions) {
+                if (execution == null || execution.skipped()) {
+                    continue;
+                }
+                if (execution.error() == null) {
+                    logBatchSuccess(execution.result());
+                    continue;
+                }
+                if (TaskConsumerFailurePolicy.isTransientOrchestratorFailure(execution.error())) {
+                    String workerType = workerTypeSupplier.get();
+                    Long taskId = EmptyChecks.isNull(execution.message())
+                            ? null
+                            : execution.message().taskId();
+                    String errorSummary = SwallowedExceptionLogger.summary(execution.error());
+                    log.warn(
+                            "{} batch item transient failure (5xx/network) — NOT committing, will retry whole"
+                                    + " batch: taskId={}, error={}",
+                            workerType,
+                            taskId,
+                            errorSummary);
+                    return false;
+                }
+                String payload = originalPayload(execution, group);
+                if (payload == null) {
+                    log.error(
+                            "{} batch item has no matching original payload — refusing to commit offset:"
+                                    + " messageIndex={}, taskId={}",
+                            workerTypeSupplier.get(),
+                            execution.messageIndex(),
+                            execution.message() == null
+                                    ? null
+                                    : execution.message().taskId());
+                    allDlq = false;
+                    continue;
+                }
+                String workerType = workerTypeSupplier.get();
+                Long taskId = EmptyChecks.isNull(execution.message())
+                        ? null
+                        : execution.message().taskId();
+                String errorSummary = SwallowedExceptionLogger.summary(execution.error());
+                log.error(
+                        "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
+                                + " error={}",
+                        workerType,
+                        taskId,
+                        errorSummary);
+                BiFunction<String, String, Boolean> deadLetterPublisher = publishToDlq;
+                String safeError = SwallowedExceptionLogger.safeMessage(
+                        execution.error().getMessage(), AbstractTaskConsumer.DLQ_ERROR_MESSAGE_MAX_LENGTH);
+                if (!deadLetterPublisher.apply(payload, safeError)) {
+                    allDlq = false;
+                }
+            }
+        }
+        return allDlq;
     }
-    return executorSupplier.get().executeBatchDetailed(messages, workerId);
-  }
 
-  private void logBatchSuccess(WorkerExecutionResult result) {
-    if (result != null) {
-      log.debug(
-          "{} batch task processed: taskId={}, success={}, message={}",
-          workerTypeSupplier.get(),
-          result.taskId(),
-          result.success(),
-          SwallowedExceptionLogger.safeMessage(result.message()));
+    private List<BatchItemExecution> executeBatchForTenant(
+            String tenantId, List<TaskDispatchMessage> messages, String workerId) {
+        if (EmptyChecks.isNotBlank(tenantId) && !"unknown".equals(tenantId)) {
+            return RlsTenantContextHolder.runWithTenant(
+                    tenantId, () -> executorSupplier.get().executeBatchDetailed(messages, workerId));
+        }
+        return executorSupplier.get().executeBatchDetailed(messages, workerId);
     }
-  }
 
-  private String originalPayload(BatchItemExecution execution, List<BatchPayload> group) {
-    int index = execution.messageIndex();
-    if (index >= 0 && index < group.size()) {
-      return group.get(index).payload();
+    private void logBatchSuccess(WorkerExecutionResult result) {
+        if (result != null) {
+            log.debug(
+                    "{} batch task processed: taskId={}, success={}, message={}",
+                    workerTypeSupplier.get(),
+                    result.taskId(),
+                    result.success(),
+                    SwallowedExceptionLogger.safeMessage(result.message()));
+        }
     }
-    // 兼容仍会构造无索引结果的测试执行器和自定义执行器。
-    for (BatchPayload item : group) {
-      if (item.message() == execution.message()) {
-        return item.payload();
-      }
-    }
-    return null;
-  }
 
-  private record BatchPayload(String payload, TaskDispatchMessage message) {}
+    private String originalPayload(BatchItemExecution execution, List<BatchPayload> group) {
+        int index = execution.messageIndex();
+        if (index >= 0 && index < group.size()) {
+            return group.get(index).payload();
+        }
+        // 兼容仍会构造无索引结果的测试执行器和自定义执行器。
+        for (BatchPayload item : group) {
+            if (item.message() == execution.message()) {
+                return item.payload();
+            }
+        }
+        return null;
+    }
+
+    private record BatchPayload(String payload, TaskDispatchMessage message) {}
 }

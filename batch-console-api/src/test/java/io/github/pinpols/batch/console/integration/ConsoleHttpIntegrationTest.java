@@ -45,314 +45,308 @@ import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("控制台 HTTP 写端点: 触发,导出,排水,审批,文件与密钥等链路的响应与入参校验")
 class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
-  @LocalServerPort
-  private int port;
+    @LocalServerPort
+    private int port;
 
-  private WebTestClient webTestClient;
+    private WebTestClient webTestClient;
 
-  @MockitoBean
-  private ConsoleJobRecoveryService jobRecoveryService;
+    @MockitoBean
+    private ConsoleJobRecoveryService jobRecoveryService;
 
-  @MockitoBean
-  private ConsoleJobApprovalService jobApprovalService;
+    @MockitoBean
+    private ConsoleJobApprovalService jobApprovalService;
 
-  @MockitoBean
-  private ConsoleWorkerApplicationService workerApplicationService;
+    @MockitoBean
+    private ConsoleWorkerApplicationService workerApplicationService;
 
-  @MockitoBean
-  private ConsoleApprovalApplicationService approvalApplicationService;
+    @MockitoBean
+    private ConsoleApprovalApplicationService approvalApplicationService;
 
-  @MockitoBean
-  private ConsoleFileApplicationService fileApplicationService;
+    @MockitoBean
+    private ConsoleFileApplicationService fileApplicationService;
 
-  @MockitoBean
-  private ConsoleConfigApplicationService configApplicationService;
+    @MockitoBean
+    private ConsoleConfigApplicationService configApplicationService;
 
-  @MockitoBean
-  private ConsoleReportExcelApplicationService reportExcelApplicationService;
+    @MockitoBean
+    private ConsoleReportExcelApplicationService reportExcelApplicationService;
 
-  @MockitoBean
-  private ConsoleAiApplicationService aiApplicationService;
+    @MockitoBean
+    private ConsoleAiApplicationService aiApplicationService;
 
-  @MockitoBean
-  private ConsoleAiAuthorizationService aiAuthorizationService;
+    @MockitoBean
+    private ConsoleAiAuthorizationService aiAuthorizationService;
 
-  @MockitoBean
-  private ConsoleAiStreamRegistry aiStreamRegistry;
+    @MockitoBean
+    private ConsoleAiStreamRegistry aiStreamRegistry;
 
-  @MockitoBean
-  private ConsoleFileDownloadApplicationService fileDownloadApplicationService;
+    @MockitoBean
+    private ConsoleFileDownloadApplicationService fileDownloadApplicationService;
 
-  @BeforeEach
-  void setUpClient() {
-    // 用 JDK HttpClient 连接器而非默认 reactor-netty:后者的 HTTP 解码器对「重复且相同」的
-    // Content-Length 响应头 fail-fast 抛 "Multiple Content-Length values found"(Netty 安全加固),
-    // 在 CI runner(JDK25 + Tomcat 响应管线)上偶发触发,与被测业务无关。JDK 连接器对此宽容,
-    // 消除该环境 flake;不改任何生产行为,仅约束测试客户端。
-    webTestClient = WebTestClient.bindToServer(new JdkClientHttpConnector())
-        .baseUrl("http://localhost:" + port)
-        .responseTimeout(Duration.ofSeconds(60))
-        .build();
-  }
+    @BeforeEach
+    void setUpClient() {
+        // 用 JDK HttpClient 连接器而非默认 reactor-netty:后者的 HTTP 解码器对「重复且相同」的
+        // Content-Length 响应头 fail-fast 抛 "Multiple Content-Length values found"(Netty 安全加固),
+        // 在 CI runner(JDK25 + Tomcat 响应管线)上偶发触发,与被测业务无关。JDK 连接器对此宽容,
+        // 消除该环境 flake;不改任何生产行为,仅约束测试客户端。
+        webTestClient = WebTestClient.bindToServer(new JdkClientHttpConnector())
+                .baseUrl("http://localhost:" + port)
+                .responseTimeout(Duration.ofSeconds(60))
+                .build();
+    }
 
-  @Test
-  @DisplayName("旧 Job 根触发路由已退役")
-  void shouldRejectRetiredJobRootTriggerRoutes() {
-    webTestClient
-        .post()
-        .uri("/api/console/jobs/trigger")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-trigger-001")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue("""
+    @Test
+    @DisplayName("旧 Job 根触发路由已退役")
+    void shouldRejectRetiredJobRootTriggerRoutes() {
+        webTestClient
+                .post()
+                .uri("/api/console/jobs/trigger")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-trigger-001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
             {"tenantId":"tenant-a","jobCode":"JOB_A","bizDate":"2026-03-27","triggerType":"MANUAL"}
             """)
-        .exchange()
-        .expectStatus()
-        .isNotFound();
+                .exchange()
+                .expectStatus()
+                .isNotFound();
 
-    webTestClient
-        .post()
-        .uri("/api/console/jobs/batch-trigger")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-batch-trigger-001")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue("[]")
-        .exchange()
-        .expectStatus()
-        .isNotFound();
-  }
+        webTestClient
+                .post()
+                .uri("/api/console/jobs/batch-trigger")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-batch-trigger-001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("[]")
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+    }
 
-  @Test
-  @DisplayName("导出配置发布报表: 返回成功,响应体字节与导出内容一致")
-  void shouldExportConfigReleasesReportViaHttp() {
-    byte[] content = "config-releases-report".getBytes(StandardCharsets.UTF_8);
-    when(reportExcelApplicationService.exportConfigReleases(any()))
-        .thenReturn(new ExcelDownload("config.xlsx", out -> out.write(content)));
+    @Test
+    @DisplayName("导出配置发布报表: 返回成功,响应体字节与导出内容一致")
+    void shouldExportConfigReleasesReportViaHttp() {
+        byte[] content = "config-releases-report".getBytes(StandardCharsets.UTF_8);
+        when(reportExcelApplicationService.exportConfigReleases(any()))
+                .thenReturn(new ExcelDownload("config.xlsx", out -> out.write(content)));
 
-    webTestClient
-        .get()
-        .uri("/api/console/reports/excel/config-releases?tenantId=tenant-a")
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(byte[].class)
-        .value(bytes -> assertThat(bytes).isEqualTo(content));
-  }
+        webTestClient
+                .get()
+                .uri("/api/console/reports/excel/config-releases?tenantId=tenant-a")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(byte[].class)
+                .value(bytes -> assertThat(bytes).isEqualTo(content));
+    }
 
-  @Test
-  @DisplayName("排水工作节点: 返回成功且响应体状态为排水中,应用服务被调用")
-  void shouldDrainWorkerViaHttp() {
-    when(workerApplicationService.drain(anyString(), any(), anyString()))
-        .thenReturn(ConsoleWorkerRegistryResponse.builder()
-            .id(1L)
-            .tenantId("tenant-a")
-            .workerCode("worker-001")
-            .workerGroup("group-a")
-            .status("DRAINING")
-            .heartbeatAt(BatchDateTimeSupport.utcNow())
-            .currentLoad(0)
-            .taskCapabilities(List.of())
-            .build());
+    @Test
+    @DisplayName("排水工作节点: 返回成功且响应体状态为排水中,应用服务被调用")
+    void shouldDrainWorkerViaHttp() {
+        when(workerApplicationService.drain(anyString(), any(), anyString()))
+                .thenReturn(ConsoleWorkerRegistryResponse.builder()
+                        .id(1L)
+                        .tenantId("tenant-a")
+                        .workerCode("worker-001")
+                        .workerGroup("group-a")
+                        .status("DRAINING")
+                        .heartbeatAt(BatchDateTimeSupport.utcNow())
+                        .currentLoad(0)
+                        .taskCapabilities(List.of())
+                        .build());
 
-    webTestClient
-        .post()
-        .uri("/api/console/workers/worker-001/drain")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-worker-001")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue("""
+        webTestClient
+                .post()
+                .uri("/api/console/workers/worker-001/drain")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-worker-001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
             {"tenantId":"tenant-a","timeoutSeconds":600}
             """)
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .value(body -> {
-          assertThat(body).contains("\"code\":\"SUCCESS\"");
-          assertThat(body).contains("\"status\":\"DRAINING\"");
-        });
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .value(body -> {
+                    assertThat(body).contains("\"code\":\"SUCCESS\"");
+                    assertThat(body).contains("\"status\":\"DRAINING\"");
+                });
 
-    verify(workerApplicationService).drain(anyString(), any(), anyString());
-  }
+        verify(workerApplicationService).drain(anyString(), any(), anyString());
+    }
 
-  @Test
-  @DisplayName("审批通过: 返回成功并回显审批结果,应用服务按请求入参被调用")
-  void shouldApproveApprovalViaHttp() {
-    when(approvalApplicationService.approve(anyString(), anyString(), anyString(), anyString()))
-        .thenReturn("APPROVED");
+    @Test
+    @DisplayName("审批通过: 返回成功并回显审批结果,应用服务按请求入参被调用")
+    void shouldApproveApprovalViaHttp() {
+        when(approvalApplicationService.approve(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn("APPROVED");
 
-    webTestClient
-        .post()
-        .uri("/api/console/approvals/appr-001/approve")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-approval-001")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue("""
+        webTestClient
+                .post()
+                .uri("/api/console/approvals/appr-001/approve")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-approval-001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
             {"tenantId":"tenant-a","operatorId":"user-1","reason":"ok"}
             """)
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .value(body -> {
-          assertThat(body).contains("\"code\":\"SUCCESS\"");
-          assertThat(body).contains("\"APPROVED\"");
-        });
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .value(body -> {
+                    assertThat(body).contains("\"code\":\"SUCCESS\"");
+                    assertThat(body).contains("\"APPROVED\"");
+                });
 
-    // operator 取鉴权身份（body.operatorId 不授权），测试安全上下文用户为 testing-console-user。
-    verify(approvalApplicationService)
-        .approve("tenant-a", "appr-001", "testing-console-user", "ok");
-  }
+        // operator 取鉴权身份（body.operatorId 不授权），测试安全上下文用户为 testing-console-user。
+        verify(approvalApplicationService).approve("tenant-a", "appr-001", "testing-console-user", "ok");
+    }
 
-  @Test
-  @DisplayName("归档文件: 返回成功且响应体状态为已归档")
-  void shouldArchiveFileViaHttp() {
-    when(fileApplicationService.archive(any(), anyString()))
-        .thenReturn(new ConsoleFileOperationResponse(FileStatus.ARCHIVED.code()));
+    @Test
+    @DisplayName("归档文件: 返回成功且响应体状态为已归档")
+    void shouldArchiveFileViaHttp() {
+        when(fileApplicationService.archive(any(), anyString()))
+                .thenReturn(new ConsoleFileOperationResponse(FileStatus.ARCHIVED.code()));
 
-    webTestClient
-        .post()
-        .uri("/api/console/files/archive")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-file-001")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue("""
+        webTestClient
+                .post()
+                .uri("/api/console/files/archive")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-file-001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
             {"tenantId":"tenant-a","fileId":1001,"reason":"cleanup"}
             """)
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .value(body -> {
-          assertThat(body).contains("\"code\":\"SUCCESS\"");
-          assertThat(body).contains("\"status\":\"ARCHIVED\"");
-        });
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .value(body -> {
+                    assertThat(body).contains("\"code\":\"SUCCESS\"");
+                    assertThat(body).contains("\"status\":\"ARCHIVED\"");
+                });
 
-    verify(fileApplicationService).archive(any(), anyString());
-  }
+        verify(fileApplicationService).archive(any(), anyString());
+    }
 
-  @Test
-  @DisplayName("预签名下载: 返回成功并回显审批单号")
-  void shouldPresignDownloadFileViaHttp() {
-    when(fileApplicationService.presignDownload(any(), anyString()))
-        .thenReturn(new ConsolePresignDownloadResponse("appr-001", null));
+    @Test
+    @DisplayName("预签名下载: 返回成功并回显审批单号")
+    void shouldPresignDownloadFileViaHttp() {
+        when(fileApplicationService.presignDownload(any(), anyString()))
+                .thenReturn(new ConsolePresignDownloadResponse("appr-001", null));
 
-    webTestClient
-        .post()
-        .uri("/api/console/files/presign-download")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-file-002")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue("""
+        webTestClient
+                .post()
+                .uri("/api/console/files/presign-download")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-file-002")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
             {"tenantId":"tenant-a","fileId":1001,"reason":"cleanup","approvalId":"appr-001"}
             """)
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .value(body -> {
-          assertThat(body).contains("\"code\":\"SUCCESS\"");
-          assertThat(body).contains("\"approvalNo\":\"appr-001\"");
-        });
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .value(body -> {
+                    assertThat(body).contains("\"code\":\"SUCCESS\"");
+                    assertThat(body).contains("\"approvalNo\":\"appr-001\"");
+                });
 
-    verify(fileApplicationService).presignDownload(any(), anyString());
-  }
+        verify(fileApplicationService).presignDownload(any(), anyString());
+    }
 
-  @Test
-  @DisplayName("轮换密钥: 返回成功并在响应体带出新版本号")
-  void shouldRotateSecretViaHttp() {
-    when(configApplicationService.rotateSecretVersion(any())).thenReturn(11L);
+    @Test
+    @DisplayName("轮换密钥: 返回成功并在响应体带出新版本号")
+    void shouldRotateSecretViaHttp() {
+        when(configApplicationService.rotateSecretVersion(any())).thenReturn(11L);
 
-    webTestClient
-        .post()
-        .uri("/api/console/config/secrets/rotate")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-config-001")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue("""
+        webTestClient
+                .post()
+                .uri("/api/console/config/secrets/rotate")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-config-001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
             {"tenantId":"tenant-a","secretRef":"DEFAULT_TEST","secretName":"console-secret","reason":"rotation"}
             """)
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .value(body -> {
-          assertThat(body).contains("\"code\":\"SUCCESS\"");
-          assertThat(body).contains("11");
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .value(body -> {
+                    assertThat(body).contains("\"code\":\"SUCCESS\"");
+                    assertThat(body).contains("11");
+                });
+
+        verify(configApplicationService).rotateSecretVersion(any());
+    }
+
+    @Test
+    @DisplayName("流式对话: 依次推送开始,增量与完成事件,会话标识与增量内容可见")
+    void shouldStreamChatViaHttp() {
+        AiChatResponse chatResponse = new AiChatResponse();
+        chatResponse.setRequestId("req-1");
+        chatResponse.setTraceId("trace-1");
+        chatResponse.setSessionId("session-1");
+        chatResponse.setPromptCategory("GENERAL");
+        chatResponse.setPromptDecision("APPROVED");
+        chatResponse.setModelName("gpt-4o-mini");
+        chatResponse.setAnswer("ok");
+        ConsoleAiApplicationService.PreparedStream prepared = mock(ConsoleAiApplicationService.PreparedStream.class);
+        when(prepared.requestId()).thenReturn("req-1");
+        when(aiApplicationService.prepareStream(any(), anyString())).thenReturn(prepared);
+        ConsoleRequestMetadataResolver resolver = mock(ConsoleRequestMetadataResolver.class);
+        when(resolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "operator", null, null));
+        ConsoleAiStreamRegistry registry = new ConsoleAiStreamRegistry(aiAuthorizationService, resolver);
+        ConsoleAiStreamRegistry.Registration registration = registry.register("req-1", () -> {});
+        when(aiStreamRegistry.register(anyString(), any())).thenReturn(registration);
+        when(prepared.execute(any())).thenAnswer(invocation -> {
+            ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(0);
+            observer.onDelta("ok");
+            return chatResponse;
         });
 
-    verify(configApplicationService).rotateSecretVersion(any());
-  }
-
-  @Test
-  @DisplayName("流式对话: 依次推送开始,增量与完成事件,会话标识与增量内容可见")
-  void shouldStreamChatViaHttp() {
-    AiChatResponse chatResponse = new AiChatResponse();
-    chatResponse.setRequestId("req-1");
-    chatResponse.setTraceId("trace-1");
-    chatResponse.setSessionId("session-1");
-    chatResponse.setPromptCategory("GENERAL");
-    chatResponse.setPromptDecision("APPROVED");
-    chatResponse.setModelName("gpt-4o-mini");
-    chatResponse.setAnswer("ok");
-    ConsoleAiApplicationService.PreparedStream prepared =
-        mock(ConsoleAiApplicationService.PreparedStream.class);
-    when(prepared.requestId()).thenReturn("req-1");
-    when(aiApplicationService.prepareStream(any(), anyString())).thenReturn(prepared);
-    ConsoleRequestMetadataResolver resolver = mock(ConsoleRequestMetadataResolver.class);
-    when(resolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "operator", null, null));
-    ConsoleAiStreamRegistry registry =
-        new ConsoleAiStreamRegistry(aiAuthorizationService, resolver);
-    ConsoleAiStreamRegistry.Registration registration = registry.register("req-1", () -> {});
-    when(aiStreamRegistry.register(anyString(), any())).thenReturn(registration);
-    when(prepared.execute(any())).thenAnswer(invocation -> {
-      ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(0);
-      observer.onDelta("ok");
-      return chatResponse;
-    });
-
-    webTestClient
-        .post()
-        .uri("/api/console/ai/chat/stream")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ai-001")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue("""
+        webTestClient
+                .post()
+                .uri("/api/console/ai/chat/stream")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ai-001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
             {"tenantId":"tenant-a","sessionId":"session-1","prompt":"给我一个调度概览","context":{"topic":"summary"}}
             """)
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .value(body -> {
-          assertThat(body).contains("event:started");
-          assertThat(body).contains("event:delta");
-          assertThat(body).contains("event:completed");
-          assertThat(body).contains("\"session-1\"");
-          assertThat(body).contains("\"ok\"");
-        });
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .value(body -> {
+                    assertThat(body).contains("event:started");
+                    assertThat(body).contains("event:delta");
+                    assertThat(body).contains("event:completed");
+                    assertThat(body).contains("\"session-1\"");
+                    assertThat(body).contains("\"ok\"");
+                });
 
-    verify(aiApplicationService).prepareStream(any(), anyString());
-  }
+        verify(aiApplicationService).prepareStream(any(), anyString());
+    }
 
-  @Test
-  @DisplayName("下载文件: 返回成功,响应体内容与文件一致,应用服务按入参被调用")
-  void shouldDownloadFileViaHttp() {
-    byte[] content = "hello-batch".getBytes(StandardCharsets.UTF_8);
-    when(fileDownloadApplicationService.download(anyString(), any(), anyString()))
-        .thenReturn(new FileDownloadArtifact(
-            new ByteArrayInputStream(content), "file.bin", "application/octet-stream", true));
+    @Test
+    @DisplayName("下载文件: 返回成功,响应体内容与文件一致,应用服务按入参被调用")
+    void shouldDownloadFileViaHttp() {
+        byte[] content = "hello-batch".getBytes(StandardCharsets.UTF_8);
+        when(fileDownloadApplicationService.download(anyString(), any(), anyString()))
+                .thenReturn(new FileDownloadArtifact(
+                        new ByteArrayInputStream(content), "file.bin", "application/octet-stream", true));
 
-    webTestClient
-        .get()
-        .uri("/api/console/files/1001/download?tenantId=tenant-a&approvalId=appr-001")
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(byte[].class)
-        .value(bytes -> assertThat(bytes).isEqualTo(content));
+        webTestClient
+                .get()
+                .uri("/api/console/files/1001/download?tenantId=tenant-a&approvalId=appr-001")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(byte[].class)
+                .value(bytes -> assertThat(bytes).isEqualTo(content));
 
-    verify(fileDownloadApplicationService).download("tenant-a", 1001L, "appr-001");
-  }
+        verify(fileDownloadApplicationService).download("tenant-a", 1001L, "appr-001");
+    }
 }

@@ -22,53 +22,52 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("编排定义写入支持: 节点写入字段透传")
 class WorkflowDefinitionWriteSupportTest {
 
-  @Test
-  @DisplayName("写入节点时跨天依赖表达式与超时秒数完整透传到写入参数")
-  void shouldPropagateCrossDayDependencyFieldsToNodeWrite() {
-    WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
-    WorkflowDefinitionWriteSupport writeSupport = new WorkflowDefinitionWriteSupport(
-        nodeMapper,
-        mock(WorkflowEdgeMapper.class),
-        mock(WorkflowDefinitionVersionMapper.class),
-        new ObjectMapper());
-    WorkflowDefinitionSaveRequest.NodeItem node = new WorkflowDefinitionSaveRequest.NodeItem();
-    node.setNodeCode("load_source");
-    node.setNodeType("JOB");
-    node.setCrossDayDependencies("[{\"alias\":\"previous_day\",\"jobCode\":\"LOAD_SOURCE\"}]");
-    node.setCrossDayDependencyTimeoutSeconds(7200);
-    WorkflowDefinitionSaveRequest request = new WorkflowDefinitionSaveRequest();
-    request.setNodes(List.of(node));
+    @Test
+    @DisplayName("写入节点时跨天依赖表达式与超时秒数完整透传到写入参数")
+    void shouldPropagateCrossDayDependencyFieldsToNodeWrite() {
+        WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
+        WorkflowDefinitionWriteSupport writeSupport = new WorkflowDefinitionWriteSupport(
+                nodeMapper,
+                mock(WorkflowEdgeMapper.class),
+                mock(WorkflowDefinitionVersionMapper.class),
+                new ObjectMapper());
+        WorkflowDefinitionSaveRequest.NodeItem node = new WorkflowDefinitionSaveRequest.NodeItem();
+        node.setNodeCode("load_source");
+        node.setNodeType("JOB");
+        node.setCrossDayDependencies("[{\"alias\":\"previous_day\",\"jobCode\":\"LOAD_SOURCE\"}]");
+        node.setCrossDayDependencyTimeoutSeconds(7200);
+        WorkflowDefinitionSaveRequest request = new WorkflowDefinitionSaveRequest();
+        request.setNodes(List.of(node));
 
-    writeSupport.upsertNodesAndEdges("tenant_a", 42L, request);
+        writeSupport.upsertNodesAndEdges("tenant_a", 42L, request);
 
-    ArgumentCaptor<WorkflowNodeUpsertParam> captor =
-        ArgumentCaptor.forClass(WorkflowNodeUpsertParam.class);
-    verify(nodeMapper).upsertWorkflowNode(captor.capture());
-    assertThat(captor.getValue().getCrossDayDependencies())
-        .isEqualTo("[{\"alias\":\"previous_day\",\"jobCode\":\"LOAD_SOURCE\"}]");
-    assertThat(captor.getValue().getCrossDayDependencyTimeoutSeconds()).isEqualTo(7200);
-  }
+        ArgumentCaptor<WorkflowNodeUpsertParam> captor = ArgumentCaptor.forClass(WorkflowNodeUpsertParam.class);
+        verify(nodeMapper).upsertWorkflowNode(captor.capture());
+        assertThat(captor.getValue().getCrossDayDependencies())
+                .isEqualTo("[{\"alias\":\"previous_day\",\"jobCode\":\"LOAD_SOURCE\"}]");
+        assertThat(captor.getValue().getCrossDayDependencyTimeoutSeconds()).isEqualTo(7200);
+    }
 
-  @Test
-  @DisplayName("保存文件等待节点时拒绝非字符串渠道编码")
-  void shouldRejectInvalidChannelBeforeNodeWrite() {
-    WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
-    WorkflowDefinitionWriteSupport writeSupport = new WorkflowDefinitionWriteSupport(
-        nodeMapper,
-        mock(WorkflowEdgeMapper.class),
-        mock(WorkflowDefinitionVersionMapper.class),
-        new ObjectMapper());
-    WorkflowDefinitionSaveRequest.NodeItem node = new WorkflowDefinitionSaveRequest.NodeItem();
-    node.setNodeCode("wait_file");
-    node.setNodeType("WAIT");
-    node.setNodeParams("""
+    @Test
+    @DisplayName("保存文件等待节点时拒绝非字符串渠道编码")
+    void shouldRejectInvalidChannelBeforeNodeWrite() {
+        WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
+        WorkflowDefinitionWriteSupport writeSupport = new WorkflowDefinitionWriteSupport(
+                nodeMapper,
+                mock(WorkflowEdgeMapper.class),
+                mock(WorkflowDefinitionVersionMapper.class),
+                new ObjectMapper());
+        WorkflowDefinitionSaveRequest.NodeItem node = new WorkflowDefinitionSaveRequest.NodeItem();
+        node.setNodeCode("wait_file");
+        node.setNodeType("WAIT");
+        node.setNodeParams("""
         {"sensor_type":"FILE_ARRIVAL","sensor_spec":{"channelCode":42}}
         """);
-    WorkflowDefinitionSaveRequest request = new WorkflowDefinitionSaveRequest();
-    request.setNodes(List.of(node));
+        WorkflowDefinitionSaveRequest request = new WorkflowDefinitionSaveRequest();
+        request.setNodes(List.of(node));
 
-    assertThatThrownBy(() -> writeSupport.upsertNodesAndEdges("tenant_a", 42L, request))
-        .isInstanceOf(BizException.class);
-    verify(nodeMapper, never()).upsertWorkflowNode(any());
-  }
+        assertThatThrownBy(() -> writeSupport.upsertNodesAndEdges("tenant_a", 42L, request))
+                .isInstanceOf(BizException.class);
+        verify(nodeMapper, never()).upsertWorkflowNode(any());
+    }
 }

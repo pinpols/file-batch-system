@@ -48,191 +48,186 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2583")
 public class ConsoleQueryCacheService {
 
-  private static final String PREFIX = "console:cache:";
+    private static final String PREFIX = "console:cache:";
 
-  /** SCAN 单次返回上限 + DEL 单批次上限：避免一次 DEL 大列表阻塞 Redis 主线程。 */
-  private static final int SCAN_BATCH_SIZE = 500;
+    /** SCAN 单次返回上限 + DEL 单批次上限：避免一次 DEL 大列表阻塞 Redis 主线程。 */
+    private static final int SCAN_BATCH_SIZE = 500;
 
-  private static final int MAX_KEY_SEGMENT_LENGTH = 96;
-  private static final int KEY_SEGMENT_PREFIX_LENGTH = 64;
+    private static final int MAX_KEY_SEGMENT_LENGTH = 96;
+    private static final int KEY_SEGMENT_PREFIX_LENGTH = 64;
 
-  private final Counter readFailureCounter;
-  private final Counter writeFailureCounter;
-  private final BatchRedisNamespace redisNamespace;
+    private final Counter readFailureCounter;
+    private final Counter writeFailureCounter;
+    private final BatchRedisNamespace redisNamespace;
 
-  /** Meta 枚举（纯静态数据）。 */
-  public static final Duration META_ENUM_TTL = Duration.ofMinutes(30);
+    /** Meta 枚举（纯静态数据）。 */
+    public static final Duration META_ENUM_TTL = Duration.ofMinutes(30);
 
-  /** Meta 配置选项（队列/日历/窗口等，跟随租户配置变化）。 */
-  public static final Duration META_OPTION_TTL = Duration.ofMinutes(5);
+    /** Meta 配置选项（队列/日历/窗口等，跟随租户配置变化）。 */
+    public static final Duration META_OPTION_TTL = Duration.ofMinutes(5);
 
-  /** Dashboard 汇总。 */
-  public static final Duration DASHBOARD_TTL = Duration.ofSeconds(10);
+    /** Dashboard 汇总。 */
+    public static final Duration DASHBOARD_TTL = Duration.ofSeconds(10);
 
-  /** 诊断页聚合。 */
-  public static final Duration DIAGNOSTIC_TTL = Duration.ofSeconds(10);
+    /** 诊断页聚合。 */
+    public static final Duration DIAGNOSTIC_TTL = Duration.ofSeconds(10);
 
-  /** Kafka lag 查询。 */
-  public static final Duration KAFKA_LAG_TTL = Duration.ofSeconds(10);
+    /** Kafka lag 查询。 */
+    public static final Duration KAFKA_LAG_TTL = Duration.ofSeconds(10);
 
-  /** 调度快照。 */
-  public static final Duration SNAPSHOT_TTL = Duration.ofSeconds(30);
+    /** 调度快照。 */
+    public static final Duration SNAPSHOT_TTL = Duration.ofSeconds(30);
 
-  private final StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-  public ConsoleQueryCacheService(
-      StringRedisTemplate redisTemplate,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      BatchRedisNamespace redisNamespace) {
-    this.redisTemplate = redisTemplate;
-    this.redisNamespace = redisNamespace;
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    this.readFailureCounter = registry == null // empty-check: allow - Sonar 需识别可选注册表为空分支
-        ? null
-        : registry.counter("batch.console.cache.failure", "operation", "read");
-    this.writeFailureCounter = registry == null // empty-check: allow - Sonar 需识别可选注册表为空分支
-        ? null
-        : registry.counter("batch.console.cache.failure", "operation", "write");
-  }
-
-  /**
-   * 查询缓存：先读 Redis，miss 则执行 loader 并写入缓存。
-   *
-   * @param cacheKey 缓存键（自动加前缀）
-   * @param ttl 过期时间
-   * @param resultType 反序列化目标类型
-   * @param loader 缓存未命中时的数据加载器
-   */
-  public <T> T getOrLoad(String cacheKey, Duration ttl, Class<T> resultType, Supplier<T> loader) {
-    return getOrLoadInternal(
-        cacheKey, ttl, loader, cached -> JsonUtils.fromJson(cached, resultType));
-  }
-
-  /**
-   * 查询缓存的泛型版本：用于 {@code List<Foo>} / {@code Map<String, Foo>} 等参数化返回值，避免命中缓存后 退化成 {@code
-   * List<LinkedHashMap>}。
-   */
-  public <T> T getOrLoad(
-      String cacheKey, Duration ttl, TypeReference<T> resultType, Supplier<T> loader) {
-    return getOrLoadInternal(
-        cacheKey, ttl, loader, cached -> JsonUtils.fromJson(cached, resultType));
-  }
-
-  private <T> T getOrLoadInternal(
-      String cacheKey, Duration ttl, Supplier<T> loader, Function<String, T> decoder) {
-    String fullKey = PREFIX + cacheKey;
-    try {
-      String cached = redisTemplate.opsForValue().get(fullKey);
-      if (Texts.hasText(cached)) {
-        return decoder.apply(cached);
-      }
-    } catch (Exception e) {
-      increment(readFailureCounter);
-      log.debug("cache read failed, falling back to db: key={}", logValue(fullKey), e);
+    public ConsoleQueryCacheService(
+            StringRedisTemplate redisTemplate,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            BatchRedisNamespace redisNamespace) {
+        this.redisTemplate = redisTemplate;
+        this.redisNamespace = redisNamespace;
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        this.readFailureCounter = registry == null // empty-check: allow - Sonar 需识别可选注册表为空分支
+                ? null
+                : registry.counter("batch.console.cache.failure", "operation", "read");
+        this.writeFailureCounter = registry == null // empty-check: allow - Sonar 需识别可选注册表为空分支
+                ? null
+                : registry.counter("batch.console.cache.failure", "operation", "write");
     }
-    T result = loader.get();
-    try {
-      if (EmptyChecks.isNotNull(result)) {
-        ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
-        String resultJson = JsonUtils.toJson(result);
-        valueOperations.set(fullKey, resultJson, ttl);
-      }
-    } catch (Exception e) {
-      increment(writeFailureCounter);
-      log.debug("cache write failed: key={}", logValue(fullKey), e);
-    }
-    return result;
-  }
 
-  private void increment(Counter counter) {
-    if (EmptyChecks.isNotNull(counter)) {
-      counter.increment();
+    /**
+     * 查询缓存：先读 Redis，miss 则执行 loader 并写入缓存。
+     *
+     * @param cacheKey 缓存键（自动加前缀）
+     * @param ttl 过期时间
+     * @param resultType 反序列化目标类型
+     * @param loader 缓存未命中时的数据加载器
+     */
+    public <T> T getOrLoad(String cacheKey, Duration ttl, Class<T> resultType, Supplier<T> loader) {
+        return getOrLoadInternal(cacheKey, ttl, loader, cached -> JsonUtils.fromJson(cached, resultType));
     }
-  }
 
-  /**
-   * 按前缀清除缓存（配置变更时调用）。
-   *
-   * <p>使用 Redis SCAN（非 KEYS）增量扫描 + 分批 DEL，避免 KEYS 命令 O(N) 阻塞主线程。
-   */
-  public void evictByPrefix(String keyPrefix) {
-    if (!Texts.hasText(keyPrefix)) {
-      return;
+    /**
+     * 查询缓存的泛型版本：用于 {@code List<Foo>} / {@code Map<String, Foo>} 等参数化返回值，避免命中缓存后 退化成 {@code
+     * List<LinkedHashMap>}。
+     */
+    public <T> T getOrLoad(String cacheKey, Duration ttl, TypeReference<T> resultType, Supplier<T> loader) {
+        return getOrLoadInternal(cacheKey, ttl, loader, cached -> JsonUtils.fromJson(cached, resultType));
     }
-    String pattern = PREFIX + keyPrefix + "*";
-    long deleted =
-        RedisKeyUtils.scanAndDelete(redisTemplate, pattern, SCAN_BATCH_SIZE, redisNamespace);
-    if (deleted > 0) {
-      log.debug("evicted {} cache keys with prefix: {}", deleted, logValue(keyPrefix));
-    }
-  }
 
-  /** 清除指定租户的 meta 选项缓存。 */
-  public void evictMetaOptions(String tenantId) {
-    evictByPrefix("meta:" + keySegment(tenantId) + ":");
-  }
-
-  /** 清除所有 meta 枚举缓存。 */
-  public void evictMetaEnums() {
-    evictByPrefix("meta:enums");
-  }
-
-  /** 清除指定租户的 dashboard 缓存。 */
-  public void evictDashboard(String tenantId) {
-    evictByPrefix("dashboard:" + keySegment(tenantId) + ":");
-  }
-
-  /**
-   * 将外部输入归一化成 Redis key segment。
-   *
-   * <p>cache key 保留短可读前缀；遇到长值或特殊字符时追加短 hash，避免高基数字段拉长 key，也避免冒号等分隔符造成前缀误伤。
-   */
-  public static String keySegment(String value) {
-    if (!Texts.hasText(value)) {
-      return "_";
+    private <T> T getOrLoadInternal(String cacheKey, Duration ttl, Supplier<T> loader, Function<String, T> decoder) {
+        String fullKey = PREFIX + cacheKey;
+        try {
+            String cached = redisTemplate.opsForValue().get(fullKey);
+            if (Texts.hasText(cached)) {
+                return decoder.apply(cached);
+            }
+        } catch (Exception e) {
+            increment(readFailureCounter);
+            log.debug("cache read failed, falling back to db: key={}", logValue(fullKey), e);
+        }
+        T result = loader.get();
+        try {
+            if (EmptyChecks.isNotNull(result)) {
+                ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
+                String resultJson = JsonUtils.toJson(result);
+                valueOperations.set(fullKey, resultJson, ttl);
+            }
+        } catch (Exception e) {
+            increment(writeFailureCounter);
+            log.debug("cache write failed: key={}", logValue(fullKey), e);
+        }
+        return result;
     }
-    String trimmed = value.trim();
-    int initialCapacity = Math.min(trimmed.length(), MAX_KEY_SEGMENT_LENGTH);
-    StringBuilder out = new StringBuilder(initialCapacity);
-    boolean changed = false;
-    for (int i = 0; i < trimmed.length() && out.length() < MAX_KEY_SEGMENT_LENGTH; i++) {
-      char c = trimmed.charAt(i);
-      if (isKeySegmentChar(c)) {
-        out.append(c);
-      } else {
-        out.append('_');
-        changed = true;
-      }
-    }
-    if (trimmed.length() > MAX_KEY_SEGMENT_LENGTH) {
-      changed = true;
-    }
-    String normalized = out.isEmpty() ? "_" : out.toString();
-    if (!changed) {
-      return normalized;
-    }
-    String hash = Hashes.sha256Short(trimmed);
-    String prefix = normalized.length() <= KEY_SEGMENT_PREFIX_LENGTH
-        ? normalized
-        : normalized.substring(0, KEY_SEGMENT_PREFIX_LENGTH);
-    return prefix + "~" + (hash == null ? "0000000000000000" : hash);
-  }
 
-  private static boolean isKeySegmentChar(char c) {
-    return (c >= 'a' && c <= 'z')
-        || (c >= 'A' && c <= 'Z')
-        || (c >= '0' && c <= '9')
-        || c == '-'
-        || c == '_'
-        || c == '.';
-  }
-
-  private static String logValue(String value) {
-    if (EmptyChecks.isNull(value)) {
-      return "";
+    private void increment(Counter counter) {
+        if (EmptyChecks.isNotNull(counter)) {
+            counter.increment();
+        }
     }
-    String withoutCarriageReturns = value.replace('\r', '_');
-    String withoutLineFeeds = withoutCarriageReturns.replace('\n', '_');
-    return withoutLineFeeds.replace('\t', '_');
-  }
+
+    /**
+     * 按前缀清除缓存（配置变更时调用）。
+     *
+     * <p>使用 Redis SCAN（非 KEYS）增量扫描 + 分批 DEL，避免 KEYS 命令 O(N) 阻塞主线程。
+     */
+    public void evictByPrefix(String keyPrefix) {
+        if (!Texts.hasText(keyPrefix)) {
+            return;
+        }
+        String pattern = PREFIX + keyPrefix + "*";
+        long deleted = RedisKeyUtils.scanAndDelete(redisTemplate, pattern, SCAN_BATCH_SIZE, redisNamespace);
+        if (deleted > 0) {
+            log.debug("evicted {} cache keys with prefix: {}", deleted, logValue(keyPrefix));
+        }
+    }
+
+    /** 清除指定租户的 meta 选项缓存。 */
+    public void evictMetaOptions(String tenantId) {
+        evictByPrefix("meta:" + keySegment(tenantId) + ":");
+    }
+
+    /** 清除所有 meta 枚举缓存。 */
+    public void evictMetaEnums() {
+        evictByPrefix("meta:enums");
+    }
+
+    /** 清除指定租户的 dashboard 缓存。 */
+    public void evictDashboard(String tenantId) {
+        evictByPrefix("dashboard:" + keySegment(tenantId) + ":");
+    }
+
+    /**
+     * 将外部输入归一化成 Redis key segment。
+     *
+     * <p>cache key 保留短可读前缀；遇到长值或特殊字符时追加短 hash，避免高基数字段拉长 key，也避免冒号等分隔符造成前缀误伤。
+     */
+    public static String keySegment(String value) {
+        if (!Texts.hasText(value)) {
+            return "_";
+        }
+        String trimmed = value.trim();
+        int initialCapacity = Math.min(trimmed.length(), MAX_KEY_SEGMENT_LENGTH);
+        StringBuilder out = new StringBuilder(initialCapacity);
+        boolean changed = false;
+        for (int i = 0; i < trimmed.length() && out.length() < MAX_KEY_SEGMENT_LENGTH; i++) {
+            char c = trimmed.charAt(i);
+            if (isKeySegmentChar(c)) {
+                out.append(c);
+            } else {
+                out.append('_');
+                changed = true;
+            }
+        }
+        if (trimmed.length() > MAX_KEY_SEGMENT_LENGTH) {
+            changed = true;
+        }
+        String normalized = out.isEmpty() ? "_" : out.toString();
+        if (!changed) {
+            return normalized;
+        }
+        String hash = Hashes.sha256Short(trimmed);
+        String prefix = normalized.length() <= KEY_SEGMENT_PREFIX_LENGTH
+                ? normalized
+                : normalized.substring(0, KEY_SEGMENT_PREFIX_LENGTH);
+        return prefix + "~" + (hash == null ? "0000000000000000" : hash);
+    }
+
+    private static boolean isKeySegmentChar(char c) {
+        return (c >= 'a' && c <= 'z')
+                || (c >= 'A' && c <= 'Z')
+                || (c >= '0' && c <= '9')
+                || c == '-'
+                || c == '_'
+                || c == '.';
+    }
+
+    private static String logValue(String value) {
+        if (EmptyChecks.isNull(value)) {
+            return "";
+        }
+        String withoutCarriageReturns = value.replace('\r', '_');
+        String withoutLineFeeds = withoutCarriageReturns.replace('\n', '_');
+        return withoutLineFeeds.replace('\t', '_');
+    }
 }

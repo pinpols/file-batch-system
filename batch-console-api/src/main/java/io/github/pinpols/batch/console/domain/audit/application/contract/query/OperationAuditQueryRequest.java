@@ -20,20 +20,20 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class OperationAuditQueryRequest extends PageQueryRequest {
-  private String tenantId;
-  private String aggregateType;
-  private String aggregateId;
-  private String action;
-  private String operatorId;
+    private String tenantId;
+    private String aggregateType;
+    private String aggregateId;
+    private String action;
+    private String operatorId;
 
-  /** "SUCCESS" 或 "FAILED";空 = 全部 */
-  private String result;
+    /** "SUCCESS" 或 "FAILED";空 = 全部 */
+    private String result;
 
-  private String traceId;
+    private String traceId;
 
-  /** 起始时间(包含),ISO-8601 字符串由 Spring 自动绑定 */
-  private Instant startTime;
+    /** 起始时间(包含),ISO-8601 字符串由 Spring 自动绑定 */
+    private Instant startTime;
 
-  /** 结束时间(包含) */
-  private Instant endTime;
+    /** 结束时间(包含) */
+    private Instant endTime;
 }

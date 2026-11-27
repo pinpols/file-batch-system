@@ -30,78 +30,78 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class BizTableSchemaRegistrar {
 
-  private final DataSource bizDataSource;
-  private final BizTableSchemaMapper mapper;
-  private final ObjectMapper objectMapper;
-  private final PlatformTransactionManager transactionManager;
+    private final DataSource bizDataSource;
+    private final BizTableSchemaMapper mapper;
+    private final ObjectMapper objectMapper;
+    private final PlatformTransactionManager transactionManager;
 
-  public BizTableSchemaRegistrar(
-      @Qualifier("importBusinessDataSource") DataSource bizDataSource,
-      BizTableSchemaMapper mapper,
-      ObjectMapper objectMapper,
-      PlatformTransactionManager transactionManager) {
-    this.bizDataSource = bizDataSource;
-    this.mapper = mapper;
-    this.objectMapper = objectMapper;
-    this.transactionManager = transactionManager;
-  }
+    public BizTableSchemaRegistrar(
+            @Qualifier("importBusinessDataSource") DataSource bizDataSource,
+            BizTableSchemaMapper mapper,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager) {
+        this.bizDataSource = bizDataSource;
+        this.mapper = mapper;
+        this.objectMapper = objectMapper;
+        this.transactionManager = transactionManager;
+    }
 
-  /** biz 元数据快照单元:一张表 + 其列定义 JSON。 */
-  private record TableColumns(String schema, String table, String columnsJson) {}
+    /** biz 元数据快照单元:一张表 + 其列定义 JSON。 */
+    private record TableColumns(String schema, String table, String columnsJson) {}
 
-  // P1-6: @EventListener 上原挂 @Transactional(REQUIRES_NEW) 违反 docs/agent-baseline.md
-  // #4(@Transactional
-  // 只放
-  // Service 公共方法),且 EventListener 无外层事务时 REQUIRES_NEW≈REQUIRED 纯属误用。改为先在事务外只读
-  // 收集 biz 元数据快照,再用 TransactionTemplate 显式包裹 deleteAll + N 条 upsertEntry 原子覆盖写
-  // (对齐 AbstractStepBeanRegistrar 的合规范式)。
-  @EventListener(ApplicationReadyEvent.class)
-  public void registerOnStartup() {
-    List<TableColumns> snapshot = new ArrayList<>();
-    try (Connection conn = bizDataSource.getConnection()) {
-      DatabaseMetaData md = conn.getMetaData();
-      try (ResultSet tables = md.getTables(null, "biz", "%", new String[] {"TABLE"})) {
-        while (tables.next()) {
-          snapshot.add(readTableColumns(md, tables));
+    // P1-6: @EventListener 上原挂 @Transactional(REQUIRES_NEW) 违反 docs/agent-baseline.md
+    // #4(@Transactional
+    // 只放
+    // Service 公共方法),且 EventListener 无外层事务时 REQUIRES_NEW≈REQUIRED 纯属误用。改为先在事务外只读
+    // 收集 biz 元数据快照,再用 TransactionTemplate 显式包裹 deleteAll + N 条 upsertEntry 原子覆盖写
+    // (对齐 AbstractStepBeanRegistrar 的合规范式)。
+    @EventListener(ApplicationReadyEvent.class)
+    public void registerOnStartup() {
+        List<TableColumns> snapshot = new ArrayList<>();
+        try (Connection conn = bizDataSource.getConnection()) {
+            DatabaseMetaData md = conn.getMetaData();
+            try (ResultSet tables = md.getTables(null, "biz", "%", new String[] {"TABLE"})) {
+                while (tables.next()) {
+                    snapshot.add(readTableColumns(md, tables));
+                }
+            }
+        } catch (Exception ex) {
+            // 读取失败时不刷新，保留此前快照；不能据此判断业务库当前结构。
+            log.error("biz_table_schema snapshot failed while reading business metadata", ex);
+            return;
         }
-      }
-    } catch (Exception ex) {
-      // 读取失败时不刷新，保留此前快照；不能据此判断业务库当前结构。
-      log.error("biz_table_schema snapshot failed while reading business metadata", ex);
-      return;
-    }
-    try {
-      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-      transaction.executeWithoutResult(status -> {
-        mapper.deleteAll();
-        for (TableColumns tc : snapshot) {
-          mapper.upsertEntry(tc.schema(), tc.table(), tc.columnsJson());
+        try {
+            TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+            transaction.executeWithoutResult(status -> {
+                mapper.deleteAll();
+                for (TableColumns tc : snapshot) {
+                    mapper.upsertEntry(tc.schema(), tc.table(), tc.columnsJson());
+                }
+            });
+            log.info("biz_table_schema snapshot refreshed: schema=biz, tables={}", snapshot.size());
+        } catch (Exception ex) {
+            log.error("biz_table_schema snapshot failed while writing registry", ex);
         }
-      });
-      log.info("biz_table_schema snapshot refreshed: schema=biz, tables={}", snapshot.size());
-    } catch (Exception ex) {
-      log.error("biz_table_schema snapshot failed while writing registry", ex);
     }
-  }
 
-  /** 读取一张表的列定义并序列化为 JSON；列循环的结果集在本方法内关闭。 */
-  private TableColumns readTableColumns(DatabaseMetaData md, ResultSet tables)
-      throws SQLException, JsonProcessingException {
-    String schema = tables.getString("TABLE_SCHEM");
-    String table = tables.getString("TABLE_NAME");
-    List<Map<String, Object>> cols = new ArrayList<>();
-    try (ResultSet colsRs = md.getColumns(null, schema, table, "%")) {
-      while (colsRs.next()) {
-        Map<String, Object> col = new LinkedHashMap<>();
-        col.put("name", colsRs.getString("COLUMN_NAME"));
-        col.put("type", colsRs.getString("TYPE_NAME"));
-        String nullableText = colsRs.getString("IS_NULLABLE");
-        boolean nullable = "YES".equalsIgnoreCase(nullableText);
-        col.put("nullable", nullable);
-        cols.add(col);
-      }
+    /** 读取一张表的列定义并序列化为 JSON；列循环的结果集在本方法内关闭。 */
+    private TableColumns readTableColumns(DatabaseMetaData md, ResultSet tables)
+            throws SQLException, JsonProcessingException {
+        String schema = tables.getString("TABLE_SCHEM");
+        String table = tables.getString("TABLE_NAME");
+        List<Map<String, Object>> cols = new ArrayList<>();
+        try (ResultSet colsRs = md.getColumns(null, schema, table, "%")) {
+            while (colsRs.next()) {
+                Map<String, Object> col = new LinkedHashMap<>();
+                col.put("name", colsRs.getString("COLUMN_NAME"));
+                col.put("type", colsRs.getString("TYPE_NAME"));
+                String nullableText = colsRs.getString("IS_NULLABLE");
+                boolean nullable = "YES".equalsIgnoreCase(nullableText);
+                col.put("nullable", nullable);
+                cols.add(col);
+            }
+        }
+        String columnsJson = objectMapper.writeValueAsString(cols);
+        return new TableColumns(schema, table, columnsJson);
     }
-    String columnsJson = objectMapper.writeValueAsString(cols);
-    return new TableColumns(schema, table, columnsJson);
-  }
 }

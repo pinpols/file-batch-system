@@ -30,164 +30,164 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("业务多分片路由集成(双真实 PG 容器):按配置哈希分片的租户物理落到选定片;placement 表显式映射覆盖哈希结果,未登记租户回退哈希")
 class BusinessMultiShardRoutingIntegrationTest {
 
-  @SuppressWarnings("resource")
-  private static final PostgreSQLContainer SHARD0 = TestPostgresContainers.business();
+    @SuppressWarnings("resource")
+    private static final PostgreSQLContainer SHARD0 = TestPostgresContainers.business();
 
-  @SuppressWarnings("resource")
-  private static final PostgreSQLContainer SHARD1 = TestPostgresContainers.business();
+    @SuppressWarnings("resource")
+    private static final PostgreSQLContainer SHARD1 = TestPostgresContainers.business();
 
-  private static HikariDataSource ds0;
-  private static HikariDataSource ds1;
+    private static HikariDataSource ds0;
+    private static HikariDataSource ds1;
 
-  @BeforeAll
-  static void startAndSeed() throws Exception {
-    final String createSchemaSql = """
+    @BeforeAll
+    static void startAndSeed() throws Exception {
+        final String createSchemaSql = """
         CREATE SCHEMA IF NOT EXISTS batch
     """;
-    final String createIfSql = """
+        final String createIfSql = """
         CREATE TABLE IF NOT EXISTS batch.business_tenant_placement (tenant_id varchar(64) PRIMARY KEY,\s\
         placement_key varchar(64) NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), updated_by\s\
         varchar(128))\
         """;
 
-    SHARD0.start();
-    SHARD1.start();
-    ds0 = hikari(SHARD0);
-    ds1 = hikari(SHARD1);
-    seedShard(ds0, "shard-0");
-    seedShard(ds1, "shard-1");
-    // placement 表放 shard-0 容器(本测当它作 platform 存储),TABLE 模式从这里读
-    try (Connection c = ds0.getConnection();
-        Statement st = c.createStatement()) {
-      st.execute(createSchemaSql);
-      st.execute(createIfSql);
+        SHARD0.start();
+        SHARD1.start();
+        ds0 = hikari(SHARD0);
+        ds1 = hikari(SHARD1);
+        seedShard(ds0, "shard-0");
+        seedShard(ds1, "shard-1");
+        // placement 表放 shard-0 容器(本测当它作 platform 存储),TABLE 模式从这里读
+        try (Connection c = ds0.getConnection();
+                Statement st = c.createStatement()) {
+            st.execute(createSchemaSql);
+            st.execute(createIfSql);
+        }
     }
-  }
 
-  @AfterAll
-  static void stop() {
-    if (ds0 != null) ds0.close();
-    if (ds1 != null) ds1.close();
-    SHARD0.stop();
-    SHARD1.stop();
-  }
-
-  @AfterEach
-  void clearContext() {
-    RlsTenantContextHolder.clear();
-  }
-
-  @Test
-  @DisplayName("config 路由:每租户经 multiShard 物理落到 hash 选定片(双真实 PG)")
-  void configHashRouting_shouldRouteTenantToResolvedShard() throws Exception {
-    HashAndSiloPlacementResolver resolver = new HashAndSiloPlacementResolver(2, Map.of());
-    DataSource routing = BusinessRoutingDataSourceFactory.multiShard(shardMap(), resolver);
-
-    for (String tenant : new String[] {"t-a", "t-b", "t-c", "t-d", "acme", "globex"}) {
-      RlsTenantContextHolder.set(tenant);
-      assertThat(readIdentity(routing))
-          .as("租户 %s 应落 %s", tenant, resolver.resolve(tenant))
-          .isEqualTo(resolver.resolve(tenant));
-      RlsTenantContextHolder.clear();
+    @AfterAll
+    static void stop() {
+        if (ds0 != null) ds0.close();
+        if (ds1 != null) ds1.close();
+        SHARD0.stop();
+        SHARD1.stop();
     }
-  }
 
-  @Test
-  @DisplayName("table 路由:placement 表显式映射覆盖 hash(table wins),未登记走 hash")
-  void tablePlacement_shouldOverrideHash() throws Exception {
-    HashAndSiloPlacementResolver hash = new HashAndSiloPlacementResolver(2, Map.of());
-    String tenant = "table-driven-tenant";
-    String tableKey = "shard-0".equals(hash.resolve(tenant)) ? "shard-1" : "shard-0"; // 反片
-    try (Connection c = ds0.getConnection();
-        Statement st = c.createStatement()) {
-      final String insertBusinessTenantPlacementSql = """
+    @AfterEach
+    void clearContext() {
+        RlsTenantContextHolder.clear();
+    }
+
+    @Test
+    @DisplayName("config 路由:每租户经 multiShard 物理落到 hash 选定片(双真实 PG)")
+    void configHashRouting_shouldRouteTenantToResolvedShard() throws Exception {
+        HashAndSiloPlacementResolver resolver = new HashAndSiloPlacementResolver(2, Map.of());
+        DataSource routing = BusinessRoutingDataSourceFactory.multiShard(shardMap(), resolver);
+
+        for (String tenant : new String[] {"t-a", "t-b", "t-c", "t-d", "acme", "globex"}) {
+            RlsTenantContextHolder.set(tenant);
+            assertThat(readIdentity(routing))
+                    .as("租户 %s 应落 %s", tenant, resolver.resolve(tenant))
+                    .isEqualTo(resolver.resolve(tenant));
+            RlsTenantContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("table 路由:placement 表显式映射覆盖 hash(table wins),未登记走 hash")
+    void tablePlacement_shouldOverrideHash() throws Exception {
+        HashAndSiloPlacementResolver hash = new HashAndSiloPlacementResolver(2, Map.of());
+        String tenant = "table-driven-tenant";
+        String tableKey = "shard-0".equals(hash.resolve(tenant)) ? "shard-1" : "shard-0"; // 反片
+        try (Connection c = ds0.getConnection();
+                Statement st = c.createStatement()) {
+            final String insertBusinessTenantPlacementSql = """
               INSERT INTO batch.business_tenant_placement(tenant_id,placement_key,updated_by)\s\
               VALUES ('%s','%s','it') ON CONFLICT (tenant_id) DO UPDATE SET placement_key=EXCLUDED.placement_key\
               """.formatted(tenant, tableKey);
-      st.execute(insertBusinessTenantPlacementSql);
+            st.execute(insertBusinessTenantPlacementSql);
+        }
+        DbTablePlacementResolver resolver =
+                new DbTablePlacementResolver(placementRepo(), hash, 0L, System::currentTimeMillis);
+        DataSource routing = BusinessRoutingDataSourceFactory.multiShard(shardMap(), resolver);
+
+        RlsTenantContextHolder.set(tenant);
+        assertThat(readIdentity(routing))
+                .as("登记租户应落表里的 %s(覆盖 hash %s)", tableKey, hash.resolve(tenant))
+                .isEqualTo(tableKey);
+        RlsTenantContextHolder.clear();
+
+        RlsTenantContextHolder.set("unlisted-tenant");
+        assertThat(readIdentity(routing)).as("未登记走 hash").isEqualTo(hash.resolve("unlisted-tenant"));
     }
-    DbTablePlacementResolver resolver =
-        new DbTablePlacementResolver(placementRepo(), hash, 0L, System::currentTimeMillis);
-    DataSource routing = BusinessRoutingDataSourceFactory.multiShard(shardMap(), resolver);
 
-    RlsTenantContextHolder.set(tenant);
-    assertThat(readIdentity(routing))
-        .as("登记租户应落表里的 %s(覆盖 hash %s)", tableKey, hash.resolve(tenant))
-        .isEqualTo(tableKey);
-    RlsTenantContextHolder.clear();
+    private static Map<String, DataSource> shardMap() {
+        Map<String, DataSource> m = new LinkedHashMap<>();
+        m.put("shard-0", ds0);
+        m.put("shard-1", ds1);
+        return m;
+    }
 
-    RlsTenantContextHolder.set("unlisted-tenant");
-    assertThat(readIdentity(routing)).as("未登记走 hash").isEqualTo(hash.resolve("unlisted-tenant"));
-  }
-
-  private static Map<String, DataSource> shardMap() {
-    Map<String, DataSource> m = new LinkedHashMap<>();
-    m.put("shard-0", ds0);
-    m.put("shard-1", ds1);
-    return m;
-  }
-
-  /** 直读 placement 表的 repository(IT 桩;生产走 MyBatisTenantPlacementRepository)。 */
-  private static TenantPlacementRepository placementRepo() {
-    final String selectTenantIdSql = """
+    /** 直读 placement 表的 repository(IT 桩;生产走 MyBatisTenantPlacementRepository)。 */
+    private static TenantPlacementRepository placementRepo() {
+        final String selectTenantIdSql = """
         SELECT tenant_id, placement_key FROM batch.business_tenant_placement
     """;
 
-    return () -> {
-      Map<String, String> map = new LinkedHashMap<>();
-      try (Connection c = ds0.getConnection();
-          Statement st = c.createStatement();
-          ResultSet rs = st.executeQuery(selectTenantIdSql)) {
-        while (rs.next()) {
-          map.put(rs.getString(1), rs.getString(2));
-        }
-      } catch (Exception ex) {
-        return Map.of();
-      }
-      return map;
-    };
-  }
+        return () -> {
+            Map<String, String> map = new LinkedHashMap<>();
+            try (Connection c = ds0.getConnection();
+                    Statement st = c.createStatement();
+                    ResultSet rs = st.executeQuery(selectTenantIdSql)) {
+                while (rs.next()) {
+                    map.put(rs.getString(1), rs.getString(2));
+                }
+            } catch (Exception ex) {
+                return Map.of();
+            }
+            return map;
+        };
+    }
 
-  private static HikariDataSource hikari(PostgreSQLContainer pg) {
-    HikariConfig cfg = new HikariConfig();
-    cfg.setJdbcUrl(pg.getJdbcUrl());
-    cfg.setUsername(pg.getUsername());
-    cfg.setPassword(pg.getPassword());
-    cfg.setMaximumPoolSize(2);
-    return new HikariDataSource(cfg);
-  }
+    private static HikariDataSource hikari(PostgreSQLContainer pg) {
+        HikariConfig cfg = new HikariConfig();
+        cfg.setJdbcUrl(pg.getJdbcUrl());
+        cfg.setUsername(pg.getUsername());
+        cfg.setPassword(pg.getPassword());
+        cfg.setMaximumPoolSize(2);
+        return new HikariDataSource(cfg);
+    }
 
-  private static void seedShard(DataSource ds, String key) throws Exception {
-    final String createSchemaSql = """
+    private static void seedShard(DataSource ds, String key) throws Exception {
+        final String createSchemaSql = """
         CREATE SCHEMA IF NOT EXISTS biz
     """;
-    final String createIfSql = """
+        final String createIfSql = """
         CREATE TABLE IF NOT EXISTS biz.__shard_identity (only_one boolean PRIMARY KEY DEFAULT true, shard_key\s\
         text NOT NULL)\
         """;
 
-    try (Connection c = ds.getConnection();
-        Statement st = c.createStatement()) {
-      st.execute(createSchemaSql);
-      st.execute(createIfSql);
-      final String insertShardIdentitySql = """
+        try (Connection c = ds.getConnection();
+                Statement st = c.createStatement()) {
+            st.execute(createSchemaSql);
+            st.execute(createIfSql);
+            final String insertShardIdentitySql = """
               INSERT INTO biz.__shard_identity(only_one,shard_key) VALUES (true,'%s')\s\
               ON CONFLICT (only_one) DO UPDATE SET shard_key=EXCLUDED.shard_key\
               """.formatted(key);
-      st.execute(insertShardIdentitySql);
+            st.execute(insertShardIdentitySql);
+        }
     }
-  }
 
-  private static String readIdentity(DataSource routing) throws Exception {
-    final String selectShardKeySql = """
+    private static String readIdentity(DataSource routing) throws Exception {
+        final String selectShardKeySql = """
         SELECT shard_key FROM biz.__shard_identity
     """;
 
-    try (Connection c = routing.getConnection();
-        Statement st = c.createStatement();
-        ResultSet rs = st.executeQuery(selectShardKeySql)) {
-      assertThat(rs.next()).isTrue();
-      return rs.getString(1);
+        try (Connection c = routing.getConnection();
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery(selectShardKeySql)) {
+            assertThat(rs.next()).isTrue();
+            return rs.getString(1);
+        }
     }
-  }
 }

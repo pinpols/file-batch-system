@@ -21,36 +21,36 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultConsoleAlertRoutingDefaultIntervalTest {
 
-  @Mock
-  private AlertRoutingConfigMapper mapper;
+    @Mock
+    private AlertRoutingConfigMapper mapper;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver metadataResolver;
 
-  @Test
-  @DisplayName("group_interval 默认 300 秒、repeat_interval 默认 3600 秒、group_wait 默认 0 秒")
-  void shouldApplyDefaultIntervals_whenRequestOmitsThem() {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
-    when(metadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req", "trace", "ta", "operator", null, null));
-    AlertRoutingSaveRequest request = new AlertRoutingSaveRequest();
-    request.setTenantId("ta");
-    request.setRouteCode("PAYMENT");
-    DefaultConsoleAlertRoutingApplicationService service =
-        new DefaultConsoleAlertRoutingApplicationService(mapper, tenantGuard, metadataResolver);
+    @Test
+    @DisplayName("group_interval 默认 300 秒、repeat_interval 默认 3600 秒、group_wait 默认 0 秒")
+    void shouldApplyDefaultIntervals_whenRequestOmitsThem() {
+        when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req", "trace", "ta", "operator", null, null));
+        AlertRoutingSaveRequest request = new AlertRoutingSaveRequest();
+        request.setTenantId("ta");
+        request.setRouteCode("PAYMENT");
+        DefaultConsoleAlertRoutingApplicationService service =
+                new DefaultConsoleAlertRoutingApplicationService(mapper, tenantGuard, metadataResolver);
 
-    service.create(request);
+        service.create(request);
 
-    ArgumentCaptor<AlertRoutingConfigUpsertParam> captor =
-        ArgumentCaptor.forClass(AlertRoutingConfigUpsertParam.class);
-    verify(mapper).upsertAlertRoutingConfig(captor.capture());
-    AlertRoutingConfigUpsertParam param = captor.getValue();
-    assertThat(param.getGroupWaitSeconds()).isZero();
-    assertThat(param.getGroupIntervalSeconds()).isEqualTo(300);
-    assertThat(param.getRepeatIntervalSeconds()).isEqualTo(3600);
-    assertThat(param.getCreatedBy()).isEqualTo("operator");
-  }
+        ArgumentCaptor<AlertRoutingConfigUpsertParam> captor =
+                ArgumentCaptor.forClass(AlertRoutingConfigUpsertParam.class);
+        verify(mapper).upsertAlertRoutingConfig(captor.capture());
+        AlertRoutingConfigUpsertParam param = captor.getValue();
+        assertThat(param.getGroupWaitSeconds()).isZero();
+        assertThat(param.getGroupIntervalSeconds()).isEqualTo(300);
+        assertThat(param.getRepeatIntervalSeconds()).isEqualTo(3600);
+        assertThat(param.getCreatedBy()).isEqualTo("operator");
+    }
 }

@@ -26,24 +26,22 @@ import org.springframework.stereotype.Component;
 @Import(ConsoleAiUuidMappingConfiguration.class)
 public class E2ePlatformMybatisConfiguration {
 
-  @Bean(name = "sqlSessionFactory")
-  @Primary
-  @ConditionalOnMissingBean(name = "sqlSessionFactory")
-  public SqlSessionFactory sqlSessionFactory(
-      @Qualifier("dataSource") DataSource dataSource,
-      ObjectProvider<ConfigurationCustomizer> configurationCustomizers)
-      throws Exception {
-    SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
-    factoryBean.setDataSource(dataSource);
-    // 平台 factory 只加载平台 mapper，避免业务 SQL 被错误绑定到平台库。
-    factoryBean.setMapperLocations(
-        new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/*.xml"));
-    Configuration mybatisConfig = new Configuration();
-    mybatisConfig.setMapUnderscoreToCamelCase(true);
-    configurationCustomizers
-        .orderedStream()
-        .forEach(customizer -> customizer.customize(mybatisConfig));
-    factoryBean.setConfiguration(mybatisConfig);
-    return factoryBean.getObject();
-  }
+    @Bean(name = "sqlSessionFactory")
+    @Primary
+    @ConditionalOnMissingBean(name = "sqlSessionFactory")
+    public SqlSessionFactory sqlSessionFactory(
+            @Qualifier("dataSource") DataSource dataSource,
+            ObjectProvider<ConfigurationCustomizer> configurationCustomizers)
+            throws Exception {
+        SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        // 平台 factory 只加载平台 mapper，避免业务 SQL 被错误绑定到平台库。
+        factoryBean.setMapperLocations(
+                new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/*.xml"));
+        Configuration mybatisConfig = new Configuration();
+        mybatisConfig.setMapUnderscoreToCamelCase(true);
+        configurationCustomizers.orderedStream().forEach(customizer -> customizer.customize(mybatisConfig));
+        factoryBean.setConfiguration(mybatisConfig);
+        return factoryBean.getObject();
+    }
 }

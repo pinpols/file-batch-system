@@ -7,9 +7,9 @@ import lombok.Builder;
 /** 触发用例接收的输入字段。 */
 @Builder(toBuilder = true)
 public record ScheduledOccurrenceCatchUpInput(
-    String tenantId,
-    Long workflowDefinitionId,
-    Instant scheduledFireTime,
-    LocalDate bizDate,
-    String requestedBy,
-    String reason) {}
+        String tenantId,
+        Long workflowDefinitionId,
+        Instant scheduledFireTime,
+        LocalDate bizDate,
+        String requestedBy,
+        String reason) {}

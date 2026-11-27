@@ -15,30 +15,30 @@ import java.util.List;
  */
 public interface WorkerDrainGovernanceService {
 
-  WorkerRegistryEntity startDrain(String tenantId, String workerCode, Integer timeoutSeconds);
+    WorkerRegistryEntity startDrain(String tenantId, String workerCode, Integer timeoutSeconds);
 
-  WorkerRegistryEntity forceOffline(String tenantId, String workerCode);
+    WorkerRegistryEntity forceOffline(String tenantId, String workerCode);
 
-  WorkerRegistryEntity takeover(String tenantId, String workerCode);
+    WorkerRegistryEntity takeover(String tenantId, String workerCode);
 
-  /**
-   * 预热:把心跳超时被标 OFFLINE 的 worker 翻回 ONLINE,让 orchestrator 立即重新派发任务, 不必等下一轮心跳。
-   *
-   * <p>状态转移:OFFLINE → ONLINE;ONLINE 幂等返回;DRAINING / DECOMMISSIONED 抛 STATE_CONFLICT(需重新注册或等排空完成)。
-   * 调用方应在确认 worker 进程实际仍存活(刚重启 / 网络瞬断恢复)时使用; 若 worker 真死,下一轮心跳超时检测会把它重新标回 OFFLINE。
-   */
-  WorkerRegistryEntity warmup(String tenantId, String workerCode);
+    /**
+     * 预热:把心跳超时被标 OFFLINE 的 worker 翻回 ONLINE,让 orchestrator 立即重新派发任务, 不必等下一轮心跳。
+     *
+     * <p>状态转移:OFFLINE → ONLINE;ONLINE 幂等返回;DRAINING / DECOMMISSIONED 抛 STATE_CONFLICT(需重新注册或等排空完成)。
+     * 调用方应在确认 worker 进程实际仍存活(刚重启 / 网络瞬断恢复)时使用; 若 worker 真死,下一轮心跳超时检测会把它重新标回 OFFLINE。
+     */
+    WorkerRegistryEntity warmup(String tenantId, String workerCode);
 
-  /**
-   * 撤销排空/退役，把注册恢复为 ONLINE。
-   *
-   * <p>状态转移：DRAINING / DECOMMISSIONED / OFFLINE → ONLINE；ONLINE 幂等返回。DRAINING 且仍有活跃任务时拒绝，
-   * 保持“跑完在途再下线”的语义；DECOMMISSIONED 允许恢复，因为接管流程已经回收过它的任务。运维误排空或维护提前结束时
-   * 使用，不需要改库，也不依赖 worker 重启（重启会被注册侧的“运维 drain 保留”规则挡回）。
-   */
-  WorkerRegistryEntity resume(String tenantId, String workerCode);
+    /**
+     * 撤销排空/退役，把注册恢复为 ONLINE。
+     *
+     * <p>状态转移：DRAINING / DECOMMISSIONED / OFFLINE → ONLINE；ONLINE 幂等返回。DRAINING 且仍有活跃任务时拒绝，
+     * 保持“跑完在途再下线”的语义；DECOMMISSIONED 允许恢复，因为接管流程已经回收过它的任务。运维误排空或维护提前结束时
+     * 使用，不需要改库，也不依赖 worker 重启（重启会被注册侧的“运维 drain 保留”规则挡回）。
+     */
+    WorkerRegistryEntity resume(String tenantId, String workerCode);
 
-  List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode);
+    List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode);
 
-  void takeoverAfterDrainTimeout(String tenantId, String workerCode);
+    void takeoverAfterDrainTimeout(String tenantId, String workerCode);
 }

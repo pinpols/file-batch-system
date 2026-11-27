@@ -33,82 +33,81 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleResourceTagController {
 
-  private final ConsoleResourceTagService tagService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleResourceTagService tagService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  /** 查询指定资源的所有标签。 */
-  @GetMapping
-  public CommonResponse<List<ResourceTagResponse>> listByResource(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("resourceType") @NotBlank String resourceType,
-      @RequestParam("resourceCode") @NotBlank String resourceCode) {
-    List<ResourceTagEntity> resourceTags =
-        tagService.listByResource(tenantId, resourceType, resourceCode);
-    List<ResourceTagResponse> responses =
-        resourceTags.stream().map(ResourceTagResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    /** 查询指定资源的所有标签。 */
+    @GetMapping
+    public CommonResponse<List<ResourceTagResponse>> listByResource(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("resourceType") @NotBlank String resourceType,
+            @RequestParam("resourceCode") @NotBlank String resourceCode) {
+        List<ResourceTagEntity> resourceTags = tagService.listByResource(tenantId, resourceType, resourceCode);
+        List<ResourceTagResponse> responses =
+                resourceTags.stream().map(ResourceTagResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  /** 按标签键（可选值）反查资源。 */
-  @GetMapping("/search")
-  public CommonResponse<List<ResourceTagResponse>> searchByTag(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("tagKey") @NotBlank String tagKey,
-      @RequestParam(value = "tagValue", required = false) String tagValue) {
-    List<ResourceTagEntity> resourceTags = tagService.listByTagKey(tenantId, tagKey, tagValue);
-    List<ResourceTagResponse> responses =
-        resourceTags.stream().map(ResourceTagResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    /** 按标签键（可选值）反查资源。 */
+    @GetMapping("/search")
+    public CommonResponse<List<ResourceTagResponse>> searchByTag(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("tagKey") @NotBlank String tagKey,
+            @RequestParam(value = "tagValue", required = false) String tagValue) {
+        List<ResourceTagEntity> resourceTags = tagService.listByTagKey(tenantId, tagKey, tagValue);
+        List<ResourceTagResponse> responses =
+                resourceTags.stream().map(ResourceTagResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  /** 列出租户下所有已使用的标签键。 */
-  @GetMapping("/keys")
-  public CommonResponse<List<String>> listKeys(@RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(tagService.listDistinctKeys(tenantId));
-  }
+    /** 列出租户下所有已使用的标签键。 */
+    @GetMapping("/keys")
+    public CommonResponse<List<String>> listKeys(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(tagService.listDistinctKeys(tenantId));
+    }
 
-  /** 打标签（已存在则覆盖 value）。 */
-  @PostMapping
-  public CommonResponse<Void> upsert(
-      @RequestParam("tenantId") String tenantId, @Valid @RequestBody UpsertTagRequest request) {
-    String operator = requestMetadataResolver.current().operatorId();
-    ResourceTagUpsertInput tagInput = ResourceTagUpsertInput.builder()
-        .tenantId(tenantId)
-        .resourceType(request.resourceType())
-        .resourceCode(request.resourceCode())
-        .tagKey(request.tagKey())
-        .tagValue(request.tagValue())
-        .operator(operator)
-        .build();
-    tagService.upsert(tagInput);
-    return responseFactory.success(null);
-  }
+    /** 打标签（已存在则覆盖 value）。 */
+    @PostMapping
+    public CommonResponse<Void> upsert(
+            @RequestParam("tenantId") String tenantId, @Valid @RequestBody UpsertTagRequest request) {
+        String operator = requestMetadataResolver.current().operatorId();
+        ResourceTagUpsertInput tagInput = ResourceTagUpsertInput.builder()
+                .tenantId(tenantId)
+                .resourceType(request.resourceType())
+                .resourceCode(request.resourceCode())
+                .tagKey(request.tagKey())
+                .tagValue(request.tagValue())
+                .operator(operator)
+                .build();
+        tagService.upsert(tagInput);
+        return responseFactory.success(null);
+    }
 
-  /** 删除单个标签。 */
-  @DeleteMapping
-  public CommonResponse<Void> delete(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("resourceType") @NotBlank String resourceType,
-      @RequestParam("resourceCode") @NotBlank String resourceCode,
-      @RequestParam("tagKey") @NotBlank String tagKey) {
-    tagService.delete(tenantId, resourceType, resourceCode, tagKey);
-    return responseFactory.success(null);
-  }
+    /** 删除单个标签。 */
+    @DeleteMapping
+    public CommonResponse<Void> delete(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("resourceType") @NotBlank String resourceType,
+            @RequestParam("resourceCode") @NotBlank String resourceCode,
+            @RequestParam("tagKey") @NotBlank String tagKey) {
+        tagService.delete(tenantId, resourceType, resourceCode, tagKey);
+        return responseFactory.success(null);
+    }
 
-  /** 删除资源的全部标签。 */
-  @DeleteMapping("/all")
-  public CommonResponse<Void> deleteAll(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("resourceType") @NotBlank String resourceType,
-      @RequestParam("resourceCode") @NotBlank String resourceCode) {
-    tagService.deleteAllByResource(tenantId, resourceType, resourceCode);
-    return responseFactory.success(null);
-  }
+    /** 删除资源的全部标签。 */
+    @DeleteMapping("/all")
+    public CommonResponse<Void> deleteAll(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("resourceType") @NotBlank String resourceType,
+            @RequestParam("resourceCode") @NotBlank String resourceCode) {
+        tagService.deleteAllByResource(tenantId, resourceType, resourceCode);
+        return responseFactory.success(null);
+    }
 
-  record UpsertTagRequest(
-      @NotBlank @Size(max = 32) String resourceType,
-      @NotBlank @Size(max = 128) String resourceCode,
-      @NotBlank @Size(max = 64) String tagKey,
-      @Size(max = 256) String tagValue) {}
+    record UpsertTagRequest(
+            @NotBlank @Size(max = 32) String resourceType,
+            @NotBlank @Size(max = 128) String resourceCode,
+            @NotBlank @Size(max = 64) String tagKey,
+            @Size(max = 256) String tagValue) {}
 }

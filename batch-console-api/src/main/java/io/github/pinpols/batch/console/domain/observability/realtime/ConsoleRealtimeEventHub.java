@@ -55,305 +55,298 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Slf4j
 public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort {
 
-  /** SSE 心跳间隔下限（10 秒），配置更小时按下限执行。 */
-  private static final long MIN_HEARTBEAT_MILLIS = 10_000L;
+    /** SSE 心跳间隔下限（10 秒），配置更小时按下限执行。 */
+    private static final long MIN_HEARTBEAT_MILLIS = 10_000L;
 
-  private static final long DEFAULT_HEARTBEAT_MILLIS = 25_000L;
-  private static final String DEFAULT_STREAM = "job-definitions";
+    private static final long DEFAULT_HEARTBEAT_MILLIS = 25_000L;
+    private static final String DEFAULT_STREAM = "job-definitions";
 
-  private final RealtimeReplayStore replayStore;
-  private final ConsoleRealtimeMetrics realtimeMetrics;
-  private final ConsoleRealtimeProperties realtimeProperties;
-  private final List<Subscription> subscriptions = new CopyOnWriteArrayList<>();
-  private final TaskScheduler scheduler;
+    private final RealtimeReplayStore replayStore;
+    private final ConsoleRealtimeMetrics realtimeMetrics;
+    private final ConsoleRealtimeProperties realtimeProperties;
+    private final List<Subscription> subscriptions = new CopyOnWriteArrayList<>();
+    private final TaskScheduler scheduler;
 
-  public ConsoleRealtimeEventHub(
-      RealtimeReplayStore replayStore,
-      ConsoleRealtimeMetrics realtimeMetrics,
-      ConsoleRealtimeProperties realtimeProperties,
-      @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
-    this.replayStore = replayStore;
-    this.realtimeMetrics = realtimeMetrics;
-    this.realtimeProperties = realtimeProperties;
-    this.scheduler = scheduler;
-  }
-
-  @Override
-  public SseEmitter subscribe(
-      String tenantId, String stream, String eventType, String cursor, Long heartbeatMillis) {
-    // P1-5：超出单实例 SSE 上限时拒绝,防止僵尸连接累积击穿进程。前端拿到 503 后退避重试。
-    int max = realtimeProperties.getMaxSubscriptions();
-    if (max > 0 && subscriptions.size() >= max) {
-      throw BizException.of(
-          ResultCode.SERVICE_UNAVAILABLE,
-          "error.realtime.subscription_limit_exceeded",
-          String.valueOf(max));
+    public ConsoleRealtimeEventHub(
+            RealtimeReplayStore replayStore,
+            ConsoleRealtimeMetrics realtimeMetrics,
+            ConsoleRealtimeProperties realtimeProperties,
+            @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
+        this.replayStore = replayStore;
+        this.realtimeMetrics = realtimeMetrics;
+        this.realtimeProperties = realtimeProperties;
+        this.scheduler = scheduler;
     }
-    String resolvedStream = normalizeStream(stream);
-    long emitterTimeoutMillis = realtimeProperties.getEmitterTimeout() != null
-        ? realtimeProperties.getEmitterTimeout().toMillis()
-        : 0L;
-    SseEmitter emitter = new SseEmitter(emitterTimeoutMillis);
-    Subscription subscription =
-        new Subscription(tenantId, resolvedStream, normalizeFilter(eventType), cursor, emitter);
-    subscriptions.add(subscription);
-    realtimeMetrics.incrementSubscriptions();
-    registerLifecycle(subscription);
 
-    long interval = resolveHeartbeatInterval(heartbeatMillis);
-    Runnable heartbeatTask = () -> sendHeartbeat(subscription);
-    Instant scheduledNow = Instant.now();
-    Instant firstHeartbeatAt = scheduledNow.plusMillis(interval);
-    Duration heartbeatPeriod = Duration.ofMillis(interval);
-    ScheduledFuture<?> heartbeatFuture =
-        scheduler.scheduleAtFixedRate(heartbeatTask, firstHeartbeatAt, heartbeatPeriod);
-    subscription.heartbeatFuture.set(heartbeatFuture);
-
-    // 订阅建立后立即回一个 ready 事件，前端可据此确认流已连通并拿到当前 cursor/stream。
-    Object readySnapshot = eventSnapshot(subscription, "connected");
-    Instant readyEmittedAt = BatchDateTimeSupport.utcNow();
-    ConsoleSseEventResponse readyEvent =
-        new ConsoleSseEventResponse(resolvedStream, "ready", cursor, readySnapshot, readyEmittedAt);
-    sendLifecycleEvent(subscription, "ready", readyEvent);
-    replay(subscription);
-    return emitter;
-  }
-
-  public SseEmitter subscribeAllEvents(String tenantId, String stream, Long heartbeatMillis) {
-    return subscribe(tenantId, stream, null, null, heartbeatMillis);
-  }
-
-  @Override
-  public void close(SseEmitter emitter) {
-    for (Subscription subscription : subscriptions) {
-      if (subscription.emitter == emitter) {
-        close(subscription);
-        return;
-      }
-    }
-  }
-
-  public void publishAfterCommit(ConsoleSseEvent event) {
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCommit() {
-          // 只在事务提交后向前端广播，避免把最终会回滚的数据状态提前暴露出去。
-          publish(event);
+    @Override
+    public SseEmitter subscribe(String tenantId, String stream, String eventType, String cursor, Long heartbeatMillis) {
+        // P1-5：超出单实例 SSE 上限时拒绝,防止僵尸连接累积击穿进程。前端拿到 503 后退避重试。
+        int max = realtimeProperties.getMaxSubscriptions();
+        if (max > 0 && subscriptions.size() >= max) {
+            throw BizException.of(
+                    ResultCode.SERVICE_UNAVAILABLE, "error.realtime.subscription_limit_exceeded", String.valueOf(max));
         }
-      });
-      return;
+        String resolvedStream = normalizeStream(stream);
+        long emitterTimeoutMillis = realtimeProperties.getEmitterTimeout() != null
+                ? realtimeProperties.getEmitterTimeout().toMillis()
+                : 0L;
+        SseEmitter emitter = new SseEmitter(emitterTimeoutMillis);
+        Subscription subscription =
+                new Subscription(tenantId, resolvedStream, normalizeFilter(eventType), cursor, emitter);
+        subscriptions.add(subscription);
+        realtimeMetrics.incrementSubscriptions();
+        registerLifecycle(subscription);
+
+        long interval = resolveHeartbeatInterval(heartbeatMillis);
+        Runnable heartbeatTask = () -> sendHeartbeat(subscription);
+        Instant scheduledNow = Instant.now();
+        Instant firstHeartbeatAt = scheduledNow.plusMillis(interval);
+        Duration heartbeatPeriod = Duration.ofMillis(interval);
+        ScheduledFuture<?> heartbeatFuture =
+                scheduler.scheduleAtFixedRate(heartbeatTask, firstHeartbeatAt, heartbeatPeriod);
+        subscription.heartbeatFuture.set(heartbeatFuture);
+
+        // 订阅建立后立即回一个 ready 事件，前端可据此确认流已连通并拿到当前 cursor/stream。
+        Object readySnapshot = eventSnapshot(subscription, "connected");
+        Instant readyEmittedAt = BatchDateTimeSupport.utcNow();
+        ConsoleSseEventResponse readyEvent =
+                new ConsoleSseEventResponse(resolvedStream, "ready", cursor, readySnapshot, readyEmittedAt);
+        sendLifecycleEvent(subscription, "ready", readyEvent);
+        replay(subscription);
+        return emitter;
     }
-    publish(event);
-  }
 
-  public void publish(ConsoleSseEvent event) {
-    if (event == null) {
-      return;
+    public SseEmitter subscribeAllEvents(String tenantId, String stream, Long heartbeatMillis) {
+        return subscribe(tenantId, stream, null, null, heartbeatMillis);
     }
-    for (Subscription subscription : new ArrayList<>(subscriptions)) {
-      if (!matches(subscription, event)) {
-        continue;
-      }
-      sendLifecycleEvent(subscription, event.eventType(), toResponse(event));
+
+    @Override
+    public void close(SseEmitter emitter) {
+        for (Subscription subscription : subscriptions) {
+            if (subscription.emitter == emitter) {
+                close(subscription);
+                return;
+            }
+        }
     }
-  }
 
-  @PreDestroy
-  void shutdown() {
-    // scheduler 由 Spring 容器管理生命周期 (consoleRealtimeScheduler bean), 这里只清理订阅状态。
-    for (Subscription subscription : new ArrayList<>(subscriptions)) {
-      close(subscription);
+    public void publishAfterCommit(ConsoleSseEvent event) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    // 只在事务提交后向前端广播，避免把最终会回滚的数据状态提前暴露出去。
+                    publish(event);
+                }
+            });
+            return;
+        }
+        publish(event);
     }
-  }
 
-  private boolean matches(Subscription subscription, ConsoleSseEvent event) {
-    return Objects.equals(subscription.tenantId, event.tenantId())
-        && (subscription.stream == null
-            || "*".equals(subscription.stream)
-            || subscription.stream.equals(event.stream()))
-        && (subscription.eventType == null
-            || subscription.eventType.isBlank()
-            || subscription.eventType.equals(event.eventType()));
-  }
-
-  private void sendHeartbeat(Subscription subscription) {
-    if (!subscription.active.get()) {
-      close(subscription);
-      return;
+    public void publish(ConsoleSseEvent event) {
+        if (event == null) {
+            return;
+        }
+        for (Subscription subscription : new ArrayList<>(subscriptions)) {
+            if (!matches(subscription, event)) {
+                continue;
+            }
+            sendLifecycleEvent(subscription, event.eventType(), toResponse(event));
+        }
     }
-    // 心跳只用于保活和连接探测，不承载业务数据。
-    String stream = subscription.stream;
-    String cursor = subscription.cursor;
-    Object heartbeatSnapshot = eventSnapshot(subscription, "alive");
-    Instant heartbeatEmittedAt = BatchDateTimeSupport.utcNow();
-    ConsoleSseEventResponse heartbeatEvent = new ConsoleSseEventResponse(
-        stream, "heartbeat", cursor, heartbeatSnapshot, heartbeatEmittedAt);
-    sendLifecycleEvent(subscription, "heartbeat", heartbeatEvent);
-  }
 
-  private void sendLifecycleEvent(
-      Subscription subscription, String eventName, ConsoleSseEventResponse payload) {
-    // 便宜检查：对已关闭订阅跳过，省掉进入 Spring ResponseBodyEmitter 内部 writeLock
-    // + 捕构 IllegalStateException 的开销。失败也只是少写一次 log。
-    if (!subscription.active.get()) {
-      return;
+    @PreDestroy
+    void shutdown() {
+        // scheduler 由 Spring 容器管理生命周期 (consoleRealtimeScheduler bean), 这里只清理订阅状态。
+        for (Subscription subscription : new ArrayList<>(subscriptions)) {
+            close(subscription);
+        }
     }
-    // 这里不再 synchronized(subscription.emitter)：
-    //   1) Spring ResponseBodyEmitter 内部已有 ReentrantLock writeLock 串行化 send
-    //   2) 我们的 monitor 锁不影响 close() 路径的 emitter.complete()——两把锁互相看不见
-    //   3) 正常 race（active 检查过了但随即被 close）Spring 会抛 IllegalStateException，
-    //      下面 catch 已调 close(subscription) 善后
-    try {
-      subscription.emitter.send(SseEmitter.event().name(eventName).data(payload));
-    } catch (IOException | IllegalStateException exception) {
-      if (log.isDebugEnabled()) {
-        log.debug(
-            "Console realtime SSE send failed: tenantId={}, stream={}, eventType={}",
-            logValue(subscription.tenantId),
-            logValue(subscription.stream),
-            logValue(eventName),
-            exception);
-      }
-      close(subscription);
+
+    private boolean matches(Subscription subscription, ConsoleSseEvent event) {
+        return Objects.equals(subscription.tenantId, event.tenantId())
+                && (subscription.stream == null
+                        || "*".equals(subscription.stream)
+                        || subscription.stream.equals(event.stream()))
+                && (subscription.eventType == null
+                        || subscription.eventType.isBlank()
+                        || subscription.eventType.equals(event.eventType()));
     }
-  }
 
-  private static String logValue(String value) {
-    return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
-  }
-
-  private void replay(Subscription subscription) {
-    if (subscription.cursor == null || subscription.cursor.isBlank()) {
-      return;
+    private void sendHeartbeat(Subscription subscription) {
+        if (!subscription.active.get()) {
+            close(subscription);
+            return;
+        }
+        // 心跳只用于保活和连接探测，不承载业务数据。
+        String stream = subscription.stream;
+        String cursor = subscription.cursor;
+        Object heartbeatSnapshot = eventSnapshot(subscription, "alive");
+        Instant heartbeatEmittedAt = BatchDateTimeSupport.utcNow();
+        ConsoleSseEventResponse heartbeatEvent =
+                new ConsoleSseEventResponse(stream, "heartbeat", cursor, heartbeatSnapshot, heartbeatEmittedAt);
+        sendLifecycleEvent(subscription, "heartbeat", heartbeatEvent);
     }
-    RealtimeReplayStore.ReplayBatch replayBatch = replayStore.replay(
-        subscription.tenantId, subscription.stream, subscription.cursor, subscription.eventType);
-    if (!replayBatch.cursorFound()) {
-      realtimeMetrics.recordReplayCursorMiss(subscription.stream);
-      sendLifecycleEvent(
-          subscription,
-          "reset-required",
-          new ConsoleSseEventResponse(
-              subscription.stream,
-              "reset-required",
-              subscription.cursor,
-              eventSnapshot(subscription, "cursor-not-found"),
-              BatchDateTimeSupport.utcNow()));
-      return;
+
+    private void sendLifecycleEvent(Subscription subscription, String eventName, ConsoleSseEventResponse payload) {
+        // 便宜检查：对已关闭订阅跳过，省掉进入 Spring ResponseBodyEmitter 内部 writeLock
+        // + 捕构 IllegalStateException 的开销。失败也只是少写一次 log。
+        if (!subscription.active.get()) {
+            return;
+        }
+        // 这里不再 synchronized(subscription.emitter)：
+        //   1) Spring ResponseBodyEmitter 内部已有 ReentrantLock writeLock 串行化 send
+        //   2) 我们的 monitor 锁不影响 close() 路径的 emitter.complete()——两把锁互相看不见
+        //   3) 正常 race（active 检查过了但随即被 close）Spring 会抛 IllegalStateException，
+        //      下面 catch 已调 close(subscription) 善后
+        try {
+            subscription.emitter.send(SseEmitter.event().name(eventName).data(payload));
+        } catch (IOException | IllegalStateException exception) {
+            if (log.isDebugEnabled()) {
+                log.debug(
+                        "Console realtime SSE send failed: tenantId={}, stream={}, eventType={}",
+                        logValue(subscription.tenantId),
+                        logValue(subscription.stream),
+                        logValue(eventName),
+                        exception);
+            }
+            close(subscription);
+        }
     }
-    for (ConsoleRealtimeStreamEnvelope envelope : replayBatch.events()) {
-      ConsoleSseEvent event = toEvent(envelope);
-      if (event != null) {
-        sendLifecycleEvent(subscription, event.eventType(), toResponse(event));
-      }
+
+    private static String logValue(String value) {
+        return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
     }
-    realtimeMetrics.recordReplayDelivered(
-        subscription.stream, replayBatch.events().size());
-  }
 
-  private void registerLifecycle(Subscription subscription) {
-    subscription.emitter.onCompletion(() -> close(subscription));
-    subscription.emitter.onTimeout(() -> close(subscription));
-    subscription.emitter.onError(throwable -> close(subscription));
-  }
-
-  private void close(Subscription subscription) {
-    if (subscription == null || !subscription.active.compareAndSet(true, false)) {
-      return;
+    private void replay(Subscription subscription) {
+        if (subscription.cursor == null || subscription.cursor.isBlank()) {
+            return;
+        }
+        RealtimeReplayStore.ReplayBatch replayBatch = replayStore.replay(
+                subscription.tenantId, subscription.stream, subscription.cursor, subscription.eventType);
+        if (!replayBatch.cursorFound()) {
+            realtimeMetrics.recordReplayCursorMiss(subscription.stream);
+            sendLifecycleEvent(
+                    subscription,
+                    "reset-required",
+                    new ConsoleSseEventResponse(
+                            subscription.stream,
+                            "reset-required",
+                            subscription.cursor,
+                            eventSnapshot(subscription, "cursor-not-found"),
+                            BatchDateTimeSupport.utcNow()));
+            return;
+        }
+        for (ConsoleRealtimeStreamEnvelope envelope : replayBatch.events()) {
+            ConsoleSseEvent event = toEvent(envelope);
+            if (event != null) {
+                sendLifecycleEvent(subscription, event.eventType(), toResponse(event));
+            }
+        }
+        realtimeMetrics.recordReplayDelivered(
+                subscription.stream, replayBatch.events().size());
     }
-    // C-2.12: CAS 过关后把清理逻辑统一放进 try/finally；
-    // 之前 subscriptions.remove 在 finally 外，中间任一步骤抛异常会导致
-    // subscription 残留在列表里（active=false 但未 remove），publish() 每次遍历都做无效比对。
-    try {
-      ScheduledFuture<?> heartbeatFuture = subscription.heartbeatFuture.getAndSet(null);
-      if (heartbeatFuture != null) {
-        heartbeatFuture.cancel(true);
-      }
-    } finally {
-      subscriptions.remove(subscription);
-      realtimeMetrics.decrementSubscriptions();
-      try {
-        subscription.emitter.complete();
-      } catch (RuntimeException ignored) {
-        // emitter 已完成 / 客户端断开后 response 不可写（AsyncRequestNotUsableException 等）；
-        // close() 仅是清理路径，任何 emitter 状态异常都不应外抛去触发 @ControllerAdvice。
-        SwallowedExceptionLogger.info(
-            ConsoleRealtimeEventHub.class, "catch:emitterCompleteFailed", ignored);
-      }
+
+    private void registerLifecycle(Subscription subscription) {
+        subscription.emitter.onCompletion(() -> close(subscription));
+        subscription.emitter.onTimeout(() -> close(subscription));
+        subscription.emitter.onError(throwable -> close(subscription));
     }
-  }
 
-  private long resolveHeartbeatInterval(Long heartbeatMillis) {
-    if (heartbeatMillis == null || heartbeatMillis <= 0) {
-      return DEFAULT_HEARTBEAT_MILLIS;
+    private void close(Subscription subscription) {
+        if (subscription == null || !subscription.active.compareAndSet(true, false)) {
+            return;
+        }
+        // C-2.12: CAS 过关后把清理逻辑统一放进 try/finally；
+        // 之前 subscriptions.remove 在 finally 外，中间任一步骤抛异常会导致
+        // subscription 残留在列表里（active=false 但未 remove），publish() 每次遍历都做无效比对。
+        try {
+            ScheduledFuture<?> heartbeatFuture = subscription.heartbeatFuture.getAndSet(null);
+            if (heartbeatFuture != null) {
+                heartbeatFuture.cancel(true);
+            }
+        } finally {
+            subscriptions.remove(subscription);
+            realtimeMetrics.decrementSubscriptions();
+            try {
+                subscription.emitter.complete();
+            } catch (RuntimeException ignored) {
+                // emitter 已完成 / 客户端断开后 response 不可写（AsyncRequestNotUsableException 等）；
+                // close() 仅是清理路径，任何 emitter 状态异常都不应外抛去触发 @ControllerAdvice。
+                SwallowedExceptionLogger.info(ConsoleRealtimeEventHub.class, "catch:emitterCompleteFailed", ignored);
+            }
+        }
     }
-    return Math.max(MIN_HEARTBEAT_MILLIS, heartbeatMillis);
-  }
 
-  private String normalizeStream(String stream) {
-    return (stream == null || stream.isBlank()) ? DEFAULT_STREAM : stream.trim();
-  }
-
-  private String normalizeFilter(String value) {
-    return value == null || value.isBlank() ? null : value.trim();
-  }
-
-  private static ConsoleSseEventResponse toResponse(ConsoleSseEvent event) {
-    String stream = event.stream();
-    String eventType = event.eventType();
-    String cursor = event.cursor();
-    Object data = event.data();
-    Instant emittedAt = EmptyChecks.isNotNull(event.emittedAt())
-        ? event.emittedAt()
-        : BatchDateTimeSupport.utcNow();
-    return new ConsoleSseEventResponse(stream, eventType, cursor, data, emittedAt);
-  }
-
-  private Object eventSnapshot(Subscription subscription, String status) {
-    Map<String, Object> snapshot = new LinkedHashMap<>();
-    snapshot.put("tenantId", subscription.tenantId);
-    snapshot.put("stream", subscription.stream);
-    snapshot.put("eventType", subscription.eventType);
-    snapshot.put("cursor", subscription.cursor);
-    snapshot.put("status", status);
-    return snapshot;
-  }
-
-  private ConsoleSseEvent toEvent(ConsoleRealtimeStreamEnvelope envelope) {
-    if (envelope == null) {
-      return null;
+    private long resolveHeartbeatInterval(Long heartbeatMillis) {
+        if (heartbeatMillis == null || heartbeatMillis <= 0) {
+            return DEFAULT_HEARTBEAT_MILLIS;
+        }
+        return Math.max(MIN_HEARTBEAT_MILLIS, heartbeatMillis);
     }
-    Object data = null;
-    if (envelope.dataJson() != null && !envelope.dataJson().isBlank()) {
-      data = JsonUtils.fromJson(envelope.dataJson(), Object.class);
-    }
-    return new ConsoleSseEvent(
-        envelope.tenantId(),
-        envelope.stream(),
-        envelope.eventType(),
-        envelope.cursor(),
-        data,
-        envelope.emittedAt() != null ? envelope.emittedAt() : BatchDateTimeSupport.utcNow());
-  }
 
-  private static final class Subscription {
-    private final String tenantId;
-    private final String stream;
-    private final String eventType;
-    private final String cursor;
-    private final SseEmitter emitter;
-    private final AtomicBoolean active = new AtomicBoolean(true);
-    private final AtomicReference<ScheduledFuture<?>> heartbeatFuture = new AtomicReference<>();
-
-    private Subscription(
-        String tenantId, String stream, String eventType, String cursor, SseEmitter emitter) {
-      // cursor 由服务端生成并回显给客户端，用于断线后的短窗口回放。
-      this.tenantId = tenantId;
-      this.stream = stream;
-      this.eventType = eventType;
-      this.cursor = cursor;
-      this.emitter = emitter;
+    private String normalizeStream(String stream) {
+        return (stream == null || stream.isBlank()) ? DEFAULT_STREAM : stream.trim();
     }
-  }
+
+    private String normalizeFilter(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static ConsoleSseEventResponse toResponse(ConsoleSseEvent event) {
+        String stream = event.stream();
+        String eventType = event.eventType();
+        String cursor = event.cursor();
+        Object data = event.data();
+        Instant emittedAt =
+                EmptyChecks.isNotNull(event.emittedAt()) ? event.emittedAt() : BatchDateTimeSupport.utcNow();
+        return new ConsoleSseEventResponse(stream, eventType, cursor, data, emittedAt);
+    }
+
+    private Object eventSnapshot(Subscription subscription, String status) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("tenantId", subscription.tenantId);
+        snapshot.put("stream", subscription.stream);
+        snapshot.put("eventType", subscription.eventType);
+        snapshot.put("cursor", subscription.cursor);
+        snapshot.put("status", status);
+        return snapshot;
+    }
+
+    private ConsoleSseEvent toEvent(ConsoleRealtimeStreamEnvelope envelope) {
+        if (envelope == null) {
+            return null;
+        }
+        Object data = null;
+        if (envelope.dataJson() != null && !envelope.dataJson().isBlank()) {
+            data = JsonUtils.fromJson(envelope.dataJson(), Object.class);
+        }
+        return new ConsoleSseEvent(
+                envelope.tenantId(),
+                envelope.stream(),
+                envelope.eventType(),
+                envelope.cursor(),
+                data,
+                envelope.emittedAt() != null ? envelope.emittedAt() : BatchDateTimeSupport.utcNow());
+    }
+
+    private static final class Subscription {
+        private final String tenantId;
+        private final String stream;
+        private final String eventType;
+        private final String cursor;
+        private final SseEmitter emitter;
+        private final AtomicBoolean active = new AtomicBoolean(true);
+        private final AtomicReference<ScheduledFuture<?>> heartbeatFuture = new AtomicReference<>();
+
+        private Subscription(String tenantId, String stream, String eventType, String cursor, SseEmitter emitter) {
+            // cursor 由服务端生成并回显给客户端，用于断线后的短窗口回放。
+            this.tenantId = tenantId;
+            this.stream = stream;
+            this.eventType = eventType;
+            this.cursor = cursor;
+            this.emitter = emitter;
+        }
+    }
 }

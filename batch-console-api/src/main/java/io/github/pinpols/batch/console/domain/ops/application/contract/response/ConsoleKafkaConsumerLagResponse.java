@@ -10,12 +10,7 @@ import java.util.List;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ConsoleKafkaConsumerLagResponse(
-    String groupId,
-    Long totalLag,
-    Integer partitionCount,
-    List<PartitionLag> partitionsWithLag,
-    String error) {
+        String groupId, Long totalLag, Integer partitionCount, List<PartitionLag> partitionsWithLag, String error) {
 
-  public record PartitionLag(
-      String topic, Integer partition, Long committedOffset, Long endOffset, Long lag) {}
+    public record PartitionLag(String topic, Integer partition, Long committedOffset, Long endOffset, Long lag) {}
 }

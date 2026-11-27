@@ -13,8 +13,7 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ConsoleOutboxEventReadMapper {
 
-  long countByStatus(
-      @Param("tenantId") String tenantId, @Param("publishStatus") String publishStatus);
+    long countByStatus(@Param("tenantId") String tenantId, @Param("publishStatus") String publishStatus);
 
-  List<OutboxEventStatusStat> statsByStatus(@Param("tenantId") String tenantId);
+    List<OutboxEventStatusStat> statsByStatus(@Param("tenantId") String tenantId);
 }

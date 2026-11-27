@@ -42,439 +42,419 @@ import org.springframework.web.client.RestClient;
 @DisplayName("审批应用服务: 按动作类型委派到对应作业服务")
 class DefaultConsoleApprovalApplicationServiceTest {
 
-  private static final String SOURCE_IDEMPOTENCY_KEY = UUID.randomUUID().toString();
+    private static final String SOURCE_IDEMPOTENCY_KEY = UUID.randomUUID().toString();
 
-  private static final String TENANT_ID = "tenant-a";
+    private static final String TENANT_ID = "tenant-a";
 
-  private OrchestratorInternalRestClient orchestratorClient;
-  private ConsoleJobRecoveryService recoveryService;
-  private ConsoleJobApprovalService approvalService;
-  private DefaultConsoleApprovalApplicationService service;
+    private OrchestratorInternalRestClient orchestratorClient;
+    private ConsoleJobRecoveryService recoveryService;
+    private ConsoleJobApprovalService approvalService;
+    private DefaultConsoleApprovalApplicationService service;
 
-  @BeforeEach
-  void setUp() {
-    orchestratorClient = mock(OrchestratorInternalRestClient.class);
-    ConsoleRequestMetadataResolver metadataResolver = mock(ConsoleRequestMetadataResolver.class);
-    recoveryService = mock(ConsoleJobRecoveryService.class);
-    approvalService = mock(ConsoleJobApprovalService.class);
-    service = new DefaultConsoleApprovalApplicationService(
-        orchestratorClient,
-        metadataResolver,
-        recoveryService,
-        approvalService,
-        mock(ConsoleFileApplicationService.class));
-    when(metadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", TENANT_ID, "operator", null, null));
-  }
-
-  @Test
-  @DisplayName("自助服务申请不能由申请人本人批准")
-  void shouldRejectSelfApproval_whenSelfServiceRequesterApproves() {
-    String approvalJson = approvalRecord("SELF_SERVICE", "RERUN", "operator");
-    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-self"), any()))
-        .thenAnswer(invocation -> {
-          @SuppressWarnings("unchecked")
-          Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
-          return JsonUtils.fromJson(approvalJson, responseType);
-        });
-
-    Throwable thrown =
-        catchThrowable(() -> service.approve(TENANT_ID, "approval-self", "operator", "approve"));
-
-    assertThat(thrown).isInstanceOf(BizException.class);
-    verify(orchestratorClient, never()).approveApproval(any(), any(), any(), any(), any(), any());
-  }
-
-  @Test
-  @DisplayName("补跑审批仍允许申请人本人批准")
-  void shouldAllowSelfApproval_whenApprovalIsNotSelfService() {
-    String approvalJson = approvalRecord("CATCH_UP", "CATCH_UP", "operator");
-    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-catch"), any()))
-        .thenAnswer(invocation -> {
-          @SuppressWarnings("unchecked")
-          Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
-          return JsonUtils.fromJson(approvalJson, responseType);
-        });
-    when(orchestratorClient.approveApproval(
-            eq(TENANT_ID), eq("approval-catch"), any(), any(), any(), any()))
-        .thenReturn(remoteDecision("approval-catch", "APPROVED", approvalJson, "operator"));
-    when(approvalService.approveCatchUp(any(), eq("approval-catch"))).thenReturn("caught-up");
-
-    assertThat(service.approve(TENANT_ID, "approval-catch", "operator", "approve"))
-        .isEqualTo("caught-up");
-  }
-
-  @Test
-  @DisplayName("补偿、重跑、DLQ 重放和 catch-up 审批委派到各自的窄服务")
-  void shouldDispatchApprovalActionsToDedicatedServices() {
-    List<String> records = List.of(
-        approval("COMPENSATION", "JOB_INSTANCE"),
-        approval("RERUN", "JOB_INSTANCE"),
-        approval("DLQ_REPLAY", "DLQ"),
-        JsonUtils.toJson(Map.of(
-            "record",
-            Map.of(
-                "approvalStatus",
-                "PENDING",
-                "actionType",
-                "CATCH_UP",
-                "targetType",
-                "JOB_INSTANCE",
-                "payloadJson",
-                JsonUtils.toJson(Map.of(
-                    "tenantId",
-                    TENANT_ID,
-                    "jobCode",
-                    "JOB_A",
-                    "bizDate",
-                    "2026-10-14",
-                    "batchDayCalendarCode",
-                    "CAL"))))));
-    AtomicInteger index = new AtomicInteger();
-    when(orchestratorClient.loadApproval(eq(TENANT_ID), any(), any())).thenAnswer(invocation -> {
-      @SuppressWarnings("unchecked")
-      Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
-      return JsonUtils.fromJson(records.get(index.getAndIncrement()), responseType);
-    });
-    for (int i = 0; i < records.size(); i++) {
-      String approvalNo = "approval-" + (i + 1);
-      String approvalJson = records.get(i);
-      ApprovalDecision decision = remoteDecision(approvalNo, "APPROVED", approvalJson, "operator");
-      when(orchestratorClient.approveApproval(
-              eq(TENANT_ID), eq(approvalNo), any(), any(), any(), any()))
-          .thenReturn(decision);
+    @BeforeEach
+    void setUp() {
+        orchestratorClient = mock(OrchestratorInternalRestClient.class);
+        ConsoleRequestMetadataResolver metadataResolver = mock(ConsoleRequestMetadataResolver.class);
+        recoveryService = mock(ConsoleJobRecoveryService.class);
+        approvalService = mock(ConsoleJobApprovalService.class);
+        service = new DefaultConsoleApprovalApplicationService(
+                orchestratorClient,
+                metadataResolver,
+                recoveryService,
+                approvalService,
+                mock(ConsoleFileApplicationService.class));
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", TENANT_ID, "operator", null, null));
     }
-    when(recoveryService.compensation(any(), eq("approval-1"))).thenReturn("compensated");
-    when(recoveryService.rerun(any(), eq("approval-2"))).thenReturn("rerun");
-    when(recoveryService.replayDeadLetter(any(), eq("approval-3"))).thenReturn("replayed");
-    when(approvalService.approveCatchUp(any(), eq("approval-4"))).thenReturn("caught-up");
 
-    assertThat(service.approve(TENANT_ID, "approval-1", "operator", "approve"))
-        .isEqualTo("compensated");
-    assertThat(service.approve(TENANT_ID, "approval-2", "operator", "approve")).isEqualTo("rerun");
-    assertThat(service.approve(TENANT_ID, "approval-3", "operator", "approve"))
-        .isEqualTo("replayed");
-    assertThat(service.approve(TENANT_ID, "approval-4", "operator", "approve"))
-        .isEqualTo("caught-up");
+    @Test
+    @DisplayName("自助服务申请不能由申请人本人批准")
+    void shouldRejectSelfApproval_whenSelfServiceRequesterApproves() {
+        String approvalJson = approvalRecord("SELF_SERVICE", "RERUN", "operator");
+        when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-self"), any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
+                    return JsonUtils.fromJson(approvalJson, responseType);
+                });
 
-    verify(recoveryService).compensation(any(), eq("approval-1"));
-    verify(recoveryService).rerun(any(), eq("approval-2"));
-    ArgumentCaptor<DeadLetterReplayRequest> replayRequest =
-        ArgumentCaptor.forClass(DeadLetterReplayRequest.class);
-    verify(recoveryService).replayDeadLetter(replayRequest.capture(), eq("approval-3"));
-    assertThat(replayRequest.getValue().getOperatorId()).isEqualTo("operator");
-    ArgumentCaptor<ConsoleCatchUpApprovalRequest> catchUp =
-        ArgumentCaptor.forClass(ConsoleCatchUpApprovalRequest.class);
-    verify(approvalService).approveCatchUp(catchUp.capture(), eq("approval-4"));
-    assertThat(catchUp.getValue().getBatchDayCalendarCode()).isEqualTo("CAL");
-    assertThat(catchUp.getValue().getApprovalId()).isEqualTo("approval-4");
-  }
+        Throwable thrown = catchThrowable(() -> service.approve(TENANT_ID, "approval-self", "operator", "approve"));
 
-  @Test
-  @DisplayName("Workflow 节点重放审批拒绝后将父 Replay Operation 收敛为已拒绝")
-  void shouldRejectWorkflowNodeReplayOperationWithApproval() {
-    String payloadJson =
-        JsonUtils.toJson(Map.of("compensationType", "WORKFLOW_NODE", "replayOperationId", 45L));
-    String approvalJson = JsonUtils.toJson(Map.of(
-        "record",
-        Map.of(
-            "approvalStatus", "PENDING",
-            "actionType", "COMPENSATION",
-            "payloadJson", payloadJson)));
-    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-node"), any()))
-        .thenAnswer(invocation -> {
-          @SuppressWarnings("unchecked")
-          Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
-          return JsonUtils.fromJson(approvalJson, responseType);
+        assertThat(thrown).isInstanceOf(BizException.class);
+        verify(orchestratorClient, never()).approveApproval(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("补跑审批仍允许申请人本人批准")
+    void shouldAllowSelfApproval_whenApprovalIsNotSelfService() {
+        String approvalJson = approvalRecord("CATCH_UP", "CATCH_UP", "operator");
+        when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-catch"), any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
+                    return JsonUtils.fromJson(approvalJson, responseType);
+                });
+        when(orchestratorClient.approveApproval(eq(TENANT_ID), eq("approval-catch"), any(), any(), any(), any()))
+                .thenReturn(remoteDecision("approval-catch", "APPROVED", approvalJson, "operator"));
+        when(approvalService.approveCatchUp(any(), eq("approval-catch"))).thenReturn("caught-up");
+
+        assertThat(service.approve(TENANT_ID, "approval-catch", "operator", "approve"))
+                .isEqualTo("caught-up");
+    }
+
+    @Test
+    @DisplayName("补偿、重跑、DLQ 重放和 catch-up 审批委派到各自的窄服务")
+    void shouldDispatchApprovalActionsToDedicatedServices() {
+        List<String> records = List.of(
+                approval("COMPENSATION", "JOB_INSTANCE"),
+                approval("RERUN", "JOB_INSTANCE"),
+                approval("DLQ_REPLAY", "DLQ"),
+                JsonUtils.toJson(Map.of(
+                        "record",
+                        Map.of(
+                                "approvalStatus",
+                                "PENDING",
+                                "actionType",
+                                "CATCH_UP",
+                                "targetType",
+                                "JOB_INSTANCE",
+                                "payloadJson",
+                                JsonUtils.toJson(Map.of(
+                                        "tenantId",
+                                        TENANT_ID,
+                                        "jobCode",
+                                        "JOB_A",
+                                        "bizDate",
+                                        "2026-10-14",
+                                        "batchDayCalendarCode",
+                                        "CAL"))))));
+        AtomicInteger index = new AtomicInteger();
+        when(orchestratorClient.loadApproval(eq(TENANT_ID), any(), any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
+            return JsonUtils.fromJson(records.get(index.getAndIncrement()), responseType);
         });
+        for (int i = 0; i < records.size(); i++) {
+            String approvalNo = "approval-" + (i + 1);
+            String approvalJson = records.get(i);
+            ApprovalDecision decision = remoteDecision(approvalNo, "APPROVED", approvalJson, "operator");
+            when(orchestratorClient.approveApproval(eq(TENANT_ID), eq(approvalNo), any(), any(), any(), any()))
+                    .thenReturn(decision);
+        }
+        when(recoveryService.compensation(any(), eq("approval-1"))).thenReturn("compensated");
+        when(recoveryService.rerun(any(), eq("approval-2"))).thenReturn("rerun");
+        when(recoveryService.replayDeadLetter(any(), eq("approval-3"))).thenReturn("replayed");
+        when(approvalService.approveCatchUp(any(), eq("approval-4"))).thenReturn("caught-up");
 
-    ApprovalDecision decision =
-        remoteDecision("approval-node", "REJECTED", approvalJson, "operator");
-    when(orchestratorClient.rejectApproval(
-            eq(TENANT_ID), eq("approval-node"), any(), any(), any(), any()))
-        .thenReturn(decision);
+        assertThat(service.approve(TENANT_ID, "approval-1", "operator", "approve"))
+                .isEqualTo("compensated");
+        assertThat(service.approve(TENANT_ID, "approval-2", "operator", "approve"))
+                .isEqualTo("rerun");
+        assertThat(service.approve(TENANT_ID, "approval-3", "operator", "approve"))
+                .isEqualTo("replayed");
+        assertThat(service.approve(TENANT_ID, "approval-4", "operator", "approve"))
+                .isEqualTo("caught-up");
 
-    assertThat(service.reject(TENANT_ID, "approval-node", "operator", "not approved"))
-        .isEqualTo("approval-node");
+        verify(recoveryService).compensation(any(), eq("approval-1"));
+        verify(recoveryService).rerun(any(), eq("approval-2"));
+        ArgumentCaptor<DeadLetterReplayRequest> replayRequest = ArgumentCaptor.forClass(DeadLetterReplayRequest.class);
+        verify(recoveryService).replayDeadLetter(replayRequest.capture(), eq("approval-3"));
+        assertThat(replayRequest.getValue().getOperatorId()).isEqualTo("operator");
+        ArgumentCaptor<ConsoleCatchUpApprovalRequest> catchUp =
+                ArgumentCaptor.forClass(ConsoleCatchUpApprovalRequest.class);
+        verify(approvalService).approveCatchUp(catchUp.capture(), eq("approval-4"));
+        assertThat(catchUp.getValue().getBatchDayCalendarCode()).isEqualTo("CAL");
+        assertThat(catchUp.getValue().getApprovalId()).isEqualTo("approval-4");
+    }
 
-    verify(orchestratorClient).rejectWorkflowNodeReplayOperation(45L, TENANT_ID);
-  }
+    @Test
+    @DisplayName("Workflow 节点重放审批拒绝后将父 Replay Operation 收敛为已拒绝")
+    void shouldRejectWorkflowNodeReplayOperationWithApproval() {
+        String payloadJson = JsonUtils.toJson(Map.of("compensationType", "WORKFLOW_NODE", "replayOperationId", 45L));
+        String approvalJson = JsonUtils.toJson(Map.of(
+                "record",
+                Map.of(
+                        "approvalStatus", "PENDING",
+                        "actionType", "COMPENSATION",
+                        "payloadJson", payloadJson)));
+        when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-node"), any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
+                    return JsonUtils.fromJson(approvalJson, responseType);
+                });
 
-  @Test
-  @DisplayName("整 Workflow Replay 审批从认证操作人启动被冻结的 Replay Operation")
-  void shouldApproveWholeWorkflowReplayOperationWithAuthenticatedActor() {
-    String payloadJson = JsonUtils.toJson(Map.of("tenantId", TENANT_ID, "replayOperationId", 46L));
-    String approvalJson = JsonUtils.toJson(Map.of(
-        "record",
-        Map.of(
-            "approvalStatus", "PENDING",
-            "actionType", "WORKFLOW_RUN_REPLAY",
-            "payloadJson", payloadJson)));
-    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-workflow"), any()))
-        .thenAnswer(invocation -> {
-          @SuppressWarnings("unchecked")
-          Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
-          return JsonUtils.fromJson(approvalJson, responseType);
-        });
+        ApprovalDecision decision = remoteDecision("approval-node", "REJECTED", approvalJson, "operator");
+        when(orchestratorClient.rejectApproval(eq(TENANT_ID), eq("approval-node"), any(), any(), any(), any()))
+                .thenReturn(decision);
 
-    ApprovalDecision decision =
-        remoteDecision("approval-workflow", "APPROVED", approvalJson, "authenticated-approver");
-    when(orchestratorClient.approveApproval(
-            eq(TENANT_ID), eq("approval-workflow"), any(), any(), any(), any()))
-        .thenReturn(decision);
+        assertThat(service.reject(TENANT_ID, "approval-node", "operator", "not approved"))
+                .isEqualTo("approval-node");
 
-    assertThat(service.approve(TENANT_ID, "approval-workflow", "authenticated-approver", "approve"))
-        .isEqualTo("approval-workflow");
+        verify(orchestratorClient).rejectWorkflowNodeReplayOperation(45L, TENANT_ID);
+    }
 
-    verify(orchestratorClient)
-        .approveWorkflowRunReplayOperation(46L, TENANT_ID, "authenticated-approver");
-    verify(orchestratorClient).markApprovalExecuted(TENANT_ID, "approval-workflow");
-  }
+    @Test
+    @DisplayName("整 Workflow Replay 审批从认证操作人启动被冻结的 Replay Operation")
+    void shouldApproveWholeWorkflowReplayOperationWithAuthenticatedActor() {
+        String payloadJson = JsonUtils.toJson(Map.of("tenantId", TENANT_ID, "replayOperationId", 46L));
+        String approvalJson = JsonUtils.toJson(Map.of(
+                "record",
+                Map.of(
+                        "approvalStatus", "PENDING",
+                        "actionType", "WORKFLOW_RUN_REPLAY",
+                        "payloadJson", payloadJson)));
+        when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-workflow"), any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
+                    return JsonUtils.fromJson(approvalJson, responseType);
+                });
 
-  @Test
-  @DisplayName("整 Workflow Replay 审批拒绝将父 operation 标记为 REJECTED")
-  void shouldRejectWholeWorkflowReplayOperationWithApproval() {
-    String payloadJson = JsonUtils.toJson(Map.of("tenantId", TENANT_ID, "replayOperationId", 47L));
-    String approvalJson = JsonUtils.toJson(Map.of(
-        "record",
-        Map.of(
-            "approvalStatus", "PENDING",
-            "actionType", "WORKFLOW_RUN_REPLAY",
-            "payloadJson", payloadJson)));
-    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-workflow-rejected"), any()))
-        .thenAnswer(invocation -> {
-          @SuppressWarnings("unchecked")
-          Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
-          return JsonUtils.fromJson(approvalJson, responseType);
-        });
+        ApprovalDecision decision =
+                remoteDecision("approval-workflow", "APPROVED", approvalJson, "authenticated-approver");
+        when(orchestratorClient.approveApproval(eq(TENANT_ID), eq("approval-workflow"), any(), any(), any(), any()))
+                .thenReturn(decision);
 
-    ApprovalDecision decision = remoteDecision(
-        "approval-workflow-rejected", "REJECTED", approvalJson, "authenticated-approver");
-    when(orchestratorClient.rejectApproval(
-            eq(TENANT_ID), eq("approval-workflow-rejected"), any(), any(), any(), any()))
-        .thenReturn(decision);
+        assertThat(service.approve(TENANT_ID, "approval-workflow", "authenticated-approver", "approve"))
+                .isEqualTo("approval-workflow");
 
-    assertThat(service.reject(
-            TENANT_ID, "approval-workflow-rejected", "authenticated-approver", "reject"))
-        .isEqualTo("approval-workflow-rejected");
+        verify(orchestratorClient).approveWorkflowRunReplayOperation(46L, TENANT_ID, "authenticated-approver");
+        verify(orchestratorClient).markApprovalExecuted(TENANT_ID, "approval-workflow");
+    }
 
-    verify(orchestratorClient).rejectWorkflowRunReplayOperation(47L, TENANT_ID);
-  }
+    @Test
+    @DisplayName("整 Workflow Replay 审批拒绝将父 operation 标记为 REJECTED")
+    void shouldRejectWholeWorkflowReplayOperationWithApproval() {
+        String payloadJson = JsonUtils.toJson(Map.of("tenantId", TENANT_ID, "replayOperationId", 47L));
+        String approvalJson = JsonUtils.toJson(Map.of(
+                "record",
+                Map.of(
+                        "approvalStatus", "PENDING",
+                        "actionType", "WORKFLOW_RUN_REPLAY",
+                        "payloadJson", payloadJson)));
+        when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-workflow-rejected"), any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
+                    return JsonUtils.fromJson(approvalJson, responseType);
+                });
 
-  @Test
-  @DisplayName("首次查询待审批但远端批准实际返回已拒绝时，不启动整 Workflow Replay")
-  void shouldNotStartWholeWorkflowReplay_whenRemoteApprovalActuallyRejected() {
-    String approvalNo = "approval-workflow-raced";
-    stubPendingWholeWorkflowApproval(approvalNo);
-    RestClient.Builder builder = RestClient.builder().baseUrl("https://approval-race.invalid");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    RestClient client = builder.build();
-    when(orchestratorClient.client()).thenReturn(client);
-    doCallRealMethod()
-        .when(orchestratorClient)
-        .approveApproval(TENANT_ID, approvalNo, "operator", "approve", "req-1", "trace-1");
-    String actualDecision = wholeWorkflowApprovalJson(approvalNo, "REJECTED");
-    server
-        .expect(requestTo(
-            "https://approval-race.invalid/internal/approvals/approval-workflow-raced/approve"))
-        .andExpect(method(HttpMethod.POST))
-        .andRespond(withSuccess(actualDecision, MediaType.APPLICATION_JSON));
+        ApprovalDecision decision =
+                remoteDecision("approval-workflow-rejected", "REJECTED", approvalJson, "authenticated-approver");
+        when(orchestratorClient.rejectApproval(
+                        eq(TENANT_ID), eq("approval-workflow-rejected"), any(), any(), any(), any()))
+                .thenReturn(decision);
 
-    Throwable failure =
-        catchThrowable(() -> service.approve(TENANT_ID, approvalNo, "operator", "approve"));
+        assertThat(service.reject(TENANT_ID, "approval-workflow-rejected", "authenticated-approver", "reject"))
+                .isEqualTo("approval-workflow-rejected");
 
-    server.verify();
-    verify(orchestratorClient, never()).approveWorkflowRunReplayOperation(any(), any(), any());
-    verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
-    assertThat(failure).isInstanceOf(BizException.class);
-  }
+        verify(orchestratorClient).rejectWorkflowRunReplayOperation(47L, TENANT_ID);
+    }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"APPROVED", "EXECUTED"})
-  @DisplayName("首次查询待审批但远端拒绝输给已批准决策时，不拒绝 Replay Operation")
-  void shouldNotRejectWholeWorkflowReplay_whenRemoteRejectionLosesDecision(String actualStatus) {
-    String approvalNo = "approval-workflow-raced";
-    stubPendingWholeWorkflowApproval(approvalNo);
-    RestClient.Builder builder = RestClient.builder().baseUrl("https://approval-race.invalid");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    RestClient client = builder.build();
-    when(orchestratorClient.client()).thenReturn(client);
-    doCallRealMethod()
-        .when(orchestratorClient)
-        .rejectApproval(TENANT_ID, approvalNo, "operator", "reject", "req-1", "trace-1");
-    String actualDecision = wholeWorkflowApprovalJson(approvalNo, actualStatus);
-    server
-        .expect(requestTo(
-            "https://approval-race.invalid/internal/approvals/approval-workflow-raced/reject"))
-        .andExpect(method(HttpMethod.POST))
-        .andRespond(withSuccess(actualDecision, MediaType.APPLICATION_JSON));
+    @Test
+    @DisplayName("首次查询待审批但远端批准实际返回已拒绝时，不启动整 Workflow Replay")
+    void shouldNotStartWholeWorkflowReplay_whenRemoteApprovalActuallyRejected() {
+        String approvalNo = "approval-workflow-raced";
+        stubPendingWholeWorkflowApproval(approvalNo);
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://approval-race.invalid");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        RestClient client = builder.build();
+        when(orchestratorClient.client()).thenReturn(client);
+        doCallRealMethod()
+                .when(orchestratorClient)
+                .approveApproval(TENANT_ID, approvalNo, "operator", "approve", "req-1", "trace-1");
+        String actualDecision = wholeWorkflowApprovalJson(approvalNo, "REJECTED");
+        server.expect(requestTo("https://approval-race.invalid/internal/approvals/approval-workflow-raced/approve"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess(actualDecision, MediaType.APPLICATION_JSON));
 
-    Throwable failure =
-        catchThrowable(() -> service.reject(TENANT_ID, approvalNo, "operator", "reject"));
+        Throwable failure = catchThrowable(() -> service.approve(TENANT_ID, approvalNo, "operator", "approve"));
 
-    server.verify();
-    verify(orchestratorClient, never()).rejectWorkflowRunReplayOperation(any(), any());
-    verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
-    assertThat(failure).isInstanceOf(BizException.class);
-  }
+        server.verify();
+        verify(orchestratorClient, never()).approveWorkflowRunReplayOperation(any(), any(), any());
+        verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
+        assertThat(failure).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("批准响应已执行表示原调用已完成，不再次派发 Replay Operation")
-  void shouldNotRedispatchWholeWorkflowReplay_whenApprovalResponseAlreadyExecuted() {
-    String approvalNo = "approval-workflow-raced";
-    stubPendingWholeWorkflowApproval(approvalNo);
-    RestClient.Builder builder = RestClient.builder().baseUrl("https://approval-race.invalid");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    RestClient client = builder.build();
-    when(orchestratorClient.client()).thenReturn(client);
-    doCallRealMethod()
-        .when(orchestratorClient)
-        .approveApproval(TENANT_ID, approvalNo, "operator", "approve", "req-1", "trace-1");
-    String actualDecision = wholeWorkflowApprovalJson(approvalNo, "EXECUTED");
-    server
-        .expect(requestTo(
-            "https://approval-race.invalid/internal/approvals/approval-workflow-raced/approve"))
-        .andExpect(method(HttpMethod.POST))
-        .andRespond(withSuccess(actualDecision, MediaType.APPLICATION_JSON));
+    @ParameterizedTest
+    @ValueSource(strings = {"APPROVED", "EXECUTED"})
+    @DisplayName("首次查询待审批但远端拒绝输给已批准决策时，不拒绝 Replay Operation")
+    void shouldNotRejectWholeWorkflowReplay_whenRemoteRejectionLosesDecision(String actualStatus) {
+        String approvalNo = "approval-workflow-raced";
+        stubPendingWholeWorkflowApproval(approvalNo);
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://approval-race.invalid");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        RestClient client = builder.build();
+        when(orchestratorClient.client()).thenReturn(client);
+        doCallRealMethod()
+                .when(orchestratorClient)
+                .rejectApproval(TENANT_ID, approvalNo, "operator", "reject", "req-1", "trace-1");
+        String actualDecision = wholeWorkflowApprovalJson(approvalNo, actualStatus);
+        server.expect(requestTo("https://approval-race.invalid/internal/approvals/approval-workflow-raced/reject"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess(actualDecision, MediaType.APPLICATION_JSON));
 
-    String result = service.approve(TENANT_ID, approvalNo, "operator", "approve");
+        Throwable failure = catchThrowable(() -> service.reject(TENANT_ID, approvalNo, "operator", "reject"));
 
-    server.verify();
-    assertThat(result).isEqualTo(approvalNo);
-    verify(orchestratorClient, never()).approveWorkflowRunReplayOperation(any(), any(), any());
-    verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
-  }
+        server.verify();
+        verify(orchestratorClient, never()).rejectWorkflowRunReplayOperation(any(), any());
+        verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
+        assertThat(failure).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("已批准审批失回应答后由另一管理员重试，Replay仍保留实际批准人")
-  void shouldResumeApprovedWholeWorkflowReplayWithPersistedApprover() {
-    String approvalNo = "approval-workflow-retry";
-    String approvedJson = wholeWorkflowApprovalJson(approvalNo, "APPROVED");
-    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq(approvalNo), any()))
-        .thenAnswer(invocation -> {
-          Class<?> responseType = invocation.getArgument(2);
-          return JsonUtils.fromJson(approvedJson, responseType);
-        });
+    @Test
+    @DisplayName("批准响应已执行表示原调用已完成，不再次派发 Replay Operation")
+    void shouldNotRedispatchWholeWorkflowReplay_whenApprovalResponseAlreadyExecuted() {
+        String approvalNo = "approval-workflow-raced";
+        stubPendingWholeWorkflowApproval(approvalNo);
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://approval-race.invalid");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        RestClient client = builder.build();
+        when(orchestratorClient.client()).thenReturn(client);
+        doCallRealMethod()
+                .when(orchestratorClient)
+                .approveApproval(TENANT_ID, approvalNo, "operator", "approve", "req-1", "trace-1");
+        String actualDecision = wholeWorkflowApprovalJson(approvalNo, "EXECUTED");
+        server.expect(requestTo("https://approval-race.invalid/internal/approvals/approval-workflow-raced/approve"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess(actualDecision, MediaType.APPLICATION_JSON));
 
-    String result = service.approve(TENANT_ID, approvalNo, "retrying-admin", "resume");
+        String result = service.approve(TENANT_ID, approvalNo, "operator", "approve");
 
-    assertThat(result).isEqualTo(approvalNo);
-    verify(orchestratorClient).approveWorkflowRunReplayOperation(46L, TENANT_ID, "operator");
-    verify(orchestratorClient).markApprovalExecuted(TENANT_ID, approvalNo);
-    verify(orchestratorClient, never()).approveApproval(any(), any(), any(), any(), any(), any());
-  }
+        server.verify();
+        assertThat(result).isEqualTo(approvalNo);
+        verify(orchestratorClient, never()).approveWorkflowRunReplayOperation(any(), any(), any());
+        verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
+    }
 
-  @Test
-  @DisplayName("BATCH_DAY_REPLAY 已非审批动作，审批通过后按不支持动作拒绝且不标记已执行")
-  void shouldRejectBatchDayReplayAction_asUnsupportedApprovalAction() {
-    stubPendingBatchDayReplayApproval("approval-bdr", TENANT_ID);
+    @Test
+    @DisplayName("已批准审批失回应答后由另一管理员重试，Replay仍保留实际批准人")
+    void shouldResumeApprovedWholeWorkflowReplayWithPersistedApprover() {
+        String approvalNo = "approval-workflow-retry";
+        String approvedJson = wholeWorkflowApprovalJson(approvalNo, "APPROVED");
+        when(orchestratorClient.loadApproval(eq(TENANT_ID), eq(approvalNo), any()))
+                .thenAnswer(invocation -> {
+                    Class<?> responseType = invocation.getArgument(2);
+                    return JsonUtils.fromJson(approvedJson, responseType);
+                });
 
-    Throwable thrown =
-        catchThrowable(() -> service.approve(TENANT_ID, "approval-bdr", "approver-1", "ok"));
+        String result = service.approve(TENANT_ID, approvalNo, "retrying-admin", "resume");
 
-    assertThat(thrown)
-        .isInstanceOf(BizException.class)
-        .hasFieldOrPropertyWithValue("messageKey", "error.common.invalid_argument_detail");
-    assertThat(((BizException) thrown).getMessageArgs())
-        .containsExactly("unsupported approval action: BATCH_DAY_REPLAY");
-    verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
-  }
+        assertThat(result).isEqualTo(approvalNo);
+        verify(orchestratorClient).approveWorkflowRunReplayOperation(46L, TENANT_ID, "operator");
+        verify(orchestratorClient).markApprovalExecuted(TENANT_ID, approvalNo);
+        verify(orchestratorClient, never()).approveApproval(any(), any(), any(), any(), any(), any());
+    }
 
-  private void stubPendingBatchDayReplayApproval(String approvalNo, String payloadTenantId) {
-    String payloadJson = JsonUtils.toJson(Map.of("sessionId", 77L, "tenantId", payloadTenantId));
-    String approvalJson = JsonUtils.toJson(Map.of(
-        "record",
-        Map.of(
-            "approvalStatus", "PENDING",
-            "actionType", "BATCH_DAY_REPLAY",
-            "payloadJson", payloadJson)));
-    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq(approvalNo), any()))
-        .thenAnswer(invocation -> {
-          Class<?> responseType = invocation.getArgument(2);
-          return JsonUtils.fromJson(approvalJson, responseType);
-        });
-    ApprovalDecision decision = remoteDecision(approvalNo, "APPROVED", approvalJson, "approver-1");
-    when(orchestratorClient.approveApproval(
-            eq(TENANT_ID), eq(approvalNo), any(), any(), any(), any()))
-        .thenReturn(decision);
-  }
+    @Test
+    @DisplayName("BATCH_DAY_REPLAY 已非审批动作，审批通过后按不支持动作拒绝且不标记已执行")
+    void shouldRejectBatchDayReplayAction_asUnsupportedApprovalAction() {
+        stubPendingBatchDayReplayApproval("approval-bdr", TENANT_ID);
 
-  private static ApprovalDecision remoteDecision(
-      String approvalNo, String status, String approvalJson, String approver) {
-    Map<?, ?> response = JsonUtils.fromJson(approvalJson, Map.class);
-    Map<?, ?> record = (Map<?, ?>) response.get("record");
-    ApprovalDecision decision = ApprovalDecision.builder()
-        .tenantId(TENANT_ID)
-        .approvalNo(approvalNo)
-        .approvalStatus(status)
-        .actionType((String) record.get("actionType"))
-        .targetType((String) record.get("targetType"))
-        .targetId((String) record.get("targetId"))
-        .payloadJson((String) record.get("payloadJson"))
-        .approverId(approver)
-        .sourceIdempotencyKey((String) record.get("sourceIdempotencyKey"))
-        .build();
-    return decision;
-  }
+        Throwable thrown = catchThrowable(() -> service.approve(TENANT_ID, "approval-bdr", "approver-1", "ok"));
 
-  private void stubPendingWholeWorkflowApproval(String approvalNo) {
-    String pendingJson = wholeWorkflowApprovalJson(approvalNo, "PENDING");
-    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq(approvalNo), any()))
-        .thenAnswer(invocation -> {
-          Class<?> responseType = invocation.getArgument(2);
-          return JsonUtils.fromJson(pendingJson, responseType);
-        });
-  }
+        assertThat(thrown)
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "error.common.invalid_argument_detail");
+        assertThat(((BizException) thrown).getMessageArgs())
+                .containsExactly("unsupported approval action: BATCH_DAY_REPLAY");
+        verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
+    }
 
-  private static String wholeWorkflowApprovalJson(String approvalNo, String status) {
-    Map<String, Object> payload = Map.of("tenantId", TENANT_ID, "replayOperationId", 46L);
-    String payloadJson = JsonUtils.toJson(payload);
-    Map<String, Object> record = Map.of(
-        "tenantId",
-        TENANT_ID,
-        "approvalNo",
-        approvalNo,
-        "approvalType",
-        "COMPENSATION",
-        "actionType",
-        "WORKFLOW_RUN_REPLAY",
-        "targetType",
-        "WORKFLOW_RUN",
-        "targetId",
-        "901",
-        "payloadJson",
-        payloadJson,
-        "approvalStatus",
-        status,
-        "approverId",
-        "operator",
-        "sourceIdempotencyKey",
-        SOURCE_IDEMPOTENCY_KEY);
-    return JsonUtils.toJson(Map.of("record", record));
-  }
+    private void stubPendingBatchDayReplayApproval(String approvalNo, String payloadTenantId) {
+        String payloadJson = JsonUtils.toJson(Map.of("sessionId", 77L, "tenantId", payloadTenantId));
+        String approvalJson = JsonUtils.toJson(Map.of(
+                "record",
+                Map.of(
+                        "approvalStatus", "PENDING",
+                        "actionType", "BATCH_DAY_REPLAY",
+                        "payloadJson", payloadJson)));
+        when(orchestratorClient.loadApproval(eq(TENANT_ID), eq(approvalNo), any()))
+                .thenAnswer(invocation -> {
+                    Class<?> responseType = invocation.getArgument(2);
+                    return JsonUtils.fromJson(approvalJson, responseType);
+                });
+        ApprovalDecision decision = remoteDecision(approvalNo, "APPROVED", approvalJson, "approver-1");
+        when(orchestratorClient.approveApproval(eq(TENANT_ID), eq(approvalNo), any(), any(), any(), any()))
+                .thenReturn(decision);
+    }
 
-  private static String approvalRecord(String approvalType, String actionType, String requesterId) {
-    return JsonUtils.toJson(Map.of(
-        "record",
-        Map.of(
-            "approvalStatus",
-            "PENDING",
-            "approvalType",
-            approvalType,
-            "actionType",
-            actionType,
-            "targetType",
-            "JOB_INSTANCE",
-            "requesterId",
-            requesterId,
-            "payloadJson",
-            "{}")));
-  }
+    private static ApprovalDecision remoteDecision(
+            String approvalNo, String status, String approvalJson, String approver) {
+        Map<?, ?> response = JsonUtils.fromJson(approvalJson, Map.class);
+        Map<?, ?> record = (Map<?, ?>) response.get("record");
+        ApprovalDecision decision = ApprovalDecision.builder()
+                .tenantId(TENANT_ID)
+                .approvalNo(approvalNo)
+                .approvalStatus(status)
+                .actionType((String) record.get("actionType"))
+                .targetType((String) record.get("targetType"))
+                .targetId((String) record.get("targetId"))
+                .payloadJson((String) record.get("payloadJson"))
+                .approverId(approver)
+                .sourceIdempotencyKey((String) record.get("sourceIdempotencyKey"))
+                .build();
+        return decision;
+    }
 
-  private static String approval(String actionType, String targetType) {
-    return """
+    private void stubPendingWholeWorkflowApproval(String approvalNo) {
+        String pendingJson = wholeWorkflowApprovalJson(approvalNo, "PENDING");
+        when(orchestratorClient.loadApproval(eq(TENANT_ID), eq(approvalNo), any()))
+                .thenAnswer(invocation -> {
+                    Class<?> responseType = invocation.getArgument(2);
+                    return JsonUtils.fromJson(pendingJson, responseType);
+                });
+    }
+
+    private static String wholeWorkflowApprovalJson(String approvalNo, String status) {
+        Map<String, Object> payload = Map.of("tenantId", TENANT_ID, "replayOperationId", 46L);
+        String payloadJson = JsonUtils.toJson(payload);
+        Map<String, Object> record = Map.of(
+                "tenantId",
+                TENANT_ID,
+                "approvalNo",
+                approvalNo,
+                "approvalType",
+                "COMPENSATION",
+                "actionType",
+                "WORKFLOW_RUN_REPLAY",
+                "targetType",
+                "WORKFLOW_RUN",
+                "targetId",
+                "901",
+                "payloadJson",
+                payloadJson,
+                "approvalStatus",
+                status,
+                "approverId",
+                "operator",
+                "sourceIdempotencyKey",
+                SOURCE_IDEMPOTENCY_KEY);
+        return JsonUtils.toJson(Map.of("record", record));
+    }
+
+    private static String approvalRecord(String approvalType, String actionType, String requesterId) {
+        return JsonUtils.toJson(Map.of(
+                "record",
+                Map.of(
+                        "approvalStatus",
+                        "PENDING",
+                        "approvalType",
+                        approvalType,
+                        "actionType",
+                        actionType,
+                        "targetType",
+                        "JOB_INSTANCE",
+                        "requesterId",
+                        requesterId,
+                        "payloadJson",
+                        "{}")));
+    }
+
+    private static String approval(String actionType, String targetType) {
+        return """
         {"record":{"approvalStatus":"PENDING","actionType":"%s","targetType":"%s","payloadJson":"{}"}}
         """.formatted(actionType, targetType);
-  }
+    }
 }

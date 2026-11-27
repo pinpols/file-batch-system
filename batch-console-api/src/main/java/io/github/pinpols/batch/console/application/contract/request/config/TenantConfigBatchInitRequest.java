@@ -19,437 +19,437 @@ import lombok.Data;
 @Data
 public class TenantConfigBatchInitRequest {
 
-  /** 配置导入拒绝未知字段，避免已退役载荷被静默当作成功。 */
-  @JsonAnySetter
-  public void rejectUnknownField(String fieldName, Object ignoredValue) {
-    throw new IllegalArgumentException("Unsupported configuration field: " + fieldName);
-  }
+    /** 配置导入拒绝未知字段，避免已退役载荷被静默当作成功。 */
+    @JsonAnySetter
+    public void rejectUnknownField(String fieldName, Object ignoredValue) {
+        throw new IllegalArgumentException("Unsupported configuration field: " + fieldName);
+    }
 
-  // CPD-OFF: 批量初始化按契约公开与文件模板 API 相同的嵌套规格。
+    // CPD-OFF: 批量初始化按契约公开与文件模板 API 相同的嵌套规格。
 
-  @NotEmpty(message = "targetTenantIds must not be empty")
-  @Size(max = 50, message = "targetTenantIds must not exceed 50")
-  private List<@NotBlank @Size(min = 1, max = 64) String> targetTenantIds;
+    @NotEmpty(message = "targetTenantIds must not be empty")
+    @Size(max = 50, message = "targetTenantIds must not exceed 50")
+    private List<@NotBlank @Size(min = 1, max = 64) String> targetTenantIds;
 
-  private InitMode mode = InitMode.SKIP_EXISTING;
+    private InitMode mode = InitMode.SKIP_EXISTING;
 
-  private boolean dryRun;
+    private boolean dryRun;
 
-  /**
-   * 严格事务模式：true 时任一 spec apply 失败即整体回滚（all-or-nothing），适用于 Job Bundle 跨环境导入； 默认 false 保留 ConfigSync
-   * 路径的"部分成功"语义（单项失败只记 failed 不回滚）。
-   */
-  private boolean strict;
-
-  @Valid
-  private List<@NotNull JobDefinitionSpec> jobDefinitions;
-
-  @Valid
-  private List<@NotNull WorkflowDefinitionSpec> workflowDefinitions;
-
-  @Valid
-  private List<@NotNull FileChannelSpec> fileChannels;
-
-  @Valid
-  private List<@NotNull FileTemplateSpec> fileTemplates;
-  // CPD-ON
-
-  @Valid
-  private List<@NotNull ResourceQueueSpec> resourceQueues;
-
-  @Valid
-  private List<@NotNull BatchWindowSpec> batchWindows;
-
-  @Valid
-  private List<@NotNull BusinessCalendarSpec> businessCalendars;
-
-  @Valid
-  private List<@NotNull TenantQuotaPolicySpec> quotaPolicies;
-
-  @Valid
-  private List<@NotNull AlertRoutingSpec> alertRoutings;
-
-  public enum InitMode {
-    SKIP_EXISTING,
-    UPSERT
-  }
-
-  @Data
-  public static class JobDefinitionSpec {
-    @Size(max = 128)
-    private String jobCode;
-
-    @Size(max = 64)
-    @Pattern(
-        regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-        message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
-            + " underscore or hyphen")
-    private String dependsOnJobCode;
+    /**
+     * 严格事务模式：true 时任一 spec apply 失败即整体回滚（all-or-nothing），适用于 Job Bundle 跨环境导入； 默认 false 保留 ConfigSync
+     * 路径的"部分成功"语义（单项失败只记 failed 不回滚）。
+     */
+    private boolean strict;
 
     @Valid
-    @Size(max = 32)
-    private List<@NotNull JobDependencyRuleRequest> dependencyRules;
-
-    @Size(max = 256)
-    private String jobName;
-
-    private String jobType;
-    private String bizType;
-    private String scheduleType;
-    private String scheduleExpr;
-    private String timezone;
-    private String triggerMode;
-    private String workerGroup;
-    private String queueCode;
-    private String calendarCode;
-    private String windowCode;
-    private Boolean dagEnabled;
-    private String shardStrategy;
-    private String retryPolicy;
-    private Integer retryMaxCount;
-    private Integer timeoutSeconds;
-
-    @Min(0)
-    private Integer softRuntimeSeconds;
-
-    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-    private String softRuntimeSeverity;
-
-    @Min(0)
-    private Integer startGraceSeconds;
-
-    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-    private String startGraceSeverity;
-
-    private LocalTime completionDeadlineLocalTime;
-
-    @Min(0)
-    @Max(1)
-    private Integer completionDeadlineDayOffset;
-
-    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-    private String completionDeadlineSeverity;
-
-    @Min(0)
-    private Integer dependencyCompletionWindowSeconds;
-
-    private String executionHandler;
-    private String paramSchema;
-    private String defaultParams;
-    private Integer priority;
-    private Boolean enabled;
-    private String description;
-
-    /** ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC,缺省 FULL。INCREMENTAL 须配合 watermarkField。 */
-    private String executionMode;
-
-    private String watermarkField;
-  }
-
-  @Data
-  public static class WorkflowDefinitionSpec {
-    @Size(max = 128)
-    private String workflowCode;
-
-    @Size(max = 256)
-    private String workflowName;
-
-    private String workflowType;
-    private Boolean enabled;
-    /** 可移植的受管关联：目标租户根据该 Job code 解析本地 ID。 */
-    private String singleJobCode;
-
-    private Boolean scheduleEnabled;
-    private String scheduleType;
-    private String scheduleExpr;
-    private String timezone;
-    private String triggerMode;
-    private String calendarCode;
-    private String dependsOnJobCode;
+    private List<@NotNull JobDefinitionSpec> jobDefinitions;
 
     @Valid
-    private List<@NotNull NodeSpec> nodes;
+    private List<@NotNull WorkflowDefinitionSpec> workflowDefinitions;
 
     @Valid
-    private List<@NotNull EdgeSpec> edges;
+    private List<@NotNull FileChannelSpec> fileChannels;
 
-    @Data
-    public static class NodeSpec {
-      private String nodeCode;
-      private String nodeName;
-      private String nodeType;
-      private String relatedJobCode;
-      private String workerGroup;
-      private String windowCode;
-      private Integer nodeOrder;
-      private String retryPolicy;
-      private Integer retryMaxCount;
-      private Integer timeoutSeconds;
-      private String nodeParams;
+    @Valid
+    private List<@NotNull FileTemplateSpec> fileTemplates;
+    // CPD-ON
 
-      /** 与普通 Workflow 保存共用 ADR-018 声明，配置包往返不能丢失跨日依赖。 */
-      private String crossDayDependencies;
+    @Valid
+    private List<@NotNull ResourceQueueSpec> resourceQueues;
 
-      /** 等待上限秒数；未传由 Mapper 取 86400，0 表示永久等待。 */
-      private Integer crossDayDependencyTimeoutSeconds;
+    @Valid
+    private List<@NotNull BatchWindowSpec> batchWindows;
 
-      private Boolean enabled;
+    @Valid
+    private List<@NotNull BusinessCalendarSpec> businessCalendars;
+
+    @Valid
+    private List<@NotNull TenantQuotaPolicySpec> quotaPolicies;
+
+    @Valid
+    private List<@NotNull AlertRoutingSpec> alertRoutings;
+
+    public enum InitMode {
+        SKIP_EXISTING,
+        UPSERT
     }
 
     @Data
-    public static class EdgeSpec {
-      private String fromNodeCode;
-      private String toNodeCode;
-      private String edgeType;
-      private String conditionExpr;
-      private Boolean enabled;
+    public static class JobDefinitionSpec {
+        @Size(max = 128)
+        private String jobCode;
+
+        @Size(max = 64)
+        @Pattern(
+                regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
+                        + " underscore or hyphen")
+        private String dependsOnJobCode;
+
+        @Valid
+        @Size(max = 32)
+        private List<@NotNull JobDependencyRuleRequest> dependencyRules;
+
+        @Size(max = 256)
+        private String jobName;
+
+        private String jobType;
+        private String bizType;
+        private String scheduleType;
+        private String scheduleExpr;
+        private String timezone;
+        private String triggerMode;
+        private String workerGroup;
+        private String queueCode;
+        private String calendarCode;
+        private String windowCode;
+        private Boolean dagEnabled;
+        private String shardStrategy;
+        private String retryPolicy;
+        private Integer retryMaxCount;
+        private Integer timeoutSeconds;
+
+        @Min(0)
+        private Integer softRuntimeSeconds;
+
+        @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+        private String softRuntimeSeverity;
+
+        @Min(0)
+        private Integer startGraceSeconds;
+
+        @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+        private String startGraceSeverity;
+
+        private LocalTime completionDeadlineLocalTime;
+
+        @Min(0)
+        @Max(1)
+        private Integer completionDeadlineDayOffset;
+
+        @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+        private String completionDeadlineSeverity;
+
+        @Min(0)
+        private Integer dependencyCompletionWindowSeconds;
+
+        private String executionHandler;
+        private String paramSchema;
+        private String defaultParams;
+        private Integer priority;
+        private Boolean enabled;
+        private String description;
+
+        /** ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC,缺省 FULL。INCREMENTAL 须配合 watermarkField。 */
+        private String executionMode;
+
+        private String watermarkField;
     }
-  }
 
-  @Data
-  public static class FileChannelSpec {
-    @Size(max = 128)
-    private String channelCode;
+    @Data
+    public static class WorkflowDefinitionSpec {
+        @Size(max = 128)
+        private String workflowCode;
+
+        @Size(max = 256)
+        private String workflowName;
+
+        private String workflowType;
+        private Boolean enabled;
+        /** 可移植的受管关联：目标租户根据该 Job code 解析本地 ID。 */
+        private String singleJobCode;
+
+        private Boolean scheduleEnabled;
+        private String scheduleType;
+        private String scheduleExpr;
+        private String timezone;
+        private String triggerMode;
+        private String calendarCode;
+        private String dependsOnJobCode;
+
+        @Valid
+        private List<@NotNull NodeSpec> nodes;
 
-    @Size(max = 256)
-    private String channelName;
+        @Valid
+        private List<@NotNull EdgeSpec> edges;
 
-    @Size(max = 32)
-    private String channelType;
+        @Data
+        public static class NodeSpec {
+            private String nodeCode;
+            private String nodeName;
+            private String nodeType;
+            private String relatedJobCode;
+            private String workerGroup;
+            private String windowCode;
+            private Integer nodeOrder;
+            private String retryPolicy;
+            private Integer retryMaxCount;
+            private Integer timeoutSeconds;
+            private String nodeParams;
 
-    @Size(max = 512)
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    private String targetEndpoint;
+            /** 与普通 Workflow 保存共用 ADR-018 声明，配置包往返不能丢失跨日依赖。 */
+            private String crossDayDependencies;
 
-    @Size(max = 32)
-    private String authType;
+            /** 等待上限秒数；未传由 Mapper 取 86400，0 表示永久等待。 */
+            private Integer crossDayDependencyTimeoutSeconds;
 
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    private String configJson;
+            private Boolean enabled;
+        }
 
-    @Size(max = 32)
-    private String receiptPolicy;
+        @Data
+        public static class EdgeSpec {
+            private String fromNodeCode;
+            private String toNodeCode;
+            private String edgeType;
+            private String conditionExpr;
+            private Boolean enabled;
+        }
+    }
+
+    @Data
+    public static class FileChannelSpec {
+        @Size(max = 128)
+        private String channelCode;
+
+        @Size(max = 256)
+        private String channelName;
 
-    private Integer timeoutSeconds;
-    private Boolean enabled;
-  }
+        @Size(max = 32)
+        private String channelType;
 
-  @Data
-  public static class FileTemplateSpec {
-    @Size(max = 128)
-    private String templateCode;
+        @Size(max = 512)
+        @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+        private String targetEndpoint;
 
-    @Size(max = 256)
-    private String templateName;
+        @Size(max = 32)
+        private String authType;
 
-    @Size(max = 32)
-    private String templateType;
+        @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+        private String configJson;
 
-    @Size(max = 64)
-    private String bizType;
+        @Size(max = 32)
+        private String receiptPolicy;
 
-    @Size(max = 32)
-    private String fileFormatType;
+        private Integer timeoutSeconds;
+        private Boolean enabled;
+    }
 
-    @Size(max = 32)
-    private String charset;
+    @Data
+    public static class FileTemplateSpec {
+        @Size(max = 128)
+        private String templateCode;
 
-    @Size(max = 32)
-    private String targetCharset;
+        @Size(max = 256)
+        private String templateName;
 
-    private Boolean withBom;
+        @Size(max = 32)
+        private String templateType;
 
-    @Size(max = 16)
-    private String lineSeparator;
+        @Size(max = 64)
+        private String bizType;
 
-    @Size(max = 8)
-    private String delimiter;
+        @Size(max = 32)
+        private String fileFormatType;
 
-    @Size(max = 8)
-    private String quoteChar;
+        @Size(max = 32)
+        private String charset;
 
-    @Size(max = 8)
-    private String escapeChar;
+        @Size(max = 32)
+        private String targetCharset;
 
-    private Integer recordLength;
-    private Integer headerRows;
-    private Integer footerRows;
-    private String headerTemplateJson;
-    private String trailerTemplateJson;
+        private Boolean withBom;
 
-    @Size(max = 32)
-    private String checksumType;
+        @Size(max = 16)
+        private String lineSeparator;
 
-    @Size(max = 32)
-    private String compressType;
+        @Size(max = 8)
+        private String delimiter;
 
-    @Size(max = 32)
-    private String encryptType;
+        @Size(max = 8)
+        private String quoteChar;
 
-    @Size(max = 512)
-    private String namingRule;
+        @Size(max = 8)
+        private String escapeChar;
 
-    private String fieldMappingsJson;
-    private String validationRuleSetJson;
+        private Integer recordLength;
+        private Integer headerRows;
+        private Integer footerRows;
+        private String headerTemplateJson;
+        private String trailerTemplateJson;
 
-    @Size(max = 128)
-    private String defaultQueryCode;
+        @Size(max = 32)
+        private String checksumType;
 
-    private String defaultQuerySql;
-    private String queryParamSchemaJson;
-    private Boolean streamingEnabled;
-    private Integer pageSize;
-    private Integer fetchSize;
-    private Integer chunkSize;
-    private Boolean previewMaskingEnabled;
-    private Boolean errorLineMaskingEnabled;
-    private Boolean logMaskingEnabled;
-    private Boolean contentEncryptionEnabled;
+        @Size(max = 32)
+        private String compressType;
 
-    @Size(max = 256)
-    private String encryptionKeyRef;
+        @Size(max = 32)
+        private String encryptType;
 
-    private Boolean downloadRequiresApproval;
+        @Size(max = 512)
+        private String namingRule;
 
-    @Size(max = 128)
-    private String maskingRuleSet;
+        private String fieldMappingsJson;
+        private String validationRuleSetJson;
 
-    private Boolean enabled;
-    private Integer version;
+        @Size(max = 128)
+        private String defaultQueryCode;
 
-    @Size(max = 512)
-    private String description;
-  }
+        private String defaultQuerySql;
+        private String queryParamSchemaJson;
+        private Boolean streamingEnabled;
+        private Integer pageSize;
+        private Integer fetchSize;
+        private Integer chunkSize;
+        private Boolean previewMaskingEnabled;
+        private Boolean errorLineMaskingEnabled;
+        private Boolean logMaskingEnabled;
+        private Boolean contentEncryptionEnabled;
 
-  @Data
-  public static class ResourceQueueSpec {
-    @Size(max = 128)
-    private String queueCode;
+        @Size(max = 256)
+        private String encryptionKeyRef;
 
-    @Size(max = 256)
-    private String queueName;
+        private Boolean downloadRequiresApproval;
 
-    @Size(max = 32)
-    private String queueType;
+        @Size(max = 128)
+        private String maskingRuleSet;
 
-    private Integer maxRunningJobs;
-    private Integer maxRunningPartitions;
-    private Integer maxQps;
+        private Boolean enabled;
+        private Integer version;
 
-    @Size(max = 128)
-    private String workerGroup;
+        @Size(max = 512)
+        private String description;
+    }
 
-    @Size(max = 128)
-    private String resourceTag;
+    @Data
+    public static class ResourceQueueSpec {
+        @Size(max = 128)
+        private String queueCode;
 
-    @Size(max = 32)
-    private String priorityPolicy;
+        @Size(max = 256)
+        private String queueName;
 
-    private Integer fairShareWeight;
-    private Boolean enabled;
+        @Size(max = 32)
+        private String queueType;
 
-    @Size(max = 512)
-    private String description;
-  }
+        private Integer maxRunningJobs;
+        private Integer maxRunningPartitions;
+        private Integer maxQps;
 
-  @Data
-  public static class BatchWindowSpec {
-    @Size(max = 128)
-    private String windowCode;
+        @Size(max = 128)
+        private String workerGroup;
 
-    @Size(max = 256)
-    private String windowName;
+        @Size(max = 128)
+        private String resourceTag;
 
-    @Size(max = 64)
-    private String timezone;
+        @Size(max = 32)
+        private String priorityPolicy;
 
-    @Size(max = 8)
-    private String startTime;
+        private Integer fairShareWeight;
+        private Boolean enabled;
 
-    @Size(max = 8)
-    private String endTime;
+        @Size(max = 512)
+        private String description;
+    }
 
-    @Size(max = 32)
-    private String endStrategy;
+    @Data
+    public static class BatchWindowSpec {
+        @Size(max = 128)
+        private String windowCode;
 
-    @Size(max = 32)
-    private String outOfWindowAction;
+        @Size(max = 256)
+        private String windowName;
 
-    private Boolean allowCrossDay;
-    private Boolean enabled;
+        @Size(max = 64)
+        private String timezone;
 
-    @Size(max = 512)
-    private String description;
-  }
+        @Size(max = 8)
+        private String startTime;
 
-  @Data
-  public static class BusinessCalendarSpec {
-    @Size(max = 128)
-    private String calendarCode;
+        @Size(max = 8)
+        private String endTime;
 
-    @Size(max = 256)
-    private String calendarName;
+        @Size(max = 32)
+        private String endStrategy;
 
-    @Size(max = 64)
-    private String timezone;
+        @Size(max = 32)
+        private String outOfWindowAction;
 
-    @Size(max = 32)
-    private String holidayRollRule;
+        private Boolean allowCrossDay;
+        private Boolean enabled;
 
-    @Size(max = 32)
-    private String catchUpPolicy;
+        @Size(max = 512)
+        private String description;
+    }
 
-    private Integer catchUpMaxDays;
-    private Boolean enabled;
+    @Data
+    public static class BusinessCalendarSpec {
+        @Size(max = 128)
+        private String calendarCode;
 
-    /** 格式：yyyy-MM-dd。 */
-    private List<String> holidays;
-  }
+        @Size(max = 256)
+        private String calendarName;
 
-  @Data
-  public static class TenantQuotaPolicySpec {
-    @Size(max = 128)
-    private String policyCode;
+        @Size(max = 64)
+        private String timezone;
 
-    private Integer maxRunningJobsPerTenant;
-    private Integer maxPartitionsPerTenant;
-    private Integer maxQpsPerTenant;
-    private Integer fairShareWeight;
-    private Boolean enabled;
+        @Size(max = 32)
+        private String holidayRollRule;
 
-    @Size(max = 512)
-    private String description;
-  }
+        @Size(max = 32)
+        private String catchUpPolicy;
 
-  @Data
-  public static class AlertRoutingSpec {
-    @Size(max = 128)
-    private String routeCode;
+        private Integer catchUpMaxDays;
+        private Boolean enabled;
 
-    @Size(max = 256)
-    private String routeName;
+        /** 格式：yyyy-MM-dd。 */
+        private List<String> holidays;
+    }
 
-    @Size(max = 128)
-    private String team;
+    @Data
+    public static class TenantQuotaPolicySpec {
+        @Size(max = 128)
+        private String policyCode;
 
-    @Size(max = 128)
-    private String alertGroup;
+        private Integer maxRunningJobsPerTenant;
+        private Integer maxPartitionsPerTenant;
+        private Integer maxQpsPerTenant;
+        private Integer fairShareWeight;
+        private Boolean enabled;
 
-    @Size(max = 32)
-    private String severity;
+        @Size(max = 512)
+        private String description;
+    }
 
-    @Size(max = 512)
-    private String receiver;
+    @Data
+    public static class AlertRoutingSpec {
+        @Size(max = 128)
+        private String routeCode;
 
-    @Size(max = 256)
-    private String groupBy;
+        @Size(max = 256)
+        private String routeName;
 
-    private Integer groupWaitSeconds;
-    private Integer groupIntervalSeconds;
-    private Integer repeatIntervalSeconds;
-    private Boolean enabled;
+        @Size(max = 128)
+        private String team;
 
-    @Size(max = 512)
-    private String description;
-  }
+        @Size(max = 128)
+        private String alertGroup;
+
+        @Size(max = 32)
+        private String severity;
+
+        @Size(max = 512)
+        private String receiver;
+
+        @Size(max = 256)
+        private String groupBy;
+
+        private Integer groupWaitSeconds;
+        private Integer groupIntervalSeconds;
+        private Integer repeatIntervalSeconds;
+        private Boolean enabled;
+
+        @Size(max = 512)
+        private String description;
+    }
 }

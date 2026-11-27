@@ -8,13 +8,13 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum NotificationChannelType implements DictEnum {
-  EMAIL("EMAIL", "邮件"),
-  WEBHOOK("WEBHOOK", "Webhook"),
-  DINGTALK("DINGTALK", "钉钉"),
-  WECOM("WECOM", "企业微信"),
-  SLACK("SLACK", "Slack"),
-  SMS("SMS", "短信");
+    EMAIL("EMAIL", "邮件"),
+    WEBHOOK("WEBHOOK", "Webhook"),
+    DINGTALK("DINGTALK", "钉钉"),
+    WECOM("WECOM", "企业微信"),
+    SLACK("SLACK", "Slack"),
+    SMS("SMS", "短信");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

@@ -8,6 +8,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.kafka")
 public class KafkaNamespaceProperties {
 
-  /** 部署标识使用小写；仅非生产环境允许留空。 */
-  private String namespace = "";
+    /** 部署标识使用小写；仅非生产环境允许留空。 */
+    private String namespace = "";
 }

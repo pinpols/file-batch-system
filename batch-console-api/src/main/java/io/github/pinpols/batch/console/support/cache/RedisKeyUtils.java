@@ -25,68 +25,62 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  */
 public final class RedisKeyUtils {
 
-  /** batchSize 非正时每次 SCAN 的 COUNT 提示值。 */
-  private static final int DEFAULT_SCAN_BATCH_SIZE = 500;
+    /** batchSize 非正时每次 SCAN 的 COUNT 提示值。 */
+    private static final int DEFAULT_SCAN_BATCH_SIZE = 500;
 
-  private RedisKeyUtils() {}
+    private RedisKeyUtils() {}
 
-  /**
-   * 按 pattern 增量 SCAN + 分批 DEL,返回成功删除的 key 总数。pattern 为 null/blank 时直接返回 0。
-   *
-   * @param redisTemplate Redis 模板
-   * @param pattern Redis glob pattern,例如 {@code "console:cache:meta:*"}
-   * @param batchSize 单次 SCAN count + 单次 DEL 上限,推荐 500
-   * @return 成功删除的 key 数;SCAN/DEL 失败返回 0(不抛)
-   */
-  public static long scanAndDelete(
-      StringRedisTemplate redisTemplate,
-      String pattern,
-      int batchSize,
-      BatchRedisNamespace namespace) {
-    try {
-      return scanAndDeleteOrThrow(redisTemplate, pattern, batchSize, namespace);
-    } catch (RuntimeException ex) {
-      // 工具层吞异常,调用方负责日志输出;残余 key 走自然 TTL 回退。
-      return 0L;
-    }
-  }
-
-  /** 与 {@link #scanAndDelete} 相同，但 Redis 异常直接抛出，适合需要把失败纳入一致性决策的调用方。 */
-  public static long scanAndDeleteOrThrow(
-      StringRedisTemplate redisTemplate,
-      String pattern,
-      int batchSize,
-      BatchRedisNamespace namespace) {
-    if (pattern == null || pattern.isBlank()) {
-      return 0L;
-    }
-    int safeBatch = batchSize <= 0 ? DEFAULT_SCAN_BATCH_SIZE : batchSize;
-    ScanOptions options = ScanOptions.scanOptions()
-        .match(namespace.scanPattern(pattern))
-        .count(safeBatch)
-        .build();
-    try (Cursor<String> cursor = redisTemplate.scan(options)) {
-      long deleted = 0L;
-      List<String> batch = new ArrayList<>(safeBatch);
-      while (cursor.hasNext()) {
-        batch.add(cursor.next());
-        if (batch.size() >= safeBatch) {
-          deleted += deleteBatch(redisTemplate, batch);
-          batch.clear();
+    /**
+     * 按 pattern 增量 SCAN + 分批 DEL,返回成功删除的 key 总数。pattern 为 null/blank 时直接返回 0。
+     *
+     * @param redisTemplate Redis 模板
+     * @param pattern Redis glob pattern,例如 {@code "console:cache:meta:*"}
+     * @param batchSize 单次 SCAN count + 单次 DEL 上限,推荐 500
+     * @return 成功删除的 key 数;SCAN/DEL 失败返回 0(不抛)
+     */
+    public static long scanAndDelete(
+            StringRedisTemplate redisTemplate, String pattern, int batchSize, BatchRedisNamespace namespace) {
+        try {
+            return scanAndDeleteOrThrow(redisTemplate, pattern, batchSize, namespace);
+        } catch (RuntimeException ex) {
+            // 工具层吞异常,调用方负责日志输出;残余 key 走自然 TTL 回退。
+            return 0L;
         }
-      }
-      if (!batch.isEmpty()) {
-        deleted += deleteBatch(redisTemplate, batch);
-      }
-      return deleted;
     }
-  }
 
-  private static long deleteBatch(StringRedisTemplate redisTemplate, List<String> keys) {
-    Long n = redisTemplate.delete(keys);
-    if (EmptyChecks.isNull(n)) {
-      throw new IllegalStateException("Redis batch delete did not execute");
+    /** 与 {@link #scanAndDelete} 相同，但 Redis 异常直接抛出，适合需要把失败纳入一致性决策的调用方。 */
+    public static long scanAndDeleteOrThrow(
+            StringRedisTemplate redisTemplate, String pattern, int batchSize, BatchRedisNamespace namespace) {
+        if (pattern == null || pattern.isBlank()) {
+            return 0L;
+        }
+        int safeBatch = batchSize <= 0 ? DEFAULT_SCAN_BATCH_SIZE : batchSize;
+        ScanOptions options = ScanOptions.scanOptions()
+                .match(namespace.scanPattern(pattern))
+                .count(safeBatch)
+                .build();
+        try (Cursor<String> cursor = redisTemplate.scan(options)) {
+            long deleted = 0L;
+            List<String> batch = new ArrayList<>(safeBatch);
+            while (cursor.hasNext()) {
+                batch.add(cursor.next());
+                if (batch.size() >= safeBatch) {
+                    deleted += deleteBatch(redisTemplate, batch);
+                    batch.clear();
+                }
+            }
+            if (!batch.isEmpty()) {
+                deleted += deleteBatch(redisTemplate, batch);
+            }
+            return deleted;
+        }
     }
-    return n;
-  }
+
+    private static long deleteBatch(StringRedisTemplate redisTemplate, List<String> keys) {
+        Long n = redisTemplate.delete(keys);
+        if (EmptyChecks.isNull(n)) {
+            throw new IllegalStateException("Redis batch delete did not execute");
+        }
+        return n;
+    }
 }

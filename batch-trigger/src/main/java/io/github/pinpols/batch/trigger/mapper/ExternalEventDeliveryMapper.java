@@ -7,41 +7,40 @@ import org.apache.ibatis.annotations.Param;
 
 public interface ExternalEventDeliveryMapper {
 
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  int insert(ExternalEventDeliveryEntity entity);
+    int insert(ExternalEventDeliveryEntity entity);
 
-  ExternalEventDeliveryEntity selectByIdentityForUpdate(
-      @Param("tenantId") String tenantId,
-      @Param("eventSource") String eventSource,
-      @Param("eventId") String eventId);
+    ExternalEventDeliveryEntity selectByIdentityForUpdate(
+            @Param("tenantId") String tenantId,
+            @Param("eventSource") String eventSource,
+            @Param("eventId") String eventId);
 
-  int insertAlias(
-      @Param("tenantId") String tenantId,
-      @Param("idempotencyKey") String idempotencyKey,
-      @Param("deliveryId") Long deliveryId);
+    int insertAlias(
+            @Param("tenantId") String tenantId,
+            @Param("idempotencyKey") String idempotencyKey,
+            @Param("deliveryId") Long deliveryId);
 
-  Long selectAliasDeliveryId(
-      @Param("tenantId") String tenantId, @Param("idempotencyKey") String idempotencyKey);
+    Long selectAliasDeliveryId(@Param("tenantId") String tenantId, @Param("idempotencyKey") String idempotencyKey);
 
-  boolean containsWorkflowTarget(
-      @Param("tenantId") String tenantId,
-      @Param("eventSource") String eventSource,
-      @Param("eventId") String eventId,
-      @Param("workflowDefinitionId") Long workflowDefinitionId);
+    boolean containsWorkflowTarget(
+            @Param("tenantId") String tenantId,
+            @Param("eventSource") String eventSource,
+            @Param("eventId") String eventId,
+            @Param("workflowDefinitionId") Long workflowDefinitionId);
 
-  ExternalEventDeliveryEntity selectByIdentity(
-      @Param("tenantId") String tenantId,
-      @Param("eventSource") String eventSource,
-      @Param("eventId") String eventId);
+    ExternalEventDeliveryEntity selectByIdentity(
+            @Param("tenantId") String tenantId,
+            @Param("eventSource") String eventSource,
+            @Param("eventId") String eventId);
 
-  ExternalEventDeliveryEntity selectByAlias(
-      @Param("tenantId") String tenantId,
-      @Param("eventSource") String eventSource,
-      @Param("idempotencyKey") String idempotencyKey);
+    ExternalEventDeliveryEntity selectByAlias(
+            @Param("tenantId") String tenantId,
+            @Param("eventSource") String eventSource,
+            @Param("idempotencyKey") String idempotencyKey);
 
-  List<ExternalEventTargetStatus> selectTargetStatuses(
-      @Param("tenantId") String tenantId,
-      @Param("eventSource") String eventSource,
-      @Param("eventId") String eventId);
+    List<ExternalEventTargetStatus> selectTargetStatuses(
+            @Param("tenantId") String tenantId,
+            @Param("eventSource") String eventSource,
+            @Param("eventId") String eventId);
 }

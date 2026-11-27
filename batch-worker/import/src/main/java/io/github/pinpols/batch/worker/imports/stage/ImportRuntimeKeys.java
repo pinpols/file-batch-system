@@ -13,35 +13,35 @@ package io.github.pinpols.batch.worker.imports.stage;
  */
 public final class ImportRuntimeKeys {
 
-  /** LOAD 累计入库成功行数；同时写入 file_record metadata 供问题定位。 */
-  public static final String SUCCESS_COUNT = "successCount";
+    /** LOAD 累计入库成功行数；同时写入 file_record metadata 供问题定位。 */
+    public static final String SUCCESS_COUNT = "successCount";
 
-  /** 非 skip 策略下的失败行数（BAD_RECORD_GOVERNANCE 计数）；同时写入 file_record metadata。 */
-  public static final String FAILED_COUNT = "failedCount";
+    /** 非 skip 策略下的失败行数（BAD_RECORD_GOVERNANCE 计数）；同时写入 file_record metadata。 */
+    public static final String FAILED_COUNT = "failedCount";
 
-  /** VALIDATE / LOAD 判定需要人工复核：为 {@code true} 时 LOAD 不自动推进文件状态。 */
-  public static final String MANUAL_REVIEW_REQUIRED = "manualReviewRequired";
+    /** VALIDATE / LOAD 判定需要人工复核：为 {@code true} 时 LOAD 不自动推进文件状态。 */
+    public static final String MANUAL_REVIEW_REQUIRED = "manualReviewRequired";
 
-  /** PREPROCESS 字符集探测结论：疑似编码与实际不符（如声明 GBK 实为 UTF-8）。 */
-  public static final String CHARSET_SUSPECT = "charsetSuspect";
+    /** PREPROCESS 字符集探测结论：疑似编码与实际不符（如声明 GBK 实为 UTF-8）。 */
+    public static final String CHARSET_SUSPECT = "charsetSuspect";
 
-  /** PREPROCESS 转码时的非法字节替换次数（{@code invalid_char_policy=REPLACE}）。 */
-  public static final String REPLACEMENT_COUNT = "replacementCount";
+    /** PREPROCESS 转码时的非法字节替换次数（{@code invalid_char_policy=REPLACE}）。 */
+    public static final String REPLACEMENT_COUNT = "replacementCount";
 
-  /** PREPROCESS 探测到的实际字符集名；同时写入 file_record metadata。 */
-  public static final String DETECTED_CHARSET = "detectedCharset";
+    /** PREPROCESS 探测到的实际字符集名；同时写入 file_record metadata。 */
+    public static final String DETECTED_CHARSET = "detectedCharset";
 
-  /** BAD_RECORD_GOVERNANCE 记录的最后一条坏记录（原样 JSON / 字符串），供失败续跑定位。 */
-  public static final String LAST_BAD_RECORD = "lastBadRecord";
+    /** BAD_RECORD_GOVERNANCE 记录的最后一条坏记录（原样 JSON / 字符串），供失败续跑定位。 */
+    public static final String LAST_BAD_RECORD = "lastBadRecord";
 
-  /** BAD_RECORD_GOVERNANCE 处理到的最后一条记录号，续跑从此处继续。 */
-  public static final String LAST_PROCESSED_RECORD_NO = "lastProcessedRecordNo";
+    /** BAD_RECORD_GOVERNANCE 处理到的最后一条记录号，续跑从此处继续。 */
+    public static final String LAST_PROCESSED_RECORD_NO = "lastProcessedRecordNo";
 
-  /** BAD_RECORD_GOVERNANCE 记录的最后一个错误码，失败上报读取。 */
-  public static final String LAST_ERROR_CODE = "lastErrorCode";
+    /** BAD_RECORD_GOVERNANCE 记录的最后一个错误码，失败上报读取。 */
+    public static final String LAST_ERROR_CODE = "lastErrorCode";
 
-  /** BAD_RECORD_GOVERNANCE 记录的最后一个错误信息（已按模板脱敏），失败上报读取。 */
-  public static final String LAST_ERROR_MESSAGE = "lastErrorMessage";
+    /** BAD_RECORD_GOVERNANCE 记录的最后一个错误信息（已按模板脱敏），失败上报读取。 */
+    public static final String LAST_ERROR_MESSAGE = "lastErrorMessage";
 
-  private ImportRuntimeKeys() {}
+    private ImportRuntimeKeys() {}
 }

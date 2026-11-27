@@ -12,20 +12,19 @@ import java.util.Map;
  * @param evidence 排障所需的少量证据（fileId / actualSize / expectedSize 等），会写入 outbox event 和 Micrometer
  *     tag（仅 code 作为 tag，避免 high-cardinality 失控）
  */
-public record VerifyResult(
-    boolean passed, String code, String message, Map<String, Object> evidence) {
+public record VerifyResult(boolean passed, String code, String message, Map<String, Object> evidence) {
 
-  private static final VerifyResult PASS_SINGLETON = new VerifyResult(true, null, null, Map.of());
+    private static final VerifyResult PASS_SINGLETON = new VerifyResult(true, null, null, Map.of());
 
-  public static VerifyResult pass() {
-    return PASS_SINGLETON;
-  }
+    public static VerifyResult pass() {
+        return PASS_SINGLETON;
+    }
 
-  public static VerifyResult fail(String code, String message) {
-    return new VerifyResult(false, code, message, Map.of());
-  }
+    public static VerifyResult fail(String code, String message) {
+        return new VerifyResult(false, code, message, Map.of());
+    }
 
-  public static VerifyResult fail(String code, String message, Map<String, Object> evidence) {
-    return new VerifyResult(false, code, message, evidence == null ? Map.of() : evidence);
-  }
+    public static VerifyResult fail(String code, String message, Map<String, Object> evidence) {
+        return new VerifyResult(false, code, message, evidence == null ? Map.of() : evidence);
+    }
 }

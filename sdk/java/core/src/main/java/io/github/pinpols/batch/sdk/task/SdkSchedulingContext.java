@@ -25,11 +25,11 @@ import java.time.LocalDate;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SdkSchedulingContext(
-    LocalDate bizDate,
-    LocalDate prevBizDate,
-    LocalDate nextBizDate,
-    Boolean isHoliday,
-    Integer attemptNo,
-    String triggerType,
-    String triggerCode,
-    Long workflowRunId) {}
+        LocalDate bizDate,
+        LocalDate prevBizDate,
+        LocalDate nextBizDate,
+        Boolean isHoliday,
+        Integer attemptNo,
+        String triggerType,
+        String triggerCode,
+        Long workflowRunId) {}

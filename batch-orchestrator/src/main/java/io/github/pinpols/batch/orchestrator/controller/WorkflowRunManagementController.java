@@ -16,37 +16,36 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class WorkflowRunManagementController {
 
-  private final WorkflowRunManagementApplicationService workflowRunManagementApplicationService;
+    private final WorkflowRunManagementApplicationService workflowRunManagementApplicationService;
 
-  @PostMapping("/{id}/cancel")
-  public RunAction cancel(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return workflowRunManagementApplicationService.cancel(tenantId, id);
-  }
+    @PostMapping("/{id}/cancel")
+    public RunAction cancel(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return workflowRunManagementApplicationService.cancel(tenantId, id);
+    }
 
-  @PostMapping("/{id}/terminate")
-  public RunAction terminate(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return workflowRunManagementApplicationService.terminate(tenantId, id);
-  }
+    @PostMapping("/{id}/terminate")
+    public RunAction terminate(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return workflowRunManagementApplicationService.terminate(tenantId, id);
+    }
 
-  @PostMapping("/{id}/pause")
-  public RunAction pause(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return workflowRunManagementApplicationService.pause(tenantId, id);
-  }
+    @PostMapping("/{id}/pause")
+    public RunAction pause(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return workflowRunManagementApplicationService.pause(tenantId, id);
+    }
 
-  @PostMapping("/{id}/resume")
-  public RunAction resume(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return workflowRunManagementApplicationService.resume(tenantId, id);
-  }
+    @PostMapping("/{id}/resume")
+    public RunAction resume(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return workflowRunManagementApplicationService.resume(tenantId, id);
+    }
 
-  @PostMapping("/{id}/skip-node")
-  public NodeAction skipNode(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("nodeCode") String nodeCode,
-      @RequestParam(value = "operatorId", required = false) String operatorId,
-      @RequestParam(value = "reason", required = false) String reason) {
-    // P1-2: operatorId / reason 用于 audit + alert,backward-compatible 默认 null
-    return workflowRunManagementApplicationService.skipNode(
-        tenantId, id, nodeCode, operatorId, reason);
-  }
+    @PostMapping("/{id}/skip-node")
+    public NodeAction skipNode(
+            @PathVariable Long id,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("nodeCode") String nodeCode,
+            @RequestParam(value = "operatorId", required = false) String operatorId,
+            @RequestParam(value = "reason", required = false) String reason) {
+        // P1-2: operatorId / reason 用于 audit + alert,backward-compatible 默认 null
+        return workflowRunManagementApplicationService.skipNode(tenantId, id, nodeCode, operatorId, reason);
+    }
 }

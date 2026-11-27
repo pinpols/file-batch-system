@@ -16,31 +16,30 @@ import org.springframework.stereotype.Service;
 /** 文件系统 presign 下载用例的基础设施实现。 */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleFilesystemPresignDownloadService
-    implements ConsoleFilesystemPresignDownloadService {
+public class DefaultConsoleFilesystemPresignDownloadService implements ConsoleFilesystemPresignDownloadService {
 
-  private final BatchObjectStore objectStore;
-  private final FilesystemStorageProperties filesystemProperties;
-  private final BatchSecurityProperties securityProperties;
+    private final BatchObjectStore objectStore;
+    private final FilesystemStorageProperties filesystemProperties;
+    private final BatchSecurityProperties securityProperties;
 
-  @Override
-  public PresignedDownload open(String bucket, String key, Long expEpochSec, String signature) {
-    if (key.contains("..") || key.startsWith("/")) {
-      throw BizException.of(ResultCode.BUSINESS_ERROR, "error.file.fs_presign_key_invalid");
+    @Override
+    public PresignedDownload open(String bucket, String key, Long expEpochSec, String signature) {
+        if (key.contains("..") || key.startsWith("/")) {
+            throw BizException.of(ResultCode.BUSINESS_ERROR, "error.file.fs_presign_key_invalid");
+        }
+        String configuredPresignSecret = filesystemProperties.getPresignSecret();
+        String secret = Texts.hasText(configuredPresignSecret)
+                ? configuredPresignSecret
+                : securityProperties.getInternalSecret();
+        if (!FilesystemPresignTokens.verify(bucket, key, expEpochSec, signature, secret)) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.file.fs_presign_invalid");
+        }
+        try {
+            String fileName = key.substring(key.lastIndexOf('/') + 1);
+            InputStream content = objectStore.get(bucket, key);
+            return new PresignedDownload(fileName, content);
+        } catch (ObjectNotFoundException exception) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
+        }
     }
-    String configuredPresignSecret = filesystemProperties.getPresignSecret();
-    String secret = Texts.hasText(configuredPresignSecret)
-        ? configuredPresignSecret
-        : securityProperties.getInternalSecret();
-    if (!FilesystemPresignTokens.verify(bucket, key, expEpochSec, signature, secret)) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.file.fs_presign_invalid");
-    }
-    try {
-      String fileName = key.substring(key.lastIndexOf('/') + 1);
-      InputStream content = objectStore.get(bucket, key);
-      return new PresignedDownload(fileName, content);
-    } catch (ObjectNotFoundException exception) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
-    }
-  }
 }

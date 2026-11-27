@@ -18,82 +18,77 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 集成测试：控制台 RetryScheduleMapper 对真实数据库的查询验证。 */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("重试计划查询映射: 按重试状态,重试策略与关联类型过滤,无数据返回空")
 class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private RetryScheduleMapper retryScheduleMapper;
+    @Autowired
+    private RetryScheduleMapper retryScheduleMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Test
-  @DisplayName("无数据租户: 查询返回空列表")
-  void shouldReturnEmptyWhenNoRetrySchedulesExist() {
-    List<RetryScheduleEntity> results =
-        retryScheduleMapper.selectByQuery(RetryScheduleQuery.ofTenant(
-            "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
+    @Test
+    @DisplayName("无数据租户: 查询返回空列表")
+    void shouldReturnEmptyWhenNoRetrySchedulesExist() {
+        List<RetryScheduleEntity> results = retryScheduleMapper.selectByQuery(RetryScheduleQuery.ofTenant(
+                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
 
-    assertThat(results).isEmpty();
-  }
+        assertThat(results).isEmpty();
+    }
 
-  @Test
-  @DisplayName("按重试状态过滤: 只返回该状态的一条记录")
-  void shouldQueryRetrySchedulesByStatus() {
-    String tenantId = "t-retry-" + BatchDateTimeSupport.utcEpochMillis();
-    insertRetrySchedule(tenantId, "JOB_PARTITION", 100L, "FIXED", "WAITING", 1);
-    insertRetrySchedule(tenantId, "JOB_PARTITION", 101L, "FIXED", "SUCCESS", 2);
-    insertRetrySchedule(tenantId, "JOB_PARTITION", 102L, "FIXED", "FAILED", 1);
+    @Test
+    @DisplayName("按重试状态过滤: 只返回该状态的一条记录")
+    void shouldQueryRetrySchedulesByStatus() {
+        String tenantId = "t-retry-" + BatchDateTimeSupport.utcEpochMillis();
+        insertRetrySchedule(tenantId, "JOB_PARTITION", 100L, "FIXED", "WAITING", 1);
+        insertRetrySchedule(tenantId, "JOB_PARTITION", 101L, "FIXED", "SUCCESS", 2);
+        insertRetrySchedule(tenantId, "JOB_PARTITION", 102L, "FIXED", "FAILED", 1);
 
-    List<RetryScheduleEntity> waiting = retryScheduleMapper.selectByQuery(
-        RetryScheduleQuery.ofRetryStatus(tenantId, "WAITING", new PageRequest(1, 10)));
+        List<RetryScheduleEntity> waiting = retryScheduleMapper.selectByQuery(
+                RetryScheduleQuery.ofRetryStatus(tenantId, "WAITING", new PageRequest(1, 10)));
 
-    assertThat(waiting).hasSize(1);
-    assertThat(waiting.get(0).getRetryStatus()).isEqualTo("WAITING");
-  }
+        assertThat(waiting).hasSize(1);
+        assertThat(waiting.get(0).getRetryStatus()).isEqualTo("WAITING");
+    }
 
-  @Test
-  @DisplayName("按重试策略过滤: 只返回该策略的一条记录")
-  void shouldQueryRetrySchedulesByRetryPolicy() {
-    String tenantId = "t-retry-policy-" + BatchDateTimeSupport.utcEpochMillis();
-    insertRetrySchedule(tenantId, "JOB_PARTITION", 200L, "FIXED", "WAITING", 1);
-    insertRetrySchedule(tenantId, "JOB_PARTITION", 201L, "EXPONENTIAL", "WAITING", 1);
+    @Test
+    @DisplayName("按重试策略过滤: 只返回该策略的一条记录")
+    void shouldQueryRetrySchedulesByRetryPolicy() {
+        String tenantId = "t-retry-policy-" + BatchDateTimeSupport.utcEpochMillis();
+        insertRetrySchedule(tenantId, "JOB_PARTITION", 200L, "FIXED", "WAITING", 1);
+        insertRetrySchedule(tenantId, "JOB_PARTITION", 201L, "EXPONENTIAL", "WAITING", 1);
 
-    List<RetryScheduleEntity> exponential = retryScheduleMapper.selectByQuery(
-        RetryScheduleQuery.ofRetryPolicy(tenantId, "EXPONENTIAL", new PageRequest(1, 10)));
+        List<RetryScheduleEntity> exponential = retryScheduleMapper.selectByQuery(
+                RetryScheduleQuery.ofRetryPolicy(tenantId, "EXPONENTIAL", new PageRequest(1, 10)));
 
-    assertThat(exponential).hasSize(1);
-    assertThat(exponential.get(0).getRetryPolicy()).isEqualTo("EXPONENTIAL");
-  }
+        assertThat(exponential).hasSize(1);
+        assertThat(exponential.get(0).getRetryPolicy()).isEqualTo("EXPONENTIAL");
+    }
 
-  @Test
-  @DisplayName("按关联类型过滤: 返回该类型的两条记录")
-  void shouldQueryRetrySchedulesByRelatedType() {
-    String tenantId = "t-retry-type-" + BatchDateTimeSupport.utcEpochMillis();
-    insertRetrySchedule(tenantId, "JOB_PARTITION", 300L, "FIXED", "WAITING", 1);
-    insertRetrySchedule(tenantId, "JOB_PARTITION", 301L, "FIXED", "WAITING", 1);
+    @Test
+    @DisplayName("按关联类型过滤: 返回该类型的两条记录")
+    void shouldQueryRetrySchedulesByRelatedType() {
+        String tenantId = "t-retry-type-" + BatchDateTimeSupport.utcEpochMillis();
+        insertRetrySchedule(tenantId, "JOB_PARTITION", 300L, "FIXED", "WAITING", 1);
+        insertRetrySchedule(tenantId, "JOB_PARTITION", 301L, "FIXED", "WAITING", 1);
 
-    List<RetryScheduleEntity> partitionRetries = retryScheduleMapper.selectByQuery(
-        RetryScheduleQuery.ofRelatedType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
+        List<RetryScheduleEntity> partitionRetries = retryScheduleMapper.selectByQuery(
+                RetryScheduleQuery.ofRelatedType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
 
-    assertThat(partitionRetries)
-        .hasSize(2)
-        .allMatch(r -> "JOB_PARTITION".equals(r.getRelatedType()));
-  }
+        assertThat(partitionRetries).hasSize(2).allMatch(r -> "JOB_PARTITION".equals(r.getRelatedType()));
+    }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
-  private void insertRetrySchedule(
-      String tenantId,
-      String relatedType,
-      Long relatedId,
-      String retryPolicy,
-      String retryStatus,
-      int retryCount) {
-    final String insertRetryScheduleSql = """
+    private void insertRetrySchedule(
+            String tenantId,
+            String relatedType,
+            Long relatedId,
+            String retryPolicy,
+            String retryStatus,
+            int retryCount) {
+        final String insertRetryScheduleSql = """
     INSERT INTO batch.retry_schedule
     (tenant_id, related_type, related_id, retry_policy, retry_count, max_retry_count,
     next_retry_at, retry_status, dedup_key, created_at, updated_at)
@@ -101,17 +96,17 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
     ?, ?, ?,
     now(), now())
     """;
-    Timestamp nextRetryAt = Timestamp.from(BatchDateTimeSupport.utcNow().plusSeconds(60));
-    String dedupKey = tenantId + ":" + relatedId + ":" + retryCount + ":" + System.nanoTime();
-    jdbcTemplate.update(
-        insertRetryScheduleSql,
-        tenantId,
-        relatedType,
-        relatedId,
-        retryPolicy,
-        retryCount,
-        nextRetryAt,
-        retryStatus,
-        dedupKey);
-  }
+        Timestamp nextRetryAt = Timestamp.from(BatchDateTimeSupport.utcNow().plusSeconds(60));
+        String dedupKey = tenantId + ":" + relatedId + ":" + retryCount + ":" + System.nanoTime();
+        jdbcTemplate.update(
+                insertRetryScheduleSql,
+                tenantId,
+                relatedType,
+                relatedId,
+                retryPolicy,
+                retryCount,
+                nextRetryAt,
+                retryStatus,
+                dedupKey);
+    }
 }

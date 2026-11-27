@@ -17,37 +17,37 @@ import org.junit.jupiter.api.Test;
 @DisplayName("控制台编码规约守护: 默认时区与字符集用法、类型命名后缀、事件监听与定时任务的事务注解边界")
 class ConsoleCodingConventionsArchTest {
 
-  private static final JavaClasses CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-      .importPackages("io.github.pinpols.batch.console..");
+    private static final JavaClasses CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("io.github.pinpols.batch.console..");
 
-  @Test
-  @DisplayName("生产代码不直接读取 JVM 默认时区, 规则校验无违规")
-  void shouldAvoidJvmDefaultTimeZone_whenRuleChecked() {
-    CodingConventionsArchRules.zoneIdSystemDefaultRule().check(CLASSES);
-  }
+    @Test
+    @DisplayName("生产代码不直接读取 JVM 默认时区, 规则校验无违规")
+    void shouldAvoidJvmDefaultTimeZone_whenRuleChecked() {
+        CodingConventionsArchRules.zoneIdSystemDefaultRule().check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("生产代码不按名称构造字符集, 规则校验无违规")
-  void shouldAvoidCharsetLookupByName_whenRuleChecked() {
-    CodingConventionsArchRules.charsetForNameRule().check(CLASSES);
-  }
+    @Test
+    @DisplayName("生产代码不按名称构造字符集, 规则校验无违规")
+    void shouldAvoidCharsetLookupByName_whenRuleChecked() {
+        CodingConventionsArchRules.charsetForNameRule().check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("生产代码内不存在以记录后缀结尾的类型名, 规则校验无违规")
-  void shouldAvoidRecordSuffixTypeName_whenRuleChecked() {
-    CodingConventionsArchRules.recordSuffixForbiddenRule().check(CLASSES);
-  }
+    @Test
+    @DisplayName("生产代码内不存在以记录后缀结尾的类型名, 规则校验无违规")
+    void shouldAvoidRecordSuffixTypeName_whenRuleChecked() {
+        CodingConventionsArchRules.recordSuffixForbiddenRule().check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("事件监听方法上不叠加事务注解, 规则校验无违规")
-  void shouldAvoidTransactionalOnEventListener_whenRuleChecked() {
-    CodingConventionsArchRules.noTransactionalOnEventListenerRule().check(CLASSES);
-  }
+    @Test
+    @DisplayName("事件监听方法上不叠加事务注解, 规则校验无违规")
+    void shouldAvoidTransactionalOnEventListener_whenRuleChecked() {
+        CodingConventionsArchRules.noTransactionalOnEventListenerRule().check(CLASSES);
+    }
 
-  @Test
-  @DisplayName("定时任务方法上不叠加事务注解, 规则校验无违规")
-  void shouldAvoidTransactionalOnScheduledMethod_whenRuleChecked() {
-    CodingConventionsArchRules.noTransactionalOnScheduledRule().check(CLASSES);
-  }
+    @Test
+    @DisplayName("定时任务方法上不叠加事务注解, 规则校验无违规")
+    void shouldAvoidTransactionalOnScheduledMethod_whenRuleChecked() {
+        CodingConventionsArchRules.noTransactionalOnScheduledRule().check(CLASSES);
+    }
 }

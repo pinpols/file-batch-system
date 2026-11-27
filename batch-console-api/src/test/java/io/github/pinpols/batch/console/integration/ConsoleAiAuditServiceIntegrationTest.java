@@ -31,230 +31,228 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 集成测试：DefaultConsoleAiAuditService 将 AI 审计日志条目持久化到数据库， 并可通过 ConsoleAiAuditLogMapper 查询。 */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("AI 审计服务: 审计条目落库与查询,加密会话在租户与属主范围内回读明文")
 class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
 
-  private final ConsoleAiAuditService auditService;
-  private final ConsoleAiAuditLogMapper auditLogMapper;
-  private final ConsoleAiConversationService conversationService;
-  private final ConsoleAiProperties aiProperties;
-  private final ConsoleAiConversationMapper conversationMapper;
-  private final JdbcTemplate jdbcTemplate;
-  private final PlatformTransactionManager transactionManager;
+    private final ConsoleAiAuditService auditService;
+    private final ConsoleAiAuditLogMapper auditLogMapper;
+    private final ConsoleAiConversationService conversationService;
+    private final ConsoleAiProperties aiProperties;
+    private final ConsoleAiConversationMapper conversationMapper;
+    private final JdbcTemplate jdbcTemplate;
+    private final PlatformTransactionManager transactionManager;
 
-  ConsoleAiAuditServiceIntegrationTest(
-      ConsoleAiAuditService auditService,
-      ConsoleAiAuditLogMapper auditLogMapper,
-      ConsoleAiConversationService conversationService,
-      ConsoleAiProperties aiProperties,
-      ConsoleAiConversationMapper conversationMapper,
-      JdbcTemplate jdbcTemplate,
-      PlatformTransactionManager transactionManager) {
-    this.auditService = auditService;
-    this.auditLogMapper = auditLogMapper;
-    this.conversationService = conversationService;
-    this.aiProperties = aiProperties;
-    this.conversationMapper = conversationMapper;
-    this.jdbcTemplate = jdbcTemplate;
-    this.transactionManager = transactionManager;
-  }
-
-  @MockitoSpyBean
-  private BatchObjectCryptoService cryptoService;
-
-  @Test
-  @DisplayName("记录审计条目: 落库租户,会话与决策与请求一致,提示词与补全用量一并写入")
-  void shouldPersistAuditLogOnRecord() {
-    AiAuditCommand command = AiAuditCommand.builder()
-        .tenantId("t1")
-        .requestId("req-001")
-        .traceId("trace-001")
-        .sessionId("session-001")
-        .operatorId("op-001")
-        .promptCategory("PLATFORM")
-        .promptDecision("APPROVED")
-        .modelName("test-model")
-        .promptHash("hash-prompt-001")
-        .promptPreview("how many jobs failed today?")
-        .responseHash("hash-resp-001")
-        .responsePreview("3 jobs failed")
-        .refusalReason(null)
-        .promptTokens(120)
-        .completionTokens(45)
-        .estimatedCostUsd(null)
-        .costStatus("UNPRICED")
-        .createdAt(BatchDateTimeSupport.utcNow())
-        .build();
-
-    auditService.record(command);
-
-    ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
-        .tenantId("t1")
-        .sessionId("session-001")
-        .operatorId("op-001")
-        .promptCategory("PLATFORM")
-        .promptDecision("APPROVED")
-        .build();
-    List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
-    assertThat(results).hasSize(1);
-    ConsoleAiAuditLogEntity entry = results.get(0);
-    assertThat(entry.getTenantId()).isEqualTo("t1");
-    assertThat(entry.getSessionId()).isEqualTo("session-001");
-    assertThat(entry.getPromptCategory()).isEqualTo("PLATFORM");
-    assertThat(entry.getPromptDecision()).isEqualTo("APPROVED");
-    assertThat(entry.getPromptPreview()).isEqualTo("how many jobs failed today?");
-    // 成本可观测：token 用量落审计,支持按租户事后聚合成本
-    assertThat(entry.getPromptTokens()).isEqualTo(120);
-    assertThat(entry.getCompletionTokens()).isEqualTo(45);
-  }
-
-  @Test
-  @DisplayName("记录被安全策略拒绝的条目: 拒绝原因落库且可按会话查询到")
-  void shouldPersistRejectedAuditLogWithRefusalReason() {
-    AiAuditCommand command = AiAuditCommand.builder()
-        .tenantId("t1")
-        .requestId("req-002")
-        .traceId("trace-002")
-        .sessionId("session-002")
-        .operatorId("op-002")
-        .promptCategory(null)
-        .promptDecision("REJECTED_SAFETY")
-        .modelName(null)
-        .promptHash(null)
-        .promptPreview("show me the password")
-        .responseHash(null)
-        .responsePreview(null)
-        .refusalReason("blocked_keyword:password")
-        .promptTokens(null)
-        .completionTokens(null)
-        .estimatedCostUsd(null)
-        .costStatus("UNPRICED")
-        .createdAt(BatchDateTimeSupport.utcNow())
-        .build();
-
-    auditService.record(command);
-
-    ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
-        .tenantId("t1")
-        .sessionId("session-002")
-        .promptDecision("REJECTED_SAFETY")
-        .build();
-    List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).getRefusalReason()).isEqualTo("blocked_keyword:password");
-  }
-
-  @Test
-  @DisplayName("同一会话连续三次记录: 按会话查询返回三条")
-  void shouldReturnMultipleEntriesForSameSession() {
-    String sessionId = "session-multi-" + BatchDateTimeSupport.utcEpochMillis();
-
-    for (int i = 1; i <= 3; i++) {
-      auditService.record(AiAuditCommand.builder()
-          .tenantId("t1")
-          .requestId("req-" + i)
-          .traceId("trace-" + i)
-          .sessionId(sessionId)
-          .operatorId("op-multi")
-          .promptCategory("PLATFORM")
-          .promptDecision("APPROVED")
-          .modelName("model")
-          .promptHash(null)
-          .promptPreview("query " + i)
-          .responseHash(null)
-          .responsePreview("result " + i)
-          .refusalReason(null)
-          .promptTokens(null)
-          .completionTokens(null)
-          .estimatedCostUsd(null)
-          .costStatus("UNPRICED")
-          .createdAt(BatchDateTimeSupport.utcNow())
-          .build());
+    ConsoleAiAuditServiceIntegrationTest(
+            ConsoleAiAuditService auditService,
+            ConsoleAiAuditLogMapper auditLogMapper,
+            ConsoleAiConversationService conversationService,
+            ConsoleAiProperties aiProperties,
+            ConsoleAiConversationMapper conversationMapper,
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager) {
+        this.auditService = auditService;
+        this.auditLogMapper = auditLogMapper;
+        this.conversationService = conversationService;
+        this.aiProperties = aiProperties;
+        this.conversationMapper = conversationMapper;
+        this.jdbcTemplate = jdbcTemplate;
+        this.transactionManager = transactionManager;
     }
 
-    ConsoleAiAuditLogQuery query =
-        ConsoleAiAuditLogQuery.builder().tenantId("t1").sessionId(sessionId).build();
-    List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
-    assertThat(results).hasSize(3);
-  }
+    @MockitoSpyBean
+    private BatchObjectCryptoService cryptoService;
 
-  @Test
-  @DisplayName("会话持久化: 库内提示词为密文,属主可读回明文,他人读取返回未找到")
-  void shouldPersistEncryptedConversationAndReturnPlaintextWithinTenantAndOwnerScope() {
-    boolean previousEnabled = aiProperties.getPersistence().isEnabled();
-    int previousRetention = aiProperties.getPersistence().getRetentionDays();
-    aiProperties.getPersistence().setEnabled(true);
-    aiProperties.getPersistence().setRetentionDays(30);
-    doReturn(false).when(cryptoService).isBypassMode();
-    String tenantId = "ai-conversation-it-" + BatchDateTimeSupport.utcEpochMillis();
-    ConsoleAiConversationService.StartedTurn started = null;
-    try {
-      ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
-          .tenantId(tenantId)
-          .ownerUserId("operator-a")
-          .contextVersion("v1")
-          .prompt("查询失败的作业实例")
-          .build();
-      started = conversationService.beginTurn(turnInput);
-      conversationService.completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
-          .tenantId(tenantId)
-          .conversationId(started.conversationId())
-          .turnNo(started.turnNo())
-          .response("发现 2 个失败实例")
-          .decision("APPROVED")
-          .modelName("test-provider:test-model")
-          .promptTokens(20)
-          .completionTokens(10)
-          .estimatedCostUsd(new BigDecimal("0.00100000"))
-          .build());
+    @Test
+    @DisplayName("记录审计条目: 落库租户,会话与决策与请求一致,提示词与补全用量一并写入")
+    void shouldPersistAuditLogOnRecord() {
+        AiAuditCommand command = AiAuditCommand.builder()
+                .tenantId("t1")
+                .requestId("req-001")
+                .traceId("trace-001")
+                .sessionId("session-001")
+                .operatorId("op-001")
+                .promptCategory("PLATFORM")
+                .promptDecision("APPROVED")
+                .modelName("test-model")
+                .promptHash("hash-prompt-001")
+                .promptPreview("how many jobs failed today?")
+                .responseHash("hash-resp-001")
+                .responsePreview("3 jobs failed")
+                .refusalReason(null)
+                .promptTokens(120)
+                .completionTokens(45)
+                .estimatedCostUsd(null)
+                .costStatus("UNPRICED")
+                .createdAt(BatchDateTimeSupport.utcNow())
+                .build();
 
-      String conversationId = started.conversationId();
-      String encryptedPrompt = new TransactionTemplate(transactionManager).execute(status -> {
-        conversationMapper.setTenantContext(tenantId);
-        String encryptedPromptSql = """
+        auditService.record(command);
+
+        ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
+                .tenantId("t1")
+                .sessionId("session-001")
+                .operatorId("op-001")
+                .promptCategory("PLATFORM")
+                .promptDecision("APPROVED")
+                .build();
+        List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
+        assertThat(results).hasSize(1);
+        ConsoleAiAuditLogEntity entry = results.get(0);
+        assertThat(entry.getTenantId()).isEqualTo("t1");
+        assertThat(entry.getSessionId()).isEqualTo("session-001");
+        assertThat(entry.getPromptCategory()).isEqualTo("PLATFORM");
+        assertThat(entry.getPromptDecision()).isEqualTo("APPROVED");
+        assertThat(entry.getPromptPreview()).isEqualTo("how many jobs failed today?");
+        // 成本可观测：token 用量落审计,支持按租户事后聚合成本
+        assertThat(entry.getPromptTokens()).isEqualTo(120);
+        assertThat(entry.getCompletionTokens()).isEqualTo(45);
+    }
+
+    @Test
+    @DisplayName("记录被安全策略拒绝的条目: 拒绝原因落库且可按会话查询到")
+    void shouldPersistRejectedAuditLogWithRefusalReason() {
+        AiAuditCommand command = AiAuditCommand.builder()
+                .tenantId("t1")
+                .requestId("req-002")
+                .traceId("trace-002")
+                .sessionId("session-002")
+                .operatorId("op-002")
+                .promptCategory(null)
+                .promptDecision("REJECTED_SAFETY")
+                .modelName(null)
+                .promptHash(null)
+                .promptPreview("show me the password")
+                .responseHash(null)
+                .responsePreview(null)
+                .refusalReason("blocked_keyword:password")
+                .promptTokens(null)
+                .completionTokens(null)
+                .estimatedCostUsd(null)
+                .costStatus("UNPRICED")
+                .createdAt(BatchDateTimeSupport.utcNow())
+                .build();
+
+        auditService.record(command);
+
+        ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
+                .tenantId("t1")
+                .sessionId("session-002")
+                .promptDecision("REJECTED_SAFETY")
+                .build();
+        List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getRefusalReason()).isEqualTo("blocked_keyword:password");
+    }
+
+    @Test
+    @DisplayName("同一会话连续三次记录: 按会话查询返回三条")
+    void shouldReturnMultipleEntriesForSameSession() {
+        String sessionId = "session-multi-" + BatchDateTimeSupport.utcEpochMillis();
+
+        for (int i = 1; i <= 3; i++) {
+            auditService.record(AiAuditCommand.builder()
+                    .tenantId("t1")
+                    .requestId("req-" + i)
+                    .traceId("trace-" + i)
+                    .sessionId(sessionId)
+                    .operatorId("op-multi")
+                    .promptCategory("PLATFORM")
+                    .promptDecision("APPROVED")
+                    .modelName("model")
+                    .promptHash(null)
+                    .promptPreview("query " + i)
+                    .responseHash(null)
+                    .responsePreview("result " + i)
+                    .refusalReason(null)
+                    .promptTokens(null)
+                    .completionTokens(null)
+                    .estimatedCostUsd(null)
+                    .costStatus("UNPRICED")
+                    .createdAt(BatchDateTimeSupport.utcNow())
+                    .build());
+        }
+
+        ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
+                .tenantId("t1")
+                .sessionId(sessionId)
+                .build();
+        List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
+        assertThat(results).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("会话持久化: 库内提示词为密文,属主可读回明文,他人读取返回未找到")
+    void shouldPersistEncryptedConversationAndReturnPlaintextWithinTenantAndOwnerScope() {
+        boolean previousEnabled = aiProperties.getPersistence().isEnabled();
+        int previousRetention = aiProperties.getPersistence().getRetentionDays();
+        aiProperties.getPersistence().setEnabled(true);
+        aiProperties.getPersistence().setRetentionDays(30);
+        doReturn(false).when(cryptoService).isBypassMode();
+        String tenantId = "ai-conversation-it-" + BatchDateTimeSupport.utcEpochMillis();
+        ConsoleAiConversationService.StartedTurn started = null;
+        try {
+            ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+                    .tenantId(tenantId)
+                    .ownerUserId("operator-a")
+                    .contextVersion("v1")
+                    .prompt("查询失败的作业实例")
+                    .build();
+            started = conversationService.beginTurn(turnInput);
+            conversationService.completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
+                    .tenantId(tenantId)
+                    .conversationId(started.conversationId())
+                    .turnNo(started.turnNo())
+                    .response("发现 2 个失败实例")
+                    .decision("APPROVED")
+                    .modelName("test-provider:test-model")
+                    .promptTokens(20)
+                    .completionTokens(10)
+                    .estimatedCostUsd(new BigDecimal("0.00100000"))
+                    .build());
+
+            String conversationId = started.conversationId();
+            String encryptedPrompt = new TransactionTemplate(transactionManager).execute(status -> {
+                conversationMapper.setTenantContext(tenantId);
+                String encryptedPromptSql = """
             SELECT prompt_text FROM batch.console_ai_turn
             WHERE tenant_id = ? AND conversation_id = ?
             """;
-        return jdbcTemplate.queryForObject(
-            encryptedPromptSql, String.class, tenantId, conversationId);
-      });
-      assertThat(encryptedPrompt).isNotEqualTo("查询失败的作业实例");
+                return jdbcTemplate.queryForObject(encryptedPromptSql, String.class, tenantId, conversationId);
+            });
+            assertThat(encryptedPrompt).isNotEqualTo("查询失败的作业实例");
 
-      assertThat(conversationService.list(tenantId, "operator-a", 20))
-          .extracting(ConsoleAiConversationService.ConversationView::id)
-          .contains(conversationId);
-      assertThat(conversationService.turns(tenantId, "operator-a", conversationId, null, 20))
-          .singleElement()
-          .satisfies(turn -> {
-            assertThat(turn.prompt()).isEqualTo("查询失败的作业实例");
-            assertThat(turn.response()).isEqualTo("发现 2 个失败实例");
-          });
-      assertThatThrownBy(
-              () -> conversationService.turns(tenantId, "operator-b", conversationId, null, 20))
-          .isInstanceOfSatisfying(
-              BizException.class,
-              exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
-    } finally {
-      if (started != null) {
-        conversationService.delete(tenantId, "operator-a", started.conversationId());
-      }
-      aiProperties.getPersistence().setEnabled(previousEnabled);
-      aiProperties.getPersistence().setRetentionDays(previousRetention);
+            assertThat(conversationService.list(tenantId, "operator-a", 20))
+                    .extracting(ConsoleAiConversationService.ConversationView::id)
+                    .contains(conversationId);
+            assertThat(conversationService.turns(tenantId, "operator-a", conversationId, null, 20))
+                    .singleElement()
+                    .satisfies(turn -> {
+                        assertThat(turn.prompt()).isEqualTo("查询失败的作业实例");
+                        assertThat(turn.response()).isEqualTo("发现 2 个失败实例");
+                    });
+            assertThatThrownBy(() -> conversationService.turns(tenantId, "operator-b", conversationId, null, 20))
+                    .isInstanceOfSatisfying(
+                            BizException.class,
+                            exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
+        } finally {
+            if (started != null) {
+                conversationService.delete(tenantId, "operator-a", started.conversationId());
+            }
+            aiProperties.getPersistence().setEnabled(previousEnabled);
+            aiProperties.getPersistence().setRetentionDays(previousRetention);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("无匹配会话: 查询返回空列表")
-  void shouldReturnEmptyWhenNoMatchingEntries() {
-    ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
-        .tenantId("t1")
-        .sessionId("no-such-session-" + BatchDateTimeSupport.utcEpochMillis())
-        .build();
-    List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
-    assertThat(results).isEmpty();
-  }
+    @Test
+    @DisplayName("无匹配会话: 查询返回空列表")
+    void shouldReturnEmptyWhenNoMatchingEntries() {
+        ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
+                .tenantId("t1")
+                .sessionId("no-such-session-" + BatchDateTimeSupport.utcEpochMillis())
+                .build();
+        List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
+        assertThat(results).isEmpty();
+    }
 }

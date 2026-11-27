@@ -61,144 +61,140 @@ import org.springframework.web.client.RestClientException;
 @EnableConfigurationProperties(DownstreamCircuitBreakerProperties.class)
 public class DownstreamFallback {
 
-  private final MeterRegistry meterRegistry;
-  private final DownstreamCircuitBreakerProperties properties;
-  private final CircuitBreakerRegistry circuitBreakerRegistry;
-  private final CircuitBreakerConfig circuitBreakerConfig;
+    private final MeterRegistry meterRegistry;
+    private final DownstreamCircuitBreakerProperties properties;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
+    private final CircuitBreakerConfig circuitBreakerConfig;
 
-  public DownstreamFallback(
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      ObjectProvider<CircuitBreakerRegistry> circuitBreakerRegistryProvider,
-      DownstreamCircuitBreakerProperties properties) {
-    this.meterRegistry = meterRegistryProvider.getIfAvailable();
-    this.properties = properties;
-    this.circuitBreakerConfig = buildConfig(properties);
-    // 优先复用 R4J autoconfig 提供的共享 CircuitBreakerRegistry(不新建竞争 bean,遵守
-    // "禁覆盖 batch-common 基础设施 bean" 红线);autoconfig 不在时(如窄上下文单测)退回内置默认 registry。
-    this.circuitBreakerRegistry =
-        circuitBreakerRegistryProvider.getIfAvailable(CircuitBreakerRegistry::ofDefaults);
-  }
-
-  private static CircuitBreakerConfig buildConfig(DownstreamCircuitBreakerProperties props) {
-    CircuitBreakerConfig.Builder config =
-        CircuitBreakerConfig.custom().slidingWindowType(SlidingWindowType.COUNT_BASED);
-
-    int requestedWindowSize = props.getSlidingWindowSize();
-    int windowSize = Math.max(1, requestedWindowSize);
-    config.slidingWindowSize(windowSize);
-
-    int requestedMinimumCalls = props.getMinimumNumberOfCalls();
-    int minimumCalls = Math.max(1, requestedMinimumCalls);
-    config.minimumNumberOfCalls(minimumCalls);
-
-    config.failureRateThreshold(props.getFailureRateThreshold());
-
-    long openWindowMillis = props.getWaitDurationInOpenStateMillis();
-    Duration openWindow = Duration.ofMillis(openWindowMillis);
-    config.waitDurationInOpenState(openWindow);
-
-    int requestedHalfOpenCalls = props.getPermittedCallsInHalfOpen();
-    int halfOpenCalls = Math.max(1, requestedHalfOpenCalls);
-    config.permittedNumberOfCallsInHalfOpenState(halfOpenCalls);
-
-    return config
-        // 只有 RestClient 层异常计入失败率;其它异常(如业务 IllegalState)不熔断、原样上抛。
-        .recordExceptions(RestClientException.class)
-        .build();
-  }
-
-  /**
-   * 跑 {@code primary},失败(RestClientException)或熔断短路则跑 {@code fallback}。
-   *
-   * @param service 服务名,做 metrics 标签 + 日志 prefix + CircuitBreaker 实例名(如 "trigger" / "orchestrator")
-   * @param operation 操作名(如 "list" / "scheduler-status")
-   * @param primary 主调用,通常是 RestClient.retrieve()
-   * @param fallback 降级,接受异常返回默认值
-   */
-  public <T> T callOrFallback(
-      String service, String operation, Supplier<T> primary, FallbackSupplier<T> fallback) {
-    try {
-      T result = decorate(service, primary).get();
-      recordOutcome(service, operation, "success", null);
-      return result;
-    } catch (CallNotPermittedException ex) {
-      DegradedResponseHeaders.mark(service);
-      recordOutcome(service, operation, "fallback", ex.getClass().getSimpleName());
-      log.warn(
-          "downstream circuit open: service={}, op={}, cb={}",
-          service,
-          operation,
-          SwallowedExceptionLogger.summary(ex));
-      RestClientException circuitOpenCause =
-          new RestClientException("downstream circuit open: " + service, ex);
-      return fallback.apply(circuitOpenCause);
-    } catch (RestClientException ex) {
-      DegradedResponseHeaders.mark(service);
-      recordOutcome(service, operation, "fallback", ex.getClass().getSimpleName());
-      log.warn(
-          "downstream degraded: service={}, op={}, ex={}: {}",
-          service,
-          operation,
-          ex.getClass().getSimpleName(),
-          SwallowedExceptionLogger.summary(ex));
-      return fallback.apply(ex);
+    public DownstreamFallback(
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            ObjectProvider<CircuitBreakerRegistry> circuitBreakerRegistryProvider,
+            DownstreamCircuitBreakerProperties properties) {
+        this.meterRegistry = meterRegistryProvider.getIfAvailable();
+        this.properties = properties;
+        this.circuitBreakerConfig = buildConfig(properties);
+        // 优先复用 R4J autoconfig 提供的共享 CircuitBreakerRegistry(不新建竞争 bean,遵守
+        // "禁覆盖 batch-common 基础设施 bean" 红线);autoconfig 不在时(如窄上下文单测)退回内置默认 registry。
+        this.circuitBreakerRegistry = circuitBreakerRegistryProvider.getIfAvailable(CircuitBreakerRegistry::ofDefaults);
     }
-  }
 
-  /**
-   * fail-fast 变体 — 不降级,只统计 + log 后原样上抛。给"业务必须 fail-fast"的写路径用。
-   *
-   * <p>语义:跟直接调用相比,只多加了 metrics 上报 + 日志统一格式 + 熔断。熔断短路时抛 {@link RestClientException}(调用方 catch {@code
-   * RestClientException} 语义不变)。
-   */
-  public <T> T callOrThrow(String service, String operation, Supplier<T> primary) {
-    try {
-      T result = decorate(service, primary).get();
-      recordOutcome(service, operation, "success", null);
-      return result;
-    } catch (CallNotPermittedException ex) {
-      recordOutcome(service, operation, "failure", ex.getClass().getSimpleName());
-      log.warn(
-          "downstream circuit open (fail-fast): service={}, op={}, cb={}",
-          service,
-          operation,
-          SwallowedExceptionLogger.summary(ex));
-      throw new RestClientException("downstream circuit open: " + service, ex);
-    } catch (RestClientException ex) {
-      recordOutcome(service, operation, "failure", ex.getClass().getSimpleName());
-      log.warn(
-          "downstream failed (fail-fast): service={}, op={}, ex={}: {}",
-          service,
-          operation,
-          ex.getClass().getSimpleName(),
-          SwallowedExceptionLogger.summary(ex));
-      throw ex;
-    }
-  }
+    private static CircuitBreakerConfig buildConfig(DownstreamCircuitBreakerProperties props) {
+        CircuitBreakerConfig.Builder config =
+                CircuitBreakerConfig.custom().slidingWindowType(SlidingWindowType.COUNT_BASED);
 
-  private <T> Supplier<T> decorate(String service, Supplier<T> primary) {
-    if (!properties.isEnabled()) {
-      return primary; // kill-switch:退回纯 try/catch,不经熔断状态机
-    }
-    CircuitBreaker circuitBreaker =
-        circuitBreakerRegistry.circuitBreaker(service, circuitBreakerConfig);
-    return CircuitBreaker.decorateSupplier(circuitBreaker, primary);
-  }
+        int requestedWindowSize = props.getSlidingWindowSize();
+        int windowSize = Math.max(1, requestedWindowSize);
+        config.slidingWindowSize(windowSize);
 
-  private void recordOutcome(String service, String operation, String outcome, String exception) {
-    if (meterRegistry == null) {
-      return; // 测试 / 无 micrometer 场景静默
-    }
-    Tags tags = Tags.of("service", service, "op", operation, "outcome", outcome);
-    if (exception != null) {
-      tags = tags.and("exception", exception);
-    }
-    meterRegistry.counter("downstream.call.total", tags).increment();
-  }
+        int requestedMinimumCalls = props.getMinimumNumberOfCalls();
+        int minimumCalls = Math.max(1, requestedMinimumCalls);
+        config.minimumNumberOfCalls(minimumCalls);
 
-  /** Fallback supplier — 接受异常,返回回退值。 */
-  @FunctionalInterface
-  public interface FallbackSupplier<T> {
-    T apply(RestClientException ex);
-  }
+        config.failureRateThreshold(props.getFailureRateThreshold());
+
+        long openWindowMillis = props.getWaitDurationInOpenStateMillis();
+        Duration openWindow = Duration.ofMillis(openWindowMillis);
+        config.waitDurationInOpenState(openWindow);
+
+        int requestedHalfOpenCalls = props.getPermittedCallsInHalfOpen();
+        int halfOpenCalls = Math.max(1, requestedHalfOpenCalls);
+        config.permittedNumberOfCallsInHalfOpenState(halfOpenCalls);
+
+        return config
+                // 只有 RestClient 层异常计入失败率;其它异常(如业务 IllegalState)不熔断、原样上抛。
+                .recordExceptions(RestClientException.class)
+                .build();
+    }
+
+    /**
+     * 跑 {@code primary},失败(RestClientException)或熔断短路则跑 {@code fallback}。
+     *
+     * @param service 服务名,做 metrics 标签 + 日志 prefix + CircuitBreaker 实例名(如 "trigger" / "orchestrator")
+     * @param operation 操作名(如 "list" / "scheduler-status")
+     * @param primary 主调用,通常是 RestClient.retrieve()
+     * @param fallback 降级,接受异常返回默认值
+     */
+    public <T> T callOrFallback(String service, String operation, Supplier<T> primary, FallbackSupplier<T> fallback) {
+        try {
+            T result = decorate(service, primary).get();
+            recordOutcome(service, operation, "success", null);
+            return result;
+        } catch (CallNotPermittedException ex) {
+            DegradedResponseHeaders.mark(service);
+            recordOutcome(service, operation, "fallback", ex.getClass().getSimpleName());
+            log.warn(
+                    "downstream circuit open: service={}, op={}, cb={}",
+                    service,
+                    operation,
+                    SwallowedExceptionLogger.summary(ex));
+            RestClientException circuitOpenCause = new RestClientException("downstream circuit open: " + service, ex);
+            return fallback.apply(circuitOpenCause);
+        } catch (RestClientException ex) {
+            DegradedResponseHeaders.mark(service);
+            recordOutcome(service, operation, "fallback", ex.getClass().getSimpleName());
+            log.warn(
+                    "downstream degraded: service={}, op={}, ex={}: {}",
+                    service,
+                    operation,
+                    ex.getClass().getSimpleName(),
+                    SwallowedExceptionLogger.summary(ex));
+            return fallback.apply(ex);
+        }
+    }
+
+    /**
+     * fail-fast 变体 — 不降级,只统计 + log 后原样上抛。给"业务必须 fail-fast"的写路径用。
+     *
+     * <p>语义:跟直接调用相比,只多加了 metrics 上报 + 日志统一格式 + 熔断。熔断短路时抛 {@link RestClientException}(调用方 catch {@code
+     * RestClientException} 语义不变)。
+     */
+    public <T> T callOrThrow(String service, String operation, Supplier<T> primary) {
+        try {
+            T result = decorate(service, primary).get();
+            recordOutcome(service, operation, "success", null);
+            return result;
+        } catch (CallNotPermittedException ex) {
+            recordOutcome(service, operation, "failure", ex.getClass().getSimpleName());
+            log.warn(
+                    "downstream circuit open (fail-fast): service={}, op={}, cb={}",
+                    service,
+                    operation,
+                    SwallowedExceptionLogger.summary(ex));
+            throw new RestClientException("downstream circuit open: " + service, ex);
+        } catch (RestClientException ex) {
+            recordOutcome(service, operation, "failure", ex.getClass().getSimpleName());
+            log.warn(
+                    "downstream failed (fail-fast): service={}, op={}, ex={}: {}",
+                    service,
+                    operation,
+                    ex.getClass().getSimpleName(),
+                    SwallowedExceptionLogger.summary(ex));
+            throw ex;
+        }
+    }
+
+    private <T> Supplier<T> decorate(String service, Supplier<T> primary) {
+        if (!properties.isEnabled()) {
+            return primary; // kill-switch:退回纯 try/catch,不经熔断状态机
+        }
+        CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker(service, circuitBreakerConfig);
+        return CircuitBreaker.decorateSupplier(circuitBreaker, primary);
+    }
+
+    private void recordOutcome(String service, String operation, String outcome, String exception) {
+        if (meterRegistry == null) {
+            return; // 测试 / 无 micrometer 场景静默
+        }
+        Tags tags = Tags.of("service", service, "op", operation, "outcome", outcome);
+        if (exception != null) {
+            tags = tags.and("exception", exception);
+        }
+        meterRegistry.counter("downstream.call.total", tags).increment();
+    }
+
+    /** Fallback supplier — 接受异常,返回回退值。 */
+    @FunctionalInterface
+    public interface FallbackSupplier<T> {
+        T apply(RestClientException ex);
+    }
 }

@@ -24,14 +24,14 @@ import java.util.List;
  * null;调用方传 null 字段安全。
  */
 public record WorkerIdentity(
-    String workerGroup,
-    String hostName,
-    String hostIp,
-    String processId,
-    List<String> capabilityTags,
-    String buildId) {
+        String workerGroup,
+        String hostName,
+        String hostIp,
+        String processId,
+        List<String> capabilityTags,
+        String buildId) {
 
-  public WorkerIdentity {
-    capabilityTags = capabilityTags == null ? List.of() : List.copyOf(capabilityTags);
-  }
+    public WorkerIdentity {
+        capabilityTags = capabilityTags == null ? List.of() : List.copyOf(capabilityTags);
+    }
 }

@@ -9,7 +9,7 @@ import java.time.LocalDate;
 
 /** 显式补扫一条被拒绝的定时触发。 */
 public record ScheduledOccurrenceCatchUpRequest(
-    @ValidTenantId String tenantId,
-    @NotNull Instant scheduledFireTime,
-    @NotNull LocalDate bizDate,
-    @NotBlank @Size(max = 1024) String reason) {}
+        @ValidTenantId String tenantId,
+        @NotNull Instant scheduledFireTime,
+        @NotNull LocalDate bizDate,
+        @NotBlank @Size(max = 1024) String reason) {}

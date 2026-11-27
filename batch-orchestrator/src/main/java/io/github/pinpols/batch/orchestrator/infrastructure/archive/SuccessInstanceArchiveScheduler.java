@@ -25,62 +25,59 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-    name = "batch.job-instance.archive.enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+@ConditionalOnProperty(name = "batch.job-instance.archive.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class SuccessInstanceArchiveScheduler {
 
-  /** 单次 tick 最多连刷批数：1000 instance × 50 = 50k instance 单次清完封顶。 */
-  private static final int MAX_BATCHES_PER_TICK = 50;
+    /** 单次 tick 最多连刷批数：1000 instance × 50 = 50k instance 单次清完封顶。 */
+    private static final int MAX_BATCHES_PER_TICK = 50;
 
-  private final SuccessInstanceArchiveService archiveService;
-  private final SuccessInstanceArchiveProperties properties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
+    private final SuccessInstanceArchiveService archiveService;
+    private final SuccessInstanceArchiveProperties properties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
 
-  @PostConstruct
-  void registerHealthMetric() {
-    schedulerHealthMetrics.register("job_instance");
-  }
-
-  @Scheduled(
-      cron = "${batch.job-instance.archive.cron:0 30 4 * * SUN}",
-      zone = "${batch.timezone.default-zone:Asia/Shanghai}")
-  @SchedulerLock(name = "success_instance_archive", lockAtMostFor = "PT2H", lockAtLeastFor = "PT5M")
-  public void scheduledArchive() {
-    archive();
-  }
-
-  public void archive() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @PostConstruct
+    void registerHealthMetric() {
+        schedulerHealthMetrics.register("job_instance");
     }
-    archiveService.reportIntegrityIssues();
-    int totalInstances = 0;
-    int batches = 0;
-    while (batches < MAX_BATCHES_PER_TICK) {
-      ArchiveBatchResult result = archiveService.archiveNextBatch();
-      if (!result.executed()) {
-        break;
-      }
-      totalInstances += result.instancesDeleted();
-      batches++;
-      if (!result.hasMore(properties.getBatchSize())) {
-        break;
-      }
-      if (gracefulShutdown.isDraining()) {
-        break;
-      }
+
+    @Scheduled(
+            cron = "${batch.job-instance.archive.cron:0 30 4 * * SUN}",
+            zone = "${batch.timezone.default-zone:Asia/Shanghai}")
+    @SchedulerLock(name = "success_instance_archive", lockAtMostFor = "PT2H", lockAtLeastFor = "PT5M")
+    public void scheduledArchive() {
+        archive();
     }
-    if (totalInstances > 0) {
-      log.info(
-          "success-instance archive completed: batches={}, instances={}, retentionDays={}",
-          batches,
-          totalInstances,
-          properties.getRetentionDays());
+
+    public void archive() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        archiveService.reportIntegrityIssues();
+        int totalInstances = 0;
+        int batches = 0;
+        while (batches < MAX_BATCHES_PER_TICK) {
+            ArchiveBatchResult result = archiveService.archiveNextBatch();
+            if (!result.executed()) {
+                break;
+            }
+            totalInstances += result.instancesDeleted();
+            batches++;
+            if (!result.hasMore(properties.getBatchSize())) {
+                break;
+            }
+            if (gracefulShutdown.isDraining()) {
+                break;
+            }
+        }
+        if (totalInstances > 0) {
+            log.info(
+                    "success-instance archive completed: batches={}, instances={}, retentionDays={}",
+                    batches,
+                    totalInstances,
+                    properties.getRetentionDays());
+        }
+        schedulerHealthMetrics.markSuccess("job_instance");
     }
-    schedulerHealthMetrics.markSuccess("job_instance");
-  }
 }

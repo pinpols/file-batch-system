@@ -11,21 +11,20 @@ import org.testcontainers.utility.DockerImageName;
 @SuppressWarnings({"java:S2095", "java:S1452"})
 public final class TestValkeyContainers {
 
-  public static final int REDIS_PORT = 6379;
+    public static final int REDIS_PORT = 6379;
 
-  private TestValkeyContainers() {}
+    private TestValkeyContainers() {}
 
-  public static GenericContainer<?> create() {
-    GenericContainer<?> container = new GenericContainer<>(
-            DockerImageName.parse(TestContainerImages.VALKEY))
-        .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
-        .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE)
-        .withExposedPorts(REDIS_PORT);
-    TestContainerLabels.markOwned(container);
-    return container;
-  }
+    public static GenericContainer<?> create() {
+        GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(TestContainerImages.VALKEY))
+                .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
+                .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE)
+                .withExposedPorts(REDIS_PORT);
+        TestContainerLabels.markOwned(container);
+        return container;
+    }
 
-  public static GenericContainer<?> createPersistent() {
-    return create().withCommand("redis-server", "--appendonly", "yes");
-  }
+    public static GenericContainer<?> createPersistent() {
+        return create().withCommand("redis-server", "--appendonly", "yes");
+    }
 }

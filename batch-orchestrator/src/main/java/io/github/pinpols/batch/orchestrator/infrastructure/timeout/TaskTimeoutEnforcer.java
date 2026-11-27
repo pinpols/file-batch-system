@@ -28,70 +28,63 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-    prefix = "batch.timeout",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+@ConditionalOnProperty(prefix = "batch.timeout", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class TaskTimeoutEnforcer {
 
-  private final JobTaskMapper jobTaskMapper;
-  private final BatchOrchestratorGovernanceProperties governance;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final MeterRegistry meterRegistry;
-  private final AtomicBoolean running = new AtomicBoolean(false);
+    private final JobTaskMapper jobTaskMapper;
+    private final BatchOrchestratorGovernanceProperties governance;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final MeterRegistry meterRegistry;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
-  @Scheduled(fixedDelayString = "${batch.timeout.poll-interval-millis:60000}")
-  @SchedulerLock(name = "task_timeout_enforce", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
-  public void enforce() {
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    if (!running.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      int batchSize = Math.max(1, governance.timeout().getBatchSize());
-      List<JobTaskEntity> candidates = jobTaskMapper.selectTaskTimeoutCandidates(batchSize);
-      if (candidates.isEmpty()) {
-        return;
-      }
-      int cancelled = 0;
-      for (JobTaskEntity task : candidates) {
-        int rows = RlsTenantContextHolder.runWithTenant(
-            task.getTenantId(),
-            () -> jobTaskMapper.requestCancelIfTimedOut(
-                task.getTenantId(), task.getId(), task.getVersion()));
-        if (rows > 0) {
-          cancelled++;
-          log.warn(
-              "task startToClose timeout: tenant={} taskId={} startedAt={} timeoutSeconds={}"
-                  + " (cancel requested)",
-              task.getTenantId(),
-              task.getId(),
-              task.getStartedAt(),
-              task.getTaskTimeoutSeconds());
+    @Scheduled(fixedDelayString = "${batch.timeout.poll-interval-millis:60000}")
+    @SchedulerLock(name = "task_timeout_enforce", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
+    public void enforce() {
+        if (gracefulShutdown.isDraining()) {
+            return;
         }
-      }
-      if (cancelled > 0) {
-        log.info(
-            "task timeout enforcer tick: scanned={} cancel_requested={}",
-            candidates.size(),
-            cancelled);
-        meterRegistry.counter("batch.task.timeout.cancel.total").increment(cancelled);
-      }
-      if (candidates.size() >= batchSize) {
-        log.warn(
-            "task timeout enforcer hit batch ceiling: scanned={} batchSize={} — consider raising"
-                + " batch.timeout.batch-size or shortening interval",
-            candidates.size(),
-            batchSize);
-      }
-    } catch (RuntimeException ex) {
-      log.warn("task timeout enforcer tick failed", ex);
-    } finally {
-      running.set(false);
+        if (!running.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            int batchSize = Math.max(1, governance.timeout().getBatchSize());
+            List<JobTaskEntity> candidates = jobTaskMapper.selectTaskTimeoutCandidates(batchSize);
+            if (candidates.isEmpty()) {
+                return;
+            }
+            int cancelled = 0;
+            for (JobTaskEntity task : candidates) {
+                int rows = RlsTenantContextHolder.runWithTenant(
+                        task.getTenantId(),
+                        () -> jobTaskMapper.requestCancelIfTimedOut(
+                                task.getTenantId(), task.getId(), task.getVersion()));
+                if (rows > 0) {
+                    cancelled++;
+                    log.warn(
+                            "task startToClose timeout: tenant={} taskId={} startedAt={} timeoutSeconds={}"
+                                    + " (cancel requested)",
+                            task.getTenantId(),
+                            task.getId(),
+                            task.getStartedAt(),
+                            task.getTaskTimeoutSeconds());
+                }
+            }
+            if (cancelled > 0) {
+                log.info("task timeout enforcer tick: scanned={} cancel_requested={}", candidates.size(), cancelled);
+                meterRegistry.counter("batch.task.timeout.cancel.total").increment(cancelled);
+            }
+            if (candidates.size() >= batchSize) {
+                log.warn(
+                        "task timeout enforcer hit batch ceiling: scanned={} batchSize={} — consider raising"
+                                + " batch.timeout.batch-size or shortening interval",
+                        candidates.size(),
+                        batchSize);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("task timeout enforcer tick failed", ex);
+        } finally {
+            running.set(false);
+        }
     }
-  }
 }

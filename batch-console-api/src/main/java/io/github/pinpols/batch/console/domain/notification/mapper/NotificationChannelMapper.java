@@ -8,14 +8,13 @@ import org.apache.ibatis.annotations.Param;
 
 public interface NotificationChannelMapper {
 
-  List<NotificationChannelRow> selectByTenant(@Param("tenantId") String tenantId);
+    List<NotificationChannelRow> selectByTenant(@Param("tenantId") String tenantId);
 
-  NotificationChannelRow selectByCode(
-      @Param("tenantId") String tenantId, @Param("channelCode") String channelCode);
+    NotificationChannelRow selectByCode(@Param("tenantId") String tenantId, @Param("channelCode") String channelCode);
 
-  int insert(NotificationChannelInsertParam params);
+    int insert(NotificationChannelInsertParam params);
 
-  int update(NotificationChannelUpdateParam params);
+    int update(NotificationChannelUpdateParam params);
 
-  int deleteByCode(@Param("tenantId") String tenantId, @Param("channelCode") String channelCode);
+    int deleteByCode(@Param("tenantId") String tenantId, @Param("channelCode") String channelCode);
 }

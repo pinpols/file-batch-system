@@ -19,30 +19,29 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class ConsoleBatchDayReplayApprovalService {
-  private final ConsoleOrchestratorPort orchestrator;
+    private final ConsoleOrchestratorPort orchestrator;
 
-  public CommonResponse<ConsoleReplayOperationResponse> approveOperation(Long id, String tenantId) {
-    return orchestrator.replayOperationApprove(id, tenantId, authenticatedApprover());
-  }
-
-  public CommonResponse<ConsoleBatchDayReplaySessionResponse> approveSession(
-      Long id, String tenantId) {
-    return orchestrator.batchDayReplayApprove(id, tenantId, authenticatedApprover());
-  }
-
-  private String authenticatedApprover() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (EmptyChecks.isNull(authentication)
-        || !authentication.isAuthenticated()
-        || !(authentication.getPrincipal() instanceof ConsolePrincipal principal)
-        || !Texts.hasText(principal.username())) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.unauthenticated");
+    public CommonResponse<ConsoleReplayOperationResponse> approveOperation(Long id, String tenantId) {
+        return orchestrator.replayOperationApprove(id, tenantId, authenticatedApprover());
     }
-    boolean admin = authentication.getAuthorities().stream()
-        .anyMatch(authority -> ConsoleRoles.ADMIN.equals(authority.getAuthority()));
-    if (!admin) {
-      throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
+
+    public CommonResponse<ConsoleBatchDayReplaySessionResponse> approveSession(Long id, String tenantId) {
+        return orchestrator.batchDayReplayApprove(id, tenantId, authenticatedApprover());
     }
-    return principal.username();
-  }
+
+    private String authenticatedApprover() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (EmptyChecks.isNull(authentication)
+                || !authentication.isAuthenticated()
+                || !(authentication.getPrincipal() instanceof ConsolePrincipal principal)
+                || !Texts.hasText(principal.username())) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.unauthenticated");
+        }
+        boolean admin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> ConsoleRoles.ADMIN.equals(authority.getAuthority()));
+        if (!admin) {
+            throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
+        }
+        return principal.username();
+    }
 }

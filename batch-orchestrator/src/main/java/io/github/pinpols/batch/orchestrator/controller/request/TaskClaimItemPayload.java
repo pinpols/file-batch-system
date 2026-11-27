@@ -7,5 +7,4 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * /internal/tasks/{taskId}/claim}({@code TaskClaimRequest})对齐 + taskId。
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TaskClaimItemPayload(
-    String tenantId, Long taskId, String workerId, String partitionInvocationId) {}
+public record TaskClaimItemPayload(String tenantId, Long taskId, String workerId, String partitionInvocationId) {}

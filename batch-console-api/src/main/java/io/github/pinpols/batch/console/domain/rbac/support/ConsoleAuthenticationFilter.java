@@ -52,249 +52,239 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
-  /**
-   * SSE ticket 在 REQUEST 分派被 {@code getAndDelete} 一次性消费后，缓存到当次 request 的 attribute； ASYNC / ERROR
-   * 分派再次进入本过滤器时直接复用，避免二次 validate 拿不到值导致认证空缺、 上抛 {@code AuthorizationDeniedException} + Tomcat
-   * ERROR 级日志雪崩（response 已 commit 写不下 403）。
-   */
-  static final String TICKET_PRINCIPAL_ATTR =
-      ConsoleAuthenticationFilter.class.getName() + ".TICKET_PRINCIPAL";
+    /**
+     * SSE ticket 在 REQUEST 分派被 {@code getAndDelete} 一次性消费后，缓存到当次 request 的 attribute； ASYNC / ERROR
+     * 分派再次进入本过滤器时直接复用，避免二次 validate 拿不到值导致认证空缺、 上抛 {@code AuthorizationDeniedException} + Tomcat
+     * ERROR 级日志雪崩（response 已 commit 写不下 403）。
+     */
+    static final String TICKET_PRINCIPAL_ATTR = ConsoleAuthenticationFilter.class.getName() + ".TICKET_PRINCIPAL";
 
-  /**
-   * Spring MVC 异步完成（例如 SSE 的 {@code SseEmitter} / Streaming 等）会再走一轮 {@code DispatcherType.ASYNC}。
-   *
-   * <p>{@link OncePerRequestFilter} 默认跳过 ASYNC 分派，则本轮不会重建 {@link SecurityContextHolder}，而 Spring
-   * Security 6+ 的 {@code AuthorizationFilter} 仍会对 ASYNC 执行校验 → 误判未认证并抛出 {@code
-   * AuthorizationDeniedException}。
-   */
-  @Override
-  protected boolean shouldNotFilterAsyncDispatch() {
-    return false;
-  }
+    /**
+     * Spring MVC 异步完成（例如 SSE 的 {@code SseEmitter} / Streaming 等）会再走一轮 {@code DispatcherType.ASYNC}。
+     *
+     * <p>{@link OncePerRequestFilter} 默认跳过 ASYNC 分派，则本轮不会重建 {@link SecurityContextHolder}，而 Spring
+     * Security 6+ 的 {@code AuthorizationFilter} 仍会对 ASYNC 执行校验 → 误判未认证并抛出 {@code
+     * AuthorizationDeniedException}。
+     */
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        return false;
+    }
 
-  /** 错误分派与 ASYNC 同理：需要在本过滤器内按同一规则（JWT / SSE ticket / bypass）恢复认证，避免仅 ERROR 轮次匿名访问被拒绝。 */
-  @Override
-  protected boolean shouldNotFilterErrorDispatch() {
-    return false;
-  }
+    /** 错误分派与 ASYNC 同理：需要在本过滤器内按同一规则（JWT / SSE ticket / bypass）恢复认证，避免仅 ERROR 轮次匿名访问被拒绝。 */
+    @Override
+    protected boolean shouldNotFilterErrorDispatch() {
+        return false;
+    }
 
-  /** 授权发起与 IdP callback 必须交给 Spring OAuth 过滤器，避免旧 JWT cookie 抢先拦截/清除认证上下文。 */
-  @Override
-  protected boolean shouldNotFilter(HttpServletRequest request) {
-    String path = request.getRequestURI();
-    return path.startsWith(request.getContextPath() + "/oauth2/authorization/")
-        || path.startsWith(request.getContextPath() + "/login/oauth2/code/");
-  }
+    /** 授权发起与 IdP callback 必须交给 Spring OAuth 过滤器，避免旧 JWT cookie 抢先拦截/清除认证上下文。 */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith(request.getContextPath() + "/oauth2/authorization/")
+                || path.startsWith(request.getContextPath() + "/login/oauth2/code/");
+    }
 
-  private final ConsoleSecurityProperties properties;
-  private final BatchSecurityProperties batchSecurityProperties;
-  private final ConsoleJwtService jwtService;
-  private final ConsoleSecurityResponseWriter responseWriter;
-  private final SseTicketService sseTicketService;
+    private final ConsoleSecurityProperties properties;
+    private final BatchSecurityProperties batchSecurityProperties;
+    private final ConsoleJwtService jwtService;
+    private final ConsoleSecurityResponseWriter responseWriter;
+    private final SseTicketService sseTicketService;
 
-  @Override
-  protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-      throws ServletException, IOException {
-    try {
-      if (!properties.isEnabled() && !batchSecurityProperties.isBypassMode()) {
-        filterChain.doFilter(request, response);
-        return;
-      }
-
-      if (authenticateSseTicket(request, response, filterChain)) {
-        return;
-      }
-      if (authenticateCookie(request, response, filterChain)) {
-        return;
-      }
-
-      if (batchSecurityProperties.isBypassMode()) {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
         try {
-          String username = resolveUsername(request);
-          String tenantId = resolveTenant(request);
-          Set<SimpleGrantedAuthority> authorities = resolveAuthorities(request);
-          Set<String> principalAuthorities = authorities.stream()
-              .map(SimpleGrantedAuthority::getAuthority)
-              .collect(Collectors.toCollection(LinkedHashSet::new));
-          ConsolePrincipal principal =
-              new ConsolePrincipal(username, tenantId, principalAuthorities);
-          setAuthentication(principal, "bypass-mode");
-        } catch (IllegalArgumentException exception) {
-          SwallowedExceptionLogger.info(
-              ConsoleAuthenticationFilter.class, "catch:IllegalArgumentException", exception);
+            if (!properties.isEnabled() && !batchSecurityProperties.isBypassMode()) {
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-          responseWriter.write(
-              response,
-              HttpStatus.FORBIDDEN,
-              ResultCode.FORBIDDEN,
-              CommonErrorMessages.TENANT_MISMATCH);
-          return;
-        }
-      }
+            if (authenticateSseTicket(request, response, filterChain)) {
+                return;
+            }
+            if (authenticateCookie(request, response, filterChain)) {
+                return;
+            }
 
-      filterChain.doFilter(request, response);
-    } finally {
-      SecurityContextHolder.clearContext();
-    }
-  }
+            if (batchSecurityProperties.isBypassMode()) {
+                try {
+                    String username = resolveUsername(request);
+                    String tenantId = resolveTenant(request);
+                    Set<SimpleGrantedAuthority> authorities = resolveAuthorities(request);
+                    Set<String> principalAuthorities = authorities.stream()
+                            .map(SimpleGrantedAuthority::getAuthority)
+                            .collect(Collectors.toCollection(LinkedHashSet::new));
+                    ConsolePrincipal principal = new ConsolePrincipal(username, tenantId, principalAuthorities);
+                    setAuthentication(principal, "bypass-mode");
+                } catch (IllegalArgumentException exception) {
+                    SwallowedExceptionLogger.info(
+                            ConsoleAuthenticationFilter.class, "catch:IllegalArgumentException", exception);
 
-  private boolean authenticateSseTicket(
-      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-      throws ServletException, IOException {
-    // SSE ticket 鉴权：EventSource 不能设 header，用一次性 ticket 替代
-    String sseTicket = request.getParameter("ticket");
-    if (Texts.hasText(sseTicket)) {
-      // ASYNC/ERROR 分派复用 REQUEST 阶段已消费的 ticket 解析结果，避免二次 validate
-      // 命中已删 key 后假装匿名 → 落入 AuthorizationFilter 抛 AccessDenied → response committed 雪崩
-      SseTicketService.TicketPayload payload =
-          (SseTicketService.TicketPayload) request.getAttribute(TICKET_PRINCIPAL_ATTR);
-      if (EmptyChecks.isNull(payload)) {
-        payload = sseTicketService.validate(sseTicket);
-        if (EmptyChecks.isNotNull(payload)) {
-          request.setAttribute(TICKET_PRINCIPAL_ATTR, payload);
+                    responseWriter.write(
+                            response, HttpStatus.FORBIDDEN, ResultCode.FORBIDDEN, CommonErrorMessages.TENANT_MISMATCH);
+                    return;
+                }
+            }
+
+            filterChain.doFilter(request, response);
+        } finally {
+            SecurityContextHolder.clearContext();
         }
-      }
-      if (EmptyChecks.isNotNull(payload)) {
-        if (!ConsoleRoles.isFormalRoleSet(payload.authorities())) {
-          responseWriter.write(
-              response,
-              HttpStatus.UNAUTHORIZED,
-              ResultCode.UNAUTHORIZED,
-              CommonErrorMessages.INVALID_CONSOLE_JWT);
-          return true;
-        }
-        LinkedHashSet<String> authorities = new LinkedHashSet<>(payload.authorities());
-        ConsolePrincipal principal =
-            new ConsolePrincipal(payload.username(), payload.tenantId(), authorities);
-        setAuthentication(principal, "sse-ticket");
-        filterChain.doFilter(request, response);
-        return true;
-      }
     }
 
-    return false;
-  }
-
-  private boolean authenticateCookie(
-      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-      throws ServletException, IOException {
-    String bearerToken = resolveCookieToken(request);
-    if (Texts.hasText(bearerToken)) {
-      try {
-        ConsolePrincipal principal = jwtService.authenticate(bearerToken);
-        setAuthentication(principal, bearerToken);
-      } catch (Exception exception) {
-        SwallowedExceptionLogger.warn(
-            ConsoleAuthenticationFilter.class, "catch:Exception", exception);
-
-        // D7 Stage B 切到 HttpOnly cookie 后,浏览器对任何同源请求都自动带 cookie
-        // (含 /auth/login、/auth/logout)。失效 cookie 在公开认证端点不应阻塞请求,
-        // 否则用户陷死:cookie 一旦过期,连重新登录换新 cookie 的机会都没有。
-        // 这些端点本来就在 SecurityConfig 标了 permitAll,放行给下游 controller 自处理。
-        if (isPublicAuthPath(request)) {
-          filterChain.doFilter(request, response);
-          return true;
+    private boolean authenticateSseTicket(
+            HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        // SSE ticket 鉴权：EventSource 不能设 header，用一次性 ticket 替代
+        String sseTicket = request.getParameter("ticket");
+        if (Texts.hasText(sseTicket)) {
+            // ASYNC/ERROR 分派复用 REQUEST 阶段已消费的 ticket 解析结果，避免二次 validate
+            // 命中已删 key 后假装匿名 → 落入 AuthorizationFilter 抛 AccessDenied → response committed 雪崩
+            SseTicketService.TicketPayload payload =
+                    (SseTicketService.TicketPayload) request.getAttribute(TICKET_PRINCIPAL_ATTR);
+            if (EmptyChecks.isNull(payload)) {
+                payload = sseTicketService.validate(sseTicket);
+                if (EmptyChecks.isNotNull(payload)) {
+                    request.setAttribute(TICKET_PRINCIPAL_ATTR, payload);
+                }
+            }
+            if (EmptyChecks.isNotNull(payload)) {
+                if (!ConsoleRoles.isFormalRoleSet(payload.authorities())) {
+                    responseWriter.write(
+                            response,
+                            HttpStatus.UNAUTHORIZED,
+                            ResultCode.UNAUTHORIZED,
+                            CommonErrorMessages.INVALID_CONSOLE_JWT);
+                    return true;
+                }
+                LinkedHashSet<String> authorities = new LinkedHashSet<>(payload.authorities());
+                ConsolePrincipal principal = new ConsolePrincipal(payload.username(), payload.tenantId(), authorities);
+                setAuthentication(principal, "sse-ticket");
+                filterChain.doFilter(request, response);
+                return true;
+            }
         }
 
-        // P1-2 fix(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md):
-        // 客户端**主动**带了 JWT(cookie)却解析失败 → 一律 401,不再因 bypass-mode 降级到 admin。
-        // 历史 A3-B 降级路径在 prod profile 误漂(SPRING_PROFILES_ACTIVE 缺失)
-        // + bypass-mode=true 同时成立时,变成"过期 cookie 自动升 admin"的认证绕过。
-        // bypass-mode 仍生效于主过滤流程的无凭据路径:dev/test 不带 cookie 时
-        // 走 default authorities,行为不变;一旦客户端带了 token 就严格按 token 校验。
-        responseWriter.write(
-            response,
-            HttpStatus.UNAUTHORIZED,
-            ResultCode.UNAUTHORIZED,
-            CommonErrorMessages.INVALID_CONSOLE_JWT);
-        return true;
-      }
-      filterChain.doFilter(request, response);
-      return true;
+        return false;
     }
 
-    return false;
-  }
+    private boolean authenticateCookie(
+            HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        String bearerToken = resolveCookieToken(request);
+        if (Texts.hasText(bearerToken)) {
+            try {
+                ConsolePrincipal principal = jwtService.authenticate(bearerToken);
+                setAuthentication(principal, bearerToken);
+            } catch (Exception exception) {
+                SwallowedExceptionLogger.warn(ConsoleAuthenticationFilter.class, "catch:Exception", exception);
 
-  private void setAuthentication(ConsolePrincipal principal, String credentials) {
-    Set<SimpleGrantedAuthority> grantedAuthorities = principal.authorities().stream()
-        .map(SimpleGrantedAuthority::new)
-        .collect(Collectors.toCollection(LinkedHashSet::new));
-    UsernamePasswordAuthenticationToken authentication =
-        new UsernamePasswordAuthenticationToken(principal, credentials, grantedAuthorities);
-    SecurityContextHolder.getContext().setAuthentication(authentication);
-  }
+                // D7 Stage B 切到 HttpOnly cookie 后,浏览器对任何同源请求都自动带 cookie
+                // (含 /auth/login、/auth/logout)。失效 cookie 在公开认证端点不应阻塞请求,
+                // 否则用户陷死:cookie 一旦过期,连重新登录换新 cookie 的机会都没有。
+                // 这些端点本来就在 SecurityConfig 标了 permitAll,放行给下游 controller 自处理。
+                if (isPublicAuthPath(request)) {
+                    filterChain.doFilter(request, response);
+                    return true;
+                }
 
-  /** ADR-030 §D7：HttpOnly cookie 名（与登录响应 Set-Cookie 同步）。 */
-  private static final String CONSOLE_TOKEN_COOKIE = "batch_console_token";
-
-  /**
-   * 与 {@code ConsoleSecurityConfiguration} permitAll 列表对齐的公开认证端点。 失效 cookie 命中这些路径时不应 401,放行给
-   * controller 处理凭证校验和换发新 cookie。
-   */
-  private static final Set<String> PUBLIC_AUTH_PATHS = Set.of(
-      "/api/console/auth/login",
-      "/api/console/auth/logout",
-      "/api/console/auth/public-key",
-      "/api/console/auth/oidc/provider");
-
-  private boolean isPublicAuthPath(HttpServletRequest request) {
-    return PUBLIC_AUTH_PATHS.contains(request.getRequestURI());
-  }
-
-  private String resolveCookieToken(HttpServletRequest request) {
-    Cookie[] cookies = request.getCookies();
-    if (cookies == null) {
-      return null;
-    }
-    for (Cookie cookie : cookies) {
-      if (CONSOLE_TOKEN_COOKIE.equals(cookie.getName())) {
-        String value = cookie.getValue();
-        if (Texts.hasText(value)) {
-          return value.trim();
+                // P1-2 fix(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md):
+                // 客户端**主动**带了 JWT(cookie)却解析失败 → 一律 401,不再因 bypass-mode 降级到 admin。
+                // 历史 A3-B 降级路径在 prod profile 误漂(SPRING_PROFILES_ACTIVE 缺失)
+                // + bypass-mode=true 同时成立时,变成"过期 cookie 自动升 admin"的认证绕过。
+                // bypass-mode 仍生效于主过滤流程的无凭据路径:dev/test 不带 cookie 时
+                // 走 default authorities,行为不变;一旦客户端带了 token 就严格按 token 校验。
+                responseWriter.write(
+                        response,
+                        HttpStatus.UNAUTHORIZED,
+                        ResultCode.UNAUTHORIZED,
+                        CommonErrorMessages.INVALID_CONSOLE_JWT);
+                return true;
+            }
+            filterChain.doFilter(request, response);
+            return true;
         }
-      }
-    }
-    return null;
-  }
 
-  private String resolveUsername(HttpServletRequest request) {
-    String username = request.getHeader(properties.getUserHeader());
-    if (!Texts.hasText(username)) {
-      username = batchSecurityProperties.isBypassMode() ? "testing-console-user" : "console-user";
+        return false;
     }
-    return username;
-  }
 
-  private String resolveTenant(HttpServletRequest request) {
-    String tenantId = request.getHeader(properties.getTenantHeader());
-    if (!Texts.hasText(tenantId)) {
-      tenantId = properties.getDefaultTenantId();
+    private void setAuthentication(ConsolePrincipal principal, String credentials) {
+        Set<SimpleGrantedAuthority> grantedAuthorities = principal.authorities().stream()
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(principal, credentials, grantedAuthorities);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
-    if (!properties.getAllowedTenants().isEmpty()
-        && !properties.getAllowedTenants().contains(tenantId)) {
-      throw new IllegalArgumentException("tenant not allowed");
-    }
-    return tenantId;
-  }
 
-  private Set<SimpleGrantedAuthority> resolveAuthorities(HttpServletRequest request) {
-    String rolesHeader = request.getHeader(properties.getRoleHeader());
-    Set<String> roles;
-    if (!Texts.hasText(rolesHeader)) {
-      roles = new LinkedHashSet<>(properties.getDefaultAuthorities());
-    } else {
-      roles = Arrays.stream(rolesHeader.split(","))
-          .map(String::trim)
-          .filter(EmptyChecks::isNotBlank)
-          .collect(Collectors.toCollection(LinkedHashSet::new));
+    /** ADR-030 §D7：HttpOnly cookie 名（与登录响应 Set-Cookie 同步）。 */
+    private static final String CONSOLE_TOKEN_COOKIE = "batch_console_token";
+
+    /**
+     * 与 {@code ConsoleSecurityConfiguration} permitAll 列表对齐的公开认证端点。 失效 cookie 命中这些路径时不应 401,放行给
+     * controller 处理凭证校验和换发新 cookie。
+     */
+    private static final Set<String> PUBLIC_AUTH_PATHS = Set.of(
+            "/api/console/auth/login",
+            "/api/console/auth/logout",
+            "/api/console/auth/public-key",
+            "/api/console/auth/oidc/provider");
+
+    private boolean isPublicAuthPath(HttpServletRequest request) {
+        return PUBLIC_AUTH_PATHS.contains(request.getRequestURI());
     }
-    if (!ConsoleRoles.isFormalRoleSet(roles)) {
-      throw new IllegalArgumentException("unsupported console role");
+
+    private String resolveCookieToken(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (CONSOLE_TOKEN_COOKIE.equals(cookie.getName())) {
+                String value = cookie.getValue();
+                if (Texts.hasText(value)) {
+                    return value.trim();
+                }
+            }
+        }
+        return null;
     }
-    return roles.stream()
-        .map(SimpleGrantedAuthority::new)
-        .collect(Collectors.toCollection(LinkedHashSet::new));
-  }
+
+    private String resolveUsername(HttpServletRequest request) {
+        String username = request.getHeader(properties.getUserHeader());
+        if (!Texts.hasText(username)) {
+            username = batchSecurityProperties.isBypassMode() ? "testing-console-user" : "console-user";
+        }
+        return username;
+    }
+
+    private String resolveTenant(HttpServletRequest request) {
+        String tenantId = request.getHeader(properties.getTenantHeader());
+        if (!Texts.hasText(tenantId)) {
+            tenantId = properties.getDefaultTenantId();
+        }
+        if (!properties.getAllowedTenants().isEmpty()
+                && !properties.getAllowedTenants().contains(tenantId)) {
+            throw new IllegalArgumentException("tenant not allowed");
+        }
+        return tenantId;
+    }
+
+    private Set<SimpleGrantedAuthority> resolveAuthorities(HttpServletRequest request) {
+        String rolesHeader = request.getHeader(properties.getRoleHeader());
+        Set<String> roles;
+        if (!Texts.hasText(rolesHeader)) {
+            roles = new LinkedHashSet<>(properties.getDefaultAuthorities());
+        } else {
+            roles = Arrays.stream(rolesHeader.split(","))
+                    .map(String::trim)
+                    .filter(EmptyChecks::isNotBlank)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+        }
+        if (!ConsoleRoles.isFormalRoleSet(roles)) {
+            throw new IllegalArgumentException("unsupported console role");
+        }
+        return roles.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
 }

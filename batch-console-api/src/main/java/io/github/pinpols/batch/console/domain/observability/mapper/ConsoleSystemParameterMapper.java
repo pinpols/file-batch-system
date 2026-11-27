@@ -11,12 +11,12 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ConsoleSystemParameterMapper {
 
-  List<SystemParameterEntity> findAllByTenant(@Param("tenantId") String tenantId);
+    List<SystemParameterEntity> findAllByTenant(@Param("tenantId") String tenantId);
 
-  Optional<SystemParameterEntity> findByTenantAndKey(
-      @Param("tenantId") String tenantId, @Param("paramKey") String paramKey);
+    Optional<SystemParameterEntity> findByTenantAndKey(
+            @Param("tenantId") String tenantId, @Param("paramKey") String paramKey);
 
-  void upsert(ConsoleSystemParameterUpsertParam parameters);
+    void upsert(ConsoleSystemParameterUpsertParam parameters);
 
-  void deleteByTenantAndKey(@Param("tenantId") String tenantId, @Param("paramKey") String paramKey);
+    void deleteByTenantAndKey(@Param("tenantId") String tenantId, @Param("paramKey") String paramKey);
 }

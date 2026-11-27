@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface AuditLogMapper {
 
-  List<FileAuditLogRow> selectByQuery(AuditLogQuery query);
+    List<FileAuditLogRow> selectByQuery(AuditLogQuery query);
 
-  long countByQuery(AuditLogQuery query);
+    long countByQuery(AuditLogQuery query);
 }

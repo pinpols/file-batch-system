@@ -8,27 +8,26 @@ import org.apache.ibatis.annotations.Param;
 
 public interface ApprovalCommandMapper {
 
-  int insert(ApprovalCommandEntity entity);
+    int insert(ApprovalCommandEntity entity);
 
-  ApprovalCommandEntity selectByTenantAndSourceIdempotencyKey(
-      @Param("tenantId") String tenantId,
-      @Param("sourceIdempotencyKey") String sourceIdempotencyKey);
+    ApprovalCommandEntity selectByTenantAndSourceIdempotencyKey(
+            @Param("tenantId") String tenantId, @Param("sourceIdempotencyKey") String sourceIdempotencyKey);
 
-  ApprovalCommandEntity selectByTenantAndApprovalNo(
-      @Param("tenantId") String tenantId, @Param("approvalNo") String approvalNo);
+    ApprovalCommandEntity selectByTenantAndApprovalNo(
+            @Param("tenantId") String tenantId, @Param("approvalNo") String approvalNo);
 
-  int markApproved(ApproveCommandDecisionParam param);
+    int markApproved(ApproveCommandDecisionParam param);
 
-  int markRejected(RejectCommandDecisionParam param);
+    int markRejected(RejectCommandDecisionParam param);
 
-  int markExecuted(
-      @Param("tenantId") String tenantId,
-      @Param("approvalNo") String approvalNo,
-      @Param("executedStatus") String executedStatus,
-      @Param("approvedStatus") String approvedStatus);
+    int markExecuted(
+            @Param("tenantId") String tenantId,
+            @Param("approvalNo") String approvalNo,
+            @Param("executedStatus") String executedStatus,
+            @Param("approvedStatus") String approvedStatus);
 
-  List<ApprovalCommandEntity> selectPending(
-      @Param("tenantId") String tenantId,
-      @Param("limit") int limit,
-      @Param("pendingStatus") String pendingStatus);
+    List<ApprovalCommandEntity> selectPending(
+            @Param("tenantId") String tenantId,
+            @Param("limit") int limit,
+            @Param("pendingStatus") String pendingStatus);
 }

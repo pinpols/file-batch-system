@@ -15,30 +15,30 @@ package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
  */
 public interface ProcessingPositionStore {
 
-  /** 启动续跑:读 (tenantId, pipelineInstanceId, stage) 当前位点;无则 {@link ProcessingPosition#empty()}。 */
-  ProcessingPosition load(String tenantId, long pipelineInstanceId, ProcessingStage stage);
+    /** 启动续跑:读 (tenantId, pipelineInstanceId, stage) 当前位点;无则 {@link ProcessingPosition#empty()}。 */
+    ProcessingPosition load(String tenantId, long pipelineInstanceId, ProcessingStage stage);
 
-  /**
-   * UPSERT 位点。本方法不开新事务,参与调用方的平台库事务;不承诺跨数据源原子性。
-   *
-   * @param newMarker 本 chunk/page 末尾的位置标记
-   * @param processedCountIncrement 本批新增的已处理记录数
-   */
-  void advance(
-      String tenantId,
-      long pipelineInstanceId,
-      ProcessingStage stage,
-      String newMarker,
-      long processedCountIncrement);
+    /**
+     * UPSERT 位点。本方法不开新事务,参与调用方的平台库事务;不承诺跨数据源原子性。
+     *
+     * @param newMarker 本 chunk/page 末尾的位置标记
+     * @param processedCountIncrement 本批新增的已处理记录数
+     */
+    void advance(
+            String tenantId,
+            long pipelineInstanceId,
+            ProcessingStage stage,
+            String newMarker,
+            long processedCountIncrement);
 
-  /** 阶段整体完成时调用;completed=true 后续 advance 不再回写位点。 */
-  void markCompleted(String tenantId, long pipelineInstanceId, ProcessingStage stage);
+    /** 阶段整体完成时调用;completed=true 后续 advance 不再回写位点。 */
+    void markCompleted(String tenantId, long pipelineInstanceId, ProcessingStage stage);
 
-  /**
-   * 作废某 pipeline 实例的**全部 stage 位点**(ADR-038 P0 补偿协同)。
-   *
-   * <p>安全增量补偿(compensate_on_failure)反向删除本 run 的业务行后调用:advance 已推进的位点指向被删数据, 必须一并作废,否则重试复用同一 {@code
-   * pipelineInstanceId} 续跑会跳过已删 chunk 造成数据永久缺失。
-   */
-  void deleteAllStages(String tenantId, long pipelineInstanceId);
+    /**
+     * 作废某 pipeline 实例的**全部 stage 位点**(ADR-038 P0 补偿协同)。
+     *
+     * <p>安全增量补偿(compensate_on_failure)反向删除本 run 的业务行后调用:advance 已推进的位点指向被删数据, 必须一并作废,否则重试复用同一 {@code
+     * pipelineInstanceId} 续跑会跳过已删 chunk 造成数据永久缺失。
+     */
+    void deleteAllStages(String tenantId, long pipelineInstanceId);
 }

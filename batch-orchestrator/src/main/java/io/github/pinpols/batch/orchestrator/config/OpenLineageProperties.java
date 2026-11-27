@@ -14,27 +14,27 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.openlineage")
 public class OpenLineageProperties {
 
-  /** 总开关,默认关。 */
-  private boolean enabled = false;
+    /** 总开关,默认关。 */
+    private boolean enabled = false;
 
-  /** 血缘事件接收端点(OpenLineage HTTP transport),如 Marquez 的 /api/v1/lineage。 */
-  private String endpoint = "";
+    /** 血缘事件接收端点(OpenLineage HTTP transport),如 Marquez 的 /api/v1/lineage。 */
+    private String endpoint = "";
 
-  /** OpenLineage namespace,血缘图里区分来源系统;默认 file-batch-system。 */
-  private String namespace = "file-batch-system";
+    /** OpenLineage namespace,血缘图里区分来源系统;默认 file-batch-system。 */
+    private String namespace = "file-batch-system";
 
-  /** producer URI,标识事件生产方(放进 RunEvent.producer)。 */
-  private String producer = "https://github.com/pinpols/file-batch-system";
+    /** producer URI,标识事件生产方(放进 RunEvent.producer)。 */
+    private String producer = "https://github.com/pinpols/file-batch-system";
 
-  /** HTTP 连接超时(毫秒)。 */
-  private int connectTimeoutMs = 2000;
+    /** HTTP 连接超时(毫秒)。 */
+    private int connectTimeoutMs = 2000;
 
-  /** HTTP 请求超时(毫秒)。 */
-  private int requestTimeoutMs = 3000;
+    /** HTTP 请求超时(毫秒)。 */
+    private int requestTimeoutMs = 3000;
 
-  /** 可靠消费者组。独立于业务消费者，端点失败只阻塞血缘 topic。 */
-  private String consumerGroupId = "batch-openlineage-emitter";
+    /** 可靠消费者组。独立于业务消费者，端点失败只阻塞血缘 topic。 */
+    private String consumerGroupId = "batch-openlineage-emitter";
 
-  /** HTTP 发送失败后的 Kafka 分区暂停时间。 */
-  private long retryBackoffMs = 5000L;
+    /** HTTP 发送失败后的 Kafka 分区暂停时间。 */
+    private long retryBackoffMs = 5000L;
 }

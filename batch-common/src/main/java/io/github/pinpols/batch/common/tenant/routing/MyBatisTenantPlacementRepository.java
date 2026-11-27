@@ -15,19 +15,19 @@ import java.util.Map;
  */
 public final class MyBatisTenantPlacementRepository implements TenantPlacementRepository {
 
-  private final BusinessTenantPlacementMapper mapper;
+    private final BusinessTenantPlacementMapper mapper;
 
-  public MyBatisTenantPlacementRepository(BusinessTenantPlacementMapper mapper) {
-    this.mapper = mapper;
-  }
-
-  @Override
-  public Map<String, String> loadAll() {
-    List<BusinessTenantPlacementEntity> rows = mapper.selectAll();
-    Map<String, String> mapping = new LinkedHashMap<>();
-    for (BusinessTenantPlacementEntity row : rows) {
-      mapping.put(row.getTenantId(), row.getPlacementKey());
+    public MyBatisTenantPlacementRepository(BusinessTenantPlacementMapper mapper) {
+        this.mapper = mapper;
     }
-    return mapping;
-  }
+
+    @Override
+    public Map<String, String> loadAll() {
+        List<BusinessTenantPlacementEntity> rows = mapper.selectAll();
+        Map<String, String> mapping = new LinkedHashMap<>();
+        for (BusinessTenantPlacementEntity row : rows) {
+            mapping.put(row.getTenantId(), row.getPlacementKey());
+        }
+        return mapping;
+    }
 }

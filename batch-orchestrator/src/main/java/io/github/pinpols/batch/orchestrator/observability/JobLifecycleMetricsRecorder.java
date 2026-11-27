@@ -43,145 +43,141 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class JobLifecycleMetricsRecorder {
 
-  /** 失败类终态:这些状态要额外打 {@code batch.orchestrator.job.failure.total} + error_code。 */
-  private static final Set<String> FAILED_TERMINAL_STATUSES = Set.of(
-      JobInstanceStatus.FAILED.code(),
-      JobInstanceStatus.PARTIAL_FAILED.code(),
-      JobInstanceStatus.FAILED_DRY_RUN.code());
+    /** 失败类终态:这些状态要额外打 {@code batch.orchestrator.job.failure.total} + error_code。 */
+    private static final Set<String> FAILED_TERMINAL_STATUSES = Set.of(
+            JobInstanceStatus.FAILED.code(),
+            JobInstanceStatus.PARTIAL_FAILED.code(),
+            JobInstanceStatus.FAILED_DRY_RUN.code());
 
-  private final JobInstanceMapper jobInstanceMapper;
-  private final JobDefinitionMapper jobDefinitionMapper;
-  private final JobLifecycleMetrics jobLifecycleMetrics;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final JobDefinitionMapper jobDefinitionMapper;
+    private final JobLifecycleMetrics jobLifecycleMetrics;
 
-  /**
-   * 使用调用方事务内已经读取的实例记录终态指标。
-   *
-   * <p>传入实体不会跨事务捕获；本方法立即复制指标需要的字段为不可变快照。{@code failureClass}
-   * 使用本次终态 CAS 即将写入的值，因为调用方持有的实体仍是更新前状态。
-   */
-  public void recordCompletionAfterCommit(
-      String tenantId,
-      JobInstanceEntity instance,
-      String terminalStatus,
-      Instant finishedAt,
-      String failureClass) {
-    if (EmptyChecks.isNull(instance) || EmptyChecks.isNull(instance.getCreatedAt())) {
-      return;
-    }
-    CompletionSnapshot snapshot = new CompletionSnapshot(
-        tenantId,
-        instance.getId(),
-        instance.getJobDefinitionId(),
-        instance.getCreatedAt(),
-        Boolean.TRUE.equals(instance.getDryRun()),
-        failureClass);
-    registerAfterCommit(snapshot, terminalStatus, finishedAt);
-  }
-
-  /**
-   * 在事务提交后记一笔 completion(duration + counter)。回滚 / 同步不可用时 no-op。
-   *
-   * @param tenantId 必填
-   * @param jobInstanceId 必填; 用于 afterCommit 阶段重新拉实例算 duration
-   * @param terminalStatus SUCCESS / FAILED / CANCELLED / PARTIAL_FAILED / TERMINATED
-   * @param finishedAt 若 null 则取 afterCommit 时刻
-   */
-  public void recordCompletionAfterCommit(
-      String tenantId, Long jobInstanceId, String terminalStatus, Instant finishedAt) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      return;
-    }
-    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-      @Override
-      public void afterCommit() {
-        try {
-          JobInstanceEntity instance = jobInstanceMapper.selectById(tenantId, jobInstanceId);
-          if (instance == null || instance.getCreatedAt() == null) {
+    /**
+     * 使用调用方事务内已经读取的实例记录终态指标。
+     *
+     * <p>传入实体不会跨事务捕获；本方法立即复制指标需要的字段为不可变快照。{@code failureClass}
+     * 使用本次终态 CAS 即将写入的值，因为调用方持有的实体仍是更新前状态。
+     */
+    public void recordCompletionAfterCommit(
+            String tenantId,
+            JobInstanceEntity instance,
+            String terminalStatus,
+            Instant finishedAt,
+            String failureClass) {
+        if (EmptyChecks.isNull(instance) || EmptyChecks.isNull(instance.getCreatedAt())) {
             return;
-          }
-          Long jobDefinitionId = instance.getJobDefinitionId();
-          Instant createdAt = instance.getCreatedAt();
-          Boolean dryRunValue = instance.getDryRun();
-          boolean dryRun = Boolean.TRUE.equals(dryRunValue);
-          String failureClass = instance.getFailureClass();
-          CompletionSnapshot completionSnapshot = new CompletionSnapshot(
-              tenantId, jobInstanceId, jobDefinitionId, createdAt, dryRun, failureClass);
-          recordSnapshot(completionSnapshot, terminalStatus, finishedAt);
-        } catch (RuntimeException ex) {
-          logFailure(tenantId, jobInstanceId, ex);
         }
-      }
-    });
-  }
-
-  private void registerAfterCommit(
-      CompletionSnapshot snapshot, String terminalStatus, Instant finishedAt) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      return;
+        CompletionSnapshot snapshot = new CompletionSnapshot(
+                tenantId,
+                instance.getId(),
+                instance.getJobDefinitionId(),
+                instance.getCreatedAt(),
+                Boolean.TRUE.equals(instance.getDryRun()),
+                failureClass);
+        registerAfterCommit(snapshot, terminalStatus, finishedAt);
     }
-    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-      @Override
-      public void afterCommit() {
-        try {
-          recordSnapshot(snapshot, terminalStatus, finishedAt);
-        } catch (RuntimeException ex) {
-          logFailure(snapshot.tenantId(), snapshot.jobInstanceId(), ex);
+
+    /**
+     * 在事务提交后记一笔 completion(duration + counter)。回滚 / 同步不可用时 no-op。
+     *
+     * @param tenantId 必填
+     * @param jobInstanceId 必填; 用于 afterCommit 阶段重新拉实例算 duration
+     * @param terminalStatus SUCCESS / FAILED / CANCELLED / PARTIAL_FAILED / TERMINATED
+     * @param finishedAt 若 null 则取 afterCommit 时刻
+     */
+    public void recordCompletionAfterCommit(
+            String tenantId, Long jobInstanceId, String terminalStatus, Instant finishedAt) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
         }
-      }
-    });
-  }
-
-  private void recordSnapshot(
-      CompletionSnapshot snapshot, String terminalStatus, Instant finishedAt) {
-    Instant resolvedFinished =
-        EmptyChecks.isNotNull(finishedAt) ? finishedAt : BatchDateTimeSupport.utcNow();
-    Duration duration = Duration.between(snapshot.createdAt(), resolvedFinished);
-    String jobType = resolveJobType(snapshot.jobDefinitionId());
-    jobLifecycleMetrics.recordCompletion(
-        snapshot.tenantId(), jobType, terminalStatus, snapshot.dryRun(), duration);
-    // 失败指标必须使用终态 CAS 写入的 failure_class，不能从更新前的实体快照反推。
-    if (FAILED_TERMINAL_STATUSES.contains(terminalStatus)) {
-      String tenantId = snapshot.tenantId();
-      String failureClass = snapshot.failureClass();
-      String errorCode = resolveErrorCode(failureClass);
-      boolean dryRun = snapshot.dryRun();
-      jobLifecycleMetrics.recordFailure(tenantId, jobType, errorCode, dryRun);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    JobInstanceEntity instance = jobInstanceMapper.selectById(tenantId, jobInstanceId);
+                    if (instance == null || instance.getCreatedAt() == null) {
+                        return;
+                    }
+                    Long jobDefinitionId = instance.getJobDefinitionId();
+                    Instant createdAt = instance.getCreatedAt();
+                    Boolean dryRunValue = instance.getDryRun();
+                    boolean dryRun = Boolean.TRUE.equals(dryRunValue);
+                    String failureClass = instance.getFailureClass();
+                    CompletionSnapshot completionSnapshot = new CompletionSnapshot(
+                            tenantId, jobInstanceId, jobDefinitionId, createdAt, dryRun, failureClass);
+                    recordSnapshot(completionSnapshot, terminalStatus, finishedAt);
+                } catch (RuntimeException ex) {
+                    logFailure(tenantId, jobInstanceId, ex);
+                }
+            }
+        });
     }
-  }
 
-  private void logFailure(String tenantId, Long jobInstanceId, RuntimeException ex) {
-    log.warn(
-        "record job lifecycle metrics failed after commit: tenantId={} jobInstanceId={}",
-        tenantId,
-        jobInstanceId,
-        ex);
-  }
-
-  /**
-   * 失败 error_code:优先 {@code failure_class}(ADR-012 故障分类),为空时回退 "unknown"。 JobInstance 表无显式
-   * error_code 列(error_code 在 job_task 粒度),用 failure_class 作为汇总粒度的错误码。
-   */
-  private String resolveErrorCode(String failureClass) {
-    return EmptyChecks.isBlank(failureClass) ? "unknown" : failureClass;
-  }
-
-  private String resolveJobType(Long jobDefinitionId) {
-    if (EmptyChecks.isNull(jobDefinitionId)) {
-      return "unknown";
+    private void registerAfterCommit(CompletionSnapshot snapshot, String terminalStatus, Instant finishedAt) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    recordSnapshot(snapshot, terminalStatus, finishedAt);
+                } catch (RuntimeException ex) {
+                    logFailure(snapshot.tenantId(), snapshot.jobInstanceId(), ex);
+                }
+            }
+        });
     }
-    JobDefinitionView definition = jobDefinitionMapper.selectById(jobDefinitionId);
-    return definition == null
-            || definition.jobType() == null
-            || definition.jobType().isBlank()
-        ? "unknown"
-        : definition.jobType();
-  }
 
-  private record CompletionSnapshot(
-      String tenantId,
-      Long jobInstanceId,
-      Long jobDefinitionId,
-      Instant createdAt,
-      boolean dryRun,
-      String failureClass) {}
+    private void recordSnapshot(CompletionSnapshot snapshot, String terminalStatus, Instant finishedAt) {
+        Instant resolvedFinished = EmptyChecks.isNotNull(finishedAt) ? finishedAt : BatchDateTimeSupport.utcNow();
+        Duration duration = Duration.between(snapshot.createdAt(), resolvedFinished);
+        String jobType = resolveJobType(snapshot.jobDefinitionId());
+        jobLifecycleMetrics.recordCompletion(snapshot.tenantId(), jobType, terminalStatus, snapshot.dryRun(), duration);
+        // 失败指标必须使用终态 CAS 写入的 failure_class，不能从更新前的实体快照反推。
+        if (FAILED_TERMINAL_STATUSES.contains(terminalStatus)) {
+            String tenantId = snapshot.tenantId();
+            String failureClass = snapshot.failureClass();
+            String errorCode = resolveErrorCode(failureClass);
+            boolean dryRun = snapshot.dryRun();
+            jobLifecycleMetrics.recordFailure(tenantId, jobType, errorCode, dryRun);
+        }
+    }
+
+    private void logFailure(String tenantId, Long jobInstanceId, RuntimeException ex) {
+        log.warn(
+                "record job lifecycle metrics failed after commit: tenantId={} jobInstanceId={}",
+                tenantId,
+                jobInstanceId,
+                ex);
+    }
+
+    /**
+     * 失败 error_code:优先 {@code failure_class}(ADR-012 故障分类),为空时回退 "unknown"。 JobInstance 表无显式
+     * error_code 列(error_code 在 job_task 粒度),用 failure_class 作为汇总粒度的错误码。
+     */
+    private String resolveErrorCode(String failureClass) {
+        return EmptyChecks.isBlank(failureClass) ? "unknown" : failureClass;
+    }
+
+    private String resolveJobType(Long jobDefinitionId) {
+        if (EmptyChecks.isNull(jobDefinitionId)) {
+            return "unknown";
+        }
+        JobDefinitionView definition = jobDefinitionMapper.selectById(jobDefinitionId);
+        return definition == null
+                        || definition.jobType() == null
+                        || definition.jobType().isBlank()
+                ? "unknown"
+                : definition.jobType();
+    }
+
+    private record CompletionSnapshot(
+            String tenantId,
+            Long jobInstanceId,
+            Long jobDefinitionId,
+            Instant createdAt,
+            boolean dryRun,
+            String failureClass) {}
 }

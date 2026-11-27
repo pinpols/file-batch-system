@@ -32,88 +32,84 @@ import org.springframework.test.context.TestConstructor;
  * 与默认 TENANT 模式（{@link OutboxEventToKafkaDispatchIntegrationTest}）形成真实 Kafka 对照。
  */
 @SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = "batch.mq.routing.mode=SINGLE")
+        classes = BatchOrchestratorApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = "batch.mq.routing.mode=SINGLE")
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("单一路由模式下消息落到基础主题且不带租户后缀的发布验证")
 class MqRoutingModeSingleIntegrationTest extends AbstractIntegrationTest {
 
-  private final DefaultScheduleForwarder scheduleForwarder;
-  private final OutboxEventMapper outboxEventMapper;
-  private final JdbcTemplate jdbcTemplate;
+    private final DefaultScheduleForwarder scheduleForwarder;
+    private final OutboxEventMapper outboxEventMapper;
+    private final JdbcTemplate jdbcTemplate;
 
-  MqRoutingModeSingleIntegrationTest(
-      DefaultScheduleForwarder scheduleForwarder,
-      OutboxEventMapper outboxEventMapper,
-      JdbcTemplate jdbcTemplate) {
-    this.scheduleForwarder = scheduleForwarder;
-    this.outboxEventMapper = outboxEventMapper;
-    this.jdbcTemplate = jdbcTemplate;
-  }
+    MqRoutingModeSingleIntegrationTest(
+            DefaultScheduleForwarder scheduleForwarder,
+            OutboxEventMapper outboxEventMapper,
+            JdbcTemplate jdbcTemplate) {
+        this.scheduleForwarder = scheduleForwarder;
+        this.outboxEventMapper = outboxEventMapper;
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
-  @Test
-  @DisplayName("单模式开关开启时事件发布状态转为已发布,基础主题上能消费到该消息")
-  void shouldPublishToBaseTopic_whenSingleRoutingModeEnabled() throws Exception {
-    String idempotencyKey = "mq-single-it-" + System.nanoTime();
-    String tenantId = "mq-single-routing-it";
-    OutboxEventEntity event = buildImportDispatchEvent(tenantId, idempotencyKey);
-    // 验证租户 API key，并将已认证的密钥名称绑定到外部事件来源。
-    // API key 不使用 Cookie；仅在其受限路由上跳过 CSRF 校验。
-    outboxEventMapper.insert(event);
+    @Test
+    @DisplayName("单模式开关开启时事件发布状态转为已发布,基础主题上能消费到该消息")
+    void shouldPublishToBaseTopic_whenSingleRoutingModeEnabled() throws Exception {
+        String idempotencyKey = "mq-single-it-" + System.nanoTime();
+        String tenantId = "mq-single-routing-it";
+        OutboxEventEntity event = buildImportDispatchEvent(tenantId, idempotencyKey);
+        // 验证租户 API key，并将已认证的密钥名称绑定到外部事件来源。
+        // API key 不使用 Cookie；仅在其受限路由上跳过 CSRF 校验。
+        outboxEventMapper.insert(event);
 
-    SchedulePlan plan = new SchedulePlan();
-    plan.setTenantId(tenantId);
-    ScheduleForwarderResult result = scheduleForwarder.advance(plan);
-    assertThat(result).isNotNull();
+        SchedulePlan plan = new SchedulePlan();
+        plan.setTenantId(tenantId);
+        ScheduleForwarderResult result = scheduleForwarder.advance(plan);
+        assertThat(result).isNotNull();
 
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          String outboxPublishStatusSql = """
+        await().atMost(Duration.ofSeconds(10))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    String outboxPublishStatusSql = """
               select publish_status from batch.outbox_event where id = ?
               """;
-          String status =
-              jdbcTemplate.queryForObject(outboxPublishStatusSql, String.class, event.getId());
-          assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
-        });
+                    String status = jdbcTemplate.queryForObject(outboxPublishStatusSql, String.class, event.getId());
+                    assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+                });
 
-    // SINGLE 模式：消息落在 base topic（无 ".t1" 后缀）
-    String baseTopic = BatchTopics.TASK_DISPATCH_IMPORT;
-    String dispatchKafkaKey = tenantId + ":IT_OUTBOX_DISPATCH:it-dispatch-001:1";
-    try (KafkaConsumer<String, String> consumer = buildConsumer("mq-single-" + System.nanoTime())) {
-      consumer.subscribe(List.of(baseTopic));
-      await()
-          .atMost(Duration.ofSeconds(15))
-          .pollInterval(Duration.ofMillis(500))
-          .untilAsserted(() -> {
-            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
-            boolean found = false;
-            for (ConsumerRecord<String, String> record : records) {
-              if (dispatchKafkaKey.equals(record.key())) {
-                found = true;
-                break;
-              }
-            }
-            assertThat(found)
-                .as(
-                    "message with key %s must be on base topic %s (SINGLE mode)",
-                    dispatchKafkaKey, baseTopic)
-                .isTrue();
-          });
+        // SINGLE 模式：消息落在 base topic（无 ".t1" 后缀）
+        String baseTopic = BatchTopics.TASK_DISPATCH_IMPORT;
+        String dispatchKafkaKey = tenantId + ":IT_OUTBOX_DISPATCH:it-dispatch-001:1";
+        try (KafkaConsumer<String, String> consumer = buildConsumer("mq-single-" + System.nanoTime())) {
+            consumer.subscribe(List.of(baseTopic));
+            await().atMost(Duration.ofSeconds(15))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(() -> {
+                        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+                        boolean found = false;
+                        for (ConsumerRecord<String, String> record : records) {
+                            if (dispatchKafkaKey.equals(record.key())) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        assertThat(found)
+                                .as(
+                                        "message with key %s must be on base topic %s (SINGLE mode)",
+                                        dispatchKafkaKey, baseTopic)
+                                .isTrue();
+                    });
+        }
     }
-  }
 
-  private static OutboxEventEntity buildImportDispatchEvent(
-      String tenantId, String idempotencyKey) {
-    OutboxEventEntity e = new OutboxEventEntity();
-    e.setTenantId(tenantId);
-    e.setAggregateType("JOB_PARTITION");
-    e.setAggregateId(System.nanoTime());
-    e.setEventType("IMPORT");
-    e.setEventKey(idempotencyKey);
-    e.setPayloadJson("""
+    private static OutboxEventEntity buildImportDispatchEvent(String tenantId, String idempotencyKey) {
+        OutboxEventEntity e = new OutboxEventEntity();
+        e.setTenantId(tenantId);
+        e.setAggregateType("JOB_PARTITION");
+        e.setAggregateId(System.nanoTime());
+        e.setEventType("IMPORT");
+        e.setEventKey(idempotencyKey);
+        e.setPayloadJson("""
         {
           "schemaVersion":"v1",
           "tenantId":"%s",
@@ -134,24 +130,24 @@ class MqRoutingModeSingleIntegrationTest extends AbstractIntegrationTest {
           "dispatchAt":"2026-01-15T00:00:00Z"
         }
         """.formatted(tenantId, idempotencyKey));
-    e.setPublishStatus(OutboxPublishStatus.NEW.code());
-    e.setPublishAttempt(0);
-    e.setNextPublishAt(BatchDateTimeSupport.utcNow());
-    e.setTraceId("trace-outbox-dispatch");
-    return e;
-  }
+        e.setPublishStatus(OutboxPublishStatus.NEW.code());
+        e.setPublishAttempt(0);
+        e.setNextPublishAt(BatchDateTimeSupport.utcNow());
+        e.setTraceId("trace-outbox-dispatch");
+        return e;
+    }
 
-  private static KafkaConsumer<String, String> buildConsumer(String groupId) {
-    return new KafkaConsumer<>(Map.of(
-        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-        kafkaBootstrapServers(),
-        ConsumerConfig.GROUP_ID_CONFIG,
-        groupId,
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-        "earliest",
-        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-        StringDeserializer.class,
-        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-        StringDeserializer.class));
-  }
+    private static KafkaConsumer<String, String> buildConsumer(String groupId) {
+        return new KafkaConsumer<>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                kafkaBootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG,
+                groupId,
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                "earliest",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class));
+    }
 }

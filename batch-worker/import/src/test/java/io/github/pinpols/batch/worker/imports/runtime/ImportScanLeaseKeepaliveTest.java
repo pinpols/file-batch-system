@@ -20,35 +20,34 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("导入扫描大文件租约续期")
 class ImportScanLeaseKeepaliveTest {
-  @Mock
-  private ImportIngressScanRepository repository;
+    @Mock
+    private ImportIngressScanRepository repository;
 
-  @Test
-  @DisplayName("到达续期间隔才续租；失去租约时中断对象校验")
-  void leaseKeepalive_shouldRenewOnlyWhenDueAndStopAfterLeaseLoss() {
-    Lease lease = Lease.builder()
-        .storageId("storage")
-        .storageFence(1)
-        .scopeId("scope")
-        .owner(UUID.randomUUID())
-        .fence(1)
-        .phase("APPLY")
-        .cycle(1)
-        .build();
-    AtomicLong nanos = new AtomicLong();
-    ImportScanLeaseKeepalive keepalive =
-        new ImportScanLeaseKeepalive(repository, lease, nanos::get);
-    nanos.set(19_000_000_000L);
-    keepalive.renewIfDue();
-    verify(repository, never()).fenced(eq(lease), any());
+    @Test
+    @DisplayName("到达续期间隔才续租；失去租约时中断对象校验")
+    void leaseKeepalive_shouldRenewOnlyWhenDueAndStopAfterLeaseLoss() {
+        Lease lease = Lease.builder()
+                .storageId("storage")
+                .storageFence(1)
+                .scopeId("scope")
+                .owner(UUID.randomUUID())
+                .fence(1)
+                .phase("APPLY")
+                .cycle(1)
+                .build();
+        AtomicLong nanos = new AtomicLong();
+        ImportScanLeaseKeepalive keepalive = new ImportScanLeaseKeepalive(repository, lease, nanos::get);
+        nanos.set(19_000_000_000L);
+        keepalive.renewIfDue();
+        verify(repository, never()).fenced(eq(lease), any());
 
-    when(repository.fenced(eq(lease), any())).thenReturn(true, false);
-    nanos.set(20_000_000_000L);
-    keepalive.renewIfDue();
-    nanos.set(40_000_000_000L);
-    assertThatThrownBy(keepalive::renewIfDue)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("租约已失效");
-    verify(repository, times(2)).fenced(eq(lease), any());
-  }
+        when(repository.fenced(eq(lease), any())).thenReturn(true, false);
+        nanos.set(20_000_000_000L);
+        keepalive.renewIfDue();
+        nanos.set(40_000_000_000L);
+        assertThatThrownBy(keepalive::renewIfDue)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("租约已失效");
+        verify(repository, times(2)).fenced(eq(lease), any());
+    }
 }

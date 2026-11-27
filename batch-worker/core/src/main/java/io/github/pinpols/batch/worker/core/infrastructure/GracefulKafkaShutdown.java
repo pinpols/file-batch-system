@@ -51,160 +51,155 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@SuppressWarnings(
-    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在各 Worker 启动类注册 Registry。
-public class GracefulKafkaShutdown
-    implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
+@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在各 Worker 启动类注册 Registry。
+public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
 
-  private static final String METRIC_DURATION = "batch.worker.drain.duration_seconds";
-  private static final String METRIC_INITIAL_LEASES = "batch.worker.drain.initial_active_leases";
-  private static final String METRIC_OUTCOME = "batch.worker.drain.outcome_total";
+    private static final String METRIC_DURATION = "batch.worker.drain.duration_seconds";
+    private static final String METRIC_INITIAL_LEASES = "batch.worker.drain.initial_active_leases";
+    private static final String METRIC_OUTCOME = "batch.worker.drain.outcome_total";
 
-  private final WorkerRuntimeState workerRuntimeState;
-  private final WorkerSelfRegistrationService workerRegistryService;
-  private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
-  private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
-  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private final long gracefulShutdownTimeoutSeconds;
-  private ApplicationEventPublisher eventPublisher;
+    private final WorkerRuntimeState workerRuntimeState;
+    private final WorkerSelfRegistrationService workerRegistryService;
+    private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+    private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    private final long gracefulShutdownTimeoutSeconds;
+    private ApplicationEventPublisher eventPublisher;
 
-  public GracefulKafkaShutdown(
-      WorkerRuntimeState workerRuntimeState,
-      WorkerSelfRegistrationService workerRegistryService,
-      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-      ActiveTaskLeaseRegistry activeTaskLeaseRegistry,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      WorkerGracefulShutdownProperties gracefulShutdownProperties) {
-    this.workerRuntimeState = workerRuntimeState;
-    this.workerRegistryService = workerRegistryService;
-    this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
-    this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
-    this.meterRegistryProvider = meterRegistryProvider;
-    this.gracefulShutdownTimeoutSeconds = gracefulShutdownProperties.getTimeoutSeconds();
-  }
-
-  @Override
-  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
-    this.eventPublisher = applicationEventPublisher;
-  }
-
-  /**
-   * 关闭顺序的意图：
-   *
-   * <ol>
-   *   <li>先把 worker 标记为 DRAINING（best-effort），让 orchestrator 在调度层面减少派发
-   *   <li>再停止 Kafka listener，避免继续拉取新任务
-   *   <li>等待 in-flight 任务自然结束（有超时），避免 RUNNING 长期停滞/重复调度
-   *   <li>排空后主动 deactivate（→OFFLINE），免去心跳超时窗口，计划内重启即时摘除
-   * </ol>
-   */
-  @Override
-  public void onApplicationEvent(ContextClosedEvent event) {
-    publishReadinessRefusal();
-    Collection<WorkerRegistration> registrations = workerRuntimeState.snapshot();
-    markAllDraining(registrations);
-    stopKafkaListeners();
-    awaitDrainAndRecord();
-    deactivateAll(registrations);
-  }
-
-  /** 关闭第 1 步：best-effort 把本进程所有注册标记为 DRAINING，单条失败仅告警。 */
-  private void markAllDraining(Collection<WorkerRegistration> registrations) {
-    for (WorkerRegistration registration : registrations) {
-      if (!isValidRegistration(registration)) {
-        continue;
-      }
-      try {
-        workerRegistryService.updateStatus(registration, WorkerRegistryStatus.DRAINING.code());
-      } catch (Exception ex) {
-        log.warn(
-            "failed to mark worker draining on shutdown: workerId={}, cause={}",
-            registration.getWorkerId(),
-            SwallowedExceptionLogger.summary(ex));
-      }
+    public GracefulKafkaShutdown(
+            WorkerRuntimeState workerRuntimeState,
+            WorkerSelfRegistrationService workerRegistryService,
+            KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+            ActiveTaskLeaseRegistry activeTaskLeaseRegistry,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            WorkerGracefulShutdownProperties gracefulShutdownProperties) {
+        this.workerRuntimeState = workerRuntimeState;
+        this.workerRegistryService = workerRegistryService;
+        this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
+        this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
+        this.meterRegistryProvider = meterRegistryProvider;
+        this.gracefulShutdownTimeoutSeconds = gracefulShutdownProperties.getTimeoutSeconds();
     }
-  }
 
-  /** 关闭第 2 步：停止 Kafka listener，不再拉取新任务；失败仅告警，继续后续排空。 */
-  private void stopKafkaListeners() {
-    try {
-      kafkaListenerEndpointRegistry.stop();
-      log.info("kafka listener containers stopped");
-    } catch (Exception ex) {
-      log.warn(
-          "failed to stop kafka listener containers: {}", SwallowedExceptionLogger.summary(ex), ex);
+    @Override
+    public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+        this.eventPublisher = applicationEventPublisher;
     }
-  }
 
-  private void publishReadinessRefusal() {
-    if (eventPublisher == null) {
-      return;
+    /**
+     * 关闭顺序的意图：
+     *
+     * <ol>
+     *   <li>先把 worker 标记为 DRAINING（best-effort），让 orchestrator 在调度层面减少派发
+     *   <li>再停止 Kafka listener，避免继续拉取新任务
+     *   <li>等待 in-flight 任务自然结束（有超时），避免 RUNNING 长期停滞/重复调度
+     *   <li>排空后主动 deactivate（→OFFLINE），免去心跳超时窗口，计划内重启即时摘除
+     * </ol>
+     */
+    @Override
+    public void onApplicationEvent(ContextClosedEvent event) {
+        publishReadinessRefusal();
+        Collection<WorkerRegistration> registrations = workerRuntimeState.snapshot();
+        markAllDraining(registrations);
+        stopKafkaListeners();
+        awaitDrainAndRecord();
+        deactivateAll(registrations);
     }
-    try {
-      AvailabilityChangeEvent.publish(eventPublisher, this, ReadinessState.REFUSING_TRAFFIC);
-    } catch (RuntimeException ex) {
-      log.warn(
-          "failed to publish worker readiness refusal: {}", SwallowedExceptionLogger.summary(ex));
-    }
-  }
 
-  /**
-   * 排空后主动把本进程所有注册置 OFFLINE。best-effort：单条失败仅告警，{@link WorkerHeartbeatTimeoutScheduler}
-   * 的心跳超时仍回退。OFFLINE 可在重启后 re-register 复活。
-   */
-  private void deactivateAll(Collection<WorkerRegistration> registrations) {
-    for (WorkerRegistration registration : registrations) {
-      if (!isValidRegistration(registration)) {
-        continue;
-      }
-      try {
-        workerRegistryService.deactivate(registration);
-      } catch (Exception ex) {
-        log.warn(
-            "failed to deactivate worker on shutdown (heartbeat timeout fallback): workerId={}, cause={}",
-            registration.getWorkerId(),
-            SwallowedExceptionLogger.summary(ex));
-      }
+    /** 关闭第 1 步：best-effort 把本进程所有注册标记为 DRAINING，单条失败仅告警。 */
+    private void markAllDraining(Collection<WorkerRegistration> registrations) {
+        for (WorkerRegistration registration : registrations) {
+            if (!isValidRegistration(registration)) {
+                continue;
+            }
+            try {
+                workerRegistryService.updateStatus(registration, WorkerRegistryStatus.DRAINING.code());
+            } catch (Exception ex) {
+                log.warn(
+                        "failed to mark worker draining on shutdown: workerId={}, cause={}",
+                        registration.getWorkerId(),
+                        SwallowedExceptionLogger.summary(ex));
+            }
+        }
     }
-  }
 
-  private void awaitDrainAndRecord() {
-    int initialActive = activeTaskLeaseRegistry.size();
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry != null && initialActive > 0) {
-      Counter.builder(METRIC_INITIAL_LEASES).register(registry).increment(initialActive);
+    /** 关闭第 2 步：停止 Kafka listener，不再拉取新任务；失败仅告警，继续后续排空。 */
+    private void stopKafkaListeners() {
+        try {
+            kafkaListenerEndpointRegistry.stop();
+            log.info("kafka listener containers stopped");
+        } catch (Exception ex) {
+            log.warn("failed to stop kafka listener containers: {}", SwallowedExceptionLogger.summary(ex), ex);
+        }
     }
-    long startNanos = System.nanoTime();
-    boolean drained = false;
-    try {
-      long drainTimeoutSeconds = Math.max(0L, gracefulShutdownTimeoutSeconds);
-      Duration drainTimeout = Duration.ofSeconds(drainTimeoutSeconds);
-      drained = activeTaskLeaseRegistry.awaitDrain(drainTimeout);
-    } catch (Exception ex) {
-      log.warn(
-          "failed to await in-flight tasks drain: {}", SwallowedExceptionLogger.summary(ex), ex);
-    }
-    long elapsedNanos = System.nanoTime() - startNanos;
-    if (registry != null) {
-      Timer.builder(METRIC_DURATION).register(registry).record(elapsedNanos, TimeUnit.NANOSECONDS);
-      Counter.builder(METRIC_OUTCOME)
-          .tags(Tags.of("outcome", drained ? "success" : "timeout"))
-          .register(registry)
-          .increment();
-    }
-    log.info(
-        "worker drain completed: outcome={}, initialActive={}, remainingLeases={},"
-            + " elapsedMs={}, timeoutSeconds={}",
-        drained ? "success" : "timeout",
-        initialActive,
-        activeTaskLeaseRegistry.size(),
-        TimeUnit.NANOSECONDS.toMillis(elapsedNanos),
-        gracefulShutdownTimeoutSeconds);
-  }
 
-  private boolean isValidRegistration(WorkerRegistration registration) {
-    return registration != null
-        && registration.getWorkerId() != null
-        && !registration.getWorkerId().isBlank();
-  }
+    private void publishReadinessRefusal() {
+        if (eventPublisher == null) {
+            return;
+        }
+        try {
+            AvailabilityChangeEvent.publish(eventPublisher, this, ReadinessState.REFUSING_TRAFFIC);
+        } catch (RuntimeException ex) {
+            log.warn("failed to publish worker readiness refusal: {}", SwallowedExceptionLogger.summary(ex));
+        }
+    }
+
+    /**
+     * 排空后主动把本进程所有注册置 OFFLINE。best-effort：单条失败仅告警，{@link WorkerHeartbeatTimeoutScheduler}
+     * 的心跳超时仍回退。OFFLINE 可在重启后 re-register 复活。
+     */
+    private void deactivateAll(Collection<WorkerRegistration> registrations) {
+        for (WorkerRegistration registration : registrations) {
+            if (!isValidRegistration(registration)) {
+                continue;
+            }
+            try {
+                workerRegistryService.deactivate(registration);
+            } catch (Exception ex) {
+                log.warn(
+                        "failed to deactivate worker on shutdown (heartbeat timeout fallback): workerId={}, cause={}",
+                        registration.getWorkerId(),
+                        SwallowedExceptionLogger.summary(ex));
+            }
+        }
+    }
+
+    private void awaitDrainAndRecord() {
+        int initialActive = activeTaskLeaseRegistry.size();
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry != null && initialActive > 0) {
+            Counter.builder(METRIC_INITIAL_LEASES).register(registry).increment(initialActive);
+        }
+        long startNanos = System.nanoTime();
+        boolean drained = false;
+        try {
+            long drainTimeoutSeconds = Math.max(0L, gracefulShutdownTimeoutSeconds);
+            Duration drainTimeout = Duration.ofSeconds(drainTimeoutSeconds);
+            drained = activeTaskLeaseRegistry.awaitDrain(drainTimeout);
+        } catch (Exception ex) {
+            log.warn("failed to await in-flight tasks drain: {}", SwallowedExceptionLogger.summary(ex), ex);
+        }
+        long elapsedNanos = System.nanoTime() - startNanos;
+        if (registry != null) {
+            Timer.builder(METRIC_DURATION).register(registry).record(elapsedNanos, TimeUnit.NANOSECONDS);
+            Counter.builder(METRIC_OUTCOME)
+                    .tags(Tags.of("outcome", drained ? "success" : "timeout"))
+                    .register(registry)
+                    .increment();
+        }
+        log.info(
+                "worker drain completed: outcome={}, initialActive={}, remainingLeases={},"
+                        + " elapsedMs={}, timeoutSeconds={}",
+                drained ? "success" : "timeout",
+                initialActive,
+                activeTaskLeaseRegistry.size(),
+                TimeUnit.NANOSECONDS.toMillis(elapsedNanos),
+                gracefulShutdownTimeoutSeconds);
+    }
+
+    private boolean isValidRegistration(WorkerRegistration registration) {
+        return registration != null
+                && registration.getWorkerId() != null
+                && !registration.getWorkerId().isBlank();
+    }
 }

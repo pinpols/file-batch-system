@@ -29,21 +29,21 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.console.maintenance")
 public class ConsoleMaintenanceProperties {
 
-  /** 维护模式总开关。默认 false。 */
-  private boolean enabled = false;
+    /** 维护模式总开关。默认 false。 */
+    private boolean enabled = false;
 
-  /** 用户可见的维护原因 / 提示语,前端 banner 直接展示。 */
-  private String message;
+    /** 用户可见的维护原因 / 提示语,前端 banner 直接展示。 */
+    private String message;
 
-  /** 预计恢复时间(ISO-8601)。前端展示 ETA 倒计时。允许为空。 */
-  private Instant etaAt;
+    /** 预计恢复时间(ISO-8601)。前端展示 ETA 倒计时。允许为空。 */
+    private Instant etaAt;
 
-  /** 只读模式:GET 通过,写方法(POST/PUT/PATCH/DELETE)返 503。默认 false=整站拒绝。 */
-  private boolean readOnly = false;
+    /** 只读模式:GET 通过,写方法(POST/PUT/PATCH/DELETE)返 503。默认 false=整站拒绝。 */
+    private boolean readOnly = false;
 
-  /**
-   * 公告中的受影响子系统。固定应用编码同时限定计划停机通知范围，未知标记仅展示；
-   * 空列表保留整站公告，通知抑制缺省仅针对 Console，不执行服务启停或路由。
-   */
-  private List<String> affectedServices = new ArrayList<>();
+    /**
+     * 公告中的受影响子系统。固定应用编码同时限定计划停机通知范围，未知标记仅展示；
+     * 空列表保留整站公告，通知抑制缺省仅针对 Console，不执行服务启停或路由。
+     */
+    private List<String> affectedServices = new ArrayList<>();
 }

@@ -11,8 +11,8 @@ package io.github.pinpols.batch.worker.core.support;
  * </ul>
  */
 public enum StageFailureCode {
-  BUSINESS_ERROR,
-  INFRA_ERROR,
-  STEP_NOT_FOUND,
-  PIPELINE_STEP_MISSING
+    BUSINESS_ERROR,
+    INFRA_ERROR,
+    STEP_NOT_FOUND,
+    PIPELINE_STEP_MISSING
 }

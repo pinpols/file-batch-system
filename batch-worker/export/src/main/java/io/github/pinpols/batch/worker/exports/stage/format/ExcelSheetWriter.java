@@ -30,250 +30,246 @@ import org.apache.poi.xssf.streaming.SXSSFWorkbook;
  */
 final class ExcelSheetWriter {
 
-  /** .xlsx 单 sheet 1048576 行硬限,留 1 行给表头(可能含分组表头时更多,写入时再校验)。 */
-  static final int MAX_DATA_ROWS_PER_SHEET = 1_048_575;
+    /** .xlsx 单 sheet 1048576 行硬限,留 1 行给表头(可能含分组表头时更多,写入时再校验)。 */
+    static final int MAX_DATA_ROWS_PER_SHEET = 1_048_575;
 
-  private static final DateTimeFormatter ISO_DATE_TIME =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    private static final DateTimeFormatter ISO_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
-  private final SXSSFWorkbook workbook;
-  private final List<ColumnLayout> columns;
-  private final String baseSheetName;
-  private final int headerRows;
-  private final int rowsPerSheet;
-  private final ExcelStyleOptions styleOptions;
-  private final AbstractExportFormat helper;
+    private final SXSSFWorkbook workbook;
+    private final List<ColumnLayout> columns;
+    private final String baseSheetName;
+    private final int headerRows;
+    private final int rowsPerSheet;
+    private final ExcelStyleOptions styleOptions;
+    private final AbstractExportFormat helper;
 
-  private final CellStyle headerStyle;
-  private final DataFormat dataFormat;
-  // 按列下标缓存的数据 cell 样式(NUMBER / DATE 带格式串时才建,STRING / BOOL 无样式不建)。
-  private final Map<Integer, CellStyle> columnStyleCache = new HashMap<>();
+    private final CellStyle headerStyle;
+    private final DataFormat dataFormat;
+    // 按列下标缓存的数据 cell 样式(NUMBER / DATE 带格式串时才建,STRING / BOOL 无样式不建)。
+    private final Map<Integer, CellStyle> columnStyleCache = new HashMap<>();
 
-  private Sheet currentSheet;
-  private int sheetSeq;
-  private int rowNoInSheet;
-  private long rowsInCurrentSheet;
+    private Sheet currentSheet;
+    private int sheetSeq;
+    private int rowNoInSheet;
+    private long rowsInCurrentSheet;
 
-  ExcelSheetWriter(
-      SXSSFWorkbook workbook,
-      List<ColumnLayout> columns,
-      String baseSheetName,
-      int headerRows,
-      int rowsPerSheet,
-      ExcelStyleOptions styleOptions,
-      AbstractExportFormat helper) {
-    this.workbook = workbook;
-    this.columns = columns;
-    this.baseSheetName = baseSheetName;
-    this.headerRows = headerRows;
-    this.rowsPerSheet = rowsPerSheet;
-    this.styleOptions = styleOptions;
-    this.helper = helper;
-    this.headerStyle =
-        styleOptions.styled() && (styleOptions.bold() || styleOptions.backgroundRgb() != null)
-            ? ExcelStyleSupport.createHeaderStyle(workbook, styleOptions.backgroundRgb())
-            : null;
-    this.dataFormat = workbook.createDataFormat();
-    startNewSheet();
-  }
-
-  /** 写一行数据。达 {@code rowsPerSheet} 阈值时先滚动到下一个 sheet(复制表头)再写。 */
-  void writeDataRow(Map<String, Object> batch, Map<String, Object> detail) {
-    if (rowsPerSheet > 0 && rowsInCurrentSheet >= rowsPerSheet) {
-      startNewSheet();
+    ExcelSheetWriter(
+            SXSSFWorkbook workbook,
+            List<ColumnLayout> columns,
+            String baseSheetName,
+            int headerRows,
+            int rowsPerSheet,
+            ExcelStyleOptions styleOptions,
+            AbstractExportFormat helper) {
+        this.workbook = workbook;
+        this.columns = columns;
+        this.baseSheetName = baseSheetName;
+        this.headerRows = headerRows;
+        this.rowsPerSheet = rowsPerSheet;
+        this.styleOptions = styleOptions;
+        this.helper = helper;
+        this.headerStyle = styleOptions.styled() && (styleOptions.bold() || styleOptions.backgroundRgb() != null)
+                ? ExcelStyleSupport.createHeaderStyle(workbook, styleOptions.backgroundRgb())
+                : null;
+        this.dataFormat = workbook.createDataFormat();
+        startNewSheet();
     }
-    Row row = currentSheet.createRow(rowNoInSheet++);
-    for (int i = 0; i < columns.size(); i++) {
-      Cell cell = row.createCell(i);
-      ColumnLayout column = columns.get(i);
-      Object resolvedValue = helper.resolveDelimitedValue(batch, detail, column.source());
-      writeTypedCell(cell, column, resolvedValue, i);
-    }
-    rowsInCurrentSheet++;
-  }
 
-  private void startNewSheet() {
-    sheetSeq++;
-    String name =
-        sheetSeq == 1 ? baseSheetName : helper.sanitizeSheetName(baseSheetName + "_" + sheetSeq);
-    currentSheet = workbook.createSheet(name);
-    rowNoInSheet = 0;
-    rowsInCurrentSheet = 0;
-    writeHeaderBlock();
-  }
-
-  private void writeHeaderBlock() {
-    // 分组表头(可选):占第 0 行,合并各分组列区间;之后写常规表头行。
-    if (styleOptions.hasHeaderGroups()) {
-      writeGroupedHeaderRow();
-    }
-    for (int r = 0; r < headerRows; r++) {
-      Row row = currentSheet.createRow(rowNoInSheet++);
-      for (int c = 0; c < columns.size(); c++) {
-        Cell cell = row.createCell(c);
-        ColumnLayout column = columns.get(c);
-        String header = column.header();
-        String escapedHeader = ExcelStyleSupport.escapeFormula(header);
-        cell.setCellValue(escapedHeader);
-        if (headerStyle != null) {
-          cell.setCellStyle(headerStyle);
+    /** 写一行数据。达 {@code rowsPerSheet} 阈值时先滚动到下一个 sheet(复制表头)再写。 */
+    void writeDataRow(Map<String, Object> batch, Map<String, Object> detail) {
+        if (rowsPerSheet > 0 && rowsInCurrentSheet >= rowsPerSheet) {
+            startNewSheet();
         }
-      }
+        Row row = currentSheet.createRow(rowNoInSheet++);
+        for (int i = 0; i < columns.size(); i++) {
+            Cell cell = row.createCell(i);
+            ColumnLayout column = columns.get(i);
+            Object resolvedValue = helper.resolveDelimitedValue(batch, detail, column.source());
+            writeTypedCell(cell, column, resolvedValue, i);
+        }
+        rowsInCurrentSheet++;
     }
-    if (styleOptions.autoWidth()) {
-      for (int c = 0; c < columns.size(); c++) {
-        ColumnLayout column = columns.get(c);
-        String header = column.header();
-        int columnWidth = ExcelStyleSupport.autoColumnWidth(header);
-        currentSheet.setColumnWidth(c, columnWidth);
-      }
-    }
-    if (styleOptions.freezeHeader()) {
-      // 冻结到最后一行表头之下(含可能的分组表头行)。
-      currentSheet.createFreezePane(0, rowNoInSheet, 0, rowNoInSheet);
-    }
-  }
 
-  private void writeGroupedHeaderRow() {
-    Row groupRow = currentSheet.createRow(rowNoInSheet++);
-    int lastColumn = columns.isEmpty() ? 0 : columns.size() - 1;
-    for (ExcelStyleOptions.HeaderGroup group : styleOptions.headerGroups()) {
-      int from = Math.max(0, group.fromColumn());
-      int to = Math.min(lastColumn, group.toColumn());
-      if (from > to) {
-        continue;
-      }
-      Cell cell = groupRow.createCell(from);
-      String groupTitle = group.title();
-      String escapedGroupTitle = ExcelStyleSupport.escapeFormula(groupTitle);
-      cell.setCellValue(escapedGroupTitle);
-      if (headerStyle != null) {
-        cell.setCellStyle(headerStyle);
-      }
-      if (to > from) {
-        // 合并仅在第 0 行表头区,仍处于 SXSSF 当前窗口,安全;跨数据行合并不支持(见类注释)。
-        currentSheet.addMergedRegion(
-            new CellRangeAddress(groupRow.getRowNum(), groupRow.getRowNum(), from, to));
-      }
+    private void startNewSheet() {
+        sheetSeq++;
+        String name = sheetSeq == 1 ? baseSheetName : helper.sanitizeSheetName(baseSheetName + "_" + sheetSeq);
+        currentSheet = workbook.createSheet(name);
+        rowNoInSheet = 0;
+        rowsInCurrentSheet = 0;
+        writeHeaderBlock();
     }
-  }
 
-  /**
-   * 按列类型写 cell。NUMBER → double、DATE → 真日期 + format、BOOL → boolean;null / 解析失败回退 {@code
-   * setCellValue(String)} 文本(escapeFormula 防注入),绝不因类型转换异常中断导出。
-   */
-  private void writeTypedCell(Cell cell, ColumnLayout column, Object value, int columnIndex) {
-    if (value == null) {
-      cell.setCellValue("");
-      return;
+    private void writeHeaderBlock() {
+        // 分组表头(可选):占第 0 行,合并各分组列区间;之后写常规表头行。
+        if (styleOptions.hasHeaderGroups()) {
+            writeGroupedHeaderRow();
+        }
+        for (int r = 0; r < headerRows; r++) {
+            Row row = currentSheet.createRow(rowNoInSheet++);
+            for (int c = 0; c < columns.size(); c++) {
+                Cell cell = row.createCell(c);
+                ColumnLayout column = columns.get(c);
+                String header = column.header();
+                String escapedHeader = ExcelStyleSupport.escapeFormula(header);
+                cell.setCellValue(escapedHeader);
+                if (headerStyle != null) {
+                    cell.setCellStyle(headerStyle);
+                }
+            }
+        }
+        if (styleOptions.autoWidth()) {
+            for (int c = 0; c < columns.size(); c++) {
+                ColumnLayout column = columns.get(c);
+                String header = column.header();
+                int columnWidth = ExcelStyleSupport.autoColumnWidth(header);
+                currentSheet.setColumnWidth(c, columnWidth);
+            }
+        }
+        if (styleOptions.freezeHeader()) {
+            // 冻结到最后一行表头之下(含可能的分组表头行)。
+            currentSheet.createFreezePane(0, rowNoInSheet, 0, rowNoInSheet);
+        }
     }
-    ColumnType type = column.type();
-    if (type == ColumnType.NUMBER) {
-      Double number = toDouble(value);
-      if (number != null) {
-        cell.setCellValue(number);
-        applyColumnStyle(cell, column, columnIndex);
-        return;
-      }
-    } else if (type == ColumnType.BOOL) {
-      Boolean bool = toBoolean(value);
-      if (bool != null) {
-        cell.setCellValue(bool);
-        return;
-      }
-    } else if (type == ColumnType.DATE) {
-      Date date = toDate(value);
-      if (date != null) {
-        cell.setCellValue(date);
-        applyColumnStyle(cell, column, columnIndex);
-        return;
-      }
-    }
-    // STRING 或上述类型解析失败 → 文本回退。
-    String text = helper.textValue(value);
-    String valueToEscape = EmptyChecks.isNull(text) ? String.valueOf(value) : text;
-    String escapedValue = ExcelStyleSupport.escapeFormula(valueToEscape);
-    cell.setCellValue(escapedValue);
-  }
 
-  /** 取(或建)该列的数字 / 日期格式样式并缓存复用;未声明 format 串则不套样式(默认通用格式)。 */
-  private void applyColumnStyle(Cell cell, ColumnLayout column, int columnIndex) {
-    String pattern =
-        column.type() == ColumnType.NUMBER ? column.numberFormat() : column.dateFormat();
-    if (pattern == null || pattern.isBlank()) {
-      return;
+    private void writeGroupedHeaderRow() {
+        Row groupRow = currentSheet.createRow(rowNoInSheet++);
+        int lastColumn = columns.isEmpty() ? 0 : columns.size() - 1;
+        for (ExcelStyleOptions.HeaderGroup group : styleOptions.headerGroups()) {
+            int from = Math.max(0, group.fromColumn());
+            int to = Math.min(lastColumn, group.toColumn());
+            if (from > to) {
+                continue;
+            }
+            Cell cell = groupRow.createCell(from);
+            String groupTitle = group.title();
+            String escapedGroupTitle = ExcelStyleSupport.escapeFormula(groupTitle);
+            cell.setCellValue(escapedGroupTitle);
+            if (headerStyle != null) {
+                cell.setCellStyle(headerStyle);
+            }
+            if (to > from) {
+                // 合并仅在第 0 行表头区,仍处于 SXSSF 当前窗口,安全;跨数据行合并不支持(见类注释)。
+                currentSheet.addMergedRegion(
+                        new CellRangeAddress(groupRow.getRowNum(), groupRow.getRowNum(), from, to));
+            }
+        }
     }
-    CellStyle style = columnStyleCache.computeIfAbsent(columnIndex, idx -> {
-      CellStyle s = workbook.createCellStyle();
-      s.setDataFormat(dataFormat.getFormat(pattern));
-      return s;
-    });
-    cell.setCellStyle(style);
-  }
 
-  private Double toDouble(Object value) {
-    if (value instanceof Number number) {
-      return number.doubleValue();
+    /**
+     * 按列类型写 cell。NUMBER → double、DATE → 真日期 + format、BOOL → boolean;null / 解析失败回退 {@code
+     * setCellValue(String)} 文本(escapeFormula 防注入),绝不因类型转换异常中断导出。
+     */
+    private void writeTypedCell(Cell cell, ColumnLayout column, Object value, int columnIndex) {
+        if (value == null) {
+            cell.setCellValue("");
+            return;
+        }
+        ColumnType type = column.type();
+        if (type == ColumnType.NUMBER) {
+            Double number = toDouble(value);
+            if (number != null) {
+                cell.setCellValue(number);
+                applyColumnStyle(cell, column, columnIndex);
+                return;
+            }
+        } else if (type == ColumnType.BOOL) {
+            Boolean bool = toBoolean(value);
+            if (bool != null) {
+                cell.setCellValue(bool);
+                return;
+            }
+        } else if (type == ColumnType.DATE) {
+            Date date = toDate(value);
+            if (date != null) {
+                cell.setCellValue(date);
+                applyColumnStyle(cell, column, columnIndex);
+                return;
+            }
+        }
+        // STRING 或上述类型解析失败 → 文本回退。
+        String text = helper.textValue(value);
+        String valueToEscape = EmptyChecks.isNull(text) ? String.valueOf(value) : text;
+        String escapedValue = ExcelStyleSupport.escapeFormula(valueToEscape);
+        cell.setCellValue(escapedValue);
     }
-    try {
-      String rawText = String.valueOf(value);
-      String text = rawText.trim();
-      return text.isEmpty() ? null : Double.valueOf(text);
-    } catch (NumberFormatException ignored) {
-      return null;
-    }
-  }
 
-  @Nullable
-  private Boolean toBoolean(Object value) {
-    if (value instanceof Boolean bool) {
-      return bool;
+    /** 取(或建)该列的数字 / 日期格式样式并缓存复用;未声明 format 串则不套样式(默认通用格式)。 */
+    private void applyColumnStyle(Cell cell, ColumnLayout column, int columnIndex) {
+        String pattern = column.type() == ColumnType.NUMBER ? column.numberFormat() : column.dateFormat();
+        if (pattern == null || pattern.isBlank()) {
+            return;
+        }
+        CellStyle style = columnStyleCache.computeIfAbsent(columnIndex, idx -> {
+            CellStyle s = workbook.createCellStyle();
+            s.setDataFormat(dataFormat.getFormat(pattern));
+            return s;
+        });
+        cell.setCellStyle(style);
     }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    if (text.equalsIgnoreCase("true") || text.equals("1")) {
-      return Boolean.TRUE;
-    }
-    if (text.equalsIgnoreCase("false") || text.equals("0")) {
-      return Boolean.FALSE;
-    }
-    return null;
-  }
 
-  private Date toDate(Object value) {
-    if (value instanceof Date date) {
-      return date;
+    private Double toDouble(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        try {
+            String rawText = String.valueOf(value);
+            String text = rawText.trim();
+            return text.isEmpty() ? null : Double.valueOf(text);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
-    if (value instanceof Instant instant) {
-      return Date.from(instant);
-    }
-    if (value instanceof LocalDateTime ldt) {
-      Instant utcInstant = ldt.toInstant(ZoneOffset.UTC);
-      return Date.from(utcInstant);
-    }
-    if (value instanceof LocalDate ld) {
-      LocalDateTime startOfDay = ld.atStartOfDay();
-      Instant utcInstant = startOfDay.toInstant(ZoneOffset.UTC);
-      return Date.from(utcInstant);
-    }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    if (text.isEmpty()) {
-      return null;
-    }
-    try {
-      LocalDateTime parsedDateTime = LocalDateTime.parse(text, ISO_DATE_TIME);
-      Instant utcInstant = parsedDateTime.toInstant(ZoneOffset.UTC);
-      return Date.from(utcInstant);
-    } catch (Exception ignoredDateTime) {
-      try {
-        LocalDate parsedDate = LocalDate.parse(text);
-        LocalDateTime startOfDay = parsedDate.atStartOfDay();
-        Instant utcInstant = startOfDay.toInstant(ZoneOffset.UTC);
-        return Date.from(utcInstant);
-      } catch (Exception ignoredDate) {
+
+    @Nullable
+    private Boolean toBoolean(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        if (text.equalsIgnoreCase("true") || text.equals("1")) {
+            return Boolean.TRUE;
+        }
+        if (text.equalsIgnoreCase("false") || text.equals("0")) {
+            return Boolean.FALSE;
+        }
         return null;
-      }
     }
-  }
+
+    private Date toDate(Object value) {
+        if (value instanceof Date date) {
+            return date;
+        }
+        if (value instanceof Instant instant) {
+            return Date.from(instant);
+        }
+        if (value instanceof LocalDateTime ldt) {
+            Instant utcInstant = ldt.toInstant(ZoneOffset.UTC);
+            return Date.from(utcInstant);
+        }
+        if (value instanceof LocalDate ld) {
+            LocalDateTime startOfDay = ld.atStartOfDay();
+            Instant utcInstant = startOfDay.toInstant(ZoneOffset.UTC);
+            return Date.from(utcInstant);
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            LocalDateTime parsedDateTime = LocalDateTime.parse(text, ISO_DATE_TIME);
+            Instant utcInstant = parsedDateTime.toInstant(ZoneOffset.UTC);
+            return Date.from(utcInstant);
+        } catch (Exception ignoredDateTime) {
+            try {
+                LocalDate parsedDate = LocalDate.parse(text);
+                LocalDateTime startOfDay = parsedDate.atStartOfDay();
+                Instant utcInstant = startOfDay.toInstant(ZoneOffset.UTC);
+                return Date.from(utcInstant);
+            } catch (Exception ignoredDate) {
+                return null;
+            }
+        }
+    }
 }

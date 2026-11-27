@@ -22,28 +22,28 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleRealtimeRedisPublisher implements RealtimeEventBus {
 
-  public static final String CHANNEL_KEY = "batch:console:realtime";
+    public static final String CHANNEL_KEY = "batch:console:realtime";
 
-  private final StringRedisTemplate redisTemplate;
-  private final BatchRedisNamespace redisNamespace;
-  private final ConsoleRealtimeInstanceIdProvider instanceIdProvider;
-  private final RealtimeReplayStore replayStore;
+    private final StringRedisTemplate redisTemplate;
+    private final BatchRedisNamespace redisNamespace;
+    private final ConsoleRealtimeInstanceIdProvider instanceIdProvider;
+    private final RealtimeReplayStore replayStore;
 
-  @Override
-  public void publish(ConsoleSseEvent event) {
-    if (event == null) {
-      return;
+    @Override
+    public void publish(ConsoleSseEvent event) {
+        if (event == null) {
+            return;
+        }
+        String sourceInstanceId = instanceIdProvider.instanceId();
+        String tenantId = event.tenantId();
+        String stream = event.stream();
+        String eventType = event.eventType();
+        String cursor = event.cursor();
+        String serializedData = EmptyChecks.isNull(event.data()) ? "" : JsonUtils.toJson(event.data());
+        Instant emittedAt = event.emittedAt();
+        ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
+                sourceInstanceId, tenantId, stream, eventType, cursor, false, serializedData, emittedAt);
+        replayStore.append(envelope);
+        redisTemplate.convertAndSend(redisNamespace.channel(CHANNEL_KEY), JsonUtils.toJson(envelope));
     }
-    String sourceInstanceId = instanceIdProvider.instanceId();
-    String tenantId = event.tenantId();
-    String stream = event.stream();
-    String eventType = event.eventType();
-    String cursor = event.cursor();
-    String serializedData = EmptyChecks.isNull(event.data()) ? "" : JsonUtils.toJson(event.data());
-    Instant emittedAt = event.emittedAt();
-    ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
-        sourceInstanceId, tenantId, stream, eventType, cursor, false, serializedData, emittedAt);
-    replayStore.append(envelope);
-    redisTemplate.convertAndSend(redisNamespace.channel(CHANNEL_KEY), JsonUtils.toJson(envelope));
-  }
 }

@@ -16,38 +16,37 @@ import java.util.regex.Pattern;
  */
 final class IdempotencyKeyResolver {
 
-  private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-zA-Z0-9_.]+)}");
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-zA-Z0-9_.]+)}");
 
-  private IdempotencyKeyResolver() {}
+    private IdempotencyKeyResolver() {}
 
-  /**
-   * 解析 key 模板。
-   *
-   * @throws IllegalArgumentException 占位符求不到值
-   */
-  static String resolve(String template, SdkTaskContext ctx) {
-    Map<String, Object> params = ctx.parameters();
-    Function<String, Object> lookup = field -> switch (field) {
-      case "tenantId" -> ctx.tenantId();
-      case "jobCode" -> ctx.jobCode();
-      case "taskInstanceId" -> ctx.taskInstanceId();
-      default -> params.get(field);
-    };
+    /**
+     * 解析 key 模板。
+     *
+     * @throws IllegalArgumentException 占位符求不到值
+     */
+    static String resolve(String template, SdkTaskContext ctx) {
+        Map<String, Object> params = ctx.parameters();
+        Function<String, Object> lookup = field -> switch (field) {
+            case "tenantId" -> ctx.tenantId();
+            case "jobCode" -> ctx.jobCode();
+            case "taskInstanceId" -> ctx.taskInstanceId();
+            default -> params.get(field);
+        };
 
-    Matcher m = PLACEHOLDER.matcher(template);
-    StringBuilder out = new StringBuilder();
-    while (m.find()) {
-      String field = m.group(1);
-      Object value = lookup.apply(field);
-      if (value == null) {
-        throw new IllegalArgumentException(
-            "idempotent key placeholder {" + field + "} resolved to null");
-      }
-      String replacementValue = String.valueOf(value);
-      String safeReplacement = Matcher.quoteReplacement(replacementValue);
-      m.appendReplacement(out, safeReplacement);
+        Matcher m = PLACEHOLDER.matcher(template);
+        StringBuilder out = new StringBuilder();
+        while (m.find()) {
+            String field = m.group(1);
+            Object value = lookup.apply(field);
+            if (value == null) {
+                throw new IllegalArgumentException("idempotent key placeholder {" + field + "} resolved to null");
+            }
+            String replacementValue = String.valueOf(value);
+            String safeReplacement = Matcher.quoteReplacement(replacementValue);
+            m.appendReplacement(out, safeReplacement);
+        }
+        m.appendTail(out);
+        return out.toString();
     }
-    m.appendTail(out);
-    return out.toString();
-  }
 }

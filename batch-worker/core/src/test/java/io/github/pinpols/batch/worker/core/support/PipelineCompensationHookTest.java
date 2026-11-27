@@ -31,258 +31,256 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("安全增量补偿 hook：opt-in off 逐字节不变 / on 才触发 / best-effort 不掩盖原始失败")
 class PipelineCompensationHookTest {
 
-  private static final PipelineRunFence RUN =
-      new PipelineRunFence(99L, OffsetDateTime.parse("2026-11-03T00:00:00Z"));
+    private static final PipelineRunFence RUN = new PipelineRunFence(99L, OffsetDateTime.parse("2026-11-03T00:00:00Z"));
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  @Mock
-  private PlatformFileAuditRepository fileAudits;
+    @Mock
+    private PlatformFileAuditRepository fileAudits;
 
-  @Mock
-  private ProcessingPositionStore positionStore;
+    @Mock
+    private ProcessingPositionStore positionStore;
 
-  private PipelineCompensationHook hook(PipelineCompensator... compensators) {
-    return new PipelineCompensationHook(
-        pipelineRuns, fileAudits, provider(compensators), new SingleValueProvider<>(positionStore));
-  }
-
-  @Test
-  @DisplayName("开关 off（默认）：不进入 COMPENSATING、不调任何 compensator")
-  void offByDefault_doesNotCompensate() {
-    RecordingCompensator compensator = new RecordingCompensator("IMPORT");
-    PipelineCompensationHook hook = hook(compensator);
-    Map<String, Object> attributes = attributesWithTemplate(false);
-
-    boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
-
-    assertThat(triggered).isFalse();
-    assertThat(compensator.calls).isZero();
-    verify(pipelineRuns, never()).markPipelineCompensating(any());
-  }
-
-  @Test
-  @DisplayName("templateConfig 缺失（失败发生在加载模板前）：安全跳过，不补偿")
-  void noTemplateConfig_doesNotCompensate() {
-    RecordingCompensator compensator = new RecordingCompensator("IMPORT");
-    PipelineCompensationHook hook = hook(compensator);
-
-    boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, new LinkedHashMap<>());
-
-    assertThat(triggered).isFalse();
-    assertThat(compensator.calls).isZero();
-    verify(pipelineRuns, never()).markPipelineCompensating(any());
-  }
-
-  @Test
-  @DisplayName("开关 on 且注册了 compensator：先清位点 → 反向动作 → 审计")
-  void onWithCompensator_marksCompensatingAndReverses() {
-    RecordingCompensator compensator = new RecordingCompensator("IMPORT");
-    compensator.result = CompensationResult.reversed(3L, "deleted 3 rows");
-    PipelineCompensationHook hook = hook(compensator);
-    Map<String, Object> attributes = attributesWithTemplate(true);
-    attributes.put(PipelineRuntimeKeys.FILE_ID, 7L);
-
-    boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
-
-    assertThat(triggered).isTrue();
-    assertThat(compensator.calls).isEqualTo(1);
-    verify(pipelineRuns).markPipelineCompensating(RUN);
-    ArgumentCaptor<FileAuditParam> audit = ArgumentCaptor.forClass(FileAuditParam.class);
-    verify(fileAudits).appendAudit(audit.capture());
-    assertThat(audit.getValue().getOperationType()).isEqualTo("PIPELINE_COMPENSATE");
-    assertThat(audit.getValue().getOperationResult()).isEqualTo("REVERSED");
-    // 跨库无 1PC:位点必须在反向删业务数据前成功作废,否则第二步失败会静默缺数。
-    var ordered = inOrder(pipelineRuns, positionStore);
-    ordered.verify(pipelineRuns).markPipelineCompensating(RUN);
-    ordered.verify(positionStore).deleteAllStages("t1", 99L);
-  }
-
-  @Test
-  @DisplayName("补偿 SKIPPED:位点已预先清理,重试从头跑并由幂等约束吸收已存数据")
-  void skippedCompensation_stillInvalidatesCheckpointBeforeAttempt() {
-    RecordingCompensator compensator = new RecordingCompensator("IMPORT");
-    compensator.result = CompensationResult.skipped("no run-scope column");
-    PipelineCompensationHook hook = hook(compensator);
-    Map<String, Object> attributes = attributesWithTemplate(true);
-
-    boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
-
-    assertThat(triggered).isTrue();
-    verify(positionStore).deleteAllStages("t1", 99L);
-  }
-
-  @Test
-  @DisplayName("补偿 FAILED:位点已预先清理,重试从头跑避免跳过状态不明的副作用")
-  void failedCompensation_stillInvalidatesCheckpointBeforeAttempt() {
-    RecordingCompensator compensator = new RecordingCompensator("IMPORT");
-    compensator.result = CompensationResult.failed("delete errored");
-    PipelineCompensationHook hook = hook(compensator);
-    Map<String, Object> attributes = attributesWithTemplate(true);
-
-    boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
-
-    assertThat(triggered).isTrue();
-    verify(positionStore).deleteAllStages("t1", 99L);
-  }
-
-  @Test
-  @DisplayName("位点作废失败:不执行反向删除,防止业务数据已删但重试仍跳过")
-  void checkpointInvalidationFailure_abortsReverse() {
-    RecordingCompensator compensator = new RecordingCompensator("IMPORT");
-    compensator.result = CompensationResult.reversed(3L, "deleted 3 rows");
-    PipelineCompensationHook hook = hook(compensator);
-    Map<String, Object> attributes = attributesWithTemplate(true);
-    attributes.put(PipelineRuntimeKeys.FILE_ID, 7L);
-    doThrow(new IllegalStateException("platform db unavailable"))
-        .when(positionStore)
-        .deleteAllStages("t1", 99L);
-
-    boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
-
-    assertThat(triggered).isTrue();
-    assertThat(compensator.calls).isZero();
-    ArgumentCaptor<FileAuditParam> audit = ArgumentCaptor.forClass(FileAuditParam.class);
-    verify(fileAudits).appendAudit(audit.capture());
-    assertThat(audit.getValue().getOperationResult()).isEqualTo("FAILED");
-  }
-
-  @Test
-  @DisplayName("开关 on 但该类型没注册 compensator：不补偿，走原路径")
-  void onWithoutMatchingCompensator_doesNotCompensate() {
-    RecordingCompensator other = new RecordingCompensator("EXPORT");
-    PipelineCompensationHook hook = hook(other);
-    Map<String, Object> attributes = attributesWithTemplate(true);
-
-    boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
-
-    assertThat(triggered).isFalse();
-    assertThat(other.calls).isZero();
-    verify(pipelineRuns, never()).markPipelineCompensating(any());
-  }
-
-  @Test
-  @DisplayName("compensator 内部抛异常：hook 不上抛，仍记审计，原始失败不被掩盖")
-  void compensatorThrows_isSwallowed() {
-    PipelineCompensator throwing = new PipelineCompensator() {
-      @Override
-      public String pipelineType() {
-        return "IMPORT";
-      }
-
-      @Override
-      public CompensationResult compensate(
-          String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attrs) {
-        throw new IllegalStateException("boom");
-      }
-    };
-    PipelineCompensationHook hook = hook(throwing);
-    Map<String, Object> attributes = attributesWithTemplate(true);
-
-    boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
-
-    assertThat(triggered).isTrue();
-    verify(pipelineRuns).markPipelineCompensating(RUN);
-  }
-
-  private static Map<String, Object> attributesWithTemplate(boolean compensateOnFailure) {
-    Map<String, Object> template = new LinkedHashMap<>();
-    template.put("compensate_on_failure", compensateOnFailure);
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, template);
-    return attributes;
-  }
-
-  /** 用真实 Iterable 实现避开 mock 严格模式对 iterator() 的“非必要 stub”告警（off 路径不遍历 provider）。 */
-  private ObjectProvider<PipelineCompensator> provider(PipelineCompensator... compensators) {
-    List<PipelineCompensator> list = new ArrayList<>(List.of(compensators));
-    return new ListBackedCompensatorProvider(list);
-  }
-
-  private static final class RecordingCompensator implements PipelineCompensator {
-    private final String type;
-    private int calls;
-    private CompensationResult result = CompensationResult.skipped("noop");
-
-    RecordingCompensator(String type) {
-      this.type = type;
+    private PipelineCompensationHook hook(PipelineCompensator... compensators) {
+        return new PipelineCompensationHook(
+                pipelineRuns, fileAudits, provider(compensators), new SingleValueProvider<>(positionStore));
     }
 
-    @Override
-    public String pipelineType() {
-      return type;
+    @Test
+    @DisplayName("开关 off（默认）：不进入 COMPENSATING、不调任何 compensator")
+    void offByDefault_doesNotCompensate() {
+        RecordingCompensator compensator = new RecordingCompensator("IMPORT");
+        PipelineCompensationHook hook = hook(compensator);
+        Map<String, Object> attributes = attributesWithTemplate(false);
+
+        boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
+
+        assertThat(triggered).isFalse();
+        assertThat(compensator.calls).isZero();
+        verify(pipelineRuns, never()).markPipelineCompensating(any());
     }
 
-    @Override
-    public CompensationResult compensate(
-        String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attributes) {
-      calls++;
-      return result;
-    }
-  }
+    @Test
+    @DisplayName("templateConfig 缺失（失败发生在加载模板前）：安全跳过，不补偿")
+    void noTemplateConfig_doesNotCompensate() {
+        RecordingCompensator compensator = new RecordingCompensator("IMPORT");
+        PipelineCompensationHook hook = hook(compensator);
 
-  /** 极简 ObjectProvider：只支持遍历（hook 唯一用到的能力）。 */
-  private static final class ListBackedCompensatorProvider
-      implements ObjectProvider<PipelineCompensator> {
-    private final List<PipelineCompensator> list;
+        boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, new LinkedHashMap<>());
 
-    ListBackedCompensatorProvider(List<PipelineCompensator> list) {
-      this.list = list;
+        assertThat(triggered).isFalse();
+        assertThat(compensator.calls).isZero();
+        verify(pipelineRuns, never()).markPipelineCompensating(any());
     }
 
-    @Override
-    public Iterator<PipelineCompensator> iterator() {
-      return list.iterator();
+    @Test
+    @DisplayName("开关 on 且注册了 compensator：先清位点 → 反向动作 → 审计")
+    void onWithCompensator_marksCompensatingAndReverses() {
+        RecordingCompensator compensator = new RecordingCompensator("IMPORT");
+        compensator.result = CompensationResult.reversed(3L, "deleted 3 rows");
+        PipelineCompensationHook hook = hook(compensator);
+        Map<String, Object> attributes = attributesWithTemplate(true);
+        attributes.put(PipelineRuntimeKeys.FILE_ID, 7L);
+
+        boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
+
+        assertThat(triggered).isTrue();
+        assertThat(compensator.calls).isEqualTo(1);
+        verify(pipelineRuns).markPipelineCompensating(RUN);
+        ArgumentCaptor<FileAuditParam> audit = ArgumentCaptor.forClass(FileAuditParam.class);
+        verify(fileAudits).appendAudit(audit.capture());
+        assertThat(audit.getValue().getOperationType()).isEqualTo("PIPELINE_COMPENSATE");
+        assertThat(audit.getValue().getOperationResult()).isEqualTo("REVERSED");
+        // 跨库无 1PC:位点必须在反向删业务数据前成功作废,否则第二步失败会静默缺数。
+        var ordered = inOrder(pipelineRuns, positionStore);
+        ordered.verify(pipelineRuns).markPipelineCompensating(RUN);
+        ordered.verify(positionStore).deleteAllStages("t1", 99L);
     }
 
-    @Override
-    public PipelineCompensator getObject(Object... args) {
-      throw new UnsupportedOperationException();
+    @Test
+    @DisplayName("补偿 SKIPPED:位点已预先清理,重试从头跑并由幂等约束吸收已存数据")
+    void skippedCompensation_stillInvalidatesCheckpointBeforeAttempt() {
+        RecordingCompensator compensator = new RecordingCompensator("IMPORT");
+        compensator.result = CompensationResult.skipped("no run-scope column");
+        PipelineCompensationHook hook = hook(compensator);
+        Map<String, Object> attributes = attributesWithTemplate(true);
+
+        boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
+
+        assertThat(triggered).isTrue();
+        verify(positionStore).deleteAllStages("t1", 99L);
     }
 
-    @Override
-    public PipelineCompensator getObject() {
-      throw new UnsupportedOperationException();
+    @Test
+    @DisplayName("补偿 FAILED:位点已预先清理,重试从头跑避免跳过状态不明的副作用")
+    void failedCompensation_stillInvalidatesCheckpointBeforeAttempt() {
+        RecordingCompensator compensator = new RecordingCompensator("IMPORT");
+        compensator.result = CompensationResult.failed("delete errored");
+        PipelineCompensationHook hook = hook(compensator);
+        Map<String, Object> attributes = attributesWithTemplate(true);
+
+        boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
+
+        assertThat(triggered).isTrue();
+        verify(positionStore).deleteAllStages("t1", 99L);
     }
 
-    @Override
-    public PipelineCompensator getIfAvailable() {
-      return list.isEmpty() ? null : list.get(0);
+    @Test
+    @DisplayName("位点作废失败:不执行反向删除,防止业务数据已删但重试仍跳过")
+    void checkpointInvalidationFailure_abortsReverse() {
+        RecordingCompensator compensator = new RecordingCompensator("IMPORT");
+        compensator.result = CompensationResult.reversed(3L, "deleted 3 rows");
+        PipelineCompensationHook hook = hook(compensator);
+        Map<String, Object> attributes = attributesWithTemplate(true);
+        attributes.put(PipelineRuntimeKeys.FILE_ID, 7L);
+        doThrow(new IllegalStateException("platform db unavailable"))
+                .when(positionStore)
+                .deleteAllStages("t1", 99L);
+
+        boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
+
+        assertThat(triggered).isTrue();
+        assertThat(compensator.calls).isZero();
+        ArgumentCaptor<FileAuditParam> audit = ArgumentCaptor.forClass(FileAuditParam.class);
+        verify(fileAudits).appendAudit(audit.capture());
+        assertThat(audit.getValue().getOperationResult()).isEqualTo("FAILED");
     }
 
-    @Override
-    public PipelineCompensator getIfUnique() {
-      return list.size() == 1 ? list.get(0) : null;
-    }
-  }
+    @Test
+    @DisplayName("开关 on 但该类型没注册 compensator：不补偿，走原路径")
+    void onWithoutMatchingCompensator_doesNotCompensate() {
+        RecordingCompensator other = new RecordingCompensator("EXPORT");
+        PipelineCompensationHook hook = hook(other);
+        Map<String, Object> attributes = attributesWithTemplate(true);
 
-  /** 极简 ObjectProvider:仅 getIfAvailable() 返回固定单值(hook 唯一用到的能力)。 */
-  private static final class SingleValueProvider<T> implements ObjectProvider<T> {
-    private final T value;
+        boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
 
-    SingleValueProvider(T value) {
-      this.value = value;
-    }
-
-    @Override
-    public T getObject(Object... args) {
-      throw new UnsupportedOperationException();
+        assertThat(triggered).isFalse();
+        assertThat(other.calls).isZero();
+        verify(pipelineRuns, never()).markPipelineCompensating(any());
     }
 
-    @Override
-    public T getObject() {
-      throw new UnsupportedOperationException();
+    @Test
+    @DisplayName("compensator 内部抛异常：hook 不上抛，仍记审计，原始失败不被掩盖")
+    void compensatorThrows_isSwallowed() {
+        PipelineCompensator throwing = new PipelineCompensator() {
+            @Override
+            public String pipelineType() {
+                return "IMPORT";
+            }
+
+            @Override
+            public CompensationResult compensate(
+                    String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attrs) {
+                throw new IllegalStateException("boom");
+            }
+        };
+        PipelineCompensationHook hook = hook(throwing);
+        Map<String, Object> attributes = attributesWithTemplate(true);
+
+        boolean triggered = hook.runCompensation("t1", "IMPORT", RUN, attributes);
+
+        assertThat(triggered).isTrue();
+        verify(pipelineRuns).markPipelineCompensating(RUN);
     }
 
-    @Override
-    public T getIfAvailable() {
-      return value;
+    private static Map<String, Object> attributesWithTemplate(boolean compensateOnFailure) {
+        Map<String, Object> template = new LinkedHashMap<>();
+        template.put("compensate_on_failure", compensateOnFailure);
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, template);
+        return attributes;
     }
 
-    @Override
-    public T getIfUnique() {
-      return value;
+    /** 用真实 Iterable 实现避开 mock 严格模式对 iterator() 的“非必要 stub”告警（off 路径不遍历 provider）。 */
+    private ObjectProvider<PipelineCompensator> provider(PipelineCompensator... compensators) {
+        List<PipelineCompensator> list = new ArrayList<>(List.of(compensators));
+        return new ListBackedCompensatorProvider(list);
     }
-  }
+
+    private static final class RecordingCompensator implements PipelineCompensator {
+        private final String type;
+        private int calls;
+        private CompensationResult result = CompensationResult.skipped("noop");
+
+        RecordingCompensator(String type) {
+            this.type = type;
+        }
+
+        @Override
+        public String pipelineType() {
+            return type;
+        }
+
+        @Override
+        public CompensationResult compensate(
+                String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attributes) {
+            calls++;
+            return result;
+        }
+    }
+
+    /** 极简 ObjectProvider：只支持遍历（hook 唯一用到的能力）。 */
+    private static final class ListBackedCompensatorProvider implements ObjectProvider<PipelineCompensator> {
+        private final List<PipelineCompensator> list;
+
+        ListBackedCompensatorProvider(List<PipelineCompensator> list) {
+            this.list = list;
+        }
+
+        @Override
+        public Iterator<PipelineCompensator> iterator() {
+            return list.iterator();
+        }
+
+        @Override
+        public PipelineCompensator getObject(Object... args) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public PipelineCompensator getObject() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public PipelineCompensator getIfAvailable() {
+            return list.isEmpty() ? null : list.get(0);
+        }
+
+        @Override
+        public PipelineCompensator getIfUnique() {
+            return list.size() == 1 ? list.get(0) : null;
+        }
+    }
+
+    /** 极简 ObjectProvider:仅 getIfAvailable() 返回固定单值(hook 唯一用到的能力)。 */
+    private static final class SingleValueProvider<T> implements ObjectProvider<T> {
+        private final T value;
+
+        SingleValueProvider(T value) {
+            this.value = value;
+        }
+
+        @Override
+        public T getObject(Object... args) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public T getObject() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public T getIfAvailable() {
+            return value;
+        }
+
+        @Override
+        public T getIfUnique() {
+            return value;
+        }
+    }
 }

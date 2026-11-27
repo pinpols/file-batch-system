@@ -46,149 +46,137 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAdminMaintenanceControllerTest {
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private ConsoleMaintenanceProperties properties;
-  private MaintenanceStateMapper mapper;
-  private MaintenanceStateHolder stateHolder;
-  private MockMvc mockMvc;
+    private ConsoleMaintenanceProperties properties;
+    private MaintenanceStateMapper mapper;
+    private MaintenanceStateHolder stateHolder;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    properties = new ConsoleMaintenanceProperties();
-    mapper = mock(MaintenanceStateMapper.class);
-    stateHolder = MaintenanceStateHolderTestSupport.initialized(properties, mapper);
+        properties = new ConsoleMaintenanceProperties();
+        mapper = mock(MaintenanceStateMapper.class);
+        stateHolder = MaintenanceStateHolderTestSupport.initialized(properties, mapper);
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAdminMaintenanceController(
-            new ConsoleMaintenanceApplicationService(stateHolder, requestMetadataResolver),
-            responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAdminMaintenanceController(
+                        new ConsoleMaintenanceApplicationService(stateHolder, requestMetadataResolver),
+                        responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("初始查询:未开启维护时返回成功响应, 启用与只读标记均为假")
-  void shouldReturnInitialDisabledState_whenQuerying() throws Exception {
-    mockMvc
-        .perform(get("/api/console/admin/system/maintenance"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.enabled").value(false))
-        .andExpect(jsonPath("$.data.readOnly").value(false));
-  }
+    @Test
+    @DisplayName("初始查询:未开启维护时返回成功响应, 启用与只读标记均为假")
+    void shouldReturnInitialDisabledState_whenQuerying() throws Exception {
+        mockMvc.perform(get("/api/console/admin/system/maintenance"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.enabled").value(false))
+                .andExpect(jsonPath("$.data.readOnly").value(false));
+    }
 
-  @Test
-  @DisplayName("热更新:部分字段更新后状态就地替换, 服务列表与更新时间一并回填")
-  void shouldHotUpdateState_whenUpdating() throws Exception {
-    when(mapper.updateIfVersion(any())).thenReturn(1);
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
-    String startsAt = "2099-05-20T14:00:00Z";
-    String body = """
+    @Test
+    @DisplayName("热更新:部分字段更新后状态就地替换, 服务列表与更新时间一并回填")
+    void shouldHotUpdateState_whenUpdating() throws Exception {
+        when(mapper.updateIfVersion(any())).thenReturn(1);
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
+        String startsAt = "2099-05-20T14:00:00Z";
+        String body = """
         {"enabled":true,"readOnly":true,"message":"DB 灰度中","etaAt":"2026-05-20T15:00:00Z",
          "startsAt":"%s","affectedServices":["job-schedule","file-download"]}
         """.formatted(startsAt);
-    mockMvc
-        .perform(put("/api/console/admin/system/maintenance")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.enabled").value(true))
-        .andExpect(jsonPath("$.data.readOnly").value(true))
-        .andExpect(jsonPath("$.data.active").value(false))
-        .andExpect(jsonPath("$.data.startsAt").value(startsAt))
-        .andExpect(jsonPath("$.data.message").value("DB 灰度中"))
-        .andExpect(jsonPath("$.data.affectedServices[0]").value("job-schedule"))
-        .andExpect(jsonPath("$.data.affectedServices[1]").value("file-download"))
-        .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
-    // holder 中持有的状态已替换
-    MaintenanceState current = stateHolder.current();
-    assertThat(current.enabled()).isTrue();
-    assertThat(current.readOnly()).isTrue();
-    assertThat(current.message()).isEqualTo("DB 灰度中");
-    assertThat(current.startsAt()).isEqualTo(Instant.parse(startsAt));
-    assertThat(current.affectedServices()).containsExactly("job-schedule", "file-download");
-    assertThat(current.updatedAt()).isNotNull();
-  }
+        mockMvc.perform(put("/api/console/admin/system/maintenance")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.readOnly").value(true))
+                .andExpect(jsonPath("$.data.active").value(false))
+                .andExpect(jsonPath("$.data.startsAt").value(startsAt))
+                .andExpect(jsonPath("$.data.message").value("DB 灰度中"))
+                .andExpect(jsonPath("$.data.affectedServices[0]").value("job-schedule"))
+                .andExpect(jsonPath("$.data.affectedServices[1]").value("file-download"))
+                .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
+        // holder 中持有的状态已替换
+        MaintenanceState current = stateHolder.current();
+        assertThat(current.enabled()).isTrue();
+        assertThat(current.readOnly()).isTrue();
+        assertThat(current.message()).isEqualTo("DB 灰度中");
+        assertThat(current.startsAt()).isEqualTo(Instant.parse(startsAt));
+        assertThat(current.affectedServices()).containsExactly("job-schedule", "file-download");
+        assertThat(current.updatedAt()).isNotNull();
+    }
 
-  @Test
-  @DisplayName("关闭维护:仅传启用为假时状态复位, 查询结果同步为假")
-  void shouldRestoreToDisabled_whenEnabledFalse() throws Exception {
-    when(mapper.updateIfVersion(any())).thenReturn(1);
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
-    // 先开
-    stateHolder.update(new MaintenanceState(
-        true, false, "x", Instant.parse("2026-05-20T16:00:00Z"), List.of("a")));
-    // 再关
-    mockMvc
-        .perform(put("/api/console/admin/system/maintenance")
-            .contentType(APPLICATION_JSON)
-            .content("{\"enabled\":false}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.enabled").value(false));
-    assertThat(stateHolder.current().enabled()).isFalse();
-  }
+    @Test
+    @DisplayName("关闭维护:仅传启用为假时状态复位, 查询结果同步为假")
+    void shouldRestoreToDisabled_whenEnabledFalse() throws Exception {
+        when(mapper.updateIfVersion(any())).thenReturn(1);
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
+        // 先开
+        stateHolder.update(new MaintenanceState(true, false, "x", Instant.parse("2026-05-20T16:00:00Z"), List.of("a")));
+        // 再关
+        mockMvc.perform(put("/api/console/admin/system/maintenance")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"enabled\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(false));
+        assertThat(stateHolder.current().enabled()).isFalse();
+    }
 
-  @Test
-  @DisplayName("空列表归一:未提供受影响服务时返回空数组, 长度为 0")
-  void shouldNormalizeToEmptyList_whenAffectedServicesAbsent() throws Exception {
-    when(mapper.updateIfVersion(any())).thenReturn(1);
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
-    mockMvc
-        .perform(put("/api/console/admin/system/maintenance")
-            .contentType(APPLICATION_JSON)
-            .content("{\"enabled\":true}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.affectedServices").isArray())
-        .andExpect(jsonPath("$.data.affectedServices.length()").value(0));
-  }
+    @Test
+    @DisplayName("空列表归一:未提供受影响服务时返回空数组, 长度为 0")
+    void shouldNormalizeToEmptyList_whenAffectedServicesAbsent() throws Exception {
+        when(mapper.updateIfVersion(any())).thenReturn(1);
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
+        mockMvc.perform(put("/api/console/admin/system/maintenance")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"enabled\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.affectedServices").isArray())
+                .andExpect(jsonPath("$.data.affectedServices.length()").value(0));
+    }
 
-  @Test
-  @DisplayName("计划开始时间随公告返回且后端报告尚未生效")
-  void shouldReportScheduledMaintenanceAsNotActive() throws Exception {
-    when(mapper.updateIfVersion(any())).thenReturn(1);
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
-    Instant startsAt = Instant.now().plusSeconds(3600);
-    String body = "{\"enabled\":true,\"readOnly\":true,\"startsAt\":\"" + startsAt + "\"}";
+    @Test
+    @DisplayName("计划开始时间随公告返回且后端报告尚未生效")
+    void shouldReportScheduledMaintenanceAsNotActive() throws Exception {
+        when(mapper.updateIfVersion(any())).thenReturn(1);
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
+        Instant startsAt = Instant.now().plusSeconds(3600);
+        String body = "{\"enabled\":true,\"readOnly\":true,\"startsAt\":\"" + startsAt + "\"}";
 
-    mockMvc
-        .perform(put("/api/console/admin/system/maintenance")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.enabled").value(true))
-        .andExpect(jsonPath("$.data.active").value(false))
-        .andExpect(jsonPath("$.data.startsAt").value(startsAt.toString()));
-  }
+        mockMvc.perform(put("/api/console/admin/system/maintenance")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.active").value(false))
+                .andExpect(jsonPath("$.data.startsAt").value(startsAt.toString()));
+    }
 
-  private MaintenanceStateEntity entityFromProperties() {
-    MaintenanceStateEntity entity = new MaintenanceStateEntity();
-    entity.setEnabled(properties.isEnabled());
-    entity.setReadOnly(properties.isReadOnly());
-    entity.setMessage(properties.getMessage());
-    entity.setEtaAt(properties.getEtaAt());
-    entity.setAffectedServicesJson(new ObjectMapper()
-        .valueToTree(
-            properties.getAffectedServices() == null ? List.of() : properties.getAffectedServices())
-        .toString());
-    entity.setVersion(0L);
-    return entity;
-  }
+    private MaintenanceStateEntity entityFromProperties() {
+        MaintenanceStateEntity entity = new MaintenanceStateEntity();
+        entity.setEnabled(properties.isEnabled());
+        entity.setReadOnly(properties.isReadOnly());
+        entity.setMessage(properties.getMessage());
+        entity.setEtaAt(properties.getEtaAt());
+        entity.setAffectedServicesJson(new ObjectMapper()
+                .valueToTree(properties.getAffectedServices() == null ? List.of() : properties.getAffectedServices())
+                .toString());
+        entity.setVersion(0L);
+        return entity;
+    }
 }

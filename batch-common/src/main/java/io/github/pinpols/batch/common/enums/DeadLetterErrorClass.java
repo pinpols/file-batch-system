@@ -17,17 +17,17 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum DeadLetterErrorClass implements DictEnum {
-  BUSINESS("BUSINESS", "业务错误"),
-  SYSTEM("SYSTEM", "系统错误");
+    BUSINESS("BUSINESS", "业务错误"),
+    SYSTEM("SYSTEM", "系统错误");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 
-  public static DeadLetterErrorClass from(String value) {
-    if (value == null || value.isBlank()) {
-      return SYSTEM;
+    public static DeadLetterErrorClass from(String value) {
+        if (value == null || value.isBlank()) {
+            return SYSTEM;
+        }
+        DeadLetterErrorClass hit = DictEnum.fromCode(DeadLetterErrorClass.class, value.trim());
+        return hit == null ? SYSTEM : hit;
     }
-    DeadLetterErrorClass hit = DictEnum.fromCode(DeadLetterErrorClass.class, value.trim());
-    return hit == null ? SYSTEM : hit;
-  }
 }

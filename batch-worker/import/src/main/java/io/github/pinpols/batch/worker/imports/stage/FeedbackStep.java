@@ -24,57 +24,50 @@ import org.springframework.stereotype.Component;
 @Component
 public class FeedbackStep implements ImportStageStep {
 
-  private final PlatformFileAuditRepository fileAudits;
+    private final PlatformFileAuditRepository fileAudits;
 
-  public FeedbackStep(PlatformFileAuditRepository fileAudits) {
-    this.fileAudits = fileAudits;
-  }
-
-  @Override
-  public ImportStage stage() {
-    return ImportStage.FEEDBACK;
-  }
-
-  @Override
-  public ImportStageResult execute(ImportJobContext context) {
-    if (context == null) {
-      return ImportStageResult.failure(
-          stage(), "IMPORT_FEEDBACK_CONTEXT_MISSING", "context is required");
+    public FeedbackStep(PlatformFileAuditRepository fileAudits) {
+        this.fileAudits = fileAudits;
     }
-    // ADR-026: 演练模式不写 audit 日志（避免污染实盘 file_audit 历史），直接返回 success。
-    if (DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
-      return ImportStageResult.success(stage());
+
+    @Override
+    public ImportStage stage() {
+        return ImportStage.FEEDBACK;
     }
-    Map<String, Object> attrs = context.getAttributes();
-    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    Map<String, Object> detailSummary = new LinkedHashMap<>();
-    detailSummary.put(
-        PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
-        attrs.get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
-    detailSummary.put(
-        PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
-        attrs.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
-    detailSummary.put(
-        PipelineRuntimeKeys.IMPORT_LOADED_COUNT,
-        attrs.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
-    detailSummary.put(
-        PipelineRuntimeKeys.PIPELINE_INSTANCE_ID,
-        attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    FileAuditParam.FileAuditParamBuilder auditParam = FileAuditParam.builder()
-        .fileId(fileId)
-        .tenantId(context.getTenantId())
-        .operationType(FileAuditOperationType.IMPORT_FEEDBACK.code())
-        .operationResult(OperationResult.SUCCESS.code())
-        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .operatorId(context.getWorkerId());
-    Object traceId = attrs.get(PipelineRuntimeKeys.TRACE_ID);
-    String traceIdText = String.valueOf(traceId);
-    FileAuditParam audit = auditParam
-        .traceId(traceIdText)
-        .evidenceRef(null)
-        .detailSummary(detailSummary)
-        .build();
-    fileAudits.appendAudit(audit);
-    return ImportStageResult.success(stage());
-  }
+
+    @Override
+    public ImportStageResult execute(ImportJobContext context) {
+        if (context == null) {
+            return ImportStageResult.failure(stage(), "IMPORT_FEEDBACK_CONTEXT_MISSING", "context is required");
+        }
+        // ADR-026: 演练模式不写 audit 日志（避免污染实盘 file_audit 历史），直接返回 success。
+        if (DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
+            return ImportStageResult.success(stage());
+        }
+        Map<String, Object> attrs = context.getAttributes();
+        Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+        Map<String, Object> detailSummary = new LinkedHashMap<>();
+        detailSummary.put(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, attrs.get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
+        detailSummary.put(
+                PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, attrs.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
+        detailSummary.put(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, attrs.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
+        detailSummary.put(
+                PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+        FileAuditParam.FileAuditParamBuilder auditParam = FileAuditParam.builder()
+                .fileId(fileId)
+                .tenantId(context.getTenantId())
+                .operationType(FileAuditOperationType.IMPORT_FEEDBACK.code())
+                .operationResult(OperationResult.SUCCESS.code())
+                .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
+                .operatorId(context.getWorkerId());
+        Object traceId = attrs.get(PipelineRuntimeKeys.TRACE_ID);
+        String traceIdText = String.valueOf(traceId);
+        FileAuditParam audit = auditParam
+                .traceId(traceIdText)
+                .evidenceRef(null)
+                .detailSummary(detailSummary)
+                .build();
+        fileAudits.appendAudit(audit);
+        return ImportStageResult.success(stage());
+    }
 }

@@ -13,13 +13,13 @@ import org.springframework.http.client.ClientHttpResponse;
 /** 将当前请求协商后的语言传递给内部 HTTP 服务。 */
 public class AcceptLanguageRequestInterceptor implements ClientHttpRequestInterceptor {
 
-  @Override
-  public ClientHttpResponse intercept(
-      HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException {
-    if (EmptyChecks.isNull(request.getHeaders().getFirst(HttpHeaders.ACCEPT_LANGUAGE))
-        && EmptyChecks.isNotNull(LocaleContextHolder.getLocaleContext())) {
-      request.getHeaders().setAcceptLanguageAsLocales(List.of(LocaleContextHolder.getLocale()));
+    @Override
+    public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution)
+            throws IOException {
+        if (EmptyChecks.isNull(request.getHeaders().getFirst(HttpHeaders.ACCEPT_LANGUAGE))
+                && EmptyChecks.isNotNull(LocaleContextHolder.getLocaleContext())) {
+            request.getHeaders().setAcceptLanguageAsLocales(List.of(LocaleContextHolder.getLocale()));
+        }
+        return execution.execute(request, body);
     }
-    return execution.execute(request, body);
-  }
 }

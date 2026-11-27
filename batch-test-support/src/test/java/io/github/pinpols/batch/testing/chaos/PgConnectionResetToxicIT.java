@@ -26,81 +26,78 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PG 连接 RST 注入 — HikariCP 借出连接抛 SQLException;故障消除后池自愈、新连接可读写")
 class PgConnectionResetToxicIT extends AbstractChaosIntegrationTest {
 
-  @Test
-  @DisplayName("正在使用的连接遭遇 PG RST → 抛 SQLException(应用走重试路径)")
-  void inUseConnection_whenPgGoesDown_shouldThrowSqlException() throws Exception {
-    final String select1Sql = """
+    @Test
+    @DisplayName("正在使用的连接遭遇 PG RST → 抛 SQLException(应用走重试路径)")
+    void inUseConnection_whenPgGoesDown_shouldThrowSqlException() throws Exception {
+        final String select1Sql = """
         SELECT 1
     """;
 
-    try (HikariDataSource ds = newHikariDataSource()) {
-      try (Connection conn = ds.getConnection();
-          Statement stmt = conn.createStatement()) {
-        // 健康路径预热
-        stmt.executeQuery(select1Sql).close();
+        try (HikariDataSource ds = newHikariDataSource()) {
+            try (Connection conn = ds.getConnection();
+                    Statement stmt = conn.createStatement()) {
+                // 健康路径预热
+                stmt.executeQuery(select1Sql).close();
 
-        withDown(
-            ProxyTarget.PG,
-            () ->
-                assertThatThrownBy(() -> executeSelectOne(conn)).isInstanceOf(SQLException.class));
-      }
+                withDown(
+                        ProxyTarget.PG,
+                        () -> assertThatThrownBy(() -> executeSelectOne(conn)).isInstanceOf(SQLException.class));
+            }
+        }
     }
-  }
 
-  @Test
-  @DisplayName("PG 恢复 → Hikari 池可重新 borrow 连接、可读写,验证池自愈(outbox 写路径不丢)")
-  void hikariPool_afterPgRecovers_shouldSelfHeal() throws Exception {
-    // 不预热 — 池里没有 idle 连接,getConnection 必触发"新建连接"路径,
-    // 这样故障期间走 toxiproxy 真实失败,不被 Hikari 的 idle fast-path 绕过。
-    try (HikariDataSource ds = newHikariDataSource()) {
-      // 故障期间 borrow 必失败(connectionTimeout=2s)
-      withDown(
-          ProxyTarget.PG,
-          () -> assertThatThrownBy(ds::getConnection).isInstanceOf(SQLException.class));
+    @Test
+    @DisplayName("PG 恢复 → Hikari 池可重新 borrow 连接、可读写,验证池自愈(outbox 写路径不丢)")
+    void hikariPool_afterPgRecovers_shouldSelfHeal() throws Exception {
+        // 不预热 — 池里没有 idle 连接,getConnection 必触发"新建连接"路径,
+        // 这样故障期间走 toxiproxy 真实失败,不被 Hikari 的 idle fast-path 绕过。
+        try (HikariDataSource ds = newHikariDataSource()) {
+            // 故障期间 borrow 必失败(connectionTimeout=2s)
+            withDown(ProxyTarget.PG, () -> assertThatThrownBy(ds::getConnection).isInstanceOf(SQLException.class));
 
-      // 退出 withDown 后 toxic 已移除 — 池必须自愈,新连接可写读
-      String testTable = "chaos_pg_reset_" + UUID.randomUUID().toString().replace('-', '_');
-      try (Connection c = ds.getConnection();
-          Statement s = c.createStatement()) {
-        final String createTempSql = """
+            // 退出 withDown 后 toxic 已移除 — 池必须自愈,新连接可写读
+            String testTable = "chaos_pg_reset_" + UUID.randomUUID().toString().replace('-', '_');
+            try (Connection c = ds.getConnection();
+                    Statement s = c.createStatement()) {
+                final String createTempSql = """
                 CREATE TEMP TABLE %s (v int)
             """.formatted(testTable);
-        s.execute(createTempSql);
-        final String insertStatementSql = """
+                s.execute(createTempSql);
+                final String insertStatementSql = """
                 INSERT INTO %s VALUES (42)
             """.formatted(testTable);
-        s.execute(insertStatementSql);
-        final String selectVSql = """
+                s.execute(insertStatementSql);
+                final String selectVSql = """
                 SELECT v FROM %s
             """.formatted(testTable);
-        var rs = s.executeQuery(selectVSql);
-        assertThat(rs.next()).isTrue();
-        assertThat(rs.getInt(1)).isEqualTo(42);
-        rs.close();
-      }
+                var rs = s.executeQuery(selectVSql);
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getInt(1)).isEqualTo(42);
+                rs.close();
+            }
+        }
     }
-  }
 
-  private HikariDataSource newHikariDataSource() {
-    HikariConfig cfg = new HikariConfig();
-    cfg.setJdbcUrl(pgProxiedJdbcUrl());
-    cfg.setUsername("batch_user");
-    cfg.setPassword("batch_pass_123");
-    cfg.setMaximumPoolSize(3);
-    cfg.setMinimumIdle(0);
-    cfg.setConnectionTimeout(2000);
-    cfg.setValidationTimeout(1500);
-    cfg.setInitializationFailTimeout(-1); // 不在构造期校验,避免 IT 启动阶段被 toxic 残留波及
-    return new HikariDataSource(cfg);
-  }
+    private HikariDataSource newHikariDataSource() {
+        HikariConfig cfg = new HikariConfig();
+        cfg.setJdbcUrl(pgProxiedJdbcUrl());
+        cfg.setUsername("batch_user");
+        cfg.setPassword("batch_pass_123");
+        cfg.setMaximumPoolSize(3);
+        cfg.setMinimumIdle(0);
+        cfg.setConnectionTimeout(2000);
+        cfg.setValidationTimeout(1500);
+        cfg.setInitializationFailTimeout(-1); // 不在构造期校验,避免 IT 启动阶段被 toxic 残留波及
+        return new HikariDataSource(cfg);
+    }
 
-  private static void executeSelectOne(Connection connection) throws SQLException {
-    final String select1Sql = """
+    private static void executeSelectOne(Connection connection) throws SQLException {
+        final String select1Sql = """
         SELECT 1
     """;
 
-    try (Statement statement = connection.createStatement()) {
-      statement.executeQuery(select1Sql).close();
+        try (Statement statement = connection.createStatement()) {
+            statement.executeQuery(select1Sql).close();
+        }
     }
-  }
 }

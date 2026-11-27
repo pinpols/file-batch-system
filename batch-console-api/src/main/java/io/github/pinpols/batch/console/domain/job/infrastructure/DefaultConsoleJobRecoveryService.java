@@ -45,380 +45,359 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryService {
 
-  /**
-   * 补偿类型，与 CompensationCommandRequest.compensationType 的 @Size(max = 64) 一致
-   * （取值为固定枚举，落库列 compensation_command.compensation_type 为 VARCHAR(32)，V13）。
-   */
-  private static final int COMPENSATION_TYPE_MAX_LENGTH = 64;
+    /**
+     * 补偿类型，与 CompensationCommandRequest.compensationType 的 @Size(max = 64) 一致
+     * （取值为固定枚举，落库列 compensation_command.compensation_type 为 VARCHAR(32)，V13）。
+     */
+    private static final int COMPENSATION_TYPE_MAX_LENGTH = 64;
 
-  /** 目标实例号，对应 job_instance.instance_no VARCHAR(128)（V5__create_runtime_tables.sql）。 */
-  private static final int TARGET_INSTANCE_NO_MAX_LENGTH = 128;
+    /** 目标实例号，对应 job_instance.instance_no VARCHAR(128)（V5__create_runtime_tables.sql）。 */
+    private static final int TARGET_INSTANCE_NO_MAX_LENGTH = 128;
 
-  /**
-   * compensation_command.job_code VARCHAR(128)（V13__create_compensation_and_step_runtime.sql），
-   * 与 CompensationCommandRequest.jobCode 的 @Size(max = 128) 一致。
-   */
-  private static final int JOB_CODE_MAX_LENGTH = 128;
+    /**
+     * compensation_command.job_code VARCHAR(128)（V13__create_compensation_and_step_runtime.sql），
+     * 与 CompensationCommandRequest.jobCode 的 @Size(max = 128) 一致。
+     */
+    private static final int JOB_CODE_MAX_LENGTH = 128;
 
-  /**
-   * compensation_command.batch_no VARCHAR(128)（V13__create_compensation_and_step_runtime.sql）。
-   */
-  private static final int BATCH_NO_MAX_LENGTH = 128;
+    /**
+     * compensation_command.batch_no VARCHAR(128)（V13__create_compensation_and_step_runtime.sql）。
+     */
+    private static final int BATCH_NO_MAX_LENGTH = 128;
 
-  /**
-   * 文件渠道编码，对应 file_channel_config.channel_code VARCHAR(128)（V6__create_file_tables.sql）
-   * 。
-   */
-  private static final int CHANNEL_CODE_MAX_LENGTH = 128;
+    /**
+     * 文件渠道编码，对应 file_channel_config.channel_code VARCHAR(128)（V6__create_file_tables.sql）
+     * 。
+     */
+    private static final int CHANNEL_CODE_MAX_LENGTH = 128;
 
-  /**
-   * 重放/补偿原因，
-   * 与 TaskReplayRequest / PartitionReplayRequest / DeadLetterReplayRequest / WorkflowRunReplayRequest.reason 的 @Size(max = 512) 一致；
-   * 落库列 compensation_command.reason 为 VARCHAR(1024)（V13）。
-   */
-  private static final int REASON_MAX_LENGTH = 512;
+    /**
+     * 重放/补偿原因，
+     * 与 TaskReplayRequest / PartitionReplayRequest / DeadLetterReplayRequest / WorkflowRunReplayRequest.reason 的 @Size(max = 512) 一致；
+     * 落库列 compensation_command.reason 为 VARCHAR(1024)（V13）。
+     */
+    private static final int REASON_MAX_LENGTH = 512;
 
-  /**
-   * compensation_command.operator_id VARCHAR(64)（V13__create_compensation_and_step_runtime.sql），
-   * 与重放请求 operatorId 的 @Size(max = 64) 一致。
-   */
-  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+    /**
+     * compensation_command.operator_id VARCHAR(64)（V13__create_compensation_and_step_runtime.sql），
+     * 与重放请求 operatorId 的 @Size(max = 64) 一致。
+     */
+    private static final int OPERATOR_ID_MAX_LENGTH = 64;
 
-  /**
-   * 审批单号，与重放请求 approvalId 的 @Size(max = 64) 一致
-   * （落库列 compensation_command.approval_id 为 VARCHAR(128)，V13）。
-   */
-  private static final int APPROVAL_ID_MAX_LENGTH = 64;
+    /**
+     * 审批单号，与重放请求 approvalId 的 @Size(max = 64) 一致
+     * （落库列 compensation_command.approval_id 为 VARCHAR(128)，V13）。
+     */
+    private static final int APPROVAL_ID_MAX_LENGTH = 64;
 
-  /**
-   * 重放策略，与重放请求 strategy 的 @Size(max = 32) 一致
-   * （落库列 compensation_command.strategy 为 VARCHAR(64)，V13）。
-   */
-  private static final int STRATEGY_MAX_LENGTH = 32;
+    /**
+     * 重放策略，与重放请求 strategy 的 @Size(max = 32) 一致
+     * （落库列 compensation_command.strategy 为 VARCHAR(64)，V13）。
+     */
+    private static final int STRATEGY_MAX_LENGTH = 32;
 
-  /** 结果策略，与 WorkflowRunReplayRequest.resultPolicy 的 @Size(max = 64) 一致。 */
-  private static final int RESULT_POLICY_MAX_LENGTH = 64;
+    /** 结果策略，与 WorkflowRunReplayRequest.resultPolicy 的 @Size(max = 64) 一致。 */
+    private static final int RESULT_POLICY_MAX_LENGTH = 64;
 
-  /** 配置版本策略，与 WorkflowRunReplayRequest.configVersionPolicy 的 @Size(max = 64) 一致。 */
-  private static final int CONFIG_VERSION_POLICY_MAX_LENGTH = 64;
+    /** 配置版本策略，与 WorkflowRunReplayRequest.configVersionPolicy 的 @Size(max = 64) 一致。 */
+    private static final int CONFIG_VERSION_POLICY_MAX_LENGTH = 64;
 
-  /**
-   * 外部结果核实凭证引用，
-   * 与 DeadLetterReplayRequest.externalOutcomeEvidenceReference 的 @Size(max = 512) 一致。
-   */
-  private static final int EXTERNAL_OUTCOME_EVIDENCE_REFERENCE_MAX_LENGTH = 512;
+    /**
+     * 外部结果核实凭证引用，
+     * 与 DeadLetterReplayRequest.externalOutcomeEvidenceReference 的 @Size(max = 512) 一致。
+     */
+    private static final int EXTERNAL_OUTCOME_EVIDENCE_REFERENCE_MAX_LENGTH = 512;
 
-  private static final String JOB_TYPE_COMPENSATION =
-      ConsoleJobOperationsPort.JOB_TYPE_COMPENSATION;
-  private static final String ACTION_WORKFLOW_RUN_REPLAY = "WORKFLOW_RUN_REPLAY";
+    private static final String JOB_TYPE_COMPENSATION = ConsoleJobOperationsPort.JOB_TYPE_COMPENSATION;
+    private static final String ACTION_WORKFLOW_RUN_REPLAY = "WORKFLOW_RUN_REPLAY";
 
-  private final ConsoleJobOperationsPort ops;
+    private final ConsoleJobOperationsPort ops;
 
-  @Override
-  public String compensation(CompensationCommandRequest request, String idempotencyKey) {
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    boolean workflowNodeReplay = "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType());
-    if (!ops.hasText(request.getApprovalId())) {
-      if (workflowNodeReplay) {
-        boolean workflowNodeReplayRequestIsIncomplete =
-            EmptyChecks.isNull(request.getSourceWorkflowRunId())
-                || EmptyChecks.isNull(request.getSourceWorkflowNodeRunId())
-                || !ops.hasText(request.getOperationKey())
-                || !ops.hasText(request.getPreviewToken())
-                || EmptyChecks.isNotNull(request.getReplayOperationId());
-        if (workflowNodeReplayRequestIsIncomplete) {
-          throw BizException.of(
-              ResultCode.INVALID_ARGUMENT, "error.workflow.replay_preview_required");
+    @Override
+    public String compensation(CompensationCommandRequest request, String idempotencyKey) {
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        boolean workflowNodeReplay = "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType());
+        if (!ops.hasText(request.getApprovalId())) {
+            if (workflowNodeReplay) {
+                boolean workflowNodeReplayRequestIsIncomplete = EmptyChecks.isNull(request.getSourceWorkflowRunId())
+                        || EmptyChecks.isNull(request.getSourceWorkflowNodeRunId())
+                        || !ops.hasText(request.getOperationKey())
+                        || !ops.hasText(request.getPreviewToken())
+                        || EmptyChecks.isNotNull(request.getReplayOperationId());
+                if (workflowNodeReplayRequestIsIncomplete) {
+                    throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_preview_required");
+                }
+                Long replayOperationId = ops.createPendingWorkflowNodeReplay(request);
+                request.setReplayOperationId(replayOperationId);
+            }
+            String approvalIdempotencyKey = workflowNodeReplay ? request.getOperationKey() : idempotencyKey;
+            ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
+                    .approvalType(JOB_TYPE_COMPENSATION)
+                    .actionType(JOB_TYPE_COMPENSATION)
+                    .targetType(
+                            "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType()) ? "WORKFLOW_NODE" : "JOB")
+                    .targetId(String.valueOf(request.getTargetId()))
+                    .payload(request)
+                    .approvalReason(request.getReason())
+                    .idempotencyKey(approvalIdempotencyKey)
+                    .build();
+            String result = ops.submitApproval(approvalCtx);
+            ops.publishRefresh(tenantId);
+            return result;
         }
-        Long replayOperationId = ops.createPendingWorkflowNodeReplay(request);
-        request.setReplayOperationId(replayOperationId);
-      }
-      String approvalIdempotencyKey =
-          workflowNodeReplay ? request.getOperationKey() : idempotencyKey;
-      ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
-          .approvalType(JOB_TYPE_COMPENSATION)
-          .actionType(JOB_TYPE_COMPENSATION)
-          .targetType(
-              "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType())
-                  ? "WORKFLOW_NODE"
-                  : "JOB")
-          .targetId(String.valueOf(request.getTargetId()))
-          .payload(request)
-          .approvalReason(request.getReason())
-          .idempotencyKey(approvalIdempotencyKey)
-          .build();
-      String result = ops.submitApproval(approvalCtx);
-      ops.publishRefresh(tenantId);
-      return result;
+        if (workflowNodeReplay && EmptyChecks.isNull(request.getReplayOperationId())) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_preview_required");
+        }
+        ops.requireApprovedApproval(tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
+        // CPD-OFF: compensation 和 compensate 按设计将不同的请求契约规范化
+        // 为相同的领域审计载荷。
+        CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder = CompensationPayload.builder()
+                .tenantId(tenantId)
+                .compensationType(
+                        ConsoleTextSanitizer.safeInput(request.getCompensationType(), COMPENSATION_TYPE_MAX_LENGTH))
+                .targetId(request.getTargetId())
+                .targetInstanceNo(
+                        ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), TARGET_INSTANCE_NO_MAX_LENGTH))
+                .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH));
+        LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
+        CompensationPayload compensationPayload = compensationPayloadBuilder
+                .bizDate(parsedBizDate)
+                .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), BATCH_NO_MAX_LENGTH))
+                .relatedFileId(request.getRelatedFileId())
+                .channelCode(ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH))
+                .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
+                .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
+                .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
+                .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
+                .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), RESULT_POLICY_MAX_LENGTH))
+                .configVersionPolicy(ConsoleTextSanitizer.safeInput(
+                        request.getConfigVersionPolicy(), CONFIG_VERSION_POLICY_MAX_LENGTH))
+                .configVersion(request.getConfigVersion())
+                .sourceWorkflowRunId(request.getSourceWorkflowRunId())
+                .sourceWorkflowNodeRunId(request.getSourceWorkflowNodeRunId())
+                .replayOperationId(request.getReplayOperationId())
+                .build();
+        String result = ops.submitCompensation(compensationPayload, idempotencyKey);
+        ops.publishRefresh(tenantId);
+        return result;
     }
-    if (workflowNodeReplay && EmptyChecks.isNull(request.getReplayOperationId())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_preview_required");
+
+    @Override
+    public ConsoleWorkflowNodeReplayPreviewResponse previewWorkflowNodeReplay(
+            WorkflowNodeReplayPreviewRequest request) {
+        return ops.previewWorkflowNodeReplay(request);
     }
-    ops.requireApprovedApproval(tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
-    // CPD-OFF: compensation 和 compensate 按设计将不同的请求契约规范化
-    // 为相同的领域审计载荷。
-    CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder =
-        CompensationPayload.builder()
-            .tenantId(tenantId)
-            .compensationType(ConsoleTextSanitizer.safeInput(
-                request.getCompensationType(), COMPENSATION_TYPE_MAX_LENGTH))
-            .targetId(request.getTargetId())
-            .targetInstanceNo(ConsoleTextSanitizer.safeInput(
-                request.getTargetInstanceNo(), TARGET_INSTANCE_NO_MAX_LENGTH))
-            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH));
-    LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
-    CompensationPayload compensationPayload = compensationPayloadBuilder
-        .bizDate(parsedBizDate)
-        .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), BATCH_NO_MAX_LENGTH))
-        .relatedFileId(request.getRelatedFileId())
-        .channelCode(
-            ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH))
-        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
-        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
-        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
-        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
-        .resultPolicy(
-            ConsoleTextSanitizer.safeInput(request.getResultPolicy(), RESULT_POLICY_MAX_LENGTH))
-        .configVersionPolicy(ConsoleTextSanitizer.safeInput(
-            request.getConfigVersionPolicy(), CONFIG_VERSION_POLICY_MAX_LENGTH))
-        .configVersion(request.getConfigVersion())
-        .sourceWorkflowRunId(request.getSourceWorkflowRunId())
-        .sourceWorkflowNodeRunId(request.getSourceWorkflowNodeRunId())
-        .replayOperationId(request.getReplayOperationId())
-        .build();
-    String result = ops.submitCompensation(compensationPayload, idempotencyKey);
-    ops.publishRefresh(tenantId);
-    return result;
-  }
 
-  @Override
-  public ConsoleWorkflowNodeReplayPreviewResponse previewWorkflowNodeReplay(
-      WorkflowNodeReplayPreviewRequest request) {
-    return ops.previewWorkflowNodeReplay(request);
-  }
-
-  @Override
-  public ConsoleWorkflowRunReplayPreviewResponse previewWorkflowRunReplay(
-      WorkflowRunReplayRequest request) {
-    return ops.previewWorkflowRunReplay(request);
-  }
-
-  @Override
-  public ConsoleWorkflowRunReplaySubmissionResponse submitWorkflowRunReplay(
-      WorkflowRunReplayRequest request, String idempotencyKey) {
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    if (!ops.hasText(request.getOperationKey())
-        || !request.getOperationKey().equals(idempotencyKey)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.workflow.workflow_run_replay_preview_required");
+    @Override
+    public ConsoleWorkflowRunReplayPreviewResponse previewWorkflowRunReplay(WorkflowRunReplayRequest request) {
+        return ops.previewWorkflowRunReplay(request);
     }
-    Long replayOperationId = ops.createPendingWorkflowRunReplay(request);
-    ConsoleJobOperationsPort operations = ops;
-    ApprovalSubmitContext approvalContext = ApprovalSubmitContext.builder()
-        .approvalType(JOB_TYPE_COMPENSATION)
-        .actionType(ACTION_WORKFLOW_RUN_REPLAY)
-        .targetType("WORKFLOW_RUN")
-        .targetId(String.valueOf(request.getWorkflowRunId()))
-        .payload(new WorkflowRunReplayApprovalPayload(tenantId, replayOperationId))
-        .approvalReason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
-        .idempotencyKey(idempotencyKey)
-        .build();
-    String approvalNo = operations.submitApproval(approvalContext);
-    ops.publishRefresh(tenantId);
-    return new ConsoleWorkflowRunReplaySubmissionResponse(replayOperationId, approvalNo);
-  }
 
-  // CPD-ON
-
-  @Override
-  public String compensate(CompensateRequest request, String idempotencyKey) {
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    boolean workflowNodeReplay = "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType());
-    if (workflowNodeReplay && !ops.hasText(request.getApprovalId())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_approval_required");
+    @Override
+    public ConsoleWorkflowRunReplaySubmissionResponse submitWorkflowRunReplay(
+            WorkflowRunReplayRequest request, String idempotencyKey) {
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        if (!ops.hasText(request.getOperationKey())
+                || !request.getOperationKey().equals(idempotencyKey)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.workflow_run_replay_preview_required");
+        }
+        Long replayOperationId = ops.createPendingWorkflowRunReplay(request);
+        ConsoleJobOperationsPort operations = ops;
+        ApprovalSubmitContext approvalContext = ApprovalSubmitContext.builder()
+                .approvalType(JOB_TYPE_COMPENSATION)
+                .actionType(ACTION_WORKFLOW_RUN_REPLAY)
+                .targetType("WORKFLOW_RUN")
+                .targetId(String.valueOf(request.getWorkflowRunId()))
+                .payload(new WorkflowRunReplayApprovalPayload(tenantId, replayOperationId))
+                .approvalReason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
+                .idempotencyKey(idempotencyKey)
+                .build();
+        String approvalNo = operations.submitApproval(approvalContext);
+        ops.publishRefresh(tenantId);
+        return new ConsoleWorkflowRunReplaySubmissionResponse(replayOperationId, approvalNo);
     }
-    if (ops.hasText(request.getApprovalId())) {
-      ops.requireApprovedApproval(
-          tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
-    }
-    String compensationType = EmptyChecks.isNull(request.getCompensationType())
-            || EmptyChecks.isBlank(Objects.requireNonNull(request.getCompensationType()))
-        ? "JOB"
-        : request.getCompensationType();
-    CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder =
-        CompensationPayload.builder()
-            .tenantId(tenantId)
-            .compensationType(compensationType)
-            .targetId(request.getTargetId())
-            .targetInstanceNo(ConsoleTextSanitizer.safeInput(
-                request.getTargetInstanceNo(), TARGET_INSTANCE_NO_MAX_LENGTH))
-            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH));
-    LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
-    CompensationPayload compensationPayload = compensationPayloadBuilder
-        .bizDate(parsedBizDate)
-        .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), BATCH_NO_MAX_LENGTH))
-        .relatedFileId(request.getRelatedFileId())
-        .channelCode(
-            ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH))
-        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
-        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
-        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
-        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
-        .resultPolicy(
-            ConsoleTextSanitizer.safeInput(request.getResultPolicy(), RESULT_POLICY_MAX_LENGTH))
-        .configVersionPolicy(ConsoleTextSanitizer.safeInput(
-            request.getConfigVersionPolicy(), CONFIG_VERSION_POLICY_MAX_LENGTH))
-        .configVersion(request.getConfigVersion())
-        .sourceWorkflowRunId(request.getSourceWorkflowRunId())
-        .sourceWorkflowNodeRunId(request.getSourceWorkflowNodeRunId())
-        .replayOperationId(request.getReplayOperationId())
-        .build();
-    String result = ops.submitCompensation(compensationPayload, idempotencyKey);
-    ops.publishRefresh(tenantId);
-    return result;
-  }
 
-  @Override
-  public String rerun(RerunRequest request, String idempotencyKey) {
-    String compensationType = (request.getTargetId() != null
-            || (request.getTargetInstanceNo() != null
-                && !request.getTargetInstanceNo().isBlank()))
-        ? "JOB"
-        : "BATCH";
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    validateRerunPolicy(request);
-    if (ops.hasText(request.getApprovalId())) {
-      ops.requireApprovedApproval(tenantId, request.getApprovalId(), "RERUN", request);
-    }
-    CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder =
-        CompensationPayload.builder()
-            .tenantId(tenantId)
-            .compensationType(compensationType)
-            .targetId(request.getTargetId())
-            .targetInstanceNo(ConsoleTextSanitizer.safeInput(
-                request.getTargetInstanceNo(), TARGET_INSTANCE_NO_MAX_LENGTH))
-            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH));
-    LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
-    CompensationPayload compensationPayload = compensationPayloadBuilder
-        .bizDate(parsedBizDate)
-        .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), BATCH_NO_MAX_LENGTH))
-        .relatedFileId(request.getRelatedFileId())
-        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
-        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
-        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
-        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
-        .resultPolicy(
-            ConsoleTextSanitizer.safeInput(request.getResultPolicy(), RESULT_POLICY_MAX_LENGTH))
-        .configVersionPolicy(ConsoleTextSanitizer.safeInput(
-            request.getConfigVersionPolicy(), CONFIG_VERSION_POLICY_MAX_LENGTH))
-        .configVersion(request.getConfigVersion())
-        .build();
-    String result = ops.submitCompensation(compensationPayload, idempotencyKey);
-    ops.publishRefresh(tenantId);
-    return result;
-  }
+    // CPD-ON
 
-  /**
-   * 跨字段校验：USE_SPECIFIED_VERSION 必须配 configVersion；其余 policy 不带 version。 单字段合法值由
-   * RerunRequest.@Pattern / @Positive 守住。
-   */
-  private void validateRerunPolicy(RerunRequest request) {
-    if (ConfigVersionPolicy.USE_SPECIFIED_VERSION.code().equals(request.getConfigVersionPolicy())
-        && request.getConfigVersion() == null) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_required");
+    @Override
+    public String compensate(CompensateRequest request, String idempotencyKey) {
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        boolean workflowNodeReplay = "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType());
+        if (workflowNodeReplay && !ops.hasText(request.getApprovalId())) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_approval_required");
+        }
+        if (ops.hasText(request.getApprovalId())) {
+            ops.requireApprovedApproval(tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
+        }
+        String compensationType = EmptyChecks.isNull(request.getCompensationType())
+                        || EmptyChecks.isBlank(Objects.requireNonNull(request.getCompensationType()))
+                ? "JOB"
+                : request.getCompensationType();
+        CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder = CompensationPayload.builder()
+                .tenantId(tenantId)
+                .compensationType(compensationType)
+                .targetId(request.getTargetId())
+                .targetInstanceNo(
+                        ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), TARGET_INSTANCE_NO_MAX_LENGTH))
+                .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH));
+        LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
+        CompensationPayload compensationPayload = compensationPayloadBuilder
+                .bizDate(parsedBizDate)
+                .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), BATCH_NO_MAX_LENGTH))
+                .relatedFileId(request.getRelatedFileId())
+                .channelCode(ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH))
+                .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
+                .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
+                .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
+                .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
+                .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), RESULT_POLICY_MAX_LENGTH))
+                .configVersionPolicy(ConsoleTextSanitizer.safeInput(
+                        request.getConfigVersionPolicy(), CONFIG_VERSION_POLICY_MAX_LENGTH))
+                .configVersion(request.getConfigVersion())
+                .sourceWorkflowRunId(request.getSourceWorkflowRunId())
+                .sourceWorkflowNodeRunId(request.getSourceWorkflowNodeRunId())
+                .replayOperationId(request.getReplayOperationId())
+                .build();
+        String result = ops.submitCompensation(compensationPayload, idempotencyKey);
+        ops.publishRefresh(tenantId);
+        return result;
     }
-  }
 
-  @Override
-  public String replayDeadLetter(DeadLetterReplayRequest request, String idempotencyKey) {
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    if (!ops.hasText(request.getApprovalId())) {
-      ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
-          .approvalType("DLQ_REPLAY")
-          .actionType("DLQ_REPLAY")
-          .targetType("DLQ")
-          .targetId(String.valueOf(request.getDeadLetterId()))
-          .payload(request)
-          .approvalReason(request.getReason())
-          .idempotencyKey(idempotencyKey)
-          .build();
-      String result = ops.submitApproval(approvalCtx);
-      ops.publishRefresh(tenantId);
-      return result;
+    @Override
+    public String rerun(RerunRequest request, String idempotencyKey) {
+        String compensationType = (request.getTargetId() != null
+                        || (request.getTargetInstanceNo() != null
+                                && !request.getTargetInstanceNo().isBlank()))
+                ? "JOB"
+                : "BATCH";
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        validateRerunPolicy(request);
+        if (ops.hasText(request.getApprovalId())) {
+            ops.requireApprovedApproval(tenantId, request.getApprovalId(), "RERUN", request);
+        }
+        CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder = CompensationPayload.builder()
+                .tenantId(tenantId)
+                .compensationType(compensationType)
+                .targetId(request.getTargetId())
+                .targetInstanceNo(
+                        ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), TARGET_INSTANCE_NO_MAX_LENGTH))
+                .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH));
+        LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
+        CompensationPayload compensationPayload = compensationPayloadBuilder
+                .bizDate(parsedBizDate)
+                .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), BATCH_NO_MAX_LENGTH))
+                .relatedFileId(request.getRelatedFileId())
+                .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
+                .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
+                .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
+                .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
+                .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), RESULT_POLICY_MAX_LENGTH))
+                .configVersionPolicy(ConsoleTextSanitizer.safeInput(
+                        request.getConfigVersionPolicy(), CONFIG_VERSION_POLICY_MAX_LENGTH))
+                .configVersion(request.getConfigVersion())
+                .build();
+        String result = ops.submitCompensation(compensationPayload, idempotencyKey);
+        ops.publishRefresh(tenantId);
+        return result;
     }
-    ops.requireApprovedApproval(tenantId, request.getApprovalId(), "DLQ_REPLAY", request);
-    ConsoleJobOperationsPort operations = ops;
-    CompensationPayload payload = CompensationPayload.builder()
-        .tenantId(tenantId)
-        .compensationType("DLQ")
-        .targetId(request.getDeadLetterId())
-        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
-        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
-        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
-        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
-        .externalActionVerifiedNotExecuted(request.getExternalActionVerifiedNotExecuted())
-        .externalOutcomeEvidenceReference(ConsoleTextSanitizer.safeInput(
-            request.getExternalOutcomeEvidenceReference(),
-            EXTERNAL_OUTCOME_EVIDENCE_REFERENCE_MAX_LENGTH))
-        .build();
-    String result = operations.submitCompensation(payload, idempotencyKey);
-    ops.publishRefresh(tenantId);
-    return result;
-  }
 
-  @Override
-  public String replayTask(TaskReplayRequest request, String idempotencyKey) {
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    if (!ops.hasText(request.getApprovalId())) {
-      ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
-          .approvalType(JOB_TYPE_COMPENSATION)
-          .actionType("RETRY")
-          .targetType("JOB_TASK")
-          .targetId(String.valueOf(request.getTaskId()))
-          .payload(request)
-          .approvalReason(request.getReason())
-          .idempotencyKey(idempotencyKey)
-          .build();
-      String result = ops.submitApproval(approvalCtx);
-      ops.publishRefresh(tenantId);
-      return result;
+    /**
+     * 跨字段校验：USE_SPECIFIED_VERSION 必须配 configVersion；其余 policy 不带 version。 单字段合法值由
+     * RerunRequest.@Pattern / @Positive 守住。
+     */
+    private void validateRerunPolicy(RerunRequest request) {
+        if (ConfigVersionPolicy.USE_SPECIFIED_VERSION.code().equals(request.getConfigVersionPolicy())
+                && request.getConfigVersion() == null) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_required");
+        }
     }
-    ops.requireApprovedApproval(tenantId, request.getApprovalId(), "RETRY", request);
-    String result = ops.triggerRecovery(
-        tenantId,
-        "/internal/recoveries/tasks/{taskId}/replay",
-        request.getTaskId(),
-        idempotencyKey);
-    ops.publishRefresh(tenantId);
-    return result;
-  }
 
-  @Override
-  public String replayPartition(PartitionReplayRequest request, String idempotencyKey) {
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    if (!ops.hasText(request.getApprovalId())) {
-      ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
-          .approvalType(JOB_TYPE_COMPENSATION)
-          .actionType("RETRY")
-          .targetType("JOB_PARTITION")
-          .targetId(String.valueOf(request.getPartitionId()))
-          .payload(request)
-          .approvalReason(request.getReason())
-          .idempotencyKey(idempotencyKey)
-          .build();
-      String result = ops.submitApproval(approvalCtx);
-      ops.publishRefresh(tenantId);
-      return result;
+    @Override
+    public String replayDeadLetter(DeadLetterReplayRequest request, String idempotencyKey) {
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        if (!ops.hasText(request.getApprovalId())) {
+            ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
+                    .approvalType("DLQ_REPLAY")
+                    .actionType("DLQ_REPLAY")
+                    .targetType("DLQ")
+                    .targetId(String.valueOf(request.getDeadLetterId()))
+                    .payload(request)
+                    .approvalReason(request.getReason())
+                    .idempotencyKey(idempotencyKey)
+                    .build();
+            String result = ops.submitApproval(approvalCtx);
+            ops.publishRefresh(tenantId);
+            return result;
+        }
+        ops.requireApprovedApproval(tenantId, request.getApprovalId(), "DLQ_REPLAY", request);
+        ConsoleJobOperationsPort operations = ops;
+        CompensationPayload payload = CompensationPayload.builder()
+                .tenantId(tenantId)
+                .compensationType("DLQ")
+                .targetId(request.getDeadLetterId())
+                .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
+                .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
+                .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
+                .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
+                .externalActionVerifiedNotExecuted(request.getExternalActionVerifiedNotExecuted())
+                .externalOutcomeEvidenceReference(ConsoleTextSanitizer.safeInput(
+                        request.getExternalOutcomeEvidenceReference(), EXTERNAL_OUTCOME_EVIDENCE_REFERENCE_MAX_LENGTH))
+                .build();
+        String result = operations.submitCompensation(payload, idempotencyKey);
+        ops.publishRefresh(tenantId);
+        return result;
     }
-    ops.requireApprovedApproval(tenantId, request.getApprovalId(), "RETRY", request);
-    String result = ops.triggerRecovery(
-        tenantId,
-        "/internal/recoveries/partitions/{partitionId}/replay",
-        request.getPartitionId(),
-        idempotencyKey);
-    ops.publishRefresh(tenantId);
-    return result;
-  }
 
-  private record WorkflowRunReplayApprovalPayload(String tenantId, Long replayOperationId) {}
+    @Override
+    public String replayTask(TaskReplayRequest request, String idempotencyKey) {
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        if (!ops.hasText(request.getApprovalId())) {
+            ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
+                    .approvalType(JOB_TYPE_COMPENSATION)
+                    .actionType("RETRY")
+                    .targetType("JOB_TASK")
+                    .targetId(String.valueOf(request.getTaskId()))
+                    .payload(request)
+                    .approvalReason(request.getReason())
+                    .idempotencyKey(idempotencyKey)
+                    .build();
+            String result = ops.submitApproval(approvalCtx);
+            ops.publishRefresh(tenantId);
+            return result;
+        }
+        ops.requireApprovedApproval(tenantId, request.getApprovalId(), "RETRY", request);
+        String result = ops.triggerRecovery(
+                tenantId, "/internal/recoveries/tasks/{taskId}/replay", request.getTaskId(), idempotencyKey);
+        ops.publishRefresh(tenantId);
+        return result;
+    }
+
+    @Override
+    public String replayPartition(PartitionReplayRequest request, String idempotencyKey) {
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        if (!ops.hasText(request.getApprovalId())) {
+            ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
+                    .approvalType(JOB_TYPE_COMPENSATION)
+                    .actionType("RETRY")
+                    .targetType("JOB_PARTITION")
+                    .targetId(String.valueOf(request.getPartitionId()))
+                    .payload(request)
+                    .approvalReason(request.getReason())
+                    .idempotencyKey(idempotencyKey)
+                    .build();
+            String result = ops.submitApproval(approvalCtx);
+            ops.publishRefresh(tenantId);
+            return result;
+        }
+        ops.requireApprovedApproval(tenantId, request.getApprovalId(), "RETRY", request);
+        String result = ops.triggerRecovery(
+                tenantId,
+                "/internal/recoveries/partitions/{partitionId}/replay",
+                request.getPartitionId(),
+                idempotencyKey);
+        ops.publishRefresh(tenantId);
+        return result;
+    }
+
+    private record WorkflowRunReplayApprovalPayload(String tenantId, Long replayOperationId) {}
 }

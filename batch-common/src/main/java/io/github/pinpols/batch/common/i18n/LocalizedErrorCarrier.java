@@ -23,17 +23,17 @@ package io.github.pinpols.batch.common.i18n;
  */
 public interface LocalizedErrorCarrier {
 
-  /** 写入时已渲染好的字符串(老 literal / 第三方异常 / fallback 用)。 */
-  String getErrorMessage();
+    /** 写入时已渲染好的字符串(老 literal / 第三方异常 / fallback 用)。 */
+    String getErrorMessage();
 
-  /** i18n message key;非 null 表示读路径应按当前 Locale 重渲染。 */
-  String getErrorKey();
+    /** i18n message key;非 null 表示读路径应按当前 Locale 重渲染。 */
+    String getErrorKey();
 
-  /** i18n 占位符参数 JSON 数组(与 messages.properties 中 {0}/{1}/... 顺序对应)。 */
-  String getErrorArgs();
+    /** i18n 占位符参数 JSON 数组(与 messages.properties 中 {0}/{1}/... 顺序对应)。 */
+    String getErrorArgs();
 
-  /** 聚合成内存 record 形式,便于函数式传递与单元测试 mock。 */
-  default LocalizedError toLocalizedError() {
-    return new LocalizedError(getErrorKey(), getErrorArgs(), getErrorMessage());
-  }
+    /** 聚合成内存 record 形式,便于函数式传递与单元测试 mock。 */
+    default LocalizedError toLocalizedError() {
+        return new LocalizedError(getErrorKey(), getErrorArgs(), getErrorMessage());
+    }
 }

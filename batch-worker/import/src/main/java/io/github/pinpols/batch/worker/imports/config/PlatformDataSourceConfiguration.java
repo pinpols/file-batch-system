@@ -23,41 +23,40 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 @RequiredArgsConstructor
 public class PlatformDataSourceConfiguration {
 
-  private final BatchPgSessionProperties pgSessionProperties;
-  private final Environment environment;
+    private final BatchPgSessionProperties pgSessionProperties;
+    private final Environment environment;
 
-  @Bean(name = "importPlatformHikariConfig")
-  @ConfigurationProperties("spring.datasource.hikari")
-  public HikariConfig importPlatformHikariConfig() {
-    return new HikariConfig();
-  }
+    @Bean(name = "importPlatformHikariConfig")
+    @ConfigurationProperties("spring.datasource.hikari")
+    public HikariConfig importPlatformHikariConfig() {
+        return new HikariConfig();
+    }
 
-  @Bean(name = "importPlatformDataSource")
-  @Primary
-  public DataSource importPlatformDataSource(
-      DataSourceProperties properties,
-      @Qualifier("importPlatformHikariConfig") HikariConfig hikariConfig) {
-    return WorkerDataSourceSupport.buildPlatformDataSource(
-        properties, hikariConfig, pgSessionProperties, environment, "batch-worker-import");
-  }
+    @Bean(name = "importPlatformDataSource")
+    @Primary
+    public DataSource importPlatformDataSource(
+            DataSourceProperties properties, @Qualifier("importPlatformHikariConfig") HikariConfig hikariConfig) {
+        return WorkerDataSourceSupport.buildPlatformDataSource(
+                properties, hikariConfig, pgSessionProperties, environment, "batch-worker-import");
+    }
 
-  @Bean(name = "importPlatformSqlSessionFactory")
-  public SqlSessionFactory importPlatformSqlSessionFactory(
-      @Qualifier("importPlatformDataSource") DataSource dataSource) throws Exception {
-    return WorkerDataSourceSupport.buildPlatformSqlSessionFactory(dataSource);
-  }
+    @Bean(name = "importPlatformSqlSessionFactory")
+    public SqlSessionFactory importPlatformSqlSessionFactory(
+            @Qualifier("importPlatformDataSource") DataSource dataSource) throws Exception {
+        return WorkerDataSourceSupport.buildPlatformSqlSessionFactory(dataSource);
+    }
 
-  @Bean(name = "importPlatformSqlSessionTemplate")
-  public SqlSessionTemplate importPlatformSqlSessionTemplate(
-      @Qualifier("importPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
-    return new SqlSessionTemplate(sqlSessionFactory);
-  }
+    @Bean(name = "importPlatformSqlSessionTemplate")
+    public SqlSessionTemplate importPlatformSqlSessionTemplate(
+            @Qualifier("importPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
+        return new SqlSessionTemplate(sqlSessionFactory);
+    }
 
-  /** 平台事务与业务库、SQLite 回报发件箱事务分别绑定各自的数据源。 */
-  @Bean(name = "transactionManager")
-  @Primary
-  public DataSourceTransactionManager transactionManager(
-      @Qualifier("importPlatformDataSource") DataSource dataSource) {
-    return WorkerDataSourceSupport.buildTransactionManager(dataSource);
-  }
+    /** 平台事务与业务库、SQLite 回报发件箱事务分别绑定各自的数据源。 */
+    @Bean(name = "transactionManager")
+    @Primary
+    public DataSourceTransactionManager transactionManager(
+            @Qualifier("importPlatformDataSource") DataSource dataSource) {
+        return WorkerDataSourceSupport.buildTransactionManager(dataSource);
+    }
 }

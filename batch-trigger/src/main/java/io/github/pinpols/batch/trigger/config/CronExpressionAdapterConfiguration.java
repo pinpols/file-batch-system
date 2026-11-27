@@ -8,8 +8,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class CronExpressionAdapterConfiguration {
 
-  @Bean
-  public CronExpressionAdapter cronExpressionAdapter() {
-    return new CronExpressionAdapter();
-  }
+    @Bean
+    public CronExpressionAdapter cronExpressionAdapter() {
+        return new CronExpressionAdapter();
+    }
 }

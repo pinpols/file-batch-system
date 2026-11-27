@@ -6,37 +6,37 @@ import java.util.Map;
 /** SDK 保持 Spring-free 时使用的最小空值判断，避免引入平台服务端公共依赖。 */
 public final class EmptyChecks {
 
-  private EmptyChecks() {}
+    private EmptyChecks() {}
 
-  public static boolean isNull(Object value) {
-    return value == null;
-  }
+    public static boolean isNull(Object value) {
+        return value == null;
+    }
 
-  public static boolean isNotNull(Object value) {
-    return value != null;
-  }
+    public static boolean isNotNull(Object value) {
+        return value != null;
+    }
 
-  public static boolean isEmpty(CharSequence value) {
-    return value == null || value.length() == 0;
-  }
+    public static boolean isEmpty(CharSequence value) {
+        return value == null || value.length() == 0;
+    }
 
-  public static boolean isNotBlank(String value) {
-    return !isBlank(value);
-  }
+    public static boolean isNotBlank(String value) {
+        return !isBlank(value);
+    }
 
-  public static boolean isEmpty(Map<?, ?> value) {
-    return value == null || value.isEmpty();
-  }
+    public static boolean isEmpty(Map<?, ?> value) {
+        return value == null || value.isEmpty();
+    }
 
-  public static boolean isEmpty(Collection<?> value) {
-    return value == null || value.isEmpty();
-  }
+    public static boolean isEmpty(Collection<?> value) {
+        return value == null || value.isEmpty();
+    }
 
-  public static boolean isBlank(String value) {
-    return value == null || value.isBlank();
-  }
+    public static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
 
-  public static boolean isEmpty(byte[] value) {
-    return value == null || value.length == 0;
-  }
+    public static boolean isEmpty(byte[] value) {
+        return value == null || value.length == 0;
+    }
 }

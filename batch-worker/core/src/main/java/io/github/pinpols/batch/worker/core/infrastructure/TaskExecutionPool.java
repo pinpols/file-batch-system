@@ -30,99 +30,95 @@ import org.springframework.stereotype.Component;
 @Component
 public class TaskExecutionPool {
 
-  private final WorkerExecutionTimeoutProperties properties;
-  private final WorkerConcurrencyProperties concurrencyProperties;
-  private ThreadPoolExecutor delegate;
+    private final WorkerExecutionTimeoutProperties properties;
+    private final WorkerConcurrencyProperties concurrencyProperties;
+    private ThreadPoolExecutor delegate;
 
-  public TaskExecutionPool(
-      WorkerExecutionTimeoutProperties properties,
-      WorkerConcurrencyProperties concurrencyProperties) {
-    this.properties = properties;
-    this.concurrencyProperties = concurrencyProperties;
-  }
-
-  @PostConstruct
-  void start() {
-    int size = Math.max(1, properties.getPoolSize());
-    int maxConcurrentTasks = concurrencyProperties.getMaxConcurrentTasks();
-    if (maxConcurrentTasks <= 0) {
-      throw new IllegalStateException(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
-          + " must be positive, got "
-          + maxConcurrentTasks);
+    public TaskExecutionPool(
+            WorkerExecutionTimeoutProperties properties, WorkerConcurrencyProperties concurrencyProperties) {
+        this.properties = properties;
+        this.concurrencyProperties = concurrencyProperties;
     }
-    if (size < maxConcurrentTasks) {
-      throw new IllegalStateException("batch.worker.execution.pool-size must be >= "
-          + WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
-          + " (poolSize="
-          + size
-          + ", maxConcurrentTasks="
-          + maxConcurrentTasks
-          + ")");
-    }
-    AtomicLong threadIndex = new AtomicLong();
-    // 最多保留一批等待任务；失联插件占满线程时显式拒绝，不能无限堆积。
-    this.delegate = new ThreadPoolExecutor(
-        size, size, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(size), runnable -> {
-          Thread thread = new Thread(runnable);
-          long threadNumber = threadIndex.incrementAndGet();
-          String threadName = "worker-task-exec-" + threadNumber;
-          thread.setName(threadName);
-          thread.setDaemon(properties.isDaemonThreads());
-          return thread;
-        });
-    log.info(
-        "TaskExecutionPool started: poolSize={}, daemonThreads={}",
-        size,
-        properties.isDaemonThreads());
-  }
 
-  public <T> Future<T> submit(Callable<T> task) {
-    ThreadPoolExecutor executor = delegate;
-    FutureTask<T> future = new FutureTask<>(task) {
-      @Override
-      protected void done() {
-        // 取消尚未执行的任务时立即释放排队位置，不等待被卡住的工作线程取走它。
-        if (isCancelled()) {
-          executor.remove(this);
+    @PostConstruct
+    void start() {
+        int size = Math.max(1, properties.getPoolSize());
+        int maxConcurrentTasks = concurrencyProperties.getMaxConcurrentTasks();
+        if (maxConcurrentTasks <= 0) {
+            throw new IllegalStateException(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
+                    + " must be positive, got "
+                    + maxConcurrentTasks);
         }
-      }
-    };
-    executor.execute(future);
-    return future;
-  }
-
-  private void shutdownNowAndCancelQueuedTasks() {
-    List<Runnable> queuedTasks = delegate.shutdownNow();
-    // shutdownNow只移出队列，不会终结Future；等待方必须立即获知任务未执行且已取消。
-    for (Runnable queuedTask : queuedTasks) {
-      if (queuedTask instanceof Future<?> future) {
-        future.cancel(false);
-      }
-    }
-  }
-
-  @PreDestroy
-  void shutdown() {
-    if (delegate == null) {
-      return;
-    }
-    log.info("TaskExecutionPool shutting down");
-    delegate.shutdown();
-    try {
-      // graceful 等执行中 task 结束 (drain 时 listener 已停, 池里只剩残留)
-      long graceSeconds = Math.max(1L, properties.getShutdownGraceSeconds());
-      if (!delegate.awaitTermination(graceSeconds, TimeUnit.SECONDS)) {
-        log.warn("TaskExecutionPool forced shutdown after {}s wait", graceSeconds);
-        shutdownNowAndCancelQueuedTasks();
-        if (!delegate.awaitTermination(graceSeconds, TimeUnit.SECONDS)) {
-          log.warn("TaskExecutionPool did not terminate after forced shutdown");
+        if (size < maxConcurrentTasks) {
+            throw new IllegalStateException("batch.worker.execution.pool-size must be >= "
+                    + WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
+                    + " (poolSize="
+                    + size
+                    + ", maxConcurrentTasks="
+                    + maxConcurrentTasks
+                    + ")");
         }
-      }
-    } catch (InterruptedException ex) {
-      SwallowedExceptionLogger.info(TaskExecutionPool.class, "catch:InterruptedException", ex);
-
-      Thread.currentThread().interrupt();
-      shutdownNowAndCancelQueuedTasks();
+        AtomicLong threadIndex = new AtomicLong();
+        // 最多保留一批等待任务；失联插件占满线程时显式拒绝，不能无限堆积。
+        this.delegate = new ThreadPoolExecutor(
+                size, size, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(size), runnable -> {
+                    Thread thread = new Thread(runnable);
+                    long threadNumber = threadIndex.incrementAndGet();
+                    String threadName = "worker-task-exec-" + threadNumber;
+                    thread.setName(threadName);
+                    thread.setDaemon(properties.isDaemonThreads());
+                    return thread;
+                });
+        log.info("TaskExecutionPool started: poolSize={}, daemonThreads={}", size, properties.isDaemonThreads());
     }
-  }
+
+    public <T> Future<T> submit(Callable<T> task) {
+        ThreadPoolExecutor executor = delegate;
+        FutureTask<T> future = new FutureTask<>(task) {
+            @Override
+            protected void done() {
+                // 取消尚未执行的任务时立即释放排队位置，不等待被卡住的工作线程取走它。
+                if (isCancelled()) {
+                    executor.remove(this);
+                }
+            }
+        };
+        executor.execute(future);
+        return future;
+    }
+
+    private void shutdownNowAndCancelQueuedTasks() {
+        List<Runnable> queuedTasks = delegate.shutdownNow();
+        // shutdownNow只移出队列，不会终结Future；等待方必须立即获知任务未执行且已取消。
+        for (Runnable queuedTask : queuedTasks) {
+            if (queuedTask instanceof Future<?> future) {
+                future.cancel(false);
+            }
+        }
+    }
+
+    @PreDestroy
+    void shutdown() {
+        if (delegate == null) {
+            return;
+        }
+        log.info("TaskExecutionPool shutting down");
+        delegate.shutdown();
+        try {
+            // graceful 等执行中 task 结束 (drain 时 listener 已停, 池里只剩残留)
+            long graceSeconds = Math.max(1L, properties.getShutdownGraceSeconds());
+            if (!delegate.awaitTermination(graceSeconds, TimeUnit.SECONDS)) {
+                log.warn("TaskExecutionPool forced shutdown after {}s wait", graceSeconds);
+                shutdownNowAndCancelQueuedTasks();
+                if (!delegate.awaitTermination(graceSeconds, TimeUnit.SECONDS)) {
+                    log.warn("TaskExecutionPool did not terminate after forced shutdown");
+                }
+            }
+        } catch (InterruptedException ex) {
+            SwallowedExceptionLogger.info(TaskExecutionPool.class, "catch:InterruptedException", ex);
+
+            Thread.currentThread().interrupt();
+            shutdownNowAndCancelQueuedTasks();
+        }
+    }
 }

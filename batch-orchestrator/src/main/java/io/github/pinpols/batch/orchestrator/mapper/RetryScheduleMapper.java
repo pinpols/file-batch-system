@@ -9,44 +9,44 @@ import org.apache.ibatis.annotations.Param;
 
 public interface RetryScheduleMapper {
 
-  int insert(RetryScheduleEntity entity);
+    int insert(RetryScheduleEntity entity);
 
-  RetryScheduleEntity selectById(@Param("id") Long id);
+    RetryScheduleEntity selectById(@Param("id") Long id);
 
-  List<RetryScheduleEntity> selectByQuery(RetryScheduleQuery query);
+    List<RetryScheduleEntity> selectByQuery(RetryScheduleQuery query);
 
-  /** 到期扫描排除暂停目标；事务内仍需重新校验当前状态。 */
-  List<RetryScheduleEntity> selectDueNotPaused(RetryScheduleQuery query);
+    /** 到期扫描排除暂停目标；事务内仍需重新校验当前状态。 */
+    List<RetryScheduleEntity> selectDueNotPaused(RetryScheduleQuery query);
 
-  int markRunning(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("fromStatus") String fromStatus,
-      @Param("runningStatus") String runningStatus);
+    int markRunning(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("fromStatus") String fromStatus,
+            @Param("runningStatus") String runningStatus);
 
-  int markSuccess(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("fromStatus") String fromStatus,
-      @Param("successStatus") String successStatus);
+    int markSuccess(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("fromStatus") String fromStatus,
+            @Param("successStatus") String successStatus);
 
-  int markFailed(@Param("p") MarkFailedParam p);
+    int markFailed(@Param("p") MarkFailedParam p);
 
-  int resetToWaiting(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("fromStatus") String fromStatus,
-      @Param("waitingStatus") String waitingStatus);
+    int resetToWaiting(
+            @Param("tenantId") String tenantId,
+            @Param("id") Long id,
+            @Param("fromStatus") String fromStatus,
+            @Param("waitingStatus") String waitingStatus);
 
-  @Builder
-  record MarkFailedParam(
-      String tenantId,
-      Long id,
-      String fromStatus,
-      String retryStatus,
-      String lastErrorCode,
-      String lastErrorMessage,
-      String lastErrorKey,
-      String lastErrorArgs,
-      Instant nextRetryAt) {}
+    @Builder
+    record MarkFailedParam(
+            String tenantId,
+            Long id,
+            String fromStatus,
+            String retryStatus,
+            String lastErrorCode,
+            String lastErrorMessage,
+            String lastErrorKey,
+            String lastErrorArgs,
+            Instant nextRetryAt) {}
 }

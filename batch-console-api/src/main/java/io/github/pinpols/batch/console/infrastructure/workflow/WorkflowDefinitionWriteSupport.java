@@ -38,159 +38,151 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor(access = AccessLevel.PUBLIC)
 public final class WorkflowDefinitionWriteSupport {
 
-  private static final TypeReference<List<WorkflowNodeEntity>> NODE_LIST_TYPE =
-      new TypeReference<>() {};
-  private static final TypeReference<List<WorkflowEdgeEntity>> EDGE_LIST_TYPE =
-      new TypeReference<>() {};
+    private static final TypeReference<List<WorkflowNodeEntity>> NODE_LIST_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<WorkflowEdgeEntity>> EDGE_LIST_TYPE = new TypeReference<>() {};
 
-  private final WorkflowNodeMapper nodeMapper;
-  private final WorkflowEdgeMapper edgeMapper;
-  private final WorkflowDefinitionVersionMapper versionMapper;
-  private final ObjectMapper objectMapper;
+    private final WorkflowNodeMapper nodeMapper;
+    private final WorkflowEdgeMapper edgeMapper;
+    private final WorkflowDefinitionVersionMapper versionMapper;
+    private final ObjectMapper objectMapper;
 
-  public void upsertNodesAndEdges(
-      String tenantId, Long definitionId, WorkflowDefinitionSaveRequest request) {
-    upsertNodesAndEdges(tenantId, definitionId, request, Map.of());
-  }
+    public void upsertNodesAndEdges(String tenantId, Long definitionId, WorkflowDefinitionSaveRequest request) {
+        upsertNodesAndEdges(tenantId, definitionId, request, Map.of());
+    }
 
-  public Map<String, String> readNodeParams(String tenantId, Long definitionId) {
-    WorkflowNodeQuery query = WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null);
-    List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(query);
-    return nodes.stream()
-        .filter(node -> EmptyChecks.isNotNull(node.getNodeParams()))
-        .collect(Collectors.toMap(
-            WorkflowNodeEntity::getNodeCode,
-            WorkflowNodeEntity::getNodeParams,
-            (first, ignored) -> first));
-  }
+    public Map<String, String> readNodeParams(String tenantId, Long definitionId) {
+        WorkflowNodeQuery query = WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null);
+        List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(query);
+        return nodes.stream()
+                .filter(node -> EmptyChecks.isNotNull(node.getNodeParams()))
+                .collect(Collectors.toMap(
+                        WorkflowNodeEntity::getNodeCode, WorkflowNodeEntity::getNodeParams, (first, ignored) -> first));
+    }
 
-  public void upsertNodesAndEdges(
-      String tenantId,
-      Long definitionId,
-      WorkflowDefinitionSaveRequest request,
-      Map<String, String> existingNodeParams) {
-    if (request.getNodes() != null) {
-      for (WorkflowDefinitionSaveRequest.NodeItem node : request.getNodes()) {
-        WorkflowNodeUpsertParam param = new WorkflowNodeUpsertParam();
+    public void upsertNodesAndEdges(
+            String tenantId,
+            Long definitionId,
+            WorkflowDefinitionSaveRequest request,
+            Map<String, String> existingNodeParams) {
+        if (request.getNodes() != null) {
+            for (WorkflowDefinitionSaveRequest.NodeItem node : request.getNodes()) {
+                WorkflowNodeUpsertParam param = new WorkflowNodeUpsertParam();
+                param.setTenantId(tenantId);
+                param.setWorkflowDefinitionId(definitionId);
+                param.setNodeCode(node.getNodeCode());
+                param.setNodeName(node.getNodeName());
+                param.setNodeType(node.getNodeType());
+                param.setRelatedJobCode(node.getRelatedJobCode());
+                param.setWorkerGroup(node.getWorkerGroup());
+                param.setWindowCode(node.getWindowCode());
+                param.setNodeOrder(node.getNodeOrder());
+                param.setRetryPolicy(node.getRetryPolicy());
+                param.setRetryMaxCount(node.getRetryMaxCount());
+                param.setTimeoutSeconds(node.getTimeoutSeconds());
+                String submittedNodeParams = node.getNodeParams();
+                String storedNodeParams = existingNodeParams.get(node.getNodeCode());
+                String resolvedNodeParams = resolveNodeParams(submittedNodeParams, storedNodeParams);
+                FileArrivalChannelNodeValidation.validate(node.getNodeType(), resolvedNodeParams);
+                param.setNodeParams(resolvedNodeParams);
+                param.setCrossDayDependencies(node.getCrossDayDependencies());
+                param.setCrossDayDependencyTimeoutSeconds(node.getCrossDayDependencyTimeoutSeconds());
+                param.setEnabled(node.getEnabled());
+                nodeMapper.upsertWorkflowNode(param);
+            }
+        }
+        if (request.getEdges() != null) {
+            for (WorkflowDefinitionSaveRequest.EdgeItem edge : request.getEdges()) {
+                WorkflowEdgeUpsertParam param = new WorkflowEdgeUpsertParam();
+                param.setTenantId(tenantId);
+                param.setWorkflowDefinitionId(definitionId);
+                param.setFromNodeCode(edge.getFromNodeCode());
+                param.setToNodeCode(edge.getToNodeCode());
+                param.setEdgeType(edge.getEdgeType());
+                param.setConditionExpr(edge.getConditionExpr());
+                param.setEnabled(edge.getEnabled());
+                edgeMapper.upsertWorkflowEdge(param);
+            }
+        }
+    }
+
+    private static String resolveNodeParams(String submitted, String stored) {
+        if (!Texts.hasText(submitted)) {
+            return submitted;
+        }
+        String resolved = EmptyChecks.isNull(stored) ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
+        if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");
+        }
+        return resolved;
+    }
+
+    public void appendVersionSnapshot(WorkflowVersionSnapshotCommand command) {
+        String tenantId = command.tenantId();
+        Long definitionId = command.definitionId();
+        String workflowCode = command.workflowCode();
+        Integer version = command.version();
+        WorkflowDefinitionSaveRequest body = command.body();
+        Boolean scheduleEnabled = command.scheduleEnabled();
+        String savedBy = command.savedBy();
+        WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null);
+        List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(nodeQuery);
+        WorkflowEdgeQuery edgeQuery = WorkflowEdgeQuery.ofDefinition(tenantId, definitionId, null);
+        List<WorkflowEdgeEntity> edges = edgeMapper.selectByQuery(edgeQuery);
+        WorkflowDefinitionVersionInsertParam param = new WorkflowDefinitionVersionInsertParam();
         param.setTenantId(tenantId);
         param.setWorkflowDefinitionId(definitionId);
-        param.setNodeCode(node.getNodeCode());
-        param.setNodeName(node.getNodeName());
-        param.setNodeType(node.getNodeType());
-        param.setRelatedJobCode(node.getRelatedJobCode());
-        param.setWorkerGroup(node.getWorkerGroup());
-        param.setWindowCode(node.getWindowCode());
-        param.setNodeOrder(node.getNodeOrder());
-        param.setRetryPolicy(node.getRetryPolicy());
-        param.setRetryMaxCount(node.getRetryMaxCount());
-        param.setTimeoutSeconds(node.getTimeoutSeconds());
-        String submittedNodeParams = node.getNodeParams();
-        String storedNodeParams = existingNodeParams.get(node.getNodeCode());
-        String resolvedNodeParams = resolveNodeParams(submittedNodeParams, storedNodeParams);
-        FileArrivalChannelNodeValidation.validate(node.getNodeType(), resolvedNodeParams);
-        param.setNodeParams(resolvedNodeParams);
-        param.setCrossDayDependencies(node.getCrossDayDependencies());
-        param.setCrossDayDependencyTimeoutSeconds(node.getCrossDayDependencyTimeoutSeconds());
-        param.setEnabled(node.getEnabled());
-        nodeMapper.upsertWorkflowNode(param);
-      }
+        param.setWorkflowCode(workflowCode);
+        param.setVersion(version);
+        param.setWorkflowName(body.getWorkflowName());
+        param.setWorkflowType(body.getWorkflowType());
+        param.setEnabled(body.getEnabled());
+        param.setScheduleEnabled(scheduleEnabled);
+        param.setScheduleType(body.getScheduleType());
+        param.setScheduleExpr(body.getScheduleExpr());
+        param.setTimezone(body.getTimezone());
+        param.setTriggerMode(body.getTriggerMode());
+        param.setCalendarCode(body.getCalendarCode());
+        param.setDependsOnJobCode(body.getDependsOnJobCode());
+        try {
+            param.setNodesJson(objectMapper.writeValueAsString(nodes));
+            param.setEdgesJson(objectMapper.writeValueAsString(edges));
+        } catch (JsonProcessingException exception) {
+            // 主路径已持久化成功；序列化失败必须让事务回滚，避免主表和历史表分裂。
+            throw BizException.of(
+                    ResultCode.SYSTEM_ERROR,
+                    "error.workflow.version_snapshot.serialize_failed",
+                    exception.getMessage());
+        }
+        param.setSavedBy(savedBy);
+        // summary 暂留 null，前端尚未提交该字段。
+        versionMapper.insertVersionSnapshot(param);
     }
-    if (request.getEdges() != null) {
-      for (WorkflowDefinitionSaveRequest.EdgeItem edge : request.getEdges()) {
-        WorkflowEdgeUpsertParam param = new WorkflowEdgeUpsertParam();
-        param.setTenantId(tenantId);
-        param.setWorkflowDefinitionId(definitionId);
-        param.setFromNodeCode(edge.getFromNodeCode());
-        param.setToNodeCode(edge.getToNodeCode());
-        param.setEdgeType(edge.getEdgeType());
-        param.setConditionExpr(edge.getConditionExpr());
-        param.setEnabled(edge.getEnabled());
-        edgeMapper.upsertWorkflowEdge(param);
-      }
-    }
-  }
 
-  private static String resolveNodeParams(String submitted, String stored) {
-    if (!Texts.hasText(submitted)) {
-      return submitted;
+    public List<WorkflowNodeEntity> readNodesJson(String json) {
+        if (EmptyChecks.isBlank(json)) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, NODE_LIST_TYPE);
+        } catch (JsonProcessingException exception) {
+            throw BizException.of(
+                    ResultCode.SYSTEM_ERROR,
+                    "error.workflow.version_snapshot.deserialize_failed",
+                    exception.getMessage());
+        }
     }
-    String resolved = EmptyChecks.isNull(stored)
-        ? submitted
-        : SecretMasking.preserveMaskedJson(submitted, stored);
-    if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");
-    }
-    return resolved;
-  }
 
-  public void appendVersionSnapshot(WorkflowVersionSnapshotCommand command) {
-    String tenantId = command.tenantId();
-    Long definitionId = command.definitionId();
-    String workflowCode = command.workflowCode();
-    Integer version = command.version();
-    WorkflowDefinitionSaveRequest body = command.body();
-    Boolean scheduleEnabled = command.scheduleEnabled();
-    String savedBy = command.savedBy();
-    WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null);
-    List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(nodeQuery);
-    WorkflowEdgeQuery edgeQuery = WorkflowEdgeQuery.ofDefinition(tenantId, definitionId, null);
-    List<WorkflowEdgeEntity> edges = edgeMapper.selectByQuery(edgeQuery);
-    WorkflowDefinitionVersionInsertParam param = new WorkflowDefinitionVersionInsertParam();
-    param.setTenantId(tenantId);
-    param.setWorkflowDefinitionId(definitionId);
-    param.setWorkflowCode(workflowCode);
-    param.setVersion(version);
-    param.setWorkflowName(body.getWorkflowName());
-    param.setWorkflowType(body.getWorkflowType());
-    param.setEnabled(body.getEnabled());
-    param.setScheduleEnabled(scheduleEnabled);
-    param.setScheduleType(body.getScheduleType());
-    param.setScheduleExpr(body.getScheduleExpr());
-    param.setTimezone(body.getTimezone());
-    param.setTriggerMode(body.getTriggerMode());
-    param.setCalendarCode(body.getCalendarCode());
-    param.setDependsOnJobCode(body.getDependsOnJobCode());
-    try {
-      param.setNodesJson(objectMapper.writeValueAsString(nodes));
-      param.setEdgesJson(objectMapper.writeValueAsString(edges));
-    } catch (JsonProcessingException exception) {
-      // 主路径已持久化成功；序列化失败必须让事务回滚，避免主表和历史表分裂。
-      throw BizException.of(
-          ResultCode.SYSTEM_ERROR,
-          "error.workflow.version_snapshot.serialize_failed",
-          exception.getMessage());
+    public List<WorkflowEdgeEntity> readEdgesJson(String json) {
+        if (EmptyChecks.isBlank(json)) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, EDGE_LIST_TYPE);
+        } catch (JsonProcessingException exception) {
+            throw BizException.of(
+                    ResultCode.SYSTEM_ERROR,
+                    "error.workflow.version_snapshot.deserialize_failed",
+                    exception.getMessage());
+        }
     }
-    param.setSavedBy(savedBy);
-    // summary 暂留 null，前端尚未提交该字段。
-    versionMapper.insertVersionSnapshot(param);
-  }
-
-  public List<WorkflowNodeEntity> readNodesJson(String json) {
-    if (EmptyChecks.isBlank(json)) {
-      return List.of();
-    }
-    try {
-      return objectMapper.readValue(json, NODE_LIST_TYPE);
-    } catch (JsonProcessingException exception) {
-      throw BizException.of(
-          ResultCode.SYSTEM_ERROR,
-          "error.workflow.version_snapshot.deserialize_failed",
-          exception.getMessage());
-    }
-  }
-
-  public List<WorkflowEdgeEntity> readEdgesJson(String json) {
-    if (EmptyChecks.isBlank(json)) {
-      return List.of();
-    }
-    try {
-      return objectMapper.readValue(json, EDGE_LIST_TYPE);
-    } catch (JsonProcessingException exception) {
-      throw BizException.of(
-          ResultCode.SYSTEM_ERROR,
-          "error.workflow.version_snapshot.deserialize_failed",
-          exception.getMessage());
-    }
-  }
 }

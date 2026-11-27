@@ -21,59 +21,57 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JobInstanceTerminalChildStateReconciler {
 
-  private final JobPartitionMapper jobPartitionMapper;
-  private final JobTaskMapper jobTaskMapper;
-  private final JobInstanceMapper jobInstanceMapper;
+    private final JobPartitionMapper jobPartitionMapper;
+    private final JobTaskMapper jobTaskMapper;
+    private final JobInstanceMapper jobInstanceMapper;
 
-  /**
-   * @param terminalInstanceStatus {@link JobInstanceStatus} 的 code；非业务终态则 no-op。
-   */
-  public void reconcile(String tenantId, Long jobInstanceId, String terminalInstanceStatus) {
-    Targets targets = resolveTargets(terminalInstanceStatus);
-    if (EmptyChecks.isNull(targets)) {
-      return;
+    /**
+     * @param terminalInstanceStatus {@link JobInstanceStatus} 的 code；非业务终态则 no-op。
+     */
+    public void reconcile(String tenantId, Long jobInstanceId, String terminalInstanceStatus) {
+        Targets targets = resolveTargets(terminalInstanceStatus);
+        if (EmptyChecks.isNull(targets)) {
+            return;
+        }
+        int partitions = jobPartitionMapper.closeNonTerminalPartitionsForTerminalInstance(
+                tenantId, jobInstanceId, targets.partitionStatus());
+        int tasks =
+                jobTaskMapper.closeNonTerminalTasksForTerminalInstance(tenantId, jobInstanceId, targets.taskStatus());
+        int pipelineSteps =
+                jobInstanceMapper.closeRunningPipelineStepsForTerminalInstance(CloseRunningPipelineStepsParam.builder()
+                        .tenantId(tenantId)
+                        .id(jobInstanceId)
+                        .terminalInstanceStatus(terminalInstanceStatus)
+                        .interruptedStepStatus(StepInstanceStatus.FAILED.code())
+                        .terminalStatusCodes(JobInstanceStatus.terminalCodes())
+                        .build());
+        if (partitions > 0 || tasks > 0 || pipelineSteps > 0) {
+            log.info(
+                    "job_instance terminal child-state reconcile: tenantId={} jobInstanceId={}"
+                            + " instanceStatus={} partitionsClosed={} tasksClosed={} pipelineStepsInterrupted={}",
+                    LogSanitizer.value(tenantId),
+                    jobInstanceId,
+                    LogSanitizer.value(terminalInstanceStatus),
+                    partitions,
+                    tasks,
+                    pipelineSteps);
+        }
     }
-    int partitions = jobPartitionMapper.closeNonTerminalPartitionsForTerminalInstance(
-        tenantId, jobInstanceId, targets.partitionStatus());
-    int tasks = jobTaskMapper.closeNonTerminalTasksForTerminalInstance(
-        tenantId, jobInstanceId, targets.taskStatus());
-    int pipelineSteps = jobInstanceMapper.closeRunningPipelineStepsForTerminalInstance(
-        CloseRunningPipelineStepsParam.builder()
-            .tenantId(tenantId)
-            .id(jobInstanceId)
-            .terminalInstanceStatus(terminalInstanceStatus)
-            .interruptedStepStatus(StepInstanceStatus.FAILED.code())
-            .terminalStatusCodes(JobInstanceStatus.terminalCodes())
-            .build());
-    if (partitions > 0 || tasks > 0 || pipelineSteps > 0) {
-      log.info(
-          "job_instance terminal child-state reconcile: tenantId={} jobInstanceId={}"
-              + " instanceStatus={} partitionsClosed={} tasksClosed={} pipelineStepsInterrupted={}",
-          LogSanitizer.value(tenantId),
-          jobInstanceId,
-          LogSanitizer.value(terminalInstanceStatus),
-          partitions,
-          tasks,
-          pipelineSteps);
-    }
-  }
 
-  private Targets resolveTargets(String instanceStatusCode) {
-    JobInstanceStatus st = DictEnum.fromCode(JobInstanceStatus.class, instanceStatusCode);
-    if (EmptyChecks.isNull(st)) {
-      return null;
+    private Targets resolveTargets(String instanceStatusCode) {
+        JobInstanceStatus st = DictEnum.fromCode(JobInstanceStatus.class, instanceStatusCode);
+        if (EmptyChecks.isNull(st)) {
+            return null;
+        }
+        return switch (st) {
+            case SUCCESS, SUCCESS_DRY_RUN -> new Targets(PartitionStatus.SUCCESS.code(), TaskStatus.SUCCESS.code());
+            case FAILED, FAILED_DRY_RUN, PARTIAL_FAILED ->
+                new Targets(PartitionStatus.FAILED.code(), TaskStatus.FAILED.code());
+            case CANCELLED -> new Targets(PartitionStatus.CANCELLED.code(), TaskStatus.CANCELLED.code());
+            case TERMINATED -> new Targets(PartitionStatus.TERMINATED.code(), TaskStatus.TERMINATED.code());
+            default -> null;
+        };
     }
-    return switch (st) {
-      case SUCCESS, SUCCESS_DRY_RUN ->
-        new Targets(PartitionStatus.SUCCESS.code(), TaskStatus.SUCCESS.code());
-      case FAILED, FAILED_DRY_RUN, PARTIAL_FAILED ->
-        new Targets(PartitionStatus.FAILED.code(), TaskStatus.FAILED.code());
-      case CANCELLED -> new Targets(PartitionStatus.CANCELLED.code(), TaskStatus.CANCELLED.code());
-      case TERMINATED ->
-        new Targets(PartitionStatus.TERMINATED.code(), TaskStatus.TERMINATED.code());
-      default -> null;
-    };
-  }
 
-  private record Targets(String partitionStatus, String taskStatus) {}
+    private record Targets(String partitionStatus, String taskStatus) {}
 }

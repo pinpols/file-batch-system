@@ -17,35 +17,34 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class HttpRequestMdcFilter extends OncePerRequestFilter {
 
-  private final String applicationName;
+    private final String applicationName;
 
-  public HttpRequestMdcFilter(String applicationName) {
-    this.applicationName = applicationName;
-  }
-
-  @Override
-  protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-      throws ServletException, IOException {
-    String requestIdHeader = request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER);
-    String generatedRequestId = IdGenerator.newBusinessNo("req");
-    String requestId = CorrelationIds.normalize(requestIdHeader, generatedRequestId);
-    String traceIdHeader = request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER);
-    String generatedTraceId = IdGenerator.newTraceId();
-    String traceId = CorrelationIds.normalize(traceIdHeader, generatedTraceId);
-    String requestedTenantId = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
-    Map<String, String> previousContext = BatchMdc.snapshot();
-    try {
-      BatchMdc.put(StructuredLogField.SERVICE, applicationName);
-      BatchMdc.put(StructuredLogField.REQUEST_ID, requestId);
-      BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
-      // 通用 filter 执行时认证尚未完成，不能把请求头当成可信租户。
-      BatchMdc.put(StructuredLogField.REQUESTED_TENANT_ID, requestedTenantId);
-      response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
-      response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
-      filterChain.doFilter(request, response);
-    } finally {
-      BatchMdc.restore(previousContext);
+    public HttpRequestMdcFilter(String applicationName) {
+        this.applicationName = applicationName;
     }
-  }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        String requestIdHeader = request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER);
+        String generatedRequestId = IdGenerator.newBusinessNo("req");
+        String requestId = CorrelationIds.normalize(requestIdHeader, generatedRequestId);
+        String traceIdHeader = request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER);
+        String generatedTraceId = IdGenerator.newTraceId();
+        String traceId = CorrelationIds.normalize(traceIdHeader, generatedTraceId);
+        String requestedTenantId = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
+        Map<String, String> previousContext = BatchMdc.snapshot();
+        try {
+            BatchMdc.put(StructuredLogField.SERVICE, applicationName);
+            BatchMdc.put(StructuredLogField.REQUEST_ID, requestId);
+            BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
+            // 通用 filter 执行时认证尚未完成，不能把请求头当成可信租户。
+            BatchMdc.put(StructuredLogField.REQUESTED_TENANT_ID, requestedTenantId);
+            response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
+            response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
+            filterChain.doFilter(request, response);
+        } finally {
+            BatchMdc.restore(previousContext);
+        }
+    }
 }

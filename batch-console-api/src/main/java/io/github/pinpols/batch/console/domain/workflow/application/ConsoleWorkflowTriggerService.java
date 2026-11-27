@@ -8,14 +8,14 @@ import io.github.pinpols.batch.console.domain.workflow.application.contract.resp
 /** Console 使用的顶层 Workflow 启动入口。 */
 public interface ConsoleWorkflowTriggerService {
 
-  String trigger(Long workflowDefinitionId, WorkflowTriggerRequest request, String idempotencyKey);
+    String trigger(Long workflowDefinitionId, WorkflowTriggerRequest request, String idempotencyKey);
 
-  WorkflowTriggerStatusResponse triggerStatus(
-      Long workflowDefinitionId, String requestedTenantId, String idempotencyKey);
+    WorkflowTriggerStatusResponse triggerStatus(
+            Long workflowDefinitionId, String requestedTenantId, String idempotencyKey);
 
-  ScheduledOccurrenceCatchUpResponse catchUpRejectedOccurrence(
-      Long workflowDefinitionId,
-      ScheduledOccurrenceCatchUpRequest request,
-      String requestedBy,
-      String idempotencyKey);
+    ScheduledOccurrenceCatchUpResponse catchUpRejectedOccurrence(
+            Long workflowDefinitionId,
+            ScheduledOccurrenceCatchUpRequest request,
+            String requestedBy,
+            String idempotencyKey);
 }

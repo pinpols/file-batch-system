@@ -19,19 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class SensorProbeTransactionExecutor {
 
-  private final WorkflowNodeRunMapper nodeRunMapper;
-  private final SensorStateMachine stateMachine;
+    private final WorkflowNodeRunMapper nodeRunMapper;
+    private final SensorStateMachine stateMachine;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  List<WorkflowNodeRunEntity> fetchDue(Instant now, int limit) {
-    return nodeRunMapper.selectDueWaitNodes(now, limit);
-  }
-
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  void probeOne(WorkflowNodeRunEntity nodeRun, Instant now) {
-    if (nodeRunMapper.claimDueWaitNode(nodeRun.getId(), now) == 0) {
-      return;
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    List<WorkflowNodeRunEntity> fetchDue(Instant now, int limit) {
+        return nodeRunMapper.selectDueWaitNodes(now, limit);
     }
-    stateMachine.probeAndAdvance(nodeRun, now);
-  }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void probeOne(WorkflowNodeRunEntity nodeRun, Instant now) {
+        if (nodeRunMapper.claimDueWaitNode(nodeRun.getId(), now) == 0) {
+            return;
+        }
+        stateMachine.probeAndAdvance(nodeRun, now);
+    }
 }

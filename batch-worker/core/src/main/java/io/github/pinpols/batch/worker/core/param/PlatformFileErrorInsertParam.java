@@ -8,22 +8,22 @@ import lombok.Setter;
 @Getter
 @Builder(toBuilder = true)
 public class PlatformFileErrorInsertParam {
-  @Setter
-  private Long id;
+    @Setter
+    private Long id;
 
-  private final String tenantId;
-  private final Long fileId;
-  private final Long pipelineInstanceId;
-  private final Long pipelineStepRunId;
-  private final Long recordNo;
-  private final String errorCode;
-  private final String errorMessage;
-  private final String errorStage;
-  private final Boolean isSkipped;
-  private final String skipAction;
-  private final String rawRecordJson;
-  private final Long sourceRowNum;
-  private final String sourceColumn;
-  private final String errorKey;
-  private final String errorArgs;
+    private final String tenantId;
+    private final Long fileId;
+    private final Long pipelineInstanceId;
+    private final Long pipelineStepRunId;
+    private final Long recordNo;
+    private final String errorCode;
+    private final String errorMessage;
+    private final String errorStage;
+    private final Boolean isSkipped;
+    private final String skipAction;
+    private final String rawRecordJson;
+    private final Long sourceRowNum;
+    private final String sourceColumn;
+    private final String errorKey;
+    private final String errorArgs;
 }

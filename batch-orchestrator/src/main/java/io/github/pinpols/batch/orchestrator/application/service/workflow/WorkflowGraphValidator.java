@@ -65,586 +65,559 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2583")
 public class WorkflowGraphValidator {
 
-  private static final Pattern DSL_OUTPUT_KEY_REF =
-      Pattern.compile("\\$\\.nodes\\.(\\w+)\\.output\\.(\\w+)");
-  private static final TypeReference<List<CrossDayDependencySpec>> SPEC_LIST_TYPE =
-      new TypeReference<>() {};
-  private static final int MAX_RANGE_DAYS = 90;
-  private final WorkflowWaitSensorSpecValidator waitSensorSpecValidator =
-      new WorkflowWaitSensorSpecValidator();
+    private static final Pattern DSL_OUTPUT_KEY_REF = Pattern.compile("\\$\\.nodes\\.(\\w+)\\.output\\.(\\w+)");
+    private static final TypeReference<List<CrossDayDependencySpec>> SPEC_LIST_TYPE = new TypeReference<>() {};
+    private static final int MAX_RANGE_DAYS = 90;
+    private final WorkflowWaitSensorSpecValidator waitSensorSpecValidator = new WorkflowWaitSensorSpecValidator();
 
-  /**
-   * 节点产出 {@code fileId} 的 orchestrator 侧局部常量。
-   *
-   * <p>该键在 IMPORT / EXPORT / DISPATCH 三个业务域都出现。它的 attributes 归属类
-   * （{@code PipelineRuntimeKeys.FILE_ID}）在 batch-worker-core，orchestrator 不可达；也不宜提升到
-   * {@link NodeOutputKeys}（后者只收没有 attributes 归属类的键，且跨模块同名键复用同一常量）。故在此固化一次，
-   * 避免同一个字面量散落三处。
-   */
-  private static final String KEY_FILE_ID = "fileId";
+    /**
+     * 节点产出 {@code fileId} 的 orchestrator 侧局部常量。
+     *
+     * <p>该键在 IMPORT / EXPORT / DISPATCH 三个业务域都出现。它的 attributes 归属类
+     * （{@code PipelineRuntimeKeys.FILE_ID}）在 batch-worker-core，orchestrator 不可达；也不宜提升到
+     * {@link NodeOutputKeys}（后者只收没有 attributes 归属类的键，且跨模块同名键复用同一常量）。故在此固化一次，
+     * 避免同一个字面量散落三处。
+     */
+    private static final String KEY_FILE_ID = "fileId";
 
-  /**
-   * ADR-009 §Worker 暴露的 output key（按业务领域）— 内置 contract，避免依赖 worker SPI 上报。
-   *
-   * <p>本表是 orchestrator 侧的契约快照：worker 模块内的 attributes 键表（{@code PipelineRuntimeKeys} /
-   * {@code ProcessRuntimeKeys} / {@code DispatchRuntimeKeys}）对 orchestrator 不可达，因此只有 batch-common
-   * 承载的 {@link NodeOutputKeys} 取常量，其余键名在此以字面量固化（跨业务域重复的键提升为本类私有常量，如
-   * {@link #KEY_FILE_ID}），改动必须与 worker adapter 产出侧同步。
-   *
-   * <p>未列业务（GENERAL / WORKFLOW）跳过 V5/V12 检查（ADR-025 §V5/V12 行规定向后兼容）。
-   */
-  private static final Map<String, Set<String>> KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE = Map.of(
-      "IMPORT",
-          Set.of(
-              KEY_FILE_ID,
-              "recordCount",
-              "parsedCount",
-              "validatedCount",
-              "skippedCount",
-              "bizDate",
-              // ADR-041 归一化 count 信封：worker 确实写进 nodeOutputs，缺声明会让合法 DSL 引用被误报为未知键。
-              NodeOutputKeys.INPUT_COUNT,
-              NodeOutputKeys.OUTPUT_COUNT),
-      "EXPORT",
-          Set.of(
-              KEY_FILE_ID,
-              "objectName",
-              "recordCount",
-              "fileSizeBytes",
-              "checksumValue",
-              "bizDate",
-              // checksumType 的常量在 batch-worker-core，orchestrator 不可达；
-              // 提升到 NodeOutputKeys 会违反其「只收无 attributes 归属的键」约定，故留字面量。
-              "checksumType",
-              NodeOutputKeys.INPUT_COUNT,
-              NodeOutputKeys.OUTPUT_COUNT),
-      "PROCESS",
-          Set.of(
-              "processedCount",
-              "stagedCount",
-              "publishedCount",
-              NodeOutputKeys.BATCH_KEY,
-              "highWaterMarkOut",
-              NodeOutputKeys.INPUT_COUNT,
-              NodeOutputKeys.OUTPUT_COUNT),
-      "DISPATCH",
-          Set.of(KEY_FILE_ID, "receiptCode", "receiptStatus", "externalRequestId", "channelCode"));
+    /**
+     * ADR-009 §Worker 暴露的 output key（按业务领域）— 内置 contract，避免依赖 worker SPI 上报。
+     *
+     * <p>本表是 orchestrator 侧的契约快照：worker 模块内的 attributes 键表（{@code PipelineRuntimeKeys} /
+     * {@code ProcessRuntimeKeys} / {@code DispatchRuntimeKeys}）对 orchestrator 不可达，因此只有 batch-common
+     * 承载的 {@link NodeOutputKeys} 取常量，其余键名在此以字面量固化（跨业务域重复的键提升为本类私有常量，如
+     * {@link #KEY_FILE_ID}），改动必须与 worker adapter 产出侧同步。
+     *
+     * <p>未列业务（GENERAL / WORKFLOW）跳过 V5/V12 检查（ADR-025 §V5/V12 行规定向后兼容）。
+     */
+    private static final Map<String, Set<String>> KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE = Map.of(
+            "IMPORT",
+                    Set.of(
+                            KEY_FILE_ID,
+                            "recordCount",
+                            "parsedCount",
+                            "validatedCount",
+                            "skippedCount",
+                            "bizDate",
+                            // ADR-041 归一化 count 信封：worker 确实写进 nodeOutputs，缺声明会让合法 DSL 引用被误报为未知键。
+                            NodeOutputKeys.INPUT_COUNT,
+                            NodeOutputKeys.OUTPUT_COUNT),
+            "EXPORT",
+                    Set.of(
+                            KEY_FILE_ID,
+                            "objectName",
+                            "recordCount",
+                            "fileSizeBytes",
+                            "checksumValue",
+                            "bizDate",
+                            // checksumType 的常量在 batch-worker-core，orchestrator 不可达；
+                            // 提升到 NodeOutputKeys 会违反其「只收无 attributes 归属的键」约定，故留字面量。
+                            "checksumType",
+                            NodeOutputKeys.INPUT_COUNT,
+                            NodeOutputKeys.OUTPUT_COUNT),
+            "PROCESS",
+                    Set.of(
+                            "processedCount",
+                            "stagedCount",
+                            "publishedCount",
+                            NodeOutputKeys.BATCH_KEY,
+                            "highWaterMarkOut",
+                            NodeOutputKeys.INPUT_COUNT,
+                            NodeOutputKeys.OUTPUT_COUNT),
+            "DISPATCH", Set.of(KEY_FILE_ID, "receiptCode", "receiptStatus", "externalRequestId", "channelCode"));
 
-  private final WorkflowNodeMapper workflowNodeMapper;
-  private final WorkflowEdgeMapper workflowEdgeMapper;
-  private final JobDefinitionMapper jobDefinitionMapper;
+    private final WorkflowNodeMapper workflowNodeMapper;
+    private final WorkflowEdgeMapper workflowEdgeMapper;
+    private final JobDefinitionMapper jobDefinitionMapper;
 
-  public WorkflowValidationResult validate(Long workflowDefinitionId) {
-    if (workflowDefinitionId == null) {
-      return WorkflowValidationResult.clean();
-    }
-    return validate(
-        workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId),
-        workflowEdgeMapper.selectAllByWorkflowDefinitionId(workflowDefinitionId));
-  }
-
-  /** 复用调用方在同一事务内已加载的节点与边，避免启动路径重复读取图定义。 */
-  public WorkflowValidationResult validate(
-      List<WorkflowNodeEntity> nodeRows, List<WorkflowEdgeEntity> edgeRows) {
-    List<WorkflowNodeEntity> nodes = nullToEmpty(nodeRows);
-    List<WorkflowEdgeEntity> edges = nullToEmpty(edgeRows);
-
-    List<ValidationIssue> errors = new ArrayList<>();
-    List<ValidationIssue> warnings = new ArrayList<>();
-
-    Map<String, WorkflowNodeEntity> byCode = indexNodesByCode(nodes, errors);
-    validateEdgeNodeRefs(edges, byCode, errors);
-
-    Map<String, List<String>> outgoing = buildAdjacency(edges, true);
-    Map<String, List<String>> incoming = buildAdjacency(edges, false);
-
-    detectCycles(byCode.keySet(), outgoing, errors);
-
-    Set<String> startCodes = new HashSet<>();
-    Set<String> endCodes = new HashSet<>();
-    for (WorkflowNodeEntity n : byCode.values()) {
-      if (WorkflowNodeType.START.code().equalsIgnoreCase(n.getNodeType()))
-        startCodes.add(n.getNodeCode());
-      else if (WorkflowNodeType.END.code().equalsIgnoreCase(n.getNodeType()))
-        endCodes.add(n.getNodeCode());
-    }
-
-    validateStartEndEdges(startCodes, endCodes, incoming, outgoing, errors);
-    validateReachability(byCode.keySet(), startCodes, endCodes, outgoing, incoming, errors);
-    validateDslNodeRefs(byCode, errors);
-
-    for (WorkflowNodeEntity n : byCode.values()) {
-      validateCrossDayDeps(n, errors);
-      errors.addAll(waitSensorSpecValidator.validate(n));
-    }
-
-    validateNodeJoinMode(byCode.values(), incoming, errors);
-
-    Map<String, JobDefinitionView> jobDefByCode = loadJobDefinitions(byCode, errors);
-    Set<String> optionalNodes = collectOptionalNodes(byCode);
-    for (WorkflowNodeEntity n : byCode.values()) {
-      validateOutputContractRefs(n, byCode, jobDefByCode, optionalNodes, errors, warnings);
-    }
-    validateCalendarTimezoneConsistency(byCode.values(), jobDefByCode, warnings);
-
-    return WorkflowValidationResult.builder().errors(errors).warnings(warnings).build();
-  }
-
-  private static <T> List<T> nullToEmpty(List<T> list) {
-    return list == null ? List.of() : list;
-  }
-
-  private Map<String, WorkflowNodeEntity> indexNodesByCode(
-      List<WorkflowNodeEntity> nodes, List<ValidationIssue> errors) {
-    Map<String, WorkflowNodeEntity> byCode = new LinkedHashMap<>();
-    Set<String> duplicates = new HashSet<>();
-    for (WorkflowNodeEntity n : nodes) {
-      if (n == null || !Texts.hasText(n.getNodeCode())) continue;
-      WorkflowNodeEntity prior = byCode.put(n.getNodeCode(), n);
-      if (prior != null) duplicates.add(n.getNodeCode());
-    }
-    for (String code : duplicates) {
-      errors.add(issue("V13", "duplicate node_code", code));
-    }
-    return byCode;
-  }
-
-  private void validateEdgeNodeRefs(
-      List<WorkflowEdgeEntity> edges,
-      Map<String, WorkflowNodeEntity> byCode,
-      List<ValidationIssue> errors) {
-    for (WorkflowEdgeEntity e : edges) {
-      if (e == null) continue;
-      if (Texts.hasText(e.getFromNodeCode()) && !byCode.containsKey(e.getFromNodeCode())) {
-        errors.add(issue(
-            "V14",
-            "edge from_node_code references missing node: " + e.getFromNodeCode(),
-            e.getFromNodeCode()));
-      }
-      if (Texts.hasText(e.getToNodeCode()) && !byCode.containsKey(e.getToNodeCode())) {
-        errors.add(issue(
-            "V14",
-            "edge to_node_code references missing node: " + e.getToNodeCode(),
-            e.getToNodeCode()));
-      }
-    }
-  }
-
-  private void validateStartEndEdges(
-      Set<String> startCodes,
-      Set<String> endCodes,
-      Map<String, List<String>> incoming,
-      Map<String, List<String>> outgoing,
-      List<ValidationIssue> errors) {
-    for (String s : startCodes) {
-      if (!incoming.getOrDefault(s, List.of()).isEmpty()) {
-        errors.add(issue("V11", "START node has incoming edges", s));
-      }
-    }
-    for (String e : endCodes) {
-      if (!outgoing.getOrDefault(e, List.of()).isEmpty()) {
-        errors.add(issue("V11", "END node has outgoing edges", e));
-      }
-    }
-  }
-
-  private void validateReachability(
-      Set<String> allCodes,
-      Set<String> startCodes,
-      Set<String> endCodes,
-      Map<String, List<String>> outgoing,
-      Map<String, List<String>> incoming,
-      List<ValidationIssue> errors) {
-    Set<String> reachableFromStart = WorkflowGraphs.reachableFrom(startCodes, outgoing);
-    for (String code : allCodes) {
-      if (!startCodes.isEmpty() && !reachableFromStart.contains(code)) {
-        errors.add(issue("V2", "node unreachable from START", code));
-      }
-    }
-    Set<String> reachableToEnd = WorkflowGraphs.reachableFrom(endCodes, incoming);
-    for (String code : allCodes) {
-      boolean nodeCannotReachAnEnd = !EmptyChecks.isEmpty(endCodes)
-          && !reachableToEnd.contains(code)
-          && !endCodes.contains(code);
-      if (nodeCannotReachAnEnd) {
-        errors.add(issue("V3", "node cannot reach END", code));
-      }
-    }
-  }
-
-  private void validateDslNodeRefs(
-      Map<String, WorkflowNodeEntity> byCode, List<ValidationIssue> errors) {
-    for (WorkflowNodeEntity n : byCode.values()) {
-      for (String referenced : WorkflowGraphs.dslNodeReferences(n.getNodeParams())) {
-        if (!byCode.containsKey(referenced)) {
-          errors.add(issue(
-              "V4", "node_params DSL references missing node: " + referenced, n.getNodeCode()));
+    public WorkflowValidationResult validate(Long workflowDefinitionId) {
+        if (workflowDefinitionId == null) {
+            return WorkflowValidationResult.clean();
         }
-      }
+        return validate(
+                workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId),
+                workflowEdgeMapper.selectAllByWorkflowDefinitionId(workflowDefinitionId));
     }
-  }
 
-  private void validateNodeJoinMode(
-      Collection<WorkflowNodeEntity> nodes,
-      Map<String, List<String>> incoming,
-      List<ValidationIssue> errors) {
-    for (WorkflowNodeEntity n : nodes) {
-      int incomingCount = incoming.getOrDefault(n.getNodeCode(), List.of()).size();
-      if (incomingCount == 0) continue;
-      boolean gateway = WorkflowNodeType.GATEWAY.code().equalsIgnoreCase(n.getNodeType());
-      String configuredMode = readNodeJoinMode(n.getNodeParams());
-      boolean missingRequiredMode = gateway && incomingCount >= 2 && !Texts.hasText(configuredMode);
-      boolean unknownMode = Texts.hasText(configuredMode)
-          && EmptyChecks.isNull(DictEnum.fromCode(WorkflowJoinMode.class, configuredMode));
-      if (missingRequiredMode || unknownMode) {
-        errors.add(issue("V9", "Node joinMode must be ALL, ANY or N_OF", n.getNodeCode()));
-      }
-      int[] thresholdAndTotal = parseJoinMode(n.getNodeParams(), incomingCount);
-      if (EmptyChecks.isNull(thresholdAndTotal)) continue;
-      int required = thresholdAndTotal[0];
-      int total = thresholdAndTotal[1];
-      if (required < 1 || required > total || total != incomingCount) {
-        errors.add(issue(
-            "V10",
-            "Node join threshold invalid or inconsistent with incoming count " + incomingCount,
-            n.getNodeCode()));
-      }
-    }
-  }
+    /** 复用调用方在同一事务内已加载的节点与边，避免启动路径重复读取图定义。 */
+    public WorkflowValidationResult validate(List<WorkflowNodeEntity> nodeRows, List<WorkflowEdgeEntity> edgeRows) {
+        List<WorkflowNodeEntity> nodes = nullToEmpty(nodeRows);
+        List<WorkflowEdgeEntity> edges = nullToEmpty(edgeRows);
 
-  /** JOB 引用是运行准入条件；数据库查询失败必须传播，不能转为健康结果。 */
-  private Map<String, JobDefinitionView> loadJobDefinitions(
-      Map<String, WorkflowNodeEntity> nodes, List<ValidationIssue> errors) {
-    Map<String, JobDefinitionView> result = new HashMap<>();
-    for (WorkflowNodeEntity node : nodes.values()) {
-      String jobCode = node.getRelatedJobCode();
-      boolean jobNode = WorkflowNodeType.JOB.code().equalsIgnoreCase(node.getNodeType());
-      if (!Texts.hasText(jobCode)) {
-        if (jobNode) {
-          errors.add(
-              issue("JOB_REF_MISSING", "JOB node missing related_job_code", node.getNodeCode()));
+        List<ValidationIssue> errors = new ArrayList<>();
+        List<ValidationIssue> warnings = new ArrayList<>();
+
+        Map<String, WorkflowNodeEntity> byCode = indexNodesByCode(nodes, errors);
+        validateEdgeNodeRefs(edges, byCode, errors);
+
+        Map<String, List<String>> outgoing = buildAdjacency(edges, true);
+        Map<String, List<String>> incoming = buildAdjacency(edges, false);
+
+        detectCycles(byCode.keySet(), outgoing, errors);
+
+        Set<String> startCodes = new HashSet<>();
+        Set<String> endCodes = new HashSet<>();
+        for (WorkflowNodeEntity n : byCode.values()) {
+            if (WorkflowNodeType.START.code().equalsIgnoreCase(n.getNodeType())) startCodes.add(n.getNodeCode());
+            else if (WorkflowNodeType.END.code().equalsIgnoreCase(n.getNodeType())) endCodes.add(n.getNodeCode());
         }
-        continue;
-      }
-      if (result.containsKey(jobCode)) {
-        continue;
-      }
-      JobDefinitionView def = jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
-          node.getTenantId(), jobCode, true);
-      boolean jobNodeDefinitionIsUnavailable =
-          jobNode && (EmptyChecks.isNull(def) || !Boolean.TRUE.equals(def.enabled()));
-      if (jobNodeDefinitionIsUnavailable) {
-        errors.add(issue(
-            "JOB_REF_NOT_FOUND",
-            "JOB reference not found or disabled: " + jobCode,
-            node.getNodeCode()));
-      } else if (EmptyChecks.isNotNull(def)) {
-        result.put(jobCode, def);
-      }
-    }
-    return result;
-  }
 
-  /**
-   * ADR-025 V8：cross_day_dependencies 中任一 dep.scope=OPTIONAL 即视该节点本身为 OPTIONAL（输出可能 incomplete）。
-   */
-  private Set<String> collectOptionalNodes(Map<String, WorkflowNodeEntity> nodes) {
-    Set<String> result = new HashSet<>();
-    for (WorkflowNodeEntity node : nodes.values()) {
-      String spec = node.getCrossDayDependencies();
-      if (!Texts.hasText(spec)) continue;
-      try {
-        List<CrossDayDependencySpec> deps = JsonUtils.fromJson(spec, SPEC_LIST_TYPE);
-        if (deps == null) continue;
+        validateStartEndEdges(startCodes, endCodes, incoming, outgoing, errors);
+        validateReachability(byCode.keySet(), startCodes, endCodes, outgoing, incoming, errors);
+        validateDslNodeRefs(byCode, errors);
+
+        for (WorkflowNodeEntity n : byCode.values()) {
+            validateCrossDayDeps(n, errors);
+            errors.addAll(waitSensorSpecValidator.validate(n));
+        }
+
+        validateNodeJoinMode(byCode.values(), incoming, errors);
+
+        Map<String, JobDefinitionView> jobDefByCode = loadJobDefinitions(byCode, errors);
+        Set<String> optionalNodes = collectOptionalNodes(byCode);
+        for (WorkflowNodeEntity n : byCode.values()) {
+            validateOutputContractRefs(n, byCode, jobDefByCode, optionalNodes, errors, warnings);
+        }
+        validateCalendarTimezoneConsistency(byCode.values(), jobDefByCode, warnings);
+
+        return WorkflowValidationResult.builder()
+                .errors(errors)
+                .warnings(warnings)
+                .build();
+    }
+
+    private static <T> List<T> nullToEmpty(List<T> list) {
+        return list == null ? List.of() : list;
+    }
+
+    private Map<String, WorkflowNodeEntity> indexNodesByCode(
+            List<WorkflowNodeEntity> nodes, List<ValidationIssue> errors) {
+        Map<String, WorkflowNodeEntity> byCode = new LinkedHashMap<>();
+        Set<String> duplicates = new HashSet<>();
+        for (WorkflowNodeEntity n : nodes) {
+            if (n == null || !Texts.hasText(n.getNodeCode())) continue;
+            WorkflowNodeEntity prior = byCode.put(n.getNodeCode(), n);
+            if (prior != null) duplicates.add(n.getNodeCode());
+        }
+        for (String code : duplicates) {
+            errors.add(issue("V13", "duplicate node_code", code));
+        }
+        return byCode;
+    }
+
+    private void validateEdgeNodeRefs(
+            List<WorkflowEdgeEntity> edges, Map<String, WorkflowNodeEntity> byCode, List<ValidationIssue> errors) {
+        for (WorkflowEdgeEntity e : edges) {
+            if (e == null) continue;
+            if (Texts.hasText(e.getFromNodeCode()) && !byCode.containsKey(e.getFromNodeCode())) {
+                errors.add(issue(
+                        "V14",
+                        "edge from_node_code references missing node: " + e.getFromNodeCode(),
+                        e.getFromNodeCode()));
+            }
+            if (Texts.hasText(e.getToNodeCode()) && !byCode.containsKey(e.getToNodeCode())) {
+                errors.add(issue(
+                        "V14", "edge to_node_code references missing node: " + e.getToNodeCode(), e.getToNodeCode()));
+            }
+        }
+    }
+
+    private void validateStartEndEdges(
+            Set<String> startCodes,
+            Set<String> endCodes,
+            Map<String, List<String>> incoming,
+            Map<String, List<String>> outgoing,
+            List<ValidationIssue> errors) {
+        for (String s : startCodes) {
+            if (!incoming.getOrDefault(s, List.of()).isEmpty()) {
+                errors.add(issue("V11", "START node has incoming edges", s));
+            }
+        }
+        for (String e : endCodes) {
+            if (!outgoing.getOrDefault(e, List.of()).isEmpty()) {
+                errors.add(issue("V11", "END node has outgoing edges", e));
+            }
+        }
+    }
+
+    private void validateReachability(
+            Set<String> allCodes,
+            Set<String> startCodes,
+            Set<String> endCodes,
+            Map<String, List<String>> outgoing,
+            Map<String, List<String>> incoming,
+            List<ValidationIssue> errors) {
+        Set<String> reachableFromStart = WorkflowGraphs.reachableFrom(startCodes, outgoing);
+        for (String code : allCodes) {
+            if (!startCodes.isEmpty() && !reachableFromStart.contains(code)) {
+                errors.add(issue("V2", "node unreachable from START", code));
+            }
+        }
+        Set<String> reachableToEnd = WorkflowGraphs.reachableFrom(endCodes, incoming);
+        for (String code : allCodes) {
+            boolean nodeCannotReachAnEnd =
+                    !EmptyChecks.isEmpty(endCodes) && !reachableToEnd.contains(code) && !endCodes.contains(code);
+            if (nodeCannotReachAnEnd) {
+                errors.add(issue("V3", "node cannot reach END", code));
+            }
+        }
+    }
+
+    private void validateDslNodeRefs(Map<String, WorkflowNodeEntity> byCode, List<ValidationIssue> errors) {
+        for (WorkflowNodeEntity n : byCode.values()) {
+            for (String referenced : WorkflowGraphs.dslNodeReferences(n.getNodeParams())) {
+                if (!byCode.containsKey(referenced)) {
+                    errors.add(issue("V4", "node_params DSL references missing node: " + referenced, n.getNodeCode()));
+                }
+            }
+        }
+    }
+
+    private void validateNodeJoinMode(
+            Collection<WorkflowNodeEntity> nodes, Map<String, List<String>> incoming, List<ValidationIssue> errors) {
+        for (WorkflowNodeEntity n : nodes) {
+            int incomingCount =
+                    incoming.getOrDefault(n.getNodeCode(), List.of()).size();
+            if (incomingCount == 0) continue;
+            boolean gateway = WorkflowNodeType.GATEWAY.code().equalsIgnoreCase(n.getNodeType());
+            String configuredMode = readNodeJoinMode(n.getNodeParams());
+            boolean missingRequiredMode = gateway && incomingCount >= 2 && !Texts.hasText(configuredMode);
+            boolean unknownMode = Texts.hasText(configuredMode)
+                    && EmptyChecks.isNull(DictEnum.fromCode(WorkflowJoinMode.class, configuredMode));
+            if (missingRequiredMode || unknownMode) {
+                errors.add(issue("V9", "Node joinMode must be ALL, ANY or N_OF", n.getNodeCode()));
+            }
+            int[] thresholdAndTotal = parseJoinMode(n.getNodeParams(), incomingCount);
+            if (EmptyChecks.isNull(thresholdAndTotal)) continue;
+            int required = thresholdAndTotal[0];
+            int total = thresholdAndTotal[1];
+            if (required < 1 || required > total || total != incomingCount) {
+                errors.add(issue(
+                        "V10",
+                        "Node join threshold invalid or inconsistent with incoming count " + incomingCount,
+                        n.getNodeCode()));
+            }
+        }
+    }
+
+    /** JOB 引用是运行准入条件；数据库查询失败必须传播，不能转为健康结果。 */
+    private Map<String, JobDefinitionView> loadJobDefinitions(
+            Map<String, WorkflowNodeEntity> nodes, List<ValidationIssue> errors) {
+        Map<String, JobDefinitionView> result = new HashMap<>();
+        for (WorkflowNodeEntity node : nodes.values()) {
+            String jobCode = node.getRelatedJobCode();
+            boolean jobNode = WorkflowNodeType.JOB.code().equalsIgnoreCase(node.getNodeType());
+            if (!Texts.hasText(jobCode)) {
+                if (jobNode) {
+                    errors.add(issue("JOB_REF_MISSING", "JOB node missing related_job_code", node.getNodeCode()));
+                }
+                continue;
+            }
+            if (result.containsKey(jobCode)) {
+                continue;
+            }
+            JobDefinitionView def =
+                    jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(node.getTenantId(), jobCode, true);
+            boolean jobNodeDefinitionIsUnavailable =
+                    jobNode && (EmptyChecks.isNull(def) || !Boolean.TRUE.equals(def.enabled()));
+            if (jobNodeDefinitionIsUnavailable) {
+                errors.add(issue(
+                        "JOB_REF_NOT_FOUND", "JOB reference not found or disabled: " + jobCode, node.getNodeCode()));
+            } else if (EmptyChecks.isNotNull(def)) {
+                result.put(jobCode, def);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * ADR-025 V8：cross_day_dependencies 中任一 dep.scope=OPTIONAL 即视该节点本身为 OPTIONAL（输出可能 incomplete）。
+     */
+    private Set<String> collectOptionalNodes(Map<String, WorkflowNodeEntity> nodes) {
+        Set<String> result = new HashSet<>();
+        for (WorkflowNodeEntity node : nodes.values()) {
+            String spec = node.getCrossDayDependencies();
+            if (!Texts.hasText(spec)) continue;
+            try {
+                List<CrossDayDependencySpec> deps = JsonUtils.fromJson(spec, SPEC_LIST_TYPE);
+                if (deps == null) continue;
+                for (CrossDayDependencySpec dep : deps) {
+                    if (dep != null && "OPTIONAL".equalsIgnoreCase(dep.scope())) {
+                        result.add(node.getNodeCode());
+                        break;
+                    }
+                }
+            } catch (Exception ignored) {
+                // V6 已经报过 parse 失败，这里不重复
+            }
+        }
+        return result;
+    }
+
+    /**
+     * V5 / V8 / V12 一次扫节点 nodeParams 的 DSL 输出引用：
+     *
+     * <ul>
+     *   <li>V5 — Y 不在引用节点 jobType 内置 contract → WARN（jobType 未列 / 找不到 def 跳过）
+     *   <li>V8 — X ∈ optionalNodes → ERROR（OPTIONAL → REQUIRED 传染性退化）
+     *   <li>V12 — Y 命中 contract 时附加 type-hint WARN（contract type info 留 worker SPI 扩展位）
+     * </ul>
+     */
+    private void validateOutputContractRefs(
+            WorkflowNodeEntity node,
+            Map<String, WorkflowNodeEntity> nodesByCode,
+            Map<String, JobDefinitionView> jobDefByCode,
+            Set<String> optionalNodes,
+            List<ValidationIssue> errors,
+            List<ValidationIssue> warnings) {
+        if (!Texts.hasText(node.getNodeParams())) return;
+        Matcher m = DSL_OUTPUT_KEY_REF.matcher(node.getNodeParams());
+        while (m.find()) {
+            String referencedNodeCode = m.group(1);
+            String outputKey = m.group(2);
+            // V8 — OPTIONAL 节点输出被引用
+            if (optionalNodes.contains(referencedNodeCode)) {
+                errors.add(issue(
+                        "V8",
+                        "node_params references output of OPTIONAL upstream node "
+                                + referencedNodeCode
+                                + " (cross-day OPTIONAL → REQUIRED contagion)",
+                        node.getNodeCode()));
+            }
+            WorkflowNodeEntity refNode = nodesByCode.get(referencedNodeCode);
+            if (refNode == null) {
+                // V4 已经报；这里跳过 V5/V12
+                continue;
+            }
+            JobDefinitionView refJobDef = EmptyChecks.isNull(refNode.getRelatedJobCode())
+                    ? null
+                    : jobDefByCode.get(refNode.getRelatedJobCode());
+            if (refJobDef == null) {
+                // 未关联 job_definition → 跳过 V5/V12（向后兼容）
+                continue;
+            }
+            Set<String> contract = KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE.get(
+                    refJobDef.jobType() == null ? "" : refJobDef.jobType().toUpperCase(Locale.ROOT));
+            if (contract == null) {
+                // jobType 不在内置 contract（如 GENERAL / WORKFLOW）→ 跳过
+                continue;
+            }
+            // V5
+            if (!contract.contains(outputKey)) {
+                String unknownOutputContractMessage = "DSL ref $.nodes."
+                        + referencedNodeCode
+                        + ".output."
+                        + outputKey
+                        + " not in known output contract for jobType="
+                        + refJobDef.jobType();
+                warnings.add(warning("V5", unknownOutputContractMessage, node.getNodeCode()));
+            } else {
+                // V12 占位 — contract type info 留 worker SPI 扩展（@WorkerOutputContract 注解未来注入）；
+                // 当前只对 contract-hit 输出 key 记一条信息级 hint，避免 type 误判
+                String knownOutputContractMessage = "DSL ref $.nodes."
+                        + referencedNodeCode
+                        + ".output."
+                        + outputKey
+                        + " hits contract; type-check pending worker SPI";
+                warnings.add(warning("V12", knownOutputContractMessage, node.getNodeCode()));
+            }
+        }
+    }
+
+    /** V15 — 同 workflow 多个节点引用的 job_definition.calendarCode / timezone 不一致 → WARN。 */
+    private void validateCalendarTimezoneConsistency(
+            Collection<WorkflowNodeEntity> nodes,
+            Map<String, JobDefinitionView> jobDefByCode,
+            List<ValidationIssue> warnings) {
+        Set<String> calendars = new HashSet<>();
+        Set<String> timezones = new HashSet<>();
+        for (WorkflowNodeEntity node : nodes) {
+            if (!Texts.hasText(node.getRelatedJobCode())) continue;
+            JobDefinitionView def = jobDefByCode.get(node.getRelatedJobCode());
+            if (def == null) continue;
+            if (Texts.hasText(def.calendarCode())) calendars.add(def.calendarCode());
+            if (Texts.hasText(def.timezone())) timezones.add(def.timezone());
+        }
+        if (calendars.size() > 1) {
+            warnings.add(warning("V15", "workflow nodes reference jobs with mixed calendarCode: " + calendars, null));
+        }
+        if (timezones.size() > 1) {
+            warnings.add(warning("V15", "workflow nodes reference jobs with mixed timezone: " + timezones, null));
+        }
+    }
+
+    private ValidationIssue warning(String code, String message, String nodeCode) {
+        return ValidationIssue.builder()
+                .code(code)
+                .severity(ValidationIssue.SEVERITY_WARN)
+                .nodeCode(nodeCode)
+                .message(message)
+                .build();
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────
+
+    private Map<String, List<String>> buildAdjacency(List<WorkflowEdgeEntity> edges, boolean outgoingDirection) {
+        Map<String, List<String>> adj = new HashMap<>();
+        for (WorkflowEdgeEntity e : edges) {
+            boolean workflowEdgeIdentityIsIncomplete =
+                    EmptyChecks.isNull(e) || !Texts.hasText(e.getFromNodeCode()) || !Texts.hasText(e.getToNodeCode());
+            if (workflowEdgeIdentityIsIncomplete) continue;
+            String key = outgoingDirection ? e.getFromNodeCode() : e.getToNodeCode();
+            String value = outgoingDirection ? e.getToNodeCode() : e.getFromNodeCode();
+            adj.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
+        }
+        return adj;
+    }
+
+    /** Tarjan-lite：DFS 三色标记找环。命中即记 ERROR。同时检 self-loop。 */
+    private void detectCycles(Set<String> nodes, Map<String, List<String>> outgoing, List<ValidationIssue> errors) {
+        // self-loop
+        for (Map.Entry<String, List<String>> e : outgoing.entrySet()) {
+            if (e.getValue() != null && e.getValue().contains(e.getKey())) {
+                errors.add(issue("V1", "self-loop edge", e.getKey()));
+            }
+        }
+        Map<String, Integer> color = new HashMap<>(); // 0=未访问 1=访问中 2=已完成
+        for (String n : nodes) {
+            if (color.getOrDefault(n, 0) == 0) {
+                dfsHasCycle(n, outgoing, color, errors);
+            }
+        }
+    }
+
+    // 环检测不与 Excel 校验共享：这里遇到第一个环就停止，Excel 校验会继续检查并多处上报。
+    private boolean dfsHasCycle(
+            String node, Map<String, List<String>> outgoing, Map<String, Integer> color, List<ValidationIssue> errors) {
+        color.put(node, 1);
+        for (String next : outgoing.getOrDefault(node, List.of())) {
+            Integer c = color.getOrDefault(next, 0);
+            if (c == 1) {
+                errors.add(issue("V1", "topology cycle through node " + node + " → " + next, node));
+                return true;
+            }
+            if (c == 0 && dfsHasCycle(next, outgoing, color, errors)) {
+                return true;
+            }
+        }
+        color.put(node, 2);
+        return false;
+    }
+
+    private void validateCrossDayDeps(WorkflowNodeEntity node, List<ValidationIssue> errors) {
+        String spec = node.getCrossDayDependencies();
+        if (!Texts.hasText(spec)) return;
+        List<CrossDayDependencySpec> deps;
+        try {
+            deps = JsonUtils.fromJson(spec, SPEC_LIST_TYPE);
+        } catch (Exception parseFailure) {
+            String failureMessage = parseFailure.getMessage();
+            String validationMessage = "cross_day_dependencies JSON parse failed: " + failureMessage;
+            String nodeCode = node.getNodeCode();
+            errors.add(issue("V6", validationMessage, nodeCode));
+            return;
+        }
+        if (deps == null) return;
         for (CrossDayDependencySpec dep : deps) {
-          if (dep != null && "OPTIONAL".equalsIgnoreCase(dep.scope())) {
-            result.add(node.getNodeCode());
-            break;
-          }
+            if (dep == null) continue;
+            if (!Texts.hasText(dep.jobCode())) {
+                errors.add(issue("V6", "cross_day_dep missing jobCode", node.getNodeCode()));
+                continue;
+            }
+            if (!dep.hasSupportedStrategy() || !dep.hasValidVersionSelector()) {
+                errors.add(issue("V6", "cross_day_dep has unsupported consume version strategy", node.getNodeCode()));
+            }
+            boolean dependencyScopeIsUnsupported = EmptyChecks.isNotNull(dep.scope())
+                    && !CrossDayDependencySpec.SCOPE_REQUIRED.equalsIgnoreCase(dep.scope())
+                    && !CrossDayDependencySpec.SCOPE_OPTIONAL.equalsIgnoreCase(dep.scope());
+            if (dependencyScopeIsUnsupported) {
+                errors.add(issue("V6", "cross_day_dep has unsupported scope", node.getNodeCode()));
+            }
+            if (Texts.hasText(dep.bizDateRange())) {
+                Integer days = parseRangeDays(dep.bizDateRange());
+                if (days != null && days > MAX_RANGE_DAYS) {
+                    String rangeLimitMessage =
+                            "cross_day_dep range " + dep.bizDateRange() + " exceeds max " + MAX_RANGE_DAYS + " days";
+                    errors.add(issue("V7", rangeLimitMessage, node.getNodeCode()));
+                }
+            }
         }
-      } catch (Exception ignored) {
-        // V6 已经报过 parse 失败，这里不重复
-      }
     }
-    return result;
-  }
 
-  /**
-   * V5 / V8 / V12 一次扫节点 nodeParams 的 DSL 输出引用：
-   *
-   * <ul>
-   *   <li>V5 — Y 不在引用节点 jobType 内置 contract → WARN（jobType 未列 / 找不到 def 跳过）
-   *   <li>V8 — X ∈ optionalNodes → ERROR（OPTIONAL → REQUIRED 传染性退化）
-   *   <li>V12 — Y 命中 contract 时附加 type-hint WARN（contract type info 留 worker SPI 扩展位）
-   * </ul>
-   */
-  private void validateOutputContractRefs(
-      WorkflowNodeEntity node,
-      Map<String, WorkflowNodeEntity> nodesByCode,
-      Map<String, JobDefinitionView> jobDefByCode,
-      Set<String> optionalNodes,
-      List<ValidationIssue> errors,
-      List<ValidationIssue> warnings) {
-    if (!Texts.hasText(node.getNodeParams())) return;
-    Matcher m = DSL_OUTPUT_KEY_REF.matcher(node.getNodeParams());
-    while (m.find()) {
-      String referencedNodeCode = m.group(1);
-      String outputKey = m.group(2);
-      // V8 — OPTIONAL 节点输出被引用
-      if (optionalNodes.contains(referencedNodeCode)) {
-        errors.add(issue(
-            "V8",
-            "node_params references output of OPTIONAL upstream node "
-                + referencedNodeCode
-                + " (cross-day OPTIONAL → REQUIRED contagion)",
-            node.getNodeCode()));
-      }
-      WorkflowNodeEntity refNode = nodesByCode.get(referencedNodeCode);
-      if (refNode == null) {
-        // V4 已经报；这里跳过 V5/V12
-        continue;
-      }
-      JobDefinitionView refJobDef = EmptyChecks.isNull(refNode.getRelatedJobCode())
-          ? null
-          : jobDefByCode.get(refNode.getRelatedJobCode());
-      if (refJobDef == null) {
-        // 未关联 job_definition → 跳过 V5/V12（向后兼容）
-        continue;
-      }
-      Set<String> contract = KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE.get(
-          refJobDef.jobType() == null ? "" : refJobDef.jobType().toUpperCase(Locale.ROOT));
-      if (contract == null) {
-        // jobType 不在内置 contract（如 GENERAL / WORKFLOW）→ 跳过
-        continue;
-      }
-      // V5
-      if (!contract.contains(outputKey)) {
-        String unknownOutputContractMessage = "DSL ref $.nodes."
-            + referencedNodeCode
-            + ".output."
-            + outputKey
-            + " not in known output contract for jobType="
-            + refJobDef.jobType();
-        warnings.add(warning("V5", unknownOutputContractMessage, node.getNodeCode()));
-      } else {
-        // V12 占位 — contract type info 留 worker SPI 扩展（@WorkerOutputContract 注解未来注入）；
-        // 当前只对 contract-hit 输出 key 记一条信息级 hint，避免 type 误判
-        String knownOutputContractMessage = "DSL ref $.nodes."
-            + referencedNodeCode
-            + ".output."
-            + outputKey
-            + " hits contract; type-check pending worker SPI";
-        warnings.add(warning("V12", knownOutputContractMessage, node.getNodeCode()));
-      }
-    }
-  }
-
-  /** V15 — 同 workflow 多个节点引用的 job_definition.calendarCode / timezone 不一致 → WARN。 */
-  private void validateCalendarTimezoneConsistency(
-      Collection<WorkflowNodeEntity> nodes,
-      Map<String, JobDefinitionView> jobDefByCode,
-      List<ValidationIssue> warnings) {
-    Set<String> calendars = new HashSet<>();
-    Set<String> timezones = new HashSet<>();
-    for (WorkflowNodeEntity node : nodes) {
-      if (!Texts.hasText(node.getRelatedJobCode())) continue;
-      JobDefinitionView def = jobDefByCode.get(node.getRelatedJobCode());
-      if (def == null) continue;
-      if (Texts.hasText(def.calendarCode())) calendars.add(def.calendarCode());
-      if (Texts.hasText(def.timezone())) timezones.add(def.timezone());
-    }
-    if (calendars.size() > 1) {
-      warnings.add(warning(
-          "V15", "workflow nodes reference jobs with mixed calendarCode: " + calendars, null));
-    }
-    if (timezones.size() > 1) {
-      warnings.add(
-          warning("V15", "workflow nodes reference jobs with mixed timezone: " + timezones, null));
-    }
-  }
-
-  private ValidationIssue warning(String code, String message, String nodeCode) {
-    return ValidationIssue.builder()
-        .code(code)
-        .severity(ValidationIssue.SEVERITY_WARN)
-        .nodeCode(nodeCode)
-        .message(message)
-        .build();
-  }
-
-  // ── helpers ─────────────────────────────────────────────────────────────
-
-  private Map<String, List<String>> buildAdjacency(
-      List<WorkflowEdgeEntity> edges, boolean outgoingDirection) {
-    Map<String, List<String>> adj = new HashMap<>();
-    for (WorkflowEdgeEntity e : edges) {
-      boolean workflowEdgeIdentityIsIncomplete = EmptyChecks.isNull(e)
-          || !Texts.hasText(e.getFromNodeCode())
-          || !Texts.hasText(e.getToNodeCode());
-      if (workflowEdgeIdentityIsIncomplete) continue;
-      String key = outgoingDirection ? e.getFromNodeCode() : e.getToNodeCode();
-      String value = outgoingDirection ? e.getToNodeCode() : e.getFromNodeCode();
-      adj.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
-    }
-    return adj;
-  }
-
-  /** Tarjan-lite：DFS 三色标记找环。命中即记 ERROR。同时检 self-loop。 */
-  private void detectCycles(
-      Set<String> nodes, Map<String, List<String>> outgoing, List<ValidationIssue> errors) {
-    // self-loop
-    for (Map.Entry<String, List<String>> e : outgoing.entrySet()) {
-      if (e.getValue() != null && e.getValue().contains(e.getKey())) {
-        errors.add(issue("V1", "self-loop edge", e.getKey()));
-      }
-    }
-    Map<String, Integer> color = new HashMap<>(); // 0=未访问 1=访问中 2=已完成
-    for (String n : nodes) {
-      if (color.getOrDefault(n, 0) == 0) {
-        dfsHasCycle(n, outgoing, color, errors);
-      }
-    }
-  }
-
-  // 环检测不与 Excel 校验共享：这里遇到第一个环就停止，Excel 校验会继续检查并多处上报。
-  private boolean dfsHasCycle(
-      String node,
-      Map<String, List<String>> outgoing,
-      Map<String, Integer> color,
-      List<ValidationIssue> errors) {
-    color.put(node, 1);
-    for (String next : outgoing.getOrDefault(node, List.of())) {
-      Integer c = color.getOrDefault(next, 0);
-      if (c == 1) {
-        errors.add(issue("V1", "topology cycle through node " + node + " → " + next, node));
-        return true;
-      }
-      if (c == 0 && dfsHasCycle(next, outgoing, color, errors)) {
-        return true;
-      }
-    }
-    color.put(node, 2);
-    return false;
-  }
-
-  private void validateCrossDayDeps(WorkflowNodeEntity node, List<ValidationIssue> errors) {
-    String spec = node.getCrossDayDependencies();
-    if (!Texts.hasText(spec)) return;
-    List<CrossDayDependencySpec> deps;
-    try {
-      deps = JsonUtils.fromJson(spec, SPEC_LIST_TYPE);
-    } catch (Exception parseFailure) {
-      String failureMessage = parseFailure.getMessage();
-      String validationMessage = "cross_day_dependencies JSON parse failed: " + failureMessage;
-      String nodeCode = node.getNodeCode();
-      errors.add(issue("V6", validationMessage, nodeCode));
-      return;
-    }
-    if (deps == null) return;
-    for (CrossDayDependencySpec dep : deps) {
-      if (dep == null) continue;
-      if (!Texts.hasText(dep.jobCode())) {
-        errors.add(issue("V6", "cross_day_dep missing jobCode", node.getNodeCode()));
-        continue;
-      }
-      if (!dep.hasSupportedStrategy() || !dep.hasValidVersionSelector()) {
-        errors.add(issue(
-            "V6", "cross_day_dep has unsupported consume version strategy", node.getNodeCode()));
-      }
-      boolean dependencyScopeIsUnsupported = EmptyChecks.isNotNull(dep.scope())
-          && !CrossDayDependencySpec.SCOPE_REQUIRED.equalsIgnoreCase(dep.scope())
-          && !CrossDayDependencySpec.SCOPE_OPTIONAL.equalsIgnoreCase(dep.scope());
-      if (dependencyScopeIsUnsupported) {
-        errors.add(issue("V6", "cross_day_dep has unsupported scope", node.getNodeCode()));
-      }
-      if (Texts.hasText(dep.bizDateRange())) {
-        Integer days = parseRangeDays(dep.bizDateRange());
-        if (days != null && days > MAX_RANGE_DAYS) {
-          String rangeLimitMessage = "cross_day_dep range "
-              + dep.bizDateRange()
-              + " exceeds max "
-              + MAX_RANGE_DAYS
-              + " days";
-          errors.add(issue("V7", rangeLimitMessage, node.getNodeCode()));
+    private Integer parseRangeDays(String rangeTag) {
+        String trimmedRangeTag = rangeTag.trim();
+        String tag = trimmedRangeTag.toUpperCase(Locale.ROOT);
+        if (tag.startsWith("PREV_") && tag.endsWith("_BIZ_DAYS")) {
+            String previousBusinessDayCount = tag.substring("PREV_".length());
+            return parseLeadingInt(previousBusinessDayCount);
         }
-      }
+        if (tag.startsWith("LAST_") && tag.endsWith("_WEEKS")) {
+            String weekCount = tag.substring("LAST_".length());
+            Integer weeks = parseLeadingInt(weekCount);
+            return weeks == null ? null : weeks * 7;
+        }
+        return null;
     }
-  }
 
-  private Integer parseRangeDays(String rangeTag) {
-    String trimmedRangeTag = rangeTag.trim();
-    String tag = trimmedRangeTag.toUpperCase(Locale.ROOT);
-    if (tag.startsWith("PREV_") && tag.endsWith("_BIZ_DAYS")) {
-      String previousBusinessDayCount = tag.substring("PREV_".length());
-      return parseLeadingInt(previousBusinessDayCount);
+    private Integer parseLeadingInt(String text) {
+        StringBuilder digits = new StringBuilder();
+        for (char c : text.toCharArray()) {
+            if (Character.isDigit(c)) digits.append(c);
+            else break;
+        }
+        if (digits.isEmpty()) return null;
+        try {
+            return Integer.parseInt(digits.toString());
+        } catch (NumberFormatException nfe) {
+            return null;
+        }
     }
-    if (tag.startsWith("LAST_") && tag.endsWith("_WEEKS")) {
-      String weekCount = tag.substring("LAST_".length());
-      Integer weeks = parseLeadingInt(weekCount);
-      return weeks == null ? null : weeks * 7;
-    }
-    return null;
-  }
 
-  private Integer parseLeadingInt(String text) {
-    StringBuilder digits = new StringBuilder();
-    for (char c : text.toCharArray()) {
-      if (Character.isDigit(c)) digits.append(c);
-      else break;
+    private String readNodeJoinMode(String nodeParams) {
+        if (!Texts.hasText(nodeParams)) return null;
+        try {
+            Map<?, ?> params = JsonUtils.fromJson(nodeParams, Map.class);
+            Object mode = EmptyChecks.isNull(params) ? null : params.get("joinMode");
+            return EmptyChecks.isNull(mode) ? null : mode.toString();
+        } catch (IllegalArgumentException invalid) {
+            return null;
+        }
     }
-    if (digits.isEmpty()) return null;
-    try {
-      return Integer.parseInt(digits.toString());
-    } catch (NumberFormatException nfe) {
-      return null;
-    }
-  }
 
-  private String readNodeJoinMode(String nodeParams) {
-    if (!Texts.hasText(nodeParams)) return null;
-    try {
-      Map<?, ?> params = JsonUtils.fromJson(nodeParams, Map.class);
-      Object mode = EmptyChecks.isNull(params) ? null : params.get("joinMode");
-      return EmptyChecks.isNull(mode) ? null : mode.toString();
-    } catch (IllegalArgumentException invalid) {
-      return null;
+    private int[] parseJoinMode(String nodeParams, int incomingCount) {
+        if (!Texts.hasText(nodeParams)) return null;
+        try {
+            Map<?, ?> map = JsonUtils.fromJson(nodeParams, Map.class);
+            if (map == null) return null;
+            Object jm = map.get("joinMode");
+            if (jm == null) return null;
+            String rawJoinMode = jm.toString();
+            String trimmedJoinMode = rawJoinMode.trim();
+            String joinModeText = trimmedJoinMode.toUpperCase(Locale.ROOT);
+            if ("N_OF".equals(joinModeText) && incomingCount >= 2) {
+                Integer threshold = WorkflowJoinThreshold.parse(map.get("joinThreshold"));
+                int required = EmptyChecks.isNull(threshold) ? 0 : threshold;
+                return new int[] {required, incomingCount};
+            }
+            if (joinModeText.matches("^\\d+_OF_\\d+$")) {
+                String[] parts = joinModeText.split("_OF_");
+                int requiredMatches = Integer.parseInt(parts[0]);
+                int totalOptions = Integer.parseInt(parts[1]);
+                int[] nOfM = {requiredMatches, totalOptions};
+                return nOfM;
+            }
+            return null;
+        } catch (Exception ignore) {
+            return null;
+        }
     }
-  }
 
-  private int[] parseJoinMode(String nodeParams, int incomingCount) {
-    if (!Texts.hasText(nodeParams)) return null;
-    try {
-      Map<?, ?> map = JsonUtils.fromJson(nodeParams, Map.class);
-      if (map == null) return null;
-      Object jm = map.get("joinMode");
-      if (jm == null) return null;
-      String rawJoinMode = jm.toString();
-      String trimmedJoinMode = rawJoinMode.trim();
-      String joinModeText = trimmedJoinMode.toUpperCase(Locale.ROOT);
-      if ("N_OF".equals(joinModeText) && incomingCount >= 2) {
-        Integer threshold = WorkflowJoinThreshold.parse(map.get("joinThreshold"));
-        int required = EmptyChecks.isNull(threshold) ? 0 : threshold;
-        return new int[] {required, incomingCount};
-      }
-      if (joinModeText.matches("^\\d+_OF_\\d+$")) {
-        String[] parts = joinModeText.split("_OF_");
-        int requiredMatches = Integer.parseInt(parts[0]);
-        int totalOptions = Integer.parseInt(parts[1]);
-        int[] nOfM = {requiredMatches, totalOptions};
-        return nOfM;
-      }
-      return null;
-    } catch (Exception ignore) {
-      return null;
+    private ValidationIssue issue(String code, String message, String nodeCode) {
+        return ValidationIssue.builder()
+                .code(code)
+                .severity(ValidationIssue.SEVERITY_ERROR)
+                .nodeCode(nodeCode)
+                .message(message)
+                .build();
     }
-  }
-
-  private ValidationIssue issue(String code, String message, String nodeCode) {
-    return ValidationIssue.builder()
-        .code(code)
-        .severity(ValidationIssue.SEVERITY_ERROR)
-        .nodeCode(nodeCode)
-        .message(message)
-        .build();
-  }
 }

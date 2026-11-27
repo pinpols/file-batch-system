@@ -42,873 +42,855 @@ import org.springframework.web.client.RestClient;
 @DisplayName("HTTP 任务执行客户端: 端点轮询, 重试退避与批量领取续期")
 class HttpTaskExecutionClientTest {
 
-  @Test
-  @DisplayName("执行入口确认携带当前身份和布尔标记，普通续租仍使用原批量报文")
-  void shouldKeepExecutionStartDetailsOutsideOrdinaryBatchRenewal() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
-      server.enqueue(jsonResponse(
-          "{\"results\":[{\"taskId\":2,\"renewed\":true,\"cancelRequested\":false}]}"));
-      server.start();
-      HttpTaskExecutionClient client =
-          newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
-      TaskLeaseRenewItem start = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "inv-1");
-      TaskLeaseRenewItem renewal = new TaskLeaseRenewItem("t1", 2L, "w1", "inv-2");
-      List<TaskLeaseRenewItem> items = List.of(start, renewal);
+    @Test
+    @DisplayName("执行入口确认携带当前身份和布尔标记，普通续租仍使用原批量报文")
+    void shouldKeepExecutionStartDetailsOutsideOrdinaryBatchRenewal() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
+            server.enqueue(jsonResponse("{\"results\":[{\"taskId\":2,\"renewed\":true,\"cancelRequested\":false}]}"));
+            server.start();
+            HttpTaskExecutionClient client =
+                    newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
+            TaskLeaseRenewItem start = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "inv-1");
+            TaskLeaseRenewItem renewal = new TaskLeaseRenewItem("t1", 2L, "w1", "inv-2");
+            List<TaskLeaseRenewItem> items = List.of(start, renewal);
 
-      Map<Long, TaskLeaseRenewResult> result = client.renewLeasesBatch(items);
+            Map<Long, TaskLeaseRenewResult> result = client.renewLeasesBatch(items);
 
-      assertThat(result)
-          .containsEntry(1L, TaskLeaseRenewResult.renewed(1L))
-          .containsEntry(2L, TaskLeaseRenewResult.renewed(2L));
-      var confirmation = server.takeRequest();
-      assertThat(confirmation.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/renew");
-      assertThat(confirmation.getBody().utf8())
-          .contains(
-              "\"tenantId\":\"t1\"",
-              "\"workerId\":\"w1\"",
-              "\"partitionInvocationId\":\"inv-1\"",
-              "\"executionStarted\":true",
-              "\"executionAttemptId\":");
-      var ordinary = server.takeRequest();
-      assertThat(ordinary.getUrl().encodedPath()).isEqualTo("/internal/tasks/leases/renew-batch");
-      assertThat(ordinary.getBody().utf8()).contains("inv-2").doesNotContain("executionStarted");
+            assertThat(result)
+                    .containsEntry(1L, TaskLeaseRenewResult.renewed(1L))
+                    .containsEntry(2L, TaskLeaseRenewResult.renewed(2L));
+            var confirmation = server.takeRequest();
+            assertThat(confirmation.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/renew");
+            assertThat(confirmation.getBody().utf8())
+                    .contains(
+                            "\"tenantId\":\"t1\"",
+                            "\"workerId\":\"w1\"",
+                            "\"partitionInvocationId\":\"inv-1\"",
+                            "\"executionStarted\":true",
+                            "\"executionAttemptId\":");
+            var ordinary = server.takeRequest();
+            assertThat(ordinary.getUrl().encodedPath()).isEqualTo("/internal/tasks/leases/renew-batch");
+            assertThat(ordinary.getBody().utf8()).contains("inv-2").doesNotContain("executionStarted");
+        }
     }
-  }
 
-  @Test
-  @DisplayName("执行入口确认响应失败时使用同一尝试标识重试")
-  void shouldReuseExecutionAttemptId_whenStartConfirmationIsRetried() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(500).build());
-      server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
-      server.start();
-      HttpTaskExecutionClient client =
-          newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
-      TaskLeaseRenewItem item = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "inv-1");
+    @Test
+    @DisplayName("执行入口确认响应失败时使用同一尝试标识重试")
+    void shouldReuseExecutionAttemptId_whenStartConfirmationIsRetried() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(500).build());
+            server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
+            server.start();
+            HttpTaskExecutionClient client =
+                    newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
+            TaskLeaseRenewItem item = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "inv-1");
 
-      Map<Long, TaskLeaseRenewResult> result = client.renewLeasesBatch(List.of(item));
+            Map<Long, TaskLeaseRenewResult> result = client.renewLeasesBatch(List.of(item));
 
-      assertThat(result).containsEntry(1L, TaskLeaseRenewResult.renewed(1L));
-      String firstBody = server.takeRequest().getBody().utf8();
-      String retryBody = server.takeRequest().getBody().utf8();
-      assertThat(firstBody).contains("\"executionAttemptId\":");
-      assertThat(retryBody).isEqualTo(firstBody);
+            assertThat(result).containsEntry(1L, TaskLeaseRenewResult.renewed(1L));
+            String firstBody = server.takeRequest().getBody().utf8();
+            String retryBody = server.takeRequest().getBody().utf8();
+            assertThat(firstBody).contains("\"executionAttemptId\":");
+            assertThat(retryBody).isEqualTo(firstBody);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("同一任务的两次业务入口使用不同的执行尝试标识")
-  void shouldUseDifferentAttemptIdsForSeparateExecutionStarts() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
-      server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
-      server.start();
-      HttpTaskExecutionClient client =
-          newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
-      TaskLeaseRenewItem item = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "inv-1");
+    @Test
+    @DisplayName("同一任务的两次业务入口使用不同的执行尝试标识")
+    void shouldUseDifferentAttemptIdsForSeparateExecutionStarts() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
+            server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
+            server.start();
+            HttpTaskExecutionClient client =
+                    newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
+            TaskLeaseRenewItem item = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "inv-1");
 
-      client.renewLeasesBatch(List.of(item));
-      client.renewLeasesBatch(List.of(item));
+            client.renewLeasesBatch(List.of(item));
+            client.renewLeasesBatch(List.of(item));
 
-      ObjectMapper mapper = new ObjectMapper();
-      String firstBody = server.takeRequest().getBody().utf8();
-      String secondBody = server.takeRequest().getBody().utf8();
-      String firstId =
-          mapper.readTree(firstBody).path("details").path("executionAttemptId").asText();
-      String secondId =
-          mapper.readTree(secondBody).path("details").path("executionAttemptId").asText();
-      assertThat(firstId).isNotBlank();
-      assertThat(secondId).isNotBlank().isNotEqualTo(firstId);
+            ObjectMapper mapper = new ObjectMapper();
+            String firstBody = server.takeRequest().getBody().utf8();
+            String secondBody = server.takeRequest().getBody().utf8();
+            String firstId = mapper.readTree(firstBody)
+                    .path("details")
+                    .path("executionAttemptId")
+                    .asText();
+            String secondId = mapper.readTree(secondBody)
+                    .path("details")
+                    .path("executionAttemptId")
+                    .asText();
+            assertThat(firstId).isNotBlank();
+            assertThat(secondId).isNotBlank().isNotEqualTo(firstId);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("执行入口 CAS 被拒绝时不得改为普通续租后继续执行业务")
-  void shouldRejectExecutionStartWithoutOrdinaryRenewFallback() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(409).build());
-      server.start();
-      HttpTaskExecutionClient client =
-          newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
-      TaskLeaseRenewItem start = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "stale-inv");
-      List<TaskLeaseRenewItem> items = List.of(start);
+    @Test
+    @DisplayName("执行入口 CAS 被拒绝时不得改为普通续租后继续执行业务")
+    void shouldRejectExecutionStartWithoutOrdinaryRenewFallback() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(409).build());
+            server.start();
+            HttpTaskExecutionClient client =
+                    newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
+            TaskLeaseRenewItem start = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "stale-inv");
+            List<TaskLeaseRenewItem> items = List.of(start);
 
-      Map<Long, TaskLeaseRenewResult> result = client.renewLeasesBatch(items);
+            Map<Long, TaskLeaseRenewResult> result = client.renewLeasesBatch(items);
 
-      assertThat(result).containsEntry(1L, TaskLeaseRenewResult.rejected(1L));
-      assertThat(server.getRequestCount()).isOne();
-      var confirmation = server.takeRequest();
-      assertThat(confirmation.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/renew");
-      assertThat(confirmation.getBody().utf8()).contains("\"executionStarted\":true", "stale-inv");
+            assertThat(result).containsEntry(1L, TaskLeaseRenewResult.rejected(1L));
+            assertThat(server.getRequestCount()).isOne();
+            var confirmation = server.takeRequest();
+            assertThat(confirmation.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/renew");
+            assertThat(confirmation.getBody().utf8()).contains("\"executionStarted\":true", "stale-inv");
+        }
     }
-  }
 
-  @Test
-  @DisplayName("配置多个端点时领取与上报请求轮流分发, 两个端点各承担一半")
-  void shouldRoundRobinClaimsAndReports_whenMultipleEndpointsConfigured() throws Exception {
-    try (MockWebServer first = new MockWebServer();
-        MockWebServer second = new MockWebServer()) {
-      first.enqueue(jsonResponse("{}"));
-      second.enqueue(jsonResponse("{}"));
-      first.enqueue(new MockResponse.Builder().code(200).build());
-      second.enqueue(new MockResponse.Builder().code(200).build());
-      first.start();
-      second.start();
+    @Test
+    @DisplayName("配置多个端点时领取与上报请求轮流分发, 两个端点各承担一半")
+    void shouldRoundRobinClaimsAndReports_whenMultipleEndpointsConfigured() throws Exception {
+        try (MockWebServer first = new MockWebServer();
+                MockWebServer second = new MockWebServer()) {
+            first.enqueue(jsonResponse("{}"));
+            second.enqueue(jsonResponse("{}"));
+            first.enqueue(new MockResponse.Builder().code(200).build());
+            second.enqueue(new MockResponse.Builder().code(200).build());
+            first.start();
+            second.start();
 
-      OrchestratorTaskClientProperties props = clientProperties(first.getPort());
-      props.setBaseUrls(List.of(baseUrl(first), baseUrl(second)));
-      HttpTaskExecutionClient client = newClient(props, new WorkerBatchClaimProperties());
+            OrchestratorTaskClientProperties props = clientProperties(first.getPort());
+            props.setBaseUrls(List.of(baseUrl(first), baseUrl(second)));
+            HttpTaskExecutionClient client = newClient(props, new WorkerBatchClaimProperties());
 
-      assertThat(client.claim("t1", 1L, "w1")).isPresent();
-      assertThat(client.claim("t1", 2L, "w1")).isPresent();
-      client.report(report(3L));
-      client.report(report(4L));
+            assertThat(client.claim("t1", 1L, "w1")).isPresent();
+            assertThat(client.claim("t1", 2L, "w1")).isPresent();
+            client.report(report(3L));
+            client.report(report(4L));
 
-      assertThat(first.getRequestCount()).isEqualTo(2);
-      assertThat(second.getRequestCount()).isEqualTo(2);
+            assertThat(first.getRequestCount()).isEqualTo(2);
+            assertThat(second.getRequestCount()).isEqualTo(2);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("上报在首个端点遇到服务不可用时故障转移到下一个端点并成功")
-  void shouldFailOverToNextEndpoint_whenReportNeedsAnotherAttempt() throws Exception {
-    try (MockWebServer first = new MockWebServer();
-        MockWebServer second = new MockWebServer()) {
-      first.enqueue(new MockResponse.Builder().code(503).build());
-      second.enqueue(new MockResponse.Builder().code(200).build());
-      first.start();
-      second.start();
+    @Test
+    @DisplayName("上报在首个端点遇到服务不可用时故障转移到下一个端点并成功")
+    void shouldFailOverToNextEndpoint_whenReportNeedsAnotherAttempt() throws Exception {
+        try (MockWebServer first = new MockWebServer();
+                MockWebServer second = new MockWebServer()) {
+            first.enqueue(new MockResponse.Builder().code(503).build());
+            second.enqueue(new MockResponse.Builder().code(200).build());
+            first.start();
+            second.start();
 
-      OrchestratorTaskClientProperties props = clientProperties(first.getPort());
-      props.setBaseUrls(List.of(baseUrl(first), baseUrl(second)));
-      props.setReportMaxAttempts(2);
-      props.setReportInitialBackoffMillis(1);
-      props.setReportMaxBackoffMillis(1);
-      HttpTaskExecutionClient client = newClient(props, new WorkerBatchClaimProperties());
+            OrchestratorTaskClientProperties props = clientProperties(first.getPort());
+            props.setBaseUrls(List.of(baseUrl(first), baseUrl(second)));
+            props.setReportMaxAttempts(2);
+            props.setReportInitialBackoffMillis(1);
+            props.setReportMaxBackoffMillis(1);
+            HttpTaskExecutionClient client = newClient(props, new WorkerBatchClaimProperties());
 
-      client.report(report(42L));
+            client.report(report(42L));
 
-      assertThat(first.getRequestCount()).isEqualTo(1);
-      assertThat(second.getRequestCount()).isEqualTo(1);
+            assertThat(first.getRequestCount()).isEqualTo(1);
+            assertThat(second.getRequestCount()).isEqualTo(1);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("上报收到服务端错误后按退避重试并成功, 同时按失败原因累加计数")
-  void shouldRetryReportAndSucceed_whenServerReturnsServiceUnavailable() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(503).build());
-      server.enqueue(new MockResponse.Builder().code(200).build());
-      server.start();
+    @Test
+    @DisplayName("上报收到服务端错误后按退避重试并成功, 同时按失败原因累加计数")
+    void shouldRetryReportAndSucceed_whenServerReturnsServiceUnavailable() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(503).build());
+            server.enqueue(new MockResponse.Builder().code(200).build());
+            server.start();
 
-      OrchestratorTaskClientProperties props = clientProperties(server.getPort());
-      props.setReportMaxAttempts(3);
-      props.setReportInitialBackoffMillis(5);
-      props.setReportMaxBackoffMillis(20);
+            OrchestratorTaskClientProperties props = clientProperties(server.getPort());
+            props.setReportMaxAttempts(3);
+            props.setReportInitialBackoffMillis(5);
+            props.setReportMaxBackoffMillis(20);
 
-      SimpleMeterRegistry registry = new SimpleMeterRegistry();
-      @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
-      when(noopCoordinator.getIfAvailable()).thenReturn(null);
-      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
-          props,
-          new BatchSecurityProperties(),
-          restClientBuilderProvider(),
-          new MockEnvironment(),
-          registry,
-          noopCoordinator,
-          new WorkerLeaseProperties(),
-          new WorkerBatchClaimProperties());
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            @SuppressWarnings("unchecked")
+            ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+            when(noopCoordinator.getIfAvailable()).thenReturn(null);
+            HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+                    props,
+                    new BatchSecurityProperties(),
+                    restClientBuilderProvider(),
+                    new MockEnvironment(),
+                    registry,
+                    noopCoordinator,
+                    new WorkerLeaseProperties(),
+                    new WorkerBatchClaimProperties());
 
-      TaskExecutionReport report = report(42L);
-      client.report(report);
+            TaskExecutionReport report = report(42L);
+            client.report(report);
 
-      assertThat(server.getRequestCount()).isEqualTo(2);
-      assertThat(registry
-              .find("worker.report.failed.total")
-              .tag("reason", "SERVER_ERROR")
-              .counter()
-              .count())
-          .isEqualTo(1.0d);
+            assertThat(server.getRequestCount()).isEqualTo(2);
+            assertThat(registry.find("worker.report.failed.total")
+                            .tag("reason", "SERVER_ERROR")
+                            .counter()
+                            .count())
+                    .isEqualTo(1.0d);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("单任务认领遇到 404 时返回未认领, 不重试并可由消费端安全跳过")
-  void shouldTreatSingleClaimNotFoundAsUnclaimed() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(404).build());
-      server.start();
+    @Test
+    @DisplayName("单任务认领遇到 404 时返回未认领, 不重试并可由消费端安全跳过")
+    void shouldTreatSingleClaimNotFoundAsUnclaimed() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(404).build());
+            server.start();
 
-      HttpTaskExecutionClient client = newClient(server.getPort());
+            HttpTaskExecutionClient client = newClient(server.getPort());
 
-      assertThat(client.claim("ta", 296L, "import-node-1")).isEmpty();
-      assertThat(server.getRequestCount()).isEqualTo(1);
-      assertThat(server.takeRequest().getUrl().encodedPath())
-          .isEqualTo("/internal/tasks/296/claim");
+            assertThat(client.claim("ta", 296L, "import-node-1")).isEmpty();
+            assertThat(server.getRequestCount()).isEqualTo(1);
+            assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/internal/tasks/296/claim");
+        }
     }
-  }
 
-  @Test
-  @DisplayName("非幂等开始标记绑定当前任务租约,冲突时拒绝执行")
-  void shouldPersistNonIdempotentStartForCurrentLease() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(204).build());
-      server.enqueue(new MockResponse.Builder().code(409).build());
-      server.start();
+    @Test
+    @DisplayName("非幂等开始标记绑定当前任务租约,冲突时拒绝执行")
+    void shouldPersistNonIdempotentStartForCurrentLease() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(204).build());
+            server.enqueue(new MockResponse.Builder().code(409).build());
+            server.start();
 
-      HttpTaskExecutionClient client = newClient(server.getPort());
+            HttpTaskExecutionClient client = newClient(server.getPort());
 
-      assertThat(client.markNonIdempotentExecutionStarted("t1", 41L, "w-1", "inv-41"))
-          .isTrue();
-      assertThat(client.markNonIdempotentExecutionStarted("t1", 42L, "w-2", "inv-42"))
-          .isFalse();
-      assertThat(server.getRequestCount()).isEqualTo(2);
+            assertThat(client.markNonIdempotentExecutionStarted("t1", 41L, "w-1", "inv-41"))
+                    .isTrue();
+            assertThat(client.markNonIdempotentExecutionStarted("t1", 42L, "w-2", "inv-42"))
+                    .isFalse();
+            assertThat(server.getRequestCount()).isEqualTo(2);
 
-      var accepted = server.takeRequest();
-      assertThat(accepted.getMethod()).isEqualTo("POST");
-      assertThat(accepted.getUrl().encodedPath())
-          .isEqualTo("/internal/tasks/41/non-idempotent-started");
-      assertThat(accepted.getBody().utf8())
-          .contains(
-              "\"tenantId\":\"t1\"",
-              "\"workerId\":\"w-1\"",
-              "\"partitionInvocationId\":\"inv-41\"");
-      assertThat(server.takeRequest().getUrl().encodedPath())
-          .isEqualTo("/internal/tasks/42/non-idempotent-started");
+            var accepted = server.takeRequest();
+            assertThat(accepted.getMethod()).isEqualTo("POST");
+            assertThat(accepted.getUrl().encodedPath()).isEqualTo("/internal/tasks/41/non-idempotent-started");
+            assertThat(accepted.getBody().utf8())
+                    .contains("\"tenantId\":\"t1\"", "\"workerId\":\"w-1\"", "\"partitionInvocationId\":\"inv-41\"");
+            assertThat(server.takeRequest().getUrl().encodedPath())
+                    .isEqualTo("/internal/tasks/42/non-idempotent-started");
+        }
     }
-  }
 
-  @Test
-  @DisplayName("一次批量领取调用返回多项结果, 逐项映射领取状态与任务配置")
-  void shouldMapPerItemResults_whenClaimBatchReturnsOneResponse() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      // 一次 /claim-batch 调用返回 2 项:1 领到(含 config)+ 1 没领到
-      server.enqueue(new MockResponse.Builder()
-          .code(200)
-          .addHeader("Content-Type", "application/json")
-          .body("{\"results\":[{\"taskId\":1,\"claimed\":true,\"config\":{\"jobCode\":\"J\"}},"
-              + "{\"taskId\":2,\"claimed\":false,\"config\":null}]}")
-          .build());
-      server.start();
+    @Test
+    @DisplayName("一次批量领取调用返回多项结果, 逐项映射领取状态与任务配置")
+    void shouldMapPerItemResults_whenClaimBatchReturnsOneResponse() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            // 一次 /claim-batch 调用返回 2 项:1 领到(含 config)+ 1 没领到
+            server.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"results\":[{\"taskId\":1,\"claimed\":true,\"config\":{\"jobCode\":\"J\"}},"
+                            + "{\"taskId\":2,\"claimed\":false,\"config\":null}]}")
+                    .build());
+            server.start();
 
-      HttpTaskExecutionClient client = newClient(server.getPort());
-      List<TaskClaimResult> results = client.claimBatch(
-          List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
+            HttpTaskExecutionClient client = newClient(server.getPort());
+            List<TaskClaimResult> results =
+                    client.claimBatch(List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
 
-      assertThat(server.getRequestCount()).isEqualTo(1); // 一次 HTTP 领 2 个
-      assertThat(results).hasSize(2);
-      assertThat(results.get(0).taskId()).isEqualTo(1L);
-      assertThat(results.get(0).claimed()).isTrue();
-      assertThat(results.get(0).config()).isNotNull();
-      assertThat(results.get(1).claimed()).isFalse();
-      assertThat(results.get(1).config()).isNull();
+            assertThat(server.getRequestCount()).isEqualTo(1); // 一次 HTTP 领 2 个
+            assertThat(results).hasSize(2);
+            assertThat(results.get(0).taskId()).isEqualTo(1L);
+            assertThat(results.get(0).claimed()).isTrue();
+            assertThat(results.get(0).config()).isNotNull();
+            assertThat(results.get(1).claimed()).isFalse();
+            assertThat(results.get(1).config()).isNull();
+        }
     }
-  }
 
-  @Test
-  @DisplayName("批量领取接口不存在时降级为逐条领取, 每项领取状态仍正确返回")
-  void shouldFallBackToSingleClaim_whenBatchClaimEndpointMissing() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(404).build()); // claim-batch 不支持
-      server.enqueue(new MockResponse.Builder().code(200).build()); // 单条 claim task1
-      server.enqueue(new MockResponse.Builder().code(409).build()); // 单条 claim task2 没领到
-      server.start();
+    @Test
+    @DisplayName("批量领取接口不存在时降级为逐条领取, 每项领取状态仍正确返回")
+    void shouldFallBackToSingleClaim_whenBatchClaimEndpointMissing() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(404).build()); // claim-batch 不支持
+            server.enqueue(new MockResponse.Builder().code(200).build()); // 单条 claim task1
+            server.enqueue(new MockResponse.Builder().code(409).build()); // 单条 claim task2 没领到
+            server.start();
 
-      HttpTaskExecutionClient client = newClient(server.getPort());
-      List<TaskClaimResult> results = client.claimBatch(
-          List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
+            HttpTaskExecutionClient client = newClient(server.getPort());
+            List<TaskClaimResult> results =
+                    client.claimBatch(List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
 
-      // 1 次 batch(404) + 2 次单条降级
-      assertThat(server.getRequestCount()).isEqualTo(3);
-      assertThat(results).hasSize(2);
-      assertThat(results.get(0).claimed()).isTrue();
-      assertThat(results.get(1).claimed()).isFalse();
+            // 1 次 batch(404) + 2 次单条降级
+            assertThat(server.getRequestCount()).isEqualTo(3);
+            assertThat(results).hasSize(2);
+            assertThat(results.get(0).claimed()).isTrue();
+            assertThat(results.get(1).claimed()).isFalse();
+        }
     }
-  }
 
-  @ParameterizedTest
-  @MethodSource("untrustedClaimResponses")
-  @DisplayName("批量领取不能把同长度乱序或错误身份的配置绑定到另一任务")
-  void shouldMatchClaimResponseByTaskIdentity(String response, boolean fallbackExpected)
-      throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(jsonResponse(response));
-      if (fallbackExpected) {
-        server.enqueue(jsonResponse("""
+    @ParameterizedTest
+    @MethodSource("untrustedClaimResponses")
+    @DisplayName("批量领取不能把同长度乱序或错误身份的配置绑定到另一任务")
+    void shouldMatchClaimResponseByTaskIdentity(String response, boolean fallbackExpected) throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(jsonResponse(response));
+            if (fallbackExpected) {
+                server.enqueue(jsonResponse("""
             {"taskId":1,"payload":"payload-1"}
             """));
-        server.enqueue(jsonResponse("""
+                server.enqueue(jsonResponse("""
             {"taskId":2,"payload":"payload-2"}
             """));
-      }
-      server.start();
-      HttpTaskExecutionClient client = newClient(server.getPort());
-      List<TaskClaimItem> items =
-          List.of(new TaskClaimItem("t1", 1L, "w1"), new TaskClaimItem("t1", 2L, "w1"));
+            }
+            server.start();
+            HttpTaskExecutionClient client = newClient(server.getPort());
+            List<TaskClaimItem> items = List.of(new TaskClaimItem("t1", 1L, "w1"), new TaskClaimItem("t1", 2L, "w1"));
 
-      List<TaskClaimResult> results = client.claimBatch(items);
+            List<TaskClaimResult> results = client.claimBatch(items);
 
-      assertThat(results).hasSize(2);
-      assertThat(results).allSatisfy(result -> {
-        assertThat(result.claimed()).isTrue();
-        assertThat(result.config()).isNotNull();
-      });
-      assertThat(results.get(0).config().taskId()).isEqualTo(1L);
-      assertThat(results.get(0).config().payload()).isEqualTo("payload-1");
-      assertThat(results.get(1).config().taskId()).isEqualTo(2L);
-      assertThat(results.get(1).config().payload()).isEqualTo("payload-2");
-      assertThat(server.getRequestCount()).isEqualTo(fallbackExpected ? 3 : 1);
-      if (fallbackExpected) {
-        server.takeRequest();
-        assertThat(server.takeRequest().getUrl().encodedPath())
-            .isEqualTo("/internal/tasks/1/claim");
-        assertThat(server.takeRequest().getUrl().encodedPath())
-            .isEqualTo("/internal/tasks/2/claim");
-      }
+            assertThat(results).hasSize(2);
+            assertThat(results).allSatisfy(result -> {
+                assertThat(result.claimed()).isTrue();
+                assertThat(result.config()).isNotNull();
+            });
+            assertThat(results.get(0).config().taskId()).isEqualTo(1L);
+            assertThat(results.get(0).config().payload()).isEqualTo("payload-1");
+            assertThat(results.get(1).config().taskId()).isEqualTo(2L);
+            assertThat(results.get(1).config().payload()).isEqualTo("payload-2");
+            assertThat(server.getRequestCount()).isEqualTo(fallbackExpected ? 3 : 1);
+            if (fallbackExpected) {
+                server.takeRequest();
+                assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/internal/tasks/1/claim");
+                assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/internal/tasks/2/claim");
+            }
+        }
     }
-  }
 
-  private static Stream<Object[]> untrustedClaimResponses() {
-    return Stream.of(
-        new Object[] {"""
+    private static Stream<Object[]> untrustedClaimResponses() {
+        return Stream.of(
+                new Object[] {"""
           {"results":[
             {"taskId":2,"claimed":true,"config":{"taskId":2,"payload":"payload-2"}},
             {"taskId":1,"claimed":true,"config":{"taskId":1,"payload":"payload-1"}}
           ]}
           """, false},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"claimed":true,"config":{"taskId":1,"payload":"payload-1"}},
             {"taskId":1,"claimed":true,"config":{"taskId":1,"payload":"payload-1"}}
           ]}
           """, true},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"claimed":true,"config":{"taskId":1,"payload":"payload-1"}},
             {"taskId":999,"claimed":true,"config":{"taskId":999,"payload":"foreign"}}
           ]}
           """, true},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"claimed":true,"config":{"taskId":2,"payload":"wrong"}},
             {"taskId":2,"claimed":true,"config":{"taskId":1,"payload":"wrong"}}
           ]}
           """, true},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"claimed":true,"config":{"taskId":1,"tenantId":"foreign","payload":"payload-1"}},
             {"taskId":2,"claimed":true,"config":{"taskId":2,"tenantId":"foreign","payload":"payload-2"}}
           ]}
           """, true},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"config":{"taskId":1,"payload":"payload-1"}},
             {"taskId":2,"claimed":true,"config":{"taskId":2,"payload":"payload-2"}}
           ]}
           """, true},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"claimed":true,"config":null},
             {"taskId":2,"claimed":true,"config":{"taskId":2,"payload":"payload-2"}}
           ]}
           """, true});
-  }
-
-  private HttpTaskExecutionClient newClient(int port) {
-    return newClient(port, new WorkerBatchClaimProperties());
-  }
-
-  private HttpTaskExecutionClient newClient(int port, WorkerBatchClaimProperties batchProps) {
-    OrchestratorTaskClientProperties props = clientProperties(port);
-    props.setClaimMaxAttempts(1);
-    return newClient(props, batchProps);
-  }
-
-  private HttpTaskExecutionClient newClient(
-      OrchestratorTaskClientProperties props, WorkerBatchClaimProperties batchProps) {
-    @SuppressWarnings("unchecked")
-    ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
-    when(noopCoordinator.getIfAvailable()).thenReturn(null);
-    return new HttpTaskExecutionClient(
-        props,
-        new BatchSecurityProperties(),
-        restClientBuilderProvider(),
-        new MockEnvironment(),
-        new SimpleMeterRegistry(),
-        noopCoordinator,
-        new WorkerLeaseProperties(),
-        batchProps);
-  }
-
-  private static MockResponse jsonResponse(String body) {
-    return new MockResponse.Builder()
-        .code(200)
-        .addHeader("Content-Type", "application/json")
-        .body(body)
-        .build();
-  }
-
-  private static String baseUrl(MockWebServer server) {
-    return "http://127.0.0.1:" + server.getPort();
-  }
-
-  /**
-   * ADR-046 P2 切片 2.3d 验收:**攒批把 CLAIM 控制面往返从 O(N) 降到 ⌈N/K⌉**。
-   *
-   * <p>N=25 个独立 partition、chunk K=10 → 走 {@code claim-batch} 只发 ⌈25/10⌉=3 次 HTTP;对照单条路径每个 partition
-   * 一次 CLAIM = 25 次。逐项结果完整映射(25 个全部领到)。这是 2.3c 批量 listener 在生产高 fan-out 下省下控制面往返的根因,以确定性 HTTP
-   * 计数固化,不依赖独占全栈压测窗口。
-   */
-  @Test
-  @DisplayName("攒批开启且分片数超过单批上限时按向上取整的批次数发起调用, 每项结果完整且不重复")
-  void shouldReduceClaimRoundTripsByChunking_whenBatchClaimEnabled() throws Exception {
-    int n = 25;
-    int k = 10;
-    try (MockWebServer server = new MockWebServer()) {
-      // 3 个 chunk:[1..10]、[11..20]、[21..25],各一次 claim-batch 响应(全部 claimed=true)
-      server.enqueue(claimBatchChunkResponse(1, 10));
-      server.enqueue(claimBatchChunkResponse(11, 10));
-      server.enqueue(claimBatchChunkResponse(21, 5));
-      server.start();
-
-      WorkerBatchClaimProperties batchProps = new WorkerBatchClaimProperties();
-      batchProps.setEnabled(true);
-      batchProps.setMaxBatchSize(k);
-      HttpTaskExecutionClient client = newClient(server.getPort(), batchProps);
-
-      List<TaskClaimItem> items = new ArrayList<>(n);
-      for (long id = 1; id <= n; id++) {
-        items.add(new TaskClaimItem("ta", id, "w1"));
-      }
-      List<TaskClaimResult> results = client.claimBatch(items);
-
-      int expectedRoundTrips = (n + k - 1) / k; // ⌈25/10⌉ = 3
-      assertThat(server.getRequestCount()).isEqualTo(expectedRoundTrips);
-      assertThat(expectedRoundTrips).isLessThan(n); // 3 « 25:对照单条路径的 O(N)
-      assertThat(results).hasSize(n);
-      assertThat(results).allMatch(TaskClaimResult::claimed);
-      assertThat(results)
-          .extracting(TaskClaimResult::taskId)
-          .doesNotHaveDuplicates()
-          .hasSize(n);
     }
-  }
 
-  /** 构造一个 claim-batch chunk 的 200 响应:taskId 从 startId 起连续 size 个,全部 claimed=true。 */
-  private static MockResponse claimBatchChunkResponse(long startId, int size) {
-    StringBuilder body = new StringBuilder("{\"results\":[");
-    for (int i = 0; i < size; i++) {
-      if (i > 0) {
-        body.append(',');
-      }
-      body.append("{\"taskId\":")
-          .append(startId + i)
-          .append(",\"claimed\":true,\"config\":{\"jobCode\":\"J\"}}");
+    private HttpTaskExecutionClient newClient(int port) {
+        return newClient(port, new WorkerBatchClaimProperties());
     }
-    body.append("]}");
-    return new MockResponse.Builder()
-        .code(200)
-        .addHeader("Content-Type", "application/json")
-        .body(body.toString())
-        .build();
-  }
 
-  @Test
-  @DisplayName("上报被限流后按退避重试, 限流解除即成功并按限流原因累加计数")
-  void shouldRetryReportAndSucceed_whenRateLimitedThenCleared() throws Exception {
-    // R6 P0-7：429 = orchestrator sliding-window 限流的瞬时拒绝，过去 worker 直接放弃 REPORT 等于把
-    // task 数据丢掉（orchestrator 端只能等 lease 过期回收）。改为按退避重试，与 5xx / I/O 同处理。
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(429).body("slow down").build());
-      server.enqueue(new MockResponse.Builder().code(429).body("slow down").build());
-      server.enqueue(new MockResponse.Builder().code(200).build());
-      server.start();
-
-      OrchestratorTaskClientProperties props = clientProperties(server.getPort());
-      props.setReportMaxAttempts(5);
-
-      SimpleMeterRegistry registry = new SimpleMeterRegistry();
-      @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
-      when(noopCoordinator.getIfAvailable()).thenReturn(null);
-      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
-          props,
-          new BatchSecurityProperties(),
-          restClientBuilderProvider(),
-          new MockEnvironment(),
-          registry,
-          noopCoordinator,
-          new WorkerLeaseProperties(),
-          new WorkerBatchClaimProperties());
-
-      client.report(report(7L));
-
-      assertThat(server.getRequestCount()).isEqualTo(3);
-      assertThat(registry
-              .find("worker.report.failed.total")
-              .tag("reason", "RATE_LIMITED")
-              .counter()
-              .count())
-          .isEqualTo(2.0d);
+    private HttpTaskExecutionClient newClient(int port, WorkerBatchClaimProperties batchProps) {
+        OrchestratorTaskClientProperties props = clientProperties(port);
+        props.setClaimMaxAttempts(1);
+        return newClient(props, batchProps);
     }
-  }
 
-  @Test
-  @DisplayName("重试耗尽且本地发件箱不可用时抑制异常, 按丢弃原因累加计数避免重复投递")
-  void shouldSwallowReportFailure_whenHttpExhaustedAndOutboxUnavailable() throws Exception {
-    // P0 #16: HTTP 重试耗尽 + outbox 不可用时,report() 必须捕获并抑制异常(避免 listener 抛回触发 Kafka
-    // 重投导致 task 双执行)。改为记 worker.report.dropped.total{reason=outbox_disabled} 由
-    // orchestrator lease reclaim 回退。
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(503).build());
-      server.enqueue(new MockResponse.Builder().code(503).build());
-      server.enqueue(new MockResponse.Builder().code(503).build());
-      server.start();
-
-      OrchestratorTaskClientProperties props = clientProperties(server.getPort());
-      props.setReportMaxAttempts(3);
-      props.setReportInitialBackoffMillis(1);
-      props.setReportMaxBackoffMillis(2);
-
-      SimpleMeterRegistry registry = new SimpleMeterRegistry();
-      @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
-      when(noopCoordinator.getIfAvailable()).thenReturn(null);
-      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
-          props,
-          new BatchSecurityProperties(),
-          restClientBuilderProvider(),
-          new MockEnvironment(),
-          registry,
-          noopCoordinator,
-          new WorkerLeaseProperties(),
-          new WorkerBatchClaimProperties());
-
-      // 不应抛出
-      client.report(report(99L));
-
-      assertThat(server.getRequestCount()).isEqualTo(3);
-      assertThat(registry
-              .find("worker.report.dropped.total")
-              .tag("reason", "outbox_disabled")
-              .counter()
-              .count())
-          .isEqualTo(1.0d);
+    private HttpTaskExecutionClient newClient(
+            OrchestratorTaskClientProperties props, WorkerBatchClaimProperties batchProps) {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+        when(noopCoordinator.getIfAvailable()).thenReturn(null);
+        return new HttpTaskExecutionClient(
+                props,
+                new BatchSecurityProperties(),
+                restClientBuilderProvider(),
+                new MockEnvironment(),
+                new SimpleMeterRegistry(),
+                noopCoordinator,
+                new WorkerLeaseProperties(),
+                batchProps);
     }
-  }
 
-  @Test
-  @DisplayName("重试耗尽且发件箱入队失败时抑制异常, 按入队失败原因累加丢弃计数")
-  void shouldSwallowReportFailure_whenOutboxEnqueueFails() throws Exception {
-    // P0 #16: outbox 启用但 enqueue 失败(DB 抖动 / repository RuntimeException)亦走 dropped 路径,
-    // 不能让异常上抛触发 Kafka 重投。
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(503).build());
-      server.enqueue(new MockResponse.Builder().code(503).build());
-      server.start();
-
-      OrchestratorTaskClientProperties props = clientProperties(server.getPort());
-      props.setReportMaxAttempts(2);
-      props.setReportInitialBackoffMillis(1);
-      props.setReportMaxBackoffMillis(2);
-
-      SimpleMeterRegistry registry = new SimpleMeterRegistry();
-      WorkerReportOutboxCoordinator coordinator = mock(WorkerReportOutboxCoordinator.class);
-      when(coordinator.enqueue(ArgumentMatchers.any())).thenReturn(false);
-      @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> coordinatorProvider =
-          mock(ObjectProvider.class);
-      when(coordinatorProvider.getIfAvailable()).thenReturn(coordinator);
-      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
-          props,
-          new BatchSecurityProperties(),
-          restClientBuilderProvider(),
-          new MockEnvironment(),
-          registry,
-          coordinatorProvider,
-          new WorkerLeaseProperties(),
-          new WorkerBatchClaimProperties());
-
-      client.report(report(100L));
-
-      assertThat(registry
-              .find("worker.report.dropped.total")
-              .tag("reason", "outbox_enqueue_failed")
-              .counter()
-              .count())
-          .isEqualTo(1.0d);
+    private static MockResponse jsonResponse(String body) {
+        return new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "application/json")
+                .body(body)
+                .build();
     }
-  }
 
-  @Test
-  @DisplayName("批量续期按分块只发起一次调用, 逐项映射续期结果与取消请求")
-  void shouldRenewLeaseChunkInSingleCall_whenBatchRenewRequested() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder()
-          .code(200)
-          .setHeader("Content-Type", "application/json")
-          .body("{\"results\":[{\"taskId\":1,\"renewed\":true,\"cancelRequested\":true},"
-              + "{\"taskId\":2,\"renewed\":false}]}")
-          .build());
-      server.start();
-
-      OrchestratorTaskClientProperties props = clientProperties(server.getPort());
-      props.setClaimMaxAttempts(2);
-
-      @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
-      when(noopCoordinator.getIfAvailable()).thenReturn(null);
-      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
-          props,
-          new BatchSecurityProperties(),
-          restClientBuilderProvider(),
-          new MockEnvironment(),
-          null,
-          noopCoordinator,
-          new WorkerLeaseProperties(),
-          new WorkerBatchClaimProperties());
-
-      List<TaskLeaseRenewItem> items = List.of(
-          new TaskLeaseRenewItem("t1", 1L, "w1", null),
-          new TaskLeaseRenewItem("t1", 2L, "w1", "inv"));
-      Map<Long, TaskLeaseRenewResult> out = client.renewLeasesBatch(items);
-
-      assertThat(out.get(1L).renewed()).isTrue();
-      assertThat(out.get(1L).cancelRequested()).isTrue();
-      assertThat(out.get(2L).renewed()).isFalse();
-      assertThat(out.get(2L).cancelRequested()).isFalse();
-      assertThat(server.getRequestCount()).isEqualTo(1);
+    private static String baseUrl(MockWebServer server) {
+        return "http://127.0.0.1:" + server.getPort();
     }
-  }
 
-  @Test
-  @DisplayName("批量续租降级到单条心跳时仍透传取消请求")
-  void shouldPreserveCancellationWhenBatchRenewFallsBackToSingleRenew() throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(404).build());
-      server.enqueue(new MockResponse.Builder()
-          .code(200)
-          .setHeader("Content-Type", "application/json")
-          .body("{\"cancelRequested\":true}")
-          .build());
-      server.start();
+    /**
+     * ADR-046 P2 切片 2.3d 验收:**攒批把 CLAIM 控制面往返从 O(N) 降到 ⌈N/K⌉**。
+     *
+     * <p>N=25 个独立 partition、chunk K=10 → 走 {@code claim-batch} 只发 ⌈25/10⌉=3 次 HTTP;对照单条路径每个 partition
+     * 一次 CLAIM = 25 次。逐项结果完整映射(25 个全部领到)。这是 2.3c 批量 listener 在生产高 fan-out 下省下控制面往返的根因,以确定性 HTTP
+     * 计数固化,不依赖独占全栈压测窗口。
+     */
+    @Test
+    @DisplayName("攒批开启且分片数超过单批上限时按向上取整的批次数发起调用, 每项结果完整且不重复")
+    void shouldReduceClaimRoundTripsByChunking_whenBatchClaimEnabled() throws Exception {
+        int n = 25;
+        int k = 10;
+        try (MockWebServer server = new MockWebServer()) {
+            // 3 个 chunk:[1..10]、[11..20]、[21..25],各一次 claim-batch 响应(全部 claimed=true)
+            server.enqueue(claimBatchChunkResponse(1, 10));
+            server.enqueue(claimBatchChunkResponse(11, 10));
+            server.enqueue(claimBatchChunkResponse(21, 5));
+            server.start();
 
-      OrchestratorTaskClientProperties props = clientProperties(server.getPort());
-      @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
-      when(noopCoordinator.getIfAvailable()).thenReturn(null);
-      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
-          props,
-          new BatchSecurityProperties(),
-          restClientBuilderProvider(),
-          new MockEnvironment(),
-          null,
-          noopCoordinator,
-          new WorkerLeaseProperties(),
-          new WorkerBatchClaimProperties());
+            WorkerBatchClaimProperties batchProps = new WorkerBatchClaimProperties();
+            batchProps.setEnabled(true);
+            batchProps.setMaxBatchSize(k);
+            HttpTaskExecutionClient client = newClient(server.getPort(), batchProps);
 
-      Map<Long, TaskLeaseRenewResult> result =
-          client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 19L, "w1", "inv-19")));
+            List<TaskClaimItem> items = new ArrayList<>(n);
+            for (long id = 1; id <= n; id++) {
+                items.add(new TaskClaimItem("ta", id, "w1"));
+            }
+            List<TaskClaimResult> results = client.claimBatch(items);
 
-      assertThat(result.get(19L).renewed()).isTrue();
-      assertThat(result.get(19L).cancelRequested()).isTrue();
-      assertThat(server.getRequestCount()).isEqualTo(2);
-      assertThat(server.takeRequest().getUrl().encodedPath())
-          .isEqualTo("/internal/tasks/leases/renew-batch");
-      assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/internal/tasks/19/renew");
+            int expectedRoundTrips = (n + k - 1) / k; // ⌈25/10⌉ = 3
+            assertThat(server.getRequestCount()).isEqualTo(expectedRoundTrips);
+            assertThat(expectedRoundTrips).isLessThan(n); // 3 « 25:对照单条路径的 O(N)
+            assertThat(results).hasSize(n);
+            assertThat(results).allMatch(TaskClaimResult::claimed);
+            assertThat(results)
+                    .extracting(TaskClaimResult::taskId)
+                    .doesNotHaveDuplicates()
+                    .hasSize(n);
+        }
     }
-  }
 
-  @ParameterizedTest
-  @MethodSource("untrustedRenewResponses")
-  @DisplayName("批量续租按任务身份匹配续租与取消，歧义响应回单条并保留owner及invocation")
-  void shouldMatchRenewResponseByTaskIdentity(String response, boolean fallbackExpected)
-      throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(jsonResponse(response));
-      if (fallbackExpected) {
-        server.enqueue(jsonResponse("""
+    /** 构造一个 claim-batch chunk 的 200 响应:taskId 从 startId 起连续 size 个,全部 claimed=true。 */
+    private static MockResponse claimBatchChunkResponse(long startId, int size) {
+        StringBuilder body = new StringBuilder("{\"results\":[");
+        for (int i = 0; i < size; i++) {
+            if (i > 0) {
+                body.append(',');
+            }
+            body.append("{\"taskId\":").append(startId + i).append(",\"claimed\":true,\"config\":{\"jobCode\":\"J\"}}");
+        }
+        body.append("]}");
+        return new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "application/json")
+                .body(body.toString())
+                .build();
+    }
+
+    @Test
+    @DisplayName("上报被限流后按退避重试, 限流解除即成功并按限流原因累加计数")
+    void shouldRetryReportAndSucceed_whenRateLimitedThenCleared() throws Exception {
+        // R6 P0-7：429 = orchestrator sliding-window 限流的瞬时拒绝，过去 worker 直接放弃 REPORT 等于把
+        // task 数据丢掉（orchestrator 端只能等 lease 过期回收）。改为按退避重试，与 5xx / I/O 同处理。
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(
+                    new MockResponse.Builder().code(429).body("slow down").build());
+            server.enqueue(
+                    new MockResponse.Builder().code(429).body("slow down").build());
+            server.enqueue(new MockResponse.Builder().code(200).build());
+            server.start();
+
+            OrchestratorTaskClientProperties props = clientProperties(server.getPort());
+            props.setReportMaxAttempts(5);
+
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            @SuppressWarnings("unchecked")
+            ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+            when(noopCoordinator.getIfAvailable()).thenReturn(null);
+            HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+                    props,
+                    new BatchSecurityProperties(),
+                    restClientBuilderProvider(),
+                    new MockEnvironment(),
+                    registry,
+                    noopCoordinator,
+                    new WorkerLeaseProperties(),
+                    new WorkerBatchClaimProperties());
+
+            client.report(report(7L));
+
+            assertThat(server.getRequestCount()).isEqualTo(3);
+            assertThat(registry.find("worker.report.failed.total")
+                            .tag("reason", "RATE_LIMITED")
+                            .counter()
+                            .count())
+                    .isEqualTo(2.0d);
+        }
+    }
+
+    @Test
+    @DisplayName("重试耗尽且本地发件箱不可用时抑制异常, 按丢弃原因累加计数避免重复投递")
+    void shouldSwallowReportFailure_whenHttpExhaustedAndOutboxUnavailable() throws Exception {
+        // P0 #16: HTTP 重试耗尽 + outbox 不可用时,report() 必须捕获并抑制异常(避免 listener 抛回触发 Kafka
+        // 重投导致 task 双执行)。改为记 worker.report.dropped.total{reason=outbox_disabled} 由
+        // orchestrator lease reclaim 回退。
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(503).build());
+            server.enqueue(new MockResponse.Builder().code(503).build());
+            server.enqueue(new MockResponse.Builder().code(503).build());
+            server.start();
+
+            OrchestratorTaskClientProperties props = clientProperties(server.getPort());
+            props.setReportMaxAttempts(3);
+            props.setReportInitialBackoffMillis(1);
+            props.setReportMaxBackoffMillis(2);
+
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            @SuppressWarnings("unchecked")
+            ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+            when(noopCoordinator.getIfAvailable()).thenReturn(null);
+            HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+                    props,
+                    new BatchSecurityProperties(),
+                    restClientBuilderProvider(),
+                    new MockEnvironment(),
+                    registry,
+                    noopCoordinator,
+                    new WorkerLeaseProperties(),
+                    new WorkerBatchClaimProperties());
+
+            // 不应抛出
+            client.report(report(99L));
+
+            assertThat(server.getRequestCount()).isEqualTo(3);
+            assertThat(registry.find("worker.report.dropped.total")
+                            .tag("reason", "outbox_disabled")
+                            .counter()
+                            .count())
+                    .isEqualTo(1.0d);
+        }
+    }
+
+    @Test
+    @DisplayName("重试耗尽且发件箱入队失败时抑制异常, 按入队失败原因累加丢弃计数")
+    void shouldSwallowReportFailure_whenOutboxEnqueueFails() throws Exception {
+        // P0 #16: outbox 启用但 enqueue 失败(DB 抖动 / repository RuntimeException)亦走 dropped 路径,
+        // 不能让异常上抛触发 Kafka 重投。
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(503).build());
+            server.enqueue(new MockResponse.Builder().code(503).build());
+            server.start();
+
+            OrchestratorTaskClientProperties props = clientProperties(server.getPort());
+            props.setReportMaxAttempts(2);
+            props.setReportInitialBackoffMillis(1);
+            props.setReportMaxBackoffMillis(2);
+
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            WorkerReportOutboxCoordinator coordinator = mock(WorkerReportOutboxCoordinator.class);
+            when(coordinator.enqueue(ArgumentMatchers.any())).thenReturn(false);
+            @SuppressWarnings("unchecked")
+            ObjectProvider<WorkerReportOutboxCoordinator> coordinatorProvider = mock(ObjectProvider.class);
+            when(coordinatorProvider.getIfAvailable()).thenReturn(coordinator);
+            HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+                    props,
+                    new BatchSecurityProperties(),
+                    restClientBuilderProvider(),
+                    new MockEnvironment(),
+                    registry,
+                    coordinatorProvider,
+                    new WorkerLeaseProperties(),
+                    new WorkerBatchClaimProperties());
+
+            client.report(report(100L));
+
+            assertThat(registry.find("worker.report.dropped.total")
+                            .tag("reason", "outbox_enqueue_failed")
+                            .counter()
+                            .count())
+                    .isEqualTo(1.0d);
+        }
+    }
+
+    @Test
+    @DisplayName("批量续期按分块只发起一次调用, 逐项映射续期结果与取消请求")
+    void shouldRenewLeaseChunkInSingleCall_whenBatchRenewRequested() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .setHeader("Content-Type", "application/json")
+                    .body("{\"results\":[{\"taskId\":1,\"renewed\":true,\"cancelRequested\":true},"
+                            + "{\"taskId\":2,\"renewed\":false}]}")
+                    .build());
+            server.start();
+
+            OrchestratorTaskClientProperties props = clientProperties(server.getPort());
+            props.setClaimMaxAttempts(2);
+
+            @SuppressWarnings("unchecked")
+            ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+            when(noopCoordinator.getIfAvailable()).thenReturn(null);
+            HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+                    props,
+                    new BatchSecurityProperties(),
+                    restClientBuilderProvider(),
+                    new MockEnvironment(),
+                    null,
+                    noopCoordinator,
+                    new WorkerLeaseProperties(),
+                    new WorkerBatchClaimProperties());
+
+            List<TaskLeaseRenewItem> items = List.of(
+                    new TaskLeaseRenewItem("t1", 1L, "w1", null), new TaskLeaseRenewItem("t1", 2L, "w1", "inv"));
+            Map<Long, TaskLeaseRenewResult> out = client.renewLeasesBatch(items);
+
+            assertThat(out.get(1L).renewed()).isTrue();
+            assertThat(out.get(1L).cancelRequested()).isTrue();
+            assertThat(out.get(2L).renewed()).isFalse();
+            assertThat(out.get(2L).cancelRequested()).isFalse();
+            assertThat(server.getRequestCount()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("批量续租降级到单条心跳时仍透传取消请求")
+    void shouldPreserveCancellationWhenBatchRenewFallsBackToSingleRenew() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(404).build());
+            server.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .setHeader("Content-Type", "application/json")
+                    .body("{\"cancelRequested\":true}")
+                    .build());
+            server.start();
+
+            OrchestratorTaskClientProperties props = clientProperties(server.getPort());
+            @SuppressWarnings("unchecked")
+            ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+            when(noopCoordinator.getIfAvailable()).thenReturn(null);
+            HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+                    props,
+                    new BatchSecurityProperties(),
+                    restClientBuilderProvider(),
+                    new MockEnvironment(),
+                    null,
+                    noopCoordinator,
+                    new WorkerLeaseProperties(),
+                    new WorkerBatchClaimProperties());
+
+            Map<Long, TaskLeaseRenewResult> result =
+                    client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 19L, "w1", "inv-19")));
+
+            assertThat(result.get(19L).renewed()).isTrue();
+            assertThat(result.get(19L).cancelRequested()).isTrue();
+            assertThat(server.getRequestCount()).isEqualTo(2);
+            assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/internal/tasks/leases/renew-batch");
+            assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/internal/tasks/19/renew");
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("untrustedRenewResponses")
+    @DisplayName("批量续租按任务身份匹配续租与取消，歧义响应回单条并保留owner及invocation")
+    void shouldMatchRenewResponseByTaskIdentity(String response, boolean fallbackExpected) throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(jsonResponse(response));
+            if (fallbackExpected) {
+                server.enqueue(jsonResponse("""
             {"cancelRequested":true}
             """));
-        server.enqueue(new MockResponse.Builder().code(409).build());
-      }
-      server.start();
-      HttpTaskExecutionClient client = newClient(server.getPort());
-      List<TaskLeaseRenewItem> items = List.of(
-          new TaskLeaseRenewItem("t1", 1L, "w1", "inv-1"),
-          new TaskLeaseRenewItem("t1", 2L, "w1", "inv-2"));
+                server.enqueue(new MockResponse.Builder().code(409).build());
+            }
+            server.start();
+            HttpTaskExecutionClient client = newClient(server.getPort());
+            List<TaskLeaseRenewItem> items = List.of(
+                    new TaskLeaseRenewItem("t1", 1L, "w1", "inv-1"), new TaskLeaseRenewItem("t1", 2L, "w1", "inv-2"));
 
-      Map<Long, TaskLeaseRenewResult> results = client.renewLeasesBatch(items);
+            Map<Long, TaskLeaseRenewResult> results = client.renewLeasesBatch(items);
 
-      TaskLeaseRenewResult first = results.get(1L);
-      TaskLeaseRenewResult second = results.get(2L);
-      assertThat(first.renewed()).isTrue();
-      assertThat(first.cancelRequested()).isTrue();
-      assertThat(second.renewed()).isFalse();
-      assertThat(second.cancelRequested()).isFalse();
-      assertThat(server.getRequestCount()).isEqualTo(fallbackExpected ? 3 : 1);
-      if (fallbackExpected) {
-        server.takeRequest();
-        var firstRequest = server.takeRequest();
-        var secondRequest = server.takeRequest();
-        assertThat(firstRequest.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/renew");
-        assertThat(secondRequest.getUrl().encodedPath()).isEqualTo("/internal/tasks/2/renew");
-        assertThat(firstRequest.getBody().utf8()).contains("inv-1", "w1", "t1");
-        assertThat(secondRequest.getBody().utf8()).contains("inv-2", "w1", "t1");
-      }
+            TaskLeaseRenewResult first = results.get(1L);
+            TaskLeaseRenewResult second = results.get(2L);
+            assertThat(first.renewed()).isTrue();
+            assertThat(first.cancelRequested()).isTrue();
+            assertThat(second.renewed()).isFalse();
+            assertThat(second.cancelRequested()).isFalse();
+            assertThat(server.getRequestCount()).isEqualTo(fallbackExpected ? 3 : 1);
+            if (fallbackExpected) {
+                server.takeRequest();
+                var firstRequest = server.takeRequest();
+                var secondRequest = server.takeRequest();
+                assertThat(firstRequest.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/renew");
+                assertThat(secondRequest.getUrl().encodedPath()).isEqualTo("/internal/tasks/2/renew");
+                assertThat(firstRequest.getBody().utf8()).contains("inv-1", "w1", "t1");
+                assertThat(secondRequest.getBody().utf8()).contains("inv-2", "w1", "t1");
+            }
+        }
     }
-  }
 
-  private static Stream<Object[]> untrustedRenewResponses() {
-    return Stream.of(
-        new Object[] {"""
+    private static Stream<Object[]> untrustedRenewResponses() {
+        return Stream.of(
+                new Object[] {"""
           {"results":[
             {"taskId":2,"renewed":false,"cancelRequested":false},
             {"taskId":1,"renewed":true,"cancelRequested":true}
           ]}
           """, false},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"renewed":true,"cancelRequested":true},
             {"taskId":1,"renewed":true,"cancelRequested":true}
           ]}
           """, true},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"renewed":true,"cancelRequested":true},
             {"taskId":999,"renewed":true,"cancelRequested":true}
           ]}
           """, true},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"renewed":true,"cancelRequested":true},
             {"renewed":true,"cancelRequested":true}
           ]}
           """, true},
-        new Object[] {"""
+                new Object[] {"""
           {"results":[
             {"taskId":1,"cancelRequested":true},
             {"taskId":2,"renewed":false,"cancelRequested":false}
           ]}
           """, true});
-  }
+    }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"claim", "renew"})
-  @DisplayName("无法解码的批响应按原单接口核对，不把协议未知误作明确业务结果")
-  void shouldConfirmThroughSingleEndpoint_whenBatchJsonCannotBeDecoded(String operation)
-      throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(jsonResponse("not-json"));
-      String singleResponse = operation.equals("claim") ? """
+    @ParameterizedTest
+    @ValueSource(strings = {"claim", "renew"})
+    @DisplayName("无法解码的批响应按原单接口核对，不把协议未知误作明确业务结果")
+    void shouldConfirmThroughSingleEndpoint_whenBatchJsonCannotBeDecoded(String operation) throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(jsonResponse("not-json"));
+            String singleResponse = operation.equals("claim") ? """
             {"taskId":1,"payload":"payload-1"}
             """ : """
             {"cancelRequested":true}
             """;
-      server.enqueue(jsonResponse(singleResponse));
-      server.start();
-      HttpTaskExecutionClient client = newClient(server.getPort());
+            server.enqueue(jsonResponse(singleResponse));
+            server.start();
+            HttpTaskExecutionClient client = newClient(server.getPort());
 
-      boolean confirmed;
-      if (operation.equals("claim")) {
-        TaskClaimItem item = new TaskClaimItem("t1", 1L, "w1");
-        List<TaskClaimResult> results = client.claimBatch(List.of(item));
-        TaskClaimResult result = results.getFirst();
-        confirmed = result.claimed();
-        assertThat(result.config().taskId()).isEqualTo(1L);
-      } else {
-        TaskLeaseRenewItem item = new TaskLeaseRenewItem("t1", 1L, "w1", "inv-1");
-        Map<Long, TaskLeaseRenewResult> results = client.renewLeasesBatch(List.of(item));
-        TaskLeaseRenewResult result = results.get(1L);
-        confirmed = result.renewed();
-        assertThat(result.cancelRequested()).isTrue();
-      }
-
-      assertThat(confirmed).isTrue();
-      assertThat(server.getRequestCount()).isEqualTo(2);
-      var batchRequest = server.takeRequest();
-      var singleRequest = server.takeRequest();
-      String expectedBatchPath = operation.equals("claim")
-          ? "/internal/tasks/claim-batch"
-          : "/internal/tasks/leases/renew-batch";
-      assertThat(batchRequest.getUrl().encodedPath()).isEqualTo(expectedBatchPath);
-      assertThat(singleRequest.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/" + operation);
-      assertThat(singleRequest.getBody().utf8()).contains("t1", "w1");
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"claim", "renew"})
-  @DisplayName("批接口认证拒绝保持原失败策略，不被解码异常回退吞掉")
-  void shouldPropagateAuthenticationRejection_withoutSingleFallback(String operation)
-      throws Exception {
-    try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse.Builder().code(401).build());
-      server.enqueue(jsonResponse("{}"));
-      server.start();
-      HttpTaskExecutionClient client = newClient(server.getPort());
-
-      assertThatThrownBy(() -> {
+            boolean confirmed;
             if (operation.equals("claim")) {
-              TaskClaimItem item = new TaskClaimItem("t1", 1L, "w1");
-              client.claimBatch(List.of(item));
+                TaskClaimItem item = new TaskClaimItem("t1", 1L, "w1");
+                List<TaskClaimResult> results = client.claimBatch(List.of(item));
+                TaskClaimResult result = results.getFirst();
+                confirmed = result.claimed();
+                assertThat(result.config().taskId()).isEqualTo(1L);
             } else {
-              TaskLeaseRenewItem item = new TaskLeaseRenewItem("t1", 1L, "w1", "inv-1");
-              client.renewLeasesBatch(List.of(item));
+                TaskLeaseRenewItem item = new TaskLeaseRenewItem("t1", 1L, "w1", "inv-1");
+                Map<Long, TaskLeaseRenewResult> results = client.renewLeasesBatch(List.of(item));
+                TaskLeaseRenewResult result = results.get(1L);
+                confirmed = result.renewed();
+                assertThat(result.cancelRequested()).isTrue();
             }
-          })
-          .isInstanceOf(HttpClientErrorException.class)
-          .hasMessageContaining("401");
-      assertThat(server.getRequestCount()).isEqualTo(1);
+
+            assertThat(confirmed).isTrue();
+            assertThat(server.getRequestCount()).isEqualTo(2);
+            var batchRequest = server.takeRequest();
+            var singleRequest = server.takeRequest();
+            String expectedBatchPath =
+                    operation.equals("claim") ? "/internal/tasks/claim-batch" : "/internal/tasks/leases/renew-batch";
+            assertThat(batchRequest.getUrl().encodedPath()).isEqualTo(expectedBatchPath);
+            assertThat(singleRequest.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/" + operation);
+            assertThat(singleRequest.getBody().utf8()).contains("t1", "w1");
+        }
     }
-  }
 
-  private static RestClient.Builder jsonRestClientBuilder() {
-    return RestClient.builder()
-        .configureMessageConverters(b -> b.configureMessageConvertersList(
-            converters -> converters.addFirst(new JacksonJsonHttpMessageConverter())));
-  }
+    @ParameterizedTest
+    @ValueSource(strings = {"claim", "renew"})
+    @DisplayName("批接口认证拒绝保持原失败策略，不被解码异常回退吞掉")
+    void shouldPropagateAuthenticationRejection_withoutSingleFallback(String operation) throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse.Builder().code(401).build());
+            server.enqueue(jsonResponse("{}"));
+            server.start();
+            HttpTaskExecutionClient client = newClient(server.getPort());
 
-  private static ObjectProvider<RestClient.Builder> restClientBuilderProvider() {
-    return new ObjectProvider<>() {
-      @Override
-      public RestClient.Builder getObject(Object... args) {
-        return jsonRestClientBuilder();
-      }
+            assertThatThrownBy(() -> {
+                        if (operation.equals("claim")) {
+                            TaskClaimItem item = new TaskClaimItem("t1", 1L, "w1");
+                            client.claimBatch(List.of(item));
+                        } else {
+                            TaskLeaseRenewItem item = new TaskLeaseRenewItem("t1", 1L, "w1", "inv-1");
+                            client.renewLeasesBatch(List.of(item));
+                        }
+                    })
+                    .isInstanceOf(HttpClientErrorException.class)
+                    .hasMessageContaining("401");
+            assertThat(server.getRequestCount()).isEqualTo(1);
+        }
+    }
 
-      @Override
-      public RestClient.Builder getObject() {
-        return jsonRestClientBuilder();
-      }
+    private static RestClient.Builder jsonRestClientBuilder() {
+        return RestClient.builder()
+                .configureMessageConverters(b -> b.configureMessageConvertersList(
+                        converters -> converters.addFirst(new JacksonJsonHttpMessageConverter())));
+    }
 
-      @Override
-      public RestClient.Builder getIfAvailable() {
-        return jsonRestClientBuilder();
-      }
+    private static ObjectProvider<RestClient.Builder> restClientBuilderProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public RestClient.Builder getObject(Object... args) {
+                return jsonRestClientBuilder();
+            }
 
-      @Override
-      public RestClient.Builder getIfUnique() {
-        return jsonRestClientBuilder();
-      }
-    };
-  }
+            @Override
+            public RestClient.Builder getObject() {
+                return jsonRestClientBuilder();
+            }
 
-  private static OrchestratorTaskClientProperties clientProperties(int port) {
-    OrchestratorTaskClientProperties props = new OrchestratorTaskClientProperties();
-    props.setBaseUrl("http://127.0.0.1:" + port);
-    props.setConnectTimeoutMillis(3_000);
-    props.setReadTimeoutMillis(10_000);
-    return props;
-  }
+            @Override
+            public RestClient.Builder getIfAvailable() {
+                return jsonRestClientBuilder();
+            }
 
-  private static TaskExecutionReport report(long taskId) {
-    TaskExecutionReport r = new TaskExecutionReport();
-    r.setTaskId(taskId);
-    r.setTenantId("t1");
-    r.setWorkerId("w1");
-    r.setSuccess(true);
-    return r;
-  }
+            @Override
+            public RestClient.Builder getIfUnique() {
+                return jsonRestClientBuilder();
+            }
+        };
+    }
+
+    private static OrchestratorTaskClientProperties clientProperties(int port) {
+        OrchestratorTaskClientProperties props = new OrchestratorTaskClientProperties();
+        props.setBaseUrl("http://127.0.0.1:" + port);
+        props.setConnectTimeoutMillis(3_000);
+        props.setReadTimeoutMillis(10_000);
+        return props;
+    }
+
+    private static TaskExecutionReport report(long taskId) {
+        TaskExecutionReport r = new TaskExecutionReport();
+        r.setTaskId(taskId);
+        r.setTenantId("t1");
+        r.setWorkerId("w1");
+        r.setSuccess(true);
+        return r;
+    }
 }

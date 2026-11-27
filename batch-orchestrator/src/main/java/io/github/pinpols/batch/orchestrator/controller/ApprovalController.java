@@ -25,90 +25,85 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ApprovalController {
 
-  private final ApprovalWorkflowService approvalWorkflowService;
+    private final ApprovalWorkflowService approvalWorkflowService;
 
-  @PostMapping
-  public ApprovalResponse submit(@RequestBody ApprovalRequest request) {
-    String tenantId = request.tenantId();
-    ApprovalWorkflowService.ApprovalTarget target = new ApprovalWorkflowService.ApprovalTarget(
-        request.approvalType(),
-        request.actionType(),
-        request.targetType(),
-        request.targetId(),
-        request.payloadJson());
-    ApprovalWorkflowService.ApprovalSource source = new ApprovalWorkflowService.ApprovalSource(
-        request.requesterId(),
-        request.sourceTraceId(),
-        request.sourceIdempotencyKey(),
-        request.approvalReason());
-    ApprovalWorkflowService.ApprovalSubmitCommand command =
-        ApprovalWorkflowService.ApprovalSubmitCommand.of(tenantId, target, source);
-    String approvalNo = approvalWorkflowService.submit(command);
-    return new ApprovalResponse(approvalNo);
-  }
-
-  @GetMapping("/{approvalNo}")
-  public ApprovalRecordResponse get(
-      @PathVariable String approvalNo, @RequestParam String tenantId) {
-    ApprovalWorkflowService.ApprovalRecord record =
-        approvalWorkflowService.get(tenantId, approvalNo);
-    return new ApprovalRecordResponse(record);
-  }
-
-  /** 按原来源请求键回查已持久化审批；未找到不能推断远端请求必然未提交。 */
-  @GetMapping("/by-source-key")
-  public ApprovalRecordResponse getBySourceKey(
-      @RequestParam(required = false) String tenantId,
-      @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
-          String sourceIdempotencyKey) {
-    if (!Texts.hasText(tenantId) || !Texts.hasText(sourceIdempotencyKey)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    @PostMapping
+    public ApprovalResponse submit(@RequestBody ApprovalRequest request) {
+        String tenantId = request.tenantId();
+        ApprovalWorkflowService.ApprovalTarget target = new ApprovalWorkflowService.ApprovalTarget(
+                request.approvalType(),
+                request.actionType(),
+                request.targetType(),
+                request.targetId(),
+                request.payloadJson());
+        ApprovalWorkflowService.ApprovalSource source = new ApprovalWorkflowService.ApprovalSource(
+                request.requesterId(),
+                request.sourceTraceId(),
+                request.sourceIdempotencyKey(),
+                request.approvalReason());
+        ApprovalWorkflowService.ApprovalSubmitCommand command =
+                ApprovalWorkflowService.ApprovalSubmitCommand.of(tenantId, target, source);
+        String approvalNo = approvalWorkflowService.submit(command);
+        return new ApprovalResponse(approvalNo);
     }
-    return new ApprovalRecordResponse(
-        approvalWorkflowService.getBySourceKey(tenantId, sourceIdempotencyKey));
-  }
 
-  @PostMapping("/{approvalNo}/approve")
-  public ApprovalRecordResponse approve(
-      @PathVariable String approvalNo, @RequestBody ApprovalActionRequest request) {
-    ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.approve(
-        request.tenantId(), approvalNo, request.operatorId(), request.reason());
-    return new ApprovalRecordResponse(record);
-  }
+    @GetMapping("/{approvalNo}")
+    public ApprovalRecordResponse get(@PathVariable String approvalNo, @RequestParam String tenantId) {
+        ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.get(tenantId, approvalNo);
+        return new ApprovalRecordResponse(record);
+    }
 
-  @PostMapping("/{approvalNo}/reject")
-  public ApprovalRecordResponse reject(
-      @PathVariable String approvalNo, @RequestBody ApprovalActionRequest request) {
-    ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.reject(
-        request.tenantId(), approvalNo, request.operatorId(), request.reason());
-    return new ApprovalRecordResponse(record);
-  }
+    /** 按原来源请求键回查已持久化审批；未找到不能推断远端请求必然未提交。 */
+    @GetMapping("/by-source-key")
+    public ApprovalRecordResponse getBySourceKey(
+            @RequestParam(required = false) String tenantId,
+            @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
+                    String sourceIdempotencyKey) {
+        if (!Texts.hasText(tenantId) || !Texts.hasText(sourceIdempotencyKey)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+        }
+        return new ApprovalRecordResponse(approvalWorkflowService.getBySourceKey(tenantId, sourceIdempotencyKey));
+    }
 
-  @PostMapping("/{approvalNo}/executed")
-  public ApprovalRecordResponse executed(
-      @PathVariable String approvalNo, @RequestBody ApprovalTenantRequest request) {
-    ApprovalWorkflowService.ApprovalRecord record =
-        approvalWorkflowService.markExecuted(request.tenantId(), approvalNo);
-    return new ApprovalRecordResponse(record);
-  }
+    @PostMapping("/{approvalNo}/approve")
+    public ApprovalRecordResponse approve(@PathVariable String approvalNo, @RequestBody ApprovalActionRequest request) {
+        ApprovalWorkflowService.ApprovalRecord record =
+                approvalWorkflowService.approve(request.tenantId(), approvalNo, request.operatorId(), request.reason());
+        return new ApprovalRecordResponse(record);
+    }
 
-  public record ApprovalRequest(
-      String tenantId,
-      String approvalType,
-      String actionType,
-      String targetType,
-      String targetId,
-      String payloadJson,
-      String requesterId,
-      String sourceTraceId,
-      String sourceIdempotencyKey,
-      String approvalReason) {}
+    @PostMapping("/{approvalNo}/reject")
+    public ApprovalRecordResponse reject(@PathVariable String approvalNo, @RequestBody ApprovalActionRequest request) {
+        ApprovalWorkflowService.ApprovalRecord record =
+                approvalWorkflowService.reject(request.tenantId(), approvalNo, request.operatorId(), request.reason());
+        return new ApprovalRecordResponse(record);
+    }
 
-  public record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
+    @PostMapping("/{approvalNo}/executed")
+    public ApprovalRecordResponse executed(
+            @PathVariable String approvalNo, @RequestBody ApprovalTenantRequest request) {
+        ApprovalWorkflowService.ApprovalRecord record =
+                approvalWorkflowService.markExecuted(request.tenantId(), approvalNo);
+        return new ApprovalRecordResponse(record);
+    }
 
-  public record ApprovalTenantRequest(String tenantId) {}
+    public record ApprovalRequest(
+            String tenantId,
+            String approvalType,
+            String actionType,
+            String targetType,
+            String targetId,
+            String payloadJson,
+            String requesterId,
+            String sourceTraceId,
+            String sourceIdempotencyKey,
+            String approvalReason) {}
 
-  public record ApprovalResponse(String approvalNo) {}
+    public record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
 
-  public record ApprovalRecordResponse(ApprovalWorkflowService.ApprovalRecord record) {}
+    public record ApprovalTenantRequest(String tenantId) {}
+
+    public record ApprovalResponse(String approvalNo) {}
+
+    public record ApprovalRecordResponse(ApprovalWorkflowService.ApprovalRecord record) {}
 }

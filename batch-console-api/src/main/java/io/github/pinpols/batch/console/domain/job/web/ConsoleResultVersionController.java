@@ -31,69 +31,65 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleResultVersionController {
 
-  private final ConsoleOrchestratorPort orchestratorProxy;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestratorProxy;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<List<ConsoleResultVersionResponse>> list(
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam("businessKey") String businessKey,
-      @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
-    CommonResponse<List<ConsoleResultVersionResponse>> resp =
-        orchestratorProxy.resultVersions(tenantId, businessKey, limit);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @GetMapping
+    public CommonResponse<List<ConsoleResultVersionResponse>> list(
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam("businessKey") String businessKey,
+            @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
+        CommonResponse<List<ConsoleResultVersionResponse>> resp =
+                orchestratorProxy.resultVersions(tenantId, businessKey, limit);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @GetMapping("/effective")
-  public CommonResponse<ConsoleResultVersionResponse> effective(
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam("businessKey") String businessKey) {
-    CommonResponse<ConsoleResultVersionResponse> resp =
-        orchestratorProxy.effectiveResultVersion(tenantId, businessKey);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @GetMapping("/effective")
+    public CommonResponse<ConsoleResultVersionResponse> effective(
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam("businessKey") String businessKey) {
+        CommonResponse<ConsoleResultVersionResponse> resp =
+                orchestratorProxy.effectiveResultVersion(tenantId, businessKey);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @GetMapping("/{id}")
-  public CommonResponse<ConsoleResultVersionResponse> detail(
-      @PathVariable("id") Long id,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    CommonResponse<ConsoleResultVersionResponse> resp =
-        orchestratorProxy.resultVersion(id, tenantId);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @GetMapping("/{id}")
+    public CommonResponse<ConsoleResultVersionResponse> detail(
+            @PathVariable("id") Long id, @RequestParam(value = "tenantId", required = false) String tenantId) {
+        CommonResponse<ConsoleResultVersionResponse> resp = orchestratorProxy.resultVersion(id, tenantId);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  // P0-1: promote/reject 是高危结果版本变更，要求管理员/配置管理员权限；P1-6：强制幂等键
-  @PostMapping("/{id}/promote")
-  @AuditAction(
-      action = "result_version.promote",
-      aggregateType = "result_version",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  @Idempotent
-  public CommonResponse<ConsoleResultVersionResponse> promote(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable("id") Long id,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    CommonResponse<ConsoleResultVersionResponse> resp =
-        orchestratorProxy.promoteResultVersion(id, tenantId);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    // P0-1: promote/reject 是高危结果版本变更，要求管理员/配置管理员权限；P1-6：强制幂等键
+    @PostMapping("/{id}/promote")
+    @AuditAction(
+            action = "result_version.promote",
+            aggregateType = "result_version",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    @Idempotent
+    public CommonResponse<ConsoleResultVersionResponse> promote(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable("id") Long id,
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        CommonResponse<ConsoleResultVersionResponse> resp = orchestratorProxy.promoteResultVersion(id, tenantId);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @PostMapping("/{id}/reject")
-  @AuditAction(
-      action = "result_version.reject",
-      aggregateType = "result_version",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  @Idempotent
-  public CommonResponse<ConsoleResultVersionResponse> reject(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable("id") Long id,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    CommonResponse<ConsoleResultVersionResponse> resp =
-        orchestratorProxy.rejectResultVersion(id, tenantId);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @PostMapping("/{id}/reject")
+    @AuditAction(
+            action = "result_version.reject",
+            aggregateType = "result_version",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    @Idempotent
+    public CommonResponse<ConsoleResultVersionResponse> reject(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable("id") Long id,
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        CommonResponse<ConsoleResultVersionResponse> resp = orchestratorProxy.rejectResultVersion(id, tenantId);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 }

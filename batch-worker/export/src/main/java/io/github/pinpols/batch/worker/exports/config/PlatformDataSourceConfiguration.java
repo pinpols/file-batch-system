@@ -25,33 +25,32 @@ import org.springframework.core.env.Environment;
 @RequiredArgsConstructor
 public class PlatformDataSourceConfiguration {
 
-  private final BatchPgSessionProperties pgSessionProperties;
-  private final Environment environment;
+    private final BatchPgSessionProperties pgSessionProperties;
+    private final Environment environment;
 
-  @Bean(name = "exportPlatformHikariConfig")
-  @ConfigurationProperties("spring.datasource.hikari")
-  public HikariConfig exportPlatformHikariConfig() {
-    return new HikariConfig();
-  }
+    @Bean(name = "exportPlatformHikariConfig")
+    @ConfigurationProperties("spring.datasource.hikari")
+    public HikariConfig exportPlatformHikariConfig() {
+        return new HikariConfig();
+    }
 
-  @Bean(name = "exportPlatformDataSource")
-  @Primary
-  public DataSource exportPlatformDataSource(
-      DataSourceProperties properties,
-      @Qualifier("exportPlatformHikariConfig") HikariConfig hikariConfig) {
-    return WorkerDataSourceSupport.buildPlatformDataSource(
-        properties, hikariConfig, pgSessionProperties, environment, "batch-worker-export");
-  }
+    @Bean(name = "exportPlatformDataSource")
+    @Primary
+    public DataSource exportPlatformDataSource(
+            DataSourceProperties properties, @Qualifier("exportPlatformHikariConfig") HikariConfig hikariConfig) {
+        return WorkerDataSourceSupport.buildPlatformDataSource(
+                properties, hikariConfig, pgSessionProperties, environment, "batch-worker-export");
+    }
 
-  @Bean(name = "exportPlatformSqlSessionFactory")
-  public SqlSessionFactory exportPlatformSqlSessionFactory(
-      @Qualifier("exportPlatformDataSource") DataSource dataSource) throws Exception {
-    return WorkerDataSourceSupport.buildPlatformSqlSessionFactory(dataSource);
-  }
+    @Bean(name = "exportPlatformSqlSessionFactory")
+    public SqlSessionFactory exportPlatformSqlSessionFactory(
+            @Qualifier("exportPlatformDataSource") DataSource dataSource) throws Exception {
+        return WorkerDataSourceSupport.buildPlatformSqlSessionFactory(dataSource);
+    }
 
-  @Bean(name = "exportPlatformSqlSessionTemplate")
-  public SqlSessionTemplate exportPlatformSqlSessionTemplate(
-      @Qualifier("exportPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
-    return new SqlSessionTemplate(sqlSessionFactory);
-  }
+    @Bean(name = "exportPlatformSqlSessionTemplate")
+    public SqlSessionTemplate exportPlatformSqlSessionTemplate(
+            @Qualifier("exportPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
+        return new SqlSessionTemplate(sqlSessionFactory);
+    }
 }

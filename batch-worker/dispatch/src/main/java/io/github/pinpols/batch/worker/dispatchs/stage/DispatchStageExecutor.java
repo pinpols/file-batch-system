@@ -11,5 +11,5 @@ import java.util.List;
  */
 public interface DispatchStageExecutor extends PipelineStepTemplateProvider {
 
-  List<DispatchStageResult> execute(DispatchJobContext context);
+    List<DispatchStageResult> execute(DispatchJobContext context);
 }

@@ -42,197 +42,189 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 public class ConsoleBatchDayReplayController {
 
-  private final ConsoleOrchestratorPort orchestratorProxy;
-  private final ConsoleBatchDayReplayApprovalService approvalService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver metadataResolver;
+    private final ConsoleOrchestratorPort orchestratorProxy;
+    private final ConsoleBatchDayReplayApprovalService approvalService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver metadataResolver;
 
-  // P1-5/P1-6 (ADR audit): submit body 的 tenantId 经 guard 解析后强制覆盖回 body，
-  // 防止跨租户提交；同时通过 @Idempotent 拦截重复请求。
-  @PostMapping("/sessions")
-  @Idempotent
-  @AuditAction(
-      action = "batchDayReplay.submit",
-      aggregateType = "batch_day_replay_session",
-      targetTenantParam = "#command.tenantId")
-  public CommonResponse<ConsoleBatchDayReplaySessionResponse> submit(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody BatchDayReplaySubmitRequest command) {
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
-        orchestratorProxy.batchDayReplaySubmit(command);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    // P1-5/P1-6 (ADR audit): submit body 的 tenantId 经 guard 解析后强制覆盖回 body，
+    // 防止跨租户提交；同时通过 @Idempotent 拦截重复请求。
+    @PostMapping("/sessions")
+    @Idempotent
+    @AuditAction(
+            action = "batchDayReplay.submit",
+            aggregateType = "batch_day_replay_session",
+            targetTenantParam = "#command.tenantId")
+    public CommonResponse<ConsoleBatchDayReplaySessionResponse> submit(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody BatchDayReplaySubmitRequest command) {
+        CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = orchestratorProxy.batchDayReplaySubmit(command);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @PostMapping("/sessions/preview")
-  public CommonResponse<ConsoleBatchDayReplayPreviewResponse> preview(
-      @Valid @RequestBody BatchDayReplaySubmitRequest command) {
-    CommonResponse<ConsoleBatchDayReplayPreviewResponse> resp =
-        orchestratorProxy.batchDayReplayPreview(command);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @PostMapping("/sessions/preview")
+    public CommonResponse<ConsoleBatchDayReplayPreviewResponse> preview(
+            @Valid @RequestBody BatchDayReplaySubmitRequest command) {
+        CommonResponse<ConsoleBatchDayReplayPreviewResponse> resp = orchestratorProxy.batchDayReplayPreview(command);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @PostMapping("/operations/date-range/preview")
-  public CommonResponse<ConsoleReplayOperationPreviewResponse> previewDateRange(
-      @Valid @RequestBody BatchDayReplayRangeRequest command) {
-    CommonResponse<ConsoleReplayOperationPreviewResponse> response =
-        orchestratorProxy.batchDayReplayRangePreview(command);
-    return responseFactory.forwardOrchestrator(response);
-  }
+    @PostMapping("/operations/date-range/preview")
+    public CommonResponse<ConsoleReplayOperationPreviewResponse> previewDateRange(
+            @Valid @RequestBody BatchDayReplayRangeRequest command) {
+        CommonResponse<ConsoleReplayOperationPreviewResponse> response =
+                orchestratorProxy.batchDayReplayRangePreview(command);
+        return responseFactory.forwardOrchestrator(response);
+    }
 
-  @PostMapping("/operations/date-range")
-  @Idempotent
-  @AuditAction(
-      action = "batchDayReplay.rangeSubmit",
-      aggregateType = "replay_operation",
-      targetTenantParam = "#command.tenantId")
-  public CommonResponse<ConsoleReplayOperationResponse> submitDateRange(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody BatchDayReplayRangeRequest command) {
-    CommonResponse<ConsoleReplayOperationResponse> response =
-        orchestratorProxy.batchDayReplayRangeSubmit(command);
-    return responseFactory.forwardOrchestrator(response);
-  }
+    @PostMapping("/operations/date-range")
+    @Idempotent
+    @AuditAction(
+            action = "batchDayReplay.rangeSubmit",
+            aggregateType = "replay_operation",
+            targetTenantParam = "#command.tenantId")
+    public CommonResponse<ConsoleReplayOperationResponse> submitDateRange(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody BatchDayReplayRangeRequest command) {
+        CommonResponse<ConsoleReplayOperationResponse> response = orchestratorProxy.batchDayReplayRangeSubmit(command);
+        return responseFactory.forwardOrchestrator(response);
+    }
 
-  @GetMapping("/operations")
-  public CommonResponse<List<ConsoleReplayOperationResponse>> listOperations(
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
-    return responseFactory.forwardOrchestrator(
-        orchestratorProxy.replayOperationList(tenantId, limit));
-  }
+    @GetMapping("/operations")
+    public CommonResponse<List<ConsoleReplayOperationResponse>> listOperations(
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
+        return responseFactory.forwardOrchestrator(orchestratorProxy.replayOperationList(tenantId, limit));
+    }
 
-  @GetMapping("/operations/{operationId}")
-  public CommonResponse<ConsoleReplayOperationResponse> operationDetail(
-      @PathVariable("operationId") Long operationId,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.forwardOrchestrator(
-        orchestratorProxy.replayOperationDetail(operationId, tenantId));
-  }
+    @GetMapping("/operations/{operationId}")
+    public CommonResponse<ConsoleReplayOperationResponse> operationDetail(
+            @PathVariable("operationId") Long operationId,
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        return responseFactory.forwardOrchestrator(orchestratorProxy.replayOperationDetail(operationId, tenantId));
+    }
 
-  @GetMapping("/operations/{operationId}/sessions")
-  public CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> operationSessions(
-      @PathVariable("operationId") Long operationId,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> response =
-        orchestratorProxy.replayOperationSessions(operationId, tenantId);
-    return responseFactory.forwardOrchestrator(response);
-  }
+    @GetMapping("/operations/{operationId}/sessions")
+    public CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> operationSessions(
+            @PathVariable("operationId") Long operationId,
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> response =
+                orchestratorProxy.replayOperationSessions(operationId, tenantId);
+        return responseFactory.forwardOrchestrator(response);
+    }
 
-  @PostMapping("/operations/{operationId}/approve")
-  @Idempotent
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @AuditAction(
-      action = "batchDayReplay.rangeApprove",
-      aggregateType = "replay_operation",
-      aggregateId = "#operationId",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleReplayOperationResponse> approveOperation(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable("operationId") Long operationId,
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam("approver") String approver) {
-    return responseFactory.forwardOrchestrator(
-        approvalService.approveOperation(operationId, tenantId));
-  }
+    @PostMapping("/operations/{operationId}/approve")
+    @Idempotent
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @AuditAction(
+            action = "batchDayReplay.rangeApprove",
+            aggregateType = "replay_operation",
+            aggregateId = "#operationId",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleReplayOperationResponse> approveOperation(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable("operationId") Long operationId,
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam("approver") String approver) {
+        return responseFactory.forwardOrchestrator(approvalService.approveOperation(operationId, tenantId));
+    }
 
-  @PostMapping("/operations/{operationId}/cancel")
-  @Idempotent
-  @AuditAction(
-      action = "batchDayReplay.rangeCancel",
-      aggregateType = "replay_operation",
-      aggregateId = "#operationId",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleReplayOperationResponse> cancelOperation(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable("operationId") Long operationId,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.forwardOrchestrator(
-        orchestratorProxy.replayOperationCancel(operationId, tenantId));
-  }
+    @PostMapping("/operations/{operationId}/cancel")
+    @Idempotent
+    @AuditAction(
+            action = "batchDayReplay.rangeCancel",
+            aggregateType = "replay_operation",
+            aggregateId = "#operationId",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleReplayOperationResponse> cancelOperation(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable("operationId") Long operationId,
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        return responseFactory.forwardOrchestrator(orchestratorProxy.replayOperationCancel(operationId, tenantId));
+    }
 
-  @GetMapping("/sessions")
-  public CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> list(
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam(value = "status", required = false) String status,
-      @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
-    CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> resp =
-        orchestratorProxy.batchDayReplayList(tenantId, status, limit);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @GetMapping("/sessions")
+    public CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> list(
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
+        CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> resp =
+                orchestratorProxy.batchDayReplayList(tenantId, status, limit);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @PostMapping("/sessions/{sessionId}/approve")
-  @Idempotent
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @AuditAction(
-      action = "batchDayReplay.approve",
-      aggregateType = "batch_day_replay_session",
-      aggregateId = "#sessionId",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleBatchDayReplaySessionResponse> approve(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable("sessionId") Long sessionId,
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam("approver") String approver) {
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
-        approvalService.approveSession(sessionId, tenantId);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @PostMapping("/sessions/{sessionId}/approve")
+    @Idempotent
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @AuditAction(
+            action = "batchDayReplay.approve",
+            aggregateType = "batch_day_replay_session",
+            aggregateId = "#sessionId",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleBatchDayReplaySessionResponse> approve(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable("sessionId") Long sessionId,
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam("approver") String approver) {
+        CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = approvalService.approveSession(sessionId, tenantId);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @PostMapping("/sessions/{sessionId}/cancel")
-  @Idempotent
-  @AuditAction(
-      action = "batchDayReplay.cancel",
-      aggregateType = "batch_day_replay_session",
-      aggregateId = "#sessionId",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleBatchDayReplaySessionResponse> cancel(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable("sessionId") Long sessionId,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
-        orchestratorProxy.batchDayReplayCancel(sessionId, tenantId);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @PostMapping("/sessions/{sessionId}/cancel")
+    @Idempotent
+    @AuditAction(
+            action = "batchDayReplay.cancel",
+            aggregateType = "batch_day_replay_session",
+            aggregateId = "#sessionId",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleBatchDayReplaySessionResponse> cancel(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable("sessionId") Long sessionId,
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
+                orchestratorProxy.batchDayReplayCancel(sessionId, tenantId);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @GetMapping("/sessions/{sessionId}")
-  public CommonResponse<ConsoleBatchDayReplaySessionResponse> detail(
-      @PathVariable("sessionId") Long sessionId,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
-        orchestratorProxy.batchDayReplayDetail(sessionId, tenantId);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @GetMapping("/sessions/{sessionId}")
+    public CommonResponse<ConsoleBatchDayReplaySessionResponse> detail(
+            @PathVariable("sessionId") Long sessionId,
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
+                orchestratorProxy.batchDayReplayDetail(sessionId, tenantId);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  // P1-5: entries 必须先解析 tenantId 走 guard 守护，避免跨租户拉取条目；改用 URI template
-  // 而非字符串拼接，让 RestClient 做转义。
-  @GetMapping("/sessions/{sessionId}/entries")
-  public CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> entries(
-      @PathVariable("sessionId") Long sessionId,
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam(value = "status", required = false) String status,
-      @RequestParam(value = "limit", required = false, defaultValue = "500") int limit) {
-    CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> resp =
-        orchestratorProxy.batchDayReplayEntries(sessionId, tenantId, status, limit);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    // P1-5: entries 必须先解析 tenantId 走 guard 守护，避免跨租户拉取条目；改用 URI template
+    // 而非字符串拼接，让 RestClient 做转义。
+    @GetMapping("/sessions/{sessionId}/entries")
+    public CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> entries(
+            @PathVariable("sessionId") Long sessionId,
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "limit", required = false, defaultValue = "500") int limit) {
+        CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> resp =
+                orchestratorProxy.batchDayReplayEntries(sessionId, tenantId, status, limit);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @PostMapping("/sessions/{sessionId}/entries/{entryId}/retry-submission")
-  @Idempotent
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @AuditAction(
-      action = "batchDayReplay.retrySubmission",
-      aggregateType = "batch_day_replay_entry",
-      aggregateId = "#entryId",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleBatchDayReplaySessionResponse> retryFailedSubmission(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable("sessionId") Long sessionId,
-      @PathVariable("entryId") Long entryId,
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam("reason") String reason) {
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> response =
-        orchestratorProxy.batchDayReplayRetryFailedSubmission(
-            sessionId, entryId, tenantId, metadataResolver.current().operatorId(), reason);
-    return responseFactory.forwardOrchestrator(response);
-  }
+    @PostMapping("/sessions/{sessionId}/entries/{entryId}/retry-submission")
+    @Idempotent
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @AuditAction(
+            action = "batchDayReplay.retrySubmission",
+            aggregateType = "batch_day_replay_entry",
+            aggregateId = "#entryId",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleBatchDayReplaySessionResponse> retryFailedSubmission(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable("sessionId") Long sessionId,
+            @PathVariable("entryId") Long entryId,
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam("reason") String reason) {
+        CommonResponse<ConsoleBatchDayReplaySessionResponse> response =
+                orchestratorProxy.batchDayReplayRetryFailedSubmission(
+                        sessionId, entryId, tenantId, metadataResolver.current().operatorId(), reason);
+        return responseFactory.forwardOrchestrator(response);
+    }
 }

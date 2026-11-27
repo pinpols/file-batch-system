@@ -22,52 +22,47 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleAiAuthorizationService implements ConsoleCapabilityProvider {
 
-  public static final String AI_ASSISTANT_USE = "AI_ASSISTANT_USE";
+    public static final String AI_ASSISTANT_USE = "AI_ASSISTANT_USE";
 
-  private final ConsoleAiProperties properties;
+    private final ConsoleAiProperties properties;
 
-  /** 未配置在白名单则抛出 FORBIDDEN。 */
-  public void assertAllowed() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    boolean authenticationIsMissingOrAnonymous = EmptyChecks.isNull(authentication)
-        || !authentication.isAuthenticated()
-        || authentication instanceof AnonymousAuthenticationToken;
-    if (authenticationIsMissingOrAnonymous) {
-      throw BizException.of(
-          ResultCode.FORBIDDEN,
-          ResultCode.FORBIDDEN.detailKey(),
-          CommonErrorMessages.AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER);
+    /** 未配置在白名单则抛出 FORBIDDEN。 */
+    public void assertAllowed() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean authenticationIsMissingOrAnonymous = EmptyChecks.isNull(authentication)
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken;
+        if (authenticationIsMissingOrAnonymous) {
+            throw BizException.of(
+                    ResultCode.FORBIDDEN,
+                    ResultCode.FORBIDDEN.detailKey(),
+                    CommonErrorMessages.AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER);
+        }
+        if (!properties.isEnabled()
+                || !isIdentityAllowed(authentication.getName(), authorities(authentication.getAuthorities()))) {
+            throw BizException.of(
+                    ResultCode.FORBIDDEN,
+                    ResultCode.FORBIDDEN.detailKey(),
+                    CommonErrorMessages.AI_ASSISTANT_ACCESS_NOT_GRANTED);
+        }
     }
-    if (!properties.isEnabled()
-        || !isIdentityAllowed(
-            authentication.getName(), authorities(authentication.getAuthorities()))) {
-      throw BizException.of(
-          ResultCode.FORBIDDEN,
-          ResultCode.FORBIDDEN.detailKey(),
-          CommonErrorMessages.AI_ASSISTANT_ACCESS_NOT_GRANTED);
+
+    @Override
+    public Set<String> resolveCapabilities(String username, Set<String> authorities) {
+        return properties.isEnabled() && isIdentityAllowed(username, authorities) ? Set.of(AI_ASSISTANT_USE) : Set.of();
     }
-  }
 
-  @Override
-  public Set<String> resolveCapabilities(String username, Set<String> authorities) {
-    return properties.isEnabled() && isIdentityAllowed(username, authorities)
-        ? Set.of(AI_ASSISTANT_USE)
-        : Set.of();
-  }
+    private boolean isIdentityAllowed(String username, Set<String> authorities) {
+        boolean allowedByUser = properties.getAllowedUsers().stream().anyMatch(user -> Objects.equals(user, username));
+        boolean allowedByAuthority = properties.getAllowedAuthorities().stream().anyMatch(authorities::contains);
+        return allowedByUser || allowedByAuthority;
+    }
 
-  private boolean isIdentityAllowed(String username, Set<String> authorities) {
-    boolean allowedByUser =
-        properties.getAllowedUsers().stream().anyMatch(user -> Objects.equals(user, username));
-    boolean allowedByAuthority =
-        properties.getAllowedAuthorities().stream().anyMatch(authorities::contains);
-    return allowedByUser || allowedByAuthority;
-  }
-
-  private Set<String> authorities(Collection<? extends GrantedAuthority> grantedAuthorities) {
-    return grantedAuthorities == null
-        ? Set.of()
-        : grantedAuthorities.stream()
-            .map(GrantedAuthority::getAuthority)
-            .collect(Collectors.toSet());
-  }
+    private Set<String> authorities(Collection<? extends GrantedAuthority> grantedAuthorities) {
+        return grantedAuthorities == null
+                ? Set.of()
+                : grantedAuthorities.stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .collect(Collectors.toSet());
+    }
 }

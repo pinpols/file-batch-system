@@ -37,29 +37,29 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * </ul>
  */
 @E2eSpringBootTest(
-    classes = E2eDispatchApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.dispatch.worker-type=DISPATCH")
+        classes = E2eDispatchApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.dispatch.worker-type=DISPATCH")
 @E2eBusinessSchema
 @DisplayName("派发失败链路端到端归因:渠道配置缺失时启动被拒绝,文件记录不会被错误标记为已派发")
 class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+    @Autowired
+    private WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Test
-  @DisplayName("派发渠道不存在时节点失败,不创建作业且文件状态不会被写成已派发")
-  void shouldRejectLaunch_whenChannelConfigMissing() {
-    final String insertFileRecordSql = """
+    @Test
+    @DisplayName("派发渠道不存在时节点失败,不创建作业且文件状态不会被写成已派发")
+    void shouldRejectLaunch_whenChannelConfigMissing() {
+        final String insertFileRecordSql = """
             insert into batch.file_record (
                 tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
                 file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
@@ -70,60 +70,58 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
                 ?, 'SYSTEM', 'GENERATED', ?, 'e2e-dis-fail-trace'
             ) returning id
             """;
-    final String selectNodeSql = """
+        final String selectNodeSql = """
         select n.node_status, n.error_message, n.job_instance_id
         from batch.workflow_node_run n
         join batch.workflow_run w on w.id = n.workflow_run_id
         join batch.trigger_request r on r.id = w.trigger_request_id and r.tenant_id = w.tenant_id
         where r.tenant_id = ? and r.request_id = ? and n.node_type = 'JOB'
         """;
-    final String selectFileStatusSql = """
+        final String selectFileStatusSql = """
         select file_status from batch.file_record where id = ?
     """;
 
-    String path = "/tmp/e2e-dispatch-fail-" + System.nanoTime() + ".json";
-    Long fileId =
-        jdbcTemplate.queryForObject(insertFileRecordSql, Long.class, TENANT, path, BIZ_DATE);
-    assertThat(fileId).isNotNull();
+        String path = "/tmp/e2e-dispatch-fail-" + System.nanoTime() + ".json";
+        Long fileId = jdbcTemplate.queryForObject(insertFileRecordSql, Long.class, TENANT, path, BIZ_DATE);
+        assertThat(fileId).isNotNull();
 
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
 
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("fileId", String.valueOf(fileId));
-    // 该渠道代码对应的 file_channel_config 记录不存在。
-    params.put("channelCode", "channel_does_not_exist");
-    params.put("dispatchTarget", "/tmp");
-    params.put("externalRequestId", "e2e-fail-ext-" + System.nanoTime());
-    params.put("receiptCode", "R-E2E-FAIL");
-    params.put("ackRequired", false);
-    params.put("forceRetry", false);
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("fileId", String.valueOf(fileId));
+        // 该渠道代码对应的 file_channel_config 记录不存在。
+        params.put("channelCode", "channel_does_not_exist");
+        params.put("dispatchTarget", "/tmp");
+        params.put("externalRequestId", "e2e-fail-ext-" + System.nanoTime());
+        params.put("receiptCode", "R-E2E-FAIL");
+        params.put("ackRequired", false);
+        params.put("forceRetry", false);
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-dispatch-fail",
-        params));
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-dispatch-fail",
+                params));
 
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          var nodes = jdbcTemplate.queryForList(selectNodeSql, TENANT, seed.requestId());
-          assertThat(nodes).hasSize(1);
-          assertThat(nodes.getFirst())
-              .containsEntry("node_status", "FAILED")
-              .containsEntry("error_message", "error.file_channel.not_found")
-              .containsEntry("job_instance_id", null);
-        });
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    var nodes = jdbcTemplate.queryForList(selectNodeSql, TENANT, seed.requestId());
+                    assertThat(nodes).hasSize(1);
+                    assertThat(nodes.getFirst())
+                            .containsEntry("node_status", "FAILED")
+                            .containsEntry("error_message", "error.file_channel.not_found")
+                            .containsEntry("job_instance_id", null);
+                });
 
-    // 失败时文件记录不得标记为 DISPATCHED。
-    String fileStatus = jdbcTemplate.queryForObject(selectFileStatusSql, String.class, fileId);
-    assertThat(fileStatus).isNotEqualTo(FileStatus.DISPATCHED.code());
-  }
+        // 失败时文件记录不得标记为 DISPATCHED。
+        String fileStatus = jdbcTemplate.queryForObject(selectFileStatusSql, String.class, fileId);
+        assertThat(fileStatus).isNotEqualTo(FileStatus.DISPATCHED.code());
+    }
 }

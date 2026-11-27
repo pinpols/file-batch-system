@@ -11,27 +11,27 @@ import org.springframework.stereotype.Component;
 @Component
 public class DiscardingOidcAuthorizedClientRepository implements OAuth2AuthorizedClientRepository {
 
-  @Override
-  public <T extends OAuth2AuthorizedClient> T loadAuthorizedClient(
-      String clientRegistrationId, Authentication principal, HttpServletRequest request) {
-    return null;
-  }
+    @Override
+    public <T extends OAuth2AuthorizedClient> T loadAuthorizedClient(
+            String clientRegistrationId, Authentication principal, HttpServletRequest request) {
+        return null;
+    }
 
-  @Override
-  public void saveAuthorizedClient(
-      OAuth2AuthorizedClient authorizedClient,
-      Authentication principal,
-      HttpServletRequest request,
-      HttpServletResponse response) {
-    // 回调后只保留平台 JWT，不持久化 IdP 授权凭据。
-  }
+    @Override
+    public void saveAuthorizedClient(
+            OAuth2AuthorizedClient authorizedClient,
+            Authentication principal,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        // 回调后只保留平台 JWT，不持久化 IdP 授权凭据。
+    }
 
-  @Override
-  public void removeAuthorizedClient(
-      String clientRegistrationId,
-      Authentication principal,
-      HttpServletRequest request,
-      HttpServletResponse response) {
-    // 本实现不保存 OAuth2AuthorizedClient。
-  }
+    @Override
+    public void removeAuthorizedClient(
+            String clientRegistrationId,
+            Authentication principal,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        // 本实现不保存 OAuth2AuthorizedClient。
+    }
 }

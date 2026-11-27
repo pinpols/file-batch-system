@@ -30,55 +30,55 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("认证控制器: 账号登录与令牌下发接口")
 class ConsoleAuthControllerTest {
 
-  private MockMvc mockMvc;
-  private ConsoleAuthApplicationService authApplicationService;
+    private MockMvc mockMvc;
+    private ConsoleAuthApplicationService authApplicationService;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleSecurityProperties securityProperties = new ConsoleSecurityProperties();
-    authApplicationService = mock(ConsoleAuthApplicationService.class);
-    ConsoleRequestMetadataResolver requestMetadataResolver =
-        mock(ConsoleRequestMetadataResolver.class);
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", null, null, null, "127.0.0.1"));
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    @BeforeEach
+    void setUp() {
+        ConsoleSecurityProperties securityProperties = new ConsoleSecurityProperties();
+        authApplicationService = mock(ConsoleAuthApplicationService.class);
+        ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", null, null, null, "127.0.0.1"));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAuthController(
-            authApplicationService,
-            new ConsoleResponseFactory(requestMetadataResolver),
-            mock(SseTicketService.class),
-            securityProperties,
-            mock(ConsoleJwtService.class),
-            mock(ConsoleUserAccountService.class),
-            new ConsoleTokenCookieWriter(securityProperties)))
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAuthController(
+                        authApplicationService,
+                        new ConsoleResponseFactory(requestMetadataResolver),
+                        mock(SseTicketService.class),
+                        securityProperties,
+                        mock(ConsoleJwtService.class),
+                        mock(ConsoleUserAccountService.class),
+                        new ConsoleTokenCookieWriter(securityProperties)))
+                .build();
+    }
 
-  @Test
-  @DisplayName("内置账号登录成功返回令牌与租户信息")
-  void shouldLoginWithBuiltInAccount() throws Exception {
-    when(authApplicationService.login(any()))
-        .thenReturn(new ConsoleAuthTokenResponse(
-            "jwt-token",
-            "Bearer",
-            Instant.parse("2026-04-05T00:00:00Z"),
-            Instant.parse("2026-04-05T08:00:00Z"),
-            "admin",
-            "default-tenant",
-            Set.of("ROLE_ADMIN"),
-            false));
+    @Test
+    @DisplayName("内置账号登录成功返回令牌与租户信息")
+    void shouldLoginWithBuiltInAccount() throws Exception {
+        when(authApplicationService.login(any()))
+                .thenReturn(new ConsoleAuthTokenResponse(
+                        "jwt-token",
+                        "Bearer",
+                        Instant.parse("2026-04-05T00:00:00Z"),
+                        Instant.parse("2026-04-05T08:00:00Z"),
+                        "admin",
+                        "default-tenant",
+                        Set.of("ROLE_ADMIN"),
+                        false));
 
-    mockMvc
-        .perform(post("/api/console/auth/login").contentType("application/json").content("""
+        mockMvc.perform(post("/api/console/auth/login")
+                        .contentType("application/json")
+                        .content("""
                     {
                       "username": "admin",
                       "password": "admin123"
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.username").value("admin"))
-        .andExpect(jsonPath("$.data.tenantId").value("default-tenant"))
-        .andExpect(jsonPath("$.data.tokenType").value("Bearer"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("admin"))
+                .andExpect(jsonPath("$.data.tenantId").value("default-tenant"))
+                .andExpect(jsonPath("$.data.tokenType").value("Bearer"));
+    }
 }

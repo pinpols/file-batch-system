@@ -18,74 +18,68 @@ import java.util.List;
  */
 public interface WorkflowDagService {
 
-  List<DagNodeResolution> resolveInitialNodes(Long workflowDefinitionId, String payloadJson);
+    List<DagNodeResolution> resolveInitialNodes(Long workflowDefinitionId, String payloadJson);
 
-  /**
-   * 使用调用方已加载的图定义解析 START 出边，避免同一准入事务内重复读取节点与边。
-   *
-   * <p>{@code edges} 需保持 {@code selectAllByWorkflowDefinitionId} 的 id 升序， 且可以包含禁用边；
-   * 本方法按 {@code enabled = true} 过滤，与 {@code selectOutgoingEdges} 的口径一致。
-   */
-  List<DagNodeResolution> resolveInitialNodes(
-      List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges, String payloadJson);
+    /**
+     * 使用调用方已加载的图定义解析 START 出边，避免同一准入事务内重复读取节点与边。
+     *
+     * <p>{@code edges} 需保持 {@code selectAllByWorkflowDefinitionId} 的 id 升序， 且可以包含禁用边；
+     * 本方法按 {@code enabled = true} 过滤，与 {@code selectOutgoingEdges} 的口径一致。
+     */
+    List<DagNodeResolution> resolveInitialNodes(
+            List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges, String payloadJson);
 
-  List<DagNodeResolution> resolveNextNodes(
-      Long workflowDefinitionId, String currentNodeCode, boolean success, String payloadJson);
+    List<DagNodeResolution> resolveNextNodes(
+            Long workflowDefinitionId, String currentNodeCode, boolean success, String payloadJson);
 
-  default List<DagNodeResolution> resolveNextNodesForRun(
-      WorkflowRunEntity run, String currentNodeCode, boolean success, String payloadJson) {
-    return EmptyChecks.isNull(run)
-        ? List.of()
-        : resolveNextNodes(run.getWorkflowDefinitionId(), currentNodeCode, success, payloadJson);
-  }
+    default List<DagNodeResolution> resolveNextNodesForRun(
+            WorkflowRunEntity run, String currentNodeCode, boolean success, String payloadJson) {
+        return EmptyChecks.isNull(run)
+                ? List.of()
+                : resolveNextNodes(run.getWorkflowDefinitionId(), currentNodeCode, success, payloadJson);
+    }
 
-  boolean isNodeReadyForDispatch(
-      Long workflowRunId, Long workflowDefinitionId, String nodeCode, String payloadJson);
+    boolean isNodeReadyForDispatch(Long workflowRunId, Long workflowDefinitionId, String nodeCode, String payloadJson);
 
-  default boolean isNodeReadyForRunDispatch(
-      WorkflowRunEntity run, String nodeCode, String payloadJson) {
-    return EmptyChecks.isNotNull(run)
-        && isNodeReadyForDispatch(
-            run.getId(), run.getWorkflowDefinitionId(), nodeCode, payloadJson);
-  }
+    default boolean isNodeReadyForRunDispatch(WorkflowRunEntity run, String nodeCode, String payloadJson) {
+        return EmptyChecks.isNotNull(run)
+                && isNodeReadyForDispatch(run.getId(), run.getWorkflowDefinitionId(), nodeCode, payloadJson);
+    }
 
-  /**
-   * SKIP 级联：从 {@code fromNodeCode}（FAILED 或 SKIPPED 节点）出发，沿 SUCCESS / CONDITION 出边 寻找无机会再触发的下游节点，写入
-   * {@code SKIPPED} 的 {@code workflow_node_run} 行并继续递归级联。
-   *
-   * <p>"无机会触发"判定：节点的所有入边对应的前驱 node_run 已达终态且没有任何一条入边匹配（即 {@code matchedCount == 0 && terminalCount
-   * == size}）。该判定对 ALL / ANY / N_OF 三种 join 模式都成立——任意 join 至少需要 1 条匹配。
-   *
-   * <p>不级联跨 ALWAYS / FAILURE 出边的下游：那些路径仍可正常派发，由 outcome 主路径推进。
-   *
-   * @return 本次实际新写 SKIPPED 行的 nodeCode 列表（用于日志/监控；为空表示无级联）
-   */
-  List<String> cascadeSkipDownstream(
-      Long workflowRunId, Long workflowDefinitionId, String fromNodeCode);
+    /**
+     * SKIP 级联：从 {@code fromNodeCode}（FAILED 或 SKIPPED 节点）出发，沿 SUCCESS / CONDITION 出边 寻找无机会再触发的下游节点，写入
+     * {@code SKIPPED} 的 {@code workflow_node_run} 行并继续递归级联。
+     *
+     * <p>"无机会触发"判定：节点的所有入边对应的前驱 node_run 已达终态且没有任何一条入边匹配（即 {@code matchedCount == 0 && terminalCount
+     * == size}）。该判定对 ALL / ANY / N_OF 三种 join 模式都成立——任意 join 至少需要 1 条匹配。
+     *
+     * <p>不级联跨 ALWAYS / FAILURE 出边的下游：那些路径仍可正常派发，由 outcome 主路径推进。
+     *
+     * @return 本次实际新写 SKIPPED 行的 nodeCode 列表（用于日志/监控；为空表示无级联）
+     */
+    List<String> cascadeSkipDownstream(Long workflowRunId, Long workflowDefinitionId, String fromNodeCode);
 
-  default List<String> cascadeSkipDownstreamForRun(WorkflowRunEntity run, String fromNodeCode) {
-    return cascadeSkipDownstreamForRun(run, fromNodeCode, null);
-  }
+    default List<String> cascadeSkipDownstreamForRun(WorkflowRunEntity run, String fromNodeCode) {
+        return cascadeSkipDownstreamForRun(run, fromNodeCode, null);
+    }
 
-  /** 对来源载荷中的条件入边进行判定时，级联跳过后继节点。 */
-  default List<String> cascadeSkipDownstreamForRun(
-      WorkflowRunEntity run, String fromNodeCode, String sourcePayloadJson) {
-    return EmptyChecks.isNull(run)
-        ? List.of()
-        : cascadeSkipDownstream(run.getId(), run.getWorkflowDefinitionId(), fromNodeCode);
-  }
+    /** 对来源载荷中的条件入边进行判定时，级联跳过后继节点。 */
+    default List<String> cascadeSkipDownstreamForRun(
+            WorkflowRunEntity run, String fromNodeCode, String sourcePayloadJson) {
+        return EmptyChecks.isNull(run)
+                ? List.of()
+                : cascadeSkipDownstream(run.getId(), run.getWorkflowDefinitionId(), fromNodeCode);
+    }
 
-  default DagNodeResolution resolveInitialNode(Long workflowDefinitionId) {
-    List<DagNodeResolution> nodes = resolveInitialNodes(workflowDefinitionId, null);
-    return nodes == null || nodes.isEmpty() ? null : nodes.get(0);
-  }
+    default DagNodeResolution resolveInitialNode(Long workflowDefinitionId) {
+        List<DagNodeResolution> nodes = resolveInitialNodes(workflowDefinitionId, null);
+        return nodes == null || nodes.isEmpty() ? null : nodes.get(0);
+    }
 
-  default DagNodeResolution resolveNextNode(
-      Long workflowDefinitionId, String currentNodeCode, boolean success) {
-    List<DagNodeResolution> nodes =
-        resolveNextNodes(workflowDefinitionId, currentNodeCode, success, null);
-    return nodes == null || nodes.isEmpty() ? null : nodes.get(0);
-  }
+    default DagNodeResolution resolveNextNode(Long workflowDefinitionId, String currentNodeCode, boolean success) {
+        List<DagNodeResolution> nodes = resolveNextNodes(workflowDefinitionId, currentNodeCode, success, null);
+        return nodes == null || nodes.isEmpty() ? null : nodes.get(0);
+    }
 
-  record DagNodeResolution(String nodeCode, String nodeType) {}
+    record DagNodeResolution(String nodeCode, String nodeType) {}
 }

@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface JobExecutionLogMapper {
 
-  List<JobExecutionLogEntity> selectByQuery(JobExecutionLogQuery query);
+    List<JobExecutionLogEntity> selectByQuery(JobExecutionLogQuery query);
 
-  long countByQuery(JobExecutionLogQuery query);
+    long countByQuery(JobExecutionLogQuery query);
 }

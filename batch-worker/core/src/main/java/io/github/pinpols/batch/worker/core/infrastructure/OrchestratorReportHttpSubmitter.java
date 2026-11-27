@@ -8,6 +8,6 @@ import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
  */
 public interface OrchestratorReportHttpSubmitter {
 
-  /** 调用 orchestrator {@code POST /internal/tasks/{taskId}/report}，失败抛运行时异常；不写入本地 outbox。 */
-  void submitReportOverHttp(TaskExecutionReport report);
+    /** 调用 orchestrator {@code POST /internal/tasks/{taskId}/report}，失败抛运行时异常；不写入本地 outbox。 */
+    void submitReportOverHttp(TaskExecutionReport report);
 }

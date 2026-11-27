@@ -10,17 +10,17 @@ import lombok.Builder;
  */
 @Builder(toBuilder = true)
 public record CalendarDependencyEntity(
-    Long id,
-    String tenantId,
-    String upstreamCode,
-    String downstreamCode,
-    String rule,
-    Boolean enabled,
-    String description,
-    Instant createdAt,
-    Instant updatedAt) {
+        Long id,
+        String tenantId,
+        String upstreamCode,
+        String downstreamCode,
+        String rule,
+        Boolean enabled,
+        String description,
+        Instant createdAt,
+        Instant updatedAt) {
 
-  public static final String RULE_WAIT_SETTLED = "WAIT_SETTLED";
-  public static final String RULE_WAIT_CUTOFF = "WAIT_CUTOFF";
-  public static final String RULE_SAME_DAY_PARALLEL = "SAME_DAY_PARALLEL";
+    public static final String RULE_WAIT_SETTLED = "WAIT_SETTLED";
+    public static final String RULE_WAIT_CUTOFF = "WAIT_CUTOFF";
+    public static final String RULE_SAME_DAY_PARALLEL = "SAME_DAY_PARALLEL";
 }

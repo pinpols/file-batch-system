@@ -29,44 +29,41 @@ import org.springframework.context.annotation.Configuration;
  */
 @Slf4j
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty(
-    name = "batch.trigger.quartz-metrics.enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+@ConditionalOnProperty(name = "batch.trigger.quartz-metrics.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class QuartzMetricsConfiguration {
 
-  private final Scheduler scheduler;
-  private final MeterRegistry meterRegistry;
+    private final Scheduler scheduler;
+    private final MeterRegistry meterRegistry;
 
-  @PostConstruct
-  public void registerListenersAndGauges() throws SchedulerException {
-    QuartzMetrics metrics = new QuartzMetrics(meterRegistry);
-    QuartzMetricsListener listener = new QuartzMetricsListener(metrics);
+    @PostConstruct
+    public void registerListenersAndGauges() throws SchedulerException {
+        QuartzMetrics metrics = new QuartzMetrics(meterRegistry);
+        QuartzMetricsListener listener = new QuartzMetricsListener(metrics);
 
-    scheduler.getListenerManager().addJobListener(listener);
-    scheduler.getListenerManager().addTriggerListener(listener);
+        scheduler.getListenerManager().addJobListener(listener);
+        scheduler.getListenerManager().addTriggerListener(listener);
 
-    meterRegistry.gauge(
-        QuartzMetrics.TRIGGERS_ACTIVE,
-        Tags.of("group", "all"),
-        scheduler,
-        QuartzMetricsConfiguration::countAllJobs);
+        meterRegistry.gauge(
+                QuartzMetrics.TRIGGERS_ACTIVE,
+                Tags.of("group", "all"),
+                scheduler,
+                QuartzMetricsConfiguration::countAllJobs);
 
-    log.info("Quartz metrics listener + active triggers gauge registered");
-  }
-
-  /**
-   * 统计当前 Scheduler 已注册 Job 总数。Prometheus scrape 时调用，{@link SchedulerException} 时返回 -1（Grafana
-   * 把负值标为不可用，避免异常数据）。
-   */
-  private static double countAllJobs(Scheduler scheduler) {
-    try {
-      return scheduler.getJobKeys(GroupMatcher.<JobKey>anyGroup()).size();
-    } catch (SchedulerException e) {
-      String causeSummary = SwallowedExceptionLogger.summary(e);
-      log.warn("count active triggers failed: {}", causeSummary);
-      return -1d;
+        log.info("Quartz metrics listener + active triggers gauge registered");
     }
-  }
+
+    /**
+     * 统计当前 Scheduler 已注册 Job 总数。Prometheus scrape 时调用，{@link SchedulerException} 时返回 -1（Grafana
+     * 把负值标为不可用，避免异常数据）。
+     */
+    private static double countAllJobs(Scheduler scheduler) {
+        try {
+            return scheduler.getJobKeys(GroupMatcher.<JobKey>anyGroup()).size();
+        } catch (SchedulerException e) {
+            String causeSummary = SwallowedExceptionLogger.summary(e);
+            log.warn("count active triggers failed: {}", causeSummary);
+            return -1d;
+        }
+    }
 }

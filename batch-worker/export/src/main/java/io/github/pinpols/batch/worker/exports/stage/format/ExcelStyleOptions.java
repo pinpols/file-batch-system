@@ -15,99 +15,87 @@ import java.util.Map;
  */
 @SuppressWarnings("java:S6218")
 record ExcelStyleOptions(
-    boolean bold,
-    byte[] backgroundRgb,
-    boolean freezeHeader,
-    boolean autoWidth,
-    List<HeaderGroup> headerGroups) {
+        boolean bold, byte[] backgroundRgb, boolean freezeHeader, boolean autoWidth, List<HeaderGroup> headerGroups) {
 
-  /** 分组合并表头:{@code [from, to]} 闭区间列下标 + 分组标题,合并仅作用于第 0 行(数据行之上)。 */
-  record HeaderGroup(String title, int fromColumn, int toColumn) {}
+    /** 分组合并表头:{@code [from, to]} 闭区间列下标 + 分组标题,合并仅作用于第 0 行(数据行之上)。 */
+    record HeaderGroup(String title, int fromColumn, int toColumn) {}
 
-  static final ExcelStyleOptions NONE = new ExcelStyleOptions(false, null, false, false, List.of());
+    static final ExcelStyleOptions NONE = new ExcelStyleOptions(false, null, false, false, List.of());
 
-  boolean styled() {
-    return bold || backgroundRgb != null || freezeHeader || autoWidth || !headerGroups.isEmpty();
-  }
+    boolean styled() {
+        return bold || backgroundRgb != null || freezeHeader || autoWidth || !headerGroups.isEmpty();
+    }
 
-  boolean hasHeaderGroups() {
-    return !headerGroups.isEmpty();
-  }
+    boolean hasHeaderGroups() {
+        return !headerGroups.isEmpty();
+    }
 
-  static ExcelStyleOptions from(Map<String, Object> templateConfig, AbstractExportFormat helper) {
-    if (templateConfig == null || templateConfig.isEmpty()) {
-      return NONE;
+    static ExcelStyleOptions from(Map<String, Object> templateConfig, AbstractExportFormat helper) {
+        if (templateConfig == null || templateConfig.isEmpty()) {
+            return NONE;
+        }
+        Map<String, Object> style = helper.toMap(
+                helper.firstNonNull(templateConfig.get("header_style"), templateConfig.get("headerStyle")));
+        boolean bold = booleanValue(style.get("bold"));
+        Object configuredBackground = helper.firstNonNull(style.get("background"), style.get("bg"));
+        String backgroundText = helper.textValue(configuredBackground);
+        byte[] background = parseRgb(backgroundText);
+        boolean freeze = booleanValue(helper.firstNonNull(style.get("freeze_header"), style.get("freezeHeader")));
+        boolean autoWidth = booleanValue(helper.firstNonNull(style.get("auto_width"), style.get("autoWidth")));
+        List<HeaderGroup> groups = parseGroups(
+                helper.firstNonNull(templateConfig.get("header_groups"), templateConfig.get("headerGroups")), helper);
+        ExcelStyleOptions options = new ExcelStyleOptions(bold, background, freeze, autoWidth, groups);
+        return options.styled() ? options : NONE;
     }
-    Map<String, Object> style = helper.toMap(
-        helper.firstNonNull(templateConfig.get("header_style"), templateConfig.get("headerStyle")));
-    boolean bold = booleanValue(style.get("bold"));
-    Object configuredBackground = helper.firstNonNull(style.get("background"), style.get("bg"));
-    String backgroundText = helper.textValue(configuredBackground);
-    byte[] background = parseRgb(backgroundText);
-    boolean freeze =
-        booleanValue(helper.firstNonNull(style.get("freeze_header"), style.get("freezeHeader")));
-    boolean autoWidth =
-        booleanValue(helper.firstNonNull(style.get("auto_width"), style.get("autoWidth")));
-    List<HeaderGroup> groups = parseGroups(
-        helper.firstNonNull(
-            templateConfig.get("header_groups"), templateConfig.get("headerGroups")),
-        helper);
-    ExcelStyleOptions options = new ExcelStyleOptions(bold, background, freeze, autoWidth, groups);
-    return options.styled() ? options : NONE;
-  }
 
-  private static List<HeaderGroup> parseGroups(Object raw, AbstractExportFormat helper) {
-    if (!(raw instanceof Collection<?> list)) {
-      return List.of();
+    private static List<HeaderGroup> parseGroups(Object raw, AbstractExportFormat helper) {
+        if (!(raw instanceof Collection<?> list)) {
+            return List.of();
+        }
+        List<HeaderGroup> groups = new ArrayList<>();
+        for (Object item : list) {
+            Map<String, Object> map = helper.toMap(item);
+            if (map.isEmpty()) {
+                continue;
+            }
+            Integer from = helper.integerValue(helper.firstNonNull(map.get("from"), map.get("fromColumn")));
+            Integer to = helper.integerValue(helper.firstNonNull(map.get("to"), map.get("toColumn")));
+            String title = helper.textValue(helper.firstNonNull(map.get("title"), map.get("label")));
+            boolean excelColumnRangeIsInvalid = EmptyChecks.isNull(from) || EmptyChecks.isNull(to) || to < from;
+            if (excelColumnRangeIsInvalid) {
+                continue;
+            }
+            groups.add(new HeaderGroup(title == null ? "" : title, from, to));
+        }
+        return List.copyOf(groups);
     }
-    List<HeaderGroup> groups = new ArrayList<>();
-    for (Object item : list) {
-      Map<String, Object> map = helper.toMap(item);
-      if (map.isEmpty()) {
-        continue;
-      }
-      Integer from =
-          helper.integerValue(helper.firstNonNull(map.get("from"), map.get("fromColumn")));
-      Integer to = helper.integerValue(helper.firstNonNull(map.get("to"), map.get("toColumn")));
-      String title = helper.textValue(helper.firstNonNull(map.get("title"), map.get("label")));
-      boolean excelColumnRangeIsInvalid =
-          EmptyChecks.isNull(from) || EmptyChecks.isNull(to) || to < from;
-      if (excelColumnRangeIsInvalid) {
-        continue;
-      }
-      groups.add(new HeaderGroup(title == null ? "" : title, from, to));
-    }
-    return List.copyOf(groups);
-  }
 
-  /** 解析 {@code #RRGGBB} / {@code RRGGBB} 6 位十六进制为 3 字节 RGB;非法 / 缺失返回 null(不上底色)。 */
-  private static byte[] parseRgb(String value) {
-    if (value == null) {
-      return null;
+    /** 解析 {@code #RRGGBB} / {@code RRGGBB} 6 位十六进制为 3 字节 RGB;非法 / 缺失返回 null(不上底色)。 */
+    private static byte[] parseRgb(String value) {
+        if (value == null) {
+            return null;
+        }
+        String hex = value.startsWith("#") ? value.substring(1) : value;
+        if (hex.length() != 6) {
+            return null;
+        }
+        try {
+            int rgb = Integer.parseInt(hex, 16);
+            return new byte[] {(byte) ((rgb >> 16) & 0xFF), (byte) ((rgb >> 8) & 0xFF), (byte) (rgb & 0xFF)};
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
-    String hex = value.startsWith("#") ? value.substring(1) : value;
-    if (hex.length() != 6) {
-      return null;
-    }
-    try {
-      int rgb = Integer.parseInt(hex, 16);
-      return new byte[] {
-        (byte) ((rgb >> 16) & 0xFF), (byte) ((rgb >> 8) & 0xFF), (byte) (rgb & 0xFF)
-      };
-    } catch (NumberFormatException ignored) {
-      return null;
-    }
-  }
 
-  private static boolean booleanValue(Object value) {
-    if (value instanceof Boolean b) {
-      return b;
+    private static boolean booleanValue(Object value) {
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        if (EmptyChecks.isNull(value)) {
+            return false;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        return Boolean.parseBoolean(text);
     }
-    if (EmptyChecks.isNull(value)) {
-      return false;
-    }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    return Boolean.parseBoolean(text);
-  }
 }

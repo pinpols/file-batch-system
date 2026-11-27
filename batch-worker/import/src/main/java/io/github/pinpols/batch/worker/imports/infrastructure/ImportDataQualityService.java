@@ -42,101 +42,95 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ImportDataQualityService {
 
-  private final ValidationConfigSupport configSupport;
-  private final ValidationRuleSetMerger ruleSetMerger;
-  private final DatasetRuleEvaluator datasetEvaluator;
-  private final RecordRuleEvaluator recordEvaluator;
-  private final ValidationIssueMasker masker;
+    private final ValidationConfigSupport configSupport;
+    private final ValidationRuleSetMerger ruleSetMerger;
+    private final DatasetRuleEvaluator datasetEvaluator;
+    private final RecordRuleEvaluator recordEvaluator;
+    private final ValidationIssueMasker masker;
 
-  public ValidationOutcome validate(
-      ImportJobContext context, List<CustomerImportPayload> payloads) {
-    List<String> schemaFields = stringList(context);
-    ValidationSession session =
-        beginValidation(context, payloads == null ? 0L : payloads.size(), schemaFields);
-    validateDataset(session);
-    validateChunk(session, payloads, 1L);
-    return outcome(session);
-  }
-
-  public ValidationSession beginValidation(
-      ImportJobContext context, long totalCount, List<String> schemaFields) {
-    Map<String, Object> ruleSet = ruleSetMerger.merge(
-        context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
-    ImportPayload importPayload = context != null
-            && context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PAYLOAD)
-                instanceof ImportPayload payload
-        ? payload
-        : null;
-    Object rawNormalizedPayload = EmptyChecks.isNull(context)
-        ? null
-        : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-    String normalizedPayload = Objects.toString(rawNormalizedPayload, null);
-    List<String> schemaFieldSnapshot =
-        EmptyChecks.isNull(schemaFields) ? List.of() : List.copyOf(schemaFields);
-    return new ValidationSession(
-        context,
-        ruleSet,
-        totalCount,
-        normalizedPayload,
-        importPayload,
-        schemaFieldSnapshot,
-        new LinkedHashMap<>(),
-        new ArrayList<>(),
-        new LinkedHashMap<>(),
-        new LinkedHashSet<>());
-  }
-
-  public void validateDataset(ValidationSession session) {
-    if (session == null) {
-      return;
+    public ValidationOutcome validate(ImportJobContext context, List<CustomerImportPayload> payloads) {
+        List<String> schemaFields = stringList(context);
+        ValidationSession session = beginValidation(context, payloads == null ? 0L : payloads.size(), schemaFields);
+        validateDataset(session);
+        validateChunk(session, payloads, 1L);
+        return outcome(session);
     }
-    datasetEvaluator.evaluate(session);
-  }
 
-  public Map<Long, ValidationIssue> validateChunk(
-      ValidationSession session, List<CustomerImportPayload> payloads, long recordBase) {
-    if (session == null || payloads == null || payloads.isEmpty()) {
-      return Map.of();
+    public ValidationSession beginValidation(ImportJobContext context, long totalCount, List<String> schemaFields) {
+        Map<String, Object> ruleSet = ruleSetMerger.merge(
+                context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+        ImportPayload importPayload = context != null
+                        && context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PAYLOAD)
+                                instanceof ImportPayload payload
+                ? payload
+                : null;
+        Object rawNormalizedPayload = EmptyChecks.isNull(context)
+                ? null
+                : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+        String normalizedPayload = Objects.toString(rawNormalizedPayload, null);
+        List<String> schemaFieldSnapshot = EmptyChecks.isNull(schemaFields) ? List.of() : List.copyOf(schemaFields);
+        return new ValidationSession(
+                context,
+                ruleSet,
+                totalCount,
+                normalizedPayload,
+                importPayload,
+                schemaFieldSnapshot,
+                new LinkedHashMap<>(),
+                new ArrayList<>(),
+                new LinkedHashMap<>(),
+                new LinkedHashSet<>());
     }
-    List<Map<String, Object>> rows = new ArrayList<>(payloads.size());
-    for (CustomerImportPayload payload : payloads) {
-      Map<String, Object> row = configSupport.payloadToMap(payload);
-      rows.add(row);
-    }
-    return validateChunkRows(session, rows, recordBase);
-  }
 
-  public Map<Long, ValidationIssue> validateChunkRows(
-      ValidationSession session, List<Map<String, Object>> rows, long recordBase) {
-    if (session == null || rows == null || rows.isEmpty()) {
-      return Map.of();
+    public void validateDataset(ValidationSession session) {
+        if (session == null) {
+            return;
+        }
+        datasetEvaluator.evaluate(session);
     }
-    return recordEvaluator.evaluate(session, rows, recordBase);
-  }
 
-  public ValidationOutcome outcome(ValidationSession session) {
-    if (session == null) {
-      return new ValidationOutcome(Map.of(), List.of(), List.of());
+    public Map<Long, ValidationIssue> validateChunk(
+            ValidationSession session, List<CustomerImportPayload> payloads, long recordBase) {
+        if (session == null || payloads == null || payloads.isEmpty()) {
+            return Map.of();
+        }
+        List<Map<String, Object>> rows = new ArrayList<>(payloads.size());
+        for (CustomerImportPayload payload : payloads) {
+            Map<String, Object> row = configSupport.payloadToMap(payload);
+            rows.add(row);
+        }
+        return validateChunkRows(session, rows, recordBase);
     }
-    return masker.maskOutcome(session);
-  }
 
-  private List<String> stringList(ImportJobContext context) {
-    Object value = context == null
-        ? null
-        : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS);
-    if (value instanceof List<?> list) {
-      return list.stream()
-          .filter(item -> {
-            if (EmptyChecks.isNull(item)) {
-              return false;
-            }
-            String itemText = String.valueOf(item);
-            return !EmptyChecks.isBlank(Objects.requireNonNull(itemText));
-          })
-          .map(String::valueOf)
-          .toList();
+    public Map<Long, ValidationIssue> validateChunkRows(
+            ValidationSession session, List<Map<String, Object>> rows, long recordBase) {
+        if (session == null || rows == null || rows.isEmpty()) {
+            return Map.of();
+        }
+        return recordEvaluator.evaluate(session, rows, recordBase);
     }
-    return List.of();
-  }
+
+    public ValidationOutcome outcome(ValidationSession session) {
+        if (session == null) {
+            return new ValidationOutcome(Map.of(), List.of(), List.of());
+        }
+        return masker.maskOutcome(session);
+    }
+
+    private List<String> stringList(ImportJobContext context) {
+        Object value = context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS);
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .filter(item -> {
+                        if (EmptyChecks.isNull(item)) {
+                            return false;
+                        }
+                        String itemText = String.valueOf(item);
+                        return !EmptyChecks.isBlank(Objects.requireNonNull(itemText));
+                    })
+                    .map(String::valueOf)
+                    .toList();
+        }
+        return List.of();
+    }
 }

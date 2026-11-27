@@ -12,34 +12,34 @@ import lombok.Builder;
  */
 @Builder
 public record ConsoleExecutionProgressResponse(
-    Long id,
-    String jobCode,
-    String instanceNo,
-    String instanceStatus,
-    Integer expectedPartitions,
-    Integer successPartitions,
-    Integer failedPartitions,
-    Integer completedPartitions,
-    Long progressPercent,
-    Instant startedAt,
-    Instant finishedAt) {
+        Long id,
+        String jobCode,
+        String instanceNo,
+        String instanceStatus,
+        Integer expectedPartitions,
+        Integer successPartitions,
+        Integer failedPartitions,
+        Integer completedPartitions,
+        Long progressPercent,
+        Instant startedAt,
+        Instant finishedAt) {
 
-  public static ConsoleExecutionProgressResponse from(ExecutionProgressView row) {
-    if (row == null) {
-      return null;
+    public static ConsoleExecutionProgressResponse from(ExecutionProgressView row) {
+        if (row == null) {
+            return null;
+        }
+        return ConsoleExecutionProgressResponse.builder()
+                .id(row.id())
+                .jobCode(row.jobCode())
+                .instanceNo(row.instanceNo())
+                .instanceStatus(row.instanceStatus())
+                .expectedPartitions(row.expectedPartitions())
+                .successPartitions(row.successPartitions())
+                .failedPartitions(row.failedPartitions())
+                .completedPartitions(row.completedPartitions())
+                .progressPercent(row.progressPercent())
+                .startedAt(row.startedAt())
+                .finishedAt(row.finishedAt())
+                .build();
     }
-    return ConsoleExecutionProgressResponse.builder()
-        .id(row.id())
-        .jobCode(row.jobCode())
-        .instanceNo(row.instanceNo())
-        .instanceStatus(row.instanceStatus())
-        .expectedPartitions(row.expectedPartitions())
-        .successPartitions(row.successPartitions())
-        .failedPartitions(row.failedPartitions())
-        .completedPartitions(row.completedPartitions())
-        .progressPercent(row.progressPercent())
-        .startedAt(row.startedAt())
-        .finishedAt(row.finishedAt())
-        .build();
-  }
 }

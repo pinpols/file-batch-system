@@ -33,160 +33,158 @@ import net.sf.jsqlparser.util.TablesNamesFinder;
  */
 public final class SelectSqlAstValidator {
 
-  private SelectSqlAstValidator() {}
+    private SelectSqlAstValidator() {}
 
-  /**
-   * 危险 PG 函数黑名单的单一权威源。sensor / DataQuality（{@code SensorSqlValidator}）、export（{@code
-   * SqlTemplateExportSecurityProperties}）、process（{@code SqlTransformComputeSecurityProperties}）
-   * 三侧默认清单此前各自维护同一份字面量（历史上曾漂移：export/process 早于 sensor/DQ 补齐 pg_sleep_for/pg_sleep_until 与 dblink
-   * 家族），容易出现单侧遗漏。统一到此常量后，各侧仍保留自己的默认值字段（properties 语义不变，租户仍可在 yml 覆盖/追加），只是默认值取自这里，防止再次漂移。
-   *
-   * <p>覆盖：任意命令 / 网络连接（{@code dblink} 家族 / {@code copy_from_program}）、后端控制（{@code
-   * pg_terminate_backend} / {@code pg_cancel_backend}）、服务器文件读取（{@code pg_read_file} / {@code
-   * pg_read_binary_file} / {@code pg_read_server_files} / {@code pg_ls_dir} / {@code lo_import} /
-   * {@code lo_export}）、拒绝服务（{@code pg_sleep} 家族，含 {@code pg_sleep_for} / {@code
-   * pg_sleep_until}）。按家族前缀匹配（见 {@link #findForbiddenFunctionCall}）。
-   *
-   * <p>调用方需要可变副本时应 {@code new ArrayList<>(DEFAULT_FORBIDDEN_FUNCTIONS)}——这里返回的是不可变列表。
-   */
-  public static final List<String> DEFAULT_FORBIDDEN_FUNCTIONS = List.of(
-      "dblink",
-      "pg_terminate_backend",
-      "pg_cancel_backend",
-      "pg_read_file",
-      "pg_read_binary_file",
-      "pg_read_server_files",
-      "pg_ls_dir",
-      "copy_from_program",
-      "lo_import",
-      "lo_export",
-      "pg_sleep",
-      "pg_sleep_for",
-      "pg_sleep_until");
+    /**
+     * 危险 PG 函数黑名单的单一权威源。sensor / DataQuality（{@code SensorSqlValidator}）、export（{@code
+     * SqlTemplateExportSecurityProperties}）、process（{@code SqlTransformComputeSecurityProperties}）
+     * 三侧默认清单此前各自维护同一份字面量（历史上曾漂移：export/process 早于 sensor/DQ 补齐 pg_sleep_for/pg_sleep_until 与 dblink
+     * 家族），容易出现单侧遗漏。统一到此常量后，各侧仍保留自己的默认值字段（properties 语义不变，租户仍可在 yml 覆盖/追加），只是默认值取自这里，防止再次漂移。
+     *
+     * <p>覆盖：任意命令 / 网络连接（{@code dblink} 家族 / {@code copy_from_program}）、后端控制（{@code
+     * pg_terminate_backend} / {@code pg_cancel_backend}）、服务器文件读取（{@code pg_read_file} / {@code
+     * pg_read_binary_file} / {@code pg_read_server_files} / {@code pg_ls_dir} / {@code lo_import} /
+     * {@code lo_export}）、拒绝服务（{@code pg_sleep} 家族，含 {@code pg_sleep_for} / {@code
+     * pg_sleep_until}）。按家族前缀匹配（见 {@link #findForbiddenFunctionCall}）。
+     *
+     * <p>调用方需要可变副本时应 {@code new ArrayList<>(DEFAULT_FORBIDDEN_FUNCTIONS)}——这里返回的是不可变列表。
+     */
+    public static final List<String> DEFAULT_FORBIDDEN_FUNCTIONS = List.of(
+            "dblink",
+            "pg_terminate_backend",
+            "pg_cancel_backend",
+            "pg_read_file",
+            "pg_read_binary_file",
+            "pg_read_server_files",
+            "pg_ls_dir",
+            "copy_from_program",
+            "lo_import",
+            "lo_export",
+            "pg_sleep",
+            "pg_sleep_for",
+            "pg_sleep_until");
 
-  /** SELECT/WITH 主体（含所有 WITH 子查询、UNION 分支、嵌套子查询）中是否出现 {@code SELECT *} 或 {@code SELECT table.*}。 */
-  public static boolean containsSelectStar(Select select) {
-    Deque<Select> queue = collectInitialBodies(select);
-    while (!queue.isEmpty()) {
-      Select body = unwrap(queue.poll());
-      if (body instanceof PlainSelect ps) {
-        if (hasStarItem(ps)) {
-          return true;
+    /** SELECT/WITH 主体（含所有 WITH 子查询、UNION 分支、嵌套子查询）中是否出现 {@code SELECT *} 或 {@code SELECT table.*}。 */
+    public static boolean containsSelectStar(Select select) {
+        Deque<Select> queue = collectInitialBodies(select);
+        while (!queue.isEmpty()) {
+            Select body = unwrap(queue.poll());
+            if (body instanceof PlainSelect ps) {
+                if (hasStarItem(ps)) {
+                    return true;
+                }
+                enqueueNestedBodies(ps, queue);
+            } else if (body instanceof SetOperationList sol && sol.getSelects() != null) {
+                queue.addAll(sol.getSelects());
+            }
         }
-        enqueueNestedBodies(ps, queue);
-      } else if (body instanceof SetOperationList sol && sol.getSelects() != null) {
-        queue.addAll(sol.getSelects());
-      }
+        return false;
     }
-    return false;
-  }
 
-  private static boolean hasStarItem(PlainSelect ps) {
-    if (ps.getSelectItems() == null) {
-      return false;
-    }
-    for (SelectItem<?> item : ps.getSelectItems()) {
-      Object expression = item.getExpression();
-      if (expression instanceof AllColumns || expression instanceof AllTableColumns) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** 解包 ParenthesedSelect → 实际的 PlainSelect / SetOperationList。 */
-  private static Select unwrap(Select select) {
-    while (select instanceof ParenthesedSelect ps) {
-      select = ps.getSelect();
-    }
-    return select;
-  }
-
-  /** 收集顶层 Select + 所有 WITH 子句的子查询主体。 */
-  private static Deque<Select> collectInitialBodies(Select select) {
-    Deque<Select> queue = new ArrayDeque<>();
-    queue.add(select);
-    if (select.getWithItemsList() != null) {
-      for (WithItem<?> wi : select.getWithItemsList()) {
-        ParenthesedSelect sub = wi.getSelect();
-        if (sub != null) {
-          queue.add(sub);
+    private static boolean hasStarItem(PlainSelect ps) {
+        if (ps.getSelectItems() == null) {
+            return false;
         }
-      }
-    }
-    return queue;
-  }
-
-  /** 把 FROM / JOIN 中的子查询加入待检查队列。 */
-  private static void enqueueNestedBodies(PlainSelect ps, Deque<Select> queue) {
-    if (ps.getFromItem() instanceof Select sub) {
-      queue.add(sub);
-    }
-    if (ps.getJoins() != null) {
-      for (Join join : ps.getJoins()) {
-        if (join.getFromItem() instanceof Select sub) {
-          queue.add(sub);
+        for (SelectItem<?> item : ps.getSelectItems()) {
+            Object expression = item.getExpression();
+            if (expression instanceof AllColumns || expression instanceof AllTableColumns) {
+                return true;
+            }
         }
-      }
+        return false;
     }
-  }
 
-  /**
-   * Schema allowlist 违规结果。{@code unqualified=true} 表示表名未带 schema 前缀（{@code violatingName}
-   * 即该表名）；{@code unqualified=false} 表示带前缀但不在白名单（{@code violatingName} 即该 schema）。
-   */
-  public record SchemaViolation(String violatingName, boolean unqualified) {}
-
-  /**
-   * 通过 TablesNamesFinder 收集所有表名（可能含 "schema.table"），校验每个都带 schema 前缀且在白名单内。
-   * 无前缀的表名一律视为违规，防止绕过白名单访问系统内部表。全部合规返回 {@code null}。
-   */
-  public static SchemaViolation findSchemaViolation(
-      Statement statement, List<String> allowedSchemas) {
-    TablesNamesFinder<Void> tablesNamesFinder = new TablesNamesFinder<>();
-    Set<String> discoveredTableNames = tablesNamesFinder.getTables(statement);
-    List<String> tableNames = List.copyOf(discoveredTableNames);
-    for (String name : tableNames) {
-      int dot = name.indexOf('.');
-      if (dot <= 0) {
-        return new SchemaViolation(name, true);
-      }
-      String schema = name.substring(0, dot).toLowerCase(Locale.ROOT);
-      if (!allowedSchemas.contains(schema)) {
-        return new SchemaViolation(schema, false);
-      }
+    /** 解包 ParenthesedSelect → 实际的 PlainSelect / SetOperationList。 */
+    private static Select unwrap(Select select) {
+        while (select instanceof ParenthesedSelect ps) {
+            select = ps.getSelect();
+        }
+        return select;
     }
-    return null;
-  }
 
-  /**
-   * 遍历已解析 AST 的所有函数调用节点，命中禁用列表（dblink / pg_terminate_backend / pg_read_server_files 等）即返回该函数名， 否则返回
-   * {@code null}。取代旧的子串匹配 —— 后者可被"函数名与左括号间插入块注释"（{@code pg_read_server_files/**}{@code
-   * /('x')}）或带引号标识符（{@code "pg_read_server_files"(...)}）绕过。
-   *
-   * <p><b>家族前缀匹配</b>：禁用项按「函数家族」拦截 —— 调用名等于禁用项，或以「禁用项 + 下划线」起头即命中。故 {@code dblink} 一条即覆盖 {@code
-   * dblink_exec} / {@code dblink_connect} / {@code dblink_send_query}，{@code pg_sleep} 亦覆盖 {@code
-   * pg_sleep_for} / {@code pg_sleep_until}。这些都是同名 PG 内置函数家族，整族封禁是安全增益（清单里全是危险系统函数，不会误伤业务函数）。
-   */
-  public static String findForbiddenFunctionCall(Statement statement, List<String> forbidden) {
-    Set<String> called = SqlFunctionNameCollector.collect(statement);
-    Set<String> forbiddenLower = forbidden.stream()
-        .map(fn -> fn.toLowerCase(Locale.ROOT))
-        .collect(Collectors.toCollection(HashSet::new));
-    return called.stream()
-        .filter(name -> {
-          // 既比对裸名，也比对 schema 限定名的尾段（pg_catalog.pg_read_server_files → pg_read_server_files）。
-          String bare = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : name;
-          return matchesForbiddenFamily(name, forbiddenLower)
-              || matchesForbiddenFamily(bare, forbiddenLower);
-        })
-        .findFirst()
-        .orElse(null);
-  }
+    /** 收集顶层 Select + 所有 WITH 子句的子查询主体。 */
+    private static Deque<Select> collectInitialBodies(Select select) {
+        Deque<Select> queue = new ArrayDeque<>();
+        queue.add(select);
+        if (select.getWithItemsList() != null) {
+            for (WithItem<?> wi : select.getWithItemsList()) {
+                ParenthesedSelect sub = wi.getSelect();
+                if (sub != null) {
+                    queue.add(sub);
+                }
+            }
+        }
+        return queue;
+    }
 
-  /** 精确名或「禁用项_ 起头」的家族成员均视为命中。 */
-  private static boolean matchesForbiddenFamily(String candidate, Set<String> forbiddenLower) {
-    return forbiddenLower.contains(candidate)
-        || forbiddenLower.stream().anyMatch(f -> candidate.startsWith(f + "_"));
-  }
+    /** 把 FROM / JOIN 中的子查询加入待检查队列。 */
+    private static void enqueueNestedBodies(PlainSelect ps, Deque<Select> queue) {
+        if (ps.getFromItem() instanceof Select sub) {
+            queue.add(sub);
+        }
+        if (ps.getJoins() != null) {
+            for (Join join : ps.getJoins()) {
+                if (join.getFromItem() instanceof Select sub) {
+                    queue.add(sub);
+                }
+            }
+        }
+    }
+
+    /**
+     * Schema allowlist 违规结果。{@code unqualified=true} 表示表名未带 schema 前缀（{@code violatingName}
+     * 即该表名）；{@code unqualified=false} 表示带前缀但不在白名单（{@code violatingName} 即该 schema）。
+     */
+    public record SchemaViolation(String violatingName, boolean unqualified) {}
+
+    /**
+     * 通过 TablesNamesFinder 收集所有表名（可能含 "schema.table"），校验每个都带 schema 前缀且在白名单内。
+     * 无前缀的表名一律视为违规，防止绕过白名单访问系统内部表。全部合规返回 {@code null}。
+     */
+    public static SchemaViolation findSchemaViolation(Statement statement, List<String> allowedSchemas) {
+        TablesNamesFinder<Void> tablesNamesFinder = new TablesNamesFinder<>();
+        Set<String> discoveredTableNames = tablesNamesFinder.getTables(statement);
+        List<String> tableNames = List.copyOf(discoveredTableNames);
+        for (String name : tableNames) {
+            int dot = name.indexOf('.');
+            if (dot <= 0) {
+                return new SchemaViolation(name, true);
+            }
+            String schema = name.substring(0, dot).toLowerCase(Locale.ROOT);
+            if (!allowedSchemas.contains(schema)) {
+                return new SchemaViolation(schema, false);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 遍历已解析 AST 的所有函数调用节点，命中禁用列表（dblink / pg_terminate_backend / pg_read_server_files 等）即返回该函数名， 否则返回
+     * {@code null}。取代旧的子串匹配 —— 后者可被"函数名与左括号间插入块注释"（{@code pg_read_server_files/**}{@code
+     * /('x')}）或带引号标识符（{@code "pg_read_server_files"(...)}）绕过。
+     *
+     * <p><b>家族前缀匹配</b>：禁用项按「函数家族」拦截 —— 调用名等于禁用项，或以「禁用项 + 下划线」起头即命中。故 {@code dblink} 一条即覆盖 {@code
+     * dblink_exec} / {@code dblink_connect} / {@code dblink_send_query}，{@code pg_sleep} 亦覆盖 {@code
+     * pg_sleep_for} / {@code pg_sleep_until}。这些都是同名 PG 内置函数家族，整族封禁是安全增益（清单里全是危险系统函数，不会误伤业务函数）。
+     */
+    public static String findForbiddenFunctionCall(Statement statement, List<String> forbidden) {
+        Set<String> called = SqlFunctionNameCollector.collect(statement);
+        Set<String> forbiddenLower = forbidden.stream()
+                .map(fn -> fn.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toCollection(HashSet::new));
+        return called.stream()
+                .filter(name -> {
+                    // 既比对裸名，也比对 schema 限定名的尾段（pg_catalog.pg_read_server_files → pg_read_server_files）。
+                    String bare = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : name;
+                    return matchesForbiddenFamily(name, forbiddenLower) || matchesForbiddenFamily(bare, forbiddenLower);
+                })
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** 精确名或「禁用项_ 起头」的家族成员均视为命中。 */
+    private static boolean matchesForbiddenFamily(String candidate, Set<String> forbiddenLower) {
+        return forbiddenLower.contains(candidate)
+                || forbiddenLower.stream().anyMatch(f -> candidate.startsWith(f + "_"));
+    }
 }

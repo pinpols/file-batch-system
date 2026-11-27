@@ -16,9 +16,9 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum SensorTimeoutAction implements DictEnum {
-  FAIL("FAIL", "失败"),
-  SKIP_DOWNSTREAM("SKIP_DOWNSTREAM", "跳过下游");
+    FAIL("FAIL", "失败"),
+    SKIP_DOWNSTREAM("SKIP_DOWNSTREAM", "跳过下游");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

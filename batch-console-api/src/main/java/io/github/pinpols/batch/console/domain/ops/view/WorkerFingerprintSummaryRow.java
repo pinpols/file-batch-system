@@ -10,7 +10,7 @@ import lombok.Data;
 @Data
 public class WorkerFingerprintSummaryRow {
 
-  private String buildId;
-  private String sdkVersion;
-  private Long count;
+    private String buildId;
+    private String sdkVersion;
+    private Long count;
 }

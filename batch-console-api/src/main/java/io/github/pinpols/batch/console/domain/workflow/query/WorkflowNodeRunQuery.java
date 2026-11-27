@@ -8,16 +8,16 @@ import io.github.pinpols.batch.common.model.PageRequest;
  * <p>{@code tenantId} 是 mandatory：mapper 通过 JOIN batch.workflow_run 强制租户过滤，禁止 null/blank。
  */
 public record WorkflowNodeRunQuery(
-    String tenantId,
-    Long workflowRunId,
-    String nodeCode,
-    String nodeStatus,
-    String traceId,
-    PageRequest pageRequest,
-    Long cursorId,
-    boolean cursorMode) {
+        String tenantId,
+        Long workflowRunId,
+        String nodeCode,
+        String nodeStatus,
+        String traceId,
+        PageRequest pageRequest,
+        Long cursorId,
+        boolean cursorMode) {
 
-  public static WorkflowNodeRunQuery ofWorkflowRun(String tenantId, Long workflowRunId) {
-    return new WorkflowNodeRunQuery(tenantId, workflowRunId, null, null, null, null, null, false);
-  }
+    public static WorkflowNodeRunQuery ofWorkflowRun(String tenantId, Long workflowRunId) {
+        return new WorkflowNodeRunQuery(tenantId, workflowRunId, null, null, null, null, null, false);
+    }
 }

@@ -5,13 +5,13 @@ import lombok.Builder;
 
 @Builder
 public record AssetFreshnessPolicyUpsertCommand(
-    Long id,
-    String tenantId,
-    String assetCode,
-    String assetType,
-    LocalTime expectedByLocalTime,
-    String timezone,
-    Integer staleAfterSeconds,
-    Integer lookbackDays,
-    String severity,
-    Boolean enabled) {}
+        Long id,
+        String tenantId,
+        String assetCode,
+        String assetType,
+        LocalTime expectedByLocalTime,
+        String timezone,
+        Integer staleAfterSeconds,
+        Integer lookbackDays,
+        String severity,
+        Boolean enabled) {}

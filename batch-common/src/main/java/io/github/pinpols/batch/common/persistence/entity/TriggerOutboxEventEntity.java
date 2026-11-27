@@ -13,32 +13,32 @@ import lombok.Data;
 @Data
 public class TriggerOutboxEventEntity {
 
-  private Long id;
-  private String tenantId;
-  private String requestId;
-  private String topic;
+    private Long id;
+    private String tenantId;
+    private String requestId;
+    private String topic;
 
-  /** {@link io.github.pinpols.batch.common.dto.LaunchEnvelope} 序列化后的 JSON 串。 */
-  private String payload;
+    /** {@link io.github.pinpols.batch.common.dto.LaunchEnvelope} 序列化后的 JSON 串。 */
+    private String payload;
 
-  /** 对齐 {@link io.github.pinpols.batch.common.enums.OutboxPublishStatus} code。 */
-  private String publishStatus;
+    /** 对齐 {@link io.github.pinpols.batch.common.enums.OutboxPublishStatus} code。 */
+    private String publishStatus;
 
-  /** 当前 PUBLISHING 领取轮次；离开该状态时清空。 */
-  private String publishClaimToken;
+    /** 当前 PUBLISHING 领取轮次；离开该状态时清空。 */
+    private String publishClaimToken;
 
-  /** 已尝试发布次数(失败时 ++,成功不变)。 */
-  private int publishAttempt;
+    /** 已尝试发布次数(失败时 ++,成功不变)。 */
+    private int publishAttempt;
 
-  /** 最近一次发布失败的简短 message,长度上限 2048。 */
-  private String lastError;
+    /** 最近一次发布失败的简短 message,长度上限 2048。 */
+    private String lastError;
 
-  private String traceId;
+    private String traceId;
 
-  /** 退避时刻;relay 只扫 {@code next_publish_at <= now()} 的行。 */
-  private Instant nextPublishAt;
+    /** 退避时刻;relay 只扫 {@code next_publish_at <= now()} 的行。 */
+    private Instant nextPublishAt;
 
-  private Instant publishedAt;
-  private Instant createdAt;
-  private Instant updatedAt;
+    private Instant publishedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

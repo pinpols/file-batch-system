@@ -10,35 +10,35 @@ import lombok.Data;
 @Data
 public class ConsoleCatchUpApprovalRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotBlank
-  @Size(max = 128, message = "requestId too long (max 128)")
-  private String requestId;
+    @NotBlank
+    @Size(max = 128, message = "requestId too long (max 128)")
+    private String requestId;
 
-  @Positive
-  private Long workflowDefinitionId;
+    @Positive
+    private Long workflowDefinitionId;
 
-  @NotBlank
-  @Size(max = 128, message = "jobCode too long (max 128)")
-  /** 用于解析补跑目标的业务作业标识。 */
-  private String jobCode;
+    @NotBlank
+    @Size(max = 128, message = "jobCode too long (max 128)")
+    /** 用于解析补跑目标的业务作业标识。 */
+    private String jobCode;
 
-  @NotBlank
-  @ValidBizDate
-  private String bizDate;
+    @NotBlank
+    @ValidBizDate
+    private String bizDate;
 
-  /** 批量日发起的审批携带其冻结日历；普通补跑审批可不传。 */
-  @Size(max = 128, message = "batchDayCalendarCode too long (max 128)")
-  private String batchDayCalendarCode;
+    /** 批量日发起的审批携带其冻结日历；普通补跑审批可不传。 */
+    @Size(max = 128, message = "batchDayCalendarCode too long (max 128)")
+    private String batchDayCalendarCode;
 
-  @Size(max = 64, message = "scheduledAt too long (max 64)")
-  private String scheduledAt;
+    @Size(max = 64, message = "scheduledAt too long (max 64)")
+    private String scheduledAt;
 
-  @Size(max = 512, message = "reason too long (max 512)")
-  private String reason;
+    @Size(max = 512, message = "reason too long (max 512)")
+    private String reason;
 
-  @Size(max = 64, message = "approvalId too long (max 64)")
-  private String approvalId;
+    @Size(max = 64, message = "approvalId too long (max 64)")
+    private String approvalId;
 }

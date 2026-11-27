@@ -15,12 +15,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleFileQueryMappers {
 
-  public final FileRecordMapper fileRecordMapper;
-  public final FileArrivalGroupMapper fileArrivalGroupMapper;
-  public final FileErrorRecordMapper fileErrorRecordMapper;
-  public final FilePipelineMapper filePipelineMapper;
-  public final FilePipelineStepRunMapper filePipelineStepRunMapper;
-  public final FileDispatchRecordMapper fileDispatchRecordMapper;
-  public final FileChannelConfigMapper fileChannelConfigMapper;
-  public final FileTemplateConfigMapper fileTemplateConfigMapper;
+    public final FileRecordMapper fileRecordMapper;
+    public final FileArrivalGroupMapper fileArrivalGroupMapper;
+    public final FileErrorRecordMapper fileErrorRecordMapper;
+    public final FilePipelineMapper filePipelineMapper;
+    public final FilePipelineStepRunMapper filePipelineStepRunMapper;
+    public final FileDispatchRecordMapper fileDispatchRecordMapper;
+    public final FileChannelConfigMapper fileChannelConfigMapper;
+    public final FileTemplateConfigMapper fileTemplateConfigMapper;
 }

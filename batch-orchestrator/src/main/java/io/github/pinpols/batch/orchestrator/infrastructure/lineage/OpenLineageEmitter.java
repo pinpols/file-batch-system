@@ -46,262 +46,245 @@ import org.springframework.stereotype.Component;
 @Component
 public class OpenLineageEmitter {
 
-  private static final String SCHEMA_URL =
-      "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent";
-  private static final String METRIC = "openlineage.emit";
+    private static final String SCHEMA_URL = "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent";
+    private static final String METRIC = "openlineage.emit";
 
-  private final OpenLineageProperties props;
-  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private final ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider;
-  private final OutboundHttpTransport httpTransport;
-  private final boolean enabled;
+    private final OpenLineageProperties props;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    private final ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider;
+    private final OutboundHttpTransport httpTransport;
+    private final boolean enabled;
 
-  public OpenLineageEmitter(
-      OpenLineageProperties props,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider,
-      @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
-    this.props = props;
-    this.meterRegistryProvider = meterRegistryProvider;
-    this.datasetMapperProvider = datasetMapperProvider;
-    this.httpTransport = httpTransport;
-    if (props.isEnabled() && !props.getEndpoint().isBlank()) {
-      this.enabled = true;
-      log.info(
-          "OpenLineageEmitter enabled: endpoint={}, namespace={}",
-          props.getEndpoint(),
-          props.getNamespace());
-    } else {
-      this.enabled = false;
-    }
-  }
-
-  /**
-   * 可靠消费者使用的同步发送入口。只有端点返回 2xx 才正常返回；调用方据此提交 Kafka offset。
-   *
-   * @throws IllegalStateException 配置未就绪、HTTP 非 2xx 或传输失败
-   */
-  public void emitWorkflowTerminalReliably(
-      WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
-    boolean lineageEmissionIsUnavailable =
-        !enabled || EmptyChecks.isNull(run) || EmptyChecks.isNull(terminalStatus);
-    if (lineageEmissionIsUnavailable) {
-      throw new IllegalStateException("OpenLineage endpoint is not configured");
-    }
-    try {
-      List<OpenLineageDatasetRow> inputDatasets = datasetsFor(run);
-      Map<String, Object> runEvent = buildRunEvent(run, terminalStatus, finishedAt, inputDatasets);
-      String body = JsonUtils.toJson(runEvent);
-      String endpoint = props.getEndpoint();
-      Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMs());
-      Duration requestTimeout = Duration.ofMillis(props.getRequestTimeoutMs());
-      OutboundHttpContent httpContent =
-          new OutboundHttpContent(body, "application/json; charset=utf-8");
-      OutboundHttpRequest request = OutboundHttpRequest.post(
-          endpoint,
-          Map.of(),
-          httpContent,
-          connectTimeout,
-          requestTimeout,
-          OutboundAddressPolicy.TRUSTED);
-      OutboundHttpResponse response = httpTransport.execute(request);
-      if (!response.isSuccessful()) {
-        recordLineageMetric("http_error", terminalStatus);
-        throw new IllegalStateException(
-            "OpenLineage endpoint returned HTTP " + response.statusCode());
-      }
-      recordLineageMetric("success", terminalStatus);
-    } catch (IOException ex) {
-      recordLineageMetric("error", terminalStatus);
-      throw new IllegalStateException("OpenLineage delivery failed", ex);
-    }
-  }
-
-  /** 构建 spec-compliant OpenLineage RunEvent(COMPLETE / FAIL)。 */
-  Map<String, Object> buildRunEvent(
-      WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
-    return buildRunEvent(run, terminalStatus, finishedAt, List.of());
-  }
-
-  /** 构建 spec-compliant OpenLineage RunEvent(COMPLETE / FAIL)。 */
-  Map<String, Object> buildRunEvent(
-      WorkflowRunEntity run,
-      String terminalStatus,
-      Instant finishedAt,
-      List<OpenLineageDatasetRow> datasets) {
-    boolean success = WorkflowRunStatus.SUCCESS.code().equals(terminalStatus)
-        || WorkflowRunStatus.SUCCESS_DRY_RUN.code().equals(terminalStatus);
-    Instant eventTime = finishedAt != null ? finishedAt : Instant.now();
-
-    Map<String, Object> nominalTime = new LinkedHashMap<>();
-    if (run.getStartedAt() != null) {
-      Instant startedAt = run.getStartedAt();
-      String nominalStartTime = startedAt.toString();
-      nominalTime.put("nominalStartTime", nominalStartTime);
-    }
-    if (finishedAt != null) {
-      String nominalEndTime = finishedAt.toString();
-      nominalTime.put("nominalEndTime", nominalEndTime);
+    public OpenLineageEmitter(
+            OpenLineageProperties props,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider,
+            @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
+        this.props = props;
+        this.meterRegistryProvider = meterRegistryProvider;
+        this.datasetMapperProvider = datasetMapperProvider;
+        this.httpTransport = httpTransport;
+        if (props.isEnabled() && !props.getEndpoint().isBlank()) {
+            this.enabled = true;
+            log.info(
+                    "OpenLineageEmitter enabled: endpoint={}, namespace={}", props.getEndpoint(), props.getNamespace());
+        } else {
+            this.enabled = false;
+        }
     }
 
-    Map<String, Object> runFacets = new LinkedHashMap<>();
-    if (!nominalTime.isEmpty()) {
-      nominalTime.put("_producer", props.getProducer());
-      nominalTime.put(
-          "_schemaURL",
-          "https://openlineage.io/spec/facets/1-0-0/NominalTimeRunFacet.json#/$defs/NominalTimeRunFacet");
-      runFacets.put("nominalTime", nominalTime);
+    /**
+     * 可靠消费者使用的同步发送入口。只有端点返回 2xx 才正常返回；调用方据此提交 Kafka offset。
+     *
+     * @throws IllegalStateException 配置未就绪、HTTP 非 2xx 或传输失败
+     */
+    public void emitWorkflowTerminalReliably(WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
+        boolean lineageEmissionIsUnavailable =
+                !enabled || EmptyChecks.isNull(run) || EmptyChecks.isNull(terminalStatus);
+        if (lineageEmissionIsUnavailable) {
+            throw new IllegalStateException("OpenLineage endpoint is not configured");
+        }
+        try {
+            List<OpenLineageDatasetRow> inputDatasets = datasetsFor(run);
+            Map<String, Object> runEvent = buildRunEvent(run, terminalStatus, finishedAt, inputDatasets);
+            String body = JsonUtils.toJson(runEvent);
+            String endpoint = props.getEndpoint();
+            Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMs());
+            Duration requestTimeout = Duration.ofMillis(props.getRequestTimeoutMs());
+            OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/json; charset=utf-8");
+            OutboundHttpRequest request = OutboundHttpRequest.post(
+                    endpoint, Map.of(), httpContent, connectTimeout, requestTimeout, OutboundAddressPolicy.TRUSTED);
+            OutboundHttpResponse response = httpTransport.execute(request);
+            if (!response.isSuccessful()) {
+                recordLineageMetric("http_error", terminalStatus);
+                throw new IllegalStateException("OpenLineage endpoint returned HTTP " + response.statusCode());
+            }
+            recordLineageMetric("success", terminalStatus);
+        } catch (IOException ex) {
+            recordLineageMetric("error", terminalStatus);
+            throw new IllegalStateException("OpenLineage delivery failed", ex);
+        }
     }
 
-    Map<String, Object> runNode = new LinkedHashMap<>();
-    runNode.put("runId", deterministicRunId(run.getId()));
-    if (!runFacets.isEmpty()) {
-      runNode.put("facets", runFacets);
+    /** 构建 spec-compliant OpenLineage RunEvent(COMPLETE / FAIL)。 */
+    Map<String, Object> buildRunEvent(WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
+        return buildRunEvent(run, terminalStatus, finishedAt, List.of());
     }
 
-    Map<String, Object> jobFacets = new LinkedHashMap<>();
-    Map<String, Object> docFacet = new LinkedHashMap<>();
-    docFacet.put("_producer", props.getProducer());
-    docFacet.put(
-        "_schemaURL",
-        "https://openlineage.io/spec/facets/1-0-0/DocumentationJobFacet.json#/$defs/DocumentationJobFacet");
-    docFacet.put(
-        "description",
-        "workflow_run id="
-            + run.getId()
-            + " tenant="
-            + run.getTenantId()
-            + " bizDate="
-            + run.getBizDate()
-            + " traceId="
-            + run.getTraceId());
-    jobFacets.put("documentation", docFacet);
+    /** 构建 spec-compliant OpenLineage RunEvent(COMPLETE / FAIL)。 */
+    Map<String, Object> buildRunEvent(
+            WorkflowRunEntity run, String terminalStatus, Instant finishedAt, List<OpenLineageDatasetRow> datasets) {
+        boolean success = WorkflowRunStatus.SUCCESS.code().equals(terminalStatus)
+                || WorkflowRunStatus.SUCCESS_DRY_RUN.code().equals(terminalStatus);
+        Instant eventTime = finishedAt != null ? finishedAt : Instant.now();
 
-    Map<String, Object> jobNode = new LinkedHashMap<>();
-    jobNode.put("namespace", props.getNamespace());
-    jobNode.put("name", jobName(run));
-    jobNode.put("facets", jobFacets);
+        Map<String, Object> nominalTime = new LinkedHashMap<>();
+        if (run.getStartedAt() != null) {
+            Instant startedAt = run.getStartedAt();
+            String nominalStartTime = startedAt.toString();
+            nominalTime.put("nominalStartTime", nominalStartTime);
+        }
+        if (finishedAt != null) {
+            String nominalEndTime = finishedAt.toString();
+            nominalTime.put("nominalEndTime", nominalEndTime);
+        }
 
-    Map<String, Object> event = new LinkedHashMap<>();
-    event.put("eventType", success ? "COMPLETE" : "FAIL");
-    String eventTimeText = eventTime.toString();
-    event.put("eventTime", eventTimeText);
-    event.put("run", runNode);
-    event.put("job", jobNode);
-    List<Map<String, Object>> inputDatasets = buildDatasets(datasets, true);
-    event.put("inputs", inputDatasets);
-    List<Map<String, Object>> outputDatasets = buildDatasets(datasets, false);
-    event.put("outputs", outputDatasets);
-    event.put("producer", props.getProducer());
-    event.put("schemaURL", SCHEMA_URL);
-    return event;
-  }
+        Map<String, Object> runFacets = new LinkedHashMap<>();
+        if (!nominalTime.isEmpty()) {
+            nominalTime.put("_producer", props.getProducer());
+            nominalTime.put(
+                    "_schemaURL",
+                    "https://openlineage.io/spec/facets/1-0-0/NominalTimeRunFacet.json#/$defs/NominalTimeRunFacet");
+            runFacets.put("nominalTime", nominalTime);
+        }
 
-  private List<OpenLineageDatasetRow> datasetsFor(WorkflowRunEntity run) {
-    OpenLineageDatasetMapper mapper = datasetMapperProvider.getIfAvailable();
-    if (mapper == null || run == null || !Texts.hasText(run.getTenantId())) {
-      return List.of();
+        Map<String, Object> runNode = new LinkedHashMap<>();
+        runNode.put("runId", deterministicRunId(run.getId()));
+        if (!runFacets.isEmpty()) {
+            runNode.put("facets", runFacets);
+        }
+
+        Map<String, Object> jobFacets = new LinkedHashMap<>();
+        Map<String, Object> docFacet = new LinkedHashMap<>();
+        docFacet.put("_producer", props.getProducer());
+        docFacet.put(
+                "_schemaURL",
+                "https://openlineage.io/spec/facets/1-0-0/DocumentationJobFacet.json#/$defs/DocumentationJobFacet");
+        docFacet.put(
+                "description",
+                "workflow_run id="
+                        + run.getId()
+                        + " tenant="
+                        + run.getTenantId()
+                        + " bizDate="
+                        + run.getBizDate()
+                        + " traceId="
+                        + run.getTraceId());
+        jobFacets.put("documentation", docFacet);
+
+        Map<String, Object> jobNode = new LinkedHashMap<>();
+        jobNode.put("namespace", props.getNamespace());
+        jobNode.put("name", jobName(run));
+        jobNode.put("facets", jobFacets);
+
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("eventType", success ? "COMPLETE" : "FAIL");
+        String eventTimeText = eventTime.toString();
+        event.put("eventTime", eventTimeText);
+        event.put("run", runNode);
+        event.put("job", jobNode);
+        List<Map<String, Object>> inputDatasets = buildDatasets(datasets, true);
+        event.put("inputs", inputDatasets);
+        List<Map<String, Object>> outputDatasets = buildDatasets(datasets, false);
+        event.put("outputs", outputDatasets);
+        event.put("producer", props.getProducer());
+        event.put("schemaURL", SCHEMA_URL);
+        return event;
     }
-    try {
-      return mapper.selectWorkflowDatasets(
-          run.getTenantId(), run.getRelatedJobInstanceId(), run.getTraceId());
-    } catch (RuntimeException ex) {
-      recordLineageMetric("dataset_error", run.getRunStatus());
-      SwallowedExceptionLogger.warn(OpenLineageEmitter.class, "catch:datasetLookup", ex);
-      return List.of();
+
+    private List<OpenLineageDatasetRow> datasetsFor(WorkflowRunEntity run) {
+        OpenLineageDatasetMapper mapper = datasetMapperProvider.getIfAvailable();
+        if (mapper == null || run == null || !Texts.hasText(run.getTenantId())) {
+            return List.of();
+        }
+        try {
+            return mapper.selectWorkflowDatasets(run.getTenantId(), run.getRelatedJobInstanceId(), run.getTraceId());
+        } catch (RuntimeException ex) {
+            recordLineageMetric("dataset_error", run.getRunStatus());
+            SwallowedExceptionLogger.warn(OpenLineageEmitter.class, "catch:datasetLookup", ex);
+            return List.of();
+        }
     }
-  }
 
-  private List<Map<String, Object>> buildDatasets(List<OpenLineageDatasetRow> rows, boolean input) {
-    if (rows == null || rows.isEmpty()) {
-      return List.of();
+    private List<Map<String, Object>> buildDatasets(List<OpenLineageDatasetRow> rows, boolean input) {
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        LinkedHashSet<Long> seen = new LinkedHashSet<>();
+        for (OpenLineageDatasetRow row : rows) {
+            boolean fileLineageReferenceIsMissingOrDuplicate =
+                    EmptyChecks.isNull(row) || EmptyChecks.isNull(row.fileId()) || seen.contains(row.fileId());
+            if (fileLineageReferenceIsMissingOrDuplicate) {
+                continue;
+            }
+            boolean isInput = "INPUT".equals(row.fileCategory());
+            if (input != isInput) {
+                continue;
+            }
+            seen.add(row.fileId());
+            Map<String, Object> dataset = buildDataset(row);
+            result.add(dataset);
+        }
+        return Collections.unmodifiableList(result);
     }
-    List<Map<String, Object>> result = new ArrayList<>();
-    LinkedHashSet<Long> seen = new LinkedHashSet<>();
-    for (OpenLineageDatasetRow row : rows) {
-      boolean fileLineageReferenceIsMissingOrDuplicate = EmptyChecks.isNull(row)
-          || EmptyChecks.isNull(row.fileId())
-          || seen.contains(row.fileId());
-      if (fileLineageReferenceIsMissingOrDuplicate) {
-        continue;
-      }
-      boolean isInput = "INPUT".equals(row.fileCategory());
-      if (input != isInput) {
-        continue;
-      }
-      seen.add(row.fileId());
-      Map<String, Object> dataset = buildDataset(row);
-      result.add(dataset);
+
+    private Map<String, Object> buildDataset(OpenLineageDatasetRow row) {
+        Map<String, Object> dataset = new LinkedHashMap<>();
+        dataset.put("namespace", datasetNamespace(row));
+        dataset.put("name", datasetName(row));
+        dataset.put("facets", Map.of("bfsFile", bfsFileFacet(row)));
+        return dataset;
     }
-    return Collections.unmodifiableList(result);
-  }
 
-  private Map<String, Object> buildDataset(OpenLineageDatasetRow row) {
-    Map<String, Object> dataset = new LinkedHashMap<>();
-    dataset.put("namespace", datasetNamespace(row));
-    dataset.put("name", datasetName(row));
-    dataset.put("facets", Map.of("bfsFile", bfsFileFacet(row)));
-    return dataset;
-  }
-
-  private String datasetNamespace(OpenLineageDatasetRow row) {
-    String storageType =
-        Texts.hasText(row.storageType()) ? row.storageType().toLowerCase(Locale.ROOT) : "file";
-    if (Texts.hasText(row.storageBucket())) {
-      return storageType + "://" + row.storageBucket();
+    private String datasetNamespace(OpenLineageDatasetRow row) {
+        String storageType =
+                Texts.hasText(row.storageType()) ? row.storageType().toLowerCase(Locale.ROOT) : "file";
+        if (Texts.hasText(row.storageBucket())) {
+            return storageType + "://" + row.storageBucket();
+        }
+        String tenantId = Texts.hasText(row.tenantId()) ? row.tenantId() : "unknown";
+        return props.getNamespace() + "/tenant/" + tenantId + "/" + storageType;
     }
-    String tenantId = Texts.hasText(row.tenantId()) ? row.tenantId() : "unknown";
-    return props.getNamespace() + "/tenant/" + tenantId + "/" + storageType;
-  }
 
-  private String datasetName(OpenLineageDatasetRow row) {
-    if (Texts.hasText(row.storagePath())) {
-      return row.storagePath();
+    private String datasetName(OpenLineageDatasetRow row) {
+        if (Texts.hasText(row.storagePath())) {
+            return row.storagePath();
+        }
+        if (Texts.hasText(row.fileName())) {
+            return row.fileName();
+        }
+        return "file_record:" + row.fileId();
     }
-    if (Texts.hasText(row.fileName())) {
-      return row.fileName();
+
+    private Map<String, Object> bfsFileFacet(OpenLineageDatasetRow row) {
+        Map<String, Object> facet = new LinkedHashMap<>();
+        facet.put("_producer", props.getProducer());
+        facet.put(
+                "_schemaURL",
+                "https://github.com/pinpols/file-batch-system/openlineage/facets/BfsFileDatasetFacet.json");
+        facet.put("fileId", row.fileId());
+        facet.put("tenantId", row.tenantId());
+        facet.put("fileCategory", row.fileCategory());
+        facet.put("fileFormatType", row.fileFormatType());
+        facet.put("fileStatus", row.fileStatus());
+        facet.put("fileSizeBytes", row.fileSizeBytes() == null ? 0L : row.fileSizeBytes());
+        facet.put("checksumType", row.checksumType());
+        facet.put("checksumValue", row.checksumValue());
+        facet.put("traceId", row.traceId());
+        return facet;
     }
-    return "file_record:" + row.fileId();
-  }
 
-  private Map<String, Object> bfsFileFacet(OpenLineageDatasetRow row) {
-    Map<String, Object> facet = new LinkedHashMap<>();
-    facet.put("_producer", props.getProducer());
-    facet.put(
-        "_schemaURL",
-        "https://github.com/pinpols/file-batch-system/openlineage/facets/BfsFileDatasetFacet.json");
-    facet.put("fileId", row.fileId());
-    facet.put("tenantId", row.tenantId());
-    facet.put("fileCategory", row.fileCategory());
-    facet.put("fileFormatType", row.fileFormatType());
-    facet.put("fileStatus", row.fileStatus());
-    facet.put("fileSizeBytes", row.fileSizeBytes() == null ? 0L : row.fileSizeBytes());
-    facet.put("checksumType", row.checksumType());
-    facet.put("checksumValue", row.checksumValue());
-    facet.put("traceId", row.traceId());
-    return facet;
-  }
-
-  private String jobName(WorkflowRunEntity run) {
-    String tenant = run.getTenantId() == null ? "unknown" : run.getTenantId();
-    return "workflow." + tenant + ".def" + run.getWorkflowDefinitionId();
-  }
-
-  static String deterministicRunId(Long workflowRunId) {
-    String runIdSeed = "file-batch-system:workflow-run:" + workflowRunId;
-    byte[] runIdSeedBytes = runIdSeed.getBytes(StandardCharsets.UTF_8);
-    UUID deterministicRunId = UUID.nameUUIDFromBytes(runIdSeedBytes);
-    return deterministicRunId.toString();
-  }
-
-  private void recordLineageMetric(String outcome, String terminalStatus) {
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry == null) {
-      return;
+    private String jobName(WorkflowRunEntity run) {
+        String tenant = run.getTenantId() == null ? "unknown" : run.getTenantId();
+        return "workflow." + tenant + ".def" + run.getWorkflowDefinitionId();
     }
-    Counter.builder(METRIC)
-        .tags(Tags.of("outcome", outcome, "status", terminalStatus))
-        .register(registry)
-        .increment();
-  }
+
+    static String deterministicRunId(Long workflowRunId) {
+        String runIdSeed = "file-batch-system:workflow-run:" + workflowRunId;
+        byte[] runIdSeedBytes = runIdSeed.getBytes(StandardCharsets.UTF_8);
+        UUID deterministicRunId = UUID.nameUUIDFromBytes(runIdSeedBytes);
+        return deterministicRunId.toString();
+    }
+
+    private void recordLineageMetric(String outcome, String terminalStatus) {
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry == null) {
+            return;
+        }
+        Counter.builder(METRIC)
+                .tags(Tags.of("outcome", outcome, "status", terminalStatus))
+                .register(registry)
+                .increment();
+    }
 }

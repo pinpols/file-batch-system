@@ -14,14 +14,12 @@ import org.springframework.http.MediaType;
  *
  * <p>守护 routeCode 字段校验 + 写入 + 唯一约束。
  */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("告警路由配置写路径: 编码校验,落库字段与唯一约束")
 class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
-  private String body(String code) {
-    return """
+    private String body(String code) {
+        return """
         {
           "tenantId": "int-ar-ta",
           "routeCode": "%s",
@@ -37,101 +35,96 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
           "enabled": false
         }
         """.formatted(code).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("创建告警路由: 返回成功,落库的租户,编码与等级与请求一致")
-  void shouldCreateAlertRoutingWithValidCode() {
-    String code = "int_ar_create_" + System.currentTimeMillis();
+    @Test
+    @DisplayName("创建告警路由: 返回成功,落库的租户,编码与等级与请求一致")
+    void shouldCreateAlertRoutingWithValidCode() {
+        String code = "int_ar_create_" + System.currentTimeMillis();
 
-    client
-        .post()
-        .uri("/api/console/alert-routings")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        client.post()
+                .uri("/api/console/alert-routings")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    String alertRoutingConfigSnapshotSql = """
+        String alertRoutingConfigSnapshotSql = """
         select tenant_id, route_code, severity, receiver from batch.alert_routing_config
         where route_code = ?
         """;
-    var row = jdbcTemplate.queryForMap(alertRoutingConfigSnapshotSql, code);
-    assertThat(row).containsEntry("tenant_id", "int-ar-ta");
-    assertThat(row).containsEntry("route_code", code);
-    assertThat(row).containsEntry("severity", "WARN");
+        var row = jdbcTemplate.queryForMap(alertRoutingConfigSnapshotSql, code);
+        assertThat(row).containsEntry("tenant_id", "int-ar-ta");
+        assertThat(row).containsEntry("route_code", code);
+        assertThat(row).containsEntry("severity", "WARN");
 
-    String deleteAlertRoutingConfigSql = """
+        String deleteAlertRoutingConfigSql = """
         delete from batch.alert_routing_config where route_code = ?
     """;
-    jdbcTemplate.update(deleteAlertRoutingConfigSql, code);
-  }
+        jdbcTemplate.update(deleteAlertRoutingConfigSql, code);
+    }
 
-  @Test
-  @DisplayName("编码含空格: 返回校验错误,且不落库")
-  void shouldRejectInvalidRouteCodeWithSpaces() {
-    client
-        .post()
-        .uri("/api/console/alert-routings")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-bad-1")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("q q q"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest()
-        .expectBody(String.class)
-        .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
+    @Test
+    @DisplayName("编码含空格: 返回校验错误,且不落库")
+    void shouldRejectInvalidRouteCodeWithSpaces() {
+        client.post()
+                .uri("/api/console/alert-routings")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-bad-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("q q q"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(String.class)
+                .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    String alertRoutingConfigCountSql = """
+        String alertRoutingConfigCountSql = """
         select count(*) from batch.alert_routing_config where route_code = ?
         """;
-    Long cnt = jdbcTemplate.queryForObject(alertRoutingConfigCountSql, Long.class, "q q q");
-    assertThat(cnt).isZero();
-  }
+        Long cnt = jdbcTemplate.queryForObject(alertRoutingConfigCountSql, Long.class, "q q q");
+        assertThat(cnt).isZero();
+    }
 
-  @Test
-  @DisplayName("编码为中文: 返回请求不合法")
-  void shouldRejectChineseRouteCode() {
-    client
-        .post()
-        .uri("/api/console/alert-routings")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-bad-2")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("中文路由"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
+    @Test
+    @DisplayName("编码为中文: 返回请求不合法")
+    void shouldRejectChineseRouteCode() {
+        client.post()
+                .uri("/api/console/alert-routings")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-bad-2")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("中文路由"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
 
-  @Test
-  @DisplayName("编码重复: 第二次写入失败,不产生重复配置")
-  void shouldRejectDuplicateRouteCode() {
-    String code = "int_ar_dup_" + System.currentTimeMillis();
-    client
-        .post()
-        .uri("/api/console/alert-routings")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-dup-1-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+    @Test
+    @DisplayName("编码重复: 第二次写入失败,不产生重复配置")
+    void shouldRejectDuplicateRouteCode() {
+        String code = "int_ar_dup_" + System.currentTimeMillis();
+        client.post()
+                .uri("/api/console/alert-routings")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-dup-1-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    client
-        .post()
-        .uri("/api/console/alert-routings")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-dup-2-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .value(s -> assertThat(s).isIn(400, 409, 500));
+        client.post()
+                .uri("/api/console/alert-routings")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ar-dup-2-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    String deleteAlertRoutingConfigSql = """
+        String deleteAlertRoutingConfigSql = """
         delete from batch.alert_routing_config where route_code = ?
     """;
-    jdbcTemplate.update(deleteAlertRoutingConfigSql, code);
-  }
+        jdbcTemplate.update(deleteAlertRoutingConfigSql, code);
+    }
 }

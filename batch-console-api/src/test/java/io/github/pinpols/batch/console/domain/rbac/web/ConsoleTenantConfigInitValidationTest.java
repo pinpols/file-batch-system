@@ -31,93 +31,91 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @DisplayName("租户配置初始化 HTTP 集合条目校验")
 @ExtendWith(MockitoExtension.class)
 class ConsoleTenantConfigInitValidationTest {
-  @Mock
-  private ConsoleTenantConfigInitApplicationService applicationService;
+    @Mock
+    private ConsoleTenantConfigInitApplicationService applicationService;
 
-  @Mock
-  private ConsoleTenantConfigCopyService copyService;
+    @Mock
+    private ConsoleTenantConfigCopyService copyService;
 
-  @Mock
-  private ConsoleResponseFactory responseFactory;
+    @Mock
+    private ConsoleResponseFactory responseFactory;
 
-  private LocalValidatorFactoryBean validator;
-  private MockMvc mvc;
+    private LocalValidatorFactoryBean validator;
+    private MockMvc mvc;
 
-  @BeforeEach
-  void setUp() {
-    validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleTenantConfigInitController(applicationService, copyService, responseFactory))
-        .setValidator(validator)
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleTenantConfigInitController(applicationService, copyService, responseFactory))
+                .setValidator(validator)
+                .build();
+    }
 
-  @AfterEach
-  void closeValidator() {
-    validator.close();
-  }
+    @AfterEach
+    void closeValidator() {
+        validator.close();
+    }
 
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "\"jobDefinitions\":[null]",
-        "\"workflowDefinitions\":[null]",
-        "\"fileChannels\":[null]",
-        "\"fileTemplates\":[null]",
-        "\"resourceQueues\":[null]",
-        "\"batchWindows\":[null]",
-        "\"businessCalendars\":[null]",
-        "\"quotaPolicies\":[null]",
-        "\"alertRoutings\":[null]",
-        "\"jobDefinitions\":[{\"jobCode\":\"JOB_A\",\"dependencyRules\":[null]}]",
-        "\"workflowDefinitions\":[{\"workflowCode\":\"WF_A\",\"nodes\":[null]}]",
-        "\"workflowDefinitions\":[{\"workflowCode\":\"WF_A\",\"edges\":[null]}]"
-      })
-  @DisplayName("顶层配置和嵌套依赖、节点及边的空条目在执行租户事务前返回400")
-  void shouldRejectNullConfigurationItemsBeforeApplicationCall(String fragment) throws Exception {
-    String body = "{\"targetTenantIds\":[\"tenant-a\"]," + fragment + "}";
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "\"jobDefinitions\":[null]",
+                "\"workflowDefinitions\":[null]",
+                "\"fileChannels\":[null]",
+                "\"fileTemplates\":[null]",
+                "\"resourceQueues\":[null]",
+                "\"batchWindows\":[null]",
+                "\"businessCalendars\":[null]",
+                "\"quotaPolicies\":[null]",
+                "\"alertRoutings\":[null]",
+                "\"jobDefinitions\":[{\"jobCode\":\"JOB_A\",\"dependencyRules\":[null]}]",
+                "\"workflowDefinitions\":[{\"workflowCode\":\"WF_A\",\"nodes\":[null]}]",
+                "\"workflowDefinitions\":[{\"workflowCode\":\"WF_A\",\"edges\":[null]}]"
+            })
+    @DisplayName("顶层配置和嵌套依赖、节点及边的空条目在执行租户事务前返回400")
+    void shouldRejectNullConfigurationItemsBeforeApplicationCall(String fragment) throws Exception {
+        String body = "{\"targetTenantIds\":[\"tenant-a\"]," + fragment + "}";
 
-    mvc.perform(post("/api/console/config/tenant-init")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "null-item")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/console/config/tenant-init")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "null-item")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
 
-    verifyNoInteractions(applicationService, copyService);
-  }
+        verifyNoInteractions(applicationService, copyService);
+    }
 
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "{\"targetTenantIds\":[\"tenant-a\"]}",
-        "{\"targetTenantIds\":[\"tenant-a\"],\"jobDefinitions\":[],\"workflowDefinitions\":[]}"
-      })
-  @DisplayName("未提供配置列表和空列表仍允许进入初始化应用边界")
-  void shouldAllowOmittedAndEmptyConfigurationLists(String body) throws Exception {
-    mvc.perform(post("/api/console/config/tenant-init")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "empty-items")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isOk());
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{\"targetTenantIds\":[\"tenant-a\"]}",
+                "{\"targetTenantIds\":[\"tenant-a\"],\"jobDefinitions\":[],\"workflowDefinitions\":[]}"
+            })
+    @DisplayName("未提供配置列表和空列表仍允许进入初始化应用边界")
+    void shouldAllowOmittedAndEmptyConfigurationLists(String body) throws Exception {
+        mvc.perform(post("/api/console/config/tenant-init")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "empty-items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
 
-    verify(applicationService)
-        .batchInit(any(TenantConfigBatchInitRequest.class), eq("system"), anyString());
-  }
+        verify(applicationService).batchInit(any(TenantConfigBatchInitRequest.class), eq("system"), anyString());
+    }
 
-  @Test
-  @DisplayName("文件模板 maskingRuleSet 长度上限与列宽一致")
-  void shouldValidateMaskingRuleSetAgainstColumnWidth() {
-    TenantConfigBatchInitRequest.FileTemplateSpec spec =
-        new TenantConfigBatchInitRequest.FileTemplateSpec();
-    spec.setMaskingRuleSet("x".repeat(128));
-    assertThat(validator.validate(spec))
-        .noneMatch(
-            violation -> "maskingRuleSet".equals(violation.getPropertyPath().toString()));
+    @Test
+    @DisplayName("文件模板 maskingRuleSet 长度上限与列宽一致")
+    void shouldValidateMaskingRuleSetAgainstColumnWidth() {
+        TenantConfigBatchInitRequest.FileTemplateSpec spec = new TenantConfigBatchInitRequest.FileTemplateSpec();
+        spec.setMaskingRuleSet("x".repeat(128));
+        assertThat(validator.validate(spec))
+                .noneMatch(violation ->
+                        "maskingRuleSet".equals(violation.getPropertyPath().toString()));
 
-    spec.setMaskingRuleSet("x".repeat(129));
-    assertThat(validator.validate(spec))
-        .anyMatch(
-            violation -> "maskingRuleSet".equals(violation.getPropertyPath().toString()));
-  }
+        spec.setMaskingRuleSet("x".repeat(129));
+        assertThat(validator.validate(spec))
+                .anyMatch(violation ->
+                        "maskingRuleSet".equals(violation.getPropertyPath().toString()));
+    }
 }

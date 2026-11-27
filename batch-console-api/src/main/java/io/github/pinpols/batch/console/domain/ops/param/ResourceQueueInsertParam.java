@@ -8,20 +8,20 @@ import lombok.Setter;
 @Getter
 @Builder
 public class ResourceQueueInsertParam {
-  @Setter
-  private Long id;
+    @Setter
+    private Long id;
 
-  private final String tenantId;
-  private final String queueCode;
-  private final String queueName;
-  private final String queueType;
-  private final Integer maxRunningJobs;
-  private final Integer maxRunningPartitions;
-  private final Integer maxQps;
-  private final String workerGroup;
-  private final String resourceTag;
-  private final String priorityPolicy;
-  private final Integer fairShareWeight;
-  private final Boolean enabled;
-  private final String description;
+    private final String tenantId;
+    private final String queueCode;
+    private final String queueName;
+    private final String queueType;
+    private final Integer maxRunningJobs;
+    private final Integer maxRunningPartitions;
+    private final Integer maxQps;
+    private final String workerGroup;
+    private final String resourceTag;
+    private final String priorityPolicy;
+    private final Integer fairShareWeight;
+    private final Boolean enabled;
+    private final String description;
 }

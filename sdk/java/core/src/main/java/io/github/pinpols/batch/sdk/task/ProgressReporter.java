@@ -18,15 +18,15 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class ProgressReporter {
 
-  private final AtomicReference<Map<String, Object>> snapshot = new AtomicReference<>();
+    private final AtomicReference<Map<String, Object>> snapshot = new AtomicReference<>();
 
-  /** 写入最新进度快照(不可变拷贝);传 null 清空。details 不得含 null 键 / 值。 */
-  public void report(Map<String, Object> details) {
-    this.snapshot.set(details == null ? null : Map.copyOf(details));
-  }
+    /** 写入最新进度快照(不可变拷贝);传 null 清空。details 不得含 null 键 / 值。 */
+    public void report(Map<String, Object> details) {
+        this.snapshot.set(details == null ? null : Map.copyOf(details));
+    }
 
-  /** 最近一次快照;从未上报时返回 null。 */
-  public Map<String, Object> latest() {
-    return snapshot.get();
-  }
+    /** 最近一次快照;从未上报时返回 null。 */
+    public Map<String, Object> latest() {
+        return snapshot.get();
+    }
 }

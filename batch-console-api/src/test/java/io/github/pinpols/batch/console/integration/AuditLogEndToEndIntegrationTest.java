@@ -37,116 +37,112 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * <p><b>不变量</b>:每次成功调用 → console_operation_audit 表新增一行
  * result=SUCCESS,action/aggregateType/aggregateId 与注解声明一致。
  */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("审计切面端到端: 真实 HTTP 写操作后审计行落库,动作与聚合标识与声明一致")
 class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String CSRF_TOKEN = "audit-e2e-csrf-token";
-  private static final String TENANT_ID = "t1";
+    private static final String CSRF_TOKEN = "audit-e2e-csrf-token";
+    private static final String TENANT_ID = "t1";
 
-  @LocalServerPort
-  private int port;
+    @LocalServerPort
+    private int port;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @MockitoBean
-  private ConsoleAlertApplicationService alertService;
+    @MockitoBean
+    private ConsoleAlertApplicationService alertService;
 
-  private WebTestClient webTestClient;
+    private WebTestClient webTestClient;
 
-  @BeforeEach
-  void setUp() {
-    webTestClient = WebTestClient.bindToServer()
-        .baseUrl("http://127.0.0.1:" + port)
-        .responseTimeout(Duration.ofSeconds(30))
-        .build();
-    // 测试前清空可能的异常数据,避免计数干扰
-    String clearAuditRowsSql = """
+    @BeforeEach
+    void setUp() {
+        webTestClient = WebTestClient.bindToServer()
+                .baseUrl("http://127.0.0.1:" + port)
+                .responseTimeout(Duration.ofSeconds(30))
+                .build();
+        // 测试前清空可能的异常数据,避免计数干扰
+        String clearAuditRowsSql = """
         DELETE FROM batch.console_operation_audit
         WHERE action IN ('alert.close', 'apiKey.create')
         """;
-    jdbcTemplate.update(clearAuditRowsSql);
-  }
+        jdbcTemplate.update(clearAuditRowsSql);
+    }
 
-  @Test
-  @DisplayName("关闭告警: 审计表落一行且结果为成功,动作,聚合类型与解析出的聚合标识都正确")
-  void shouldWriteAuditRowWithResolvedAggregateId_whenClosingAlert() {
-    when(alertService.close(anyLong(), any(), any()))
-        .thenReturn(new ConsoleAlertActionResponse(7L, "t1", "close", "CLOSED"));
+    @Test
+    @DisplayName("关闭告警: 审计表落一行且结果为成功,动作,聚合类型与解析出的聚合标识都正确")
+    void shouldWriteAuditRowWithResolvedAggregateId_whenClosingAlert() {
+        when(alertService.close(anyLong(), any(), any()))
+                .thenReturn(new ConsoleAlertActionResponse(7L, "t1", "close", "CLOSED"));
 
-    webTestClient
-        .post()
-        .uri("/api/console/alerts/7/close")
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
-        .header("X-Console-User", "audit-e2e-admin")
-        .header("X-Console-Roles", "ROLE_ADMIN,ROLE_TENANT_ADMIN")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "alert-close-k1")
-        .header("X-XSRF-TOKEN", CSRF_TOKEN)
-        .cookie("XSRF-TOKEN", CSRF_TOKEN)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(Map.of("tenantId", TENANT_ID, "reason", "fixed"))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        webTestClient
+                .post()
+                .uri("/api/console/alerts/7/close")
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
+                .header("X-Console-User", "audit-e2e-admin")
+                .header("X-Console-Roles", "ROLE_ADMIN,ROLE_TENANT_ADMIN")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "alert-close-k1")
+                .header("X-XSRF-TOKEN", CSRF_TOKEN)
+                .cookie("XSRF-TOKEN", CSRF_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("tenantId", TENANT_ID, "reason", "fixed"))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .pollInterval(Duration.ofMillis(500))
-        .untilAsserted(() -> {
-          String matchingAuditCountSql = """
+        await().atMost(Duration.ofSeconds(10))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    String matchingAuditCountSql = """
               SELECT count(*)::int FROM batch.console_operation_audit
               WHERE action = ? AND aggregate_type = ? AND aggregate_id = ?
               """;
-          Integer count = jdbcTemplate.queryForObject(
-              matchingAuditCountSql, Integer.class, "alert.close", "alert", "7");
-          assertThat(count).isEqualTo(1);
-        });
+                    Integer count = jdbcTemplate.queryForObject(
+                            matchingAuditCountSql, Integer.class, "alert.close", "alert", "7");
+                    assertThat(count).isEqualTo(1);
+                });
 
-    String latestAuditResultSql = """
+        String latestAuditResultSql = """
         SELECT result FROM batch.console_operation_audit
         WHERE action = 'alert.close' ORDER BY id DESC LIMIT 1
         """;
-    String result = jdbcTemplate.queryForObject(latestAuditResultSql, String.class);
-    assertThat(result).isEqualTo("SUCCESS");
-  }
+        String result = jdbcTemplate.queryForObject(latestAuditResultSql, String.class);
+        assertThat(result).isEqualTo("SUCCESS");
+    }
 
-  @Test
-  @DisplayName("关闭告警: 默认记录请求参数,审计参数列包含提交的原因")
-  void shouldRecordParamsByDefault_whenClosingAlert() {
-    when(alertService.close(anyLong(), any(), any()))
-        .thenReturn(new ConsoleAlertActionResponse(9L, "t1", "close", "CLOSED"));
+    @Test
+    @DisplayName("关闭告警: 默认记录请求参数,审计参数列包含提交的原因")
+    void shouldRecordParamsByDefault_whenClosingAlert() {
+        when(alertService.close(anyLong(), any(), any()))
+                .thenReturn(new ConsoleAlertActionResponse(9L, "t1", "close", "CLOSED"));
 
-    webTestClient
-        .post()
-        .uri("/api/console/alerts/9/close")
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
-        .header("X-Console-User", "audit-e2e-admin")
-        .header("X-Console-Roles", "ROLE_ADMIN,ROLE_TENANT_ADMIN")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "alert-close-k2")
-        .header("X-XSRF-TOKEN", CSRF_TOKEN)
-        .cookie("XSRF-TOKEN", CSRF_TOKEN)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(Map.of("tenantId", TENANT_ID, "reason", "fix-after-rcal"))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        webTestClient
+                .post()
+                .uri("/api/console/alerts/9/close")
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
+                .header("X-Console-User", "audit-e2e-admin")
+                .header("X-Console-Roles", "ROLE_ADMIN,ROLE_TENANT_ADMIN")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "alert-close-k2")
+                .header("X-XSRF-TOKEN", CSRF_TOKEN)
+                .cookie("XSRF-TOKEN", CSRF_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("tenantId", TENANT_ID, "reason", "fix-after-rcal"))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .pollInterval(Duration.ofMillis(500))
-        .untilAsserted(() -> {
-          String latestAuditParamsSql = """
+        await().atMost(Duration.ofSeconds(10))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    String latestAuditParamsSql = """
               SELECT params FROM batch.console_operation_audit
               WHERE action = 'alert.close' AND aggregate_id = '9'
               ORDER BY id DESC LIMIT 1
               """;
-          String params = jdbcTemplate.queryForObject(latestAuditParamsSql, String.class);
-          // alert.close 默认 recordParams=true,params 列非空且包含 reason 字段
-          assertThat(params).isNotNull();
-          assertThat(params).contains("fix-after-rcal");
-        });
-  }
+                    String params = jdbcTemplate.queryForObject(latestAuditParamsSql, String.class);
+                    // alert.close 默认 recordParams=true,params 列非空且包含 reason 字段
+                    assertThat(params).isNotNull();
+                    assertThat(params).contains("fix-after-rcal");
+                });
+    }
 }

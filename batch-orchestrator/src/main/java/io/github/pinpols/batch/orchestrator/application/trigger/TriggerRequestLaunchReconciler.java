@@ -50,77 +50,74 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TriggerRequestLaunchReconciler {
 
-  private static final String METRIC_RECONCILED = "batch.trigger.launch.reconciled.total";
-  private static final String METRIC_SKIPPED_CAS = "batch.trigger.launch.reconciled.skipped.total";
+    private static final String METRIC_RECONCILED = "batch.trigger.launch.reconciled.total";
+    private static final String METRIC_SKIPPED_CAS = "batch.trigger.launch.reconciled.skipped.total";
 
-  private final TriggerRequestMapper triggerRequestMapper;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final MeterRegistry meterRegistry;
-  private final TriggerLaunchReconcilerProperties properties;
+    private final TriggerRequestMapper triggerRequestMapper;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final MeterRegistry meterRegistry;
+    private final TriggerLaunchReconcilerProperties properties;
 
-  @Scheduled(fixedDelayString = "${batch.trigger.launch.reconcile.poll-interval-millis:60000}")
-  @SchedulerLock(
-      name = "trigger_launch_reconciler",
-      lockAtMostFor = "PT5M",
-      lockAtLeastFor = "PT10S")
-  public void reconcile() {
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    Instant now = BatchDateTimeSupport.utcNow();
-    int configuredMinAgeSeconds = properties.getMinAgeSeconds();
-    int nonnegativeMinAgeSeconds = Math.max(configuredMinAgeSeconds, 0);
-    Instant olderThan = now.minusSeconds(nonnegativeMinAgeSeconds);
-    int configuredBatchSize = properties.getBatchSize();
-    int batch = Math.max(configuredBatchSize, 1);
-    List<TriggerRequestLaunchReconcileRow> rows;
-    try {
-      rows = triggerRequestMapper.selectStaleAcceptedWithJobInstance(olderThan, batch);
-    } catch (RuntimeException ex) {
-      log.warn(
-          "Trigger launch reconciler scan failed; retrying on the next cycle: olderThan={} batchSize={} error={}",
-          olderThan,
-          batch,
-          SwallowedExceptionLogger.summary(ex));
-      return;
-    }
-    if (EmptyChecks.isEmpty(rows)) {
-      return;
-    }
-    int reconciled = 0;
-    int skipped = 0;
-    for (TriggerRequestLaunchReconcileRow row : rows) {
-      try {
-        int updated = RlsTenantContextHolder.runWithTenant(
-            row.getTenantId(),
-            () -> triggerRequestMapper.reconcileLaunched(
-                row.getTenantId(), row.getRequestId(), row.getJobInstanceId()));
-        if (updated > 0) {
-          reconciled++;
-          counter(METRIC_RECONCILED, "tenant", row.getTenantId()).increment();
-        } else {
-          // CAS miss = 并发已被 consumer writeBack / 运维改走,正常情况
-          skipped++;
-          counter(METRIC_SKIPPED_CAS, "tenant", row.getTenantId()).increment();
+    @Scheduled(fixedDelayString = "${batch.trigger.launch.reconcile.poll-interval-millis:60000}")
+    @SchedulerLock(name = "trigger_launch_reconciler", lockAtMostFor = "PT5M", lockAtLeastFor = "PT10S")
+    public void reconcile() {
+        if (gracefulShutdown.isDraining()) {
+            return;
         }
-      } catch (RuntimeException ex) {
-        log.warn(
-            "Trigger launch reconciler failed to update one row: tenantId={} requestId={} jobInstanceId={} error={}",
-            row.getTenantId(),
-            row.getRequestId(),
-            row.getJobInstanceId(),
-            SwallowedExceptionLogger.summary(ex));
-      }
+        Instant now = BatchDateTimeSupport.utcNow();
+        int configuredMinAgeSeconds = properties.getMinAgeSeconds();
+        int nonnegativeMinAgeSeconds = Math.max(configuredMinAgeSeconds, 0);
+        Instant olderThan = now.minusSeconds(nonnegativeMinAgeSeconds);
+        int configuredBatchSize = properties.getBatchSize();
+        int batch = Math.max(configuredBatchSize, 1);
+        List<TriggerRequestLaunchReconcileRow> rows;
+        try {
+            rows = triggerRequestMapper.selectStaleAcceptedWithJobInstance(olderThan, batch);
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "Trigger launch reconciler scan failed; retrying on the next cycle: olderThan={} batchSize={} error={}",
+                    olderThan,
+                    batch,
+                    SwallowedExceptionLogger.summary(ex));
+            return;
+        }
+        if (EmptyChecks.isEmpty(rows)) {
+            return;
+        }
+        int reconciled = 0;
+        int skipped = 0;
+        for (TriggerRequestLaunchReconcileRow row : rows) {
+            try {
+                int updated = RlsTenantContextHolder.runWithTenant(
+                        row.getTenantId(),
+                        () -> triggerRequestMapper.reconcileLaunched(
+                                row.getTenantId(), row.getRequestId(), row.getJobInstanceId()));
+                if (updated > 0) {
+                    reconciled++;
+                    counter(METRIC_RECONCILED, "tenant", row.getTenantId()).increment();
+                } else {
+                    // CAS miss = 并发已被 consumer writeBack / 运维改走,正常情况
+                    skipped++;
+                    counter(METRIC_SKIPPED_CAS, "tenant", row.getTenantId()).increment();
+                }
+            } catch (RuntimeException ex) {
+                log.warn(
+                        "Trigger launch reconciler failed to update one row: tenantId={} requestId={} jobInstanceId={} error={}",
+                        row.getTenantId(),
+                        row.getRequestId(),
+                        row.getJobInstanceId(),
+                        SwallowedExceptionLogger.summary(ex));
+            }
+        }
+        log.info(
+                "trigger launch reconciled: scanned={} updated={} skipped_cas={} olderThan={}",
+                rows.size(),
+                reconciled,
+                skipped,
+                olderThan);
     }
-    log.info(
-        "trigger launch reconciled: scanned={} updated={} skipped_cas={} olderThan={}",
-        rows.size(),
-        reconciled,
-        skipped,
-        olderThan);
-  }
 
-  private Counter counter(String name, String... tagPairs) {
-    return Counter.builder(name).tags(Tags.of(tagPairs)).register(meterRegistry);
-  }
+    private Counter counter(String name, String... tagPairs) {
+        return Counter.builder(name).tags(Tags.of(tagPairs)).register(meterRegistry);
+    }
 }

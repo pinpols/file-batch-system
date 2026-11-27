@@ -17,37 +17,37 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisConfigInvalidationStore implements ConfigInvalidationStore {
 
-  private final StringRedisTemplate redisTemplate;
-  private final BatchRedisNamespace redisNamespace;
+    private final StringRedisTemplate redisTemplate;
+    private final BatchRedisNamespace redisNamespace;
 
-  @Override
-  public boolean delete(String key) {
-    Boolean deleted = redisTemplate.delete(key);
-    return Objects.requireNonNull(deleted, "Redis delete did not execute");
-  }
+    @Override
+    public boolean delete(String key) {
+        Boolean deleted = redisTemplate.delete(key);
+        return Objects.requireNonNull(deleted, "Redis delete did not execute");
+    }
 
-  @Override
-  public long scanAndDelete(String pattern, int batchSize) {
-    return RedisKeyUtils.scanAndDeleteOrThrow(redisTemplate, pattern, batchSize, redisNamespace);
-  }
+    @Override
+    public long scanAndDelete(String pattern, int batchSize) {
+        return RedisKeyUtils.scanAndDeleteOrThrow(redisTemplate, pattern, batchSize, redisNamespace);
+    }
 
-  @Override
-  public Long nextGlobalRevision() {
-    return redisTemplate.opsForValue().increment(BatchRedisKeys.configInvalidationGlobalRevision());
-  }
+    @Override
+    public Long nextGlobalRevision() {
+        return redisTemplate.opsForValue().increment(BatchRedisKeys.configInvalidationGlobalRevision());
+    }
 
-  @Override
-  public Long nextKeyRevision(String tenantId, String type, String code) {
-    return redisTemplate
-        .opsForValue()
-        .increment(BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, code));
-  }
+    @Override
+    public Long nextKeyRevision(String tenantId, String type, String code) {
+        return redisTemplate
+                .opsForValue()
+                .increment(BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, code));
+    }
 
-  @Override
-  public void publish(ConfigCacheInvalidationEvent event) {
-    Long receivers = redisTemplate.convertAndSend(
-        redisNamespace.channel(ConsoleConfigCacheInvalidationService.INVALIDATION_CHANNEL),
-        JsonUtils.toJson(event));
-    Objects.requireNonNull(receivers, "Redis publish did not execute");
-  }
+    @Override
+    public void publish(ConfigCacheInvalidationEvent event) {
+        Long receivers = redisTemplate.convertAndSend(
+                redisNamespace.channel(ConsoleConfigCacheInvalidationService.INVALIDATION_CHANNEL),
+                JsonUtils.toJson(event));
+        Objects.requireNonNull(receivers, "Redis publish did not execute");
+    }
 }

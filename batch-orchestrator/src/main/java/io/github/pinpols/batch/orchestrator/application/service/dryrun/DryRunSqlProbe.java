@@ -6,5 +6,5 @@ import java.util.Map;
 /** Dry-run SQL 探测端口。 */
 public interface DryRunSqlProbe {
 
-  int probe(Map<String, Object> params, List<DryRunFinding> findings);
+    int probe(Map<String, Object> params, List<DryRunFinding> findings);
 }

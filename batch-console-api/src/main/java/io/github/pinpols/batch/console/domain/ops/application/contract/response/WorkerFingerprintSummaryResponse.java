@@ -9,8 +9,8 @@ import io.github.pinpols.batch.console.domain.ops.view.WorkerFingerprintSummaryR
  */
 public record WorkerFingerprintSummaryResponse(String buildId, String sdkVersion, long count) {
 
-  public static WorkerFingerprintSummaryResponse from(WorkerFingerprintSummaryRow row) {
-    return new WorkerFingerprintSummaryResponse(
-        row.getBuildId(), row.getSdkVersion(), row.getCount() == null ? 0L : row.getCount());
-  }
+    public static WorkerFingerprintSummaryResponse from(WorkerFingerprintSummaryRow row) {
+        return new WorkerFingerprintSummaryResponse(
+                row.getBuildId(), row.getSdkVersion(), row.getCount() == null ? 0L : row.getCount());
+    }
 }

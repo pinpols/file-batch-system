@@ -26,33 +26,31 @@ import org.junit.jupiter.api.Test;
 @DisplayName("架构守护:Task/Partition 复位只能由登记的受限入口调用")
 class BoundedRetryResetCallerArchTest {
 
-  private static final Map<Class<?>, Set<String>> RESET_METHODS = Map.of(
-      JobTaskMapper.class, Set.of("resetForRetry", "resetForLeaseReclaim"),
-      JobPartitionMapper.class, Set.of("resetForDispatch", "resetForLeaseReclaim"));
+    private static final Map<Class<?>, Set<String>> RESET_METHODS = Map.of(
+            JobTaskMapper.class, Set.of("resetForRetry", "resetForLeaseReclaim"),
+            JobPartitionMapper.class, Set.of("resetForDispatch", "resetForLeaseReclaim"));
 
-  private static final JavaClasses CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-      .importPackages("io.github.pinpols.batch.orchestrator..");
+    private static final JavaClasses CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("io.github.pinpols.batch.orchestrator..");
 
-  @Test
-  @DisplayName("重试重排队、文件重派与租约回收之外的生产类不调用复位语句")
-  void shouldOnlyResetFromRegisteredEntryPoints() {
-    noClasses()
-        .that()
-        .doNotBelongToAnyOf(
-            RetryRequeueCoordinator.class,
-            DefaultFileGovernanceService.class,
-            PartitionReclaimUnit.class)
-        .should()
-        .callMethodWhere(resetStatementCall())
-        .check(CLASSES);
-  }
+    @Test
+    @DisplayName("重试重排队、文件重派与租约回收之外的生产类不调用复位语句")
+    void shouldOnlyResetFromRegisteredEntryPoints() {
+        noClasses()
+                .that()
+                .doNotBelongToAnyOf(
+                        RetryRequeueCoordinator.class, DefaultFileGovernanceService.class, PartitionReclaimUnit.class)
+                .should()
+                .callMethodWhere(resetStatementCall())
+                .check(CLASSES);
+    }
 
-  private static DescribedPredicate<JavaMethodCall> resetStatementCall() {
-    return DescribedPredicate.describe(
-        "call a Task/Partition reset statement",
-        call -> RESET_METHODS.entrySet().stream()
-            .anyMatch(entry -> call.getTargetOwner().isEquivalentTo(entry.getKey())
-                && entry.getValue().contains(call.getName())));
-  }
+    private static DescribedPredicate<JavaMethodCall> resetStatementCall() {
+        return DescribedPredicate.describe(
+                "call a Task/Partition reset statement",
+                call -> RESET_METHODS.entrySet().stream()
+                        .anyMatch(entry -> call.getTargetOwner().isEquivalentTo(entry.getKey())
+                                && entry.getValue().contains(call.getName())));
+    }
 }

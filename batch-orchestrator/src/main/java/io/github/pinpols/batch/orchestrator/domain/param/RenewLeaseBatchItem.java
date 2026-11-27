@@ -11,10 +11,10 @@ import lombok.Getter;
 @Getter
 @Builder
 public class RenewLeaseBatchItem {
-  private final String tenantId;
-  private final Long taskId;
-  private final String workerCode;
+    private final String tenantId;
+    private final Long taskId;
+    private final String workerCode;
 
-  /** R3-P1-10: 强制匹配 {@code current_invocation_id}，防多副本同 workerCode 续他人 lease。 */
-  private final String invocationId;
+    /** R3-P1-10: 强制匹配 {@code current_invocation_id}，防多副本同 workerCode 续他人 lease。 */
+    private final String invocationId;
 }

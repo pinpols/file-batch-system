@@ -7,12 +7,11 @@ import org.apache.ibatis.annotations.Param;
 
 public interface ConfigApprovalMapper {
 
-  ConfigApprovalRow selectLatestByRelease(
-      @Param("tenantId") String tenantId, @Param("releaseId") Long releaseId);
+    ConfigApprovalRow selectLatestByRelease(@Param("tenantId") String tenantId, @Param("releaseId") Long releaseId);
 
-  ConfigApprovalRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    ConfigApprovalRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int insert(@Param("param") ConfigApprovalInsertParam param);
+    int insert(@Param("param") ConfigApprovalInsertParam param);
 
-  int transition(@Param("param") ConfigApprovalTransitionParam param);
+    int transition(@Param("param") ConfigApprovalTransitionParam param);
 }

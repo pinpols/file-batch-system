@@ -30,9 +30,9 @@ import java.lang.annotation.Target;
 @Constraint(validatedBy = ValidCronValidator.class)
 public @interface ValidCron {
 
-  String message() default "cron expression invalid";
+    String message() default "cron expression invalid";
 
-  Class<?>[] groups() default {};
+    Class<?>[] groups() default {};
 
-  Class<? extends Payload>[] payload() default {};
+    Class<? extends Payload>[] payload() default {};
 }

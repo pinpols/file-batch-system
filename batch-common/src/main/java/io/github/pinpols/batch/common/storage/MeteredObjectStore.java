@@ -17,102 +17,102 @@ import java.util.function.Supplier;
  */
 public class MeteredObjectStore implements BatchObjectStore {
 
-  private static final String TIMER = "batch.objectstore.op";
+    private static final String TIMER = "batch.objectstore.op";
 
-  private final BatchObjectStore delegate;
-  private final MeterRegistry registry;
+    private final BatchObjectStore delegate;
+    private final MeterRegistry registry;
 
-  public MeteredObjectStore(BatchObjectStore delegate, MeterRegistry registry) {
-    this.delegate = delegate;
-    this.registry = registry;
-  }
-
-  private void timedRun(String op, Runnable action) {
-    timed(op, () -> {
-      action.run();
-      return null;
-    });
-  }
-
-  private <T> T timed(String op, Supplier<T> action) {
-    long start = System.nanoTime();
-    String outcome = "success";
-    try {
-      return action.get();
-    } catch (RuntimeException ex) {
-      outcome = "error";
-      throw ex;
-    } finally {
-      Timer.builder(TIMER)
-          .tag("operation", op)
-          .tag("outcome", outcome)
-          .register(registry)
-          .record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+    public MeteredObjectStore(BatchObjectStore delegate, MeterRegistry registry) {
+        this.delegate = delegate;
+        this.registry = registry;
     }
-  }
 
-  @Override
-  public void put(String bucket, String key, InputStream in, long size, String contentType) {
-    timedRun("put", () -> delegate.put(bucket, key, in, size, contentType));
-  }
+    private void timedRun(String op, Runnable action) {
+        timed(op, () -> {
+            action.run();
+            return null;
+        });
+    }
 
-  @Override
-  public void copy(String bucket, String srcKey, String dstKey) {
-    timedRun("copy", () -> delegate.copy(bucket, srcKey, dstKey));
-  }
+    private <T> T timed(String op, Supplier<T> action) {
+        long start = System.nanoTime();
+        String outcome = "success";
+        try {
+            return action.get();
+        } catch (RuntimeException ex) {
+            outcome = "error";
+            throw ex;
+        } finally {
+            Timer.builder(TIMER)
+                    .tag("operation", op)
+                    .tag("outcome", outcome)
+                    .register(registry)
+                    .record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+        }
+    }
 
-  @Override
-  public void delete(String bucket, String key) {
-    timedRun("delete", () -> delegate.delete(bucket, key));
-  }
+    @Override
+    public void put(String bucket, String key, InputStream in, long size, String contentType) {
+        timedRun("put", () -> delegate.put(bucket, key, in, size, contentType));
+    }
 
-  @Override
-  public void deleteMany(String bucket, Collection<String> keys) {
-    timedRun("deleteMany", () -> delegate.deleteMany(bucket, keys));
-  }
+    @Override
+    public void copy(String bucket, String srcKey, String dstKey) {
+        timedRun("copy", () -> delegate.copy(bucket, srcKey, dstKey));
+    }
 
-  @Override
-  public InputStream get(String bucket, String key) {
-    return timed("get", () -> delegate.get(bucket, key));
-  }
+    @Override
+    public void delete(String bucket, String key) {
+        timedRun("delete", () -> delegate.delete(bucket, key));
+    }
 
-  @Override
-  public InputStream getFrom(String bucket, String key, long offset) {
-    return timed("getFrom", () -> delegate.getFrom(bucket, key, offset));
-  }
+    @Override
+    public void deleteMany(String bucket, Collection<String> keys) {
+        timedRun("deleteMany", () -> delegate.deleteMany(bucket, keys));
+    }
 
-  @Override
-  public boolean supportsRangeRead() {
-    return delegate.supportsRangeRead();
-  }
+    @Override
+    public InputStream get(String bucket, String key) {
+        return timed("get", () -> delegate.get(bucket, key));
+    }
 
-  @Override
-  public long statSize(String bucket, String key) {
-    return timed("statSize", () -> delegate.statSize(bucket, key));
-  }
+    @Override
+    public InputStream getFrom(String bucket, String key, long offset) {
+        return timed("getFrom", () -> delegate.getFrom(bucket, key, offset));
+    }
 
-  @Override
-  public boolean exists(String bucket, String key) {
-    return timed("exists", () -> delegate.exists(bucket, key));
-  }
+    @Override
+    public boolean supportsRangeRead() {
+        return delegate.supportsRangeRead();
+    }
 
-  @Override
-  public ObjectListing list(String bucket, String prefix, String afterMarker, int maxKeys) {
-    return timed("list", () -> delegate.list(bucket, prefix, afterMarker, maxKeys));
-  }
+    @Override
+    public long statSize(String bucket, String key) {
+        return timed("statSize", () -> delegate.statSize(bucket, key));
+    }
 
-  @Override
-  public String presign(String bucket, String key, Duration ttl) {
-    return timed("presign", () -> delegate.presign(bucket, key, ttl));
-  }
+    @Override
+    public boolean exists(String bucket, String key) {
+        return timed("exists", () -> delegate.exists(bucket, key));
+    }
 
-  @Override
-  public boolean supportsPresignPut() {
-    return delegate.supportsPresignPut();
-  }
+    @Override
+    public ObjectListing list(String bucket, String prefix, String afterMarker, int maxKeys) {
+        return timed("list", () -> delegate.list(bucket, prefix, afterMarker, maxKeys));
+    }
 
-  @Override
-  public String presignPut(String bucket, String key, Duration ttl, String contentType) {
-    return timed("presignPut", () -> delegate.presignPut(bucket, key, ttl, contentType));
-  }
+    @Override
+    public String presign(String bucket, String key, Duration ttl) {
+        return timed("presign", () -> delegate.presign(bucket, key, ttl));
+    }
+
+    @Override
+    public boolean supportsPresignPut() {
+        return delegate.supportsPresignPut();
+    }
+
+    @Override
+    public String presignPut(String bucket, String key, Duration ttl, String contentType) {
+        return timed("presignPut", () -> delegate.presignPut(bucket, key, ttl, contentType));
+    }
 }

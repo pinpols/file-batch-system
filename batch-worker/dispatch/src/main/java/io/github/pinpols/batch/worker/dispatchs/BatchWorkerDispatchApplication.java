@@ -13,22 +13,22 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = "io.github.pinpols.batch")
 @ImportAutoConfiguration({
-  BatchJsonAutoConfiguration.class,
-  BatchObjectCryptoAutoConfiguration.class,
-  RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
 @EnableKafka
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "io.github.pinpols.batch")
 @MapperScan({
-  "io.github.pinpols.batch.worker.core.mapper",
-  "io.github.pinpols.batch.worker.dispatchs.mapper",
-  "io.github.pinpols.batch.common.mapper"
+    "io.github.pinpols.batch.worker.core.mapper",
+    "io.github.pinpols.batch.worker.dispatchs.mapper",
+    "io.github.pinpols.batch.common.mapper"
 })
 /** 分发 Worker 应用程序入口。 */
 public class BatchWorkerDispatchApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(BatchWorkerDispatchApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(BatchWorkerDispatchApplication.class, args);
+    }
 }

@@ -32,85 +32,82 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AtomicRuntimeStatusService {
 
-  private final AtomicWorkerConfiguration workerConfiguration;
-  private final Environment environment;
-  private final ObjectProvider<ShellExecutorProperties> shellProps;
-  private final ObjectProvider<SqlExecutorProperties> sqlProps;
-  private final ObjectProvider<HttpExecutorProperties> httpProps;
-  private final ObjectProvider<StoredProcExecutorProperties> storedProcProps;
-  private final ObjectProvider<DataSource> dataSourceProvider;
+    private final AtomicWorkerConfiguration workerConfiguration;
+    private final Environment environment;
+    private final ObjectProvider<ShellExecutorProperties> shellProps;
+    private final ObjectProvider<SqlExecutorProperties> sqlProps;
+    private final ObjectProvider<HttpExecutorProperties> httpProps;
+    private final ObjectProvider<StoredProcExecutorProperties> storedProcProps;
+    private final ObjectProvider<DataSource> dataSourceProvider;
 
-  public AtomicRuntimeStatus snapshot() {
-    String workerCode = workerConfiguration.workerCode();
-    String workerType = workerConfiguration.workerType();
-    ShellStatus shellStatus = shellStatus();
-    SqlStatus sqlStatus = sqlStatus();
-    HttpStatus httpStatus = httpStatus();
-    StoredProcStatus storedProcStatus = storedProcStatus();
-    return new AtomicRuntimeStatus(
-        workerCode, workerType, shellStatus, sqlStatus, httpStatus, storedProcStatus);
-  }
-
-  private ShellStatus shellStatus() {
-    ShellExecutorProperties p = shellProps.getIfAvailable();
-    if (p == null) {
-      return new ShellStatus(false, 0);
+    public AtomicRuntimeStatus snapshot() {
+        String workerCode = workerConfiguration.workerCode();
+        String workerType = workerConfiguration.workerType();
+        ShellStatus shellStatus = shellStatus();
+        SqlStatus sqlStatus = sqlStatus();
+        HttpStatus httpStatus = httpStatus();
+        StoredProcStatus storedProcStatus = storedProcStatus();
+        return new AtomicRuntimeStatus(workerCode, workerType, shellStatus, sqlStatus, httpStatus, storedProcStatus);
     }
-    int commandWhitelistSize = safeSize(p.getCommandWhitelist());
-    return new ShellStatus(p.isEnabled(), commandWhitelistSize);
-  }
 
-  private SqlStatus sqlStatus() {
-    SqlExecutorProperties p = sqlProps.getIfAvailable();
-    boolean enabled = p != null && p.isEnabled();
-    String dialect = enabled ? detectDialect() : "n/a";
-    return new SqlStatus(enabled, dialect);
-  }
+    private ShellStatus shellStatus() {
+        ShellExecutorProperties p = shellProps.getIfAvailable();
+        if (p == null) {
+            return new ShellStatus(false, 0);
+        }
+        int commandWhitelistSize = safeSize(p.getCommandWhitelist());
+        return new ShellStatus(p.isEnabled(), commandWhitelistSize);
+    }
 
-  private HttpStatus httpStatus() {
-    HttpExecutorProperties p = httpProps.getIfAvailable();
-    if (p == null) {
-      return new HttpStatus(false, false, "absent", 0);
+    private SqlStatus sqlStatus() {
+        SqlExecutorProperties p = sqlProps.getIfAvailable();
+        boolean enabled = p != null && p.isEnabled();
+        String dialect = enabled ? detectDialect() : "n/a";
+        return new SqlStatus(enabled, dialect);
     }
-    String source;
-    if (environment.containsProperty(HttpExecutorProdDefaults.PROP_ENFORCE_ALLOWLIST)) {
-      source = "explicit";
-    } else if (BatchProfileSupport.isProductionProfile(environment)) {
-      // 生产类 profile 下未显式配置 → HttpExecutorProdDefaults 已隐式翻 true。
-      source = "prod-default";
-    } else {
-      source = "dev-default";
-    }
-    int allowedHostPatternCount = safeSize(p.getAllowedHostPatterns());
-    return new HttpStatus(p.isEnabled(), p.isEnforceAllowlist(), source, allowedHostPatternCount);
-  }
 
-  private StoredProcStatus storedProcStatus() {
-    StoredProcExecutorProperties p = storedProcProps.getIfAvailable();
-    if (p == null) {
-      return new StoredProcStatus(false, 0);
+    private HttpStatus httpStatus() {
+        HttpExecutorProperties p = httpProps.getIfAvailable();
+        if (p == null) {
+            return new HttpStatus(false, false, "absent", 0);
+        }
+        String source;
+        if (environment.containsProperty(HttpExecutorProdDefaults.PROP_ENFORCE_ALLOWLIST)) {
+            source = "explicit";
+        } else if (BatchProfileSupport.isProductionProfile(environment)) {
+            // 生产类 profile 下未显式配置 → HttpExecutorProdDefaults 已隐式翻 true。
+            source = "prod-default";
+        } else {
+            source = "dev-default";
+        }
+        int allowedHostPatternCount = safeSize(p.getAllowedHostPatterns());
+        return new HttpStatus(p.isEnabled(), p.isEnforceAllowlist(), source, allowedHostPatternCount);
     }
-    int allowedSchemaCount = safeSize(p.getAllowedSchemas());
-    return new StoredProcStatus(p.isEnabled(), allowedSchemaCount);
-  }
 
-  private String detectDialect() {
-    DataSource ds = dataSourceProvider.getIfAvailable();
-    if (ds == null) {
-      return "unknown";
+    private StoredProcStatus storedProcStatus() {
+        StoredProcExecutorProperties p = storedProcProps.getIfAvailable();
+        if (p == null) {
+            return new StoredProcStatus(false, 0);
+        }
+        int allowedSchemaCount = safeSize(p.getAllowedSchemas());
+        return new StoredProcStatus(p.isEnabled(), allowedSchemaCount);
     }
-    try (Connection conn = ds.getConnection()) {
-      String product = conn.getMetaData().getDatabaseProductName();
-      return product == null ? "unknown" : product;
-    } catch (SQLException ex) {
-      log.debug(
-          "atomic runtime status: detect SQL dialect failed: {}",
-          SwallowedExceptionLogger.summary(ex));
-      return "unknown";
-    }
-  }
 
-  private static int safeSize(Collection<?> c) {
-    return c == null ? 0 : c.size();
-  }
+    private String detectDialect() {
+        DataSource ds = dataSourceProvider.getIfAvailable();
+        if (ds == null) {
+            return "unknown";
+        }
+        try (Connection conn = ds.getConnection()) {
+            String product = conn.getMetaData().getDatabaseProductName();
+            return product == null ? "unknown" : product;
+        } catch (SQLException ex) {
+            log.debug("atomic runtime status: detect SQL dialect failed: {}", SwallowedExceptionLogger.summary(ex));
+            return "unknown";
+        }
+    }
+
+    private static int safeSize(Collection<?> c) {
+        return c == null ? 0 : c.size();
+    }
 }

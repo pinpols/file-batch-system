@@ -32,114 +32,106 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ResultVersionQueryService {
 
-  private final ResultVersionMapper resultVersionMapper;
+    private final ResultVersionMapper resultVersionMapper;
 
-  /**
-   * 找 (tenant, business_key) 的当前 EFFECTIVE 版本；同 business_key 至多 1 行 EFFECTIVE（ADR-017 不变量），由
-   * partial unique index 保证。
-   */
-  public Optional<ResultVersionEntity> findEffective(String tenantId, String businessKey) {
-    if (!Texts.hasText(tenantId) || !Texts.hasText(businessKey)) {
-      return Optional.empty();
+    /**
+     * 找 (tenant, business_key) 的当前 EFFECTIVE 版本；同 business_key 至多 1 行 EFFECTIVE（ADR-017 不变量），由
+     * partial unique index 保证。
+     */
+    public Optional<ResultVersionEntity> findEffective(String tenantId, String businessKey) {
+        if (!Texts.hasText(tenantId) || !Texts.hasText(businessKey)) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(resultVersionMapper.selectEffective(tenantId, businessKey));
     }
-    return Optional.ofNullable(resultVersionMapper.selectEffective(tenantId, businessKey));
-  }
 
-  /**
-   * 按 (tenant, jobCode, bizDate) 查询可消费版本。
-   *
-   * <p>这里 intentionally 使用「最新版本必须是 EFFECTIVE」语义：同一账期 rerun 已产生 PENDING / FAILED 最新 attempt 时，不能继续把旧
-   * EFFECTIVE 暴露给 readiness / 跨账期依赖消费。
-   */
-  public Optional<ResultVersionEntity> findEffectiveByJob(
-      String tenantId, String jobCode, LocalDate bizDate) {
-    return findLatestByJob(tenantId, jobCode, bizDate)
-        .filter(row -> "EFFECTIVE".equals(row.status()));
-  }
-
-  /** 按 (tenant, jobCode, bizDate) 查询最新版本；用于 readiness 阻断旧 EFFECTIVE 被新 attempt 覆盖前误消费。 */
-  public Optional<ResultVersionEntity> findLatestByJob(
-      String tenantId, String jobCode, LocalDate bizDate) {
-    if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
-      return Optional.empty();
+    /**
+     * 按 (tenant, jobCode, bizDate) 查询可消费版本。
+     *
+     * <p>这里 intentionally 使用「最新版本必须是 EFFECTIVE」语义：同一账期 rerun 已产生 PENDING / FAILED 最新 attempt 时，不能继续把旧
+     * EFFECTIVE 暴露给 readiness / 跨账期依赖消费。
+     */
+    public Optional<ResultVersionEntity> findEffectiveByJob(String tenantId, String jobCode, LocalDate bizDate) {
+        return findLatestByJob(tenantId, jobCode, bizDate).filter(row -> "EFFECTIVE".equals(row.status()));
     }
-    List<ResultVersionEntity> versions =
-        listVersions(tenantId, jobBusinessKey(jobCode, bizDate), 1);
-    return versions.isEmpty() ? Optional.empty() : Optional.of(versions.get(0));
-  }
 
-  /** 列出某 business_key 的所有版本（按 version_no desc，含 PENDING / EFFECTIVE / SUPERSEDED / ARCHIVED）。 */
-  public List<ResultVersionEntity> listVersions(String tenantId, String businessKey, int limit) {
-    if (!Texts.hasText(tenantId) || !Texts.hasText(businessKey) || limit <= 0) {
-      return Collections.emptyList();
+    /** 按 (tenant, jobCode, bizDate) 查询最新版本；用于 readiness 阻断旧 EFFECTIVE 被新 attempt 覆盖前误消费。 */
+    public Optional<ResultVersionEntity> findLatestByJob(String tenantId, String jobCode, LocalDate bizDate) {
+        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
+            return Optional.empty();
+        }
+        List<ResultVersionEntity> versions = listVersions(tenantId, jobBusinessKey(jobCode, bizDate), 1);
+        return versions.isEmpty() ? Optional.empty() : Optional.of(versions.get(0));
     }
-    return resultVersionMapper.listVersionsByBusinessKey(tenantId, businessKey, limit);
-  }
 
-  /** 精确读取指定 Job 业务日的版本，不经过控制台列表分页。 */
-  public Optional<ResultVersionEntity> findVersionByJob(
-      String tenantId, String jobCode, LocalDate bizDate, int versionNo) {
-    boolean versionQueryIsInvalid = !Texts.hasText(tenantId)
-        || !Texts.hasText(jobCode)
-        || EmptyChecks.isNull(bizDate)
-        || versionNo <= 0;
-    if (versionQueryIsInvalid) {
-      return Optional.empty();
+    /** 列出某 business_key 的所有版本（按 version_no desc，含 PENDING / EFFECTIVE / SUPERSEDED / ARCHIVED）。 */
+    public List<ResultVersionEntity> listVersions(String tenantId, String businessKey, int limit) {
+        if (!Texts.hasText(tenantId) || !Texts.hasText(businessKey) || limit <= 0) {
+            return Collections.emptyList();
+        }
+        return resultVersionMapper.listVersionsByBusinessKey(tenantId, businessKey, limit);
     }
-    String businessKey = jobBusinessKey(jobCode, bizDate);
-    return Optional.ofNullable(
-        resultVersionMapper.selectByBusinessKeyAndVersionNo(tenantId, businessKey, versionNo));
-  }
 
-  /** 同一正式/试运行模式下，可供跨日依赖使用的最新版本。 */
-  public Optional<ResultVersionEntity> findLatestCrossDayDependencyVersion(
-      String tenantId, String jobCode, LocalDate bizDate, boolean dryRun) {
-    if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || EmptyChecks.isNull(bizDate)) {
-      return Optional.empty();
+    /** 精确读取指定 Job 业务日的版本，不经过控制台列表分页。 */
+    public Optional<ResultVersionEntity> findVersionByJob(
+            String tenantId, String jobCode, LocalDate bizDate, int versionNo) {
+        boolean versionQueryIsInvalid =
+                !Texts.hasText(tenantId) || !Texts.hasText(jobCode) || EmptyChecks.isNull(bizDate) || versionNo <= 0;
+        if (versionQueryIsInvalid) {
+            return Optional.empty();
+        }
+        String businessKey = jobBusinessKey(jobCode, bizDate);
+        return Optional.ofNullable(
+                resultVersionMapper.selectByBusinessKeyAndVersionNo(tenantId, businessKey, versionNo));
     }
-    String businessKey = jobBusinessKey(jobCode, bizDate);
-    ResultVersionEntity latestVersion =
-        resultVersionMapper.selectLatestCrossDayDependencyVersion(tenantId, businessKey, dryRun);
-    return Optional.ofNullable(latestVersion);
-  }
 
-  /** 仅查找同一正式/试运行执行模式中的指定版本。 */
-  public Optional<ResultVersionEntity> findCrossDayDependencyVersion(
-      String tenantId, String jobCode, LocalDate bizDate, int versionNo, boolean dryRun) {
-    boolean versionQueryIsInvalid = !Texts.hasText(tenantId)
-        || !Texts.hasText(jobCode)
-        || EmptyChecks.isNull(bizDate)
-        || versionNo <= 0;
-    if (versionQueryIsInvalid) {
-      return Optional.empty();
+    /** 同一正式/试运行模式下，可供跨日依赖使用的最新版本。 */
+    public Optional<ResultVersionEntity> findLatestCrossDayDependencyVersion(
+            String tenantId, String jobCode, LocalDate bizDate, boolean dryRun) {
+        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || EmptyChecks.isNull(bizDate)) {
+            return Optional.empty();
+        }
+        String businessKey = jobBusinessKey(jobCode, bizDate);
+        ResultVersionEntity latestVersion =
+                resultVersionMapper.selectLatestCrossDayDependencyVersion(tenantId, businessKey, dryRun);
+        return Optional.ofNullable(latestVersion);
     }
-    String businessKey = jobBusinessKey(jobCode, bizDate);
-    ResultVersionEntity version = resultVersionMapper.selectCrossDayDependencyVersion(
-        tenantId, businessKey, versionNo, dryRun);
-    return Optional.ofNullable(version);
-  }
 
-  /** 按租户和版本 id 查询详情；Controller 不直接触碰 Mapper，避免绕过应用层的不变量。 */
-  public ResultVersionEntity getByIdOrThrow(String tenantId, Long id) {
-    if (!Texts.hasText(tenantId) || id == null) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.result_version.invalid_argument");
+    /** 仅查找同一正式/试运行执行模式中的指定版本。 */
+    public Optional<ResultVersionEntity> findCrossDayDependencyVersion(
+            String tenantId, String jobCode, LocalDate bizDate, int versionNo, boolean dryRun) {
+        boolean versionQueryIsInvalid =
+                !Texts.hasText(tenantId) || !Texts.hasText(jobCode) || EmptyChecks.isNull(bizDate) || versionNo <= 0;
+        if (versionQueryIsInvalid) {
+            return Optional.empty();
+        }
+        String businessKey = jobBusinessKey(jobCode, bizDate);
+        ResultVersionEntity version =
+                resultVersionMapper.selectCrossDayDependencyVersion(tenantId, businessKey, versionNo, dryRun);
+        return Optional.ofNullable(version);
     }
-    ResultVersionEntity entity = resultVersionMapper.selectById(tenantId, id);
-    if (entity == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
-    }
-    return entity;
-  }
 
-  /** 按精确租户身份查询重放快照；缺少版本时由调用方决定拒绝方式。 */
-  public Optional<ResultVersionEntity> findById(String tenantId, Long id) {
-    if (!Texts.hasText(tenantId) || EmptyChecks.isNull(id) || id <= 0) {
-      return Optional.empty();
+    /** 按租户和版本 id 查询详情；Controller 不直接触碰 Mapper，避免绕过应用层的不变量。 */
+    public ResultVersionEntity getByIdOrThrow(String tenantId, Long id) {
+        if (!Texts.hasText(tenantId) || id == null) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.result_version.invalid_argument");
+        }
+        ResultVersionEntity entity = resultVersionMapper.selectById(tenantId, id);
+        if (entity == null) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
+        }
+        return entity;
     }
-    return Optional.ofNullable(resultVersionMapper.selectById(tenantId, id));
-  }
 
-  private String jobBusinessKey(String jobCode, LocalDate bizDate) {
-    return "job:" + jobCode + ":" + bizDate;
-  }
+    /** 按精确租户身份查询重放快照；缺少版本时由调用方决定拒绝方式。 */
+    public Optional<ResultVersionEntity> findById(String tenantId, Long id) {
+        if (!Texts.hasText(tenantId) || EmptyChecks.isNull(id) || id <= 0) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(resultVersionMapper.selectById(tenantId, id));
+    }
+
+    private String jobBusinessKey(String jobCode, LocalDate bizDate) {
+        return "job:" + jobCode + ":" + bizDate;
+    }
 }

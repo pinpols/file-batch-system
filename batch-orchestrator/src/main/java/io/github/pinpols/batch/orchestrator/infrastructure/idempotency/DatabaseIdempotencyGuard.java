@@ -16,29 +16,29 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DatabaseIdempotencyGuard implements IdempotencyGuard {
 
-  private final IdempotencyRecordMapper idempotencyRecordMapper;
+    private final IdempotencyRecordMapper idempotencyRecordMapper;
 
-  @Override
-  @Transactional
-  public String executeOnce(String tenantId, String idempotencyKey, IdempotentAction action) {
-    // 尝试占位：ON CONFLICT DO NOTHING 在 key 已存在时返回 0
-    int inserted = idempotencyRecordMapper.insertIfAbsent(tenantId, idempotencyKey, null);
-    if (inserted <= 0) {
-      log.debug("idempotency key already executed: tenantId={}, key={}", tenantId, idempotencyKey);
-      return idempotencyRecordMapper.selectResultByKey(tenantId, idempotencyKey);
+    @Override
+    @Transactional
+    public String executeOnce(String tenantId, String idempotencyKey, IdempotentAction action) {
+        // 尝试占位：ON CONFLICT DO NOTHING 在 key 已存在时返回 0
+        int inserted = idempotencyRecordMapper.insertIfAbsent(tenantId, idempotencyKey, null);
+        if (inserted <= 0) {
+            log.debug("idempotency key already executed: tenantId={}, key={}", tenantId, idempotencyKey);
+            return idempotencyRecordMapper.selectResultByKey(tenantId, idempotencyKey);
+        }
+        // 本事务成功占位，执行业务动作；同事务内回写 result，保证幂等语义完整
+        String result = action.execute();
+        if (result != null) {
+            idempotencyRecordMapper.updateResult(tenantId, idempotencyKey, result);
+        }
+        return result;
     }
-    // 本事务成功占位，执行业务动作；同事务内回写 result，保证幂等语义完整
-    String result = action.execute();
-    if (result != null) {
-      idempotencyRecordMapper.updateResult(tenantId, idempotencyKey, result);
-    }
-    return result;
-  }
 
-  @Override
-  public boolean isAlreadyExecuted(String tenantId, String idempotencyKey) {
-    // count 可识别已提交但 result 为 null 的记录；其他事务未提交的占位行不可见。
-    // 本查询不能作为并发认领围栏，原子认领由 executeOnce 的唯一约束负责。
-    return idempotencyRecordMapper.countByKey(tenantId, idempotencyKey) > 0;
-  }
+    @Override
+    public boolean isAlreadyExecuted(String tenantId, String idempotencyKey) {
+        // count 可识别已提交但 result 为 null 的记录；其他事务未提交的占位行不可见。
+        // 本查询不能作为并发认领围栏，原子认领由 executeOnce 的唯一约束负责。
+        return idempotencyRecordMapper.countByKey(tenantId, idempotencyKey) > 0;
+    }
 }

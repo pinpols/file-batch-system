@@ -35,211 +35,208 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ArchiveSchemaDriftCheck {
 
-  /**
-   * 归档对照表清单 — V71 起步 14 张 + 后续 ADR 增量加表（如 V108 新增 result_version）。
-   *
-   * <p>每加一张归档表必须同步在这里登记，否则 archive 列差异不被守护。
-   */
-  static final List<String> ARCHIVED_TABLES = List.of(
-      "outbox_event",
-      "event_delivery_log",
-      "event_outbox_retry",
-      "job_instance",
-      "job_partition",
-      "job_task",
-      "job_step_instance",
-      "pipeline_instance",
-      "pipeline_step_run",
-      // V188 (P1-4 lineage cold evidence) — file_record 冷表镜像;补齐历史文件证据链。
-      "file_record",
-      "file_dispatch_record",
-      "workflow_run",
-      "workflow_node_run",
-      "job_execution_log",
-      "compensation_command",
-      // V108 (ADR-017) — result_version 主模型；archive 镜像由 LIKE INCLUDING ALL 创建
-      "result_version",
-      // V110 (ADR-020) — batch_day_replay 聚合 + 子项；archive 镜像同样 LIKE INCLUDING ALL
-      "batch_day_replay_session",
-      "batch_day_replay_entry",
-      // R7-A3-P0 / V118 (ADR-021) — 数据质量规则 + 校验记录；archive 镜像已建立但之前未注册，
-      // 任何加列 migration 启动期不会 fail-fast，归档静默漂移。
-      "data_quality_check",
-      // V139 (DBA-2026-05-20 P0-3) — trigger_outbox_event 归档表;ADR-010 trigger 异步事件。
-      "trigger_outbox_event",
-      // V140 (DBA-2026-05-20 P0-4) — dead_letter_task 归档表;死信任务事故复盘。
-      "dead_letter_task",
-      // V164 (ADR-038 P1) — pipeline_progress 归档表;平台 worker LOAD/GENERATE 续跑位点。
-      "pipeline_progress",
-      "console_operation_audit",
-      "notification_delivery_log",
-      "console_push_job_delivery",
-      "workflow_terminal_notification_receipt",
-      "webhook_delivery_log");
+    /**
+     * 归档对照表清单 — V71 起步 14 张 + 后续 ADR 增量加表（如 V108 新增 result_version）。
+     *
+     * <p>每加一张归档表必须同步在这里登记，否则 archive 列差异不被守护。
+     */
+    static final List<String> ARCHIVED_TABLES = List.of(
+            "outbox_event",
+            "event_delivery_log",
+            "event_outbox_retry",
+            "job_instance",
+            "job_partition",
+            "job_task",
+            "job_step_instance",
+            "pipeline_instance",
+            "pipeline_step_run",
+            // V188 (P1-4 lineage cold evidence) — file_record 冷表镜像;补齐历史文件证据链。
+            "file_record",
+            "file_dispatch_record",
+            "workflow_run",
+            "workflow_node_run",
+            "job_execution_log",
+            "compensation_command",
+            // V108 (ADR-017) — result_version 主模型；archive 镜像由 LIKE INCLUDING ALL 创建
+            "result_version",
+            // V110 (ADR-020) — batch_day_replay 聚合 + 子项；archive 镜像同样 LIKE INCLUDING ALL
+            "batch_day_replay_session",
+            "batch_day_replay_entry",
+            // R7-A3-P0 / V118 (ADR-021) — 数据质量规则 + 校验记录；archive 镜像已建立但之前未注册，
+            // 任何加列 migration 启动期不会 fail-fast，归档静默漂移。
+            "data_quality_check",
+            // V139 (DBA-2026-05-20 P0-3) — trigger_outbox_event 归档表;ADR-010 trigger 异步事件。
+            "trigger_outbox_event",
+            // V140 (DBA-2026-05-20 P0-4) — dead_letter_task 归档表;死信任务事故复盘。
+            "dead_letter_task",
+            // V164 (ADR-038 P1) — pipeline_progress 归档表;平台 worker LOAD/GENERATE 续跑位点。
+            "pipeline_progress",
+            "console_operation_audit",
+            "notification_delivery_log",
+            "console_push_job_delivery",
+            "workflow_terminal_notification_receipt",
+            "webhook_delivery_log");
 
-  private final InformationSchemaMapper informationSchemaMapper;
+    private final InformationSchemaMapper informationSchemaMapper;
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void checkOnStartup() {
-    int driftCount = 0;
-    for (String hot : ARCHIVED_TABLES) {
-      Set<String> hotCols = columnsOf("batch", hot);
-      Set<String> coldCols = columnsOf("archive", hot + "_archive");
-      // archive 表如果根本不存在(归档功能未启用 + V71 migration 没跑),hotCols 也 empty 时一起 skip
-      if (hotCols.isEmpty() || coldCols.isEmpty()) {
-        log.info(
-            "archive schema drift check skipped for {}: hot={} cold={} (table missing)",
-            hot,
-            hotCols.size(),
-            coldCols.size());
-        continue;
-      }
-      Set<String> missingInCold = new TreeSet<>(hotCols);
-      missingInCold.removeAll(coldCols);
-      Set<String> missingInHot = new TreeSet<>(coldCols);
-      missingInHot.removeAll(hotCols);
-      if (!missingInCold.isEmpty() || !missingInHot.isEmpty()) {
-        driftCount++;
-        log.error(
-            "archive schema drift on {}: hot has extra {} | cold has extra {}",
-            hot,
-            missingInCold,
-            missingInHot);
-      }
-    }
-    if (driftCount > 0) {
-      throw new IllegalStateException("archive schema drift detected on "
-          + driftCount
-          + " table(s). "
-          + "Add migration to ALTER archive.* schema to match batch.* before next deploy. "
-          + "See logs above for column-level diff.");
-    }
-    log.info("archive schema drift check passed for {} tables", ARCHIVED_TABLES.size());
-  }
-
-  /** Public 让 IT 测试直接调验证查询行为;运行期由 {@link #checkOnStartup()} 内部使用。 */
-  public Set<String> columnsOf(String schema, String table) {
-    List<String> columns = informationSchemaMapper.listColumns(schema, table);
-    return Set.copyOf(columns);
-  }
-
-  /**
-   * 列级类型 / nullable 漂移检测 — 独立于 {@link #checkOnStartup()}。
-   *
-   * <p>{@link #checkOnStartup()} 只看列名集合,无法捕获 {@code ALTER COLUMN tenant_id TYPE varchar(128)} /
-   * {@code ALTER COLUMN xxx SET NOT NULL} 这类语义变更:列名集合仍然相等,但 archive INSERT 会因类型 截断 / NULL
-   * 违反而失败。本方法对每张 {@link #ARCHIVED_TABLES} 比对核心兼容性:
-   *
-   * <ul>
-   *   <li>{@code data_type} 必须严格相等 — 类型不一致 INSERT-SELECT 直接失败 / 截断
-   *   <li>{@code is_nullable} 只在「冷比热严格」时报错(cold=NO + hot=YES):热表允许 NULL 但冷表拒,归档 INSERT 会 NULL 违反 —
-   *       反向(hot NOT NULL + cold NULLABLE)是 V91 起的故意设计(archive 是冷库,不强制 NOT NULL,见 V91 comment),不报错。
-   *   <li>{@code column_default} 不参与比对 — INSERT-SELECT 从热表带值,default 不影响行内容。
-   * </ul>
-   *
-   * <p>仅对冷热两侧都存在的列做对比 — 列名集合差异由 {@link #checkOnStartup()} 负责报错,避免重复噪音。
-   */
-  @EventListener(ApplicationReadyEvent.class)
-  public void checkColumnTypesOnStartup() {
-    List<String> diffs = new ArrayList<>();
-    for (String hot : ARCHIVED_TABLES) {
-      Map<String, ColumnMeta> hotMeta = columnMetaOf("batch", hot);
-      Map<String, ColumnMeta> coldMeta = columnMetaOf("archive", hot + "_archive");
-      if (hotMeta.isEmpty() || coldMeta.isEmpty()) {
-        // 与 checkOnStartup 行为一致:任一侧表缺失,skip(列名集合检查会回退)
-        continue;
-      }
-      Set<String> shared = new TreeSet<>(hotMeta.keySet());
-      shared.retainAll(coldMeta.keySet());
-      for (String col : shared) {
-        ColumnMeta h = hotMeta.get(col);
-        ColumnMeta c = coldMeta.get(col);
-        if (!Objects.equals(h.dataType(), c.dataType())) {
-          diffs.add(hot + "." + col + " data_type hot=" + h.dataType() + " cold=" + c.dataType());
+    @EventListener(ApplicationReadyEvent.class)
+    public void checkOnStartup() {
+        int driftCount = 0;
+        for (String hot : ARCHIVED_TABLES) {
+            Set<String> hotCols = columnsOf("batch", hot);
+            Set<String> coldCols = columnsOf("archive", hot + "_archive");
+            // archive 表如果根本不存在(归档功能未启用 + V71 migration 没跑),hotCols 也 empty 时一起 skip
+            if (hotCols.isEmpty() || coldCols.isEmpty()) {
+                log.info(
+                        "archive schema drift check skipped for {}: hot={} cold={} (table missing)",
+                        hot,
+                        hotCols.size(),
+                        coldCols.size());
+                continue;
+            }
+            Set<String> missingInCold = new TreeSet<>(hotCols);
+            missingInCold.removeAll(coldCols);
+            Set<String> missingInHot = new TreeSet<>(coldCols);
+            missingInHot.removeAll(hotCols);
+            if (!missingInCold.isEmpty() || !missingInHot.isEmpty()) {
+                driftCount++;
+                log.error(
+                        "archive schema drift on {}: hot has extra {} | cold has extra {}",
+                        hot,
+                        missingInCold,
+                        missingInHot);
+            }
         }
-        // varchar(N) / numeric(P,S) 的长度/精度差异在 character_maximum_length / numeric_*,
-        // data_type 不带,必须显式比对
-        if (!Objects.equals(h.characterMaximumLength(), c.characterMaximumLength())) {
-          diffs.add(hot
-              + "."
-              + col
-              + " character_maximum_length hot="
-              + h.characterMaximumLength()
-              + " cold="
-              + c.characterMaximumLength());
+        if (driftCount > 0) {
+            throw new IllegalStateException("archive schema drift detected on "
+                    + driftCount
+                    + " table(s). "
+                    + "Add migration to ALTER archive.* schema to match batch.* before next deploy. "
+                    + "See logs above for column-level diff.");
         }
-        if (!Objects.equals(h.numericPrecision(), c.numericPrecision())
-            || !Objects.equals(h.numericScale(), c.numericScale())) {
-          diffs.add(hot
-              + "."
-              + col
-              + " numeric precision/scale hot="
-              + h.numericPrecision()
-              + "/"
-              + h.numericScale()
-              + " cold="
-              + c.numericPrecision()
-              + "/"
-              + c.numericScale());
-        }
-        // 只报 "cold 比 hot 严格" 方向 — cold NOT NULL + hot NULLABLE 会让 NULL 行 INSERT 失败
-        if ("NO".equalsIgnoreCase(c.isNullable()) && "YES".equalsIgnoreCase(h.isNullable())) {
-          diffs.add(hot
-              + "."
-              + col
-              + " is_nullable hot=YES cold=NO (cold rejects NULL rows hot may produce)");
-        }
-      }
+        log.info("archive schema drift check passed for {} tables", ARCHIVED_TABLES.size());
     }
-    if (!diffs.isEmpty()) {
-      for (String d : diffs) {
-        log.error("archive column type drift: {}", d);
-      }
-      throw new IllegalStateException("archive column type drift detected on "
-          + diffs.size()
-          + " column(s). "
-          + "Hot vs cold (data_type or restrictive is_nullable) mismatch — "
-          + "add migration to ALTER archive.* to match batch.* before next deploy. "
-          + "See logs above for per-column diff.");
-    }
-    log.info("archive column type drift check passed for {} tables", ARCHIVED_TABLES.size());
-  }
 
-  private Map<String, ColumnMeta> columnMetaOf(String schema, String table) {
-    List<InformationSchemaColumnView> rows =
-        informationSchemaMapper.listColumnsWithTypes(schema, table);
-    Map<String, ColumnMeta> map = new LinkedHashMap<>();
-    for (InformationSchemaColumnView row : rows) {
-      if (EmptyChecks.isNotNull(row.columnName())) {
-        map.put(
-            row.columnName(),
-            new ColumnMeta(
-                row.dataType(),
-                row.isNullable(),
-                row.columnDefault(),
-                row.characterMaximumLength(),
-                row.numericPrecision(),
-                row.numericScale()));
-      }
+    /** Public 让 IT 测试直接调验证查询行为;运行期由 {@link #checkOnStartup()} 内部使用。 */
+    public Set<String> columnsOf(String schema, String table) {
+        List<String> columns = informationSchemaMapper.listColumns(schema, table);
+        return Set.copyOf(columns);
     }
-    return map;
-  }
 
-  /**
-   * 列元数据 — 保留 {@code column_default} 字段仅用于诊断日志,实际比对见 {@link #checkColumnTypesOnStartup()}:
-   *
-   * <ul>
-   *   <li>{@code data_type} 严格比
-   *   <li>{@code character_maximum_length} 严格比(覆盖 varchar(N) 长度差异 — PostgreSQL data_type 不带长度)
-   *   <li>{@code numeric_precision} + {@code numeric_scale} 严格比(覆盖 numeric(P,S) 精度差异)
-   *   <li>{@code is_nullable} 单向比(冷比热严格才报)
-   * </ul>
-   */
-  private record ColumnMeta(
-      String dataType,
-      String isNullable,
-      String columnDefault,
-      String characterMaximumLength,
-      String numericPrecision,
-      String numericScale) {}
+    /**
+     * 列级类型 / nullable 漂移检测 — 独立于 {@link #checkOnStartup()}。
+     *
+     * <p>{@link #checkOnStartup()} 只看列名集合,无法捕获 {@code ALTER COLUMN tenant_id TYPE varchar(128)} /
+     * {@code ALTER COLUMN xxx SET NOT NULL} 这类语义变更:列名集合仍然相等,但 archive INSERT 会因类型 截断 / NULL
+     * 违反而失败。本方法对每张 {@link #ARCHIVED_TABLES} 比对核心兼容性:
+     *
+     * <ul>
+     *   <li>{@code data_type} 必须严格相等 — 类型不一致 INSERT-SELECT 直接失败 / 截断
+     *   <li>{@code is_nullable} 只在「冷比热严格」时报错(cold=NO + hot=YES):热表允许 NULL 但冷表拒,归档 INSERT 会 NULL 违反 —
+     *       反向(hot NOT NULL + cold NULLABLE)是 V91 起的故意设计(archive 是冷库,不强制 NOT NULL,见 V91 comment),不报错。
+     *   <li>{@code column_default} 不参与比对 — INSERT-SELECT 从热表带值,default 不影响行内容。
+     * </ul>
+     *
+     * <p>仅对冷热两侧都存在的列做对比 — 列名集合差异由 {@link #checkOnStartup()} 负责报错,避免重复噪音。
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void checkColumnTypesOnStartup() {
+        List<String> diffs = new ArrayList<>();
+        for (String hot : ARCHIVED_TABLES) {
+            Map<String, ColumnMeta> hotMeta = columnMetaOf("batch", hot);
+            Map<String, ColumnMeta> coldMeta = columnMetaOf("archive", hot + "_archive");
+            if (hotMeta.isEmpty() || coldMeta.isEmpty()) {
+                // 与 checkOnStartup 行为一致:任一侧表缺失,skip(列名集合检查会回退)
+                continue;
+            }
+            Set<String> shared = new TreeSet<>(hotMeta.keySet());
+            shared.retainAll(coldMeta.keySet());
+            for (String col : shared) {
+                ColumnMeta h = hotMeta.get(col);
+                ColumnMeta c = coldMeta.get(col);
+                if (!Objects.equals(h.dataType(), c.dataType())) {
+                    diffs.add(hot + "." + col + " data_type hot=" + h.dataType() + " cold=" + c.dataType());
+                }
+                // varchar(N) / numeric(P,S) 的长度/精度差异在 character_maximum_length / numeric_*,
+                // data_type 不带,必须显式比对
+                if (!Objects.equals(h.characterMaximumLength(), c.characterMaximumLength())) {
+                    diffs.add(hot
+                            + "."
+                            + col
+                            + " character_maximum_length hot="
+                            + h.characterMaximumLength()
+                            + " cold="
+                            + c.characterMaximumLength());
+                }
+                if (!Objects.equals(h.numericPrecision(), c.numericPrecision())
+                        || !Objects.equals(h.numericScale(), c.numericScale())) {
+                    diffs.add(hot
+                            + "."
+                            + col
+                            + " numeric precision/scale hot="
+                            + h.numericPrecision()
+                            + "/"
+                            + h.numericScale()
+                            + " cold="
+                            + c.numericPrecision()
+                            + "/"
+                            + c.numericScale());
+                }
+                // 只报 "cold 比 hot 严格" 方向 — cold NOT NULL + hot NULLABLE 会让 NULL 行 INSERT 失败
+                if ("NO".equalsIgnoreCase(c.isNullable()) && "YES".equalsIgnoreCase(h.isNullable())) {
+                    diffs.add(
+                            hot + "." + col + " is_nullable hot=YES cold=NO (cold rejects NULL rows hot may produce)");
+                }
+            }
+        }
+        if (!diffs.isEmpty()) {
+            for (String d : diffs) {
+                log.error("archive column type drift: {}", d);
+            }
+            throw new IllegalStateException("archive column type drift detected on "
+                    + diffs.size()
+                    + " column(s). "
+                    + "Hot vs cold (data_type or restrictive is_nullable) mismatch — "
+                    + "add migration to ALTER archive.* to match batch.* before next deploy. "
+                    + "See logs above for per-column diff.");
+        }
+        log.info("archive column type drift check passed for {} tables", ARCHIVED_TABLES.size());
+    }
+
+    private Map<String, ColumnMeta> columnMetaOf(String schema, String table) {
+        List<InformationSchemaColumnView> rows = informationSchemaMapper.listColumnsWithTypes(schema, table);
+        Map<String, ColumnMeta> map = new LinkedHashMap<>();
+        for (InformationSchemaColumnView row : rows) {
+            if (EmptyChecks.isNotNull(row.columnName())) {
+                map.put(
+                        row.columnName(),
+                        new ColumnMeta(
+                                row.dataType(),
+                                row.isNullable(),
+                                row.columnDefault(),
+                                row.characterMaximumLength(),
+                                row.numericPrecision(),
+                                row.numericScale()));
+            }
+        }
+        return map;
+    }
+
+    /**
+     * 列元数据 — 保留 {@code column_default} 字段仅用于诊断日志,实际比对见 {@link #checkColumnTypesOnStartup()}:
+     *
+     * <ul>
+     *   <li>{@code data_type} 严格比
+     *   <li>{@code character_maximum_length} 严格比(覆盖 varchar(N) 长度差异 — PostgreSQL data_type 不带长度)
+     *   <li>{@code numeric_precision} + {@code numeric_scale} 严格比(覆盖 numeric(P,S) 精度差异)
+     *   <li>{@code is_nullable} 单向比(冷比热严格才报)
+     * </ul>
+     */
+    private record ColumnMeta(
+            String dataType,
+            String isNullable,
+            String columnDefault,
+            String characterMaximumLength,
+            String numericPrecision,
+            String numericScale) {}
 }

@@ -8,12 +8,12 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum TriggerMode implements DictEnum {
-  SCHEDULED("SCHEDULED", "定时"),
-  API("API", "API"),
-  MANUAL("MANUAL", "手动"),
-  EVENT("EVENT", "事件"),
-  MIXED("MIXED", "混合");
+    SCHEDULED("SCHEDULED", "定时"),
+    API("API", "API"),
+    MANUAL("MANUAL", "手动"),
+    EVENT("EVENT", "事件"),
+    MIXED("MIXED", "混合");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

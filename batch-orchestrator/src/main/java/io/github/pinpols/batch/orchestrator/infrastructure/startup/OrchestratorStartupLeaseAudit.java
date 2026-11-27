@@ -36,79 +36,79 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class OrchestratorStartupLeaseAudit {
 
-  /** outbox 卡住判定阈值：与原 SQL `current_timestamp - interval '10 minutes'` 等价。 */
-  private static final long OUTBOX_STUCK_THRESHOLD_SECONDS = 600L;
+    /** outbox 卡住判定阈值：与原 SQL `current_timestamp - interval '10 minutes'` 等价。 */
+    private static final long OUTBOX_STUCK_THRESHOLD_SECONDS = 600L;
 
-  private final WorkerRegistryMapper workerRegistryMapper;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final JobPartitionMapper jobPartitionMapper;
-  private final OutboxEventMapper outboxEventMapper;
-  private final WorkerDrainProperties workerDrainProperties;
+    private final WorkerRegistryMapper workerRegistryMapper;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final JobPartitionMapper jobPartitionMapper;
+    private final OutboxEventMapper outboxEventMapper;
+    private final WorkerDrainProperties workerDrainProperties;
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void audit() {
-    try {
-      long drainingStale = workerRegistryMapper.countDrainingPastDeadline();
-      long staleOnlineWorkers = workerRegistryMapper.countStaleOnline(
-          (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
-              + workerDrainProperties.getHeartbeatGraceSeconds());
-      long decommissionedActiveClaims = workerRegistryMapper.countDecommissionedWithActiveTasks();
-      long invalidCapabilityTags = workerRegistryMapper.countInvalidCapabilityTags();
-      long terminalActiveChildren = jobInstanceMapper.countTerminalInstancesWithActiveChildren();
-      long leasesExpired = jobPartitionMapper.countLeaseExpired(
-          PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
-      long outboxStuck = outboxEventMapper.countStalePublishing(
-          OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STUCK_THRESHOLD_SECONDS);
+    @EventListener(ApplicationReadyEvent.class)
+    public void audit() {
+        try {
+            long drainingStale = workerRegistryMapper.countDrainingPastDeadline();
+            long staleOnlineWorkers =
+                    workerRegistryMapper.countStaleOnline((long) workerDrainProperties.getHeartbeatTimeoutSeconds()
+                            + workerDrainProperties.getHeartbeatGraceSeconds());
+            long decommissionedActiveClaims = workerRegistryMapper.countDecommissionedWithActiveTasks();
+            long invalidCapabilityTags = workerRegistryMapper.countInvalidCapabilityTags();
+            long terminalActiveChildren = jobInstanceMapper.countTerminalInstancesWithActiveChildren();
+            long leasesExpired =
+                    jobPartitionMapper.countLeaseExpired(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
+            long outboxStuck = outboxEventMapper.countStalePublishing(
+                    OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STUCK_THRESHOLD_SECONDS);
 
-      boolean noRuntimeResidual = drainingStale == 0
-          && staleOnlineWorkers == 0
-          && decommissionedActiveClaims == 0
-          && invalidCapabilityTags == 0
-          && terminalActiveChildren == 0
-          && leasesExpired == 0
-          && outboxStuck == 0;
-      if (noRuntimeResidual) {
-        log.info(
-            "Startup runtime audit passed (orchestrator): no stale worker, overdue drain, or active decommissioned"
-                + " claims / invalid capability_tags / terminal active children / expired leases / long-stuck"
-                + " PUBLISHING");
-        return;
-      }
+            boolean noRuntimeResidual = drainingStale == 0
+                    && staleOnlineWorkers == 0
+                    && decommissionedActiveClaims == 0
+                    && invalidCapabilityTags == 0
+                    && terminalActiveChildren == 0
+                    && leasesExpired == 0
+                    && outboxStuck == 0;
+            if (noRuntimeResidual) {
+                log.info(
+                        "Startup runtime audit passed (orchestrator): no stale worker, overdue drain, or active decommissioned"
+                                + " claims / invalid capability_tags / terminal active children / expired leases / long-stuck"
+                                + " PUBLISHING");
+                return;
+            }
 
-      // 仅存在「终态实例仍有活跃子节点」时常为重启间隙的可自愈状态，由 JobInstanceTerminalChildStateReconciler 收敛；降级为 INFO 减少噪音
-      boolean onlyTerminalChildStateResidual = drainingStale == 0
-          && staleOnlineWorkers == 0
-          && decommissionedActiveClaims == 0
-          && invalidCapabilityTags == 0
-          && terminalActiveChildren > 0
-          && leasesExpired == 0
-          && outboxStuck == 0;
-      if (onlyTerminalChildStateResidual) {
-        log.info(
-            "Startup runtime audit (orchestrator): terminalActiveChildren={} (will be reconciled by"
-                + " JobInstanceTerminalChildStateReconciler; all other counters are 0)",
-            terminalActiveChildren);
-        return;
-      }
+            // 仅存在「终态实例仍有活跃子节点」时常为重启间隙的可自愈状态，由 JobInstanceTerminalChildStateReconciler 收敛；降级为 INFO 减少噪音
+            boolean onlyTerminalChildStateResidual = drainingStale == 0
+                    && staleOnlineWorkers == 0
+                    && decommissionedActiveClaims == 0
+                    && invalidCapabilityTags == 0
+                    && terminalActiveChildren > 0
+                    && leasesExpired == 0
+                    && outboxStuck == 0;
+            if (onlyTerminalChildStateResidual) {
+                log.info(
+                        "Startup runtime audit (orchestrator): terminalActiveChildren={} (will be reconciled by"
+                                + " JobInstanceTerminalChildStateReconciler; all other counters are 0)",
+                        terminalActiveChildren);
+                return;
+            }
 
-      log.warn(
-          "Startup runtime audit found residual state (orchestrator): drainingStale={}, staleOnlineWorkers={},"
-              + " decommissionedActiveClaims={}, invalidCapabilityTags={},"
-              + " terminalActiveChildren={}, leasesExpired={}, outboxStuck={}"
-              + "; this audit only reports the condition; recovery is handled by WorkerDrainTimeoutScheduler / PartitionLeaseReclaimScheduler"
-              + " / OutboxPollScheduler / JobInstanceTerminalChildStateReconciler 关联路径自动完成；"
-              + ". Check the corresponding scheduler state if this is unexpected.",
-          drainingStale,
-          staleOnlineWorkers,
-          decommissionedActiveClaims,
-          invalidCapabilityTags,
-          terminalActiveChildren,
-          leasesExpired,
-          outboxStuck);
-    } catch (RuntimeException ex) {
-      // 审计失败不阻塞应用启动；可能是首次启动时部分表未建（Flyway 还没跑完）
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("Startup lease audit failed (startup continues): {}", causeSummary);
+            log.warn(
+                    "Startup runtime audit found residual state (orchestrator): drainingStale={}, staleOnlineWorkers={},"
+                            + " decommissionedActiveClaims={}, invalidCapabilityTags={},"
+                            + " terminalActiveChildren={}, leasesExpired={}, outboxStuck={}"
+                            + "; this audit only reports the condition; recovery is handled by WorkerDrainTimeoutScheduler / PartitionLeaseReclaimScheduler"
+                            + " / OutboxPollScheduler / JobInstanceTerminalChildStateReconciler 关联路径自动完成；"
+                            + ". Check the corresponding scheduler state if this is unexpected.",
+                    drainingStale,
+                    staleOnlineWorkers,
+                    decommissionedActiveClaims,
+                    invalidCapabilityTags,
+                    terminalActiveChildren,
+                    leasesExpired,
+                    outboxStuck);
+        } catch (RuntimeException ex) {
+            // 审计失败不阻塞应用启动；可能是首次启动时部分表未建（Flyway 还没跑完）
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("Startup lease audit failed (startup continues): {}", causeSummary);
+        }
     }
-  }
 }

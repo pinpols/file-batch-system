@@ -9,19 +9,19 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = false)
 public class EventDeliveryLogEntity extends AbstractLocalizedErrorEntity {
 
-  private Long id;
-  private String tenantId;
-  private Long outboxEventId;
-  private Instant outboxEventCreatedAt;
-  private String eventType;
-  private String eventKey;
-  private String targetTopic;
-  private String targetWorkerId;
-  private String deliveryStatus;
-  private Integer deliveryAttempt;
-  private String deliverySummary;
+    private Long id;
+    private String tenantId;
+    private Long outboxEventId;
+    private Instant outboxEventCreatedAt;
+    private String eventType;
+    private String eventKey;
+    private String targetTopic;
+    private String targetWorkerId;
+    private String deliveryStatus;
+    private Integer deliveryAttempt;
+    private String deliverySummary;
 
-  private String traceId;
-  private Instant createdAt;
-  private Instant updatedAt;
+    private String traceId;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

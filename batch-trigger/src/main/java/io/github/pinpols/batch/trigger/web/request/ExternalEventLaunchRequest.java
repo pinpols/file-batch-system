@@ -12,25 +12,25 @@ import lombok.Data;
 @Data
 public class ExternalEventLaunchRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  private String externalEventCode;
+    @NotBlank
+    @Size(max = 128)
+    private String externalEventCode;
 
-  @NotBlank
-  @Size(max = 256)
-  private String externalEventId;
+    @NotBlank
+    @Size(max = 256)
+    private String externalEventId;
 
-  @NotNull
-  private LocalDate bizDate;
+    @NotNull
+    private LocalDate bizDate;
 
-  private Map<String, Object> params;
+    private Map<String, Object> params;
 
-  private Instant dataIntervalStart;
+    private Instant dataIntervalStart;
 
-  private Instant dataIntervalEnd;
+    private Instant dataIntervalEnd;
 
-  private Boolean dryRun;
+    private Boolean dryRun;
 }

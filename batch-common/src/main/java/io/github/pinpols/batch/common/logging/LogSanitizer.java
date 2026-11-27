@@ -18,10 +18,10 @@ package io.github.pinpols.batch.common.logging;
  */
 public final class LogSanitizer {
 
-  private LogSanitizer() {}
+    private LogSanitizer() {}
 
-  /** 净化单个日志字段；{@code null} 归一为 {@code "null"} 字面量（与 SLF4J 输出一致）。 */
-  public static String value(Object raw) {
-    return String.valueOf(raw).replaceAll("\\R", "_");
-  }
+    /** 净化单个日志字段；{@code null} 归一为 {@code "null"} 字面量（与 SLF4J 输出一致）。 */
+    public static String value(Object raw) {
+        return String.valueOf(raw).replaceAll("\\R", "_");
+    }
 }

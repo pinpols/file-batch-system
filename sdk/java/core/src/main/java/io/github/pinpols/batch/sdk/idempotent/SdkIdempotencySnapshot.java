@@ -13,17 +13,17 @@ import java.util.Map;
  */
 public record SdkIdempotencySnapshot(String message, Map<String, Object> output) {
 
-  public SdkIdempotencySnapshot {
-    output = output == null ? Map.of() : Map.copyOf(output);
-  }
+    public SdkIdempotencySnapshot {
+        output = output == null ? Map.of() : Map.copyOf(output);
+    }
 
-  /** 从一次成功结果抽快照。 */
-  public static SdkIdempotencySnapshot ofResult(SdkTaskResult result) {
-    return new SdkIdempotencySnapshot(result.message(), result.output());
-  }
+    /** 从一次成功结果抽快照。 */
+    public static SdkIdempotencySnapshot ofResult(SdkTaskResult result) {
+        return new SdkIdempotencySnapshot(result.message(), result.output());
+    }
 
-  /** 重建成功结果(命中跳过执行时返回)。 */
-  public SdkTaskResult toResult() {
-    return SdkTaskResult.ok(message, output);
-  }
+    /** 重建成功结果(命中跳过执行时返回)。 */
+    public SdkTaskResult toResult() {
+        return SdkTaskResult.ok(message, output);
+    }
 }

@@ -52,298 +52,296 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @SpringBootTest(
-    classes = BatchWorkerDispatchApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        classes = BatchWorkerDispatchApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @EnabledIf("s3BackendActive")
 @DisplayName("外部渠道真实投递集成:对象存储、SFTP 与邮件三条链路端到端送达并回读校验")
 class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
 
-  @TempDir
-  Path tempDir;
+    @TempDir
+    Path tempDir;
 
-  private static final DockerImageName SFTP_IMAGE = DockerImageName.parse("jmcombs/sftp:alpine");
-  private static final String SFTP_USER = "batch";
-  private static final String SFTP_PASSWORD = "batch-pass";
-  private static final String SMTP_USER = "sender@example.com";
-  private static final String SMTP_PASSWORD = "smtp-secret";
-  private static final String SMTP_RECIPIENT = "recipient@example.com";
-  private static final long MAIL_WAIT_TIMEOUT_MILLIS = Duration.ofSeconds(10).toMillis();
+    private static final DockerImageName SFTP_IMAGE = DockerImageName.parse("jmcombs/sftp:alpine");
+    private static final String SFTP_USER = "batch";
+    private static final String SFTP_PASSWORD = "batch-pass";
+    private static final String SMTP_USER = "sender@example.com";
+    private static final String SMTP_PASSWORD = "smtp-secret";
+    private static final String SMTP_RECIPIENT = "recipient@example.com";
+    private static final long MAIL_WAIT_TIMEOUT_MILLIS = Duration.ofSeconds(10).toMillis();
 
-  @Container
-  @SuppressWarnings("resource")
-  private static final GenericContainer<?> SFTP_SERVER = new GenericContainer<>(SFTP_IMAGE)
-      .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
-      .withExposedPorts(22)
-      .withCommand(SFTP_USER + ":" + SFTP_PASSWORD + ":::upload")
-      .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
+    @Container
+    @SuppressWarnings("resource")
+    private static final GenericContainer<?> SFTP_SERVER = new GenericContainer<>(SFTP_IMAGE)
+            .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
+            .withExposedPorts(22)
+            .withCommand(SFTP_USER + ":" + SFTP_PASSWORD + ":::upload")
+            .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
 
-  private static final GreenMail GREEN_MAIL = new GreenMail(ServerSetupTest.SMTP);
+    private static final GreenMail GREEN_MAIL = new GreenMail(ServerSetupTest.SMTP);
 
-  @DynamicPropertySource
-  static void orchestratorStub(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
-
-  @BeforeAll
-  static void startMailServer() {
-    GREEN_MAIL.start();
-    GREEN_MAIL.setUser(SMTP_USER, SMTP_USER, SMTP_PASSWORD);
-    GREEN_MAIL.setUser(SMTP_RECIPIENT, SMTP_RECIPIENT, "recipient-pass");
-  }
-
-  @AfterAll
-  static void stopMailServer() {
-    GREEN_MAIL.stop();
-  }
-
-  @Autowired
-  private DispatchChannelGateway gateway;
-
-  private final SftpDispatchChannelAdapter sftpDispatchChannelAdapter;
-
-  @Autowired
-  DispatchExternalChannelIntegrationTest(SftpDispatchChannelAdapter sftpDispatchChannelAdapter) {
-    this.sftpDispatchChannelAdapter = sftpDispatchChannelAdapter;
-  }
-
-  @Test
-  @DisplayName("投递到真实对象存储后目标对象可读,回执引用指向目标对象且内容与源文件一致")
-  void shouldDispatchFileToRealMinioObjectStorage() throws Exception {
-    String tenantId = "tenant-oss";
-    String channelCode = "oss-" + UUID.randomUUID();
-    String sourceObject = "input/" + UUID.randomUUID() + ".txt";
-    String targetObject = "output-" + UUID.randomUUID() + ".txt";
-    byte[] content = ("oss-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-
-    S3Client s3Client = s3Client();
-    ensureS3Bucket(s3Bucket());
-    s3Client.putObject(
-        PutObjectRequest.builder()
-            .bucket(s3Bucket())
-            .key(sourceObject)
-            .contentType("text/plain")
-            .build(),
-        RequestBody.fromBytes(content));
-
-    DispatchResult result = dispatch(
-        tenantId,
-        Map.of(
-            "tenant_id", tenantId,
-            "channel_type", "OSS",
-            "channel_code", channelCode,
-            "oss_bucket", s3Bucket(),
-            "oss_object_name", targetObject),
-        fileRecord(sourceObject, "OSS", s3Bucket(), "input.txt", "text/plain"),
-        payload("file-oss", channelCode, "req-oss", "rc-oss"));
-
-    assertThat(result.success()).isTrue();
-    assertThat(result.evidenceRef()).isEqualTo("oss://" + s3Bucket() + "/" + targetObject);
-
-    assertThat(s3Client.headObject(
-            HeadObjectRequest.builder().bucket(s3Bucket()).key(targetObject).build()))
-        .isNotNull();
-    byte[] downloaded = s3Client
-        .getObjectAsBytes(
-            GetObjectRequest.builder().bucket(s3Bucket()).key(targetObject).build())
-        .asByteArray();
-    assertThat(downloaded).isEqualTo(content);
-  }
-
-  @Test
-  @DisplayName("投递到真实 SFTP 服务器后远端文件存在,回执引用为远端地址且内容与源文件一致")
-  void shouldDispatchFileToRealSftpServer() throws Exception {
-    String tenantId = "tenant-sftp";
-    String channelCode = "sftp-" + UUID.randomUUID();
-    Path localFile = Files.createTempFile(tempDir, "dispatch-sftp-", ".txt");
-    byte[] content = ("sftp-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-    Files.write(localFile, content);
-    String remoteFileName = "dispatch-" + UUID.randomUUID() + ".txt";
-    String remotePath = "/home/" + SFTP_USER + "/upload/" + remoteFileName;
-
-    DispatchResult result = dispatch(
-        tenantId,
-        Map.ofEntries(
-            Map.entry("tenant_id", tenantId),
-            Map.entry("channel_type", "SFTP"),
-            Map.entry("channel_code", channelCode),
-            Map.entry("sftp_host", SFTP_SERVER.getHost()),
-            Map.entry("sftp_port", SFTP_SERVER.getMappedPort(22)),
-            Map.entry("sftp_user", SFTP_USER),
-            Map.entry("sftp_password", SFTP_PASSWORD),
-            Map.entry("sftp_remote_directory", "/upload/"),
-            Map.entry("sftp_remote_file_name", remoteFileName),
-            Map.entry("sftp_strict_host_key_checking", "no")),
-        fileRecord(localFile.toString(), "LOCAL", null, "source.txt", "text/plain"),
-        payload("file-sftp", channelCode, "req-sftp", "rc-sftp"));
-
-    assertThat(result.success()).isTrue();
-    assertThat(result.evidenceRef()).contains("sftp://");
-
-    ExecResult exec =
-        SFTP_SERVER.execInContainer("sh", "-lc", "test -f " + remotePath + " && cat " + remotePath);
-    assertThat(exec.getExitCode()).isZero();
-    assertThat(exec.getStdout()).isEqualTo(new String(content, StandardCharsets.UTF_8));
-  }
-
-  @Test
-  @DisplayName("SFTP 主文件已发布但旁挂清单发布失败时标记外部结果未知且保留主文件")
-  void shouldReportUnknown_whenSftpFileWasPublishedButManifestFailed() throws Exception {
-    String tenantId = "tenant-sftp-unknown";
-    String channelCode = "sftp-" + UUID.randomUUID();
-    Path localFile = Files.createTempFile(tempDir, "dispatch-sftp-unknown-", ".txt");
-    byte[] content = "sftp-published-before-manifest-failure".getBytes(StandardCharsets.UTF_8);
-    Files.write(localFile, content);
-    String remoteFileName = "dispatch-" + UUID.randomUUID() + ".txt";
-    String remotePath = "/home/" + SFTP_USER + "/upload/" + remoteFileName;
-    String remoteManifestPath = remotePath + ".chk";
-    ExecResult prepareManifestConflict = SFTP_SERVER.execInContainer(
-        "sh",
-        "-lc",
-        "mkdir -p " + remoteManifestPath + " && printf occupied > " + remoteManifestPath
-            + "/occupied");
-    assertThat(prepareManifestConflict.getExitCode()).isZero();
-
-    Map<String, Object> channelConfig = Map.ofEntries(
-        Map.entry("tenant_id", tenantId),
-        Map.entry("channel_type", "SFTP"),
-        Map.entry("channel_code", channelCode),
-        Map.entry("sftp_host", SFTP_SERVER.getHost()),
-        Map.entry("sftp_port", SFTP_SERVER.getMappedPort(22)),
-        Map.entry("sftp_user", SFTP_USER),
-        Map.entry("sftp_password", SFTP_PASSWORD),
-        Map.entry("sftp_remote_directory", "/upload/"),
-        Map.entry("sftp_remote_file_name", remoteFileName),
-        Map.entry("sftp_strict_host_key_checking", "no"));
-    Map<String, Object> sourceFile =
-        fileRecord(localFile.toString(), "LOCAL", null, "source.txt", "text/plain");
-    DispatchCommand command = new DispatchCommand(
-        tenantId,
-        "trace-sftp-unknown",
-        sourceFile,
-        channelConfig,
-        payload("file-sftp-unknown", channelCode, "req-sftp-unknown", "rc-sftp-unknown"));
-    DispatchResult result = sftpDispatchChannelAdapter.dispatch(command);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.externalOutcomeUnknown()).isTrue();
-    ExecResult remoteFile = SFTP_SERVER.execInContainer(
-        "sh",
-        "-lc",
-        "test -f " + remotePath + " && cat " + remotePath + " && test -f " + remoteManifestPath
-            + "/occupied");
-    assertThat(remoteFile.getExitCode()).isZero();
-    assertThat(remoteFile.getStdout()).isEqualTo(new String(content, StandardCharsets.UTF_8));
-  }
-
-  @Test
-  @DisplayName("投递到真实邮件服务器后收件人收到邮件:主题前缀、发件人、收件人与附件内容均符合预期")
-  void shouldDispatchFileToRealSmtpServer() throws Exception {
-    String tenantId = "tenant-email";
-    String channelCode = "email-" + UUID.randomUUID();
-    Path localFile = Files.createTempFile(tempDir, "dispatch-mail-", ".txt");
-    byte[] content = ("mail-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-    Files.write(localFile, content);
-
-    DispatchResult result = dispatch(
-        tenantId,
-        Map.ofEntries(
-            Map.entry("tenant_id", tenantId),
-            Map.entry("channel_type", "EMAIL"),
-            Map.entry("channel_code", channelCode),
-            Map.entry("smtp_host", "127.0.0.1"),
-            Map.entry("smtp_port", ServerSetupTest.SMTP.getPort()),
-            Map.entry("smtp_username", SMTP_USER),
-            Map.entry("smtp_password", SMTP_PASSWORD),
-            Map.entry("smtp_starttls", false),
-            Map.entry("mail_from", SMTP_USER),
-            Map.entry("mail_to", SMTP_RECIPIENT),
-            Map.entry("mail_subject", "Dispatch smoke " + channelCode)),
-        fileRecord(localFile.toString(), "LOCAL", null, "attachment.txt", "text/plain"),
-        payload("file-email", channelCode, "req-email", "rc-email"));
-
-    assertThat(result.success()).isTrue();
-    assertThat(result.evidenceRef()).isEqualTo("mailto:" + SMTP_RECIPIENT);
-
-    Message[] received = waitForMessages(1);
-    assertThat(received).hasSize(1);
-    Message message = received[0];
-    assertThat(message.getSubject()).startsWith("Dispatch smoke ");
-    assertThat(message.getFrom()[0].toString()).contains(SMTP_USER);
-    assertThat(message.getAllRecipients()[0].toString()).contains(SMTP_RECIPIENT);
-
-    MimeMultipart multipart = (MimeMultipart) message.getContent();
-    assertThat(multipart.getCount()).isEqualTo(2);
-    assertThat(multipart.getBodyPart(1).getFileName()).isEqualTo("attachment.txt");
-    try (InputStream in = multipart.getBodyPart(1).getInputStream()) {
-      assertThat(in.readAllBytes()).isEqualTo(content);
+    @DynamicPropertySource
+    static void orchestratorStub(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
     }
-  }
 
-  private S3Client s3Client() {
-    return S3Client.builder()
-        .endpointOverride(URI.create(s3Endpoint()))
-        .credentialsProvider(StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(s3AccessKey(), s3SecretKey())))
-        .forcePathStyle(s3PathStyleEnabled())
-        .region(Region.of(s3Region()))
-        .build();
-  }
-
-  private static Message[] waitForMessages(int expectedCount) throws InterruptedException {
-    long deadline = BatchDateTimeSupport.utcEpochMillis() + MAIL_WAIT_TIMEOUT_MILLIS;
-    while (BatchDateTimeSupport.utcEpochMillis() < deadline) {
-      Message[] messages = GREEN_MAIL.getReceivedMessages();
-      if (messages.length >= expectedCount) {
-        return messages;
-      }
-      Thread.sleep(200L);
+    @BeforeAll
+    static void startMailServer() {
+        GREEN_MAIL.start();
+        GREEN_MAIL.setUser(SMTP_USER, SMTP_USER, SMTP_PASSWORD);
+        GREEN_MAIL.setUser(SMTP_RECIPIENT, SMTP_RECIPIENT, "recipient-pass");
     }
-    return GREEN_MAIL.getReceivedMessages();
-  }
 
-  private static DispatchPayload payload(
-      String fileId, String channelCode, String requestId, String receiptCode) {
-    return new DispatchPayload(
-        fileId,
-        fileId,
-        channelCode,
-        channelCode,
-        requestId,
-        receiptCode,
-        true,
-        false,
-        "SYNC",
-        Map.of("source", "integration-test"));
-  }
-
-  private static Map<String, Object> fileRecord(
-      String storagePath, String storageType, String bucket, String originalName, String mimeType) {
-    Map<String, Object> fileRecord = new LinkedHashMap<>();
-    fileRecord.put("storage_type", storageType);
-    fileRecord.put("storage_path", storagePath);
-    fileRecord.put("original_file_name", originalName);
-    fileRecord.put("file_name", originalName);
-    fileRecord.put("mime_type", mimeType);
-    if (bucket != null) {
-      fileRecord.put("storage_bucket", bucket);
+    @AfterAll
+    static void stopMailServer() {
+        GREEN_MAIL.stop();
     }
-    return fileRecord;
-  }
 
-  private DispatchResult dispatch(
-      String tenantId,
-      Map<String, Object> channelConfig,
-      Map<String, Object> fileRecord,
-      DispatchPayload payload) {
-    ensureChannelConfig(tenantId, channelConfig);
-    return gateway.dispatch(new DispatchCommand(
-        tenantId, "trace-" + UUID.randomUUID(), fileRecord, channelConfig, payload));
-  }
+    @Autowired
+    private DispatchChannelGateway gateway;
 
-  private static void ensureChannelConfig(String tenantId, Map<String, Object> channelConfig) {
-    String channelCode = String.valueOf(channelConfig.get("channel_code"));
-    String channelType = String.valueOf(channelConfig.get("channel_type"));
-    final String insertBatchFileChannelConfigSql = """
+    private final SftpDispatchChannelAdapter sftpDispatchChannelAdapter;
+
+    @Autowired
+    DispatchExternalChannelIntegrationTest(SftpDispatchChannelAdapter sftpDispatchChannelAdapter) {
+        this.sftpDispatchChannelAdapter = sftpDispatchChannelAdapter;
+    }
+
+    @Test
+    @DisplayName("投递到真实对象存储后目标对象可读,回执引用指向目标对象且内容与源文件一致")
+    void shouldDispatchFileToRealMinioObjectStorage() throws Exception {
+        String tenantId = "tenant-oss";
+        String channelCode = "oss-" + UUID.randomUUID();
+        String sourceObject = "input/" + UUID.randomUUID() + ".txt";
+        String targetObject = "output-" + UUID.randomUUID() + ".txt";
+        byte[] content = ("oss-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+
+        S3Client s3Client = s3Client();
+        ensureS3Bucket(s3Bucket());
+        s3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(s3Bucket())
+                        .key(sourceObject)
+                        .contentType("text/plain")
+                        .build(),
+                RequestBody.fromBytes(content));
+
+        DispatchResult result = dispatch(
+                tenantId,
+                Map.of(
+                        "tenant_id", tenantId,
+                        "channel_type", "OSS",
+                        "channel_code", channelCode,
+                        "oss_bucket", s3Bucket(),
+                        "oss_object_name", targetObject),
+                fileRecord(sourceObject, "OSS", s3Bucket(), "input.txt", "text/plain"),
+                payload("file-oss", channelCode, "req-oss", "rc-oss"));
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.evidenceRef()).isEqualTo("oss://" + s3Bucket() + "/" + targetObject);
+
+        assertThat(s3Client.headObject(HeadObjectRequest.builder()
+                        .bucket(s3Bucket())
+                        .key(targetObject)
+                        .build()))
+                .isNotNull();
+        byte[] downloaded = s3Client.getObjectAsBytes(GetObjectRequest.builder()
+                        .bucket(s3Bucket())
+                        .key(targetObject)
+                        .build())
+                .asByteArray();
+        assertThat(downloaded).isEqualTo(content);
+    }
+
+    @Test
+    @DisplayName("投递到真实 SFTP 服务器后远端文件存在,回执引用为远端地址且内容与源文件一致")
+    void shouldDispatchFileToRealSftpServer() throws Exception {
+        String tenantId = "tenant-sftp";
+        String channelCode = "sftp-" + UUID.randomUUID();
+        Path localFile = Files.createTempFile(tempDir, "dispatch-sftp-", ".txt");
+        byte[] content = ("sftp-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        Files.write(localFile, content);
+        String remoteFileName = "dispatch-" + UUID.randomUUID() + ".txt";
+        String remotePath = "/home/" + SFTP_USER + "/upload/" + remoteFileName;
+
+        DispatchResult result = dispatch(
+                tenantId,
+                Map.ofEntries(
+                        Map.entry("tenant_id", tenantId),
+                        Map.entry("channel_type", "SFTP"),
+                        Map.entry("channel_code", channelCode),
+                        Map.entry("sftp_host", SFTP_SERVER.getHost()),
+                        Map.entry("sftp_port", SFTP_SERVER.getMappedPort(22)),
+                        Map.entry("sftp_user", SFTP_USER),
+                        Map.entry("sftp_password", SFTP_PASSWORD),
+                        Map.entry("sftp_remote_directory", "/upload/"),
+                        Map.entry("sftp_remote_file_name", remoteFileName),
+                        Map.entry("sftp_strict_host_key_checking", "no")),
+                fileRecord(localFile.toString(), "LOCAL", null, "source.txt", "text/plain"),
+                payload("file-sftp", channelCode, "req-sftp", "rc-sftp"));
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.evidenceRef()).contains("sftp://");
+
+        ExecResult exec = SFTP_SERVER.execInContainer("sh", "-lc", "test -f " + remotePath + " && cat " + remotePath);
+        assertThat(exec.getExitCode()).isZero();
+        assertThat(exec.getStdout()).isEqualTo(new String(content, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    @DisplayName("SFTP 主文件已发布但旁挂清单发布失败时标记外部结果未知且保留主文件")
+    void shouldReportUnknown_whenSftpFileWasPublishedButManifestFailed() throws Exception {
+        String tenantId = "tenant-sftp-unknown";
+        String channelCode = "sftp-" + UUID.randomUUID();
+        Path localFile = Files.createTempFile(tempDir, "dispatch-sftp-unknown-", ".txt");
+        byte[] content = "sftp-published-before-manifest-failure".getBytes(StandardCharsets.UTF_8);
+        Files.write(localFile, content);
+        String remoteFileName = "dispatch-" + UUID.randomUUID() + ".txt";
+        String remotePath = "/home/" + SFTP_USER + "/upload/" + remoteFileName;
+        String remoteManifestPath = remotePath + ".chk";
+        ExecResult prepareManifestConflict = SFTP_SERVER.execInContainer(
+                "sh",
+                "-lc",
+                "mkdir -p " + remoteManifestPath + " && printf occupied > " + remoteManifestPath + "/occupied");
+        assertThat(prepareManifestConflict.getExitCode()).isZero();
+
+        Map<String, Object> channelConfig = Map.ofEntries(
+                Map.entry("tenant_id", tenantId),
+                Map.entry("channel_type", "SFTP"),
+                Map.entry("channel_code", channelCode),
+                Map.entry("sftp_host", SFTP_SERVER.getHost()),
+                Map.entry("sftp_port", SFTP_SERVER.getMappedPort(22)),
+                Map.entry("sftp_user", SFTP_USER),
+                Map.entry("sftp_password", SFTP_PASSWORD),
+                Map.entry("sftp_remote_directory", "/upload/"),
+                Map.entry("sftp_remote_file_name", remoteFileName),
+                Map.entry("sftp_strict_host_key_checking", "no"));
+        Map<String, Object> sourceFile = fileRecord(localFile.toString(), "LOCAL", null, "source.txt", "text/plain");
+        DispatchCommand command = new DispatchCommand(
+                tenantId,
+                "trace-sftp-unknown",
+                sourceFile,
+                channelConfig,
+                payload("file-sftp-unknown", channelCode, "req-sftp-unknown", "rc-sftp-unknown"));
+        DispatchResult result = sftpDispatchChannelAdapter.dispatch(command);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.externalOutcomeUnknown()).isTrue();
+        ExecResult remoteFile = SFTP_SERVER.execInContainer(
+                "sh",
+                "-lc",
+                "test -f " + remotePath + " && cat " + remotePath + " && test -f " + remoteManifestPath + "/occupied");
+        assertThat(remoteFile.getExitCode()).isZero();
+        assertThat(remoteFile.getStdout()).isEqualTo(new String(content, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    @DisplayName("投递到真实邮件服务器后收件人收到邮件:主题前缀、发件人、收件人与附件内容均符合预期")
+    void shouldDispatchFileToRealSmtpServer() throws Exception {
+        String tenantId = "tenant-email";
+        String channelCode = "email-" + UUID.randomUUID();
+        Path localFile = Files.createTempFile(tempDir, "dispatch-mail-", ".txt");
+        byte[] content = ("mail-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        Files.write(localFile, content);
+
+        DispatchResult result = dispatch(
+                tenantId,
+                Map.ofEntries(
+                        Map.entry("tenant_id", tenantId),
+                        Map.entry("channel_type", "EMAIL"),
+                        Map.entry("channel_code", channelCode),
+                        Map.entry("smtp_host", "127.0.0.1"),
+                        Map.entry("smtp_port", ServerSetupTest.SMTP.getPort()),
+                        Map.entry("smtp_username", SMTP_USER),
+                        Map.entry("smtp_password", SMTP_PASSWORD),
+                        Map.entry("smtp_starttls", false),
+                        Map.entry("mail_from", SMTP_USER),
+                        Map.entry("mail_to", SMTP_RECIPIENT),
+                        Map.entry("mail_subject", "Dispatch smoke " + channelCode)),
+                fileRecord(localFile.toString(), "LOCAL", null, "attachment.txt", "text/plain"),
+                payload("file-email", channelCode, "req-email", "rc-email"));
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.evidenceRef()).isEqualTo("mailto:" + SMTP_RECIPIENT);
+
+        Message[] received = waitForMessages(1);
+        assertThat(received).hasSize(1);
+        Message message = received[0];
+        assertThat(message.getSubject()).startsWith("Dispatch smoke ");
+        assertThat(message.getFrom()[0].toString()).contains(SMTP_USER);
+        assertThat(message.getAllRecipients()[0].toString()).contains(SMTP_RECIPIENT);
+
+        MimeMultipart multipart = (MimeMultipart) message.getContent();
+        assertThat(multipart.getCount()).isEqualTo(2);
+        assertThat(multipart.getBodyPart(1).getFileName()).isEqualTo("attachment.txt");
+        try (InputStream in = multipart.getBodyPart(1).getInputStream()) {
+            assertThat(in.readAllBytes()).isEqualTo(content);
+        }
+    }
+
+    private S3Client s3Client() {
+        return S3Client.builder()
+                .endpointOverride(URI.create(s3Endpoint()))
+                .credentialsProvider(
+                        StaticCredentialsProvider.create(AwsBasicCredentials.create(s3AccessKey(), s3SecretKey())))
+                .forcePathStyle(s3PathStyleEnabled())
+                .region(Region.of(s3Region()))
+                .build();
+    }
+
+    private static Message[] waitForMessages(int expectedCount) throws InterruptedException {
+        long deadline = BatchDateTimeSupport.utcEpochMillis() + MAIL_WAIT_TIMEOUT_MILLIS;
+        while (BatchDateTimeSupport.utcEpochMillis() < deadline) {
+            Message[] messages = GREEN_MAIL.getReceivedMessages();
+            if (messages.length >= expectedCount) {
+                return messages;
+            }
+            Thread.sleep(200L);
+        }
+        return GREEN_MAIL.getReceivedMessages();
+    }
+
+    private static DispatchPayload payload(String fileId, String channelCode, String requestId, String receiptCode) {
+        return new DispatchPayload(
+                fileId,
+                fileId,
+                channelCode,
+                channelCode,
+                requestId,
+                receiptCode,
+                true,
+                false,
+                "SYNC",
+                Map.of("source", "integration-test"));
+    }
+
+    private static Map<String, Object> fileRecord(
+            String storagePath, String storageType, String bucket, String originalName, String mimeType) {
+        Map<String, Object> fileRecord = new LinkedHashMap<>();
+        fileRecord.put("storage_type", storageType);
+        fileRecord.put("storage_path", storagePath);
+        fileRecord.put("original_file_name", originalName);
+        fileRecord.put("file_name", originalName);
+        fileRecord.put("mime_type", mimeType);
+        if (bucket != null) {
+            fileRecord.put("storage_bucket", bucket);
+        }
+        return fileRecord;
+    }
+
+    private DispatchResult dispatch(
+            String tenantId,
+            Map<String, Object> channelConfig,
+            Map<String, Object> fileRecord,
+            DispatchPayload payload) {
+        ensureChannelConfig(tenantId, channelConfig);
+        return gateway.dispatch(
+                new DispatchCommand(tenantId, "trace-" + UUID.randomUUID(), fileRecord, channelConfig, payload));
+    }
+
+    private static void ensureChannelConfig(String tenantId, Map<String, Object> channelConfig) {
+        String channelCode = String.valueOf(channelConfig.get("channel_code"));
+        String channelType = String.valueOf(channelConfig.get("channel_type"));
+        final String insertBatchFileChannelConfigSql = """
         insert into batch.file_channel_config (
           tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
           config_json, receipt_policy, timeout_seconds, enabled, is_deleted)
@@ -351,13 +349,12 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
           '{}', 'SYNC', 30, true, false)
         on conflict (tenant_id, channel_code) do nothing
         """;
-    platformJdbcTemplate()
-        .update(insertBatchFileChannelConfigSql, tenantId, channelCode, channelType);
-  }
+        platformJdbcTemplate().update(insertBatchFileChannelConfigSql, tenantId, channelCode, channelType);
+    }
 
-  private static JdbcTemplate platformJdbcTemplate() {
-    DriverManagerDataSource dataSource = new DriverManagerDataSource(
-        platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
-    return new JdbcTemplate(dataSource);
-  }
+    private static JdbcTemplate platformJdbcTemplate() {
+        DriverManagerDataSource dataSource =
+                new DriverManagerDataSource(platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
+        return new JdbcTemplate(dataSource);
+    }
 }

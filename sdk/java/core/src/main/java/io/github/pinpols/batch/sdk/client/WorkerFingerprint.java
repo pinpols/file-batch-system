@@ -21,35 +21,35 @@ import java.net.UnknownHostException;
  */
 public final class WorkerFingerprint {
 
-  private WorkerFingerprint() {}
+    private WorkerFingerprint() {}
 
-  public static String hostName() {
-    try {
-      InetAddress localHost = InetAddress.getLocalHost();
-      return localHost.getHostName();
-    } catch (UnknownHostException e) {
-      String env = System.getenv("HOSTNAME");
-      return env == null || env.isBlank() ? null : env;
+    public static String hostName() {
+        try {
+            InetAddress localHost = InetAddress.getLocalHost();
+            return localHost.getHostName();
+        } catch (UnknownHostException e) {
+            String env = System.getenv("HOSTNAME");
+            return env == null || env.isBlank() ? null : env;
+        }
     }
-  }
 
-  public static String hostIp() {
-    try {
-      InetAddress localHost = InetAddress.getLocalHost();
-      return localHost.getHostAddress();
-    } catch (UnknownHostException e) {
-      return null;
+    public static String hostIp() {
+        try {
+            InetAddress localHost = InetAddress.getLocalHost();
+            return localHost.getHostAddress();
+        } catch (UnknownHostException e) {
+            return null;
+        }
     }
-  }
 
-  public static String processId() {
-    long processId = ProcessHandle.current().pid();
-    return Long.toString(processId);
-  }
+    public static String processId() {
+        long processId = ProcessHandle.current().pid();
+        return Long.toString(processId);
+    }
 
-  /** 本 SDK 库版本 — 从 jar manifest Implementation-Version 读;非 jar 运行(IDE / 测试)返回 null。 */
-  public static String sdkVersion() {
-    Package pkg = WorkerFingerprint.class.getPackage();
-    return pkg == null ? null : pkg.getImplementationVersion();
-  }
+    /** 本 SDK 库版本 — 从 jar manifest Implementation-Version 读;非 jar 运行(IDE / 测试)返回 null。 */
+    public static String sdkVersion() {
+        Package pkg = WorkerFingerprint.class.getPackage();
+        return pkg == null ? null : pkg.getImplementationVersion();
+    }
 }

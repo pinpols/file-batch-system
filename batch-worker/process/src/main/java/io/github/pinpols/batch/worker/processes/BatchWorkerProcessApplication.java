@@ -12,32 +12,30 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-@SpringBootApplication(
-    scanBasePackages = "io.github.pinpols.batch",
-    exclude = MybatisAutoConfiguration.class)
+@SpringBootApplication(scanBasePackages = "io.github.pinpols.batch", exclude = MybatisAutoConfiguration.class)
 @ImportAutoConfiguration({
-  BatchJsonAutoConfiguration.class,
-  BatchObjectCryptoAutoConfiguration.class,
-  RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
 @EnableKafka
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "io.github.pinpols.batch")
 @MapperScan(
-    basePackages = {
-      "io.github.pinpols.batch.worker.core.mapper",
-      "io.github.pinpols.batch.common.mapper",
-      "io.github.pinpols.batch.worker.processes.mapper.platform"
-    },
-    sqlSessionFactoryRef = "processPlatformSqlSessionFactory")
+        basePackages = {
+            "io.github.pinpols.batch.worker.core.mapper",
+            "io.github.pinpols.batch.common.mapper",
+            "io.github.pinpols.batch.worker.processes.mapper.platform"
+        },
+        sqlSessionFactoryRef = "processPlatformSqlSessionFactory")
 @MapperScan(
-    basePackages = "io.github.pinpols.batch.worker.processes.mapper.business",
-    sqlSessionFactoryRef = "processBusinessSqlSessionFactory")
+        basePackages = "io.github.pinpols.batch.worker.processes.mapper.business",
+        sqlSessionFactoryRef = "processBusinessSqlSessionFactory")
 /** 批量加工 Worker 服务启动类。 */
 public class BatchWorkerProcessApplication {
 
-  /** 加工 Worker 服务启动入口。 */
-  public static void main(String[] args) {
-    SpringApplication.run(BatchWorkerProcessApplication.class, args);
-  }
+    /** 加工 Worker 服务启动入口。 */
+    public static void main(String[] args) {
+        SpringApplication.run(BatchWorkerProcessApplication.class, args);
+    }
 }

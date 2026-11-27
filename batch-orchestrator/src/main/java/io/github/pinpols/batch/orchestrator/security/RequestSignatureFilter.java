@@ -31,89 +31,84 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class RequestSignatureFilter extends OncePerRequestFilter {
 
-  private static final String HEADER_API_KEY = CommonConstants.BATCH_API_KEY_HEADER;
-  private static final String HEADER_TIMESTAMP = "X-Batch-Timestamp";
-  private static final String HEADER_NONCE = "X-Batch-Nonce";
-  private static final String HEADER_SIGNATURE = "X-Batch-Signature";
+    private static final String HEADER_API_KEY = CommonConstants.BATCH_API_KEY_HEADER;
+    private static final String HEADER_TIMESTAMP = "X-Batch-Timestamp";
+    private static final String HEADER_NONCE = "X-Batch-Nonce";
+    private static final String HEADER_SIGNATURE = "X-Batch-Signature";
 
-  private final RequestSigningProperties properties;
-  private final RequestSignatureVerifier verifier;
-  private final InternalRequestProperties internalRequestProperties;
+    private final RequestSigningProperties properties;
+    private final RequestSignatureVerifier verifier;
+    private final InternalRequestProperties internalRequestProperties;
 
-  @Override
-  protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-      throws ServletException, IOException {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
 
-    String apiKey = request.getHeader(HEADER_API_KEY);
-    boolean requestNeedsSignatureVerification =
-        properties.isEnabled() && isMutating(request.getMethod()) && Texts.hasText(apiKey);
-    if (!requestNeedsSignatureVerification) {
-      chain.doFilter(request, response);
-      return;
+        String apiKey = request.getHeader(HEADER_API_KEY);
+        boolean requestNeedsSignatureVerification =
+                properties.isEnabled() && isMutating(request.getMethod()) && Texts.hasText(apiKey);
+        if (!requestNeedsSignatureVerification) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        byte[] body;
+        try {
+            body = BoundedRequestBodyReader.read(
+                    request.getInputStream(), internalRequestProperties.getMaxBodyBytes(), "signed-internal");
+        } catch (RequestBodyLimitExceededException ex) {
+            writePayloadTooLarge(response);
+            return;
+        }
+        Object tenantAttr = request.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID);
+        String tenantId = tenantAttr == null ? null : tenantAttr.toString();
+        SignedRequest signed = new SignedRequest(
+                apiKey,
+                request.getMethod(),
+                request.getRequestURI(),
+                body,
+                request.getHeader(HEADER_TIMESTAMP),
+                request.getHeader(HEADER_NONCE),
+                request.getHeader(HEADER_SIGNATURE),
+                tenantId);
+
+        Result result = verifier.verify(signed, System.currentTimeMillis());
+        if (result != Result.OK) {
+            String safeTenantId = LogSanitizer.value(tenantId);
+            String requestMethod = request.getMethod();
+            String safeRequestMethod = LogSanitizer.value(requestMethod);
+            String requestUri = request.getRequestURI();
+            String safeRequestUri = LogSanitizer.value(requestUri);
+            log.warn(
+                    "request signature rejected: result={} tenant={} method={} uri={}",
+                    result,
+                    safeTenantId,
+                    safeRequestMethod,
+                    safeRequestUri);
+            writeUnauthorized(response, result);
+            return;
+        }
+        chain.doFilter(new CachedBodyHttpServletRequest(request, body), response);
     }
 
-    byte[] body;
-    try {
-      body = BoundedRequestBodyReader.read(
-          request.getInputStream(), internalRequestProperties.getMaxBodyBytes(), "signed-internal");
-    } catch (RequestBodyLimitExceededException ex) {
-      writePayloadTooLarge(response);
-      return;
+    private static boolean isMutating(String method) {
+        return "POST".equalsIgnoreCase(method)
+                || "PUT".equalsIgnoreCase(method)
+                || "PATCH".equalsIgnoreCase(method)
+                || "DELETE".equalsIgnoreCase(method);
     }
-    Object tenantAttr = request.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID);
-    String tenantId = tenantAttr == null ? null : tenantAttr.toString();
-    SignedRequest signed = new SignedRequest(
-        apiKey,
-        request.getMethod(),
-        request.getRequestURI(),
-        body,
-        request.getHeader(HEADER_TIMESTAMP),
-        request.getHeader(HEADER_NONCE),
-        request.getHeader(HEADER_SIGNATURE),
-        tenantId);
 
-    Result result = verifier.verify(signed, System.currentTimeMillis());
-    if (result != Result.OK) {
-      String safeTenantId = LogSanitizer.value(tenantId);
-      String requestMethod = request.getMethod();
-      String safeRequestMethod = LogSanitizer.value(requestMethod);
-      String requestUri = request.getRequestURI();
-      String safeRequestUri = LogSanitizer.value(requestUri);
-      log.warn(
-          "request signature rejected: result={} tenant={} method={} uri={}",
-          result,
-          safeTenantId,
-          safeRequestMethod,
-          safeRequestUri);
-      writeUnauthorized(response, result);
-      return;
+    private static void writeUnauthorized(HttpServletResponse response, Result result) throws IOException {
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write("{\"code\":\"SIGNATURE_INVALID\",\"message\":\"" + result.name() + "\"}");
     }
-    chain.doFilter(new CachedBodyHttpServletRequest(request, body), response);
-  }
 
-  private static boolean isMutating(String method) {
-    return "POST".equalsIgnoreCase(method)
-        || "PUT".equalsIgnoreCase(method)
-        || "PATCH".equalsIgnoreCase(method)
-        || "DELETE".equalsIgnoreCase(method);
-  }
-
-  private static void writeUnauthorized(HttpServletResponse response, Result result)
-      throws IOException {
-    response.setStatus(HttpStatus.UNAUTHORIZED.value());
-    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-    response
-        .getWriter()
-        .write("{\"code\":\"SIGNATURE_INVALID\",\"message\":\"" + result.name() + "\"}");
-  }
-
-  private static void writePayloadTooLarge(HttpServletResponse response) throws IOException {
-    response.setStatus(HttpStatus.CONTENT_TOO_LARGE.value());
-    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-    response
-        .getWriter()
-        .write("{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"signed internal request body exceeds"
-            + " the configured limit\"}");
-  }
+    private static void writePayloadTooLarge(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpStatus.CONTENT_TOO_LARGE.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter()
+                .write("{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"signed internal request body exceeds"
+                        + " the configured limit\"}");
+    }
 }

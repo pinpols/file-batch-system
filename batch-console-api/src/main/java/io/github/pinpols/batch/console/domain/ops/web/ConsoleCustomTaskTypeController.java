@@ -28,39 +28,38 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleCustomTaskTypeController {
 
-  private final ConsoleCustomTaskTypeQueryService queryService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleCustomTaskTypeQueryService queryService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /**
-   * GET /api/console/custom-task-types?tenantId=xxx — 列本租户 ACTIVE 自定义 taskType（last_declared_at
-   * 倒序）。
-   */
-  @GetMapping
-  public CommonResponse<List<CustomTaskTypeResponse>> list(
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    List<CustomTaskTypeView> activeTaskTypes = queryService.listActive(tenantId);
-    List<CustomTaskTypeResponse> responses =
-        activeTaskTypes.stream().map(CustomTaskTypeResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    /**
+     * GET /api/console/custom-task-types?tenantId=xxx — 列本租户 ACTIVE 自定义 taskType（last_declared_at
+     * 倒序）。
+     */
+    @GetMapping
+    public CommonResponse<List<CustomTaskTypeResponse>> list(
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        List<CustomTaskTypeView> activeTaskTypes = queryService.listActive(tenantId);
+        List<CustomTaskTypeResponse> responses =
+                activeTaskTypes.stream().map(CustomTaskTypeResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  /** GET /api/console/custom-task-types/count?tenantId=xxx — 本租户 ACTIVE 自定义 taskType 计数。 */
-  @GetMapping("/count")
-  public CommonResponse<Long> count(
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.success(queryService.countActive(tenantId));
-  }
+    /** GET /api/console/custom-task-types/count?tenantId=xxx — 本租户 ACTIVE 自定义 taskType 计数。 */
+    @GetMapping("/count")
+    public CommonResponse<Long> count(@RequestParam(value = "tenantId", required = false) String tenantId) {
+        return responseFactory.success(queryService.countActive(tenantId));
+    }
 
-  /**
-   * GET /api/console/custom-task-types/{taskTypeCode}?tenantId=xxx — 单个 taskType 详情（含 descriptor
-   * 全文）。
-   */
-  @GetMapping("/{taskTypeCode}")
-  public CommonResponse<CustomTaskTypeResponse> detail(
-      @PathVariable("taskTypeCode") String taskTypeCode,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    CustomTaskTypeView taskType = queryService.detail(tenantId, taskTypeCode);
-    CustomTaskTypeResponse response = CustomTaskTypeResponse.from(taskType);
-    return responseFactory.success(response);
-  }
+    /**
+     * GET /api/console/custom-task-types/{taskTypeCode}?tenantId=xxx — 单个 taskType 详情（含 descriptor
+     * 全文）。
+     */
+    @GetMapping("/{taskTypeCode}")
+    public CommonResponse<CustomTaskTypeResponse> detail(
+            @PathVariable("taskTypeCode") String taskTypeCode,
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        CustomTaskTypeView taskType = queryService.detail(tenantId, taskTypeCode);
+        CustomTaskTypeResponse response = CustomTaskTypeResponse.from(taskType);
+        return responseFactory.success(response);
+    }
 }

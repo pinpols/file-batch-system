@@ -8,7 +8,7 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
  */
 public final class DeadLetterOrphanSourceException extends RuntimeException {
 
-  public DeadLetterOrphanSourceException(String message) {
-    super(message);
-  }
+    public DeadLetterOrphanSourceException(String message) {
+        super(message);
+    }
 }

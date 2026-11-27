@@ -25,351 +25,337 @@ import org.junit.jupiter.api.Test;
 @DisplayName("编排配置包静态拓扑校验: 起止、环、可达性与引用约束")
 class ConfigPackageExcelValidatorWorkflowTest {
 
-  private static final String WF_CODE = "WF_DEMO";
-  private static final String WF_VERSION = "1";
+    private static final String WF_CODE = "WF_DEMO";
+    private static final String WF_VERSION = "1";
 
-  @Test
-  @DisplayName("配置包节点缺少名称时标记为无效")
-  void shouldRejectWorkflowNodeWithoutName_whenValidatingPackage() {
-    Map<String, String> missingName = node("START_0", "START");
-    missingName.remove("node_name");
-    PackageExcelSession session =
-        wfSession(List.of(wfDef()), List.of(missingName, node("END_0", "END")), List.of());
+    @Test
+    @DisplayName("配置包节点缺少名称时标记为无效")
+    void shouldRejectWorkflowNodeWithoutName_whenValidatingPackage() {
+        Map<String, String> missingName = node("START_0", "START");
+        missingName.remove("node_name");
+        PackageExcelSession session =
+                wfSession(List.of(wfDef()), List.of(missingName, node("END_0", "END")), List.of());
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.wfNodes().invalid()).isEqualTo(1);
-    assertThat(result.wfNodes().issues())
-        .anySatisfy(issue -> assertThat(issue.message()).contains("node_name"));
-    assertThat(result.wfNodes().validRows()).hasSize(1);
-  }
+        assertThat(result.wfNodes().invalid()).isEqualTo(1);
+        assertThat(result.wfNodes().issues())
+                .anySatisfy(issue -> assertThat(issue.message()).contains("node_name"));
+        assertThat(result.wfNodes().validRows()).hasSize(1);
+    }
 
-  @Test
-  @DisplayName("起止节点齐备的链式编排图不产生编排表相关问题")
-  void shouldReportNoTopologyIssues_whenChainWorkflowIsValid() {
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(node("START_0", "START"), node("TASK_1", "TASK"), node("END_0", "END")),
-        List.of(edge("START_0", "TASK_1", "ALWAYS"), edge("TASK_1", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("起止节点齐备的链式编排图不产生编排表相关问题")
+    void shouldReportNoTopologyIssues_whenChainWorkflowIsValid() {
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(node("START_0", "START"), node("TASK_1", "TASK"), node("END_0", "END")),
+                List.of(edge("START_0", "TASK_1", "ALWAYS"), edge("TASK_1", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .filteredOn(i -> i.sheetName().startsWith("workflow_"))
-        .isEmpty();
-  }
+        assertThat(result.crossRefIssues())
+                .filteredOn(i -> i.sheetName().startsWith("workflow_"))
+                .isEmpty();
+    }
 
-  @Test
-  @DisplayName("Workflow 监控策略按工作流编码和版本校验并拒绝重复项")
-  void shouldValidateWorkflowMonitoringPolicyByDefinitionVersion() {
-    Map<String, String> policyRow = Map.of(
-        "workflow_code", WF_CODE,
-        "workflow_version", WF_VERSION,
-        "soft_runtime_seconds", "600",
-        "soft_runtime_severity", "ERROR",
-        "start_grace_seconds", "120",
-        "start_grace_severity", "WARN",
-        "completion_deadline_local_time", "04:30",
-        "completion_deadline_day_offset", "1",
-        "completion_deadline_severity", "CRITICAL");
-    PackageExcelSession session = new PackageExcelSession(
-        "wf.xlsx",
-        "t1",
-        Instant.EPOCH,
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(wfDef()),
-        List.of(),
-        List.of(),
-        List.of(policyRow, policyRow));
+    @Test
+    @DisplayName("Workflow 监控策略按工作流编码和版本校验并拒绝重复项")
+    void shouldValidateWorkflowMonitoringPolicyByDefinitionVersion() {
+        Map<String, String> policyRow = Map.of(
+                "workflow_code", WF_CODE,
+                "workflow_version", WF_VERSION,
+                "soft_runtime_seconds", "600",
+                "soft_runtime_severity", "ERROR",
+                "start_grace_seconds", "120",
+                "start_grace_severity", "WARN",
+                "completion_deadline_local_time", "04:30",
+                "completion_deadline_day_offset", "1",
+                "completion_deadline_severity", "CRITICAL");
+        PackageExcelSession session = new PackageExcelSession(
+                "wf.xlsx",
+                "t1",
+                Instant.EPOCH,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(wfDef()),
+                List.of(),
+                List.of(),
+                List.of(policyRow, policyRow));
 
-    var result = validator(mock(WorkflowDefinitionMapper.class)).validate(session);
+        var result = validator(mock(WorkflowDefinitionMapper.class)).validate(session);
 
-    assertThat(result.workflowMonitoringPolicies().validRows()).hasSize(1);
-    assertThat(result.workflowMonitoringPolicies().invalid()).isEqualTo(1);
-    assertThat(result.workflowMonitoringPolicies().issues())
-        .anySatisfy(issue -> assertThat(issue.message()).contains("duplicate workflow_code"));
-  }
+        assertThat(result.workflowMonitoringPolicies().validRows()).hasSize(1);
+        assertThat(result.workflowMonitoringPolicies().invalid()).isEqualTo(1);
+        assertThat(result.workflowMonitoringPolicies().issues())
+                .anySatisfy(issue -> assertThat(issue.message()).contains("duplicate workflow_code"));
+    }
 
-  @Test
-  @DisplayName("缺少起始节点时报错并提示缺少起始节点")
-  void shouldFail_whenStartNodeMissing() {
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(node("TASK_1", "TASK"), node("END_0", "END")),
-        List.of(edge("TASK_1", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("缺少起始节点时报错并提示缺少起始节点")
+    void shouldFail_whenStartNodeMissing() {
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(node("TASK_1", "TASK"), node("END_0", "END")),
+                List.of(edge("TASK_1", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(i -> assertThat(i.message()).contains("missing START node"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(i -> assertThat(i.message()).contains("missing START node"));
+    }
 
-  @Test
-  @DisplayName("存在多个起始节点时报错并提示起始节点重复")
-  void shouldFail_whenMultipleStartNodes() {
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(
-            node("START_A", "START"),
-            node("START_B", "START"),
-            node("TASK_1", "TASK"),
-            node("END_0", "END")),
-        List.of(
-            edge("START_A", "TASK_1", "ALWAYS"),
-            edge("START_B", "TASK_1", "ALWAYS"),
-            edge("TASK_1", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("存在多个起始节点时报错并提示起始节点重复")
+    void shouldFail_whenMultipleStartNodes() {
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(
+                        node("START_A", "START"),
+                        node("START_B", "START"),
+                        node("TASK_1", "TASK"),
+                        node("END_0", "END")),
+                List.of(
+                        edge("START_A", "TASK_1", "ALWAYS"),
+                        edge("START_B", "TASK_1", "ALWAYS"),
+                        edge("TASK_1", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(i -> assertThat(i.message()).contains("multiple START nodes"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(i -> assertThat(i.message()).contains("multiple START nodes"));
+    }
 
-  @Test
-  @DisplayName("缺少结束节点时报错并提示至少需要一个结束节点")
-  void shouldFail_whenEndNodeMissing() {
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(node("START_0", "START"), node("TASK_1", "TASK")),
-        List.of(edge("START_0", "TASK_1", "ALWAYS")));
+    @Test
+    @DisplayName("缺少结束节点时报错并提示至少需要一个结束节点")
+    void shouldFail_whenEndNodeMissing() {
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(node("START_0", "START"), node("TASK_1", "TASK")),
+                List.of(edge("START_0", "TASK_1", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(i -> assertThat(i.message()).contains("at least 1 END node"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(i -> assertThat(i.message()).contains("at least 1 END node"));
+    }
 
-  @Test
-  @DisplayName("编排图中存在环时报错并提示拓扑成环")
-  void shouldFail_whenGraphHasCycle() {
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(
-            node("START_0", "START"),
-            node("A", "TASK"),
-            node("B", "TASK"),
-            node("C", "TASK"),
-            node("END_0", "END")),
-        List.of(
-            edge("START_0", "A", "ALWAYS"),
-            edge("A", "B", "ALWAYS"),
-            edge("B", "C", "ALWAYS"),
-            edge("C", "A", "ALWAYS"), // cycle
-            edge("C", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("编排图中存在环时报错并提示拓扑成环")
+    void shouldFail_whenGraphHasCycle() {
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(
+                        node("START_0", "START"),
+                        node("A", "TASK"),
+                        node("B", "TASK"),
+                        node("C", "TASK"),
+                        node("END_0", "END")),
+                List.of(
+                        edge("START_0", "A", "ALWAYS"),
+                        edge("A", "B", "ALWAYS"),
+                        edge("B", "C", "ALWAYS"),
+                        edge("C", "A", "ALWAYS"), // cycle
+                        edge("C", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(i -> assertThat(i.message()).contains("topology cycle"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(i -> assertThat(i.message()).contains("topology cycle"));
+    }
 
-  @Test
-  @DisplayName("节点存在指向自身的边时报错并提示自环")
-  void shouldFail_whenNodeHasSelfLoop() {
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(node("START_0", "START"), node("A", "TASK"), node("END_0", "END")),
-        List.of(
-            edge("START_0", "A", "ALWAYS"),
-            edge("A", "A", "ALWAYS"), // self-loop
-            edge("A", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("节点存在指向自身的边时报错并提示自环")
+    void shouldFail_whenNodeHasSelfLoop() {
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(node("START_0", "START"), node("A", "TASK"), node("END_0", "END")),
+                List.of(
+                        edge("START_0", "A", "ALWAYS"),
+                        edge("A", "A", "ALWAYS"), // self-loop
+                        edge("A", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(i -> assertThat(i.message()).contains("self-loop"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(i -> assertThat(i.message()).contains("self-loop"));
+    }
 
-  @Test
-  @DisplayName("存在从起始节点不可达的节点时报错并点名该节点")
-  void shouldFail_whenNodeUnreachableFromStart() {
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(
-            node("START_0", "START"),
-            node("A", "TASK"),
-            node("ORPHAN", "TASK"),
-            node("END_0", "END")),
-        List.of(edge("START_0", "A", "ALWAYS"), edge("A", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("存在从起始节点不可达的节点时报错并点名该节点")
+    void shouldFail_whenNodeUnreachableFromStart() {
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(node("START_0", "START"), node("A", "TASK"), node("ORPHAN", "TASK"), node("END_0", "END")),
+                List.of(edge("START_0", "A", "ALWAYS"), edge("A", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(
-            i -> assertThat(i.message()).contains("unreachable from START").contains("ORPHAN"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(i -> assertThat(i.message())
+                        .contains("unreachable from START")
+                        .contains("ORPHAN"));
+    }
 
-  @Test
-  @DisplayName("存在无法到达任一结束节点的节点时报错并点名该节点")
-  void shouldFail_whenNodeCannotReachAnyEnd() {
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(
-            node("START_0", "START"),
-            node("A", "TASK"),
-            node("DEADEND", "TASK"),
-            node("END_0", "END")),
-        List.of(
-            edge("START_0", "A", "ALWAYS"),
-            edge("START_0", "DEADEND", "ALWAYS"),
-            edge("A", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("存在无法到达任一结束节点的节点时报错并点名该节点")
+    void shouldFail_whenNodeCannotReachAnyEnd() {
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(node("START_0", "START"), node("A", "TASK"), node("DEADEND", "TASK"), node("END_0", "END")),
+                List.of(
+                        edge("START_0", "A", "ALWAYS"),
+                        edge("START_0", "DEADEND", "ALWAYS"),
+                        edge("A", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(
-            i -> assertThat(i.message()).contains("cannot reach any END").contains("DEADEND"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(i ->
+                        assertThat(i.message()).contains("cannot reach any END").contains("DEADEND"));
+    }
 
-  @Test
-  @DisplayName("条件边的条件表达式为空时报错并提示表达式必须非空")
-  void shouldFail_whenConditionEdgeExpressionBlank() {
-    Map<String, String> condEdge = edge("GW", "A", "CONDITION");
-    condEdge.put("condition_expr", ""); // 显式空
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(
-            node("START_0", "START"),
-            node("GW", "GATEWAY"),
-            node("A", "TASK"),
-            node("END_0", "END")),
-        List.of(
-            edge("START_0", "GW", "ALWAYS"),
-            condEdge,
-            edge("GW", "END_0", "ALWAYS"),
-            edge("A", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("条件边的条件表达式为空时报错并提示表达式必须非空")
+    void shouldFail_whenConditionEdgeExpressionBlank() {
+        Map<String, String> condEdge = edge("GW", "A", "CONDITION");
+        condEdge.put("condition_expr", ""); // 显式空
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(node("START_0", "START"), node("GW", "GATEWAY"), node("A", "TASK"), node("END_0", "END")),
+                List.of(
+                        edge("START_0", "GW", "ALWAYS"),
+                        condEdge,
+                        edge("GW", "END_0", "ALWAYS"),
+                        edge("A", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(i -> assertThat(i.message())
-            .contains("CONDITION edge")
-            .contains("non-empty condition_expr"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(
+                        i -> assertThat(i.message()).contains("CONDITION edge").contains("non-empty condition_expr"));
+    }
 
-  @Test
-  @DisplayName("节点参数引用不存在的节点时报错并点名该引用")
-  void shouldFail_whenDslReferencesMissingNode() {
-    Map<String, String> n = node("DOWN", "TASK");
-    n.put("node_params", "{\"src\":\"$.nodes.MISSING_NODE.output.fileId\"}");
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(node("START_0", "START"), n, node("END_0", "END")),
-        List.of(edge("START_0", "DOWN", "ALWAYS"), edge("DOWN", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("节点参数引用不存在的节点时报错并点名该引用")
+    void shouldFail_whenDslReferencesMissingNode() {
+        Map<String, String> n = node("DOWN", "TASK");
+        n.put("node_params", "{\"src\":\"$.nodes.MISSING_NODE.output.fileId\"}");
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(node("START_0", "START"), n, node("END_0", "END")),
+                List.of(edge("START_0", "DOWN", "ALWAYS"), edge("DOWN", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(i -> assertThat(i.message())
-            .contains("DSL references missing node")
-            .contains("MISSING_NODE"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(i -> assertThat(i.message())
+                        .contains("DSL references missing node")
+                        .contains("MISSING_NODE"));
+    }
 
-  @Test
-  @DisplayName("节点引用非上游分支节点的输出时报错并提示只能引用上游节点")
-  void shouldFail_whenDslReferencesNonAncestorNode() {
-    // A 和 B 是 START 的两个独立分支,A 试图引用 B 的输出 → B 不是 A 的祖先 → 拒绝
-    Map<String, String> a = node("A", "TASK");
-    a.put("node_params", "{\"src\":\"$.nodes.B.output.fileId\"}");
-    PackageExcelSession session = wfSession(
-        List.of(wfDef()),
-        List.of(node("START_0", "START"), a, node("B", "TASK"), node("END_0", "END")),
-        List.of(
-            edge("START_0", "A", "ALWAYS"),
-            edge("START_0", "B", "ALWAYS"),
-            edge("A", "END_0", "ALWAYS"),
-            edge("B", "END_0", "ALWAYS")));
+    @Test
+    @DisplayName("节点引用非上游分支节点的输出时报错并提示只能引用上游节点")
+    void shouldFail_whenDslReferencesNonAncestorNode() {
+        // A 和 B 是 START 的两个独立分支,A 试图引用 B 的输出 → B 不是 A 的祖先 → 拒绝
+        Map<String, String> a = node("A", "TASK");
+        a.put("node_params", "{\"src\":\"$.nodes.B.output.fileId\"}");
+        PackageExcelSession session = wfSession(
+                List.of(wfDef()),
+                List.of(node("START_0", "START"), a, node("B", "TASK"), node("END_0", "END")),
+                List.of(
+                        edge("START_0", "A", "ALWAYS"),
+                        edge("START_0", "B", "ALWAYS"),
+                        edge("A", "END_0", "ALWAYS"),
+                        edge("B", "END_0", "ALWAYS")));
 
-    var result = validator().validate(session);
+        var result = validator().validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(i -> assertThat(i.message())
-            .contains("can only reference upstream nodes")
-            .contains("'B'"));
-  }
+        assertThat(result.crossRefIssues())
+                .anySatisfy(i -> assertThat(i.message())
+                        .contains("can only reference upstream nodes")
+                        .contains("'B'"));
+    }
 
-  // ── helpers ─────────────────────────────────────────────────────────────
+    // ── helpers ─────────────────────────────────────────────────────────────
 
-  private static ConfigPackageExcelValidator validator() {
-    return new ConfigPackageExcelValidator(
-        mock(JobDefinitionMapper.class),
-        mock(FileTemplateConfigMapper.class),
-        mock(ResourceQueueMapper.class),
-        mock(BusinessCalendarMapper.class),
-        mock(BatchWindowMapper.class));
-  }
+    private static ConfigPackageExcelValidator validator() {
+        return new ConfigPackageExcelValidator(
+                mock(JobDefinitionMapper.class),
+                mock(FileTemplateConfigMapper.class),
+                mock(ResourceQueueMapper.class),
+                mock(BusinessCalendarMapper.class),
+                mock(BatchWindowMapper.class));
+    }
 
-  private static ConfigPackageExcelValidator validator(WorkflowDefinitionMapper workflowMapper) {
-    return new ConfigPackageExcelValidator(
-        mock(JobDefinitionMapper.class),
-        mock(FileTemplateConfigMapper.class),
-        mock(ResourceQueueMapper.class),
-        mock(BusinessCalendarMapper.class),
-        mock(BatchWindowMapper.class),
-        workflowMapper);
-  }
+    private static ConfigPackageExcelValidator validator(WorkflowDefinitionMapper workflowMapper) {
+        return new ConfigPackageExcelValidator(
+                mock(JobDefinitionMapper.class),
+                mock(FileTemplateConfigMapper.class),
+                mock(ResourceQueueMapper.class),
+                mock(BusinessCalendarMapper.class),
+                mock(BatchWindowMapper.class),
+                workflowMapper);
+    }
 
-  private static PackageExcelSession wfSession(
-      List<Map<String, String>> wfDefs,
-      List<Map<String, String>> wfNodes,
-      List<Map<String, String>> wfEdges) {
-    return new PackageExcelSession(
-        "wf.xlsx",
-        "t1",
-        Instant.EPOCH,
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        wfDefs,
-        wfNodes,
-        wfEdges);
-  }
+    private static PackageExcelSession wfSession(
+            List<Map<String, String>> wfDefs, List<Map<String, String>> wfNodes, List<Map<String, String>> wfEdges) {
+        return new PackageExcelSession(
+                "wf.xlsx",
+                "t1",
+                Instant.EPOCH,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                wfDefs,
+                wfNodes,
+                wfEdges);
+    }
 
-  private static Map<String, String> wfDef() {
-    Map<String, String> row = new LinkedHashMap<>();
-    row.put("tenant_id", "t1");
-    row.put("workflow_code", WF_CODE);
-    row.put("workflow_name", "demo");
-    row.put("workflow_type", "DAG");
-    row.put("version", WF_VERSION);
-    row.put("enabled", "true");
-    return row;
-  }
+    private static Map<String, String> wfDef() {
+        Map<String, String> row = new LinkedHashMap<>();
+        row.put("tenant_id", "t1");
+        row.put("workflow_code", WF_CODE);
+        row.put("workflow_name", "demo");
+        row.put("workflow_type", "DAG");
+        row.put("version", WF_VERSION);
+        row.put("enabled", "true");
+        return row;
+    }
 
-  private static Map<String, String> node(String nodeCode, String nodeType) {
-    Map<String, String> row = new LinkedHashMap<>();
-    row.put("tenant_id", "t1");
-    row.put("workflow_code", WF_CODE);
-    row.put("workflow_version", WF_VERSION);
-    row.put("node_code", nodeCode);
-    row.put("node_name", nodeCode);
-    row.put("node_type", nodeType);
-    row.put("enabled", "true");
-    return row;
-  }
+    private static Map<String, String> node(String nodeCode, String nodeType) {
+        Map<String, String> row = new LinkedHashMap<>();
+        row.put("tenant_id", "t1");
+        row.put("workflow_code", WF_CODE);
+        row.put("workflow_version", WF_VERSION);
+        row.put("node_code", nodeCode);
+        row.put("node_name", nodeCode);
+        row.put("node_type", nodeType);
+        row.put("enabled", "true");
+        return row;
+    }
 
-  private static Map<String, String> edge(String from, String to, String edgeType) {
-    Map<String, String> row = new LinkedHashMap<>();
-    row.put("tenant_id", "t1");
-    row.put("workflow_code", WF_CODE);
-    row.put("workflow_version", WF_VERSION);
-    row.put("from_node_code", from);
-    row.put("to_node_code", to);
-    row.put("edge_type", edgeType);
-    row.put("enabled", "true");
-    return row;
-  }
+    private static Map<String, String> edge(String from, String to, String edgeType) {
+        Map<String, String> row = new LinkedHashMap<>();
+        row.put("tenant_id", "t1");
+        row.put("workflow_code", WF_CODE);
+        row.put("workflow_version", WF_VERSION);
+        row.put("from_node_code", from);
+        row.put("to_node_code", to);
+        row.put("edge_type", edgeType);
+        row.put("enabled", "true");
+        return row;
+    }
 }

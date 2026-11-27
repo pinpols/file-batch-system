@@ -14,21 +14,21 @@ import org.junit.jupiter.params.provider.ValueSource;
 @ResourceLock("java.util.Locale.default")
 class TenantConfigCopyTypeLocaleTest {
 
-  @ParameterizedTest
-  @ValueSource(strings = {"tr-TR", "az-AZ"})
-  @DisplayName("土耳其语与阿塞拜疆语默认环境仍接受相同配置类型和兼容简写")
-  void shouldKeepProtocolTypeParsingIndependentOfDefaultLocale(String language) {
-    Locale previous = Locale.getDefault();
-    try {
-      Locale.setDefault(Locale.forLanguageTag(language));
-      ConfigType channel = ConfigType.fromValue(" file_channel ");
-      ConfigType workflow = ConfigType.fromValue("workflow_definition");
-      ConfigType job = ConfigType.fromValue("job");
-      assertThat(channel).isEqualTo(ConfigType.FILE_CHANNEL);
-      assertThat(workflow).isEqualTo(ConfigType.WORKFLOW_DEFINITION);
-      assertThat(job).isEqualTo(ConfigType.JOB_DEFINITION);
-    } finally {
-      Locale.setDefault(previous);
+    @ParameterizedTest
+    @ValueSource(strings = {"tr-TR", "az-AZ"})
+    @DisplayName("土耳其语与阿塞拜疆语默认环境仍接受相同配置类型和兼容简写")
+    void shouldKeepProtocolTypeParsingIndependentOfDefaultLocale(String language) {
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag(language));
+            ConfigType channel = ConfigType.fromValue(" file_channel ");
+            ConfigType workflow = ConfigType.fromValue("workflow_definition");
+            ConfigType job = ConfigType.fromValue("job");
+            assertThat(channel).isEqualTo(ConfigType.FILE_CHANNEL);
+            assertThat(workflow).isEqualTo(ConfigType.WORKFLOW_DEFINITION);
+            assertThat(job).isEqualTo(ConfigType.JOB_DEFINITION);
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
-  }
 }

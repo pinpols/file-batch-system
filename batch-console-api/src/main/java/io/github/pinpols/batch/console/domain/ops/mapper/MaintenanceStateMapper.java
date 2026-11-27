@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface MaintenanceStateMapper {
 
-  MaintenanceStateEntity selectSingleton();
+    MaintenanceStateEntity selectSingleton();
 
-  int updateIfVersion(@Param("param") MaintenanceStateUpdateParam param);
+    int updateIfVersion(@Param("param") MaintenanceStateUpdateParam param);
 }

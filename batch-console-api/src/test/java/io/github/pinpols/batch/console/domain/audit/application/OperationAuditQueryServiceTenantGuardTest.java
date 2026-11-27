@@ -52,225 +52,221 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @DisplayName("操作审计查询服务: 租户隔离校验与游标分页行为")
 class OperationAuditQueryServiceTenantGuardTest {
 
-  @Mock
-  private OperationAuditMapper mapper;
+    @Mock
+    private OperationAuditMapper mapper;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private ConsoleTenantGuard tenantGuard;
-  private OperationAuditQueryService service;
+    private ConsoleTenantGuard tenantGuard;
+    private OperationAuditQueryService service;
 
-  @BeforeEach
-  void setUp() {
-    tenantGuard = new ConsoleTenantGuard(requestMetadataResolver, TenantDatabaseContext.NONE);
-    service = new OperationAuditQueryService(mapper, tenantGuard, new ObjectMapper());
-    when(requestMetadataResolver.current())
-        .thenThrow(new IllegalStateException("request scope missing"));
-    when(mapper.count(ArgumentMatchers.any(OperationAuditCountQuery.class))).thenReturn(0L);
-    when(mapper.query(ArgumentMatchers.any(OperationAuditQuery.class))).thenReturn(List.of());
-  }
+    @BeforeEach
+    void setUp() {
+        tenantGuard = new ConsoleTenantGuard(requestMetadataResolver, TenantDatabaseContext.NONE);
+        service = new OperationAuditQueryService(mapper, tenantGuard, new ObjectMapper());
+        when(requestMetadataResolver.current()).thenThrow(new IllegalStateException("request scope missing"));
+        when(mapper.count(ArgumentMatchers.any(OperationAuditCountQuery.class))).thenReturn(0L);
+        when(mapper.query(ArgumentMatchers.any(OperationAuditQuery.class))).thenReturn(List.of());
+    }
 
-  @AfterEach
-  void tearDown() {
-    SecurityContextHolder.clearContext();
-  }
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
 
-  @Test
-  @DisplayName("租户用户未带租户标识且认证无租户声明时拒绝查询")
-  void shouldRejectTenantUserPassingNullTenantId() {
-    // 租户角色,JWT 未注入,requestTenantId=null → guard 抛 UNAUTHORIZED / required
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken("anon", "x"));
-    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
-    req.setPageNo(1);
-    req.setPageSize(10);
-    req.setTenantId(null);
-    assertThatThrownBy(() -> service.query(req)).isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("租户用户未带租户标识且认证无租户声明时拒绝查询")
+    void shouldRejectTenantUserPassingNullTenantId() {
+        // 租户角色,JWT 未注入,requestTenantId=null → guard 抛 UNAUTHORIZED / required
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("anon", "x"));
+        OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(10);
+        req.setTenantId(null);
+        assertThatThrownBy(() -> service.query(req)).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("租户用户请求租户与认证租户不一致时按越权拒绝")
-  void shouldOverrideRequestTenantIdWithJwtTenantForTenantRole() {
-    // 租户角色,JWT tenantId=ta;请求传 tb(越权尝试)→ FORBIDDEN
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
-    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
-    req.setPageNo(1);
-    req.setPageSize(10);
-    req.setTenantId("tb");
-    assertThatThrownBy(() -> service.query(req)).isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("租户用户请求租户与认证租户不一致时按越权拒绝")
+    void shouldOverrideRequestTenantIdWithJwtTenantForTenantRole() {
+        // 租户角色,JWT tenantId=ta;请求传 tb(越权尝试)→ FORBIDDEN
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+        OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(10);
+        req.setTenantId("tb");
+        assertThatThrownBy(() -> service.query(req)).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("租户用户请求租户与认证租户一致时以该租户下传查询")
-  void shouldPassResolvedTenantIdToMapperForTenantUser() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
-    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
-    req.setPageNo(1);
-    req.setPageSize(10);
-    req.setTenantId("ta"); // 一致即透传
-    service.query(req);
-    verify(mapper)
-        .count(ArgumentMatchers.argThat(
-            parameters -> parameters != null && Objects.equals(parameters.tenantId(), "ta")));
-    verify(mapper)
-        .query(ArgumentMatchers.argThat(
-            parameters -> parameters != null && Objects.equals(parameters.tenantId(), "ta")));
-  }
+    @Test
+    @DisplayName("租户用户请求租户与认证租户一致时以该租户下传查询")
+    void shouldPassResolvedTenantIdToMapperForTenantUser() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+        OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(10);
+        req.setTenantId("ta"); // 一致即透传
+        service.query(req);
+        verify(mapper)
+                .count(ArgumentMatchers.argThat(
+                        parameters -> parameters != null && Objects.equals(parameters.tenantId(), "ta")));
+        verify(mapper)
+                .query(ArgumentMatchers.argThat(
+                        parameters -> parameters != null && Objects.equals(parameters.tenantId(), "ta")));
+    }
 
-  @Test
-  @DisplayName("全局管理员未指定目标租户时拒绝查询")
-  void shouldRequireTenantIdForGlobalAdmin() {
-    // 全局角色 ROLE_ADMIN 但未指定 tenantId → 必须明确目标租户
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
-    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
-    req.setPageNo(1);
-    req.setPageSize(10);
-    req.setTenantId(null);
-    assertThatThrownBy(() -> service.query(req)).isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("全局管理员未指定目标租户时拒绝查询")
+    void shouldRequireTenantIdForGlobalAdmin() {
+        // 全局角色 ROLE_ADMIN 但未指定 tenantId → 必须明确目标租户
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
+        OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(10);
+        req.setTenantId(null);
+        assertThatThrownBy(() -> service.query(req)).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("全局管理员显式指定租户时允许跨租户查询")
-  void shouldAllowGlobalAdminToQueryAnyTenantExplicitly() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
-    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
-    req.setPageNo(1);
-    req.setPageSize(10);
-    req.setTenantId("tb"); // admin 跨租 OK
-    service.query(req);
-    verify(mapper)
-        .count(ArgumentMatchers.argThat(
-            parameters -> parameters != null && Objects.equals(parameters.tenantId(), "tb")));
-    assertThat(req.getTenantId()).isEqualTo("tb");
-  }
+    @Test
+    @DisplayName("全局管理员显式指定租户时允许跨租户查询")
+    void shouldAllowGlobalAdminToQueryAnyTenantExplicitly() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
+        OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(10);
+        req.setTenantId("tb"); // admin 跨租 OK
+        service.query(req);
+        verify(mapper)
+                .count(ArgumentMatchers.argThat(
+                        parameters -> parameters != null && Objects.equals(parameters.tenantId(), "tb")));
+        assertThat(req.getTenantId()).isEqualTo("tb");
+    }
 
-  @Test
-  @DisplayName("携带游标查询时跳过总数统计并按游标首页分页")
-  void shouldUseCursorWithoutCountingForOperationAuditList() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
-    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
-    req.setPageNo(99);
-    req.setPageSize(10);
-    req.setTenantId("ta");
-    req.setCursor(CursorCodec.encode(Map.of("id", 100L)));
+    @Test
+    @DisplayName("携带游标查询时跳过总数统计并按游标首页分页")
+    void shouldUseCursorWithoutCountingForOperationAuditList() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+        OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+        req.setPageNo(99);
+        req.setPageSize(10);
+        req.setTenantId("ta");
+        req.setCursor(CursorCodec.encode(Map.of("id", 100L)));
 
-    service.query(req);
+        service.query(req);
 
-    verify(mapper, never()).count(ArgumentMatchers.any(OperationAuditCountQuery.class));
-    verify(mapper)
-        .query(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.cursorId(), 100L)
-            && Objects.equals(parameters.pageRequest(), new PageRequest(1, 10))));
-  }
+        verify(mapper, never()).count(ArgumentMatchers.any(OperationAuditCountQuery.class));
+        verify(mapper)
+                .query(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.cursorId(), 100L)
+                        && Objects.equals(parameters.pageRequest(), new PageRequest(1, 10))));
+    }
 
-  @Test
-  @DisplayName("空游标按游标首页处理且不触发总数统计")
-  void shouldTreatEmptyCursorAsCursorFirstPage() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
-    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
-    req.setPageNo(99);
-    req.setPageSize(10);
-    req.setTenantId("ta");
-    req.setCursor("");
+    @Test
+    @DisplayName("空游标按游标首页处理且不触发总数统计")
+    void shouldTreatEmptyCursorAsCursorFirstPage() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+        OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+        req.setPageNo(99);
+        req.setPageSize(10);
+        req.setTenantId("ta");
+        req.setCursor("");
 
-    service.query(req);
+        service.query(req);
 
-    verify(mapper, never()).count(ArgumentMatchers.any(OperationAuditCountQuery.class));
-    verify(mapper)
-        .query(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), "ta")
-            && Objects.equals(parameters.cursorId(), null)
-            && Objects.equals(parameters.pageRequest(), new PageRequest(1, 10))));
-  }
+        verify(mapper, never()).count(ArgumentMatchers.any(OperationAuditCountQuery.class));
+        verify(mapper)
+                .query(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.tenantId(), "ta")
+                        && Objects.equals(parameters.cursorId(), null)
+                        && Objects.equals(parameters.pageRequest(), new PageRequest(1, 10))));
+    }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"%%%", "e30"})
-  @DisplayName("损坏或缺少 id 的非空游标必须拒绝，不能重新查询第一页")
-  void shouldRejectInvalidNonBlankCursor(String cursor) {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
-    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
-    req.setTenantId("ta");
-    req.setPageSize(10);
-    req.setCursor(cursor);
+    @ParameterizedTest
+    @ValueSource(strings = {"%%%", "e30"})
+    @DisplayName("损坏或缺少 id 的非空游标必须拒绝，不能重新查询第一页")
+    void shouldRejectInvalidNonBlankCursor(String cursor) {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+        OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+        req.setTenantId("ta");
+        req.setPageSize(10);
+        req.setCursor(cursor);
 
-    assertThatThrownBy(() -> service.query(req))
-        .isInstanceOfSatisfying(BizException.class, failure -> {
-          assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
-          assertThat(failure.getMessageKey()).isEqualTo(ResultCode.INVALID_ARGUMENT.detailKey());
+        assertThatThrownBy(() -> service.query(req)).isInstanceOfSatisfying(BizException.class, failure -> {
+            assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+            assertThat(failure.getMessageKey()).isEqualTo(ResultCode.INVALID_ARGUMENT.detailKey());
         });
-    verify(mapper, never()).query(ArgumentMatchers.any(OperationAuditQuery.class));
-  }
+        verify(mapper, never()).query(ArgumentMatchers.any(OperationAuditQuery.class));
+    }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"1.5", "9223372036854775808"})
-  @DisplayName("非整数或越界游标不得进入操作审计查询")
-  void shouldRejectNumericCursorBeforeAuditQuery(String number) {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
-    OperationAuditQueryRequest request = new OperationAuditQueryRequest();
-    request.setTenantId("ta");
-    request.setPageSize(10);
-    String json = "{\"id\":" + number + "}";
-    request.setCursor(Base64.getUrlEncoder()
-        .withoutPadding()
-        .encodeToString(json.getBytes(StandardCharsets.UTF_8)));
-    assertThatThrownBy(() -> service.query(request))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
-    verify(mapper, never()).query(ArgumentMatchers.any(OperationAuditQuery.class));
-  }
+    @ParameterizedTest
+    @ValueSource(strings = {"1.5", "9223372036854775808"})
+    @DisplayName("非整数或越界游标不得进入操作审计查询")
+    void shouldRejectNumericCursorBeforeAuditQuery(String number) {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+        OperationAuditQueryRequest request = new OperationAuditQueryRequest();
+        request.setTenantId("ta");
+        request.setPageSize(10);
+        String json = "{\"id\":" + number + "}";
+        request.setCursor(
+                Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes(StandardCharsets.UTF_8)));
+        assertThatThrownBy(() -> service.query(request))
+                .isInstanceOfSatisfying(
+                        BizException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+        verify(mapper, never()).query(ArgumentMatchers.any(OperationAuditQuery.class));
+    }
 
-  @Test
-  @DisplayName("返回历史审计记录前脱敏密码等凭据字段")
-  void shouldRedactHistoricalCredentialsBeforeReturningAuditRows() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(
-            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
-    when(mapper.count(ArgumentMatchers.any(OperationAuditCountQuery.class))).thenReturn(1L);
-    when(mapper.query(ArgumentMatchers.any(OperationAuditQuery.class)))
-        .thenReturn(List.of(new AuditRow(
-            1L,
-            "ta",
-            "user",
-            "alice",
-            "user.create",
-            "admin",
-            "ROLE_ADMIN",
-            "SUCCESS",
-            null,
-            null,
-            "{\"request\":{\"username\":\"alice\",\"password\":\"admin123\"}}",
-            "trace-1",
-            "request-1",
-            null,
-            null,
-            1,
-            Instant.parse("2026-09-21T00:00:00Z"))));
-    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
-    req.setPageNo(1);
-    req.setPageSize(10);
-    req.setTenantId("ta");
+    @Test
+    @DisplayName("返回历史审计记录前脱敏密码等凭据字段")
+    void shouldRedactHistoricalCredentialsBeforeReturningAuditRows() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
+        when(mapper.count(ArgumentMatchers.any(OperationAuditCountQuery.class))).thenReturn(1L);
+        when(mapper.query(ArgumentMatchers.any(OperationAuditQuery.class)))
+                .thenReturn(List.of(new AuditRow(
+                        1L,
+                        "ta",
+                        "user",
+                        "alice",
+                        "user.create",
+                        "admin",
+                        "ROLE_ADMIN",
+                        "SUCCESS",
+                        null,
+                        null,
+                        "{\"request\":{\"username\":\"alice\",\"password\":\"admin123\"}}",
+                        "trace-1",
+                        "request-1",
+                        null,
+                        null,
+                        1,
+                        Instant.parse("2026-09-21T00:00:00Z"))));
+        OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(10);
+        req.setTenantId("ta");
 
-    String params = service.query(req).items().getFirst().params();
+        String params = service.query(req).items().getFirst().params();
 
-    assertThat(params).contains("alice", "[REDACTED]").doesNotContain("admin123");
-  }
+        assertThat(params).contains("alice", "[REDACTED]").doesNotContain("admin123");
+    }
 }

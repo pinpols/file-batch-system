@@ -31,86 +31,87 @@ import org.testcontainers.containers.GenericContainer;
 @DisplayName("限流熔断集成: 真实后端停机后的熔断开路与快速失败口径")
 class RedisRateLimitCircuitBreakerIntegrationTest {
 
-  private static RateLimitProperties.CircuitBreaker config() {
-    RateLimitProperties.CircuitBreaker config = new RateLimitProperties.CircuitBreaker();
-    config.setEnabled(true);
-    config.setConsecutiveFailures(3);
-    config.setOpenWindowMillis(10_000L); // 保持 OPEN,专测短路省阻塞
-    config.setHalfOpenProbes(1);
-    return config;
-  }
-
-  @Test
-  @DisplayName("真 Redis 停机 → 连续失败开熔断 → 后续请求短路 near-instant fail-open(不再阻塞 500ms)")
-  void shouldOpenCircuitAndFailFast_whenBackendKeepsFailing() {
-    @SuppressWarnings("resource")
-    GenericContainer<?> redis = TestValkeyContainers.create();
-    redis.start();
-
-    RedisClient client = RedisClient.create();
-    // autoReconnect(false):Redis 停机后命令立即失败,不无限重连;命令超时交给 bucket4j requestTimeout(500ms) 兜底。
-    client.setOptions(ClientOptions.builder()
-        .autoReconnect(false)
-        .socketOptions(
-            SocketOptions.builder().connectTimeout(Duration.ofSeconds(2)).build())
-        .build());
-    RedisURI uri = RedisURI.builder()
-        .withHost(redis.getHost())
-        .withPort(redis.getMappedPort(TestValkeyContainers.REDIS_PORT))
-        .withTimeout(Duration.ofSeconds(2))
-        .build();
-    try (StatefulRedisConnection<String, byte[]> connection =
-        client.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE), uri)) {
-      // requestTimeout 与生产 Bucket4jRateLimitConfig.REQUEST_TIMEOUT 对齐(500ms)。
-      LettuceBasedProxyManager<String> proxyManager = Bucket4jLettuce.casBasedBuilder(connection)
-          .requestTimeout(Duration.ofMillis(500))
-          .expirationAfterWrite(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
-              Duration.ofMinutes(1)))
-          .build();
-      SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-      RedisRateLimitCircuitBreaker circuitBreaker = new RedisRateLimitCircuitBreaker(
-          config(), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
-      TokenBucketRateLimiter limiter = new TokenBucketRateLimiter(
-          proxyManager, meterRegistry, circuitBreaker, new RateLimitProperties());
-
-      // sanity:健康时正常限流
-      assertThat(limiter.tryConsume("t-cb", "LAUNCH", 100)).isTrue();
-
-      // Redis 停机 → 后续命令不可达
-      redis.stop();
-
-      // 连续 3 次失败填满窗口 → 熔断 OPEN。每次真发命令、阻塞至多 requestTimeout。
-      for (int i = 0; i < 3; i++) {
-        assertThat(limiter.tryConsume("t-cb", "LAUNCH", 100))
-            .as("failing call %d must fail-open", i + 1)
-            .isTrue();
-      }
-      assertThat(meterRegistry
-              .get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN)
-              .gauge()
-              .value())
-          .as("circuit should be OPEN after 3 sustained real-Redis failures")
-          .isEqualTo(1.0);
-
-      // 熔断已 OPEN:下一次请求应被短路,near-instant 返回,不再阻塞到 requestTimeout(500ms)。
-      long startNanos = System.nanoTime();
-      boolean allowed = limiter.tryConsume("t-cb", "LAUNCH", 100);
-      long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
-
-      assertThat(allowed).as("open circuit must fail-open").isTrue();
-      assertThat(elapsedMillis)
-          .as("short-circuit must skip Redis entirely, far below requestTimeout(500ms)")
-          .isLessThan(100L);
-      assertThat(meterRegistry
-              .get(TokenBucketRateLimiter.METRIC_FAILOPEN)
-              .tag("reason", TokenBucketRateLimiter.FAILOPEN_REASON_CIRCUIT_OPEN)
-              .counter()
-              .count())
-          .as("short-circuited request must count reason=circuit_open")
-          .isGreaterThanOrEqualTo(1.0);
-    } finally {
-      client.shutdown();
-      redis.stop();
+    private static RateLimitProperties.CircuitBreaker config() {
+        RateLimitProperties.CircuitBreaker config = new RateLimitProperties.CircuitBreaker();
+        config.setEnabled(true);
+        config.setConsecutiveFailures(3);
+        config.setOpenWindowMillis(10_000L); // 保持 OPEN,专测短路省阻塞
+        config.setHalfOpenProbes(1);
+        return config;
     }
-  }
+
+    @Test
+    @DisplayName("真 Redis 停机 → 连续失败开熔断 → 后续请求短路 near-instant fail-open(不再阻塞 500ms)")
+    void shouldOpenCircuitAndFailFast_whenBackendKeepsFailing() {
+        @SuppressWarnings("resource")
+        GenericContainer<?> redis = TestValkeyContainers.create();
+        redis.start();
+
+        RedisClient client = RedisClient.create();
+        // autoReconnect(false):Redis 停机后命令立即失败,不无限重连;命令超时交给 bucket4j requestTimeout(500ms) 兜底。
+        client.setOptions(ClientOptions.builder()
+                .autoReconnect(false)
+                .socketOptions(SocketOptions.builder()
+                        .connectTimeout(Duration.ofSeconds(2))
+                        .build())
+                .build());
+        RedisURI uri = RedisURI.builder()
+                .withHost(redis.getHost())
+                .withPort(redis.getMappedPort(TestValkeyContainers.REDIS_PORT))
+                .withTimeout(Duration.ofSeconds(2))
+                .build();
+        try (StatefulRedisConnection<String, byte[]> connection =
+                client.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE), uri)) {
+            // requestTimeout 与生产 Bucket4jRateLimitConfig.REQUEST_TIMEOUT 对齐(500ms)。
+            LettuceBasedProxyManager<String> proxyManager = Bucket4jLettuce.casBasedBuilder(connection)
+                    .requestTimeout(Duration.ofMillis(500))
+                    .expirationAfterWrite(
+                            ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(1)))
+                    .build();
+            SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+            RedisRateLimitCircuitBreaker circuitBreaker =
+                    new RedisRateLimitCircuitBreaker(config(), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
+            TokenBucketRateLimiter limiter =
+                    new TokenBucketRateLimiter(proxyManager, meterRegistry, circuitBreaker, new RateLimitProperties());
+
+            // sanity:健康时正常限流
+            assertThat(limiter.tryConsume("t-cb", "LAUNCH", 100)).isTrue();
+
+            // Redis 停机 → 后续命令不可达
+            redis.stop();
+
+            // 连续 3 次失败填满窗口 → 熔断 OPEN。每次真发命令、阻塞至多 requestTimeout。
+            for (int i = 0; i < 3; i++) {
+                assertThat(limiter.tryConsume("t-cb", "LAUNCH", 100))
+                        .as("failing call %d must fail-open", i + 1)
+                        .isTrue();
+            }
+            assertThat(meterRegistry
+                            .get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN)
+                            .gauge()
+                            .value())
+                    .as("circuit should be OPEN after 3 sustained real-Redis failures")
+                    .isEqualTo(1.0);
+
+            // 熔断已 OPEN:下一次请求应被短路,near-instant 返回,不再阻塞到 requestTimeout(500ms)。
+            long startNanos = System.nanoTime();
+            boolean allowed = limiter.tryConsume("t-cb", "LAUNCH", 100);
+            long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
+
+            assertThat(allowed).as("open circuit must fail-open").isTrue();
+            assertThat(elapsedMillis)
+                    .as("short-circuit must skip Redis entirely, far below requestTimeout(500ms)")
+                    .isLessThan(100L);
+            assertThat(meterRegistry
+                            .get(TokenBucketRateLimiter.METRIC_FAILOPEN)
+                            .tag("reason", TokenBucketRateLimiter.FAILOPEN_REASON_CIRCUIT_OPEN)
+                            .counter()
+                            .count())
+                    .as("short-circuited request must count reason=circuit_open")
+                    .isGreaterThanOrEqualTo(1.0);
+        } finally {
+            client.shutdown();
+            redis.stop();
+        }
+    }
 }

@@ -11,19 +11,19 @@ import lombok.Data;
 @Data
 public class ResourceTagEntity {
 
-  private Long id;
+    private Long id;
 
-  private String tenantId;
+    private String tenantId;
 
-  private String resourceType;
+    private String resourceType;
 
-  private String resourceCode;
+    private String resourceCode;
 
-  private String tagKey;
+    private String tagKey;
 
-  private String tagValue;
+    private String tagValue;
 
-  private String createdBy;
+    private String createdBy;
 
-  private Instant createdAt;
+    private Instant createdAt;
 }

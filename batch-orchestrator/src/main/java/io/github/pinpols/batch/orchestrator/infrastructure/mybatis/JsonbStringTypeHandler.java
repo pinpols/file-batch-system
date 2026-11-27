@@ -20,25 +20,25 @@ import org.apache.ibatis.type.MappedTypes;
 @MappedTypes(JsonbString.class)
 public class JsonbStringTypeHandler extends BaseTypeHandler<JsonbString> {
 
-  @Override
-  public void setNonNullParameter(
-      PreparedStatement ps, int i, JsonbString parameter, JdbcType jdbcType) throws SQLException {
-    // 写路径在 mapper xml 内用 cast(#{...} as jsonb)，本方法理论上不被调用；保留回退。
-    ps.setString(i, parameter.getValue());
-  }
+    @Override
+    public void setNonNullParameter(PreparedStatement ps, int i, JsonbString parameter, JdbcType jdbcType)
+            throws SQLException {
+        // 写路径在 mapper xml 内用 cast(#{...} as jsonb)，本方法理论上不被调用；保留回退。
+        ps.setString(i, parameter.getValue());
+    }
 
-  @Override
-  public JsonbString getNullableResult(ResultSet rs, String columnName) throws SQLException {
-    return JsonbString.of(rs.getString(columnName));
-  }
+    @Override
+    public JsonbString getNullableResult(ResultSet rs, String columnName) throws SQLException {
+        return JsonbString.of(rs.getString(columnName));
+    }
 
-  @Override
-  public JsonbString getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
-    return JsonbString.of(rs.getString(columnIndex));
-  }
+    @Override
+    public JsonbString getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
+        return JsonbString.of(rs.getString(columnIndex));
+    }
 
-  @Override
-  public JsonbString getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
-    return JsonbString.of(cs.getString(columnIndex));
-  }
+    @Override
+    public JsonbString getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
+        return JsonbString.of(cs.getString(columnIndex));
+    }
 }

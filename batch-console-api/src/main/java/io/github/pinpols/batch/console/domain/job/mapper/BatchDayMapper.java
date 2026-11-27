@@ -11,38 +11,38 @@ import org.apache.ibatis.annotations.Param;
 
 public interface BatchDayMapper {
 
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  List<BatchDayView> selectByQuery(BatchDayQuery parameters);
+    List<BatchDayView> selectByQuery(BatchDayQuery parameters);
 
-  long countByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("fromBizDate") LocalDate fromBizDate,
-      @Param("toBizDate") LocalDate toBizDate);
+    long countByQuery(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("fromBizDate") LocalDate fromBizDate,
+            @Param("toBizDate") LocalDate toBizDate);
 
-  BatchDayView selectWindow(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate);
+    BatchDayView selectWindow(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("bizDate") LocalDate bizDate);
 
-  List<BatchDayScheduledOccurrenceView> selectScheduledOccurrences(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate);
+    List<BatchDayScheduledOccurrenceView> selectScheduledOccurrences(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("bizDate") LocalDate bizDate);
 
-  List<BatchDayScheduledOccurrenceFireView> selectScheduledOccurrenceFires(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate);
+    List<BatchDayScheduledOccurrenceFireView> selectScheduledOccurrenceFires(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("bizDate") LocalDate bizDate);
 
-  List<BatchDayJobSummaryView> selectJobSummaries(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate);
+    List<BatchDayJobSummaryView> selectJobSummaries(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("bizDate") LocalDate bizDate);
 
-  List<String> selectFailedJobCodes(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate);
+    List<String> selectFailedJobCodes(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("bizDate") LocalDate bizDate);
 }

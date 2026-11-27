@@ -9,15 +9,13 @@ import org.apache.ibatis.annotations.Param;
 
 public interface FileRecordMapper {
 
-  List<FileRecordView> selectByQuery(FileRecordQuery query);
+    List<FileRecordView> selectByQuery(FileRecordQuery query);
 
-  long countByQuery(FileRecordQuery query);
+    long countByQuery(FileRecordQuery query);
 
-  String selectTemplateCodeByFileId(
-      @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
+    String selectTemplateCodeByFileId(@Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
-  FileRecordStorageView selectFileRecordById(
-      @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
+    FileRecordStorageView selectFileRecordById(@Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
-  FileRecordSummaryView selectSummary(@Param("tenantId") String tenantId);
+    FileRecordSummaryView selectSummary(@Param("tenantId") String tenantId);
 }

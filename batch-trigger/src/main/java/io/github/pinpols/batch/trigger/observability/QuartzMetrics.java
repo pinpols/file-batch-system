@@ -30,38 +30,38 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class QuartzMetrics {
 
-  private final MeterRegistry registry;
+    private final MeterRegistry registry;
 
-  public static final String FIRE_TOTAL = "batch.trigger.quartz.fire.total";
-  public static final String EXECUTION_DURATION = "batch.trigger.quartz.execution.duration";
-  public static final String MISFIRE_TOTAL = "batch.trigger.quartz.misfire.total";
-  public static final String TRIGGERS_ACTIVE = "batch.trigger.quartz.triggers.active";
+    public static final String FIRE_TOTAL = "batch.trigger.quartz.fire.total";
+    public static final String EXECUTION_DURATION = "batch.trigger.quartz.execution.duration";
+    public static final String MISFIRE_TOTAL = "batch.trigger.quartz.misfire.total";
+    public static final String TRIGGERS_ACTIVE = "batch.trigger.quartz.triggers.active";
 
-  Counter fireCounter(String jobGroup) {
-    return Counter.builder(FIRE_TOTAL)
-        .description("Quartz job fired (jobWasExecuted) — used to derive QPS via rate()")
-        .tags(Tags.of("group", jobGroup))
-        .register(registry);
-  }
+    Counter fireCounter(String jobGroup) {
+        return Counter.builder(FIRE_TOTAL)
+                .description("Quartz job fired (jobWasExecuted) — used to derive QPS via rate()")
+                .tags(Tags.of("group", jobGroup))
+                .register(registry);
+    }
 
-  Timer executionTimer(String jobGroup) {
-    return Timer.builder(EXECUTION_DURATION)
-        .description("Quartz job execution duration (jobToBeExecuted → jobWasExecuted)")
-        .tags(Tags.of("group", jobGroup))
-        .publishPercentiles(0.5, 0.95, 0.99)
-        .publishPercentileHistogram(false)
-        .register(registry);
-  }
+    Timer executionTimer(String jobGroup) {
+        return Timer.builder(EXECUTION_DURATION)
+                .description("Quartz job execution duration (jobToBeExecuted → jobWasExecuted)")
+                .tags(Tags.of("group", jobGroup))
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .publishPercentileHistogram(false)
+                .register(registry);
+    }
 
-  Counter misfireCounter(String triggerGroup) {
-    return Counter.builder(MISFIRE_TOTAL)
-        .description("Quartz trigger misfired — used to detect schedule slippage / lock wait")
-        .tags(Tags.of("group", triggerGroup))
-        .register(registry);
-  }
+    Counter misfireCounter(String triggerGroup) {
+        return Counter.builder(MISFIRE_TOTAL)
+                .description("Quartz trigger misfired — used to detect schedule slippage / lock wait")
+                .tags(Tags.of("group", triggerGroup))
+                .register(registry);
+    }
 
-  void recordExecution(String jobGroup, long startNanos) {
-    long elapsed = System.nanoTime() - startNanos;
-    executionTimer(jobGroup).record(elapsed, TimeUnit.NANOSECONDS);
-  }
+    void recordExecution(String jobGroup, long startNanos) {
+        long elapsed = System.nanoTime() - startNanos;
+        executionTimer(jobGroup).record(elapsed, TimeUnit.NANOSECONDS);
+    }
 }

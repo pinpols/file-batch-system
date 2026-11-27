@@ -5,47 +5,47 @@ import org.springframework.context.SmartLifecycle;
 
 public final class BatchPlatformClientLifecycle implements SmartLifecycle {
 
-  public static final int PHASE = Integer.MAX_VALUE - 100;
+    public static final int PHASE = Integer.MAX_VALUE - 100;
 
-  private final BatchPlatformClient client;
-  private final boolean autoStartup;
-  private volatile boolean running;
+    private final BatchPlatformClient client;
+    private final boolean autoStartup;
+    private volatile boolean running;
 
-  BatchPlatformClientLifecycle(BatchPlatformClient client, BatchWorkerSdkProperties properties) {
-    this.client = client;
-    this.autoStartup = properties.isEnabled();
-  }
-
-  @Override
-  public void start() {
-    if (running) {
-      return;
+    BatchPlatformClientLifecycle(BatchPlatformClient client, BatchWorkerSdkProperties properties) {
+        this.client = client;
+        this.autoStartup = properties.isEnabled();
     }
-    client.start();
-    running = true;
-  }
 
-  @Override
-  public void stop() {
-    if (!running) {
-      return;
+    @Override
+    public void start() {
+        if (running) {
+            return;
+        }
+        client.start();
+        running = true;
     }
-    client.stop();
-    running = false;
-  }
 
-  @Override
-  public boolean isRunning() {
-    return running;
-  }
+    @Override
+    public void stop() {
+        if (!running) {
+            return;
+        }
+        client.stop();
+        running = false;
+    }
 
-  @Override
-  public boolean isAutoStartup() {
-    return autoStartup;
-  }
+    @Override
+    public boolean isRunning() {
+        return running;
+    }
 
-  @Override
-  public int getPhase() {
-    return PHASE;
-  }
+    @Override
+    public boolean isAutoStartup() {
+        return autoStartup;
+    }
+
+    @Override
+    public int getPhase() {
+        return PHASE;
+    }
 }

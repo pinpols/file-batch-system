@@ -25,106 +25,102 @@ import org.junit.jupiter.api.Test;
 @DisplayName("可观测域响应记录序列化契约: 动态维度键, 嵌套列表与空值键省略")
 class ObservabilityMapResponseJacksonTest {
 
-  private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+    private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
-  @Test
-  @DisplayName("作业统计保留按状态动态生成的键与嵌套趋势列表, 数值按原样输出")
-  void shouldKeepDynamicStatusKeysAndNestedTrend_whenJobStatsRowMapped() throws Exception {
-    Map<String, Long> byStatus = new LinkedHashMap<>();
-    byStatus.put("SUCCESS", 8L);
-    byStatus.put("FAILED", 2L);
-    var view = new JobStatsView(
-        byStatus,
-        10L,
-        List.of(new DayStatusCountView(LocalDate.parse("2026-07-11"), "SUCCESS", 8L)));
-    Map<String, Object> back = roundTrip(ConsoleJobStatsResponse.from(view));
+    @Test
+    @DisplayName("作业统计保留按状态动态生成的键与嵌套趋势列表, 数值按原样输出")
+    void shouldKeepDynamicStatusKeysAndNestedTrend_whenJobStatsRowMapped() throws Exception {
+        Map<String, Long> byStatus = new LinkedHashMap<>();
+        byStatus.put("SUCCESS", 8L);
+        byStatus.put("FAILED", 2L);
+        var view = new JobStatsView(
+                byStatus, 10L, List.of(new DayStatusCountView(LocalDate.parse("2026-07-11"), "SUCCESS", 8L)));
+        Map<String, Object> back = roundTrip(ConsoleJobStatsResponse.from(view));
 
-    assertThat(back).containsOnlyKeys("byStatus", "total", "dailyTrend");
-    assertThat(
-            mapper.convertValue(back.get("byStatus"), new TypeReference<Map<String, Object>>() {}))
-        .containsEntry("SUCCESS", 8)
-        .containsEntry("FAILED", 2);
-    assertThat(back).containsEntry("total", 10);
-    Map<String, Object> trend0 =
-        mapper.convertValue(((List<?>) back.get("dailyTrend")).get(0), new TypeReference<>() {});
-    assertThat(trend0).containsOnlyKeys("day", "status", "count");
-    assertThat(trend0).containsEntry("day", "2026-07-11").containsEntry("status", "SUCCESS");
-  }
+        assertThat(back).containsOnlyKeys("byStatus", "total", "dailyTrend");
+        assertThat(mapper.convertValue(back.get("byStatus"), new TypeReference<Map<String, Object>>() {}))
+                .containsEntry("SUCCESS", 8)
+                .containsEntry("FAILED", 2);
+        assertThat(back).containsEntry("total", 10);
+        Map<String, Object> trend0 =
+                mapper.convertValue(((List<?>) back.get("dailyTrend")).get(0), new TypeReference<>() {});
+        assertThat(trend0).containsOnlyKeys("day", "status", "count");
+        assertThat(trend0).containsEntry("day", "2026-07-11").containsEntry("status", "SUCCESS");
+    }
 
-  @Test
-  @DisplayName("执行进度显式写入的结束时间为空时仍保留该键, 并还原开始时间")
-  void shouldPreserveNullTemporalKeys_whenExecutionProgressRowMapped() throws Exception {
-    var view = ExecutionProgressView.builder()
-        .id(9L)
-        .jobCode("JOB_A")
-        .instanceNo("INS-9")
-        .instanceStatus("RUNNING")
-        .expectedPartitions(4)
-        .successPartitions(2)
-        .failedPartitions(0)
-        .completedPartitions(2)
-        .progressPercent(50L)
-        .startedAt(Instant.parse("2026-07-11T02:00:00Z"))
-        .build();
-    var response = ConsoleExecutionProgressResponse.from(view);
-    Map<String, Object> back = roundTrip(response);
+    @Test
+    @DisplayName("执行进度显式写入的结束时间为空时仍保留该键, 并还原开始时间")
+    void shouldPreserveNullTemporalKeys_whenExecutionProgressRowMapped() throws Exception {
+        var view = ExecutionProgressView.builder()
+                .id(9L)
+                .jobCode("JOB_A")
+                .instanceNo("INS-9")
+                .instanceStatus("RUNNING")
+                .expectedPartitions(4)
+                .successPartitions(2)
+                .failedPartitions(0)
+                .completedPartitions(2)
+                .progressPercent(50L)
+                .startedAt(Instant.parse("2026-07-11T02:00:00Z"))
+                .build();
+        var response = ConsoleExecutionProgressResponse.from(view);
+        Map<String, Object> back = roundTrip(response);
 
-    assertThat(back)
-        .containsKeys(
-            "id",
-            "jobCode",
-            "instanceNo",
-            "instanceStatus",
-            "expectedPartitions",
-            "successPartitions",
-            "failedPartitions",
-            "completedPartitions",
-            "progressPercent",
-            "startedAt",
-            "finishedAt");
-    assertThat(back).containsEntry("progressPercent", 50).containsEntry("finishedAt", null);
-    // Instant 归一由 record 承载（JSON 表示由生产 ObjectMapper 决定，此处仅校验键集与转换）。
-    assertThat(response.startedAt()).isEqualTo(Instant.parse("2026-07-11T02:00:00Z"));
-  }
+        assertThat(back)
+                .containsKeys(
+                        "id",
+                        "jobCode",
+                        "instanceNo",
+                        "instanceStatus",
+                        "expectedPartitions",
+                        "successPartitions",
+                        "failedPartitions",
+                        "completedPartitions",
+                        "progressPercent",
+                        "startedAt",
+                        "finishedAt");
+        assertThat(back).containsEntry("progressPercent", 50).containsEntry("finishedAt", null);
+        // Instant 归一由 record 承载（JSON 表示由生产 ObjectMapper 决定，此处仅校验键集与转换）。
+        assertThat(response.startedAt()).isEqualTo(Instant.parse("2026-07-11T02:00:00Z"));
+    }
 
-  @Test
-  @DisplayName("超期合规统计中平均时长为空时保留该键, 其余计数按原值输出")
-  void shouldKeepNullAvgDurationKey_whenSlaComplianceRowMapped() throws Exception {
-    var view = new SlaComplianceView(
-        1L, 9L, 10L, null, List.of(new SlaDayView(LocalDate.parse("2026-07-11"), 1L, 9L)));
-    Map<String, Object> back = roundTrip(ConsoleSlaComplianceResponse.from(view));
+    @Test
+    @DisplayName("超期合规统计中平均时长为空时保留该键, 其余计数按原值输出")
+    void shouldKeepNullAvgDurationKey_whenSlaComplianceRowMapped() throws Exception {
+        var view = new SlaComplianceView(
+                1L, 9L, 10L, null, List.of(new SlaDayView(LocalDate.parse("2026-07-11"), 1L, 9L)));
+        Map<String, Object> back = roundTrip(ConsoleSlaComplianceResponse.from(view));
 
-    assertThat(back).containsKey("avgDurationSeconds").containsEntry("avgDurationSeconds", null);
-    assertThat(back).containsEntry("breached", 1).containsEntry("totalWithSla", 10);
-  }
+        assertThat(back).containsKey("avgDurationSeconds").containsEntry("avgDurationSeconds", null);
+        assertThat(back).containsEntry("breached", 1).containsEntry("totalWithSla", 10);
+    }
 
-  @Test
-  @DisplayName("系统参数命中时输出键与值, 未命中时只输出参数键")
-  void shouldOmitValueKey_whenSystemParameterValueMissing() throws Exception {
-    // 命中：{key,value}；未命中：仅 {key}（NON_NULL 省略 value）。
-    Map<String, Object> hit = roundTrip(ConsoleSystemParameterValueResponse.of("k1", "v1"));
-    assertThat(hit).containsOnlyKeys("key", "value").containsEntry("value", "v1");
+    @Test
+    @DisplayName("系统参数命中时输出键与值, 未命中时只输出参数键")
+    void shouldOmitValueKey_whenSystemParameterValueMissing() throws Exception {
+        // 命中：{key,value}；未命中：仅 {key}（NON_NULL 省略 value）。
+        Map<String, Object> hit = roundTrip(ConsoleSystemParameterValueResponse.of("k1", "v1"));
+        assertThat(hit).containsOnlyKeys("key", "value").containsEntry("value", "v1");
 
-    Map<String, Object> miss = roundTrip(ConsoleSystemParameterValueResponse.of("k1", null));
-    assertThat(miss).containsOnlyKeys("key").doesNotContainKey("value");
-  }
+        Map<String, Object> miss = roundTrip(ConsoleSystemParameterValueResponse.of("k1", null));
+        assertThat(miss).containsOnlyKeys("key").doesNotContainKey("value");
+    }
 
-  @Test
-  @DisplayName("流水线进度中总行数提示为空时仍保留该键, 其余字段按原值输出")
-  void shouldKeepNullTotalRowsHintKey_whenPipelineProgressSerialized() throws Exception {
-    // 透传自 orchestrator record（无 NON_NULL），totalRowsHint 为 null 时显式保留键。
-    Map<String, Object> back = roundTrip(new ConsolePipelineProgressItemResponse(
-        "LOAD", 100L, null, Instant.parse("2026-07-11T02:00:00Z")));
+    @Test
+    @DisplayName("流水线进度中总行数提示为空时仍保留该键, 其余字段按原值输出")
+    void shouldKeepNullTotalRowsHintKey_whenPipelineProgressSerialized() throws Exception {
+        // 透传自 orchestrator record（无 NON_NULL），totalRowsHint 为 null 时显式保留键。
+        Map<String, Object> back = roundTrip(
+                new ConsolePipelineProgressItemResponse("LOAD", 100L, null, Instant.parse("2026-07-11T02:00:00Z")));
 
-    assertThat(back)
-        .containsOnlyKeys(
-            "stageCode", "rowsProcessed", "totalRowsHint", "heartbeatAt", "stepRunIds")
-        .containsEntry("stageCode", "LOAD")
-        .containsEntry("totalRowsHint", null)
-        .containsEntry("rowsProcessed", 100);
-  }
+        assertThat(back)
+                .containsOnlyKeys("stageCode", "rowsProcessed", "totalRowsHint", "heartbeatAt", "stepRunIds")
+                .containsEntry("stageCode", "LOAD")
+                .containsEntry("totalRowsHint", null)
+                .containsEntry("rowsProcessed", 100);
+    }
 
-  private Map<String, Object> roundTrip(Object value) throws Exception {
-    return mapper.readValue(mapper.writeValueAsString(value), new TypeReference<>() {});
-  }
+    private Map<String, Object> roundTrip(Object value) throws Exception {
+        return mapper.readValue(mapper.writeValueAsString(value), new TypeReference<>() {});
+    }
 }

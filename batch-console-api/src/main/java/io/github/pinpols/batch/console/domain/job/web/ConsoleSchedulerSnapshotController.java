@@ -23,22 +23,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleSchedulerSnapshotController {
 
-  private final ConsoleOrchestratorPort orchestratorProxyService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestratorProxyService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** 当前调度快照（Redis 缓存 30s，分钟级数据无需实时）。 */
-  @GetMapping("/snapshot")
-  public CommonResponse<ConsoleSchedulerSnapshotResponse> live(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(orchestratorProxyService.schedulerSnapshot(tenantId));
-  }
+    /** 当前调度快照（Redis 缓存 30s，分钟级数据无需实时）。 */
+    @GetMapping("/snapshot")
+    public CommonResponse<ConsoleSchedulerSnapshotResponse> live(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(orchestratorProxyService.schedulerSnapshot(tenantId));
+    }
 
-  /** 调度快照历史。 */
-  @GetMapping("/snapshot/history")
-  public CommonResponse<List<ConsoleSchedulerSnapshotHistoryResponse>> history(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "limit", defaultValue = "20") int limit) {
-    return responseFactory.success(
-        orchestratorProxyService.schedulerSnapshotHistory(tenantId, limit));
-  }
+    /** 调度快照历史。 */
+    @GetMapping("/snapshot/history")
+    public CommonResponse<List<ConsoleSchedulerSnapshotHistoryResponse>> history(
+            @RequestParam("tenantId") String tenantId, @RequestParam(value = "limit", defaultValue = "20") int limit) {
+        return responseFactory.success(orchestratorProxyService.schedulerSnapshotHistory(tenantId, limit));
+    }
 }

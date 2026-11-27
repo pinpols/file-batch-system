@@ -9,5 +9,4 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * NON_NULL} 省略以保持 wire 一致。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record ConsoleInstanceActionResponse(
-    Long id, String instanceNo, String status, Integer cancelRequestedTasks) {}
+public record ConsoleInstanceActionResponse(Long id, String instanceNo, String status, Integer cancelRequestedTasks) {}

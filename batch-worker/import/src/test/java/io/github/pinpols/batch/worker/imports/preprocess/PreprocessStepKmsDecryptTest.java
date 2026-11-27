@@ -33,123 +33,122 @@ import org.junit.jupiter.api.Test;
 @DisplayName("导入预处理解密单测:加密载荷在管道运行前解密,明文载荷原样透传")
 class PreprocessStepKmsDecryptTest {
 
-  private static final String KEY_REF = "TEST_KMS_2026";
-  private static final String KEY_B64 = Base64.getEncoder()
-      .encodeToString("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345".getBytes(StandardCharsets.US_ASCII));
-  private static final String PLAINTEXT = "{\"customerNo\":\"C001\",\"customerName\":\"Alice\"}";
+    private static final String KEY_REF = "TEST_KMS_2026";
+    private static final String KEY_B64 =
+            Base64.getEncoder().encodeToString("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345".getBytes(StandardCharsets.US_ASCII));
+    private static final String PLAINTEXT = "{\"customerNo\":\"C001\",\"customerName\":\"Alice\"}";
 
-  private BatchObjectCryptoService cryptoService;
-  private PlatformFileRecordRepository runtimeRepo;
-  private PreprocessStep preprocessStep;
+    private BatchObjectCryptoService cryptoService;
+    private PlatformFileRecordRepository runtimeRepo;
+    private PreprocessStep preprocessStep;
 
-  @BeforeEach
-  void setUp() {
-    BatchSecurityProperties security = new BatchSecurityProperties();
-    security.setBypassMode(false);
+    @BeforeEach
+    void setUp() {
+        BatchSecurityProperties security = new BatchSecurityProperties();
+        security.setBypassMode(false);
 
-    BatchKmsProperties kms = new BatchKmsProperties();
-    kms.setDefaultKeyRef(KEY_REF);
-    kms.setKeys(Map.of(KEY_REF, KEY_B64));
+        BatchKmsProperties kms = new BatchKmsProperties();
+        kms.setDefaultKeyRef(KEY_REF);
+        kms.setKeys(Map.of(KEY_REF, KEY_B64));
 
-    cryptoService = new BatchObjectCryptoService(security, kms);
+        cryptoService = new BatchObjectCryptoService(security, kms);
 
-    runtimeRepo = mock(PlatformFileRecordRepository.class);
-    PlatformFileTemplateRepository pipelineDefinitions = mock(PlatformFileTemplateRepository.class);
-    when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
-    // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
+        runtimeRepo = mock(PlatformFileRecordRepository.class);
+        PlatformFileTemplateRepository pipelineDefinitions = mock(PlatformFileTemplateRepository.class);
+        when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
+        // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
 
-    preprocessStep = PreprocessStepFixture.create(
-        runtimeRepo,
-        pipelineDefinitions,
-        security,
-        cryptoService,
-        mock(S3StorageProperties.class),
-        mock(BatchObjectStore.class));
-  }
+        preprocessStep = PreprocessStepFixture.create(
+                runtimeRepo,
+                pipelineDefinitions,
+                security,
+                cryptoService,
+                mock(S3StorageProperties.class),
+                mock(BatchObjectStore.class));
+    }
 
-  @Test
-  @DisplayName("加密载荷在预处理阶段被解密,规整后内容与原始明文一致")
-  void shouldDecryptBatchEncPayload_beforePipelineRuns() {
-    // 模拟 StoreStep 的行为：使用 BatchObjectCryptoService 加密明文
-    byte[] encryptedBytes =
-        cryptoService.encrypt(PLAINTEXT.getBytes(StandardCharsets.UTF_8), KEY_REF);
-    String encryptedBase64 = Base64.getEncoder().encodeToString(encryptedBytes);
+    @Test
+    @DisplayName("加密载荷在预处理阶段被解密,规整后内容与原始明文一致")
+    void shouldDecryptBatchEncPayload_beforePipelineRuns() {
+        // 模拟 StoreStep 的行为：使用 BatchObjectCryptoService 加密明文
+        byte[] encryptedBytes = cryptoService.encrypt(PLAINTEXT.getBytes(StandardCharsets.UTF_8), KEY_REF);
+        String encryptedBase64 = Base64.getEncoder().encodeToString(encryptedBytes);
 
-    // 构建携带 BATCHENC 加密内容（base64 编码）的 ImportPayload
-    // 字段: fileCode, fileName, originalFileName, bizType, fileFormatType, charset,
-    //   targetCharset, checksumType, checksumValue, sourceType, sourceRef, storageType,
-    //   storagePath, storageBucket, templateCode, batchNo, content, contentBase64,
-    //   delimiter, headerRows, footerRows, withHeader, metadata
-    ImportPayload payload = new ImportPayload(
-        null,
-        null,
-        null,
-        null,
-        "JSON",
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        encryptedBase64, // contentBase64（第 18 个字段）
-        null,
-        null,
-        null,
-        null,
-        Map.of());
+        // 构建携带 BATCHENC 加密内容（base64 编码）的 ImportPayload
+        // 字段: fileCode, fileName, originalFileName, bizType, fileFormatType, charset,
+        //   targetCharset, checksumType, checksumValue, sourceType, sourceRef, storageType,
+        //   storagePath, storageBucket, templateCode, batchNo, content, contentBase64,
+        //   delimiter, headerRows, footerRows, withHeader, metadata
+        ImportPayload payload = new ImportPayload(
+                null,
+                null,
+                null,
+                null,
+                "JSON",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                encryptedBase64, // contentBase64（第 18 个字段）
+                null,
+                null,
+                null,
+                null,
+                Map.of());
 
-    ImportJobContext context = buildContext(payload);
-    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
+        ImportJobContext context = buildContext(payload);
+        context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
 
-    ImportStageResult result = preprocessStep.execute(context);
+        ImportStageResult result = preprocessStep.execute(context);
 
-    assertThat(result.success()).isTrue();
-    // 解密后，normalizedPayload 应与原始 JSON 一致
-    Object normalized = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-    assertThat(normalized).isNotNull();
-    assertThat(normalized.toString()).contains("customerNo");
-    assertThat(normalized.toString()).contains("C001");
-  }
+        assertThat(result.success()).isTrue();
+        // 解密后，normalizedPayload 应与原始 JSON 一致
+        Object normalized = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+        assertThat(normalized).isNotNull();
+        assertThat(normalized.toString()).contains("customerNo");
+        assertThat(normalized.toString()).contains("C001");
+    }
 
-  @Test
-  @DisplayName("未加密载荷直接透传,规整后内容保持原样")
-  void shouldPassThrough_nonEncryptedPayload() {
-    String rawJson = "{\"records\":[]}";
-    ImportPayload payload = new ImportPayload(
-        null, null, null, null, "JSON", null, null, null, null, null, null, null, null, null, null,
-        null, rawJson, null, // content（第 17 个字段）
-        null, null, null, null, Map.of());
+    @Test
+    @DisplayName("未加密载荷直接透传,规整后内容保持原样")
+    void shouldPassThrough_nonEncryptedPayload() {
+        String rawJson = "{\"records\":[]}";
+        ImportPayload payload = new ImportPayload(
+                null, null, null, null, "JSON", null, null, null, null, null, null, null, null, null, null, null,
+                rawJson, null, // content（第 17 个字段）
+                null, null, null, null, Map.of());
 
-    ImportJobContext context = buildContext(payload);
-    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
+        ImportJobContext context = buildContext(payload);
+        context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
 
-    ImportStageResult result = preprocessStep.execute(context);
+        ImportStageResult result = preprocessStep.execute(context);
 
-    assertThat(result.success()).isTrue();
-    Object normalized = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-    assertThat(normalized).isNotNull();
-    assertThat(normalized.toString()).contains("records");
-  }
+        assertThat(result.success()).isTrue();
+        Object normalized = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+        assertThat(normalized).isNotNull();
+        assertThat(normalized.toString()).contains("records");
+    }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+    // ── helpers ────────────────────────────────────────────────────────────────
 
-  private ImportJobContext buildContext(ImportPayload payload) {
-    ImportJobContext context = new ImportJobContext();
-    context.setTenantId("tenant-kms-test");
-    context.setJobCode("KMS_IMPORT");
-    context.setWorkerId("worker-kms-1");
-    context.setRawPayload("{\"placeholder\":true}");
-    Map<String, Object> attrs = new HashMap<>();
-    attrs.put(PipelineRuntimeKeys.FILE_ID, 1L);
-    attrs.put(PipelineRuntimeKeys.TASK_ID, 101L);
-    context.setAttributes(attrs);
-    return context;
-  }
+    private ImportJobContext buildContext(ImportPayload payload) {
+        ImportJobContext context = new ImportJobContext();
+        context.setTenantId("tenant-kms-test");
+        context.setJobCode("KMS_IMPORT");
+        context.setWorkerId("worker-kms-1");
+        context.setRawPayload("{\"placeholder\":true}");
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put(PipelineRuntimeKeys.FILE_ID, 1L);
+        attrs.put(PipelineRuntimeKeys.TASK_ID, 101L);
+        context.setAttributes(attrs);
+        return context;
+    }
 }

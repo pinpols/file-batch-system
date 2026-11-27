@@ -22,95 +22,89 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("控制台登录服务:已初始化用户签发令牌, 口令错误或账号不存在时拒绝并隐藏原因")
 class ConsoleLoginServiceTest {
 
-  @Mock
-  private ConsoleSessionRegistry sessionRegistry;
+    @Mock
+    private ConsoleSessionRegistry sessionRegistry;
 
-  @Mock
-  private ConsoleJwtService jwtService;
+    @Mock
+    private ConsoleJwtService jwtService;
 
-  @Mock
-  private ConsoleUserAccountServiceSupport userAccountService;
+    @Mock
+    private ConsoleUserAccountServiceSupport userAccountService;
 
-  @Mock
-  private ConsolePasswordHasher passwordHasher;
-  // 默认 mock:登录防护方法均 void/no-op,等效总开关关 → 既有用例行为不变。
-  @Mock
-  private LoginProtectionService loginProtectionService;
+    @Mock
+    private ConsolePasswordHasher passwordHasher;
+    // 默认 mock:登录防护方法均 void/no-op,等效总开关关 → 既有用例行为不变。
+    @Mock
+    private LoginProtectionService loginProtectionService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @InjectMocks
-  private ConsoleLoginService loginService;
+    @InjectMocks
+    private ConsoleLoginService loginService;
 
-  @Test
-  @DisplayName("登录成功:签发令牌并回填用户名, 租户与角色集合")
-  void shouldIssueJwtForSeededUser() {
-    ConsoleLoginRequest request = new ConsoleLoginRequest();
-    request.setUsername("admin");
-    request.setPassword("admin123");
-    // 用户名全局唯一，按 username 查找，租户从账号记录中获取
-    when(userAccountService.findByUsername("admin"))
-        .thenReturn(Optional.of(new ConsoleUserAccount(
-            "default-tenant",
-            "admin",
-            "Console Admin",
-            ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123,
-            Set.of("ROLE_ADMIN"),
-            true,
-            false)));
-    when(passwordHasher.matches("admin123", ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123))
-        .thenReturn(true);
-    when(sessionRegistry.nextSessionVersion("admin", "default-tenant")).thenReturn(7L);
-    when(jwtService.issueToken("admin", "default-tenant", Set.of("ROLE_ADMIN"), 7L))
-        .thenReturn(new ConsoleAuthTokenResponse(
-            "jwt",
-            "Bearer",
-            Instant.parse("2026-04-05T00:00:00Z"),
-            Instant.parse("2026-04-05T08:00:00Z"),
-            "admin",
-            "default-tenant",
-            Set.of("ROLE_ADMIN"),
-            false));
+    @Test
+    @DisplayName("登录成功:签发令牌并回填用户名, 租户与角色集合")
+    void shouldIssueJwtForSeededUser() {
+        ConsoleLoginRequest request = new ConsoleLoginRequest();
+        request.setUsername("admin");
+        request.setPassword("admin123");
+        // 用户名全局唯一，按 username 查找，租户从账号记录中获取
+        when(userAccountService.findByUsername("admin"))
+                .thenReturn(Optional.of(new ConsoleUserAccount(
+                        "default-tenant",
+                        "admin",
+                        "Console Admin",
+                        ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123,
+                        Set.of("ROLE_ADMIN"),
+                        true,
+                        false)));
+        when(passwordHasher.matches("admin123", ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123))
+                .thenReturn(true);
+        when(sessionRegistry.nextSessionVersion("admin", "default-tenant")).thenReturn(7L);
+        when(jwtService.issueToken("admin", "default-tenant", Set.of("ROLE_ADMIN"), 7L))
+                .thenReturn(new ConsoleAuthTokenResponse(
+                        "jwt",
+                        "Bearer",
+                        Instant.parse("2026-04-05T00:00:00Z"),
+                        Instant.parse("2026-04-05T08:00:00Z"),
+                        "admin",
+                        "default-tenant",
+                        Set.of("ROLE_ADMIN"),
+                        false));
 
-    var response = loginService.login(request);
-    assertThat(response.username()).isEqualTo("admin");
-    assertThat(response.tenantId()).isEqualTo("default-tenant");
-    assertThat(response.authorities()).contains("ROLE_ADMIN");
-  }
+        var response = loginService.login(request);
+        assertThat(response.username()).isEqualTo("admin");
+        assertThat(response.tenantId()).isEqualTo("default-tenant");
+        assertThat(response.authorities()).contains("ROLE_ADMIN");
+    }
 
-  @Test
-  @DisplayName("口令错误:返回凭据无效错误, 不泄露账号是否存在")
-  void shouldRejectWrongPassword() {
-    ConsoleLoginRequest request = new ConsoleLoginRequest();
-    request.setUsername("admin");
-    request.setPassword("wrong");
-    when(userAccountService.findByUsername("admin"))
-        .thenReturn(Optional.of(new ConsoleUserAccount(
-            "default-tenant",
-            "admin",
-            "Console Admin",
-            "hash",
-            Set.of("ROLE_ADMIN"),
-            true,
-            false)));
-    when(passwordHasher.matches("wrong", "hash")).thenReturn(false);
+    @Test
+    @DisplayName("口令错误:返回凭据无效错误, 不泄露账号是否存在")
+    void shouldRejectWrongPassword() {
+        ConsoleLoginRequest request = new ConsoleLoginRequest();
+        request.setUsername("admin");
+        request.setPassword("wrong");
+        when(userAccountService.findByUsername("admin"))
+                .thenReturn(Optional.of(new ConsoleUserAccount(
+                        "default-tenant", "admin", "Console Admin", "hash", Set.of("ROLE_ADMIN"), true, false)));
+        when(passwordHasher.matches("wrong", "hash")).thenReturn(false);
 
-    assertThatThrownBy(() -> loginService.login(request))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("invalid_credentials");
-  }
+        assertThatThrownBy(() -> loginService.login(request))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("invalid_credentials");
+    }
 
-  @Test
-  @DisplayName("账号不存在:同样返回凭据无效错误, 与口令错误不可区分")
-  void shouldRejectUnknownUsername() {
-    ConsoleLoginRequest request = new ConsoleLoginRequest();
-    request.setUsername("nonexistent");
-    request.setPassword("admin123");
-    when(userAccountService.findByUsername("nonexistent")).thenReturn(Optional.empty());
+    @Test
+    @DisplayName("账号不存在:同样返回凭据无效错误, 与口令错误不可区分")
+    void shouldRejectUnknownUsername() {
+        ConsoleLoginRequest request = new ConsoleLoginRequest();
+        request.setUsername("nonexistent");
+        request.setPassword("admin123");
+        when(userAccountService.findByUsername("nonexistent")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> loginService.login(request))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("invalid_credentials");
-  }
+        assertThatThrownBy(() -> loginService.login(request))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("invalid_credentials");
+    }
 }

@@ -29,193 +29,193 @@ import org.junit.jupiter.api.Test;
 @DisplayName("导入解析阶段流式路径单测:多种 JSON 形态与分隔符按条落盘语义")
 class ParseStepStreamingTest {
 
-  private ParseStep parseStep;
-  private PlatformFileRecordRepository runtimeRepository;
-  private ImportRecordGovernanceService recordGovernanceService;
+    private ParseStep parseStep;
+    private PlatformFileRecordRepository runtimeRepository;
+    private ImportRecordGovernanceService recordGovernanceService;
 
-  @BeforeEach
-  void setUp() {
-    runtimeRepository = mock(PlatformFileRecordRepository.class);
-    recordGovernanceService = mock(ImportRecordGovernanceService.class);
-    // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
-    when(recordGovernanceService.withinThreshold(any())).thenReturn(true);
-    when(recordGovernanceService.isSkippable(any())).thenReturn(false);
+    @BeforeEach
+    void setUp() {
+        runtimeRepository = mock(PlatformFileRecordRepository.class);
+        recordGovernanceService = mock(ImportRecordGovernanceService.class);
+        // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
+        when(recordGovernanceService.withinThreshold(any())).thenReturn(true);
+        when(recordGovernanceService.isSkippable(any())).thenReturn(false);
 
-    parseStep = new ParseStep(new ObjectMapper(), runtimeRepository, recordGovernanceService);
-  }
-
-  // ── JSON array path ────────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("JSON 数组逐条解析,计数与明细行数一致")
-  void shouldParseJsonArray_streamingOnRecord() {
-    String json = "[{\"customerNo\":\"C001\",\"customerName\":\"Alice\"},"
-        + "{\"customerNo\":\"C002\",\"customerName\":\"Bob\"}]";
-
-    ImportJobContext context = buildContext(json, "JSON");
-
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
-    assertNdjsonRecordCount(context, 2);
-  }
-
-  @Test
-  @DisplayName("上下文为空时解析失败,返回解析失败错误码")
-  void shouldFail_whenContextIsNull() {
-    ImportStageResult result = parseStep.execute(null);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
-  }
-
-  // ── JSON {"records":[...]} envelope — streaming path ──────────────────────
-
-  @Test
-  @DisplayName("记录信封形态逐条解析,五条记录全部落盘")
-  void shouldParseRecordsEnvelope_streamingWithoutFullLoad() {
-    // Build a {"records":[...]} payload with 5 records
-    String records = IntStream.rangeClosed(1, 5)
-        .mapToObj(i -> "{\"customerNo\":\"C"
-            + String.format("%03d", i)
-            + "\","
-            + "\"customerName\":\"Name"
-            + i
-            + "\"}")
-        .collect(Collectors.joining(","));
-    String json = "{\"records\":[" + records + "]}";
-
-    ImportJobContext context = buildContext(json, "JSON");
-
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
-    assertNdjsonRecordCount(context, 5);
-  }
-
-  @Test
-  @DisplayName("记录信封为空数组时判定为空内容,返回解析为空")
-  void shouldReturnEmpty_forEmptyRecordsEnvelope() {
-    String json = "{\"records\":[]}";
-
-    ImportJobContext context = buildContext(json, "JSON");
-    // 当 totalCount==0 时，ParseStep 返回失败 "IMPORT_PARSE_EMPTY"
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_PARSE_EMPTY");
-  }
-
-  @Test
-  @DisplayName("大批量记录信封仍能流式解析,总数准确")
-  void shouldHandleLargeRecordsEnvelope_streaming() {
-    // 500 条记录包装在 {"records":[...]} 信封中 — 验证流式路径
-    // 可处理大量数据而不会导致 StackOverflow 或过度 GC
-    int count = 500;
-    String records = IntStream.rangeClosed(1, count)
-        .mapToObj(i -> "{\"customerNo\":\"C" + i + "\",\"customerName\":\"Name" + i + "\"}")
-        .collect(Collectors.joining(","));
-    String json = "{\"records\":[" + records + "]}";
-
-    ImportJobContext context = buildContext(json, "JSON");
-
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes())
-        .containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, (long) count);
-  }
-
-  // ── 不含 "records" 字段的 JSON 对象 ────────────────────────────────────
-
-  @Test
-  @DisplayName("不含记录字段的普通对象按单条记录处理")
-  void shouldReturnEmpty_forJsonObjectWithoutRecordsField() {
-    // 不含 "records" 字段的普通 JSON 对象 → 视为 1 条记录
-    String json = "{\"batchId\":\"B001\",\"totalAmount\":100}";
-
-    ImportJobContext context = buildContext(json, "JSON");
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 1L);
-    assertNdjsonRecordCount(context, 1);
-  }
-
-  // ── DELIMITED path ─────────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("分隔符格式逐行流式解析,跳过表头后计数正确")
-  void shouldParseDelimited_streamingLineByLine() {
-    String csv = "customerNo,customerName,customerType,certificateNo,mobileNo,email,status\n"
-        + "C001,Alice,PERSONAL,ID001,13800000001,alice@example.com,ACTIVE\n"
-        + "C002,Bob,CORPORATE,ID002,13800000002,bob@example.com,ACTIVE\n";
-
-    ImportJobContext context = buildContext(csv, "DELIMITED");
-
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
-  }
-
-  // ── helpers ────────────────────────────────────────────────────────────────
-
-  private ImportJobContext buildContext(String rawPayload, String fileFormatType) {
-    ImportPayload importPayload = new ImportPayload(
-        null,
-        null,
-        null,
-        null,
-        fileFormatType,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        rawPayload,
-        null,
-        null,
-        null,
-        null,
-        Boolean.TRUE,
-        Map.of());
-
-    ImportJobContext context = new ImportJobContext();
-    context.setTenantId("tenant-streaming-test");
-    context.setJobCode("PARSE_STREAM");
-    context.setWorkerId("worker-1");
-    context.setFileId("42");
-    context.setRawPayload(rawPayload);
-    Map<String, Object> attrs = new HashMap<>();
-    attrs.put(PipelineRuntimeKeys.FILE_ID, 42L);
-    attrs.put(PipelineRuntimeKeys.TASK_ID, 101L);
-    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
-    attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("jdbc_mapped_import", Map.of()));
-    context.setAttributes(attrs);
-    return context;
-  }
-
-  /** 读取 NDJSON 暂存文件并统计非空行数。 */
-  private void assertNdjsonRecordCount(ImportJobContext context, int expected) {
-    Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
-    if (path == null) {
-      return;
+        parseStep = new ParseStep(new ObjectMapper(), runtimeRepository, recordGovernanceService);
     }
-    try {
-      long lineCount =
-          Files.lines(Path.of(path.toString())).filter(l -> !l.isBlank()).count();
-      assertThat(lineCount).isEqualTo(expected);
-    } catch (Exception e) {
-      throw new AssertionError("Could not count NDJSON lines: " + e.getMessage(), e);
+
+    // ── JSON array path ────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("JSON 数组逐条解析,计数与明细行数一致")
+    void shouldParseJsonArray_streamingOnRecord() {
+        String json = "[{\"customerNo\":\"C001\",\"customerName\":\"Alice\"},"
+                + "{\"customerNo\":\"C002\",\"customerName\":\"Bob\"}]";
+
+        ImportJobContext context = buildContext(json, "JSON");
+
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
+        assertNdjsonRecordCount(context, 2);
     }
-  }
+
+    @Test
+    @DisplayName("上下文为空时解析失败,返回解析失败错误码")
+    void shouldFail_whenContextIsNull() {
+        ImportStageResult result = parseStep.execute(null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
+    }
+
+    // ── JSON {"records":[...]} envelope — streaming path ──────────────────────
+
+    @Test
+    @DisplayName("记录信封形态逐条解析,五条记录全部落盘")
+    void shouldParseRecordsEnvelope_streamingWithoutFullLoad() {
+        // Build a {"records":[...]} payload with 5 records
+        String records = IntStream.rangeClosed(1, 5)
+                .mapToObj(i -> "{\"customerNo\":\"C"
+                        + String.format("%03d", i)
+                        + "\","
+                        + "\"customerName\":\"Name"
+                        + i
+                        + "\"}")
+                .collect(Collectors.joining(","));
+        String json = "{\"records\":[" + records + "]}";
+
+        ImportJobContext context = buildContext(json, "JSON");
+
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
+        assertNdjsonRecordCount(context, 5);
+    }
+
+    @Test
+    @DisplayName("记录信封为空数组时判定为空内容,返回解析为空")
+    void shouldReturnEmpty_forEmptyRecordsEnvelope() {
+        String json = "{\"records\":[]}";
+
+        ImportJobContext context = buildContext(json, "JSON");
+        // 当 totalCount==0 时，ParseStep 返回失败 "IMPORT_PARSE_EMPTY"
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_PARSE_EMPTY");
+    }
+
+    @Test
+    @DisplayName("大批量记录信封仍能流式解析,总数准确")
+    void shouldHandleLargeRecordsEnvelope_streaming() {
+        // 500 条记录包装在 {"records":[...]} 信封中 — 验证流式路径
+        // 可处理大量数据而不会导致 StackOverflow 或过度 GC
+        int count = 500;
+        String records = IntStream.rangeClosed(1, count)
+                .mapToObj(i -> "{\"customerNo\":\"C" + i + "\",\"customerName\":\"Name" + i + "\"}")
+                .collect(Collectors.joining(","));
+        String json = "{\"records\":[" + records + "]}";
+
+        ImportJobContext context = buildContext(json, "JSON");
+
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, (long) count);
+    }
+
+    // ── 不含 "records" 字段的 JSON 对象 ────────────────────────────────────
+
+    @Test
+    @DisplayName("不含记录字段的普通对象按单条记录处理")
+    void shouldReturnEmpty_forJsonObjectWithoutRecordsField() {
+        // 不含 "records" 字段的普通 JSON 对象 → 视为 1 条记录
+        String json = "{\"batchId\":\"B001\",\"totalAmount\":100}";
+
+        ImportJobContext context = buildContext(json, "JSON");
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 1L);
+        assertNdjsonRecordCount(context, 1);
+    }
+
+    // ── DELIMITED path ─────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("分隔符格式逐行流式解析,跳过表头后计数正确")
+    void shouldParseDelimited_streamingLineByLine() {
+        String csv = "customerNo,customerName,customerType,certificateNo,mobileNo,email,status\n"
+                + "C001,Alice,PERSONAL,ID001,13800000001,alice@example.com,ACTIVE\n"
+                + "C002,Bob,CORPORATE,ID002,13800000002,bob@example.com,ACTIVE\n";
+
+        ImportJobContext context = buildContext(csv, "DELIMITED");
+
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
+    }
+
+    // ── helpers ────────────────────────────────────────────────────────────────
+
+    private ImportJobContext buildContext(String rawPayload, String fileFormatType) {
+        ImportPayload importPayload = new ImportPayload(
+                null,
+                null,
+                null,
+                null,
+                fileFormatType,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                rawPayload,
+                null,
+                null,
+                null,
+                null,
+                Boolean.TRUE,
+                Map.of());
+
+        ImportJobContext context = new ImportJobContext();
+        context.setTenantId("tenant-streaming-test");
+        context.setJobCode("PARSE_STREAM");
+        context.setWorkerId("worker-1");
+        context.setFileId("42");
+        context.setRawPayload(rawPayload);
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put(PipelineRuntimeKeys.FILE_ID, 42L);
+        attrs.put(PipelineRuntimeKeys.TASK_ID, 101L);
+        attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
+        attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("jdbc_mapped_import", Map.of()));
+        context.setAttributes(attrs);
+        return context;
+    }
+
+    /** 读取 NDJSON 暂存文件并统计非空行数。 */
+    private void assertNdjsonRecordCount(ImportJobContext context, int expected) {
+        Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+        if (path == null) {
+            return;
+        }
+        try {
+            long lineCount = Files.lines(Path.of(path.toString()))
+                    .filter(l -> !l.isBlank())
+                    .count();
+            assertThat(lineCount).isEqualTo(expected);
+        } catch (Exception e) {
+            throw new AssertionError("Could not count NDJSON lines: " + e.getMessage(), e);
+        }
+    }
 }

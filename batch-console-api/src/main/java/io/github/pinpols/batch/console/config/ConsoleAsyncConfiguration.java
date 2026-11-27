@@ -23,81 +23,81 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @EnableAsync
 public class ConsoleAsyncConfiguration {
 
-  public static final String PUSH_TASK_EXECUTOR = "pushTaskExecutor";
-  public static final String REALTIME_SCHEDULER = "consoleRealtimeScheduler";
+    public static final String PUSH_TASK_EXECUTOR = "pushTaskExecutor";
+    public static final String REALTIME_SCHEDULER = "consoleRealtimeScheduler";
 
-  /** 使用量派生写线程池：固定 2 线程、有界队列，满时由调度器丢弃派生写。 */
-  private static final int USAGE_CORE_POOL_SIZE = 2;
+    /** 使用量派生写线程池：固定 2 线程、有界队列，满时由调度器丢弃派生写。 */
+    private static final int USAGE_CORE_POOL_SIZE = 2;
 
-  private static final int USAGE_MAX_POOL_SIZE = 2;
+    private static final int USAGE_MAX_POOL_SIZE = 2;
 
-  private static final int USAGE_QUEUE_CAPACITY = 500;
+    private static final int USAGE_QUEUE_CAPACITY = 500;
 
-  private static final int USAGE_KEEP_ALIVE_SECONDS = 60;
+    private static final int USAGE_KEEP_ALIVE_SECONDS = 60;
 
-  private static final int USAGE_AWAIT_TERMINATION_SECONDS = 10;
+    private static final int USAGE_AWAIT_TERMINATION_SECONDS = 10;
 
-  /** 推送异步线程池核心线程数。 */
-  private static final int PUSH_CORE_POOL_SIZE = 4;
+    /** 推送异步线程池核心线程数。 */
+    private static final int PUSH_CORE_POOL_SIZE = 4;
 
-  /** 推送异步线程池最大线程数。 */
-  private static final int PUSH_MAX_POOL_SIZE = 16;
+    /** 推送异步线程池最大线程数。 */
+    private static final int PUSH_MAX_POOL_SIZE = 16;
 
-  /** 推送异步队列容量；队列满后由调用线程执行（CallerRunsPolicy）。 */
-  private static final int PUSH_QUEUE_CAPACITY = 200;
+    /** 推送异步队列容量；队列满后由调用线程执行（CallerRunsPolicy）。 */
+    private static final int PUSH_QUEUE_CAPACITY = 200;
 
-  /** 超出核心数的空闲线程存活秒数。 */
-  private static final int PUSH_KEEP_ALIVE_SECONDS = 60;
+    /** 超出核心数的空闲线程存活秒数。 */
+    private static final int PUSH_KEEP_ALIVE_SECONDS = 60;
 
-  /** 关闭时等待在途推送完成的最长秒数。 */
-  private static final int PUSH_AWAIT_TERMINATION_SECONDS = 30;
+    /** 关闭时等待在途推送完成的最长秒数。 */
+    private static final int PUSH_AWAIT_TERMINATION_SECONDS = 30;
 
-  @Bean(name = ConsoleUsageProjectionDispatcher.EXECUTOR_BEAN_NAME)
-  public Executor usageTaskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(USAGE_CORE_POOL_SIZE);
-    executor.setMaxPoolSize(USAGE_MAX_POOL_SIZE);
-    executor.setQueueCapacity(USAGE_QUEUE_CAPACITY);
-    executor.setKeepAliveSeconds(USAGE_KEEP_ALIVE_SECONDS);
-    executor.setThreadNamePrefix("usage-async-");
-    // 派生写不是事实源；队列满时丢弃并由调度器告警，避免阻塞审计线程。
-    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
-    executor.setWaitForTasksToCompleteOnShutdown(true);
-    executor.setAwaitTerminationSeconds(USAGE_AWAIT_TERMINATION_SECONDS);
-    return executor;
-  }
+    @Bean(name = ConsoleUsageProjectionDispatcher.EXECUTOR_BEAN_NAME)
+    public Executor usageTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(USAGE_CORE_POOL_SIZE);
+        executor.setMaxPoolSize(USAGE_MAX_POOL_SIZE);
+        executor.setQueueCapacity(USAGE_QUEUE_CAPACITY);
+        executor.setKeepAliveSeconds(USAGE_KEEP_ALIVE_SECONDS);
+        executor.setThreadNamePrefix("usage-async-");
+        // 派生写不是事实源；队列满时丢弃并由调度器告警，避免阻塞审计线程。
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(USAGE_AWAIT_TERMINATION_SECONDS);
+        return executor;
+    }
 
-  @Bean(name = PUSH_TASK_EXECUTOR)
-  public Executor pushTaskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(PUSH_CORE_POOL_SIZE);
-    executor.setMaxPoolSize(PUSH_MAX_POOL_SIZE);
-    executor.setQueueCapacity(PUSH_QUEUE_CAPACITY);
-    executor.setKeepAliveSeconds(PUSH_KEEP_ALIVE_SECONDS);
-    executor.setThreadNamePrefix("push-async-");
-    // queue 满了让调用线程自己跑,而不是默认 AbortPolicy 丢任务/抛异常静默漏推送
-    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-    executor.setWaitForTasksToCompleteOnShutdown(true);
-    executor.setAwaitTerminationSeconds(PUSH_AWAIT_TERMINATION_SECONDS);
-    return executor;
-  }
+    @Bean(name = PUSH_TASK_EXECUTOR)
+    public Executor pushTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(PUSH_CORE_POOL_SIZE);
+        executor.setMaxPoolSize(PUSH_MAX_POOL_SIZE);
+        executor.setQueueCapacity(PUSH_QUEUE_CAPACITY);
+        executor.setKeepAliveSeconds(PUSH_KEEP_ALIVE_SECONDS);
+        executor.setThreadNamePrefix("push-async-");
+        // queue 满了让调用线程自己跑,而不是默认 AbortPolicy 丢任务/抛异常静默漏推送
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(PUSH_AWAIT_TERMINATION_SECONDS);
+        return executor;
+    }
 
-  /**
-   * P1 治理项 (audit 2026-05-23): SSE 实时事件总线 / 摘要流之前各自直接 {@code Executors.newScheduledThreadPool}, 游离
-   * Spring 生命周期外, 无 Actuator 指标. 这里统一注册一个 {@code consoleRealtimeScheduler} 给 {@code
-   * ConsoleRealtimeEventHub} 心跳调度与 {@code ConsoleOpsSummaryRealtimeStream} debounce 刷新共用. pool size
-   * 走 2 起步: 一格供 hub 高频心跳, 一格供 summary 延迟刷新.
-   */
-  @Bean(name = REALTIME_SCHEDULER, destroyMethod = "shutdown")
-  public ThreadPoolTaskScheduler consoleRealtimeScheduler() {
-    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-    scheduler.setPoolSize(2);
-    scheduler.setThreadNamePrefix("console-realtime-");
-    scheduler.setDaemon(true);
-    scheduler.setRemoveOnCancelPolicy(true);
-    scheduler.setWaitForTasksToCompleteOnShutdown(false);
-    scheduler.setAwaitTerminationSeconds(5);
-    scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-    return scheduler;
-  }
+    /**
+     * P1 治理项 (audit 2026-05-23): SSE 实时事件总线 / 摘要流之前各自直接 {@code Executors.newScheduledThreadPool}, 游离
+     * Spring 生命周期外, 无 Actuator 指标. 这里统一注册一个 {@code consoleRealtimeScheduler} 给 {@code
+     * ConsoleRealtimeEventHub} 心跳调度与 {@code ConsoleOpsSummaryRealtimeStream} debounce 刷新共用. pool size
+     * 走 2 起步: 一格供 hub 高频心跳, 一格供 summary 延迟刷新.
+     */
+    @Bean(name = REALTIME_SCHEDULER, destroyMethod = "shutdown")
+    public ThreadPoolTaskScheduler consoleRealtimeScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(2);
+        scheduler.setThreadNamePrefix("console-realtime-");
+        scheduler.setDaemon(true);
+        scheduler.setRemoveOnCancelPolicy(true);
+        scheduler.setWaitForTasksToCompleteOnShutdown(false);
+        scheduler.setAwaitTerminationSeconds(5);
+        scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        return scheduler;
+    }
 }

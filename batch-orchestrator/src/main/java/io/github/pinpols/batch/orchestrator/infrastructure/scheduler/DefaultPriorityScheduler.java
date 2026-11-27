@@ -18,27 +18,27 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultPriorityScheduler implements PriorityScheduler {
 
-  @Override
-  public Integer resolvePriority(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    int priority = request == null || request.getPriority() == null ? 5 : request.getPriority();
-    if (priority < 1) {
-      return 1;
+    @Override
+    public Integer resolvePriority(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
+        int priority = request == null || request.getPriority() == null ? 5 : request.getPriority();
+        if (priority < 1) {
+            return 1;
+        }
+        if (priority > 9) {
+            return 9;
+        }
+        return priority;
     }
-    if (priority > 9) {
-      return 9;
-    }
-    return priority;
-  }
 
-  @Override
-  public String resolvePriorityBand(Integer priority) {
-    int normalizedPriority = priority == null ? 5 : priority;
-    if (normalizedPriority <= 3) {
-      return SchedulingPriorityBand.HIGH.code();
+    @Override
+    public String resolvePriorityBand(Integer priority) {
+        int normalizedPriority = priority == null ? 5 : priority;
+        if (normalizedPriority <= 3) {
+            return SchedulingPriorityBand.HIGH.code();
+        }
+        if (normalizedPriority <= 6) {
+            return SchedulingPriorityBand.MEDIUM.code();
+        }
+        return SchedulingPriorityBand.LOW.code();
     }
-    if (normalizedPriority <= 6) {
-      return SchedulingPriorityBand.MEDIUM.code();
-    }
-    return SchedulingPriorityBand.LOW.code();
-  }
 }

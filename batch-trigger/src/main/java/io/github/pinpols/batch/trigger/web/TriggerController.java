@@ -38,94 +38,87 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TriggerController {
 
-  private final TriggerApiApplicationService applicationService;
+    private final TriggerApiApplicationService applicationService;
 
-  @PostMapping("/launch")
-  public CommonResponse<LaunchResponse> launch(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @RequestHeader(value = CommonConstants.DEFAULT_REQUEST_ID_HEADER, required = false)
-          String requestId,
-      @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false)
-          String traceId,
-      @Valid @RequestBody TriggerLaunchRequest request) {
-    TriggerApiApplicationService service = applicationService;
-    TriggerApiKeyPrincipal principal = externalEventSourcePrincipal();
-    TriggerLaunchInput input = TriggerCommandInputMapper.toInput(request);
-    LaunchResponse result = service.launch(principal, input, idempotencyKey, requestId, traceId);
-    return CommonResponse.success(result);
-  }
-
-  @PostMapping("/events")
-  public CommonResponse<ExternalEventLaunchResponse> launchEvent(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @RequestHeader(value = CommonConstants.DEFAULT_REQUEST_ID_HEADER, required = false)
-          String requestId,
-      @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false)
-          String traceId,
-      @Valid @RequestBody ExternalEventLaunchRequest request) {
-    TriggerApiApplicationService service = applicationService;
-    TriggerApiKeyPrincipal principal = externalEventSourcePrincipal();
-    ExternalEventLaunchInput input = TriggerCommandInputMapper.toInput(request);
-    ExternalEventLaunchResponse result =
-        service.launchEvent(principal, input, idempotencyKey, requestId, traceId);
-    return CommonResponse.success(result);
-  }
-
-  @GetMapping("/events/status")
-  public CommonResponse<ExternalEventLaunchStatus> externalEventStatus(
-      @RequestParam String tenantId,
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
-    ExternalEventLaunchStatus status = applicationService.externalEventStatus(
-        externalEventSourcePrincipal(), tenantId, idempotencyKey);
-    return CommonResponse.success(status);
-  }
-
-  @PostMapping("/scheduled-occurrences/catch-up")
-  public CommonResponse<ScheduledOccurrenceCatchUpResponse> catchUpRejectedOccurrence(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @RequestHeader(value = CommonConstants.DEFAULT_REQUEST_ID_HEADER, required = false)
-          String requestId,
-      @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false)
-          String traceId,
-      @Valid @RequestBody ScheduledOccurrenceCatchUpRequest request) {
-    ScheduledOccurrenceCatchUpResponse result = applicationService.catchUpRejectedOccurrence(
-        TriggerCommandInputMapper.toInput(request), idempotencyKey, requestId, traceId);
-    return CommonResponse.success(result);
-  }
-
-  /**
-   * 查询异步 launch 的确定性状态。
-   *
-   * <p>客户端在 POST 超时后使用原幂等键查询，避免把不确定的超时结果再次当作新请求提交。
-   */
-  @GetMapping("/launch/status")
-  public CommonResponse<TriggerLaunchStatus> launchStatus(
-      @RequestParam String tenantId,
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
-    TriggerLaunchStatus launchStatus =
-        applicationService.launchStatus(externalEventSourcePrincipal(), tenantId, idempotencyKey);
-    return CommonResponse.success(launchStatus);
-  }
-
-  private static TriggerApiKeyPrincipal externalEventSourcePrincipal() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (EmptyChecks.isNotNull(authentication)
-        && authentication.getPrincipal() instanceof TriggerApiKeyPrincipal principal) {
-      return principal;
+    @PostMapping("/launch")
+    public CommonResponse<LaunchResponse> launch(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @RequestHeader(value = CommonConstants.DEFAULT_REQUEST_ID_HEADER, required = false) String requestId,
+            @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false) String traceId,
+            @Valid @RequestBody TriggerLaunchRequest request) {
+        TriggerApiApplicationService service = applicationService;
+        TriggerApiKeyPrincipal principal = externalEventSourcePrincipal();
+        TriggerLaunchInput input = TriggerCommandInputMapper.toInput(request);
+        LaunchResponse result = service.launch(principal, input, idempotencyKey, requestId, traceId);
+        return CommonResponse.success(result);
     }
-    return null;
-  }
 
-  @PostMapping("/catch-up/approve")
-  public CommonResponse<LaunchResponse> approveCatchUp(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody TriggerCatchUpRequest request) {
-    PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
-    command.setTenantId(request.getTenantId());
-    command.setRequestId(request.getRequestId());
-    command.setPendingId(request.getPendingId());
-    command.setReason(request.getReason());
-    command.setIdempotencyKey(idempotencyKey);
-    return CommonResponse.success(applicationService.approveCatchUp(command));
-  }
+    @PostMapping("/events")
+    public CommonResponse<ExternalEventLaunchResponse> launchEvent(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @RequestHeader(value = CommonConstants.DEFAULT_REQUEST_ID_HEADER, required = false) String requestId,
+            @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false) String traceId,
+            @Valid @RequestBody ExternalEventLaunchRequest request) {
+        TriggerApiApplicationService service = applicationService;
+        TriggerApiKeyPrincipal principal = externalEventSourcePrincipal();
+        ExternalEventLaunchInput input = TriggerCommandInputMapper.toInput(request);
+        ExternalEventLaunchResponse result = service.launchEvent(principal, input, idempotencyKey, requestId, traceId);
+        return CommonResponse.success(result);
+    }
+
+    @GetMapping("/events/status")
+    public CommonResponse<ExternalEventLaunchStatus> externalEventStatus(
+            @RequestParam String tenantId,
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
+        ExternalEventLaunchStatus status =
+                applicationService.externalEventStatus(externalEventSourcePrincipal(), tenantId, idempotencyKey);
+        return CommonResponse.success(status);
+    }
+
+    @PostMapping("/scheduled-occurrences/catch-up")
+    public CommonResponse<ScheduledOccurrenceCatchUpResponse> catchUpRejectedOccurrence(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @RequestHeader(value = CommonConstants.DEFAULT_REQUEST_ID_HEADER, required = false) String requestId,
+            @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false) String traceId,
+            @Valid @RequestBody ScheduledOccurrenceCatchUpRequest request) {
+        ScheduledOccurrenceCatchUpResponse result = applicationService.catchUpRejectedOccurrence(
+                TriggerCommandInputMapper.toInput(request), idempotencyKey, requestId, traceId);
+        return CommonResponse.success(result);
+    }
+
+    /**
+     * 查询异步 launch 的确定性状态。
+     *
+     * <p>客户端在 POST 超时后使用原幂等键查询，避免把不确定的超时结果再次当作新请求提交。
+     */
+    @GetMapping("/launch/status")
+    public CommonResponse<TriggerLaunchStatus> launchStatus(
+            @RequestParam String tenantId,
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
+        TriggerLaunchStatus launchStatus =
+                applicationService.launchStatus(externalEventSourcePrincipal(), tenantId, idempotencyKey);
+        return CommonResponse.success(launchStatus);
+    }
+
+    private static TriggerApiKeyPrincipal externalEventSourcePrincipal() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (EmptyChecks.isNotNull(authentication)
+                && authentication.getPrincipal() instanceof TriggerApiKeyPrincipal principal) {
+            return principal;
+        }
+        return null;
+    }
+
+    @PostMapping("/catch-up/approve")
+    public CommonResponse<LaunchResponse> approveCatchUp(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody TriggerCatchUpRequest request) {
+        PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
+        command.setTenantId(request.getTenantId());
+        command.setRequestId(request.getRequestId());
+        command.setPendingId(request.getPendingId());
+        command.setReason(request.getReason());
+        command.setIdempotencyKey(idempotencyKey);
+        return CommonResponse.success(applicationService.approveCatchUp(command));
+    }
 }

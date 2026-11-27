@@ -23,35 +23,32 @@ import java.util.stream.Stream;
 // S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，收窄会破坏租户编译兼容性。
 @SuppressWarnings("java:S112")
 public abstract class SdkAbstractProcessHandler<I, O>
-    extends SdkAbstractTypedProcessHandler<Map<String, Object>, I, O, Void> {
+        extends SdkAbstractTypedProcessHandler<Map<String, Object>, I, O, Void> {
 
-  /**
-   * 读输入行(从租户表 select)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} 在读完或异常时都释放; 租户可直接返 {@code
-   * jdbcTemplate.queryForStream(...)}。
-   */
-  protected abstract Stream<I> selectInput(SdkTaskContext ctx) throws Exception;
+    /**
+     * 读输入行(从租户表 select)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} 在读完或异常时都释放; 租户可直接返 {@code
+     * jdbcTemplate.queryForStream(...)}。
+     */
+    protected abstract Stream<I> selectInput(SdkTaskContext ctx) throws Exception;
 
-  /** 单行转换 I→O;返回 null 表示该行 skip(不写)。 */
-  protected abstract O transform(SdkTaskContext ctx, I input) throws Exception;
+    /** 单行转换 I→O;返回 null 表示该行 skip(不写)。 */
+    protected abstract O transform(SdkTaskContext ctx, I input) throws Exception;
 
-  /** 批量 upsert 输出行到租户表。 */
-  protected abstract void upsert(SdkTaskContext ctx, List<O> batch) throws Exception;
+    /** 批量 upsert 输出行到租户表。 */
+    protected abstract void upsert(SdkTaskContext ctx, List<O> batch) throws Exception;
 
-  @Override
-  protected final Stream<I> selectInput(Map<String, Object> params, SdkTaskContext ctx)
-      throws Exception {
-    return selectInput(ctx);
-  }
+    @Override
+    protected final Stream<I> selectInput(Map<String, Object> params, SdkTaskContext ctx) throws Exception {
+        return selectInput(ctx);
+    }
 
-  @Override
-  protected final O transform(Map<String, Object> params, SdkTaskContext ctx, I row)
-      throws Exception {
-    return transform(ctx, row);
-  }
+    @Override
+    protected final O transform(Map<String, Object> params, SdkTaskContext ctx, I row) throws Exception {
+        return transform(ctx, row);
+    }
 
-  @Override
-  protected final void upsert(Map<String, Object> params, SdkTaskContext ctx, List<O> batch)
-      throws Exception {
-    upsert(ctx, batch);
-  }
+    @Override
+    protected final void upsert(Map<String, Object> params, SdkTaskContext ctx, List<O> batch) throws Exception {
+        upsert(ctx, batch);
+    }
 }

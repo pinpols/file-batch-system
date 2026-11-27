@@ -26,71 +26,64 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class DbTablePlacementResolver implements BusinessPlacementResolver {
 
-  /** 不可变缓存快照:单次原子写保证 mapping/时间/已加载标志三者一致。 */
-  private record Snapshot(Map<String, String> mapping, long loadedAtMs, boolean everLoaded) {}
+    /** 不可变缓存快照:单次原子写保证 mapping/时间/已加载标志三者一致。 */
+    private record Snapshot(Map<String, String> mapping, long loadedAtMs, boolean everLoaded) {}
 
-  private final TenantPlacementRepository repository;
-  private final BusinessPlacementResolver fallback;
-  private final long cacheTtlMs;
-  private final LongSupplier clockMs;
+    private final TenantPlacementRepository repository;
+    private final BusinessPlacementResolver fallback;
+    private final long cacheTtlMs;
+    private final LongSupplier clockMs;
 
-  private final AtomicReference<Snapshot> snapshot =
-      new AtomicReference<>(new Snapshot(Map.of(), 0L, false));
+    private final AtomicReference<Snapshot> snapshot = new AtomicReference<>(new Snapshot(Map.of(), 0L, false));
 
-  public DbTablePlacementResolver(
-      TenantPlacementRepository repository,
-      BusinessPlacementResolver fallback,
-      long cacheTtlMs,
-      LongSupplier clockMs) {
-    if (repository == null || fallback == null) {
-      throw new IllegalArgumentException("repository and fallback must not be null");
+    public DbTablePlacementResolver(
+            TenantPlacementRepository repository,
+            BusinessPlacementResolver fallback,
+            long cacheTtlMs,
+            LongSupplier clockMs) {
+        if (repository == null || fallback == null) {
+            throw new IllegalArgumentException("repository and fallback must not be null");
+        }
+        this.repository = repository;
+        this.fallback = fallback;
+        this.cacheTtlMs = Math.max(0L, cacheTtlMs);
+        this.clockMs = clockMs == null ? System::currentTimeMillis : clockMs;
     }
-    this.repository = repository;
-    this.fallback = fallback;
-    this.cacheTtlMs = Math.max(0L, cacheTtlMs);
-    this.clockMs = clockMs == null ? System::currentTimeMillis : clockMs;
-  }
 
-  @Override
-  public String resolve(String tenantId) {
-    if (!Texts.hasText(tenantId)) {
-      return fallback.resolve(tenantId);
+    @Override
+    public String resolve(String tenantId) {
+        if (!Texts.hasText(tenantId)) {
+            return fallback.resolve(tenantId);
+        }
+        String key = currentMapping().get(tenantId);
+        return key != null ? key : fallback.resolve(tenantId);
     }
-    String key = currentMapping().get(tenantId);
-    return key != null ? key : fallback.resolve(tenantId);
-  }
 
-  private Map<String, String> currentMapping() {
-    Snapshot current = snapshot.get();
-    long now = clockMs.getAsLong();
-    boolean currentSnapshotIsFresh =
-        current.everLoaded() && now - current.loadedAtMs() < cacheTtlMs;
-    if (currentSnapshotIsFresh) {
-      return current.mapping();
+    private Map<String, String> currentMapping() {
+        Snapshot current = snapshot.get();
+        long now = clockMs.getAsLong();
+        boolean currentSnapshotIsFresh = current.everLoaded() && now - current.loadedAtMs() < cacheTtlMs;
+        if (currentSnapshotIsFresh) {
+            return current.mapping();
+        }
+        try {
+            Map<String, String> fresh = repository.loadAll();
+            // 并发下多线程可能同时重载,均幂等;各自单次快照写入,无撕裂
+            snapshot.set(new Snapshot(fresh, now, true));
+            return fresh;
+        } catch (RuntimeException ex) {
+            if (current.everLoaded()) {
+                // 有缓存:保留 stale(silo 路由仍正确),bump 时间避免每次都打失败的库
+                int mappingSize = current.mapping().size();
+                String causeSummary = SwallowedExceptionLogger.summary(ex);
+                log.warn("placement reload failed, keep stale mapping ({} entries): {}", mappingSize, causeSummary);
+                snapshot.set(new Snapshot(current.mapping(), now, true));
+                return current.mapping();
+            }
+            // 冷启动读失败:表里本无 silo 指派可丢,退 hash;不写 snapshot,下次 resolve 重试
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("initial placement load failed, fall back to hash until table reachable: {}", causeSummary);
+            return Map.of();
+        }
     }
-    try {
-      Map<String, String> fresh = repository.loadAll();
-      // 并发下多线程可能同时重载,均幂等;各自单次快照写入,无撕裂
-      snapshot.set(new Snapshot(fresh, now, true));
-      return fresh;
-    } catch (RuntimeException ex) {
-      if (current.everLoaded()) {
-        // 有缓存:保留 stale(silo 路由仍正确),bump 时间避免每次都打失败的库
-        int mappingSize = current.mapping().size();
-        String causeSummary = SwallowedExceptionLogger.summary(ex);
-        log.warn(
-            "placement reload failed, keep stale mapping ({} entries): {}",
-            mappingSize,
-            causeSummary);
-        snapshot.set(new Snapshot(current.mapping(), now, true));
-        return current.mapping();
-      }
-      // 冷启动读失败:表里本无 silo 指派可丢,退 hash;不写 snapshot,下次 resolve 重试
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "initial placement load failed, fall back to hash until table reachable: {}",
-          causeSummary);
-      return Map.of();
-    }
-  }
 }

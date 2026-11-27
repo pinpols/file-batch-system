@@ -32,21 +32,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleAdminMaintenanceController {
 
-  private final ConsoleMaintenanceApplicationService maintenanceService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleMaintenanceApplicationService maintenanceService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/maintenance")
-  public CommonResponse<MaintenanceStatusResponse> get() {
-    return responseFactory.success(maintenanceService.status());
-  }
+    @GetMapping("/maintenance")
+    public CommonResponse<MaintenanceStatusResponse> get() {
+        return responseFactory.success(maintenanceService.status());
+    }
 
-  @PutMapping("/maintenance")
-  @AuditAction(
-      action = "system.maintenance.update",
-      aggregateType = "system",
-      aggregateId = "'maintenance'")
-  public CommonResponse<MaintenanceStatusResponse> update(
-      @Valid @RequestBody UpdateMaintenanceRequest request) {
-    return responseFactory.success(maintenanceService.update(request));
-  }
+    @PutMapping("/maintenance")
+    @AuditAction(action = "system.maintenance.update", aggregateType = "system", aggregateId = "'maintenance'")
+    public CommonResponse<MaintenanceStatusResponse> update(@Valid @RequestBody UpdateMaintenanceRequest request) {
+        return responseFactory.success(maintenanceService.update(request));
+    }
 }

@@ -7,9 +7,9 @@ import lombok.Builder;
 /** 审批后提升到执行态的精确待处理 Workflow 重放身份。 */
 @Builder
 public record ReplayOperationStartParam(
-    String tenantId, Long operationId, String targetRequestId, String approver, Instant now) {
+        String tenantId, Long operationId, String targetRequestId, String approver, Instant now) {
 
-  public String targetStatus() {
-    return ReplayOperationStatus.RUNNING.code();
-  }
+    public String targetStatus() {
+        return ReplayOperationStatus.RUNNING.code();
+    }
 }

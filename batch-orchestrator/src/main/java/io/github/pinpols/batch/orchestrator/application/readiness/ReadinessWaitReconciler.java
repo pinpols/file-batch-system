@@ -18,32 +18,29 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ReadinessWaitReconciler {
 
-  /** 每轮 readiness 等待扫描最多处理的条数。 */
-  private static final int SWEEP_BATCH_SIZE = 100;
+    /** 每轮 readiness 等待扫描最多处理的条数。 */
+    private static final int SWEEP_BATCH_SIZE = 100;
 
-  private final ReadinessWaitService readinessWaitService;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final ReadinessWaitService readinessWaitService;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.readiness-wait.sweep-interval-millis:60000}")
-  @SchedulerLock(
-      name = "readiness_wait_reconciler",
-      lockAtMostFor = "PT2M",
-      lockAtLeastFor = "PT5S")
-  public void reconcile() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.readiness-wait.sweep-interval-millis:60000}")
+    @SchedulerLock(name = "readiness_wait_reconciler", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
+    public void reconcile() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        try {
+            ReadinessWaitService.SweepOutcome outcome = readinessWaitService.sweep(SWEEP_BATCH_SIZE);
+            if (outcome.released() > 0 || outcome.timedOut() > 0) {
+                log.info(
+                        "readiness wait sweep completed: released={}, timedOut={}, deferred={}",
+                        outcome.released(),
+                        outcome.timedOut(),
+                        outcome.deferred());
+            }
+        } catch (RuntimeException ex) {
+            log.warn("readiness wait sweep failed; will retry next round", ex);
+        }
     }
-    try {
-      ReadinessWaitService.SweepOutcome outcome = readinessWaitService.sweep(SWEEP_BATCH_SIZE);
-      if (outcome.released() > 0 || outcome.timedOut() > 0) {
-        log.info(
-            "readiness wait sweep completed: released={}, timedOut={}, deferred={}",
-            outcome.released(),
-            outcome.timedOut(),
-            outcome.deferred());
-      }
-    } catch (RuntimeException ex) {
-      log.warn("readiness wait sweep failed; will retry next round", ex);
-    }
-  }
 }

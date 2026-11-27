@@ -8,26 +8,26 @@ import lombok.Data;
 
 @Data
 public class QuotaPolicySaveRequest {
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @ValidResourceCode
-  private String policyCode;
+    @ValidResourceCode
+    private String policyCode;
 
-  @Min(0)
-  private Integer maxRunningJobsPerTenant;
+    @Min(0)
+    private Integer maxRunningJobsPerTenant;
 
-  @Min(0)
-  private Integer maxPartitionsPerTenant;
+    @Min(0)
+    private Integer maxPartitionsPerTenant;
 
-  @Min(0)
-  private Integer maxQpsPerTenant;
+    @Min(0)
+    private Integer maxQpsPerTenant;
 
-  @Min(1)
-  private Integer fairShareWeight;
+    @Min(1)
+    private Integer fairShareWeight;
 
-  private Boolean enabled;
+    private Boolean enabled;
 
-  @Size(max = 512)
-  private String description;
+    @Size(max = 512)
+    private String description;
 }

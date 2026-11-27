@@ -53,378 +53,375 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BatchPlatformClient {
 
-  private static final Duration STARTUP_ROLLBACK_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration STARTUP_ROLLBACK_TIMEOUT = Duration.ofSeconds(5);
 
-  private final BatchPlatformClientConfig config;
-  private final Map<String, SdkTaskHandler> handlers;
-  private final PlatformHttpClient httpClient;
-  private final SdkIdempotencyStore idempotencyStore;
-  private volatile boolean started = false;
-  private TaskDispatcher dispatcher;
-  private KafkaTaskConsumer kafkaConsumer;
-  private Thread kafkaConsumerThread;
-  private HeartbeatScheduler heartbeatScheduler;
-  private LeaseRenewalScheduler leaseRenewalScheduler;
-
-  private BatchPlatformClient(
-      BatchPlatformClientConfig config,
-      Map<String, SdkTaskHandler> handlers,
-      SdkIdempotencyStore idempotencyStore) {
-    config.validate();
-    this.config = config;
-    this.handlers = Map.copyOf(handlers);
-    this.idempotencyStore = idempotencyStore;
-    this.httpClient = new PlatformHttpClient(config);
-  }
-
-  public static Builder builder(BatchPlatformClientConfig config) {
-    return new Builder(config);
-  }
-
-  /**
-   * 启动 — 调 register API + 启动 Kafka consumer + heartbeat / lease scheduler。
-   *
-   * <p>P7-3:register 失败 → 抛 {@link RuntimeException}(此时尚未启动任何后台线程)。调用方<b>不应捕获并抑制</b>此异常 —— 让它传播出
-   * {@code main} 使进程以非 0 退出码结束,K8s / systemd 据此重启拉起(register 失败通常是平台不可达 / apiKey 失效 / 配置错误,重启 +
-   * 运维介入是正确处置)。示范见 {@code sample-tenant-worker} 的 {@code main}。
-   */
-  public synchronized void start() {
-    if (started) {
-      throw new IllegalStateException("client already started");
-    }
-    if (handlers.isEmpty()) {
-      throw new IllegalStateException("at least one SdkTaskHandler must be registered");
-    }
-    log.info(
-        "BatchPlatformClient starting: tenant={}, worker={}, handlers={}",
-        config.getTenantId(),
-        config.getWorkerCode(),
-        handlers.keySet());
-    List<SdkTaskTypeDescriptor> descriptors = collectDescriptors();
-    List<String> capabilityTags = capabilityTags();
-    // 与旧载荷保持同一可选字段策略：空指纹和空 taskTypes 不上报，避免覆盖平台注册信息。
-    RegisterRequest.RegisterRequestBuilder requestBuilder = RegisterRequest.builder()
-        .tenantId(config.getTenantId())
-        .workerCode(config.getWorkerCode())
-        .workerGroup("sdk-self-hosted")
-        .status("RUNNING")
-        .heartbeatAt(Instant.now())
-        .currentLoad(0)
-        .maxConcurrent(config.getMaxConcurrentTasks())
-        .capabilityTags(capabilityTags);
-    String rawHostName = WorkerFingerprint.hostName();
-    String hostName = optionalFingerprint(rawHostName);
-    requestBuilder.hostName(hostName);
-    String rawHostIp = WorkerFingerprint.hostIp();
-    String hostIp = optionalFingerprint(rawHostIp);
-    requestBuilder.hostIp(hostIp);
-    String rawProcessId = WorkerFingerprint.processId();
-    String processId = optionalFingerprint(rawProcessId);
-    requestBuilder.processId(processId);
-    String rawBuildId = config.getBuildId();
-    String buildId = optionalFingerprint(rawBuildId);
-    requestBuilder.buildId(buildId);
-    String rawSdkVersion = WorkerFingerprint.sdkVersion();
-    String sdkVersion = optionalFingerprint(rawSdkVersion);
-    requestBuilder.sdkVersion(sdkVersion);
-    RegisterRequest request = requestBuilder
-        .protocolVersion(RegisterRequest.CURRENT_PROTOCOL_VERSION)
-        .taskTypes(EmptyChecks.isEmpty(descriptors) ? null : descriptors)
-        .build();
-    try {
-      PlatformHttpClient.WorkerRegistrationResponse resp = httpClient.register(request);
-      log.info("BatchPlatformClient registered: workerId={} status={}", resp.id(), resp.status());
-    } catch (IOException e) {
-      throw new BatchSdkClientException(
-          BatchSdkClientException.Stage.REGISTER, "worker register failed", e);
-    }
-    try {
-      this.dispatcher = new TaskDispatcher(config, handlers, httpClient, idempotencyStore);
-      this.kafkaConsumer = new KafkaTaskConsumer(config, dispatcher);
-      this.kafkaConsumerThread = new Thread(kafkaConsumer, "batch-sdk-kafka-consumer");
-      this.kafkaConsumerThread.setDaemon(false);
-      this.kafkaConsumerThread.start();
-      // SDK-P5-3 + Python PR #320 对齐:把 register 时的 6 字段身份快照交给 heartbeat 每次带上,
-      // 防止 worker_registry 行被运维误删 / 平台冷启重建索引导致 heartbeat 回退降级 register 时丢字段。
-      WorkerIdentity identity = new WorkerIdentity(
-          "sdk-self-hosted",
-          WorkerFingerprint.hostName(),
-          WorkerFingerprint.hostIp(),
-          WorkerFingerprint.processId(),
-          capabilityTags,
-          config.getBuildId());
-      this.heartbeatScheduler = new HeartbeatScheduler(config, httpClient, dispatcher, identity);
-      this.heartbeatScheduler.start();
-      this.leaseRenewalScheduler = new LeaseRenewalScheduler(config, httpClient, dispatcher);
-      this.leaseRenewalScheduler.start();
-      started = true;
-    } catch (RuntimeException | Error startupFailure) {
-      log.warn(
-          "BatchPlatformClient startup failed; rolling back partial runtime resources: {}",
-          ExceptionLogSummary.of(startupFailure));
-      try {
-        stop(STARTUP_ROLLBACK_TIMEOUT, true);
-      } catch (RuntimeException | Error rollbackFailure) {
-        startupFailure.addSuppressed(rollbackFailure);
-      }
-      throw startupFailure;
-    }
-  }
-
-  List<String> capabilityTags() {
-    LinkedHashSet<String> tags = new LinkedHashSet<>(handlers.keySet());
-    if (config.isDryRunSafe()) {
-      tags.add(SdkWorkerCapabilities.DRY_RUN_SAFE);
-    }
-    return List.copyOf(tags);
-  }
-
-  /**
-   * 收集声明了 descriptor 的 handler —— code 以 {@link SdkTaskHandler#taskType()} 为权威(覆盖 descriptor 里 可能漏填
-   * / 写错的 code),保证 register 上报的 code 与派单路由一致。
-   */
-  List<SdkTaskTypeDescriptor> collectDescriptors() {
-    List<SdkTaskTypeDescriptor> out = new ArrayList<>();
-    for (Map.Entry<String, SdkTaskHandler> entry : handlers.entrySet()) {
-      SdkTaskTypeDescriptor descriptor = entry.getValue().descriptor();
-      if (descriptor != null) {
-        String registeredTaskType = entry.getKey();
-        SdkTaskTypeDescriptor canonicalDescriptor = descriptor.withCode(registeredTaskType);
-        out.add(canonicalDescriptor);
-      }
-    }
-    return out;
-  }
-
-  /**
-   * 优雅停 — 顺序见 Phase 1 §3.1 #1.1:
-   *
-   * <ol>
-   *   <li>Kafka consumer 先 wakeup + join — 停止接新 dispatch 消息
-   *   <li>Dispatcher drain — 等 in-flight handler 跑完(超时 30s),期间 heartbeat / lease 仍在跑 维持租约,避免
-   *       orchestrator 在 drain 中误判 worker 死了把任务派给别人
-   *   <li>Heartbeat / lease scheduler 关 — drain 完成后才停心跳
-   *   <li>Deactivate — 通知平台 OFFLINE(失败 swallow,不阻写入程退出)
-   * </ol>
-   */
-  public synchronized void stop() {
-    stop(Duration.ofSeconds(30));
-  }
-
-  /**
-   * P0 hardening — 带预算的优雅停。K8s {@code terminationGracePeriodSeconds} 到期前必须返回,否则 SIGKILL 让 in-flight
-   * 任务状态错乱。
-   *
-   * <p>Lane E #5 预算重分配(原 kafka 20% / dispatcher 75% / scheduler+deactivate 5% 精细化):
-   *
-   * <ul>
-   *   <li>Kafka close+join: 15%(显式让 poll thread join 完成 offset commit)
-   *   <li>Dispatcher drain: 70%(in-flight handler 主消耗)
-   *   <li>Scheduler stop: 10%(lease + heartbeat 按剩余预算动态分配)
-   *   <li>Deactivate + 收尾: 剩余 ~5%
-   * </ul>
-   *
-   * 各阶段用 {@link System#nanoTime()} 算剩余时间,超时立刻 forceful 关下一阶段; dispatcher 超时未结束会打 WARN 列出未完成 task
-   * id(见 {@link TaskDispatcher#stop(Duration)})。
-   *
-   * <p>Lane E #4-Java:若 Kafka 因 SASL 凭据错 fatal-failed,跳过 deactivate(凭据已坏,HTTP 也会 401)。
-   */
-  public synchronized void stop(Duration timeout) {
-    stop(timeout, false);
-  }
-
-  private void stop(Duration timeout, boolean forceCleanup) {
-    boolean clientNeedsNoRuntimeCleanup = !forceCleanup && !started && !hasRuntimeResources();
-    if (clientNeedsNoRuntimeCleanup) {
-      return;
-    }
-    long totalMs = Math.max(0L, timeout == null ? 0L : timeout.toMillis());
-    long startNanos = System.nanoTime();
-    log.info("BatchPlatformClient stopping (timeoutMs={})", totalMs);
-    // Lane E #5:Kafka close+join 预算 15%(原 20%);KafkaTaskConsumer.close(Duration) 内部已 join thread。
-    long kafkaJoinMs = Math.min(remainingMs(startNanos, totalMs), totalMs * 15 / 100);
-    if (kafkaConsumer != null) {
-      kafkaConsumer.close(Duration.ofMillis(kafkaJoinMs));
-    }
-    // 回退再 join 一次(KafkaTaskConsumer.close 已经 join,这里只覆盖极端竞态)
-    if (kafkaConsumerThread != null && kafkaConsumerThread.isAlive()) {
-      long remainingMs = remainingMs(startNanos, totalMs);
-      long fallbackJoinMs = Math.min(remainingMs, kafkaJoinMs);
-      if (fallbackJoinMs > 0L) {
-        try {
-          kafkaConsumerThread.join(fallbackJoinMs);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-        }
-      }
-    }
-    if (dispatcher != null) {
-      long remainingMs = remainingMs(startNanos, totalMs);
-      // Lane E #5:dispatcher drain 用剩余预算 - 15%(scheduler+deactivate 保留),目标 ~70% 总预算
-      long dispatcherMs = Math.max(0L, remainingMs - totalMs * 15 / 100);
-      dispatcher.stop(Duration.ofMillis(dispatcherMs));
-    }
-    // OkHttp 同步 execute() 的稳定取消入口是 Call.cancel(),不能只依赖 shutdownNow 的线程中断。
-    // dispatcher drain 完成或超时后统一取消残余 REPORT、heartbeat 和 renew，再关闭 scheduler。
-    httpClient.cancelInFlightCalls();
-    closeSchedulersWithinBudget(startNanos, totalMs);
-    // Lane E #4-Java:凭据 fatal 时,deactivate 也会 401 — 跳过,只 log。
-    boolean skipDeactivate = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
-    if (skipDeactivate) {
-      log.warn("skipping deactivate: Kafka SASL auth failed earlier, "
-          + "platform HTTP will also fail with 401");
-    } else {
-      long deactivateTimeoutMs = remainingMs(startNanos, totalMs);
-      if (deactivateTimeoutMs <= 0L) {
-        log.warn("skipping deactivate: stop timeout budget exhausted");
-      } else {
-        try {
-          Map<String, Object> body = new HashMap<>();
-          body.put("tenantId", config.getTenantId());
-          body.put("workerCode", config.getWorkerCode());
-          body.put("status", "OFFLINE");
-          Instant heartbeatAt = Instant.now();
-          String heartbeatAtText = heartbeatAt.toString();
-          body.put("heartbeatAt", heartbeatAtText);
-          httpClient.deactivate(
-              config.getWorkerCode(), body, Duration.ofMillis(deactivateTimeoutMs));
-        } catch (Exception ex) {
-          log.warn("deactivate call failed (ignored): {}", ExceptionLogSummary.of(ex));
-        }
-      }
-    }
-    httpClient.evictIdleConnections();
-    started = false;
-  }
-
-  private boolean hasRuntimeResources() {
-    return EmptyChecks.isNotNull(dispatcher)
-        || EmptyChecks.isNotNull(kafkaConsumer)
-        || EmptyChecks.isNotNull(kafkaConsumerThread)
-        || EmptyChecks.isNotNull(heartbeatScheduler)
-        || EmptyChecks.isNotNull(leaseRenewalScheduler);
-  }
-
-  private static long remainingMs(long startNanos, long totalMs) {
-    long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
-    return Math.max(0L, totalMs - elapsedMs);
-  }
-
-  private void closeSchedulersWithinBudget(long stopStartNanos, long totalMs) {
-    int schedulerCount = (EmptyChecks.isNull(heartbeatScheduler) ? 0 : 1)
-        + (EmptyChecks.isNull(leaseRenewalScheduler) ? 0 : 1);
-    if (schedulerCount == 0) {
-      return;
-    }
-    long remainingStopBudgetMs = remainingMs(stopStartNanos, totalMs);
-    long maximumSchedulerBudgetMs = totalMs * 10 / 100;
-    long schedulerBudgetMs = Math.min(remainingStopBudgetMs, maximumSchedulerBudgetMs);
-    long schedulerStartNanos = System.nanoTime();
-    if (EmptyChecks.isNotNull(heartbeatScheduler)) {
-      long heartbeatBudgetMs = schedulerBudgetMs / schedulerCount;
-      heartbeatScheduler.close(Duration.ofMillis(heartbeatBudgetMs));
-    }
-    if (EmptyChecks.isNotNull(leaseRenewalScheduler)) {
-      long schedulerElapsedMs = (System.nanoTime() - schedulerStartNanos) / 1_000_000L;
-      long remainingStopBudgetForLeaseMs = remainingMs(stopStartNanos, totalMs);
-      long remainingSchedulerBudgetMs = Math.max(0L, schedulerBudgetMs - schedulerElapsedMs);
-      long leaseBudgetMs = Math.min(remainingStopBudgetForLeaseMs, remainingSchedulerBudgetMs);
-      leaseRenewalScheduler.close(Duration.ofMillis(leaseBudgetMs));
-    }
-  }
-
-  private static String optionalFingerprint(String value) {
-    return EmptyChecks.isBlank(value) ? null : value;
-  }
-
-  /** 给业务可见的工具方法 — 让自己生成 idempotency-key。 */
-  public static String newIdempotencyKey() {
-    return "sdk-" + UUID.randomUUID();
-  }
-
-  /**
-   * Phase 1 §3.1 #1.6:运行时指标快照,供租户对接到自家 Prometheus / Micrometer。 字段说明见 {@link SdkClientMetrics}。
-   * 线程安全(全部读 volatile / atomic 状态)。
-   */
-  public SdkClientMetrics metrics() {
-    boolean startedSnap = started;
-    boolean fatal = dispatcher != null && dispatcher.isFatal();
-    boolean draining = dispatcher != null && dispatcher.isDraining();
-    // Kafka SASL 认证失败时 poll 线程抛 BatchSdkClientException 退出(非走 catch(Throwable) 那条,故 crashed 不会被置),
-    // 但消费已实质停止。必须并入 healthy/crashed,否则 actuator/liveness 仍报 UP,starter SmartLifecycle 也以为 running。
-    boolean authFail = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
-    boolean crashed = (kafkaConsumer != null && kafkaConsumer.hasCrashed()) || authFail;
-    int inFlight = dispatcher == null ? 0 : dispatcher.inFlightCount();
-    long consumerLag = kafkaConsumer == null ? -1L : kafkaConsumer.consumerLagMax();
-    return SdkClientMetrics.builder()
-        .tenantId(config.getTenantId())
-        .workerCode(config.getWorkerCode())
-        .started(startedSnap)
-        .healthy(startedSnap && !fatal && !crashed)
-        .inFlightTaskCount(inFlight)
-        .maxConcurrentTasks(config.getMaxConcurrentTasks())
-        .registeredHandlerCount(handlers.size())
-        .dispatcherFatal(fatal)
-        .dispatcherDraining(draining)
-        .consumerCrashed(crashed)
-        .kafkaConsumerLag(consumerLag)
-        .build();
-  }
-
-  /**
-   * Phase 1 §3.1 #1.6:liveness/readiness 信号。{@code true} = SDK 仍在正常接派单。
-   *
-   * <ul>
-   *   <li>未 start → false(还没 ready)
-   *   <li>CLAIM 401/403 之后 dispatcher fatal → false(鉴权失效,运维介入)
-   *   <li>Kafka poll loop 因 Throwable 死 → false(参考 #1.7)
-   *   <li>drain 中 → true(graceful 状态,lease 仍在续约)
-   * </ul>
-   */
-  public boolean isHealthy() {
-    if (!started) return false;
-    boolean fatal = dispatcher != null && dispatcher.isFatal();
-    boolean crashed = kafkaConsumer != null && kafkaConsumer.hasCrashed();
-    // Kafka SASL 认证失败:poll 线程已 fail-fast 退出(消费停止),但不经 crashed 路径。纳入 liveness,否则
-    // actuator/liveness 误报 UP。详见 metrics() 同款注释。
-    boolean authFail = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
-    return !fatal && !crashed && !authFail;
-  }
-
-  // ─── Builder ────────────────────────────────────────────────────────────────
-
-  public static final class Builder {
     private final BatchPlatformClientConfig config;
-    private final Map<String, SdkTaskHandler> handlers = new ConcurrentHashMap<>();
-    private SdkIdempotencyStore idempotencyStore;
+    private final Map<String, SdkTaskHandler> handlers;
+    private final PlatformHttpClient httpClient;
+    private final SdkIdempotencyStore idempotencyStore;
+    private volatile boolean started = false;
+    private TaskDispatcher dispatcher;
+    private KafkaTaskConsumer kafkaConsumer;
+    private Thread kafkaConsumerThread;
+    private HeartbeatScheduler heartbeatScheduler;
+    private LeaseRenewalScheduler leaseRenewalScheduler;
 
-    private Builder(BatchPlatformClientConfig config) {
-      this.config = config;
+    private BatchPlatformClient(
+            BatchPlatformClientConfig config,
+            Map<String, SdkTaskHandler> handlers,
+            SdkIdempotencyStore idempotencyStore) {
+        config.validate();
+        this.config = config;
+        this.handlers = Map.copyOf(handlers);
+        this.idempotencyStore = idempotencyStore;
+        this.httpClient = new PlatformHttpClient(config);
+    }
+
+    public static Builder builder(BatchPlatformClientConfig config) {
+        return new Builder(config);
     }
 
     /**
-     * SDK-P5 auto-wrap:注入声明式幂等所需的去重存储(可选)。注册了标 {@code @Idempotent} 的 handler 时必须设置,否则 {@link
-     * TaskDispatcher} 构造期 fail-fast。无幂等 handler 时无需调用。
+     * 启动 — 调 register API + 启动 Kafka consumer + heartbeat / lease scheduler。
+     *
+     * <p>P7-3:register 失败 → 抛 {@link RuntimeException}(此时尚未启动任何后台线程)。调用方<b>不应捕获并抑制</b>此异常 —— 让它传播出
+     * {@code main} 使进程以非 0 退出码结束,K8s / systemd 据此重启拉起(register 失败通常是平台不可达 / apiKey 失效 / 配置错误,重启 +
+     * 运维介入是正确处置)。示范见 {@code sample-tenant-worker} 的 {@code main}。
      */
-    public Builder idempotencyStore(SdkIdempotencyStore store) {
-      this.idempotencyStore = store;
-      return this;
+    public synchronized void start() {
+        if (started) {
+            throw new IllegalStateException("client already started");
+        }
+        if (handlers.isEmpty()) {
+            throw new IllegalStateException("at least one SdkTaskHandler must be registered");
+        }
+        log.info(
+                "BatchPlatformClient starting: tenant={}, worker={}, handlers={}",
+                config.getTenantId(),
+                config.getWorkerCode(),
+                handlers.keySet());
+        List<SdkTaskTypeDescriptor> descriptors = collectDescriptors();
+        List<String> capabilityTags = capabilityTags();
+        // 与旧载荷保持同一可选字段策略：空指纹和空 taskTypes 不上报，避免覆盖平台注册信息。
+        RegisterRequest.RegisterRequestBuilder requestBuilder = RegisterRequest.builder()
+                .tenantId(config.getTenantId())
+                .workerCode(config.getWorkerCode())
+                .workerGroup("sdk-self-hosted")
+                .status("RUNNING")
+                .heartbeatAt(Instant.now())
+                .currentLoad(0)
+                .maxConcurrent(config.getMaxConcurrentTasks())
+                .capabilityTags(capabilityTags);
+        String rawHostName = WorkerFingerprint.hostName();
+        String hostName = optionalFingerprint(rawHostName);
+        requestBuilder.hostName(hostName);
+        String rawHostIp = WorkerFingerprint.hostIp();
+        String hostIp = optionalFingerprint(rawHostIp);
+        requestBuilder.hostIp(hostIp);
+        String rawProcessId = WorkerFingerprint.processId();
+        String processId = optionalFingerprint(rawProcessId);
+        requestBuilder.processId(processId);
+        String rawBuildId = config.getBuildId();
+        String buildId = optionalFingerprint(rawBuildId);
+        requestBuilder.buildId(buildId);
+        String rawSdkVersion = WorkerFingerprint.sdkVersion();
+        String sdkVersion = optionalFingerprint(rawSdkVersion);
+        requestBuilder.sdkVersion(sdkVersion);
+        RegisterRequest request = requestBuilder
+                .protocolVersion(RegisterRequest.CURRENT_PROTOCOL_VERSION)
+                .taskTypes(EmptyChecks.isEmpty(descriptors) ? null : descriptors)
+                .build();
+        try {
+            PlatformHttpClient.WorkerRegistrationResponse resp = httpClient.register(request);
+            log.info("BatchPlatformClient registered: workerId={} status={}", resp.id(), resp.status());
+        } catch (IOException e) {
+            throw new BatchSdkClientException(BatchSdkClientException.Stage.REGISTER, "worker register failed", e);
+        }
+        try {
+            this.dispatcher = new TaskDispatcher(config, handlers, httpClient, idempotencyStore);
+            this.kafkaConsumer = new KafkaTaskConsumer(config, dispatcher);
+            this.kafkaConsumerThread = new Thread(kafkaConsumer, "batch-sdk-kafka-consumer");
+            this.kafkaConsumerThread.setDaemon(false);
+            this.kafkaConsumerThread.start();
+            // SDK-P5-3 + Python PR #320 对齐:把 register 时的 6 字段身份快照交给 heartbeat 每次带上,
+            // 防止 worker_registry 行被运维误删 / 平台冷启重建索引导致 heartbeat 回退降级 register 时丢字段。
+            WorkerIdentity identity = new WorkerIdentity(
+                    "sdk-self-hosted",
+                    WorkerFingerprint.hostName(),
+                    WorkerFingerprint.hostIp(),
+                    WorkerFingerprint.processId(),
+                    capabilityTags,
+                    config.getBuildId());
+            this.heartbeatScheduler = new HeartbeatScheduler(config, httpClient, dispatcher, identity);
+            this.heartbeatScheduler.start();
+            this.leaseRenewalScheduler = new LeaseRenewalScheduler(config, httpClient, dispatcher);
+            this.leaseRenewalScheduler.start();
+            started = true;
+        } catch (RuntimeException | Error startupFailure) {
+            log.warn(
+                    "BatchPlatformClient startup failed; rolling back partial runtime resources: {}",
+                    ExceptionLogSummary.of(startupFailure));
+            try {
+                stop(STARTUP_ROLLBACK_TIMEOUT, true);
+            } catch (RuntimeException | Error rollbackFailure) {
+                startupFailure.addSuppressed(rollbackFailure);
+            }
+            throw startupFailure;
+        }
     }
 
-    public Builder register(SdkTaskHandler handler) {
-      String type = handler.taskType();
-      if (type == null || type.isBlank()) {
-        throw new IllegalArgumentException("handler.taskType() must be non-blank");
-      }
-      SdkTaskHandler prev = handlers.putIfAbsent(type, handler);
-      if (prev != null) {
-        throw new IllegalStateException("duplicate taskType registered: " + type);
-      }
-      return this;
+    List<String> capabilityTags() {
+        LinkedHashSet<String> tags = new LinkedHashSet<>(handlers.keySet());
+        if (config.isDryRunSafe()) {
+            tags.add(SdkWorkerCapabilities.DRY_RUN_SAFE);
+        }
+        return List.copyOf(tags);
     }
 
-    public BatchPlatformClient build() {
-      return new BatchPlatformClient(config, handlers, idempotencyStore);
+    /**
+     * 收集声明了 descriptor 的 handler —— code 以 {@link SdkTaskHandler#taskType()} 为权威(覆盖 descriptor 里 可能漏填
+     * / 写错的 code),保证 register 上报的 code 与派单路由一致。
+     */
+    List<SdkTaskTypeDescriptor> collectDescriptors() {
+        List<SdkTaskTypeDescriptor> out = new ArrayList<>();
+        for (Map.Entry<String, SdkTaskHandler> entry : handlers.entrySet()) {
+            SdkTaskTypeDescriptor descriptor = entry.getValue().descriptor();
+            if (descriptor != null) {
+                String registeredTaskType = entry.getKey();
+                SdkTaskTypeDescriptor canonicalDescriptor = descriptor.withCode(registeredTaskType);
+                out.add(canonicalDescriptor);
+            }
+        }
+        return out;
     }
-  }
+
+    /**
+     * 优雅停 — 顺序见 Phase 1 §3.1 #1.1:
+     *
+     * <ol>
+     *   <li>Kafka consumer 先 wakeup + join — 停止接新 dispatch 消息
+     *   <li>Dispatcher drain — 等 in-flight handler 跑完(超时 30s),期间 heartbeat / lease 仍在跑 维持租约,避免
+     *       orchestrator 在 drain 中误判 worker 死了把任务派给别人
+     *   <li>Heartbeat / lease scheduler 关 — drain 完成后才停心跳
+     *   <li>Deactivate — 通知平台 OFFLINE(失败 swallow,不阻写入程退出)
+     * </ol>
+     */
+    public synchronized void stop() {
+        stop(Duration.ofSeconds(30));
+    }
+
+    /**
+     * P0 hardening — 带预算的优雅停。K8s {@code terminationGracePeriodSeconds} 到期前必须返回,否则 SIGKILL 让 in-flight
+     * 任务状态错乱。
+     *
+     * <p>Lane E #5 预算重分配(原 kafka 20% / dispatcher 75% / scheduler+deactivate 5% 精细化):
+     *
+     * <ul>
+     *   <li>Kafka close+join: 15%(显式让 poll thread join 完成 offset commit)
+     *   <li>Dispatcher drain: 70%(in-flight handler 主消耗)
+     *   <li>Scheduler stop: 10%(lease + heartbeat 按剩余预算动态分配)
+     *   <li>Deactivate + 收尾: 剩余 ~5%
+     * </ul>
+     *
+     * 各阶段用 {@link System#nanoTime()} 算剩余时间,超时立刻 forceful 关下一阶段; dispatcher 超时未结束会打 WARN 列出未完成 task
+     * id(见 {@link TaskDispatcher#stop(Duration)})。
+     *
+     * <p>Lane E #4-Java:若 Kafka 因 SASL 凭据错 fatal-failed,跳过 deactivate(凭据已坏,HTTP 也会 401)。
+     */
+    public synchronized void stop(Duration timeout) {
+        stop(timeout, false);
+    }
+
+    private void stop(Duration timeout, boolean forceCleanup) {
+        boolean clientNeedsNoRuntimeCleanup = !forceCleanup && !started && !hasRuntimeResources();
+        if (clientNeedsNoRuntimeCleanup) {
+            return;
+        }
+        long totalMs = Math.max(0L, timeout == null ? 0L : timeout.toMillis());
+        long startNanos = System.nanoTime();
+        log.info("BatchPlatformClient stopping (timeoutMs={})", totalMs);
+        // Lane E #5:Kafka close+join 预算 15%(原 20%);KafkaTaskConsumer.close(Duration) 内部已 join thread。
+        long kafkaJoinMs = Math.min(remainingMs(startNanos, totalMs), totalMs * 15 / 100);
+        if (kafkaConsumer != null) {
+            kafkaConsumer.close(Duration.ofMillis(kafkaJoinMs));
+        }
+        // 回退再 join 一次(KafkaTaskConsumer.close 已经 join,这里只覆盖极端竞态)
+        if (kafkaConsumerThread != null && kafkaConsumerThread.isAlive()) {
+            long remainingMs = remainingMs(startNanos, totalMs);
+            long fallbackJoinMs = Math.min(remainingMs, kafkaJoinMs);
+            if (fallbackJoinMs > 0L) {
+                try {
+                    kafkaConsumerThread.join(fallbackJoinMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        if (dispatcher != null) {
+            long remainingMs = remainingMs(startNanos, totalMs);
+            // Lane E #5:dispatcher drain 用剩余预算 - 15%(scheduler+deactivate 保留),目标 ~70% 总预算
+            long dispatcherMs = Math.max(0L, remainingMs - totalMs * 15 / 100);
+            dispatcher.stop(Duration.ofMillis(dispatcherMs));
+        }
+        // OkHttp 同步 execute() 的稳定取消入口是 Call.cancel(),不能只依赖 shutdownNow 的线程中断。
+        // dispatcher drain 完成或超时后统一取消残余 REPORT、heartbeat 和 renew，再关闭 scheduler。
+        httpClient.cancelInFlightCalls();
+        closeSchedulersWithinBudget(startNanos, totalMs);
+        // Lane E #4-Java:凭据 fatal 时,deactivate 也会 401 — 跳过,只 log。
+        boolean skipDeactivate = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
+        if (skipDeactivate) {
+            log.warn("skipping deactivate: Kafka SASL auth failed earlier, " + "platform HTTP will also fail with 401");
+        } else {
+            long deactivateTimeoutMs = remainingMs(startNanos, totalMs);
+            if (deactivateTimeoutMs <= 0L) {
+                log.warn("skipping deactivate: stop timeout budget exhausted");
+            } else {
+                try {
+                    Map<String, Object> body = new HashMap<>();
+                    body.put("tenantId", config.getTenantId());
+                    body.put("workerCode", config.getWorkerCode());
+                    body.put("status", "OFFLINE");
+                    Instant heartbeatAt = Instant.now();
+                    String heartbeatAtText = heartbeatAt.toString();
+                    body.put("heartbeatAt", heartbeatAtText);
+                    httpClient.deactivate(config.getWorkerCode(), body, Duration.ofMillis(deactivateTimeoutMs));
+                } catch (Exception ex) {
+                    log.warn("deactivate call failed (ignored): {}", ExceptionLogSummary.of(ex));
+                }
+            }
+        }
+        httpClient.evictIdleConnections();
+        started = false;
+    }
+
+    private boolean hasRuntimeResources() {
+        return EmptyChecks.isNotNull(dispatcher)
+                || EmptyChecks.isNotNull(kafkaConsumer)
+                || EmptyChecks.isNotNull(kafkaConsumerThread)
+                || EmptyChecks.isNotNull(heartbeatScheduler)
+                || EmptyChecks.isNotNull(leaseRenewalScheduler);
+    }
+
+    private static long remainingMs(long startNanos, long totalMs) {
+        long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
+        return Math.max(0L, totalMs - elapsedMs);
+    }
+
+    private void closeSchedulersWithinBudget(long stopStartNanos, long totalMs) {
+        int schedulerCount =
+                (EmptyChecks.isNull(heartbeatScheduler) ? 0 : 1) + (EmptyChecks.isNull(leaseRenewalScheduler) ? 0 : 1);
+        if (schedulerCount == 0) {
+            return;
+        }
+        long remainingStopBudgetMs = remainingMs(stopStartNanos, totalMs);
+        long maximumSchedulerBudgetMs = totalMs * 10 / 100;
+        long schedulerBudgetMs = Math.min(remainingStopBudgetMs, maximumSchedulerBudgetMs);
+        long schedulerStartNanos = System.nanoTime();
+        if (EmptyChecks.isNotNull(heartbeatScheduler)) {
+            long heartbeatBudgetMs = schedulerBudgetMs / schedulerCount;
+            heartbeatScheduler.close(Duration.ofMillis(heartbeatBudgetMs));
+        }
+        if (EmptyChecks.isNotNull(leaseRenewalScheduler)) {
+            long schedulerElapsedMs = (System.nanoTime() - schedulerStartNanos) / 1_000_000L;
+            long remainingStopBudgetForLeaseMs = remainingMs(stopStartNanos, totalMs);
+            long remainingSchedulerBudgetMs = Math.max(0L, schedulerBudgetMs - schedulerElapsedMs);
+            long leaseBudgetMs = Math.min(remainingStopBudgetForLeaseMs, remainingSchedulerBudgetMs);
+            leaseRenewalScheduler.close(Duration.ofMillis(leaseBudgetMs));
+        }
+    }
+
+    private static String optionalFingerprint(String value) {
+        return EmptyChecks.isBlank(value) ? null : value;
+    }
+
+    /** 给业务可见的工具方法 — 让自己生成 idempotency-key。 */
+    public static String newIdempotencyKey() {
+        return "sdk-" + UUID.randomUUID();
+    }
+
+    /**
+     * Phase 1 §3.1 #1.6:运行时指标快照,供租户对接到自家 Prometheus / Micrometer。 字段说明见 {@link SdkClientMetrics}。
+     * 线程安全(全部读 volatile / atomic 状态)。
+     */
+    public SdkClientMetrics metrics() {
+        boolean startedSnap = started;
+        boolean fatal = dispatcher != null && dispatcher.isFatal();
+        boolean draining = dispatcher != null && dispatcher.isDraining();
+        // Kafka SASL 认证失败时 poll 线程抛 BatchSdkClientException 退出(非走 catch(Throwable) 那条,故 crashed 不会被置),
+        // 但消费已实质停止。必须并入 healthy/crashed,否则 actuator/liveness 仍报 UP,starter SmartLifecycle 也以为 running。
+        boolean authFail = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
+        boolean crashed = (kafkaConsumer != null && kafkaConsumer.hasCrashed()) || authFail;
+        int inFlight = dispatcher == null ? 0 : dispatcher.inFlightCount();
+        long consumerLag = kafkaConsumer == null ? -1L : kafkaConsumer.consumerLagMax();
+        return SdkClientMetrics.builder()
+                .tenantId(config.getTenantId())
+                .workerCode(config.getWorkerCode())
+                .started(startedSnap)
+                .healthy(startedSnap && !fatal && !crashed)
+                .inFlightTaskCount(inFlight)
+                .maxConcurrentTasks(config.getMaxConcurrentTasks())
+                .registeredHandlerCount(handlers.size())
+                .dispatcherFatal(fatal)
+                .dispatcherDraining(draining)
+                .consumerCrashed(crashed)
+                .kafkaConsumerLag(consumerLag)
+                .build();
+    }
+
+    /**
+     * Phase 1 §3.1 #1.6:liveness/readiness 信号。{@code true} = SDK 仍在正常接派单。
+     *
+     * <ul>
+     *   <li>未 start → false(还没 ready)
+     *   <li>CLAIM 401/403 之后 dispatcher fatal → false(鉴权失效,运维介入)
+     *   <li>Kafka poll loop 因 Throwable 死 → false(参考 #1.7)
+     *   <li>drain 中 → true(graceful 状态,lease 仍在续约)
+     * </ul>
+     */
+    public boolean isHealthy() {
+        if (!started) return false;
+        boolean fatal = dispatcher != null && dispatcher.isFatal();
+        boolean crashed = kafkaConsumer != null && kafkaConsumer.hasCrashed();
+        // Kafka SASL 认证失败:poll 线程已 fail-fast 退出(消费停止),但不经 crashed 路径。纳入 liveness,否则
+        // actuator/liveness 误报 UP。详见 metrics() 同款注释。
+        boolean authFail = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
+        return !fatal && !crashed && !authFail;
+    }
+
+    // ─── Builder ────────────────────────────────────────────────────────────────
+
+    public static final class Builder {
+        private final BatchPlatformClientConfig config;
+        private final Map<String, SdkTaskHandler> handlers = new ConcurrentHashMap<>();
+        private SdkIdempotencyStore idempotencyStore;
+
+        private Builder(BatchPlatformClientConfig config) {
+            this.config = config;
+        }
+
+        /**
+         * SDK-P5 auto-wrap:注入声明式幂等所需的去重存储(可选)。注册了标 {@code @Idempotent} 的 handler 时必须设置,否则 {@link
+         * TaskDispatcher} 构造期 fail-fast。无幂等 handler 时无需调用。
+         */
+        public Builder idempotencyStore(SdkIdempotencyStore store) {
+            this.idempotencyStore = store;
+            return this;
+        }
+
+        public Builder register(SdkTaskHandler handler) {
+            String type = handler.taskType();
+            if (type == null || type.isBlank()) {
+                throw new IllegalArgumentException("handler.taskType() must be non-blank");
+            }
+            SdkTaskHandler prev = handlers.putIfAbsent(type, handler);
+            if (prev != null) {
+                throw new IllegalStateException("duplicate taskType registered: " + type);
+            }
+            return this;
+        }
+
+        public BatchPlatformClient build() {
+            return new BatchPlatformClient(config, handlers, idempotencyStore);
+        }
+    }
 }

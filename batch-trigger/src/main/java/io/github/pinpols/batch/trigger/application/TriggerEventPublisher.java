@@ -20,48 +20,48 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface TriggerEventPublisher {
 
-  /**
-   * 发起异步发送。future 正常完成时表示 broker 已 ack 或已明确失败。
-   *
-   * @param topic Kafka topic name(envelope.envelopeVersion 决定的版本化 topic)
-   * @param messageKey Kafka 分区 key,通常 {@code tenantId:requestId}
-   * @param envelope 完整事件载荷
-   * @param traceId 链路 trace,作为 message header 写入,便于 Kafka 端日志聚合
-   * @return 发送结果(success + 失败时的简短 message,长度内 2KB 截断)
-   */
-  default CompletableFuture<PublishResult> publishAsync(
-      String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
-    PublishResult publishResult = publish(topic, messageKey, envelope, traceId);
-    return CompletableFuture.completedFuture(publishResult);
-  }
-
-  /**
-   * 兼容同步调用方的适配方法。
-   *
-   * <p>Relay 使用 {@link #publishAsync(String, String, LaunchEnvelope, String)}，让同一批 Kafka 请求并发在 producer
-   * 内飞行；非 Kafka 实现可以只实现本方法，默认异步适配会保持原有行为。
-   */
-  PublishResult publish(String topic, String messageKey, LaunchEnvelope envelope, String traceId);
-
-  /** 发送结果。 */
-  record PublishResult(boolean success, String errorMessage) {
-
-    public static PublishResult ok() {
-      return new PublishResult(true, null);
+    /**
+     * 发起异步发送。future 正常完成时表示 broker 已 ack 或已明确失败。
+     *
+     * @param topic Kafka topic name(envelope.envelopeVersion 决定的版本化 topic)
+     * @param messageKey Kafka 分区 key,通常 {@code tenantId:requestId}
+     * @param envelope 完整事件载荷
+     * @param traceId 链路 trace,作为 message header 写入,便于 Kafka 端日志聚合
+     * @return 发送结果(success + 失败时的简短 message,长度内 2KB 截断)
+     */
+    default CompletableFuture<PublishResult> publishAsync(
+            String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
+        PublishResult publishResult = publish(topic, messageKey, envelope, traceId);
+        return CompletableFuture.completedFuture(publishResult);
     }
 
-    public static PublishResult fail(String errorMessage) {
-      String truncatedErrorMessage = truncate(errorMessage);
-      return new PublishResult(false, truncatedErrorMessage);
-    }
+    /**
+     * 兼容同步调用方的适配方法。
+     *
+     * <p>Relay 使用 {@link #publishAsync(String, String, LaunchEnvelope, String)}，让同一批 Kafka 请求并发在 producer
+     * 内飞行；非 Kafka 实现可以只实现本方法，默认异步适配会保持原有行为。
+     */
+    PublishResult publish(String topic, String messageKey, LaunchEnvelope envelope, String traceId);
 
-    private static String truncate(String message) {
-      if (EmptyChecks.isNull(message)) {
-        return null;
-      }
-      return message.length() <= TriggerOutboxRelay.LAST_ERROR_MAX_LENGTH
-          ? message
-          : message.substring(0, TriggerOutboxRelay.LAST_ERROR_MAX_LENGTH);
+    /** 发送结果。 */
+    record PublishResult(boolean success, String errorMessage) {
+
+        public static PublishResult ok() {
+            return new PublishResult(true, null);
+        }
+
+        public static PublishResult fail(String errorMessage) {
+            String truncatedErrorMessage = truncate(errorMessage);
+            return new PublishResult(false, truncatedErrorMessage);
+        }
+
+        private static String truncate(String message) {
+            if (EmptyChecks.isNull(message)) {
+                return null;
+            }
+            return message.length() <= TriggerOutboxRelay.LAST_ERROR_MAX_LENGTH
+                    ? message
+                    : message.substring(0, TriggerOutboxRelay.LAST_ERROR_MAX_LENGTH);
+        }
     }
-  }
 }

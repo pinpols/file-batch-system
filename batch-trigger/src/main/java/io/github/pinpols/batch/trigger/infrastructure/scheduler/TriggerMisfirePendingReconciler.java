@@ -18,39 +18,36 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TriggerMisfirePendingReconciler {
 
-  private final TriggerMisfirePendingMapper pendingMapper;
-  private final TriggerGracefulShutdown gracefulShutdown;
+    private final TriggerMisfirePendingMapper pendingMapper;
+    private final TriggerGracefulShutdown gracefulShutdown;
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void onApplicationReady() {
-    reconcile();
-  }
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        reconcile();
+    }
 
-  @Scheduled(fixedDelayString = "${batch.trigger.misfire-pending-reconcile-interval-millis:30000}")
-  @SchedulerLock(
-      name = "trigger_misfire_pending_reconciler",
-      lockAtMostFor = "PT2M",
-      lockAtLeastFor = "PT5S")
-  public void reconcile() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.trigger.misfire-pending-reconcile-interval-millis:30000}")
+    @SchedulerLock(name = "trigger_misfire_pending_reconciler", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
+    public void reconcile() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        try {
+            int approved = pendingMapper.approveCentrallyApproved();
+            int rejected = pendingMapper.rejectAndCloseCentrallyRejected();
+            int expired = pendingMapper.expireAndCloseUnlaunched(Instant.now());
+            boolean misfireReconciliationChangedRequests = approved > 0 || rejected > 0 || expired > 0;
+            if (misfireReconciliationChangedRequests) {
+                log.info(
+                        "misfire pending state reconciled: approvedOccurrences={}, rejectedOccurrences={},"
+                                + " expiredOccurrences={}",
+                        approved,
+                        rejected,
+                        expired);
+            }
+        } catch (RuntimeException exception) {
+            SwallowedExceptionLogger.warn(
+                    TriggerMisfirePendingReconciler.class, "misfire-pending-reconcile-failed", exception);
+        }
     }
-    try {
-      int approved = pendingMapper.approveCentrallyApproved();
-      int rejected = pendingMapper.rejectAndCloseCentrallyRejected();
-      int expired = pendingMapper.expireAndCloseUnlaunched(Instant.now());
-      boolean misfireReconciliationChangedRequests = approved > 0 || rejected > 0 || expired > 0;
-      if (misfireReconciliationChangedRequests) {
-        log.info(
-            "misfire pending state reconciled: approvedOccurrences={}, rejectedOccurrences={},"
-                + " expiredOccurrences={}",
-            approved,
-            rejected,
-            expired);
-      }
-    } catch (RuntimeException exception) {
-      SwallowedExceptionLogger.warn(
-          TriggerMisfirePendingReconciler.class, "misfire-pending-reconcile-failed", exception);
-    }
-  }
 }

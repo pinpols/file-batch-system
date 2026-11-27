@@ -14,23 +14,23 @@ import lombok.Data;
 @Data
 public class UpdateMaintenanceRequest {
 
-  /** 维护总开关。 */
-  private boolean enabled;
+    /** 维护总开关。 */
+    private boolean enabled;
 
-  /** 只读模式:true=GET 通过/写拒,false 且 enabled=true → 整站拒。 */
-  private boolean readOnly;
+    /** 只读模式:true=GET 通过/写拒,false 且 enabled=true → 整站拒。 */
+    private boolean readOnly;
 
-  /** 用户可见提示语(<= 2048)。 */
-  @Size(max = 2048)
-  private String message;
+    /** 用户可见提示语(<= 2048)。 */
+    @Size(max = 2048)
+    private String message;
 
-  /** 预计恢复时间(ISO-8601)。 */
-  private Instant etaAt;
+    /** 预计恢复时间(ISO-8601)。 */
+    private Instant etaAt;
 
-  /** 计划开始时间;空表示保存后立即生效。 */
-  private Instant startsAt;
+    /** 计划开始时间;空表示保存后立即生效。 */
+    private Instant startsAt;
 
-  /** 公告服务标记及固定应用编码的通知范围(最多 50 项，每项最多 64 字符)；未知标记不抑制通知。 */
-  @Size(max = 50)
-  private List<@Size(max = 64) String> affectedServices;
+    /** 公告服务标记及固定应用编码的通知范围(最多 50 项，每项最多 64 字符)；未知标记不抑制通知。 */
+    @Size(max = 50)
+    private List<@Size(max = 64) String> affectedServices;
 }

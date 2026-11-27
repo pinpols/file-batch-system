@@ -19,16 +19,13 @@ import org.springframework.context.annotation.Bean;
 @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
 public class BatchHealthAutoConfiguration {
 
-  @Bean
-  @ConditionalOnClass(HikariDataSource.class)
-  @ConditionalOnSingleCandidate(DataSource.class)
-  @ConditionalOnProperty(
-      name = "batch.health.hikari.enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  @ConditionalOnMissingBean(name = "hikariSaturationHealthIndicator")
-  public HikariSaturationHealthIndicator hikariSaturationHealthIndicator(
-      DataSource dataSource, HikariSaturationProperties properties) {
-    return new HikariSaturationHealthIndicator(dataSource, properties);
-  }
+    @Bean
+    @ConditionalOnClass(HikariDataSource.class)
+    @ConditionalOnSingleCandidate(DataSource.class)
+    @ConditionalOnProperty(name = "batch.health.hikari.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnMissingBean(name = "hikariSaturationHealthIndicator")
+    public HikariSaturationHealthIndicator hikariSaturationHealthIndicator(
+            DataSource dataSource, HikariSaturationProperties properties) {
+        return new HikariSaturationHealthIndicator(dataSource, properties);
+    }
 }

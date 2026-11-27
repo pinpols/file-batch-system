@@ -26,22 +26,21 @@ import java.time.Instant;
  * @param envelopeVersion 协议版本号,当前 2
  */
 public record LaunchEnvelope(
-    LaunchRequest launchRequest,
-    String dedupKey,
-    Instant sourceFireTime,
-    int envelopeVersion,
-    W3cTraceContext traceContext) {
+        LaunchRequest launchRequest,
+        String dedupKey,
+        Instant sourceFireTime,
+        int envelopeVersion,
+        W3cTraceContext traceContext) {
 
-  /** 当前协议版本。 */
-  public static final int CURRENT_VERSION = 2;
+    /** 当前协议版本。 */
+    public static final int CURRENT_VERSION = 2;
 
-  /** 工厂方法:用当前版本号 + now() 构造,业务路径默认调用此方法。 */
-  public static LaunchEnvelope of(
-      LaunchRequest launchRequest, String dedupKey, Instant sourceFireTime) {
-    return new LaunchEnvelope(launchRequest, dedupKey, sourceFireTime, CURRENT_VERSION, null);
-  }
+    /** 工厂方法:用当前版本号 + now() 构造,业务路径默认调用此方法。 */
+    public static LaunchEnvelope of(LaunchRequest launchRequest, String dedupKey, Instant sourceFireTime) {
+        return new LaunchEnvelope(launchRequest, dedupKey, sourceFireTime, CURRENT_VERSION, null);
+    }
 
-  public LaunchEnvelope withTraceContext(W3cTraceContext context) {
-    return new LaunchEnvelope(launchRequest, dedupKey, sourceFireTime, envelopeVersion, context);
-  }
+    public LaunchEnvelope withTraceContext(W3cTraceContext context) {
+        return new LaunchEnvelope(launchRequest, dedupKey, sourceFireTime, envelopeVersion, context);
+    }
 }

@@ -8,18 +8,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.result-version.retention")
 public class ResultVersionRetentionProperties {
 
-  /** 启用开关。设为 false 时 scheduler 直接 skip。 */
-  private boolean enabled = true;
+    /** 启用开关。设为 false 时 scheduler 直接 skip。 */
+    private boolean enabled = true;
 
-  /** 扫描周期（毫秒），默认 1h。 */
-  private long pollIntervalMillis = 3_600_000L;
+    /** 扫描周期（毫秒），默认 1h。 */
+    private long pollIntervalMillis = 3_600_000L;
 
-  /** 单轮处理上限。 */
-  private int batchSize = 500;
+    /** 单轮处理上限。 */
+    private int batchSize = 500;
 
-  /** SUPERSEDED 超过此天数 → ARCHIVED；payload_json 同时清空（释放 JSONB 体积）。 */
-  private int supersededDays = 90;
+    /** SUPERSEDED 超过此天数 → ARCHIVED；payload_json 同时清空（释放 JSONB 体积）。 */
+    private int supersededDays = 90;
 
-  /** ARCHIVED 在 batch 热表保留此天数；archive 镜像不由该任务删除。 */
-  private int archivedDays = 365;
+    /** ARCHIVED 在 batch 热表保留此天数；archive 镜像不由该任务删除。 */
+    private int archivedDays = 365;
 }

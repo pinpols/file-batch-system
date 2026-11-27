@@ -8,57 +8,57 @@ import org.testcontainers.utility.DockerImageName;
 
 /** 集成测试使用的 MinIO 测试容器封装；通用入口请使用 {@link TestObjectStoreEndpoint}。 */
 public final class MinioObjectStoreContainer extends GenericContainer<MinioObjectStoreContainer>
-    implements TestObjectStoreEndpoint {
+        implements TestObjectStoreEndpoint {
 
-  private static final int MINIO_API_PORT = 9000;
-  private static final int MINIO_CONSOLE_PORT = 9001;
-  private static final DockerImageName IMAGE = DockerImageName.parse(TestContainerImages.MINIO);
+    private static final int MINIO_API_PORT = 9000;
+    private static final int MINIO_CONSOLE_PORT = 9001;
+    private static final DockerImageName IMAGE = DockerImageName.parse(TestContainerImages.MINIO);
 
-  @Getter
-  private final String accessKey;
+    @Getter
+    private final String accessKey;
 
-  @Getter
-  private final String secretKey;
+    @Getter
+    private final String secretKey;
 
-  @Getter
-  private final String defaultBucket;
+    @Getter
+    private final String defaultBucket;
 
-  public MinioObjectStoreContainer() {
-    this("minioadmin", "minioadmin123", "batch-test");
-  }
+    public MinioObjectStoreContainer() {
+        this("minioadmin", "minioadmin123", "batch-test");
+    }
 
-  public MinioObjectStoreContainer(String accessKey, String secretKey, String defaultBucket) {
-    super(IMAGE);
-    this.accessKey = accessKey;
-    this.secretKey = secretKey;
-    this.defaultBucket = defaultBucket;
-    withEnv("LANG", TestContainerImages.UTF8_LOCALE);
-    withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE);
-    TestContainerLabels.markOwned(this);
-    withExposedPorts(MINIO_API_PORT, MINIO_CONSOLE_PORT);
-    withEnv("MINIO_ROOT_USER", accessKey);
-    withEnv("MINIO_ROOT_PASSWORD", secretKey);
-    withCommand("server", "/bitnami/minio/data", "--console-address", ":9001");
-    waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
-  }
+    public MinioObjectStoreContainer(String accessKey, String secretKey, String defaultBucket) {
+        super(IMAGE);
+        this.accessKey = accessKey;
+        this.secretKey = secretKey;
+        this.defaultBucket = defaultBucket;
+        withEnv("LANG", TestContainerImages.UTF8_LOCALE);
+        withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE);
+        TestContainerLabels.markOwned(this);
+        withExposedPorts(MINIO_API_PORT, MINIO_CONSOLE_PORT);
+        withEnv("MINIO_ROOT_USER", accessKey);
+        withEnv("MINIO_ROOT_PASSWORD", secretKey);
+        withCommand("server", "/bitnami/minio/data", "--console-address", ":9001");
+        waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
+    }
 
-  @Override
-  public void start() {
-    super.start();
-    ensureBucketExists(defaultBucket);
-  }
+    @Override
+    public void start() {
+        super.start();
+        ensureBucketExists(defaultBucket);
+    }
 
-  public String getEndpoint() {
-    return "http://" + getHost() + ":" + getMappedPort(MINIO_API_PORT);
-  }
+    public String getEndpoint() {
+        return "http://" + getHost() + ":" + getMappedPort(MINIO_API_PORT);
+    }
 
-  @Override
-  public final boolean equals(Object other) {
-    return super.equals(other);
-  }
+    @Override
+    public final boolean equals(Object other) {
+        return super.equals(other);
+    }
 
-  @Override
-  public final int hashCode() {
-    return super.hashCode();
-  }
+    @Override
+    public final int hashCode() {
+        return super.hashCode();
+    }
 }

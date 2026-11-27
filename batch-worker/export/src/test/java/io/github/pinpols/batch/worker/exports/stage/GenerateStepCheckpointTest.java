@@ -55,561 +55,537 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("导出生成阶段断点续跑单测:崩溃重派续写,幂等跳过与指纹不符重算语义")
 class GenerateStepCheckpointTest {
 
-  private static final String PLUGIN_ID = "test.export.plugin";
-  private static final long INSTANCE_ID = 777_777L;
-  private static final Map<String, Object> BATCH = Map.of("id", 1L, "batchCode", "B001");
+    private static final String PLUGIN_ID = "test.export.plugin";
+    private static final long INSTANCE_ID = 777_777L;
+    private static final Map<String, Object> BATCH = Map.of("id", 1L, "batchCode", "B001");
 
-  private ExportDataPlugin dataPlugin;
-  private GenerateStep generateStep;
-  private InMemoryPositionStore positionStore;
-  private Path deterministicFile;
+    private ExportDataPlugin dataPlugin;
+    private GenerateStep generateStep;
+    private InMemoryPositionStore positionStore;
+    private Path deterministicFile;
 
-  /** 进程内位点存储:跨「崩溃」与「重派」两次 execute 复用同一实例,模拟 pipeline_progress 表的持久化。 */
-  private static final class InMemoryPositionStore implements ProcessingPositionStore {
-    private String marker;
-    private long count;
-    private boolean completed;
-    int advanceCalls;
+    /** 进程内位点存储:跨「崩溃」与「重派」两次 execute 复用同一实例,模拟 pipeline_progress 表的持久化。 */
+    private static final class InMemoryPositionStore implements ProcessingPositionStore {
+        private String marker;
+        private long count;
+        private boolean completed;
+        int advanceCalls;
 
-    @Override
-    public ProcessingPosition load(String t, long id, ProcessingStage s) {
-      if (completed) {
-        // P1-2:completed 保留 marker(含文件字节数指纹),与 DefaultProcessingPositionStore 一致。
-        return new ProcessingPosition(marker, count, true);
-      }
-      return marker == null
-          ? ProcessingPosition.empty()
-          : new ProcessingPosition(marker, count, false);
+        @Override
+        public ProcessingPosition load(String t, long id, ProcessingStage s) {
+            if (completed) {
+                // P1-2:completed 保留 marker(含文件字节数指纹),与 DefaultProcessingPositionStore 一致。
+                return new ProcessingPosition(marker, count, true);
+            }
+            return marker == null ? ProcessingPosition.empty() : new ProcessingPosition(marker, count, false);
+        }
+
+        @Override
+        public void advance(String t, long id, ProcessingStage s, String newMarker, long inc) {
+            this.marker = newMarker;
+            this.count += inc;
+            this.advanceCalls++;
+        }
+
+        @Override
+        public void markCompleted(String t, long id, ProcessingStage s) {
+            this.completed = true;
+        }
+
+        @Override
+        public void deleteAllStages(String t, long id) {
+            this.marker = null;
+            this.count = 0;
+            this.completed = false;
+        }
     }
 
-    @Override
-    public void advance(String t, long id, ProcessingStage s, String newMarker, long inc) {
-      this.marker = newMarker;
-      this.count += inc;
-      this.advanceCalls++;
+    @BeforeEach
+    void setUp() throws Exception {
+        dataPlugin = mock(ExportDataPlugin.class);
+        when(dataPlugin.id()).thenReturn(PLUGIN_ID);
+        when(dataPlugin.loadBatch(any())).thenReturn(BATCH);
+
+        ExportDataPluginRegistry pluginRegistry = mock(ExportDataPluginRegistry.class);
+        when(pluginRegistry.require(any())).thenReturn(dataPlugin);
+
+        ExportWorkerConfiguration config = new ExportWorkerConfiguration(
+                "worker-test",
+                "EXPORT",
+                "tenant-test",
+                5000L,
+                "batch-export",
+                "group-export",
+                null,
+                500_000L,
+                new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        ExportFormatStrategyRegistry formatStrategyRegistry = new ExportFormatStrategyRegistry(List.of(
+                new JsonExportFormat(objectMapper),
+                new DelimitedExportFormat(objectMapper),
+                new ExcelExportFormat(objectMapper),
+                new FixedWidthExportFormat(objectMapper)));
+
+        positionStore = new InMemoryPositionStore();
+        WorkerCheckpointProperties props = new WorkerCheckpointProperties();
+        props.setEnabled(true); // 开续跑
+
+        generateStep = new GenerateStep(
+                pluginRegistry,
+                formatStrategyRegistry,
+                config,
+                objectMapper,
+                new GenerateRuntimeSupport(
+                        props, positionStore, new GenerateCursorCodec(), new PipelineStageProgressRegistry()));
+
+        deterministicFile =
+                PrivateTempFiles.resolveUnderTempRoot("file-batch-export").resolve("inst-" + INSTANCE_ID + ".json");
+        Files.deleteIfExists(deterministicFile);
+        Files.deleteIfExists(deterministicFile("DELIMITED"));
+        Files.deleteIfExists(deterministicFile("FIXED_WIDTH"));
     }
 
-    @Override
-    public void markCompleted(String t, long id, ProcessingStage s) {
-      this.completed = true;
+    @AfterEach
+    void tearDown() throws Exception {
+        Files.deleteIfExists(deterministicFile);
+        Files.deleteIfExists(deterministicFile("DELIMITED"));
+        Files.deleteIfExists(deterministicFile("FIXED_WIDTH"));
     }
 
-    @Override
-    public void deleteAllStages(String t, long id) {
-      this.marker = null;
-      this.count = 0;
-      this.completed = false;
+    @Test
+    @DisplayName("分页续跑累计已处理记录，超过上限时不得生成成功结果")
+    void resumedPages_countPreviouslyWrittenRowsAgainstLimit() throws Exception {
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1"), Map.of("id", "2")), "2"));
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("2")))
+                .thenThrow(new RuntimeException("模拟第二页读取失败"))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "3")), null));
+        GenerateStep limitedStep = stepWithMaxRows(2);
+
+        ExportStageResult first = limitedStep.execute(buildContext());
+        assertThat(first.success()).isFalse();
+        assertThat(positionStore.count).isEqualTo(2);
+
+        ExportJobContext resumed = buildContext();
+        ExportStageResult result = limitedStep.execute(resumed);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("EXPORT_EXCEEDS_MAX_ROWS");
+        assertThat(resumed.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
+        assertThat(positionStore.completed).isFalse();
+        assertThat(deterministicFile).exists();
     }
-  }
 
-  @BeforeEach
-  void setUp() throws Exception {
-    dataPlugin = mock(ExportDataPlugin.class);
-    when(dataPlugin.id()).thenReturn(PLUGIN_ID);
-    when(dataPlugin.loadBatch(any())).thenReturn(BATCH);
+    @Test
+    @DisplayName("已完成位点超过新上限时不得跳过校验并登记")
+    void completedCheckpoint_aboveCurrentLimitIsRejected() throws Exception {
+        List<Map<String, Object>> rows = List.of(Map.of("id", "1"), Map.of("id", "2"), Map.of("id", "3"));
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(rows, null));
+        ExportStageResult initial = generateStep.execute(buildContext());
+        assertThat(initial.success()).isTrue();
+        assertThat(positionStore.completed).isTrue();
 
-    ExportDataPluginRegistry pluginRegistry = mock(ExportDataPluginRegistry.class);
-    when(pluginRegistry.require(any())).thenReturn(dataPlugin);
+        ExportJobContext resumed = buildContext();
+        ExportStageResult result = stepWithMaxRows(2).execute(resumed);
 
-    ExportWorkerConfiguration config = new ExportWorkerConfiguration(
-        "worker-test",
-        "EXPORT",
-        "tenant-test",
-        5000L,
-        "batch-export",
-        "group-export",
-        null,
-        500_000L,
-        new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
-
-    ObjectMapper objectMapper = new ObjectMapper();
-    ExportFormatStrategyRegistry formatStrategyRegistry = new ExportFormatStrategyRegistry(List.of(
-        new JsonExportFormat(objectMapper),
-        new DelimitedExportFormat(objectMapper),
-        new ExcelExportFormat(objectMapper),
-        new FixedWidthExportFormat(objectMapper)));
-
-    positionStore = new InMemoryPositionStore();
-    WorkerCheckpointProperties props = new WorkerCheckpointProperties();
-    props.setEnabled(true); // 开续跑
-
-    generateStep = new GenerateStep(
-        pluginRegistry,
-        formatStrategyRegistry,
-        config,
-        objectMapper,
-        new GenerateRuntimeSupport(
-            props, positionStore, new GenerateCursorCodec(), new PipelineStageProgressRegistry()));
-
-    deterministicFile = PrivateTempFiles.resolveUnderTempRoot("file-batch-export")
-        .resolve("inst-" + INSTANCE_ID + ".json");
-    Files.deleteIfExists(deterministicFile);
-    Files.deleteIfExists(deterministicFile("DELIMITED"));
-    Files.deleteIfExists(deterministicFile("FIXED_WIDTH"));
-  }
-
-  @AfterEach
-  void tearDown() throws Exception {
-    Files.deleteIfExists(deterministicFile);
-    Files.deleteIfExists(deterministicFile("DELIMITED"));
-    Files.deleteIfExists(deterministicFile("FIXED_WIDTH"));
-  }
-
-  @Test
-  @DisplayName("分页续跑累计已处理记录，超过上限时不得生成成功结果")
-  void resumedPages_countPreviouslyWrittenRowsAgainstLimit() throws Exception {
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(
-            new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1"), Map.of("id", "2")), "2"));
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("2")))
-        .thenThrow(new RuntimeException("模拟第二页读取失败"))
-        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "3")), null));
-    GenerateStep limitedStep = stepWithMaxRows(2);
-
-    ExportStageResult first = limitedStep.execute(buildContext());
-    assertThat(first.success()).isFalse();
-    assertThat(positionStore.count).isEqualTo(2);
-
-    ExportJobContext resumed = buildContext();
-    ExportStageResult result = limitedStep.execute(resumed);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("EXPORT_EXCEEDS_MAX_ROWS");
-    assertThat(resumed.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
-    assertThat(positionStore.completed).isFalse();
-    assertThat(deterministicFile).exists();
-  }
-
-  @Test
-  @DisplayName("已完成位点超过新上限时不得跳过校验并登记")
-  void completedCheckpoint_aboveCurrentLimitIsRejected() throws Exception {
-    List<Map<String, Object>> rows =
-        List.of(Map.of("id", "1"), Map.of("id", "2"), Map.of("id", "3"));
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(rows, null));
-    ExportStageResult initial = generateStep.execute(buildContext());
-    assertThat(initial.success()).isTrue();
-    assertThat(positionStore.completed).isTrue();
-
-    ExportJobContext resumed = buildContext();
-    ExportStageResult result = stepWithMaxRows(2).execute(resumed);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("EXPORT_EXCEEDS_MAX_ROWS");
-    assertThat(resumed.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
-    assertThat(deterministicFile).exists();
-  }
-
-  @Test
-  @DisplayName("分隔符重派首页为空且无列声明:保留断点失败,不登记旧残文件")
-  void delimitedRedispatch_emptyFirstPageWithoutColumns_failsAndKeepsCheckpoint() throws Exception {
-    assertRedispatchWithoutLayoutFails("DELIMITED");
-  }
-
-  @Test
-  @DisplayName("定长重派首页为空且无列声明:保留断点失败,不登记旧残文件")
-  void fixedWidthRedispatch_emptyFirstPageWithoutColumns_failsAndKeepsCheckpoint()
-      throws Exception {
-    assertRedispatchWithoutLayoutFails("FIXED_WIDTH");
-  }
-
-  private void assertRedispatchWithoutLayoutFails(String format) throws Exception {
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "OLD_ROW")), "cursor-2"));
-    when(dataPlugin.loadDetailPage(
-            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
-        .thenThrow(new RuntimeException("simulated crash loading page 2"));
-
-    ExportJobContext first = buildContext(format, Map.of("export_data_ref", PLUGIN_ID));
-    assertThat(generateStep.execute(first).success()).isFalse();
-    Path file = deterministicFile(format);
-    assertThat(file).exists();
-    long partialSize = Files.size(file);
-    assertThat(partialSize).isGreaterThan(0);
-    assertThat(positionStore.completed).isFalse();
-
-    // 重派:首页已空,模板与插件都未声明列 → 布局不可还原。
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(ExportDataPlugin.DetailPage.empty());
-
-    ExportJobContext rerun = buildContext(format, Map.of("export_data_ref", PLUGIN_ID));
-    ExportStageResult result = generateStep.execute(rerun);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN");
-    assertThat(rerun.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
-    assertThat(positionStore.completed).isFalse();
-    assertThat(file).exists();
-    assertThat(Files.size(file)).isEqualTo(partialSize);
-  }
-
-  @Test
-  @DisplayName("分隔符断点续跑:重派首页为空但模板声明列时按游标续写,登记行数与文件内容一致")
-  void delimitedResume_withDeclaredColumnsAndEmptyFirstPage_continuesFromCursor() throws Exception {
-    Map<String, Object> template =
-        Map.of("export_data_ref", PLUGIN_ID, "csv_columns", List.of(Map.of("source", "id")));
-
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(
-            List.of(Map.of("id", "1"), Map.of("id", "2")), "cursor-2"));
-    when(dataPlugin.loadDetailPage(
-            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
-        .thenThrow(new RuntimeException("simulated crash loading page 2"));
-    assertThat(generateStep.execute(buildContext("DELIMITED", template)).success())
-        .isFalse();
-
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(ExportDataPlugin.DetailPage.empty());
-    when(dataPlugin.loadDetailPage(
-            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
-        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "3")), null));
-
-    ExportJobContext rerun = buildContext("DELIMITED", template);
-    ExportStageResult result = generateStep.execute(rerun);
-
-    assertThat(result.success()).isTrue();
-    assertThat(rerun.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 3L);
-    assertThat(positionStore.completed).isTrue();
-    List<String> lines = Files.readAllLines(deterministicFile("DELIMITED"));
-    assertThat(lines).containsExactly("id", "1", "2", "3");
-  }
-
-  @Test
-  @DisplayName("分隔符首次空输入:截断历史字节并登记零行")
-  void delimitedFirstRunEmpty_writesEmptyArtifactAndClearsStaleBytes() throws Exception {
-    assertEmptyFirstRun("DELIMITED");
-  }
-
-  @Test
-  @DisplayName("定长首次空输入:截断历史字节并登记零行")
-  void fixedWidthFirstRunEmpty_writesEmptyArtifactAndClearsStaleBytes() throws Exception {
-    assertEmptyFirstRun("FIXED_WIDTH");
-  }
-
-  private void assertEmptyFirstRun(String format) throws Exception {
-    Path file = deterministicFile(format);
-    Files.writeString(file, "STALE-BYTES");
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(ExportDataPlugin.DetailPage.empty());
-
-    ExportJobContext ctx = buildContext(format, Map.of("export_data_ref", PLUGIN_ID));
-    ExportStageResult result = generateStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 0L);
-    assertThat(file).exists();
-    assertThat(Files.size(file)).isZero();
-    assertThat(positionStore.completed).isTrue();
-  }
-
-  private GenerateStep stepWithMaxRows(long maxRows) {
-    ExportDataPluginRegistry registry = mock(ExportDataPluginRegistry.class);
-    when(registry.require(any())).thenReturn(dataPlugin);
-    ExportWorkerConfiguration config = new ExportWorkerConfiguration(
-        "worker-test",
-        "EXPORT",
-        "tenant-test",
-        5000L,
-        "batch-export",
-        "group-export",
-        null,
-        maxRows,
-        new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
-    WorkerCheckpointProperties props = new WorkerCheckpointProperties();
-    props.setEnabled(true);
-    ObjectMapper mapper = new ObjectMapper();
-    return new GenerateStep(
-        registry,
-        new ExportFormatStrategyRegistry(List.of(new JsonExportFormat(mapper))),
-        config,
-        mapper,
-        new GenerateRuntimeSupport(
-            props, positionStore, new GenerateCursorCodec(), new PipelineStageProgressRegistry()));
-  }
-
-  @Test
-  @DisplayName("第二页崩溃后重派:从残文件续写,最终文件行数完整且不重复")
-  void crashOnSecondPage_thenResume_producesCompleteValidJsonWithoutDuplication() throws Exception {
-    List<Map<String, Object>> page1 = List.of(Map.of("id", "1"), Map.of("id", "2"));
-    List<Map<String, Object>> page2 = List.of(Map.of("id", "3"));
-
-    // 首跑:首页正常,加载第二页时「崩溃」。
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(page1, "cursor-2"));
-    when(dataPlugin.loadDetailPage(
-            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
-        .thenThrow(new RuntimeException("simulated crash loading page 2"));
-
-    ExportJobContext run1 = buildContext();
-    ExportStageResult r1 = generateStep.execute(run1);
-
-    // 崩溃 → 失败,但首页边界位点已落 + 残文件保留(未删)。
-    assertThat(r1.success()).isFalse();
-    assertThat(positionStore.advanceCalls).isEqualTo(1);
-    assertThat(positionStore.marker).isNotNull();
-    assertThat(deterministicFile).exists();
-    long partialSize = Files.size(deterministicFile);
-    assertThat(partialSize).isGreaterThan(0);
-
-    // 重派:第二页这次能正常返回(null nextCursor 表示结束)。
-    when(dataPlugin.loadDetailPage(
-            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
-        .thenReturn(new ExportDataPlugin.DetailPage(page2, null));
-
-    ExportJobContext run2 = buildContext();
-    ExportStageResult r2 = generateStep.execute(run2);
-
-    assertThat(r2.success()).isTrue();
-    assertThat(run2.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 3L);
-
-    String content = Files.readString(deterministicFile);
-    // 收尾后缀只在完成时写一次:整体是合法 JSON。
-    Map<?, ?> parsed = new ObjectMapper().readValue(content, Map.class);
-    List<?> details = (List<?>) parsed.get("details");
-    assertThat(details).hasSize(3); // 不重复、不丢行
-    assertThat(content).contains("\"1\"").contains("\"2\"").contains("\"3\"");
-    // 续写从残文件末尾追加,文件应比首跑残文件更大。
-    assertThat(Files.size(deterministicFile)).isGreaterThan(partialSize);
-  }
-
-  @Test
-  @DisplayName("已完成且文件仍在:重派幂等跳过,不再推进位点也不重读明细")
-  void completedAndFileExists_isIdempotentlySkipped() throws Exception {
-    // 先正常完整跑一遍(单页结束)。
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
-
-    assertThat(generateStep.execute(buildContext()).success()).isTrue();
-    int advancesAfterFirst = positionStore.advanceCalls;
-
-    // 重派(已 completed + 文件在)→ 幂等跳过,不再 advance、不再读明细页。
-    ExportJobContext rerun = buildContext();
-    ExportStageResult result = generateStep.execute(rerun);
-
-    assertThat(result.success()).isTrue();
-    assertThat(rerun.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 1L);
-    assertThat(positionStore.advanceCalls).isEqualTo(advancesAfterFirst);
-  }
-
-  @Test
-  @DisplayName("演练 STORE 删除文件后步骤结果持久化失败，重派恢复相同校验和")
-  @SuppressWarnings("unchecked")
-  void dryRunStoreCleanup_whenStepResultWriteFails_requeueRegenerates() throws Exception {
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
-    var storage = mock(S3ExportStorage.class);
-    var crypto = mock(BatchObjectCryptoService.class);
-    var store = new StoreStep(storage, crypto);
-    var pipelineRuns = mock(PlatformPipelineRunRepository.class);
-    when(pipelineRuns.startStepRun(any(), any(), any(), any()))
-        .thenAnswer(call -> "STORE".equals(call.getArgument(2)) ? 2L : 1L);
-    Mockito.doThrow(new IllegalStateException("simulated result persistence failure"))
-        .doNothing()
-        .when(pipelineRuns)
-        .finishStepRunSuccess(eq(2L), any());
-    var meters = (ObjectProvider<MeterRegistry>) mock(ObjectProvider.class);
-    List<ExportStageStep> stages = new ArrayList<>();
-    for (var stage : ExportStage.values()) {
-      if (stage == ExportStage.GENERATE) stages.add(generateStep);
-      else if (stage == ExportStage.STORE) stages.add(store);
-      else {
-        ExportStageStep step = mock(ExportStageStep.class);
-        when(step.stage()).thenReturn(stage);
-        when(step.stepCode()).thenReturn("EXPORT_" + stage.name());
-        when(step.implCode()).thenReturn("EXPORT_" + stage.name());
-        when(step.stepName()).thenReturn("EXPORT_" + stage.name());
-        stages.add(step);
-      }
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("EXPORT_EXCEEDS_MAX_ROWS");
+        assertThat(resumed.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
+        assertThat(deterministicFile).exists();
     }
-    var executor = new DefaultExportStageExecutor(stages, pipelineRuns, meters);
-    var generateDefinition = new PipelineStepDefinition(
-        1L,
-        "EXPORT_GENERATE",
-        "Generate",
-        "GENERATE",
-        1,
-        "EXPORT_GENERATE",
-        Map.of(),
-        0,
-        "NONE",
-        0,
-        true);
-    var storeDefinition = new PipelineStepDefinition(
-        2L, "EXPORT_STORE", "Store", "STORE", 2, "EXPORT_STORE", Map.of(), 0, "NONE", 0, true);
-    var definitions = List.of(generateDefinition, storeDefinition);
-    ExportJobContext first = buildContext();
-    first.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
-    first.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, definitions);
-    Assertions.assertThatThrownBy(() -> executor.execute(first))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("simulated result persistence failure");
-    assertThat(deterministicFile).doesNotExist();
-    Object checksum = first.getAttributes().get(PipelineRuntimeKeys.CHECKSUM_VALUE);
-    assertThat(checksum).isNotNull();
-    ExportJobContext retry = buildContext();
-    retry.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
-    retry.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, definitions);
-    assertThat(executor.execute(retry)).hasSize(2).allMatch(ExportStageResult::success);
-    assertThat(retry.getAttributes()).containsEntry(PipelineRuntimeKeys.CHECKSUM_VALUE, checksum);
-    assertThat(deterministicFile).doesNotExist();
-    Mockito.verifyNoInteractions(storage, crypto);
-  }
 
-  @Test
-  @DisplayName("演练存储清理生成文件后重派，已完成位点仍重新生成相同内容")
-  void dryRunStoreCleanup_thenRequeuedGenerateRebuildsFile() throws Exception {
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
-    ExportJobContext first = buildContext();
-    first.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
-    assertThat(generateStep.execute(first).success()).isTrue();
-    byte[] original = Files.readAllBytes(deterministicFile);
-    var store = new StoreStep(mock(S3ExportStorage.class), mock(BatchObjectCryptoService.class));
-    assertThat(store.execute(first).success()).isTrue();
-    assertThat(deterministicFile).doesNotExist();
-    assertThat(positionStore
-            .load("tenant-gen-test", INSTANCE_ID, ProcessingStage.GENERATE)
-            .completed())
-        .isTrue();
+    @Test
+    @DisplayName("分隔符重派首页为空且无列声明:保留断点失败,不登记旧残文件")
+    void delimitedRedispatch_emptyFirstPageWithoutColumns_failsAndKeepsCheckpoint() throws Exception {
+        assertRedispatchWithoutLayoutFails("DELIMITED");
+    }
 
-    ExportJobContext retry = buildContext();
-    retry.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
-    assertThat(generateStep.execute(retry).success()).isTrue();
-    assertThat(Files.readAllBytes(deterministicFile)).isEqualTo(original);
-    assertThat(retry.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 1L);
-    assertThat(store.execute(retry).success()).isTrue();
-    assertThat(deterministicFile).doesNotExist();
-  }
+    @Test
+    @DisplayName("定长重派首页为空且无列声明:保留断点失败,不登记旧残文件")
+    void fixedWidthRedispatch_emptyFirstPageWithoutColumns_failsAndKeepsCheckpoint() throws Exception {
+        assertRedispatchWithoutLayoutFails("FIXED_WIDTH");
+    }
 
-  @Test
-  @DisplayName("标记已完成但文件字节数不符:放弃跳过,全量重写恢复完整文件")
-  void completedButFileFingerprintMismatch_regeneratesFreshInsteadOfSkipping() throws Exception {
-    // 先正常完整跑一遍(单页结束)→ 完成 marker 记录了真实文件字节数指纹。
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
-    assertThat(generateStep.execute(buildContext()).success()).isTrue();
-    long fullSize = Files.size(deterministicFile);
-    assertThat(fullSize).isGreaterThan(0);
+    private void assertRedispatchWithoutLayoutFails(String format) throws Exception {
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "OLD_ROW")), "cursor-2"));
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+                .thenThrow(new RuntimeException("simulated crash loading page 2"));
 
-    // 模拟双故障:completed=true 但残文件被 fresh 半写截断(字节数 < 指纹)。
-    Files.writeString(deterministicFile, "{ half");
-    assertThat(Files.size(deterministicFile)).isNotEqualTo(fullSize);
-    int advancesBefore = positionStore.advanceCalls;
+        ExportJobContext first = buildContext(format, Map.of("export_data_ref", PLUGIN_ID));
+        assertThat(generateStep.execute(first).success()).isFalse();
+        Path file = deterministicFile(format);
+        assertThat(file).exists();
+        long partialSize = Files.size(file);
+        assertThat(partialSize).isGreaterThan(0);
+        assertThat(positionStore.completed).isFalse();
 
-    // 重派:字节数指纹不符 → 不幂等跳过,而是全量重写(truncate + 重新生成)。
-    ExportJobContext rerun = buildContext();
-    ExportStageResult result = generateStep.execute(rerun);
+        // 重派:首页已空,模板与插件都未声明列 → 布局不可还原。
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(ExportDataPlugin.DetailPage.empty());
 
-    assertThat(result.success()).isTrue();
-    // 全量重写发生:重新读明细页 + 重新 complete(至少一次 advance),文件恢复为完整字节数。
-    assertThat(positionStore.advanceCalls).isGreaterThan(advancesBefore);
-    assertThat(Files.size(deterministicFile)).isEqualTo(fullSize);
-    Map<?, ?> parsed = new ObjectMapper().readValue(Files.readString(deterministicFile), Map.class);
-    assertThat((List<?>) parsed.get("details")).hasSize(1);
-  }
+        ExportJobContext rerun = buildContext(format, Map.of("export_data_ref", PLUGIN_ID));
+        ExportStageResult result = generateStep.execute(rerun);
 
-  @Test
-  @DisplayName("多分区共享同一实例:整体降级为不可续跑,不写位点也不走确定化路径")
-  void multiPartition_degradesToNonResumableFullRun() throws Exception {
-    // ADR-046 bundle export / 多分区任务:K 个 partition 共享同一 pipelineInstanceId
-    // (pipeline_instance UPSERT on related_job_instance_id),GENERATE 位点行会跨 partition 互写
-    // (A 的 markCompleted 让 B 误判跳过 / advance marker 互相覆盖)→ partitionCount>1 必须整体降级。
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("EXPORT_GENERATE_RESUME_LAYOUT_UNKNOWN");
+        assertThat(rerun.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
+        assertThat(positionStore.completed).isFalse();
+        assertThat(file).exists();
+        assertThat(Files.size(file)).isEqualTo(partialSize);
+    }
 
-    ExportJobContext ctx = buildContext();
-    ctx.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
-    ExportStageResult result = generateStep.execute(ctx);
+    @Test
+    @DisplayName("分隔符断点续跑:重派首页为空但模板声明列时按游标续写,登记行数与文件内容一致")
+    void delimitedResume_withDeclaredColumnsAndEmptyFirstPage_continuesFromCursor() throws Exception {
+        Map<String, Object> template =
+                Map.of("export_data_ref", PLUGIN_ID, "csv_columns", List.of(Map.of("source", "id")));
 
-    assertThat(result.success()).isTrue();
-    // 不进位点路径:不 advance 也不 markCompleted(store 状态保持 empty)
-    assertThat(positionStore.advanceCalls).isZero();
-    assertThat(positionStore.load("tenant-gen-test", INSTANCE_ID, ProcessingStage.GENERATE))
-        .isEqualTo(ProcessingPosition.empty());
-    // 不用确定化路径(随机 temp),不留 inst-* 文件
-    assertThat(deterministicFile).doesNotExist();
-  }
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1"), Map.of("id", "2")), "cursor-2"));
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+                .thenThrow(new RuntimeException("simulated crash loading page 2"));
+        assertThat(generateStep.execute(buildContext("DELIMITED", template)).success())
+                .isFalse();
 
-  @Test
-  @DisplayName("分隔符格式续跑收尾:trailer 采用批次控制总额,而非分页累加值")
-  void delimitedTrailerAfterResume_usesBatchControlTotal() throws Exception {
-    when(dataPlugin.loadBatch(any()))
-        .thenReturn(Map.of("id", 1L, "batchCode", "B001", "total_amount", "60.00"));
-    List<Map<String, Object>> page1 =
-        List.of(Map.of("id", "1", "amount", "10.00"), Map.of("id", "2", "amount", "20.00"));
-    List<Map<String, Object>> page2 = List.of(Map.of("id", "3", "amount", "30.00"));
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(ExportDataPlugin.DetailPage.empty());
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "3")), null));
 
-    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
-        .thenReturn(new ExportDataPlugin.DetailPage(page1, "cursor-2"));
-    when(dataPlugin.loadDetailPage(
-            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
-        .thenThrow(new RuntimeException("simulated crash loading page 2"));
+        ExportJobContext rerun = buildContext("DELIMITED", template);
+        ExportStageResult result = generateStep.execute(rerun);
 
-    assertThat(
-            generateStep.execute(buildContext("DELIMITED", trailerTemplate())).success())
-        .isFalse();
-    assertThat(positionStore.marker).isNotNull();
+        assertThat(result.success()).isTrue();
+        assertThat(rerun.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 3L);
+        assertThat(positionStore.completed).isTrue();
+        List<String> lines = Files.readAllLines(deterministicFile("DELIMITED"));
+        assertThat(lines).containsExactly("id", "1", "2", "3");
+    }
 
-    when(dataPlugin.loadDetailPage(
-            any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
-        .thenReturn(new ExportDataPlugin.DetailPage(page2, null));
+    @Test
+    @DisplayName("分隔符首次空输入:截断历史字节并登记零行")
+    void delimitedFirstRunEmpty_writesEmptyArtifactAndClearsStaleBytes() throws Exception {
+        assertEmptyFirstRun("DELIMITED");
+    }
 
-    ExportJobContext rerun = buildContext("DELIMITED", trailerTemplate());
-    ExportStageResult result = generateStep.execute(rerun);
+    @Test
+    @DisplayName("定长首次空输入:截断历史字节并登记零行")
+    void fixedWidthFirstRunEmpty_writesEmptyArtifactAndClearsStaleBytes() throws Exception {
+        assertEmptyFirstRun("FIXED_WIDTH");
+    }
 
-    assertThat(result.success()).isTrue();
-    List<String> lines = Files.readAllLines(deterministicFile("DELIMITED"));
-    assertThat(lines).contains("T,3,60.00");
-  }
+    private void assertEmptyFirstRun(String format) throws Exception {
+        Path file = deterministicFile(format);
+        Files.writeString(file, "STALE-BYTES");
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(ExportDataPlugin.DetailPage.empty());
 
-  private ExportJobContext buildContext() {
-    return buildContext("JSON", Map.of("export_data_ref", PLUGIN_ID));
-  }
+        ExportJobContext ctx = buildContext(format, Map.of("export_data_ref", PLUGIN_ID));
+        ExportStageResult result = generateStep.execute(ctx);
 
-  private ExportJobContext buildContext(String fileFormatType, Map<String, Object> templateConfig) {
-    ExportJobContext context = new ExportJobContext();
-    context.setTenantId("tenant-gen-test");
-    context.setJobCode("GEN_JOB");
-    context.setWorkerId("worker-1");
-    ExportPayload payload = new ExportPayload(
-        null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, null, Map.of());
-    context.getAttributes().put("exportPayload", payload);
-    context.getAttributes().put(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, fileFormatType);
-    context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
-    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, INSTANCE_ID);
-    return context;
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 0L);
+        assertThat(file).exists();
+        assertThat(Files.size(file)).isZero();
+        assertThat(positionStore.completed).isTrue();
+    }
 
-  private Path deterministicFile(String fileFormatType) {
-    String suffix =
-        switch (fileFormatType) {
-          case "DELIMITED" -> ".csv";
-          case "FIXED_WIDTH" -> ".txt";
-          default -> ".json";
-        };
-    return PrivateTempFiles.resolveUnderTempRoot("file-batch-export")
-        .resolve("inst-" + INSTANCE_ID + suffix);
-  }
+    private GenerateStep stepWithMaxRows(long maxRows) {
+        ExportDataPluginRegistry registry = mock(ExportDataPluginRegistry.class);
+        when(registry.require(any())).thenReturn(dataPlugin);
+        ExportWorkerConfiguration config = new ExportWorkerConfiguration(
+                "worker-test",
+                "EXPORT",
+                "tenant-test",
+                5000L,
+                "batch-export",
+                "group-export",
+                null,
+                maxRows,
+                new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
+        WorkerCheckpointProperties props = new WorkerCheckpointProperties();
+        props.setEnabled(true);
+        ObjectMapper mapper = new ObjectMapper();
+        return new GenerateStep(
+                registry,
+                new ExportFormatStrategyRegistry(List.of(new JsonExportFormat(mapper))),
+                config,
+                mapper,
+                new GenerateRuntimeSupport(
+                        props, positionStore, new GenerateCursorCodec(), new PipelineStageProgressRegistry()));
+    }
 
-  private Map<String, Object> trailerTemplate() {
-    return Map.of(
-        "export_data_ref",
-        PLUGIN_ID,
-        "trailer_template",
-        Map.of(
-            "present",
-            true,
-            "recordType",
-            "T",
-            "recordTypeIndex",
-            0,
-            "recordCountIndex",
-            1,
-            "controlTotalIndex",
-            2,
-            "fieldCount",
-            3,
-            "amountField",
-            "amount"));
-  }
+    @Test
+    @DisplayName("第二页崩溃后重派:从残文件续写,最终文件行数完整且不重复")
+    void crashOnSecondPage_thenResume_producesCompleteValidJsonWithoutDuplication() throws Exception {
+        List<Map<String, Object>> page1 = List.of(Map.of("id", "1"), Map.of("id", "2"));
+        List<Map<String, Object>> page2 = List.of(Map.of("id", "3"));
+
+        // 首跑:首页正常,加载第二页时「崩溃」。
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(page1, "cursor-2"));
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+                .thenThrow(new RuntimeException("simulated crash loading page 2"));
+
+        ExportJobContext run1 = buildContext();
+        ExportStageResult r1 = generateStep.execute(run1);
+
+        // 崩溃 → 失败,但首页边界位点已落 + 残文件保留(未删)。
+        assertThat(r1.success()).isFalse();
+        assertThat(positionStore.advanceCalls).isEqualTo(1);
+        assertThat(positionStore.marker).isNotNull();
+        assertThat(deterministicFile).exists();
+        long partialSize = Files.size(deterministicFile);
+        assertThat(partialSize).isGreaterThan(0);
+
+        // 重派:第二页这次能正常返回(null nextCursor 表示结束)。
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+                .thenReturn(new ExportDataPlugin.DetailPage(page2, null));
+
+        ExportJobContext run2 = buildContext();
+        ExportStageResult r2 = generateStep.execute(run2);
+
+        assertThat(r2.success()).isTrue();
+        assertThat(run2.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 3L);
+
+        String content = Files.readString(deterministicFile);
+        // 收尾后缀只在完成时写一次:整体是合法 JSON。
+        Map<?, ?> parsed = new ObjectMapper().readValue(content, Map.class);
+        List<?> details = (List<?>) parsed.get("details");
+        assertThat(details).hasSize(3); // 不重复、不丢行
+        assertThat(content).contains("\"1\"").contains("\"2\"").contains("\"3\"");
+        // 续写从残文件末尾追加,文件应比首跑残文件更大。
+        assertThat(Files.size(deterministicFile)).isGreaterThan(partialSize);
+    }
+
+    @Test
+    @DisplayName("已完成且文件仍在:重派幂等跳过,不再推进位点也不重读明细")
+    void completedAndFileExists_isIdempotentlySkipped() throws Exception {
+        // 先正常完整跑一遍(单页结束)。
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+
+        assertThat(generateStep.execute(buildContext()).success()).isTrue();
+        int advancesAfterFirst = positionStore.advanceCalls;
+
+        // 重派(已 completed + 文件在)→ 幂等跳过,不再 advance、不再读明细页。
+        ExportJobContext rerun = buildContext();
+        ExportStageResult result = generateStep.execute(rerun);
+
+        assertThat(result.success()).isTrue();
+        assertThat(rerun.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 1L);
+        assertThat(positionStore.advanceCalls).isEqualTo(advancesAfterFirst);
+    }
+
+    @Test
+    @DisplayName("演练 STORE 删除文件后步骤结果持久化失败，重派恢复相同校验和")
+    @SuppressWarnings("unchecked")
+    void dryRunStoreCleanup_whenStepResultWriteFails_requeueRegenerates() throws Exception {
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+        var storage = mock(S3ExportStorage.class);
+        var crypto = mock(BatchObjectCryptoService.class);
+        var store = new StoreStep(storage, crypto);
+        var pipelineRuns = mock(PlatformPipelineRunRepository.class);
+        when(pipelineRuns.startStepRun(any(), any(), any(), any()))
+                .thenAnswer(call -> "STORE".equals(call.getArgument(2)) ? 2L : 1L);
+        Mockito.doThrow(new IllegalStateException("simulated result persistence failure"))
+                .doNothing()
+                .when(pipelineRuns)
+                .finishStepRunSuccess(eq(2L), any());
+        var meters = (ObjectProvider<MeterRegistry>) mock(ObjectProvider.class);
+        List<ExportStageStep> stages = new ArrayList<>();
+        for (var stage : ExportStage.values()) {
+            if (stage == ExportStage.GENERATE) stages.add(generateStep);
+            else if (stage == ExportStage.STORE) stages.add(store);
+            else {
+                ExportStageStep step = mock(ExportStageStep.class);
+                when(step.stage()).thenReturn(stage);
+                when(step.stepCode()).thenReturn("EXPORT_" + stage.name());
+                when(step.implCode()).thenReturn("EXPORT_" + stage.name());
+                when(step.stepName()).thenReturn("EXPORT_" + stage.name());
+                stages.add(step);
+            }
+        }
+        var executor = new DefaultExportStageExecutor(stages, pipelineRuns, meters);
+        var generateDefinition = new PipelineStepDefinition(
+                1L, "EXPORT_GENERATE", "Generate", "GENERATE", 1, "EXPORT_GENERATE", Map.of(), 0, "NONE", 0, true);
+        var storeDefinition = new PipelineStepDefinition(
+                2L, "EXPORT_STORE", "Store", "STORE", 2, "EXPORT_STORE", Map.of(), 0, "NONE", 0, true);
+        var definitions = List.of(generateDefinition, storeDefinition);
+        ExportJobContext first = buildContext();
+        first.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+        first.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, definitions);
+        Assertions.assertThatThrownBy(() -> executor.execute(first))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("simulated result persistence failure");
+        assertThat(deterministicFile).doesNotExist();
+        Object checksum = first.getAttributes().get(PipelineRuntimeKeys.CHECKSUM_VALUE);
+        assertThat(checksum).isNotNull();
+        ExportJobContext retry = buildContext();
+        retry.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+        retry.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, definitions);
+        assertThat(executor.execute(retry)).hasSize(2).allMatch(ExportStageResult::success);
+        assertThat(retry.getAttributes()).containsEntry(PipelineRuntimeKeys.CHECKSUM_VALUE, checksum);
+        assertThat(deterministicFile).doesNotExist();
+        Mockito.verifyNoInteractions(storage, crypto);
+    }
+
+    @Test
+    @DisplayName("演练存储清理生成文件后重派，已完成位点仍重新生成相同内容")
+    void dryRunStoreCleanup_thenRequeuedGenerateRebuildsFile() throws Exception {
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+        ExportJobContext first = buildContext();
+        first.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+        assertThat(generateStep.execute(first).success()).isTrue();
+        byte[] original = Files.readAllBytes(deterministicFile);
+        var store = new StoreStep(mock(S3ExportStorage.class), mock(BatchObjectCryptoService.class));
+        assertThat(store.execute(first).success()).isTrue();
+        assertThat(deterministicFile).doesNotExist();
+        assertThat(positionStore
+                        .load("tenant-gen-test", INSTANCE_ID, ProcessingStage.GENERATE)
+                        .completed())
+                .isTrue();
+
+        ExportJobContext retry = buildContext();
+        retry.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+        assertThat(generateStep.execute(retry).success()).isTrue();
+        assertThat(Files.readAllBytes(deterministicFile)).isEqualTo(original);
+        assertThat(retry.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 1L);
+        assertThat(store.execute(retry).success()).isTrue();
+        assertThat(deterministicFile).doesNotExist();
+    }
+
+    @Test
+    @DisplayName("标记已完成但文件字节数不符:放弃跳过,全量重写恢复完整文件")
+    void completedButFileFingerprintMismatch_regeneratesFreshInsteadOfSkipping() throws Exception {
+        // 先正常完整跑一遍(单页结束)→ 完成 marker 记录了真实文件字节数指纹。
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+        assertThat(generateStep.execute(buildContext()).success()).isTrue();
+        long fullSize = Files.size(deterministicFile);
+        assertThat(fullSize).isGreaterThan(0);
+
+        // 模拟双故障:completed=true 但残文件被 fresh 半写截断(字节数 < 指纹)。
+        Files.writeString(deterministicFile, "{ half");
+        assertThat(Files.size(deterministicFile)).isNotEqualTo(fullSize);
+        int advancesBefore = positionStore.advanceCalls;
+
+        // 重派:字节数指纹不符 → 不幂等跳过,而是全量重写(truncate + 重新生成)。
+        ExportJobContext rerun = buildContext();
+        ExportStageResult result = generateStep.execute(rerun);
+
+        assertThat(result.success()).isTrue();
+        // 全量重写发生:重新读明细页 + 重新 complete(至少一次 advance),文件恢复为完整字节数。
+        assertThat(positionStore.advanceCalls).isGreaterThan(advancesBefore);
+        assertThat(Files.size(deterministicFile)).isEqualTo(fullSize);
+        Map<?, ?> parsed = new ObjectMapper().readValue(Files.readString(deterministicFile), Map.class);
+        assertThat((List<?>) parsed.get("details")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("多分区共享同一实例:整体降级为不可续跑,不写位点也不走确定化路径")
+    void multiPartition_degradesToNonResumableFullRun() throws Exception {
+        // ADR-046 bundle export / 多分区任务:K 个 partition 共享同一 pipelineInstanceId
+        // (pipeline_instance UPSERT on related_job_instance_id),GENERATE 位点行会跨 partition 互写
+        // (A 的 markCompleted 让 B 误判跳过 / advance marker 互相覆盖)→ partitionCount>1 必须整体降级。
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+
+        ExportJobContext ctx = buildContext();
+        ctx.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
+        ExportStageResult result = generateStep.execute(ctx);
+
+        assertThat(result.success()).isTrue();
+        // 不进位点路径:不 advance 也不 markCompleted(store 状态保持 empty)
+        assertThat(positionStore.advanceCalls).isZero();
+        assertThat(positionStore.load("tenant-gen-test", INSTANCE_ID, ProcessingStage.GENERATE))
+                .isEqualTo(ProcessingPosition.empty());
+        // 不用确定化路径(随机 temp),不留 inst-* 文件
+        assertThat(deterministicFile).doesNotExist();
+    }
+
+    @Test
+    @DisplayName("分隔符格式续跑收尾:trailer 采用批次控制总额,而非分页累加值")
+    void delimitedTrailerAfterResume_usesBatchControlTotal() throws Exception {
+        when(dataPlugin.loadBatch(any())).thenReturn(Map.of("id", 1L, "batchCode", "B001", "total_amount", "60.00"));
+        List<Map<String, Object>> page1 =
+                List.of(Map.of("id", "1", "amount", "10.00"), Map.of("id", "2", "amount", "20.00"));
+        List<Map<String, Object>> page2 = List.of(Map.of("id", "3", "amount", "30.00"));
+
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+                .thenReturn(new ExportDataPlugin.DetailPage(page1, "cursor-2"));
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+                .thenThrow(new RuntimeException("simulated crash loading page 2"));
+
+        assertThat(generateStep
+                        .execute(buildContext("DELIMITED", trailerTemplate()))
+                        .success())
+                .isFalse();
+        assertThat(positionStore.marker).isNotNull();
+
+        when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
+                .thenReturn(new ExportDataPlugin.DetailPage(page2, null));
+
+        ExportJobContext rerun = buildContext("DELIMITED", trailerTemplate());
+        ExportStageResult result = generateStep.execute(rerun);
+
+        assertThat(result.success()).isTrue();
+        List<String> lines = Files.readAllLines(deterministicFile("DELIMITED"));
+        assertThat(lines).contains("T,3,60.00");
+    }
+
+    private ExportJobContext buildContext() {
+        return buildContext("JSON", Map.of("export_data_ref", PLUGIN_ID));
+    }
+
+    private ExportJobContext buildContext(String fileFormatType, Map<String, Object> templateConfig) {
+        ExportJobContext context = new ExportJobContext();
+        context.setTenantId("tenant-gen-test");
+        context.setJobCode("GEN_JOB");
+        context.setWorkerId("worker-1");
+        ExportPayload payload =
+                new ExportPayload(null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, null, Map.of());
+        context.getAttributes().put("exportPayload", payload);
+        context.getAttributes().put(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, fileFormatType);
+        context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, INSTANCE_ID);
+        return context;
+    }
+
+    private Path deterministicFile(String fileFormatType) {
+        String suffix =
+                switch (fileFormatType) {
+                    case "DELIMITED" -> ".csv";
+                    case "FIXED_WIDTH" -> ".txt";
+                    default -> ".json";
+                };
+        return PrivateTempFiles.resolveUnderTempRoot("file-batch-export").resolve("inst-" + INSTANCE_ID + suffix);
+    }
+
+    private Map<String, Object> trailerTemplate() {
+        return Map.of(
+                "export_data_ref",
+                PLUGIN_ID,
+                "trailer_template",
+                Map.of(
+                        "present",
+                        true,
+                        "recordType",
+                        "T",
+                        "recordTypeIndex",
+                        0,
+                        "recordCountIndex",
+                        1,
+                        "controlTotalIndex",
+                        2,
+                        "fieldCount",
+                        3,
+                        "amountField",
+                        "amount"));
+    }
 }

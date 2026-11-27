@@ -13,13 +13,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class JobDependencyWaitMetricsQuery {
 
-  private final JobDependencyWaitingLaunchMapper waitingMapper;
-  private final DataSource dataSource;
+    private final JobDependencyWaitingLaunchMapper waitingMapper;
+    private final DataSource dataSource;
 
-  @Transactional(readOnly = true)
-  public JobDependencyWaitBacklog selectForTenant(String tenantId) {
-    // 此表启用了 FORCE RLS；仅设置 ThreadLocal 不会限定 PostgreSQL 会话。
-    RlsTenantSessionSupport.applyIfPresent(dataSource);
-    return waitingMapper.selectBacklogMetrics(tenantId);
-  }
+    @Transactional(readOnly = true)
+    public JobDependencyWaitBacklog selectForTenant(String tenantId) {
+        // 此表启用了 FORCE RLS；仅设置 ThreadLocal 不会限定 PostgreSQL 会话。
+        RlsTenantSessionSupport.applyIfPresent(dataSource);
+        return waitingMapper.selectBacklogMetrics(tenantId);
+    }
 }

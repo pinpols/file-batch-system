@@ -23,55 +23,55 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Workflow 恢复时按已持久化节点结果推进 DAG")
 class WorkflowRunResumeProgressorTest {
 
-  @Test
-  @DisplayName("失败节点恢复时派发 FAILURE 和 ALWAYS 后继")
-  void shouldDispatchFailureAndAlwaysSuccessors_whenSourceNodeFailed() {
-    Long workflowRunId = 701L;
-    String tenantId = "tenant-a";
-    WorkflowRunEntity run = new WorkflowRunEntity();
-    run.setId(workflowRunId);
-    run.setTenantId(tenantId);
-    run.setTraceId("trace-701");
+    @Test
+    @DisplayName("失败节点恢复时派发 FAILURE 和 ALWAYS 后继")
+    void shouldDispatchFailureAndAlwaysSuccessors_whenSourceNodeFailed() {
+        Long workflowRunId = 701L;
+        String tenantId = "tenant-a";
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.setId(workflowRunId);
+        run.setTenantId(tenantId);
+        run.setTraceId("trace-701");
 
-    WorkflowNodeRunEntity failedSource = new WorkflowNodeRunEntity();
-    failedSource.setWorkflowRunId(workflowRunId);
-    failedSource.setNodeCode("PROCESS");
-    failedSource.setNodeStatus(WorkflowNodeRunStatus.FAILED.code());
-    failedSource.setRunSeq(1);
+        WorkflowNodeRunEntity failedSource = new WorkflowNodeRunEntity();
+        failedSource.setWorkflowRunId(workflowRunId);
+        failedSource.setNodeCode("PROCESS");
+        failedSource.setNodeStatus(WorkflowNodeRunStatus.FAILED.code());
+        failedSource.setRunSeq(1);
 
-    WorkflowRunMapper workflowRunMapper = mock(WorkflowRunMapper.class);
-    when(workflowRunMapper.selectById(tenantId, workflowRunId)).thenReturn(run);
-    WorkflowNodeRunMapper nodeRunMapper = mock(WorkflowNodeRunMapper.class);
-    when(nodeRunMapper.selectByWorkflowRunId(workflowRunId)).thenReturn(List.of(failedSource));
-    OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
-        mock(WorkflowNodeMapper.class), workflowRunMapper, nodeRunMapper);
+        WorkflowRunMapper workflowRunMapper = mock(WorkflowRunMapper.class);
+        when(workflowRunMapper.selectById(tenantId, workflowRunId)).thenReturn(run);
+        WorkflowNodeRunMapper nodeRunMapper = mock(WorkflowNodeRunMapper.class);
+        when(nodeRunMapper.selectByWorkflowRunId(workflowRunId)).thenReturn(List.of(failedSource));
+        OrchestratorWorkflowMappers workflowMappers =
+                new OrchestratorWorkflowMappers(mock(WorkflowNodeMapper.class), workflowRunMapper, nodeRunMapper);
 
-    WorkflowDagService dagService = mock(WorkflowDagService.class);
-    WorkflowDagService.DagNodeResolution failureHandler =
-        new WorkflowDagService.DagNodeResolution("FAILURE_HANDLER", "JOB");
-    WorkflowDagService.DagNodeResolution alwaysHandler =
-        new WorkflowDagService.DagNodeResolution("ALWAYS_HANDLER", "JOB");
-    when(dagService.resolveNextNodesForRun(run, "PROCESS", false, null))
-        .thenReturn(List.of(failureHandler, alwaysHandler));
-    when(dagService.isNodeReadyForRunDispatch(run, "FAILURE_HANDLER", null)).thenReturn(true);
-    when(dagService.isNodeReadyForRunDispatch(run, "ALWAYS_HANDLER", null)).thenReturn(true);
+        WorkflowDagService dagService = mock(WorkflowDagService.class);
+        WorkflowDagService.DagNodeResolution failureHandler =
+                new WorkflowDagService.DagNodeResolution("FAILURE_HANDLER", "JOB");
+        WorkflowDagService.DagNodeResolution alwaysHandler =
+                new WorkflowDagService.DagNodeResolution("ALWAYS_HANDLER", "JOB");
+        when(dagService.resolveNextNodesForRun(run, "PROCESS", false, null))
+                .thenReturn(List.of(failureHandler, alwaysHandler));
+        when(dagService.isNodeReadyForRunDispatch(run, "FAILURE_HANDLER", null)).thenReturn(true);
+        when(dagService.isNodeReadyForRunDispatch(run, "ALWAYS_HANDLER", null)).thenReturn(true);
 
-    WorkflowNodeDispatchService dispatchService = mock(WorkflowNodeDispatchService.class);
-    WorkflowRunResumeProgressor progressor = new WorkflowRunResumeProgressor(
-        workflowRunMapper,
-        workflowMappers,
-        dagService,
-        dispatchService,
-        new TaskOutcomeNodeRunRecorder(workflowMappers),
-        mock(CountContinuityOutboxService.class),
-        mock(SecretPayloadProtector.class),
-        mock(WorkflowNodeTerminalFinalizer.class));
+        WorkflowNodeDispatchService dispatchService = mock(WorkflowNodeDispatchService.class);
+        WorkflowRunResumeProgressor progressor = new WorkflowRunResumeProgressor(
+                workflowRunMapper,
+                workflowMappers,
+                dagService,
+                dispatchService,
+                new TaskOutcomeNodeRunRecorder(workflowMappers),
+                mock(CountContinuityOutboxService.class),
+                mock(SecretPayloadProtector.class),
+                mock(WorkflowNodeTerminalFinalizer.class));
 
-    progressor.resume(tenantId, workflowRunId);
+        progressor.resume(tenantId, workflowRunId);
 
-    verify(dagService).resolveNextNodesForRun(run, "PROCESS", false, null);
-    verify(dispatchService).dispatchNode(null, run, failureHandler, null, "trace-701");
-    verify(dispatchService).dispatchNode(null, run, alwaysHandler, null, "trace-701");
-    verify(dagService).cascadeSkipDownstreamForRun(run, "PROCESS", null);
-  }
+        verify(dagService).resolveNextNodesForRun(run, "PROCESS", false, null);
+        verify(dispatchService).dispatchNode(null, run, failureHandler, null, "trace-701");
+        verify(dispatchService).dispatchNode(null, run, alwaysHandler, null, "trace-701");
+        verify(dagService).cascadeSkipDownstreamForRun(run, "PROCESS", null);
+    }
 }

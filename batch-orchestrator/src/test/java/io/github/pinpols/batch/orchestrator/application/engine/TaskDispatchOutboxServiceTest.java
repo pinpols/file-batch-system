@@ -47,236 +47,231 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("派发出箱服务: 事件键, 优先级分档, 幂等键与调度上下文口径")
 class TaskDispatchOutboxServiceTest {
 
-  @Mock
-  private DomainEventPublisher domainEventPublisher;
+    @Mock
+    private DomainEventPublisher domainEventPublisher;
 
-  @Mock
-  private JobTaskMapper jobTaskMapper;
+    @Mock
+    private JobTaskMapper jobTaskMapper;
 
-  private TaskDispatchOutboxService service;
+    private TaskDispatchOutboxService service;
 
-  @BeforeEach
-  void setUp() {
-    service =
-        new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper, new BizDateArithmetic());
-  }
+    @BeforeEach
+    void setUp() {
+        service = new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper, new BizDateArithmetic());
+    }
 
-  // ===== eventKey 回退 =====
+    // ===== eventKey 回退 =====
 
-  @Test
-  @DisplayName("eventKey 缺失 → 退化为 tenantId:taskId")
-  void shouldDeriveEventKey_whenEventKeyMissing() {
-    service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", null);
+    @Test
+    @DisplayName("eventKey 缺失 → 退化为 tenantId:taskId")
+    void shouldDeriveEventKey_whenEventKeyMissing() {
+        service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().eventKey()).isEqualTo("ta:500");
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        assertThat(cap.getValue().eventKey()).isEqualTo("ta:500");
+    }
 
-  @Test
-  @DisplayName("eventKey 显式给出 → 透传")
-  void shouldPassThroughEventKey_whenProvided() {
-    service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", "custom-key");
+    @Test
+    @DisplayName("eventKey 显式给出 → 透传")
+    void shouldPassThroughEventKey_whenProvided() {
+        service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", "custom-key");
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().eventKey()).isEqualTo("custom-key");
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        assertThat(cap.getValue().eventKey()).isEqualTo("custom-key");
+    }
 
-  // ===== priority =====
+    // ===== priority =====
 
-  @Test
-  @DisplayName("priority 取 task.priority,缺失时回退 jobInstance.priority")
-  void shouldFallBackToInstancePriority_whenTaskPriorityMissing() {
-    JobTaskEntity t = task(500L, null);
-    t.setPriority(null);
-    service.writeDispatchEvent(instance(100L, 7), t, null, "trace", null);
+    @Test
+    @DisplayName("priority 取 task.priority,缺失时回退 jobInstance.priority")
+    void shouldFallBackToInstancePriority_whenTaskPriorityMissing() {
+        JobTaskEntity t = task(500L, null);
+        t.setPriority(null);
+        service.writeDispatchEvent(instance(100L, 7), t, null, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().priority()).isEqualTo(7);
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        assertThat(cap.getValue().priority()).isEqualTo(7);
+    }
 
-  @Test
-  @DisplayName("priority 优先用 task.priority(覆盖 instance.priority)")
-  void shouldPreferTaskPriority_whenTaskPriorityPresent() {
-    JobTaskEntity t = task(500L, null);
-    t.setPriority(2);
-    service.writeDispatchEvent(instance(100L, 7), t, null, "trace", null);
+    @Test
+    @DisplayName("priority 优先用 task.priority(覆盖 instance.priority)")
+    void shouldPreferTaskPriority_whenTaskPriorityPresent() {
+        JobTaskEntity t = task(500L, null);
+        t.setPriority(2);
+        service.writeDispatchEvent(instance(100L, 7), t, null, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().priority()).isEqualTo(2);
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        assertThat(cap.getValue().priority()).isEqualTo(2);
+    }
 
-  // ===== aggregate / event type =====
+    // ===== aggregate / event type =====
 
-  @Test
-  @DisplayName("写入派发事件时聚合类型, 事件类型, 聚合标识与追踪标识均正确")
-  void shouldFillEventMetadata_whenWritingDispatchEvent() {
-    JobTaskEntity t = task(500L, null);
-    t.setTaskType("EXECUTION");
-    service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
+    @Test
+    @DisplayName("写入派发事件时聚合类型, 事件类型, 聚合标识与追踪标识均正确")
+    void shouldFillEventMetadata_whenWritingDispatchEvent() {
+        JobTaskEntity t = task(500L, null);
+        t.setTaskType("EXECUTION");
+        service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    DomainEvent e = cap.getValue();
-    assertThat(e.aggregateType()).isEqualTo("JOB_TASK");
-    assertThat(e.eventType()).isEqualTo("EXECUTION");
-    assertThat(e.aggregateId()).isEqualTo(500L);
-    assertThat(e.traceId()).isEqualTo("trace");
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        DomainEvent e = cap.getValue();
+        assertThat(e.aggregateType()).isEqualTo("JOB_TASK");
+        assertThat(e.eventType()).isEqualTo("EXECUTION");
+        assertThat(e.aggregateId()).isEqualTo(500L);
+        assertThat(e.traceId()).isEqualTo("trace");
+    }
 
-  // ===== payload priorityBand =====
+    // ===== payload priorityBand =====
 
-  @Test
-  @DisplayName("priorityBand 映射: 1/2/3 → HIGH")
-  void shouldMapToHighBand_whenPriorityIsTop() {
-    JobTaskEntity t = task(500L, null);
-    t.setPriority(1);
-    service.writeDispatchEvent(instance(100L, 1), t, null, "trace", null);
+    @Test
+    @DisplayName("priorityBand 映射: 1/2/3 → HIGH")
+    void shouldMapToHighBand_whenPriorityIsTop() {
+        JobTaskEntity t = task(500L, null);
+        t.setPriority(1);
+        service.writeDispatchEvent(instance(100L, 1), t, null, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().payload())
-        .containsEntry("priorityBand", SchedulingPriorityBand.HIGH.code());
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        assertThat(cap.getValue().payload()).containsEntry("priorityBand", SchedulingPriorityBand.HIGH.code());
+    }
 
-  @Test
-  @DisplayName("priorityBand 映射: 5 → MEDIUM")
-  void shouldMapToMediumBand_whenPriorityIsMiddle() {
-    JobTaskEntity t = task(500L, null);
-    t.setPriority(5);
-    service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
+    @Test
+    @DisplayName("priorityBand 映射: 5 → MEDIUM")
+    void shouldMapToMediumBand_whenPriorityIsMiddle() {
+        JobTaskEntity t = task(500L, null);
+        t.setPriority(5);
+        service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().payload())
-        .containsEntry("priorityBand", SchedulingPriorityBand.MEDIUM.code());
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        assertThat(cap.getValue().payload()).containsEntry("priorityBand", SchedulingPriorityBand.MEDIUM.code());
+    }
 
-  @Test
-  @DisplayName("priorityBand 映射: 10 → LOW")
-  void shouldMapToLowBand_whenPriorityIsLow() {
-    JobTaskEntity t = task(500L, null);
-    t.setPriority(10);
-    service.writeDispatchEvent(instance(100L, 10), t, null, "trace", null);
+    @Test
+    @DisplayName("priorityBand 映射: 10 → LOW")
+    void shouldMapToLowBand_whenPriorityIsLow() {
+        JobTaskEntity t = task(500L, null);
+        t.setPriority(10);
+        service.writeDispatchEvent(instance(100L, 10), t, null, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().payload())
-        .containsEntry("priorityBand", SchedulingPriorityBand.LOW.code());
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        assertThat(cap.getValue().payload()).containsEntry("priorityBand", SchedulingPriorityBand.LOW.code());
+    }
 
-  // ===== RunMode override 持久化 =====
+    // ===== RunMode override 持久化 =====
 
-  @Test
-  @DisplayName("runModeOverride=null → 不写 task.payload")
-  void shouldSkipPayloadUpdate_whenRunModeMissing() {
-    service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", null);
-    verify(jobTaskMapper, never()).updatePayload(anyString(), anyLong(), anyString());
-  }
+    @Test
+    @DisplayName("runModeOverride=null → 不写 task.payload")
+    void shouldSkipPayloadUpdate_whenRunModeMissing() {
+        service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", null);
+        verify(jobTaskMapper, never()).updatePayload(anyString(), anyLong(), anyString());
+    }
 
-  @Test
-  @DisplayName("runModeOverride 非 null → 更新 task.payload + 同步内存对象")
-  void shouldPersistRunModeToPayload_whenOverrideGiven() {
-    JobTaskEntity t = task(500L, null);
-    t.setTaskPayload("{}"); // 初始空 payload
-    when(jobTaskMapper.updatePayload(eq("ta"), eq(500L), anyString())).thenReturn(1);
-    service.writeDispatchEvent(TaskDispatchEventCommand.builder()
-        .jobInstance(instance(100L, 5))
-        .task(t)
-        .partition(null)
-        .traceId("trace")
-        .eventKey(null)
-        .runModeOverride(RunMode.RECOVER)
-        .build());
+    @Test
+    @DisplayName("runModeOverride 非 null → 更新 task.payload + 同步内存对象")
+    void shouldPersistRunModeToPayload_whenOverrideGiven() {
+        JobTaskEntity t = task(500L, null);
+        t.setTaskPayload("{}"); // 初始空 payload
+        when(jobTaskMapper.updatePayload(eq("ta"), eq(500L), anyString())).thenReturn(1);
+        service.writeDispatchEvent(TaskDispatchEventCommand.builder()
+                .jobInstance(instance(100L, 5))
+                .task(t)
+                .partition(null)
+                .traceId("trace")
+                .eventKey(null)
+                .runModeOverride(RunMode.RECOVER)
+                .build());
 
-    ArgumentCaptor<String> payloadCap = ArgumentCaptor.forClass(String.class);
-    verify(jobTaskMapper).updatePayload(eq("ta"), eq(500L), payloadCap.capture());
-    // payload 应含 run_mode 标记
-    assertThat(payloadCap.getValue()).contains("RECOVER");
-    // 内存对象也被同步
-    assertThat(t.getTaskPayload()).contains("RECOVER");
-  }
+        ArgumentCaptor<String> payloadCap = ArgumentCaptor.forClass(String.class);
+        verify(jobTaskMapper).updatePayload(eq("ta"), eq(500L), payloadCap.capture());
+        // payload 应含 run_mode 标记
+        assertThat(payloadCap.getValue()).contains("RECOVER");
+        // 内存对象也被同步
+        assertThat(t.getTaskPayload()).contains("RECOVER");
+    }
 
-  // ===== idempotencyKey (partition 缺失场景) =====
+    // ===== idempotencyKey (partition 缺失场景) =====
 
-  @Test
-  @DisplayName("无 partition + 无 eventKey → idempotencyKey 用 tenantId:task:taskId:instance:instId")
-  void shouldDeriveIdempotencyKey_whenPartitionAndEventKeyMissing() {
-    JobTaskEntity t = task(500L, null);
-    t.setJobInstanceId(100L);
-    service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
+    @Test
+    @DisplayName("无 partition + 无 eventKey → idempotencyKey 用 tenantId:task:taskId:instance:instId")
+    void shouldDeriveIdempotencyKey_whenPartitionAndEventKeyMissing() {
+        JobTaskEntity t = task(500L, null);
+        t.setJobInstanceId(100L);
+        service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    // idempotencyKey 在 message payload 里,JSON 序列化后应含 "ta:task:500:instance:100"
-    assertThat(cap.getValue().payload().toString()).contains("ta:task:500:instance:100");
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        // idempotencyKey 在 message payload 里,JSON 序列化后应含 "ta:task:500:instance:100"
+        assertThat(cap.getValue().payload().toString()).contains("ta:task:500:instance:100");
+    }
 
-  @Test
-  @DisplayName("有 partition → idempotencyKey 用 partition.idempotencyKey")
-  void shouldUsePartitionIdempotencyKey_whenPartitionPresent() {
-    JobPartitionEntity p = new JobPartitionEntity();
-    p.setId(99L);
-    p.setIdempotencyKey("partition-idem-99");
-    JobTaskEntity t = task(500L, 99L);
+    @Test
+    @DisplayName("有 partition → idempotencyKey 用 partition.idempotencyKey")
+    void shouldUsePartitionIdempotencyKey_whenPartitionPresent() {
+        JobPartitionEntity p = new JobPartitionEntity();
+        p.setId(99L);
+        p.setIdempotencyKey("partition-idem-99");
+        JobTaskEntity t = task(500L, 99L);
 
-    service.writeDispatchEvent(instance(100L, 5), t, p, "trace", null);
+        service.writeDispatchEvent(instance(100L, 5), t, p, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().payload().toString()).contains("partition-idem-99");
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        assertThat(cap.getValue().payload().toString()).contains("partition-idem-99");
+    }
 
-  // ===== SDK Phase 2 §2.1 schedulingContext =====
+    // ===== SDK Phase 2 §2.1 schedulingContext =====
 
-  @Test
-  @DisplayName(
-      "schedulingContext 填 bizDate + 前后工作日 + attemptNo + triggerType,且 outbox payload 可往返反序列化")
-  void shouldPopulateSchedulingContext_whenWritingDispatchEvent() {
-    JobInstanceEntity i = instance(100L, 5);
-    i.setBizDate(LocalDate.of(2026, Month.JUNE, 1)); // 周一
-    i.setRunAttempt(2);
-    i.setTriggerType("SCHEDULED");
-    service.writeDispatchEvent(i, task(500L, null), null, "trace", null);
+    @Test
+    @DisplayName("schedulingContext 填 bizDate + 前后工作日 + attemptNo + triggerType,且 outbox payload 可往返反序列化")
+    void shouldPopulateSchedulingContext_whenWritingDispatchEvent() {
+        JobInstanceEntity i = instance(100L, 5);
+        i.setBizDate(LocalDate.of(2026, Month.JUNE, 1)); // 周一
+        i.setRunAttempt(2);
+        i.setTriggerType("SCHEDULED");
+        service.writeDispatchEvent(i, task(500L, null), null, "trace", null);
 
-    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(cap.capture());
-    // payload 是 outbox 写入数据库的 Map;按真实 Kafka 投递路径往返回 record,验证 SDK 可消费的 wire 契约。
-    TaskDispatchMessage roundTrip =
-        JsonUtils.fromJson(JsonUtils.toJson(cap.getValue().payload()), TaskDispatchMessage.class);
-    SchedulingContext ctx = roundTrip.schedulingContext();
-    assertThat(ctx).isNotNull();
-    assertThat(ctx.bizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 1));
-    // 周一往前一个工作日 = 上周五 5/29
-    assertThat(ctx.prevBizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 29));
-    // 周一往后一个工作日 = 周二 6/2
-    assertThat(ctx.nextBizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 2));
-    assertThat(ctx.isHoliday()).isFalse();
-    assertThat(ctx.attemptNo()).isEqualTo(2);
-    assertThat(ctx.triggerType()).isEqualTo("SCHEDULED");
-  }
+        ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(cap.capture());
+        // payload 是 outbox 写入数据库的 Map;按真实 Kafka 投递路径往返回 record,验证 SDK 可消费的 wire 契约。
+        TaskDispatchMessage roundTrip =
+                JsonUtils.fromJson(JsonUtils.toJson(cap.getValue().payload()), TaskDispatchMessage.class);
+        SchedulingContext ctx = roundTrip.schedulingContext();
+        assertThat(ctx).isNotNull();
+        assertThat(ctx.bizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 1));
+        // 周一往前一个工作日 = 上周五 5/29
+        assertThat(ctx.prevBizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 29));
+        // 周一往后一个工作日 = 周二 6/2
+        assertThat(ctx.nextBizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 2));
+        assertThat(ctx.isHoliday()).isFalse();
+        assertThat(ctx.attemptNo()).isEqualTo(2);
+        assertThat(ctx.triggerType()).isEqualTo("SCHEDULED");
+    }
 
-  // ===== fixtures =====
+    // ===== fixtures =====
 
-  private JobInstanceEntity instance(Long id, Integer priority) {
-    JobInstanceEntity i = new JobInstanceEntity();
-    i.setId(id);
-    i.setTenantId("ta");
-    i.setInstanceNo("inst-" + id);
-    i.setJobCode("job-x");
-    i.setPriority(priority);
-    return i;
-  }
+    private JobInstanceEntity instance(Long id, Integer priority) {
+        JobInstanceEntity i = new JobInstanceEntity();
+        i.setId(id);
+        i.setTenantId("ta");
+        i.setInstanceNo("inst-" + id);
+        i.setJobCode("job-x");
+        i.setPriority(priority);
+        return i;
+    }
 
-  private JobTaskEntity task(Long taskId, Long jobPartitionId) {
-    JobTaskEntity t = new JobTaskEntity();
-    t.setId(taskId);
-    t.setTenantId("ta");
-    t.setTaskType("EXECUTION");
-    t.setJobPartitionId(jobPartitionId);
-    return t;
-  }
+    private JobTaskEntity task(Long taskId, Long jobPartitionId) {
+        JobTaskEntity t = new JobTaskEntity();
+        t.setId(taskId);
+        t.setTenantId("ta");
+        t.setTaskType("EXECUTION");
+        t.setJobPartitionId(jobPartitionId);
+        return t;
+    }
 }

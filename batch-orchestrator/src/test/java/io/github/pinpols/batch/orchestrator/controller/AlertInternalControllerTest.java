@@ -21,35 +21,37 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("内部告警入口保留请求字段并委派应用服务")
 class AlertInternalControllerTest {
 
-  @Mock
-  private AlertEventService alertEventService;
+    @Mock
+    private AlertEventService alertEventService;
 
-  @Test
-  @DisplayName("忽略扩展字段并将已有字段完整传递给服务")
-  void shouldMapAlertRequestToCommand() throws Exception {
-    MockMvc mvc = MockMvcBuilders.standaloneSetup(new AlertInternalController(alertEventService))
-        .build();
-    String body = """
+    @Test
+    @DisplayName("忽略扩展字段并将已有字段完整传递给服务")
+    void shouldMapAlertRequestToCommand() throws Exception {
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AlertInternalController(alertEventService))
+                .build();
+        String body = """
         {"tenantId":"t1","serviceName":"worker","alertType":"SLA","severity":"WARN",
          "title":"timeout","detailJson":"{}","resourceKey":"job:1","traceId":"trace-1",
          "futureField":"ignored"}
         """;
 
-    mvc.perform(post("/internal/alerts").contentType(MediaType.APPLICATION_JSON).content(body))
-        .andExpect(status().isOk());
+        mvc.perform(post("/internal/alerts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
 
-    ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
-    verify(alertEventService).emit(captor.capture());
-    AlertEmitCommand expected = AlertEmitCommand.builder()
-        .tenantId("t1")
-        .serviceName("worker")
-        .alertType("SLA")
-        .severity("WARN")
-        .title("timeout")
-        .detailJson("{}")
-        .resourceKey("job:1")
-        .traceId("trace-1")
-        .build();
-    assertThat(captor.getValue()).isEqualTo(expected);
-  }
+        ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
+        verify(alertEventService).emit(captor.capture());
+        AlertEmitCommand expected = AlertEmitCommand.builder()
+                .tenantId("t1")
+                .serviceName("worker")
+                .alertType("SLA")
+                .severity("WARN")
+                .title("timeout")
+                .detailJson("{}")
+                .resourceKey("job:1")
+                .traceId("trace-1")
+                .build();
+        assertThat(captor.getValue()).isEqualTo(expected);
+    }
 }

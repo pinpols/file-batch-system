@@ -13,16 +13,16 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RelatedFileReferenceValidator {
 
-  private final FileGovernanceRepository fileGovernanceRepository;
+    private final FileGovernanceRepository fileGovernanceRepository;
 
-  /** 文件不存在或属于其他租户时返回相同结果，避免枚举其他租户数据。 */
-  public void validate(String tenantId, Long fileId) {
-    if (EmptyChecks.isNull(fileId)) {
-      return;
+    /** 文件不存在或属于其他租户时返回相同结果，避免枚举其他租户数据。 */
+    public void validate(String tenantId, Long fileId) {
+        if (EmptyChecks.isNull(fileId)) {
+            return;
+        }
+        FileRecordRow fileRecord = fileGovernanceRepository.loadFileRecord(tenantId, fileId);
+        if (EmptyChecks.isNull(fileRecord)) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
+        }
     }
-    FileRecordRow fileRecord = fileGovernanceRepository.loadFileRecord(tenantId, fileId);
-    if (EmptyChecks.isNull(fileRecord)) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
-    }
-  }
 }

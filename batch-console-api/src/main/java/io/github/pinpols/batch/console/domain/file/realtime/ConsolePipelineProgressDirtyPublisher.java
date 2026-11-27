@@ -35,162 +35,159 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(
-    prefix = "batch.console.pipeline-progress-dirty",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+        prefix = "batch.console.pipeline-progress-dirty",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class ConsolePipelineProgressDirtyPublisher {
 
-  /** 首轮扫描的回看秒数：启动时把最近 30 秒内更新过的 pipeline 视为脏数据。 */
-  private static final int INITIAL_LOOKBACK_SECONDS = 30;
+    /** 首轮扫描的回看秒数：启动时把最近 30 秒内更新过的 pipeline 视为脏数据。 */
+    private static final int INITIAL_LOOKBACK_SECONDS = 30;
 
-  /** 轮询间隔下限（1 秒），防止配置过小压垮 pipeline_progress 查询。 */
-  private static final long MIN_INTERVAL_MILLIS = 1_000L;
+    /** 轮询间隔下限（1 秒），防止配置过小压垮 pipeline_progress 查询。 */
+    private static final long MIN_INTERVAL_MILLIS = 1_000L;
 
-  /** 单轮扫描条数上限；配置默认 500，超出按 2000 截断。 */
-  private static final int MAX_BATCH_SIZE = 2_000;
+    /** 单轮扫描条数上限；配置默认 500，超出按 2000 截断。 */
+    private static final int MAX_BATCH_SIZE = 2_000;
 
-  private static final String STREAM = "pipeline-progress";
-  private static final String EVENT_TYPE = "pipeline-progress-dirty";
-  private static final String REASON_STEP_PROGRESS = "STEP_PROGRESS";
-  private static final int MAX_TRACKED_KEYS = 10_000;
-  private final ConsolePipelineProgressDirtyMapper dirtyMapper;
-  private final ConsoleRealtimeEventPort eventPublisher;
-  private final ConsolePipelineProgressDirtyProperties properties;
+    private static final String STREAM = "pipeline-progress";
+    private static final String EVENT_TYPE = "pipeline-progress-dirty";
+    private static final String REASON_STEP_PROGRESS = "STEP_PROGRESS";
+    private static final int MAX_TRACKED_KEYS = 10_000;
+    private final ConsolePipelineProgressDirtyMapper dirtyMapper;
+    private final ConsoleRealtimeEventPort eventPublisher;
+    private final ConsolePipelineProgressDirtyProperties properties;
 
-  private final AtomicBoolean stopping = new AtomicBoolean(false);
-  private final Map<String, Instant> lastPublishedUpdateByPipeline = new ConcurrentHashMap<>();
-  private final Map<String, Instant> lastEmittedAtByPipeline = new ConcurrentHashMap<>();
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private final Map<String, Instant> lastPublishedUpdateByPipeline = new ConcurrentHashMap<>();
+    private final Map<String, Instant> lastEmittedAtByPipeline = new ConcurrentHashMap<>();
 
-  private ScheduledExecutorService scheduler;
-  private volatile Instant lastSeen = Instant.now().minusSeconds(INITIAL_LOOKBACK_SECONDS);
-  private DirtyCursor scanCursor;
+    private ScheduledExecutorService scheduler;
+    private volatile Instant lastSeen = Instant.now().minusSeconds(INITIAL_LOOKBACK_SECONDS);
+    private DirtyCursor scanCursor;
 
-  private long intervalMillis;
-  private long initialDelayMillis;
-  private long lookbackOverlapMillis;
-  private long throttleMillis;
-  private int batchSize;
+    private long intervalMillis;
+    private long initialDelayMillis;
+    private long lookbackOverlapMillis;
+    private long throttleMillis;
+    private int batchSize;
 
-  @EventListener(ApplicationReadyEvent.class)
-  void start() {
-    // Flyway 初始化会先于 ApplicationReadyEvent 完成。若从
-    // @PostConstruct 启动轮询器，新数据库仍在迁移时就可能查询 pipeline_progress。
-    intervalMillis = Math.max(MIN_INTERVAL_MILLIS, properties.getIntervalMillis());
-    initialDelayMillis = Math.max(0L, properties.getInitialDelayMillis());
-    lookbackOverlapMillis = Math.max(0L, properties.getLookbackOverlapMillis());
-    throttleMillis = Math.max(intervalMillis, properties.getThrottleMillis());
-    batchSize = Math.clamp(properties.getBatchSize(), 1, MAX_BATCH_SIZE);
+    @EventListener(ApplicationReadyEvent.class)
+    void start() {
+        // Flyway 初始化会先于 ApplicationReadyEvent 完成。若从
+        // @PostConstruct 启动轮询器，新数据库仍在迁移时就可能查询 pipeline_progress。
+        intervalMillis = Math.max(MIN_INTERVAL_MILLIS, properties.getIntervalMillis());
+        initialDelayMillis = Math.max(0L, properties.getInitialDelayMillis());
+        lookbackOverlapMillis = Math.max(0L, properties.getLookbackOverlapMillis());
+        throttleMillis = Math.max(intervalMillis, properties.getThrottleMillis());
+        batchSize = Math.clamp(properties.getBatchSize(), 1, MAX_BATCH_SIZE);
 
-    scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-      Thread t = new Thread(r, "pipeline-progress-dirty-publisher");
-      t.setDaemon(true);
-      return t;
-    });
-    scheduler.scheduleWithFixedDelay(
-        this::pollSafely, initialDelayMillis, intervalMillis, TimeUnit.MILLISECONDS);
-    log.info(
-        "pipeline progress dirty publisher started: intervalMs={}, throttleMs={}, batchSize={}",
-        intervalMillis,
-        throttleMillis,
-        batchSize);
-  }
-
-  @EventListener(ContextClosedEvent.class)
-  void stopOnContextClosed(ContextClosedEvent event) {
-    stopScheduler("context-closed");
-  }
-
-  @PreDestroy
-  void stop() {
-    stopScheduler("pre-destroy");
-  }
-
-  private void stopScheduler(String source) {
-    if (!stopping.compareAndSet(false, true)) {
-      return;
-    }
-    if (scheduler != null) {
-      log.info("pipeline progress dirty publisher stopping: source={}", source);
-      scheduler.shutdownNow();
-    }
-  }
-
-  void pollSafely() {
-    if (stopping.get()) {
-      return;
-    }
-    try {
-      pollOnce();
-    } catch (RuntimeException ex) {
-      if (stopping.get()) {
+        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "pipeline-progress-dirty-publisher");
+            t.setDaemon(true);
+            return t;
+        });
+        scheduler.scheduleWithFixedDelay(this::pollSafely, initialDelayMillis, intervalMillis, TimeUnit.MILLISECONDS);
         log.info(
-            "pipeline progress dirty poll skipped during shutdown: {}",
-            SwallowedExceptionLogger.summary(ex));
-        return;
-      }
-      log.warn("pipeline progress dirty poll failed: {}", SwallowedExceptionLogger.summary(ex));
-    }
-  }
-
-  void pollOnce() {
-    Instant since = lastSeen.minusMillis(lookbackOverlapMillis);
-    List<PipelineProgressDirtyView> rows =
-        dirtyMapper.selectUpdatedSince(since, scanCursor, batchSize);
-    if (rows.isEmpty()) {
-      scanCursor = null;
-      return;
+                "pipeline progress dirty publisher started: intervalMs={}, throttleMs={}, batchSize={}",
+                intervalMillis,
+                throttleMillis,
+                batchSize);
     }
 
-    Instant now = Instant.now();
-    for (PipelineProgressDirtyView row : rows) {
-      String key = row.tenantId() + "|" + row.pipelineInstanceId();
-      Instant publishedUpdate = lastPublishedUpdateByPipeline.get(key);
-      if (EmptyChecks.isNull(publishedUpdate) || row.updatedAt().isAfter(publishedUpdate)) {
-        Instant lastEmittedAt = lastEmittedAtByPipeline.get(key);
-        if (EmptyChecks.isNotNull(lastEmittedAt)
-            && Duration.between(lastEmittedAt, now).toMillis() < throttleMillis) {
-          pruneTrackedKeysIfNeeded();
-          return;
+    @EventListener(ContextClosedEvent.class)
+    void stopOnContextClosed(ContextClosedEvent event) {
+        stopScheduler("context-closed");
+    }
+
+    @PreDestroy
+    void stop() {
+        stopScheduler("pre-destroy");
+    }
+
+    private void stopScheduler(String source) {
+        if (!stopping.compareAndSet(false, true)) {
+            return;
         }
-        // 发布失败时不推进游标，也不登记为已发布；下次扫描重试同一更新。
-        publish(row);
-        lastPublishedUpdateByPipeline.put(key, row.updatedAt());
-        lastEmittedAtByPipeline.put(key, now);
-      }
-      advancePast(row);
+        if (scheduler != null) {
+            log.info("pipeline progress dirty publisher stopping: source={}", source);
+            scheduler.shutdownNow();
+        }
     }
-    if (rows.size() < batchSize) {
-      scanCursor = null;
-    }
-    pruneTrackedKeysIfNeeded();
-  }
 
-  private void advancePast(PipelineProgressDirtyView row) {
-    if (row.updatedAt().isAfter(lastSeen)) {
-      lastSeen = row.updatedAt();
+    void pollSafely() {
+        if (stopping.get()) {
+            return;
+        }
+        try {
+            pollOnce();
+        } catch (RuntimeException ex) {
+            if (stopping.get()) {
+                log.info(
+                        "pipeline progress dirty poll skipped during shutdown: {}",
+                        SwallowedExceptionLogger.summary(ex));
+                return;
+            }
+            log.warn("pipeline progress dirty poll failed: {}", SwallowedExceptionLogger.summary(ex));
+        }
     }
-    scanCursor = new DirtyCursor(row.updatedAt(), row.tenantId(), row.pipelineInstanceId());
-  }
 
-  private void publish(PipelineProgressDirtyView row) {
-    ConsolePipelineProgressDirtyEventResponse payload =
-        new ConsolePipelineProgressDirtyEventResponse(
-            row.tenantId(),
-            row.pipelineInstanceId(),
-            row.jobInstanceId(),
-            REASON_STEP_PROGRESS,
-            row.updatedAt().toEpochMilli(),
-            row.updatedAt());
-    eventPublisher.publishChanged(row.tenantId(), STREAM, EVENT_TYPE, payload);
-  }
+    void pollOnce() {
+        Instant since = lastSeen.minusMillis(lookbackOverlapMillis);
+        List<PipelineProgressDirtyView> rows = dirtyMapper.selectUpdatedSince(since, scanCursor, batchSize);
+        if (rows.isEmpty()) {
+            scanCursor = null;
+            return;
+        }
 
-  private void pruneTrackedKeysIfNeeded() {
-    if (lastPublishedUpdateByPipeline.size() <= MAX_TRACKED_KEYS
-        && lastEmittedAtByPipeline.size() <= MAX_TRACKED_KEYS) {
-      return;
+        Instant now = Instant.now();
+        for (PipelineProgressDirtyView row : rows) {
+            String key = row.tenantId() + "|" + row.pipelineInstanceId();
+            Instant publishedUpdate = lastPublishedUpdateByPipeline.get(key);
+            if (EmptyChecks.isNull(publishedUpdate) || row.updatedAt().isAfter(publishedUpdate)) {
+                Instant lastEmittedAt = lastEmittedAtByPipeline.get(key);
+                if (EmptyChecks.isNotNull(lastEmittedAt)
+                        && Duration.between(lastEmittedAt, now).toMillis() < throttleMillis) {
+                    pruneTrackedKeysIfNeeded();
+                    return;
+                }
+                // 发布失败时不推进游标，也不登记为已发布；下次扫描重试同一更新。
+                publish(row);
+                lastPublishedUpdateByPipeline.put(key, row.updatedAt());
+                lastEmittedAtByPipeline.put(key, now);
+            }
+            advancePast(row);
+        }
+        if (rows.size() < batchSize) {
+            scanCursor = null;
+        }
+        pruneTrackedKeysIfNeeded();
     }
-    lastPublishedUpdateByPipeline.clear();
-    lastEmittedAtByPipeline.clear();
-  }
+
+    private void advancePast(PipelineProgressDirtyView row) {
+        if (row.updatedAt().isAfter(lastSeen)) {
+            lastSeen = row.updatedAt();
+        }
+        scanCursor = new DirtyCursor(row.updatedAt(), row.tenantId(), row.pipelineInstanceId());
+    }
+
+    private void publish(PipelineProgressDirtyView row) {
+        ConsolePipelineProgressDirtyEventResponse payload = new ConsolePipelineProgressDirtyEventResponse(
+                row.tenantId(),
+                row.pipelineInstanceId(),
+                row.jobInstanceId(),
+                REASON_STEP_PROGRESS,
+                row.updatedAt().toEpochMilli(),
+                row.updatedAt());
+        eventPublisher.publishChanged(row.tenantId(), STREAM, EVENT_TYPE, payload);
+    }
+
+    private void pruneTrackedKeysIfNeeded() {
+        if (lastPublishedUpdateByPipeline.size() <= MAX_TRACKED_KEYS
+                && lastEmittedAtByPipeline.size() <= MAX_TRACKED_KEYS) {
+            return;
+        }
+        lastPublishedUpdateByPipeline.clear();
+        lastEmittedAtByPipeline.clear();
+    }
 }

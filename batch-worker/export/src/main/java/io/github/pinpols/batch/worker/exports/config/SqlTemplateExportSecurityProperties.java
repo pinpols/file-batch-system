@@ -11,42 +11,41 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.export.sql-template")
 public class SqlTemplateExportSecurityProperties {
 
-  /** 每次查询的语句超时时间（秒）。 */
-  private int queryTimeoutSeconds = 30;
+    /** 每次查询的语句超时时间（秒）。 */
+    private int queryTimeoutSeconds = 30;
 
-  /** 单页最大行数上限，防止误配大页造成内存压力。 */
-  private int maxPageSize = 5000;
+    /** 单页最大行数上限，防止误配大页造成内存压力。 */
+    private int maxPageSize = 5000;
 
-  /** 模板 SQL 中必须包含的具名参数，用于强制租户隔离。 */
-  private List<String> requiredParams = new ArrayList<>(List.of("tenantId", "batchNo"));
+    /** 模板 SQL 中必须包含的具名参数，用于强制租户隔离。 */
+    private List<String> requiredParams = new ArrayList<>(List.of("tenantId", "batchNo"));
 
-  /**
-   * S-1.10：模板 SQL 允许使用的额外具名参数白名单（除 required + 引擎保留 __cursor / __limit 之外）。 默认包含常见业务占位符 {@code
-   * bizDate}（业务日期过滤常用）与 {@code region}（地区过滤，per-run + 字典校验，PrepareStep 解析后透传绑定）； 其余扩展参数仍需在 yml
-   * 显式列出。 注：{@code tenantId} / {@code batchNo} 已通过 {@link #requiredParams} 强制，这里不必重复。
-   */
-  private List<String> allowedExtraParams = new ArrayList<>(List.of("bizDate", "region"));
+    /**
+     * S-1.10：模板 SQL 允许使用的额外具名参数白名单（除 required + 引擎保留 __cursor / __limit 之外）。 默认包含常见业务占位符 {@code
+     * bizDate}（业务日期过滤常用）与 {@code region}（地区过滤，per-run + 字典校验，PrepareStep 解析后透传绑定）； 其余扩展参数仍需在 yml
+     * 显式列出。 注：{@code tenantId} / {@code batchNo} 已通过 {@link #requiredParams} 强制，这里不必重复。
+     */
+    private List<String> allowedExtraParams = new ArrayList<>(List.of("bizDate", "region"));
 
-  /** 允许引用的 schema 白名单，空列表表示不限制。 示例：["biz", "ref"] — 引用其他 schema（如 pg_catalog）的表将被拒绝。 */
-  private List<String> allowedSchemas = new ArrayList<>();
+    /** 允许引用的 schema 白名单，空列表表示不限制。 示例：["biz", "ref"] — 引用其他 schema（如 pg_catalog）的表将被拒绝。 */
+    private List<String> allowedSchemas = new ArrayList<>();
 
-  /** 在解析阶段拒绝 {@code SELECT *} / {@code SELECT table.*}。 */
-  private boolean forbidSelectStar = true;
+    /** 在解析阶段拒绝 {@code SELECT *} / {@code SELECT table.*}。 */
+    private boolean forbidSelectStar = true;
 
-  /** 在首页查询前对基础 SQL 执行 {@code EXPLAIN (FORMAT JSON)} 预检。 默认关闭；在需要检查执行计划代价或预估行数的环境中可开启。 */
-  private boolean explainCheckEnabled = false;
+    /** 在首页查询前对基础 SQL 执行 {@code EXPLAIN (FORMAT JSON)} 预检。 默认关闭；在需要检查执行计划代价或预估行数的环境中可开启。 */
+    private boolean explainCheckEnabled = false;
 
-  /** EXPLAIN 预估最大行数上限，&lt;= 0 表示不限制。 仅在 {@link #explainCheckEnabled} 为 true 时生效。 */
-  private long maxEstimatedRows = 5_000_000L;
+    /** EXPLAIN 预估最大行数上限，&lt;= 0 表示不限制。 仅在 {@link #explainCheckEnabled} 为 true 时生效。 */
+    private long maxEstimatedRows = 5_000_000L;
 
-  /** EXPLAIN 预估最大总代价上限，&lt;= 0 表示不限制。 仅在 {@link #explainCheckEnabled} 为 true 时生效。 */
-  private double maxPlanCost = -1;
+    /** EXPLAIN 预估最大总代价上限，&lt;= 0 表示不限制。 仅在 {@link #explainCheckEnabled} 为 true 时生效。 */
+    private double maxPlanCost = -1;
 
-  /**
-   * 禁止在 SQL 中调用的 PG 函数(大小写不敏感 AST 遍历,按函数家族前缀匹配)。默认值取自单一权威源 {@link
-   * SelectSqlAstValidator#DEFAULT_FORBIDDEN_FUNCTIONS}（与 sensor/DQ、process 侧同源，防止清单漂移）；yml
-   * 可在此基础上追加或覆盖。
-   */
-  private List<String> forbiddenFunctions =
-      new ArrayList<>(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
+    /**
+     * 禁止在 SQL 中调用的 PG 函数(大小写不敏感 AST 遍历,按函数家族前缀匹配)。默认值取自单一权威源 {@link
+     * SelectSqlAstValidator#DEFAULT_FORBIDDEN_FUNCTIONS}（与 sensor/DQ、process 侧同源，防止清单漂移）；yml
+     * 可在此基础上追加或覆盖。
+     */
+    private List<String> forbiddenFunctions = new ArrayList<>(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
 }

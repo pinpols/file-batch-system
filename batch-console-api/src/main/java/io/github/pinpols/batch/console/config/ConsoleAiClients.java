@@ -5,9 +5,9 @@ import org.springframework.ai.chat.client.ChatClient;
 /** 已配置的主模型与可选故障切换模型。 */
 public record ConsoleAiClients(ProviderClient primary, ProviderClient fallback) {
 
-  public record ProviderClient(String provider, ChatClient client, boolean imageInput) {
-    public ProviderClient(String provider, ChatClient client) {
-      this(provider, client, false);
+    public record ProviderClient(String provider, ChatClient client, boolean imageInput) {
+        public ProviderClient(String provider, ChatClient client) {
+            this(provider, client, false);
+        }
     }
-  }
 }

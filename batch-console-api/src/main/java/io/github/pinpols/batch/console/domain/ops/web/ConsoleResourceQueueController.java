@@ -25,39 +25,37 @@ import org.springframework.web.bind.annotation.*;
 @Idempotent
 public class ConsoleResourceQueueController {
 
-  private final ConsoleResourceQueueApplicationService resourceQueueApplicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleResourceQueueApplicationService resourceQueueApplicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<PageResponse<ResourceQueueResponse>> list(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "queueCode", required = false) String queueCode,
-      @RequestParam(value = "queueType", required = false) String queueType,
-      @RequestParam(value = "enabled", required = false) Boolean enabled,
-      @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
-      @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    ResourceQueueListRequest request =
-        new ResourceQueueListRequest(tenantId, queueCode, queueType, enabled, pageNo, pageSize);
-    PageResponse<ResourceQueueResponse> page = resourceQueueApplicationService.list(request);
-    return responseFactory.success(page);
-  }
+    @GetMapping
+    public CommonResponse<PageResponse<ResourceQueueResponse>> list(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "queueCode", required = false) String queueCode,
+            @RequestParam(value = "queueType", required = false) String queueType,
+            @RequestParam(value = "enabled", required = false) Boolean enabled,
+            @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
+            @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
+        ResourceQueueListRequest request =
+                new ResourceQueueListRequest(tenantId, queueCode, queueType, enabled, pageNo, pageSize);
+        PageResponse<ResourceQueueResponse> page = resourceQueueApplicationService.list(request);
+        return responseFactory.success(page);
+    }
 
-  @PostMapping
-  public CommonResponse<ResourceQueueResponse> create(
-      @Valid @RequestBody ResourceQueueCreateRequest request) {
-    return responseFactory.success(resourceQueueApplicationService.create(request));
-  }
+    @PostMapping
+    public CommonResponse<ResourceQueueResponse> create(@Valid @RequestBody ResourceQueueCreateRequest request) {
+        return responseFactory.success(resourceQueueApplicationService.create(request));
+    }
 
-  @PutMapping("/{id}")
-  public CommonResponse<ResourceQueueResponse> update(
-      @PathVariable Long id, @Valid @RequestBody ResourceQueueUpdateRequest request) {
-    return responseFactory.success(resourceQueueApplicationService.update(id, request));
-  }
+    @PutMapping("/{id}")
+    public CommonResponse<ResourceQueueResponse> update(
+            @PathVariable Long id, @Valid @RequestBody ResourceQueueUpdateRequest request) {
+        return responseFactory.success(resourceQueueApplicationService.update(id, request));
+    }
 
-  @PatchMapping("/{id}/enabled")
-  public CommonResponse<Void> setEnabled(
-      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    resourceQueueApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
-    return responseFactory.success(null);
-  }
+    @PatchMapping("/{id}/enabled")
+    public CommonResponse<Void> setEnabled(@PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        resourceQueueApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
+        return responseFactory.success(null);
+    }
 }

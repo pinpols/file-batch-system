@@ -11,41 +11,40 @@ import org.apache.ibatis.annotations.Param;
 
 public interface FileTemplateConfigMapper {
 
-  List<FileTemplateConfigQueryView> selectByQuery(@Param("q") FileTemplateConfigQuery q);
+    List<FileTemplateConfigQueryView> selectByQuery(@Param("q") FileTemplateConfigQuery q);
 
-  long countByQuery(@Param("q") FileTemplateConfigQuery q);
+    long countByQuery(@Param("q") FileTemplateConfigQuery q);
 
-  FileTemplateSecurityFlagsView selectSecurityFlagsByTemplateCode(
-      @Param("tenantId") String tenantId, @Param("templateCode") String templateCode);
+    FileTemplateSecurityFlagsView selectSecurityFlagsByTemplateCode(
+            @Param("tenantId") String tenantId, @Param("templateCode") String templateCode);
 
-  FileTemplateConfigQueryView selectByUniqueKey(
-      @Param("tenantId") String tenantId,
-      @Param("templateCode") String templateCode,
-      @Param("version") Integer version);
+    FileTemplateConfigQueryView selectByUniqueKey(
+            @Param("tenantId") String tenantId,
+            @Param("templateCode") String templateCode,
+            @Param("version") Integer version);
 
-  FileTemplateConfigQueryView selectEnabledByTenantAndCode(
-      @Param("tenantId") String tenantId, @Param("templateCode") String templateCode);
+    FileTemplateConfigQueryView selectEnabledByTenantAndCode(
+            @Param("tenantId") String tenantId, @Param("templateCode") String templateCode);
 
-  /** 模板是否配置了非空的显式预处理流水线；Console 不写该列，只在校验加密类型时读取。 */
-  boolean hasPreprocessPipeline(
-      @Param("tenantId") String tenantId,
-      @Param("templateCode") String templateCode,
-      @Param("version") Integer version);
+    /** 模板是否配置了非空的显式预处理流水线；Console 不写该列，只在校验加密类型时读取。 */
+    boolean hasPreprocessPipeline(
+            @Param("tenantId") String tenantId,
+            @Param("templateCode") String templateCode,
+            @Param("version") Integer version);
 
-  FileTemplateConfigQueryView selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    FileTemplateConfigQueryView selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int toggleEnabled(
-      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
+    int toggleEnabled(@Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 
-  int toggleEnabledIfUnchanged(@Param("p") FileTemplateEnableFence p);
+    int toggleEnabledIfUnchanged(@Param("p") FileTemplateEnableFence p);
 
-  int deleteById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    int deleteById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int upsertFileTemplateConfig(@Param("p") FileTemplateConfigUpsertParam p);
+    int upsertFileTemplateConfig(@Param("p") FileTemplateConfigUpsertParam p);
 
-  /**
-   * 租户就绪自检专用:返回未删除模板的最小完整性字段 (templateCode, templateType, enabled, default_query_sql,
-   * field_mappings, naming_rule)。只读,供 readiness 端点判定关键字段是否空占位。
-   */
-  List<FileTemplateConfigReadinessView> selectReadinessRows(@Param("tenantId") String tenantId);
+    /**
+     * 租户就绪自检专用:返回未删除模板的最小完整性字段 (templateCode, templateType, enabled, default_query_sql,
+     * field_mappings, naming_rule)。只读,供 readiness 端点判定关键字段是否空占位。
+     */
+    List<FileTemplateConfigReadinessView> selectReadinessRows(@Param("tenantId") String tenantId);
 }

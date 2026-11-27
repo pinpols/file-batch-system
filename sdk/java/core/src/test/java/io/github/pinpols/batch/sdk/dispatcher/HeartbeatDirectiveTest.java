@@ -11,105 +11,102 @@ import org.junit.jupiter.api.Test;
 @DisplayName("HeartbeatDirective 心跳指令 — 平台状态映射、排空优先与畸形回包降级")
 class HeartbeatDirectiveTest {
 
-  @Test
-  @DisplayName("心跳回包为空或缺失时按正常态处理,不触发排空")
-  void shouldFallbackToNormal_whenResponseEmptyOrNull() {
-    // 老平台心跳回包为空(bodiless)→ NORMAL,不暂停
-    for (Map<String, Object> resp : List.of(Map.<String, Object>of())) {
-      HeartbeatDirective d = HeartbeatDirective.fromResponse(resp);
-      assertThat(d.platformStatus()).isEqualTo("NORMAL");
-      assertThat(d.shouldDrain()).isFalse();
-      assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
+    @Test
+    @DisplayName("心跳回包为空或缺失时按正常态处理,不触发排空")
+    void shouldFallbackToNormal_whenResponseEmptyOrNull() {
+        // 老平台心跳回包为空(bodiless)→ NORMAL,不暂停
+        for (Map<String, Object> resp : List.of(Map.<String, Object>of())) {
+            HeartbeatDirective d = HeartbeatDirective.fromResponse(resp);
+            assertThat(d.platformStatus()).isEqualTo("NORMAL");
+            assertThat(d.shouldDrain()).isFalse();
+            assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
+        }
+        assertThat(HeartbeatDirective.fromResponse(null).toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
     }
-    assertThat(HeartbeatDirective.fromResponse(null).toRuntimeState())
-        .isEqualTo(WorkerRuntimeState.NORMAL);
-  }
 
-  @Test
-  @DisplayName("正常态指令解析出期望并发上限与空暂停类型,且不排空")
-  void shouldParseDirective_whenStatusNormal() {
-    Map<String, Object> resp = new HashMap<>();
-    resp.put("platformStatus", "NORMAL");
-    resp.put("desiredMaxConcurrent", 8);
-    resp.put("shouldDrain", false);
-    resp.put("pausedTaskTypes", List.of());
-    resp.put("nextHeartbeatHint", null);
+    @Test
+    @DisplayName("正常态指令解析出期望并发上限与空暂停类型,且不排空")
+    void shouldParseDirective_whenStatusNormal() {
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("platformStatus", "NORMAL");
+        resp.put("desiredMaxConcurrent", 8);
+        resp.put("shouldDrain", false);
+        resp.put("pausedTaskTypes", List.of());
+        resp.put("nextHeartbeatHint", null);
 
-    HeartbeatDirective d = HeartbeatDirective.fromResponse(resp);
+        HeartbeatDirective d = HeartbeatDirective.fromResponse(resp);
 
-    assertThat(d.desiredMaxConcurrent()).isEqualTo(8);
-    assertThat(d.shouldDrain()).isFalse();
-    assertThat(d.pausedTaskTypes()).isEmpty();
-    assertThat(d.nextHeartbeatHint()).isNull();
-    assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
-  }
+        assertThat(d.desiredMaxConcurrent()).isEqualTo(8);
+        assertThat(d.shouldDrain()).isFalse();
+        assertThat(d.pausedTaskTypes()).isEmpty();
+        assertThat(d.nextHeartbeatHint()).isNull();
+        assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
+    }
 
-  @Test
-  @DisplayName("排空指令映射为排空态,且不再接收新任务")
-  void shouldDrainMapsToDraining() {
-    Map<String, Object> resp = new HashMap<>();
-    resp.put("platformStatus", "DRAINING");
-    resp.put("shouldDrain", true);
-    HeartbeatDirective d = HeartbeatDirective.fromResponse(resp);
-    assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.DRAINING);
-    assertThat(d.toRuntimeState().acceptsNewTasks()).isFalse();
-  }
+    @Test
+    @DisplayName("排空指令映射为排空态,且不再接收新任务")
+    void shouldDrainMapsToDraining() {
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("platformStatus", "DRAINING");
+        resp.put("shouldDrain", true);
+        HeartbeatDirective d = HeartbeatDirective.fromResponse(resp);
+        assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.DRAINING);
+        assertThat(d.toRuntimeState().acceptsNewTasks()).isFalse();
+    }
 
-  @Test
-  @DisplayName("平台暂停态即便未置排空标记也停止认领新任务")
-  void shouldEnterPaused_whenPlatformStatusPaused() {
-    // 平台预留态:即便 shouldDrain=false,PAUSED 也停止认领
-    HeartbeatDirective d = HeartbeatDirective.fromResponse(Map.of("platformStatus", "PAUSED"));
-    assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.PAUSED);
-    assertThat(d.toRuntimeState().acceptsNewTasks()).isFalse();
-  }
+    @Test
+    @DisplayName("平台暂停态即便未置排空标记也停止认领新任务")
+    void shouldEnterPaused_whenPlatformStatusPaused() {
+        // 平台预留态:即便 shouldDrain=false,PAUSED 也停止认领
+        HeartbeatDirective d = HeartbeatDirective.fromResponse(Map.of("platformStatus", "PAUSED"));
+        assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.PAUSED);
+        assertThat(d.toRuntimeState().acceptsNewTasks()).isFalse();
+    }
 
-  @Test
-  @DisplayName("平台降级态下仍允许接收新任务,不误停")
-  void shouldStillAcceptTasks_whenPlatformStatusDegraded() {
-    HeartbeatDirective d = HeartbeatDirective.fromResponse(Map.of("platformStatus", "DEGRADED"));
-    assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.DEGRADED);
-    assertThat(d.toRuntimeState().acceptsNewTasks()).isTrue();
-  }
+    @Test
+    @DisplayName("平台降级态下仍允许接收新任务,不误停")
+    void shouldStillAcceptTasks_whenPlatformStatusDegraded() {
+        HeartbeatDirective d = HeartbeatDirective.fromResponse(Map.of("platformStatus", "DEGRADED"));
+        assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.DEGRADED);
+        assertThat(d.toRuntimeState().acceptsNewTasks()).isTrue();
+    }
 
-  @Test
-  @DisplayName("平台下发未知状态时按正常态处理,避免老客户端误暂停")
-  void shouldFallbackToNormal_whenPlatformStatusUnknown() {
-    // 向后兼容:平台后续加新态,老 SDK 不认 → 当 NORMAL 处理(不误暂停)
-    HeartbeatDirective d =
-        HeartbeatDirective.fromResponse(Map.of("platformStatus", "FUTURE_STATE"));
-    assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
-  }
+    @Test
+    @DisplayName("平台下发未知状态时按正常态处理,避免老客户端误暂停")
+    void shouldFallbackToNormal_whenPlatformStatusUnknown() {
+        // 向后兼容:平台后续加新态,老 SDK 不认 → 当 NORMAL 处理(不误暂停)
+        HeartbeatDirective d = HeartbeatDirective.fromResponse(Map.of("platformStatus", "FUTURE_STATE"));
+        assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
+    }
 
-  @Test
-  @DisplayName("回包字段类型畸形时忽略非法值并保持正常态,不抛异常")
-  void shouldDegradeGracefully_whenFieldShapesMalformed() {
-    // 平台回包字段类型不对(pausedTaskTypes 非 List、数值字段是非数字字符串)→ 不抛,降级:
-    // status 仍读到(任意值都当字符串),非 List 的 paused → 空,非数字的 int 字段 → null
-    Map<String, Object> resp = new HashMap<>();
-    resp.put("platformStatus", "NORMAL");
-    resp.put("pausedTaskTypes", "not-a-list"); // 错误形状
-    resp.put("desiredMaxConcurrent", "eight"); // 非数字
-    resp.put("nextHeartbeatHint", "soon"); // 非数字
-    resp.put("shouldDrain", "yes"); // 非 Boolean.TRUE → 当 false
+    @Test
+    @DisplayName("回包字段类型畸形时忽略非法值并保持正常态,不抛异常")
+    void shouldDegradeGracefully_whenFieldShapesMalformed() {
+        // 平台回包字段类型不对(pausedTaskTypes 非 List、数值字段是非数字字符串)→ 不抛,降级:
+        // status 仍读到(任意值都当字符串),非 List 的 paused → 空,非数字的 int 字段 → null
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("platformStatus", "NORMAL");
+        resp.put("pausedTaskTypes", "not-a-list"); // 错误形状
+        resp.put("desiredMaxConcurrent", "eight"); // 非数字
+        resp.put("nextHeartbeatHint", "soon"); // 非数字
+        resp.put("shouldDrain", "yes"); // 非 Boolean.TRUE → 当 false
 
-    HeartbeatDirective d = HeartbeatDirective.fromResponse(resp);
+        HeartbeatDirective d = HeartbeatDirective.fromResponse(resp);
 
-    assertThat(d.pausedTaskTypes()).isEmpty();
-    assertThat(d.desiredMaxConcurrent()).isNull();
-    assertThat(d.nextHeartbeatHint()).isNull();
-    assertThat(d.shouldDrain()).isFalse();
-    assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
-  }
+        assertThat(d.pausedTaskTypes()).isEmpty();
+        assertThat(d.desiredMaxConcurrent()).isNull();
+        assertThat(d.nextHeartbeatHint()).isNull();
+        assertThat(d.shouldDrain()).isFalse();
+        assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
+    }
 
-  @Test
-  @DisplayName("排空标记优先于平台状态,两者冲突时判为排空")
-  void shouldPreferDraining_whenDrainFlagSet() {
-    // shouldDrain=true 即使 platformStatus 说别的也优先 DRAINING
-    Map<String, Object> resp = new HashMap<>();
-    resp.put("platformStatus", "NORMAL");
-    resp.put("shouldDrain", true);
-    assertThat(HeartbeatDirective.fromResponse(resp).toRuntimeState())
-        .isEqualTo(WorkerRuntimeState.DRAINING);
-  }
+    @Test
+    @DisplayName("排空标记优先于平台状态,两者冲突时判为排空")
+    void shouldPreferDraining_whenDrainFlagSet() {
+        // shouldDrain=true 即使 platformStatus 说别的也优先 DRAINING
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("platformStatus", "NORMAL");
+        resp.put("shouldDrain", true);
+        assertThat(HeartbeatDirective.fromResponse(resp).toRuntimeState()).isEqualTo(WorkerRuntimeState.DRAINING);
+    }
 }

@@ -11,10 +11,10 @@ import java.util.Map;
  */
 public interface TenantPlacementRepository {
 
-  /**
-   * 全量加载 tenant_id → placement_key。读失败抛出(由 resolver 处理 stale/cold 降级)。
-   *
-   * @return 当前 placement 映射(空表合法返回空 map)
-   */
-  Map<String, String> loadAll();
+    /**
+     * 全量加载 tenant_id → placement_key。读失败抛出(由 resolver 处理 stale/cold 降级)。
+     *
+     * @return 当前 placement 映射(空表合法返回空 map)
+     */
+    Map<String, String> loadAll();
 }

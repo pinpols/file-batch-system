@@ -67,271 +67,259 @@ import reactor.core.publisher.Sinks;
 @Idempotent
 public class ConsoleAiController {
 
-  /** 流式对话线程池的最大并发线程数；SynchronousQueue 不排队，超出即拒绝。 */
-  private static final int STREAM_MAX_THREADS = 16;
+    /** 流式对话线程池的最大并发线程数；SynchronousQueue 不排队，超出即拒绝。 */
+    private static final int STREAM_MAX_THREADS = 16;
 
-  /** 流式对话空闲线程的回收秒数。 */
-  private static final long STREAM_KEEP_ALIVE_SECONDS = 60L;
+    /** 流式对话空闲线程的回收秒数。 */
+    private static final long STREAM_KEEP_ALIVE_SECONDS = 60L;
 
-  /** SSE 超时比模型请求超时多留的毫秒数，让模型请求超时先于 SSE 连接超时发生。 */
-  private static final int SSE_TIMEOUT_MARGIN_MILLIS = 10_000;
+    /** SSE 超时比模型请求超时多留的毫秒数，让模型请求超时先于 SSE 连接超时发生。 */
+    private static final int SSE_TIMEOUT_MARGIN_MILLIS = 10_000;
 
-  private final ConsoleAiApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleAiAuthorizationService authorizationService;
-  private final ConsoleRequestMetadataResolver metadataResolver;
-  private final ConsoleAiProperties aiProperties;
-  private final ConsoleAiImageApplicationService imageService;
-  private final ConsoleAiStreamRegistry streamRegistry;
-  private final ExecutorService streamExecutor = new ThreadPoolExecutor(
-      0,
-      STREAM_MAX_THREADS,
-      STREAM_KEEP_ALIVE_SECONDS,
-      TimeUnit.SECONDS,
-      new SynchronousQueue<>(),
-      runnable -> {
-        Thread thread = new Thread(runnable, "console-ai-stream");
-        thread.setDaemon(true);
-        return thread;
-      });
+    private final ConsoleAiApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleAiAuthorizationService authorizationService;
+    private final ConsoleRequestMetadataResolver metadataResolver;
+    private final ConsoleAiProperties aiProperties;
+    private final ConsoleAiImageApplicationService imageService;
+    private final ConsoleAiStreamRegistry streamRegistry;
+    private final ExecutorService streamExecutor = new ThreadPoolExecutor(
+            0, STREAM_MAX_THREADS, STREAM_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
+                Thread thread = new Thread(runnable, "console-ai-stream");
+                thread.setDaemon(true);
+                return thread;
+            });
 
-  @PreDestroy
-  void shutdownStreamExecutor() {
-    streamExecutor.shutdownNow();
-  }
+    @PreDestroy
+    void shutdownStreamExecutor() {
+        streamExecutor.shutdownNow();
+    }
 
-  @GetMapping("/capabilities")
-  public CommonResponse<ConsoleAiCapabilities> capabilities() {
-    authorizationService.assertAllowed();
-    return responseFactory.success(imageService.capabilities());
-  }
+    @GetMapping("/capabilities")
+    public CommonResponse<ConsoleAiCapabilities> capabilities() {
+        authorizationService.assertAllowed();
+        return responseFactory.success(imageService.capabilities());
+    }
 
-  @PostMapping(value = "/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public CommonResponse<ConsoleAiAttachmentUseCase.AttachmentView> uploadAttachment(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @RequestParam UUID clientAttachmentId,
-      @RequestParam("file") MultipartFile file)
-      throws IOException {
-    authorizationService.assertAllowed();
-    ConsoleAiAttachmentUseCase.AttachmentView attachment =
-        imageService.upload(clientAttachmentId, file);
-    return responseFactory.success(attachment);
-  }
+    @PostMapping(value = "/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CommonResponse<ConsoleAiAttachmentUseCase.AttachmentView> uploadAttachment(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @RequestParam UUID clientAttachmentId,
+            @RequestParam("file") MultipartFile file)
+            throws IOException {
+        authorizationService.assertAllowed();
+        ConsoleAiAttachmentUseCase.AttachmentView attachment = imageService.upload(clientAttachmentId, file);
+        return responseFactory.success(attachment);
+    }
 
-  @GetMapping("/attachments/by-client-id/{clientAttachmentId}")
-  public CommonResponse<ConsoleAiAttachmentUseCase.AttachmentView> attachmentStatus(
-      @PathVariable UUID clientAttachmentId) {
-    authorizationService.assertAllowed();
-    ConsoleAiAttachmentUseCase.AttachmentView attachment = imageService.status(clientAttachmentId);
-    return responseFactory.success(attachment);
-  }
+    @GetMapping("/attachments/by-client-id/{clientAttachmentId}")
+    public CommonResponse<ConsoleAiAttachmentUseCase.AttachmentView> attachmentStatus(
+            @PathVariable UUID clientAttachmentId) {
+        authorizationService.assertAllowed();
+        ConsoleAiAttachmentUseCase.AttachmentView attachment = imageService.status(clientAttachmentId);
+        return responseFactory.success(attachment);
+    }
 
-  @GetMapping("/attachments/{id}/content")
-  public ResponseEntity<byte[]> attachmentContent(@PathVariable UUID id) {
-    authorizationService.assertAllowed();
-    ConsoleAiAttachmentUseCase.ImageContent image = imageService.content(id);
-    ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
-    responseBuilder.cacheControl(CacheControl.noStore());
-    responseBuilder.header("X-Content-Type-Options", "nosniff");
-    String mediaTypeValue = image.mediaType();
-    MediaType mediaType = MediaType.parseMediaType(mediaTypeValue);
-    responseBuilder.contentType(mediaType);
-    byte[] content = image.bytes();
-    return responseBuilder.body(content);
-  }
+    @GetMapping("/attachments/{id}/content")
+    public ResponseEntity<byte[]> attachmentContent(@PathVariable UUID id) {
+        authorizationService.assertAllowed();
+        ConsoleAiAttachmentUseCase.ImageContent image = imageService.content(id);
+        ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
+        responseBuilder.cacheControl(CacheControl.noStore());
+        responseBuilder.header("X-Content-Type-Options", "nosniff");
+        String mediaTypeValue = image.mediaType();
+        MediaType mediaType = MediaType.parseMediaType(mediaTypeValue);
+        responseBuilder.contentType(mediaType);
+        byte[] content = image.bytes();
+        return responseBuilder.body(content);
+    }
 
-  @DeleteMapping("/attachments/{id}")
-  public CommonResponse<Void> deleteAttachment(@PathVariable UUID id) {
-    authorizationService.assertAllowed();
-    imageService.deleteDraft(id);
-    return responseFactory.success(null);
-  }
+    @DeleteMapping("/attachments/{id}")
+    public CommonResponse<Void> deleteAttachment(@PathVariable UUID id) {
+        authorizationService.assertAllowed();
+        imageService.deleteDraft(id);
+        return responseFactory.success(null);
+    }
 
-  @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter chatStream(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody AiChatRequest request) {
-    authorizationService.assertAllowed();
-    PreparedStream prepared = applicationService.prepareStream(request, idempotencyKey);
-    String requestId = prepared.requestId();
-    Locale requestLocale = LocaleContextHolder.getLocale();
-    long configuredRequestTimeoutMillis = aiProperties.getRequestTimeout().toMillis();
-    long minimumRequestTimeoutMillis = Math.max(1, configuredRequestTimeoutMillis);
-    long timeout = minimumRequestTimeoutMillis + SSE_TIMEOUT_MARGIN_MILLIS;
-    SseEmitter emitter = new SseEmitter(timeout);
-    ActiveStream active = new ActiveStream(emitter);
-    Registration registration = streamRegistry.register(requestId, active::cancel);
-    emitter.onTimeout(active::cancel);
-    emitter.onError(error -> active.cancel());
-    emitter.onCompletion(active::cancel);
-    try {
-      streamExecutor.execute(() -> {
-        LocaleContextHolder.setLocale(requestLocale);
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatStream(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody AiChatRequest request) {
+        authorizationService.assertAllowed();
+        PreparedStream prepared = applicationService.prepareStream(request, idempotencyKey);
+        String requestId = prepared.requestId();
+        Locale requestLocale = LocaleContextHolder.getLocale();
+        long configuredRequestTimeoutMillis = aiProperties.getRequestTimeout().toMillis();
+        long minimumRequestTimeoutMillis = Math.max(1, configuredRequestTimeoutMillis);
+        long timeout = minimumRequestTimeoutMillis + SSE_TIMEOUT_MARGIN_MILLIS;
+        SseEmitter emitter = new SseEmitter(timeout);
+        ActiveStream active = new ActiveStream(emitter);
+        Registration registration = streamRegistry.register(requestId, active::cancel);
+        emitter.onTimeout(active::cancel);
+        emitter.onError(error -> active.cancel());
+        emitter.onCompletion(active::cancel);
         try {
-          active.send("started", Map.of("requestId", requestId));
-          AiChatResponse result = prepared.execute(active);
-          if (!active.isCancelled()) {
-            active.send("completed", result);
-          }
-        } catch (CancellationException ignored) {
-          // 客户端已停止；服务仍须结算并审计本轮请求。
-        } catch (Exception exception) {
-          if (!active.isCancelled()) {
-            try {
-              String code = exception instanceof BizException bizException
-                  ? bizException.getCode().code()
-                  : "STREAM_FAILED";
-              active.send("failed", Map.of("code", code));
-            } catch (IOException | UncheckedIOException ignored) {
-              active.cancel();
-            }
-          }
-        } finally {
-          LocaleContextHolder.resetLocaleContext();
-          active.finished.set(true);
-          streamRegistry.remove(requestId, registration);
-          emitter.complete();
+            streamExecutor.execute(() -> {
+                LocaleContextHolder.setLocale(requestLocale);
+                try {
+                    active.send("started", Map.of("requestId", requestId));
+                    AiChatResponse result = prepared.execute(active);
+                    if (!active.isCancelled()) {
+                        active.send("completed", result);
+                    }
+                } catch (CancellationException ignored) {
+                    // 客户端已停止；服务仍须结算并审计本轮请求。
+                } catch (Exception exception) {
+                    if (!active.isCancelled()) {
+                        try {
+                            String code = exception instanceof BizException bizException
+                                    ? bizException.getCode().code()
+                                    : "STREAM_FAILED";
+                            active.send("failed", Map.of("code", code));
+                        } catch (IOException | UncheckedIOException ignored) {
+                            active.cancel();
+                        }
+                    }
+                } finally {
+                    LocaleContextHolder.resetLocaleContext();
+                    active.finished.set(true);
+                    streamRegistry.remove(requestId, registration);
+                    emitter.complete();
+                }
+            });
+        } catch (RejectedExecutionException exception) {
+            streamRegistry.remove(requestId, registration);
+            throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.assistant_not_configured");
         }
-      });
-    } catch (RejectedExecutionException exception) {
-      streamRegistry.remove(requestId, registration);
-      throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.assistant_not_configured");
-    }
-    return emitter;
-  }
-
-  @PostMapping("/chat/stream/{requestId}/cancel")
-  public CommonResponse<Void> cancelChatStream(@PathVariable String requestId) {
-    authorizationService.assertAllowed();
-    streamRegistry.cancel(requestId);
-    return responseFactory.success(null);
-  }
-
-  private static final class ActiveStream implements ConsoleAiApplicationService.StreamObserver {
-    private final SseEmitter emitter;
-    private final Sinks.Empty<Void> cancellation = Sinks.empty();
-    private final AtomicBoolean cancelled = new AtomicBoolean();
-    private final AtomicBoolean emitted = new AtomicBoolean();
-    private final AtomicBoolean finished = new AtomicBoolean();
-
-    private ActiveStream(SseEmitter emitter) {
-      this.emitter = emitter;
+        return emitter;
     }
 
-    private void send(String event, Object payload) throws IOException {
-      emitter.send(SseEmitter.event().name(event).data(payload));
+    @PostMapping("/chat/stream/{requestId}/cancel")
+    public CommonResponse<Void> cancelChatStream(@PathVariable String requestId) {
+        authorizationService.assertAllowed();
+        streamRegistry.cancel(requestId);
+        return responseFactory.success(null);
     }
 
-    @Override
-    public void onDelta(String text) {
-      if (isCancelled()) throw new CancellationException("AI stream cancelled");
-      try {
-        send("delta", Map.of("text", text));
-        emitted.set(true);
-      } catch (IOException exception) {
-        cancel();
-        throw new UncheckedIOException(exception);
-      }
+    private static final class ActiveStream implements ConsoleAiApplicationService.StreamObserver {
+        private final SseEmitter emitter;
+        private final Sinks.Empty<Void> cancellation = Sinks.empty();
+        private final AtomicBoolean cancelled = new AtomicBoolean();
+        private final AtomicBoolean emitted = new AtomicBoolean();
+        private final AtomicBoolean finished = new AtomicBoolean();
+
+        private ActiveStream(SseEmitter emitter) {
+            this.emitter = emitter;
+        }
+
+        private void send(String event, Object payload) throws IOException {
+            emitter.send(SseEmitter.event().name(event).data(payload));
+        }
+
+        @Override
+        public void onDelta(String text) {
+            if (isCancelled()) throw new CancellationException("AI stream cancelled");
+            try {
+                send("delta", Map.of("text", text));
+                emitted.set(true);
+            } catch (IOException exception) {
+                cancel();
+                throw new UncheckedIOException(exception);
+            }
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return cancelled.get();
+        }
+
+        @Override
+        public boolean hasEmitted() {
+            return emitted.get();
+        }
+
+        @Override
+        public Mono<Void> cancellationSignal() {
+            return cancellation.asMono();
+        }
+
+        private void cancel() {
+            if (!finished.get() && cancelled.compareAndSet(false, true)) {
+                cancellation.tryEmitEmpty();
+            }
+        }
     }
 
-    @Override
-    public boolean isCancelled() {
-      return cancelled.get();
+    @GetMapping("/conversations")
+    public CommonResponse<List<ConsoleAiApplicationService.ConversationSummary>> conversations(
+            @RequestParam(defaultValue = "20") int limit) {
+        authorizationService.assertAllowed();
+        ConsoleRequestMetadata metadata = metadataResolver.current();
+        String tenantId = metadata.tenantId();
+        String operatorId = metadata.operatorId();
+        List<ConsoleAiApplicationService.ConversationSummary> conversations =
+                applicationService.conversations(tenantId, operatorId, limit);
+        return responseFactory.success(conversations);
     }
 
-    @Override
-    public boolean hasEmitted() {
-      return emitted.get();
+    @GetMapping("/conversations/page")
+    public CommonResponse<PageResponse<ConsoleAiApplicationService.ConversationSummary>> conversationPage(
+            @RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int limit) {
+        authorizationService.assertAllowed();
+        ConsoleRequestMetadata metadata = metadataResolver.current();
+        String tenantId = metadata.tenantId();
+        String operatorId = metadata.operatorId();
+        PageResponse<ConsoleAiApplicationService.ConversationSummary> page =
+                applicationService.conversationPage(tenantId, operatorId, cursor, limit);
+        return responseFactory.success(page);
     }
 
-    @Override
-    public Mono<Void> cancellationSignal() {
-      return cancellation.asMono();
+    @GetMapping("/conversations/{conversationId}/turns")
+    public CommonResponse<List<ConsoleAiApplicationService.TurnSummary>> turns(
+            @PathVariable String conversationId,
+            @RequestParam(required = false) Long beforeTurnNo,
+            @RequestParam(defaultValue = "50") int limit) {
+        authorizationService.assertAllowed();
+        ConsoleRequestMetadata metadata = metadataResolver.current();
+        String tenantId = metadata.tenantId();
+        String operatorId = metadata.operatorId();
+        List<ConsoleAiApplicationService.TurnSummary> turns =
+                applicationService.turns(tenantId, operatorId, conversationId, beforeTurnNo, limit);
+        return responseFactory.success(turns);
     }
 
-    private void cancel() {
-      if (!finished.get() && cancelled.compareAndSet(false, true)) {
-        cancellation.tryEmitEmpty();
-      }
+    @GetMapping("/turns/by-client-id/{clientTurnId}")
+    public CommonResponse<ConsoleAiApplicationService.ClientTurnSummary> turnStatus(@PathVariable UUID clientTurnId) {
+        authorizationService.assertAllowed();
+        ConsoleRequestMetadata metadata = metadataResolver.current();
+        String tenantId = metadata.tenantId();
+        String operatorId = metadata.operatorId();
+        ConsoleAiApplicationService.ClientTurnSummary turn =
+                applicationService.turnByClientId(tenantId, operatorId, clientTurnId);
+        return responseFactory.success(turn);
     }
-  }
 
-  @GetMapping("/conversations")
-  public CommonResponse<List<ConsoleAiApplicationService.ConversationSummary>> conversations(
-      @RequestParam(defaultValue = "20") int limit) {
-    authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    String tenantId = metadata.tenantId();
-    String operatorId = metadata.operatorId();
-    List<ConsoleAiApplicationService.ConversationSummary> conversations =
-        applicationService.conversations(tenantId, operatorId, limit);
-    return responseFactory.success(conversations);
-  }
-
-  @GetMapping("/conversations/page")
-  public CommonResponse<PageResponse<ConsoleAiApplicationService.ConversationSummary>>
-      conversationPage(
-          @RequestParam(required = false) String cursor,
-          @RequestParam(defaultValue = "20") int limit) {
-    authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    String tenantId = metadata.tenantId();
-    String operatorId = metadata.operatorId();
-    PageResponse<ConsoleAiApplicationService.ConversationSummary> page =
-        applicationService.conversationPage(tenantId, operatorId, cursor, limit);
-    return responseFactory.success(page);
-  }
-
-  @GetMapping("/conversations/{conversationId}/turns")
-  public CommonResponse<List<ConsoleAiApplicationService.TurnSummary>> turns(
-      @PathVariable String conversationId,
-      @RequestParam(required = false) Long beforeTurnNo,
-      @RequestParam(defaultValue = "50") int limit) {
-    authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    String tenantId = metadata.tenantId();
-    String operatorId = metadata.operatorId();
-    List<ConsoleAiApplicationService.TurnSummary> turns =
-        applicationService.turns(tenantId, operatorId, conversationId, beforeTurnNo, limit);
-    return responseFactory.success(turns);
-  }
-
-  @GetMapping("/turns/by-client-id/{clientTurnId}")
-  public CommonResponse<ConsoleAiApplicationService.ClientTurnSummary> turnStatus(
-      @PathVariable UUID clientTurnId) {
-    authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    String tenantId = metadata.tenantId();
-    String operatorId = metadata.operatorId();
-    ConsoleAiApplicationService.ClientTurnSummary turn =
-        applicationService.turnByClientId(tenantId, operatorId, clientTurnId);
-    return responseFactory.success(turn);
-  }
-
-  @DeleteMapping("/conversations/{conversationId}")
-  public CommonResponse<Void> deleteConversation(@PathVariable String conversationId) {
-    authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    applicationService.deleteConversation(
-        metadata.tenantId(), metadata.operatorId(), conversationId);
-    return responseFactory.success(null);
-  }
-
-  @GetMapping("/cost-summary")
-  public CommonResponse<ConsoleAiApplicationService.AiCostSummary> costSummary(
-      @RequestParam(required = false) String month) {
-    authorizationService.assertAllowed();
-    YearMonth billingMonth;
-    try {
-      billingMonth =
-          EmptyChecks.isBlank(month) ? YearMonth.now(ZoneOffset.UTC) : YearMonth.parse(month);
-    } catch (DateTimeParseException exception) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
+    @DeleteMapping("/conversations/{conversationId}")
+    public CommonResponse<Void> deleteConversation(@PathVariable String conversationId) {
+        authorizationService.assertAllowed();
+        ConsoleRequestMetadata metadata = metadataResolver.current();
+        applicationService.deleteConversation(metadata.tenantId(), metadata.operatorId(), conversationId);
+        return responseFactory.success(null);
     }
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    String tenantId = metadata.tenantId();
-    ConsoleAiApplicationService.AiCostSummary summary =
-        applicationService.costSummary(tenantId, billingMonth);
-    return responseFactory.success(summary);
-  }
+
+    @GetMapping("/cost-summary")
+    public CommonResponse<ConsoleAiApplicationService.AiCostSummary> costSummary(
+            @RequestParam(required = false) String month) {
+        authorizationService.assertAllowed();
+        YearMonth billingMonth;
+        try {
+            billingMonth = EmptyChecks.isBlank(month) ? YearMonth.now(ZoneOffset.UTC) : YearMonth.parse(month);
+        } catch (DateTimeParseException exception) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
+        }
+        ConsoleRequestMetadata metadata = metadataResolver.current();
+        String tenantId = metadata.tenantId();
+        ConsoleAiApplicationService.AiCostSummary summary = applicationService.costSummary(tenantId, billingMonth);
+        return responseFactory.success(summary);
+    }
 }

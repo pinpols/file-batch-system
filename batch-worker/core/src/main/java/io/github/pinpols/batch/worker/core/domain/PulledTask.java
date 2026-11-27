@@ -14,78 +14,78 @@ import lombok.Data;
 @Data
 public class PulledTask {
 
-  private String taskId;
-  private String taskType;
-  private String jobCode;
-  private String tenantId;
-  private String workerId;
-  private String traceId;
-  private String businessKey;
-  private Long jobInstanceId;
-  private Long jobPartitionId;
-  private Integer taskSeq;
-  private String idempotencyKey;
-  private String payload;
+    private String taskId;
+    private String taskType;
+    private String jobCode;
+    private String tenantId;
+    private String workerId;
+    private String traceId;
+    private String businessKey;
+    private Long jobInstanceId;
+    private Long jobPartitionId;
+    private Integer taskSeq;
+    private String idempotencyKey;
+    private String payload;
 
-  /** 派发时刻确定的业务日，来自 {@code TaskDispatchMessage.schedulingContext}。 */
-  private LocalDate bizDate;
+    /** 派发时刻确定的业务日，来自 {@code TaskDispatchMessage.schedulingContext}。 */
+    private LocalDate bizDate;
 
-  /**
-   * 增量执行模式(ExecutionMode.INCREMENTAL)的水位起点,从 TaskDispatchMessage 透传过来。 Worker 业务逻辑可通过 {@code
-   * ExecutionContext.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN)} 读取并 拼接 SQL,例
-   * `WHERE update_time > :highWaterMarkIn`。
-   */
-  private String highWaterMarkIn;
+    /**
+     * 增量执行模式(ExecutionMode.INCREMENTAL)的水位起点,从 TaskDispatchMessage 透传过来。 Worker 业务逻辑可通过 {@code
+     * ExecutionContext.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN)} 读取并 拼接 SQL,例
+     * `WHERE update_time > :highWaterMarkIn`。
+     */
+    private String highWaterMarkIn;
 
-  /** 当前 task 所属 partition 的 1-based 序号(claim 拿,源头 job_partition.partition_no)。 */
-  private Integer partitionNo;
+    /** 当前 task 所属 partition 的 1-based 序号(claim 拿,源头 job_partition.partition_no)。 */
+    private Integer partitionNo;
 
-  /** 本次 job_instance 的 partition 总数(claim 拿,源头 job_instance.expected_partition_count)。 */
-  private Integer partitionCount;
+    /** 本次 job_instance 的 partition 总数(claim 拿,源头 job_instance.expected_partition_count)。 */
+    private Integer partitionCount;
 
-  /** partition 业务标识(claim 拿,源头 job_partition.partition_key)。 */
-  private String partitionKey;
+    /** partition 业务标识(claim 拿,源头 job_partition.partition_key)。 */
+    private String partitionKey;
 
-  /** 分区计划契约版本(claim 拿,源头 job_partition.input_snapshot.partitionPlanVersion)。 */
-  private Integer partitionPlanVersion;
+    /** 分区计划契约版本(claim 拿,源头 job_partition.input_snapshot.partitionPlanVersion)。 */
+    private Integer partitionPlanVersion;
 
-  /** 当前分片 0-based 下标(claim 拿,源头 job_partition.input_snapshot.shardIndex)。 */
-  private Integer shardIndex;
+    /** 当前分片 0-based 下标(claim 拿,源头 job_partition.input_snapshot.shardIndex)。 */
+    private Integer shardIndex;
 
-  /** 本次分片总数(claim 拿,源头 job_partition.input_snapshot.shardTotal)。 */
-  private Integer shardTotal;
+    /** 本次分片总数(claim 拿,源头 job_partition.input_snapshot.shardTotal)。 */
+    private Integer shardTotal;
 
-  /** 当前分片半开范围起点(claim 拿,源头 job_partition.input_snapshot.rangeStartInclusive)。 */
-  private Long rangeStartInclusive;
+    /** 当前分片半开范围起点(claim 拿,源头 job_partition.input_snapshot.rangeStartInclusive)。 */
+    private Long rangeStartInclusive;
 
-  /** 当前分片半开范围终点(claim 拿,源头 job_partition.input_snapshot.rangeEndExclusive)。 */
-  private Long rangeEndExclusive;
+    /** 当前分片半开范围终点(claim 拿,源头 job_partition.input_snapshot.rangeEndExclusive)。 */
+    private Long rangeEndExclusive;
 
-  /** 当前分片预期行数(claim 拿,源头 job_partition.input_snapshot.expectedRows)。 */
-  private Long expectedRows;
+    /** 当前分片预期行数(claim 拿,源头 job_partition.input_snapshot.expectedRows)。 */
+    private Long expectedRows;
 
-  /** ADR-014: partition 认领 invocation id（claim 返回的 EffectiveTaskConfig 快照）。 */
-  private String partitionInvocationId;
+    /** ADR-014: partition 认领 invocation id（claim 返回的 EffectiveTaskConfig 快照）。 */
+    private String partitionInvocationId;
 
-  /** 为显式 Workflow Trigger 目标创建根 Workflow Run，并派发入口节点。 */
-  private List<DependencyResultReference> dependencyResultSnapshot = List.of();
+    /** 为显式 Workflow Trigger 目标创建根 Workflow Run，并派发入口节点。 */
+    private List<DependencyResultReference> dependencyResultSnapshot = List.of();
 
-  /** CLAIM 返回的整 Workflow Replay 能力围栏；缺失时不启用重放专用分支。 */
-  private ReplayExecutionGuard replayExecutionGuard;
+    /** CLAIM 返回的整 Workflow Replay 能力围栏；缺失时不启用重放专用分支。 */
+    private ReplayExecutionGuard replayExecutionGuard;
 
-  /**
-   * P0-1: task 超时秒数 (从 EffectiveTaskConfig.timeoutSeconds 透传, 即 step_definition.timeout_seconds).
-   * null/0 表示走 worker 端配置回退 (batch.worker.execution.default-timeout-seconds, 默认 1800s).
-   */
-  private Integer timeoutSeconds;
+    /**
+     * P0-1: task 超时秒数 (从 EffectiveTaskConfig.timeoutSeconds 透传, 即 step_definition.timeout_seconds).
+     * null/0 表示走 worker 端配置回退 (batch.worker.execution.default-timeout-seconds, 默认 1800s).
+     */
+    private Integer timeoutSeconds;
 
-  /**
-   * V94: data_interval 半开区间起点. 业务可读 {@code
-   * ExecutionContext.getAttributes().get(PipelineRuntimeKeys.DATA_INTERVAL_START)} 拼 SQL {@code
-   * WHERE update_time >= :start}. null 时退化为 bizDate.atStartOfDay (worker 端回退).
-   */
-  private Instant dataIntervalStart;
+    /**
+     * V94: data_interval 半开区间起点. 业务可读 {@code
+     * ExecutionContext.getAttributes().get(PipelineRuntimeKeys.DATA_INTERVAL_START)} 拼 SQL {@code
+     * WHERE update_time >= :start}. null 时退化为 bizDate.atStartOfDay (worker 端回退).
+     */
+    private Instant dataIntervalStart;
 
-  /** V94: data_interval 半开区间终点. null 时退化为 bizDate+1.atStartOfDay (worker 端回退). */
-  private Instant dataIntervalEnd;
+    /** V94: data_interval 半开区间终点. null 时退化为 bizDate+1.atStartOfDay (worker 端回退). */
+    private Instant dataIntervalEnd;
 }

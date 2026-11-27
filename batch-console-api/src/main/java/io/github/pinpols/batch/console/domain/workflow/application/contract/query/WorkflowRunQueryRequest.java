@@ -8,12 +8,12 @@ import lombok.EqualsAndHashCode;
 @Data
 public class WorkflowRunQueryRequest extends PageQueryRequest {
 
-  private String tenantId;
-  private Long workflowDefinitionId;
-  private String workflowCode;
-  private Long relatedJobInstanceId;
-  private String runStatus;
-  private String currentNodeCode;
-  private String traceId;
-  private String requestId;
+    private String tenantId;
+    private Long workflowDefinitionId;
+    private String workflowCode;
+    private Long relatedJobInstanceId;
+    private String runStatus;
+    private String currentNodeCode;
+    private String traceId;
+    private String requestId;
 }

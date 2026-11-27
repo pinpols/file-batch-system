@@ -23,83 +23,82 @@ import org.springframework.web.client.RestClient;
  * 未签名 / 篡改 401，合法签名放行到路由层。
  */
 @SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.request-signing.enabled=true"})
+        classes = BatchOrchestratorApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {"batch.security.bypass-mode=true", "batch.request-signing.enabled=true"})
 @DisplayName("请求验签过滤器集成:验证真实 HTTP 链路上携带接口密钥的写请求在未签名与签名被篡改时返回未授权,合法签名放行至路由层")
 class RequestSigningWebIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String API_KEY = "it-signing-key";
-  private static final String PATH = "/internal/tasks/it-nonexistent/claim";
-  private static final byte[] BODY = "{}".getBytes(StandardCharsets.UTF_8);
+    private static final String API_KEY = "it-signing-key";
+    private static final String PATH = "/internal/tasks/it-nonexistent/claim";
+    private static final byte[] BODY = "{}".getBytes(StandardCharsets.UTF_8);
 
-  @LocalServerPort
-  private int port;
+    @LocalServerPort
+    private int port;
 
-  private RestClient client;
+    private RestClient client;
 
-  @BeforeEach
-  void setUp() {
-    client = RestClient.builder().baseUrl("http://127.0.0.1:" + port).build();
-  }
-
-  @Test
-  @DisplayName("携带接口密钥但未签名时返回未授权,并提示签名无效")
-  void shouldRejectWriteRequest_whenSignatureMissing() {
-    Response resp = post(null, null, null);
-    assertThat(resp.status()).isEqualTo(401);
-    assertThat(resp.body()).contains("SIGNATURE_INVALID");
-  }
-
-  @Test
-  @DisplayName("签名被篡改时返回未授权,并提示签名无效")
-  void shouldRejectWriteRequest_whenSignatureTampered() {
-    Response resp = post(timestamp(), UUID.randomUUID().toString(), "tampered");
-    assertThat(resp.status()).isEqualTo(401);
-    assertThat(resp.body()).contains("SIGNATURE_INVALID");
-  }
-
-  @Test
-  @DisplayName("签名合法时放行至路由层,不再返回未授权与签名无效提示")
-  void shouldPassSignatureFilter_whenSignatureValid() {
-    String timestamp = timestamp();
-    String nonce = UUID.randomUUID().toString();
-    String signature = RequestSignatures.sign(API_KEY, "POST", PATH, timestamp, nonce, BODY);
-    Response resp = post(timestamp, nonce, signature);
-
-    assertThat(resp.status())
-        .as("valid signature must pass the filter (routing/business status is fine)")
-        .isNotEqualTo(401);
-    assertThat(resp.body()).doesNotContain("SIGNATURE_INVALID");
-  }
-
-  private Response post(String timestamp, String nonce, String signature) {
-    return client
-        .post()
-        .uri(PATH)
-        .contentType(MediaType.APPLICATION_JSON)
-        .headers(headers -> {
-          headers.set("X-Batch-Api-Key", API_KEY);
-          if (timestamp != null) {
-            headers.set("X-Batch-Timestamp", timestamp);
-            headers.set("X-Batch-Nonce", nonce);
-            headers.set("X-Batch-Signature", signature);
-          }
-        })
-        .body(BODY)
-        .exchange((request, response) -> toResponse(response));
-  }
-
-  private static Response toResponse(ClientHttpResponse response) throws IOException {
-    try (InputStream in = response.getBody()) {
-      String body = in == null ? "" : new String(in.readAllBytes(), StandardCharsets.UTF_8);
-      return new Response(response.getStatusCode().value(), body);
+    @BeforeEach
+    void setUp() {
+        client = RestClient.builder().baseUrl("http://127.0.0.1:" + port).build();
     }
-  }
 
-  private static String timestamp() {
-    return String.valueOf(System.currentTimeMillis());
-  }
+    @Test
+    @DisplayName("携带接口密钥但未签名时返回未授权,并提示签名无效")
+    void shouldRejectWriteRequest_whenSignatureMissing() {
+        Response resp = post(null, null, null);
+        assertThat(resp.status()).isEqualTo(401);
+        assertThat(resp.body()).contains("SIGNATURE_INVALID");
+    }
 
-  private record Response(int status, String body) {}
+    @Test
+    @DisplayName("签名被篡改时返回未授权,并提示签名无效")
+    void shouldRejectWriteRequest_whenSignatureTampered() {
+        Response resp = post(timestamp(), UUID.randomUUID().toString(), "tampered");
+        assertThat(resp.status()).isEqualTo(401);
+        assertThat(resp.body()).contains("SIGNATURE_INVALID");
+    }
+
+    @Test
+    @DisplayName("签名合法时放行至路由层,不再返回未授权与签名无效提示")
+    void shouldPassSignatureFilter_whenSignatureValid() {
+        String timestamp = timestamp();
+        String nonce = UUID.randomUUID().toString();
+        String signature = RequestSignatures.sign(API_KEY, "POST", PATH, timestamp, nonce, BODY);
+        Response resp = post(timestamp, nonce, signature);
+
+        assertThat(resp.status())
+                .as("valid signature must pass the filter (routing/business status is fine)")
+                .isNotEqualTo(401);
+        assertThat(resp.body()).doesNotContain("SIGNATURE_INVALID");
+    }
+
+    private Response post(String timestamp, String nonce, String signature) {
+        return client.post()
+                .uri(PATH)
+                .contentType(MediaType.APPLICATION_JSON)
+                .headers(headers -> {
+                    headers.set("X-Batch-Api-Key", API_KEY);
+                    if (timestamp != null) {
+                        headers.set("X-Batch-Timestamp", timestamp);
+                        headers.set("X-Batch-Nonce", nonce);
+                        headers.set("X-Batch-Signature", signature);
+                    }
+                })
+                .body(BODY)
+                .exchange((request, response) -> toResponse(response));
+    }
+
+    private static Response toResponse(ClientHttpResponse response) throws IOException {
+        try (InputStream in = response.getBody()) {
+            String body = in == null ? "" : new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            return new Response(response.getStatusCode().value(), body);
+        }
+    }
+
+    private static String timestamp() {
+        return String.valueOf(System.currentTimeMillis());
+    }
+
+    private record Response(int status, String body) {}
 }

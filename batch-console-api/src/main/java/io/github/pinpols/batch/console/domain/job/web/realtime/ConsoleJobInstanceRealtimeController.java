@@ -25,17 +25,16 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class ConsoleJobInstanceRealtimeController {
 
-  private final ConsoleRealtimeSubscriptionPort realtimeEventHub;
-  private final TenantIdResolver tenantGuard;
+    private final ConsoleRealtimeSubscriptionPort realtimeEventHub;
+    private final TenantIdResolver tenantGuard;
 
-  @GetMapping(path = "/job-instances/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter jobInstances(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "eventType", required = false) String eventType,
-      @RequestParam(value = "cursor", required = false) String cursor,
-      @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    return realtimeEventHub.subscribe(
-        resolvedTenantId, "job-instances", eventType, cursor, heartbeatMillis);
-  }
+    @GetMapping(path = "/job-instances/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter jobInstances(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "eventType", required = false) String eventType,
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        return realtimeEventHub.subscribe(resolvedTenantId, "job-instances", eventType, cursor, heartbeatMillis);
+    }
 }

@@ -21,38 +21,38 @@ import org.springframework.context.event.EventListener;
 @Slf4j
 public class RlsStartupFailFastCheck {
 
-  private final RlsClosedWorldChecker checker;
+    private final RlsClosedWorldChecker checker;
 
-  public RlsStartupFailFastCheck(DataSource businessDataSource, List<String> exemptTables) {
-    this.checker = new RlsClosedWorldChecker(businessDataSource, exemptTables);
-  }
+    public RlsStartupFailFastCheck(DataSource businessDataSource, List<String> exemptTables) {
+        this.checker = new RlsClosedWorldChecker(businessDataSource, exemptTables);
+    }
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void checkOnStartup() {
-    RlsClosedWorldChecker.Result result;
-    try {
-      result = checker.check();
-    } catch (SQLException e) {
-      throw new IllegalStateException(
-          "RLS startup fail-fast: biz datasource unreachable while verifying closed-world RLS "
-              + "coverage — configure the business database and RLS before starting. cause="
-              + e.getMessage(),
-          e);
+    @EventListener(ApplicationReadyEvent.class)
+    public void checkOnStartup() {
+        RlsClosedWorldChecker.Result result;
+        try {
+            result = checker.check();
+        } catch (SQLException e) {
+            throw new IllegalStateException(
+                    "RLS startup fail-fast: biz datasource unreachable while verifying closed-world RLS "
+                            + "coverage — configure the business database and RLS before starting. cause="
+                            + e.getMessage(),
+                    e);
+        }
+        if (!result.isClean()) {
+            log.error(
+                    "RLS closed-world check failed: missingEnable={} missingForce={} missingPolicy={}",
+                    result.missingEnable(),
+                    result.missingForce(),
+                    result.missingPolicy());
+            throw new IllegalStateException("RLS startup fail-fast: "
+                    + result.allMissingTables().size()
+                    + " biz table(s) missing RLS enable/force/policy: "
+                    + result.allMissingTables()
+                    + ". Run scripts/db/business/rls-phase-a.sql or add the table to "
+                    + "batch.rls.exempt-tables if it is non-tenant metadata. "
+                    + "See logs above for per-category diff.");
+        }
+        log.info("RLS closed-world startup check passed");
     }
-    if (!result.isClean()) {
-      log.error(
-          "RLS closed-world check failed: missingEnable={} missingForce={} missingPolicy={}",
-          result.missingEnable(),
-          result.missingForce(),
-          result.missingPolicy());
-      throw new IllegalStateException("RLS startup fail-fast: "
-          + result.allMissingTables().size()
-          + " biz table(s) missing RLS enable/force/policy: "
-          + result.allMissingTables()
-          + ". Run scripts/db/business/rls-phase-a.sql or add the table to "
-          + "batch.rls.exempt-tables if it is non-tenant metadata. "
-          + "See logs above for per-category diff.");
-    }
-    log.info("RLS closed-world startup check passed");
-  }
 }

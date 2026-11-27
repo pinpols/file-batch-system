@@ -11,19 +11,19 @@ import org.springframework.stereotype.Component;
 @Data
 public class ForensicExportProperties {
 
-  /** 落盘根目录；默认 ${java.io.tmpdir}/batch-forensic。 */
-  private String storageDir =
-      PrivateTempFiles.resolveUnderTempRoot("batch-forensic").toString();
+    /** 落盘根目录；默认 ${java.io.tmpdir}/batch-forensic。 */
+    private String storageDir =
+            PrivateTempFiles.resolveUnderTempRoot("batch-forensic").toString();
 
-  /** 单次导出 instance 行数硬上限，防 unbounded（v0.1 默认 100k）。 */
-  private int instanceRowCap = 100_000;
+    /** 单次导出 instance 行数硬上限，防 unbounded（v0.1 默认 100k）。 */
+    private int instanceRowCap = 100_000;
 
-  /** 单次导出允许覆盖的最大自然日数，避免同步导出占满数据库和磁盘。 */
-  private int maxDateRangeDays = 31;
+    /** 单次导出允许覆盖的最大自然日数，避免同步导出占满数据库和磁盘。 */
+    private int maxDateRangeDays = 31;
 
-  /** 单次导出的 batch-day 审计行数上限。 */
-  private int auditRowCap = 100_000;
+    /** 单次导出的 batch-day 审计行数上限。 */
+    private int auditRowCap = 100_000;
 
-  /** 默认启用;显式关闭时 export endpoint 返回 503。 */
-  private boolean enabled = true;
+    /** 默认启用;显式关闭时 export endpoint 返回 503。 */
+    private boolean enabled = true;
 }

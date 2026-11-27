@@ -16,30 +16,30 @@ import java.io.IOException;
  */
 public class PlatformHttpException extends IOException {
 
-  private final int statusCode;
+    private final int statusCode;
 
-  public PlatformHttpException(int statusCode, String message) {
-    super(message);
-    this.statusCode = statusCode;
-  }
+    public PlatformHttpException(int statusCode, String message) {
+        super(message);
+        this.statusCode = statusCode;
+    }
 
-  public int statusCode() {
-    return statusCode;
-  }
+    public int statusCode() {
+        return statusCode;
+    }
 
-  public boolean isAuthError() {
-    return statusCode == 401 || statusCode == 403;
-  }
+    public boolean isAuthError() {
+        return statusCode == 401 || statusCode == 403;
+    }
 
-  public boolean isConflict() {
-    return statusCode == 409;
-  }
+    public boolean isConflict() {
+        return statusCode == 409;
+    }
 
-  public boolean isServerError() {
-    return statusCode >= 500 && statusCode < 600;
-  }
+    public boolean isServerError() {
+        return statusCode >= 500 && statusCode < 600;
+    }
 
-  public boolean isClientError() {
-    return statusCode >= 400 && statusCode < 500;
-  }
+    public boolean isClientError() {
+        return statusCode >= 400 && statusCode < 500;
+    }
 }

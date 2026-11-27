@@ -25,42 +25,39 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleClusterDiagnosticController {
 
-  private final ConsoleClusterDiagnosticService diagnosticService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleClusterDiagnosticService diagnosticService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<ConsoleClusterDiagnosticResponse> diagnose(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(diagnosticService.diagnose(tenantId));
-  }
+    @GetMapping
+    public CommonResponse<ConsoleClusterDiagnosticResponse> diagnose(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(diagnosticService.diagnose(tenantId));
+    }
 
-  @GetMapping("/shedlock")
-  public CommonResponse<ConsoleShedLockStatusResponse> shedLockStatus(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(diagnosticService.shedLockStatus(tenantId));
-  }
+    @GetMapping("/shedlock")
+    public CommonResponse<ConsoleShedLockStatusResponse> shedLockStatus(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(diagnosticService.shedLockStatus(tenantId));
+    }
 
-  @GetMapping("/workers")
-  public CommonResponse<ConsoleWorkerConsistencyResponse> workerConsistency(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(diagnosticService.workerConsistency(tenantId));
-  }
+    @GetMapping("/workers")
+    public CommonResponse<ConsoleWorkerConsistencyResponse> workerConsistency(
+            @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(diagnosticService.workerConsistency(tenantId));
+    }
 
-  @GetMapping("/outbox")
-  public CommonResponse<ConsoleOutboxHealthResponse> outboxHealth(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(diagnosticService.outboxHealth(tenantId));
-  }
+    @GetMapping("/outbox")
+    public CommonResponse<ConsoleOutboxHealthResponse> outboxHealth(@RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(diagnosticService.outboxHealth(tenantId));
+    }
 
-  @GetMapping("/terminal-children")
-  public CommonResponse<ConsoleTerminalChildrenHealthResponse> terminalChildrenHealth(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(diagnosticService.terminalChildrenHealth(tenantId));
-  }
+    @GetMapping("/terminal-children")
+    public CommonResponse<ConsoleTerminalChildrenHealthResponse> terminalChildrenHealth(
+            @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(diagnosticService.terminalChildrenHealth(tenantId));
+    }
 
-  @GetMapping("/instances/{id}")
-  public CommonResponse<ConsoleInstanceDiagnosisResponse> instanceDiagnosis(
-      @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(diagnosticService.instanceDiagnosis(tenantId, id));
-  }
+    @GetMapping("/instances/{id}")
+    public CommonResponse<ConsoleInstanceDiagnosisResponse> instanceDiagnosis(
+            @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(diagnosticService.instanceDiagnosis(tenantId, id));
+    }
 }

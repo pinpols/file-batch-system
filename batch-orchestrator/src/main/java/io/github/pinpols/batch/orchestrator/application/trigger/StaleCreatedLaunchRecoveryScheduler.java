@@ -47,200 +47,187 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(
-    prefix = "batch.trigger.launch.created-recovery",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+        prefix = "batch.trigger.launch.created-recovery",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class StaleCreatedLaunchRecoveryScheduler {
 
-  private static final String METRIC_RECOVERED = "batch.trigger.launch.created_recovered.total";
-  private static final String METRIC_FAILED = "batch.trigger.launch.created_recovery_failed.total";
-  private static final String METRIC_REJECTED =
-      "batch.trigger.launch.created_recovery_rejected.total";
+    private static final String METRIC_RECOVERED = "batch.trigger.launch.created_recovered.total";
+    private static final String METRIC_FAILED = "batch.trigger.launch.created_recovery_failed.total";
+    private static final String METRIC_REJECTED = "batch.trigger.launch.created_recovery_rejected.total";
 
-  private final JobInstanceMapper jobInstanceMapper;
-  private final TriggerRequestMapper triggerRequestMapper;
-  private final PartitionDispatchService partitionDispatchService;
-  private final LaunchService launchService;
-  private final LaunchValidationService launchValidationService;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final MeterRegistry meterRegistry;
-  private final StaleCreatedLaunchRecoveryProperties properties;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final TriggerRequestMapper triggerRequestMapper;
+    private final PartitionDispatchService partitionDispatchService;
+    private final LaunchService launchService;
+    private final LaunchValidationService launchValidationService;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final MeterRegistry meterRegistry;
+    private final StaleCreatedLaunchRecoveryProperties properties;
 
-  @Scheduled(
-      fixedDelayString = "${batch.trigger.launch.created-recovery.poll-interval-millis:60000}")
-  @SchedulerLock(
-      name = "trigger_launch_created_recovery",
-      lockAtMostFor = "PT5M",
-      lockAtLeastFor = "PT5S")
-  public void recover() {
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    Instant recoveryCheckTime = BatchDateTimeSupport.utcNow();
-    long configuredMinAgeSeconds = properties.getMinAgeSeconds();
-    long minAgeSeconds = Math.max(configuredMinAgeSeconds, 0);
-    Instant olderThan = recoveryCheckTime.minusSeconds(minAgeSeconds);
-    int limit = Math.max(properties.getBatchSize(), 1);
-    List<JobInstanceEntity> candidates =
-        jobInstanceMapper.selectStaleCreatedLaunchCandidates(olderThan, limit);
-    if (EmptyChecks.isEmpty(candidates)) {
-      return;
-    }
-    int recovered = 0;
-    int failed = 0;
-    for (JobInstanceEntity jobInstance : candidates) {
-      try {
-        if (RlsTenantContextHolder.runWithTenant(
-            jobInstance.getTenantId(), () -> recoverOne(jobInstance))) {
-          recovered++;
+    @Scheduled(fixedDelayString = "${batch.trigger.launch.created-recovery.poll-interval-millis:60000}")
+    @SchedulerLock(name = "trigger_launch_created_recovery", lockAtMostFor = "PT5M", lockAtLeastFor = "PT5S")
+    public void recover() {
+        if (gracefulShutdown.isDraining()) {
+            return;
         }
-      } catch (RuntimeException ex) {
-        failed++;
-        log.warn(
-            "stale CREATED launch recovery failed: tenantId={} jobInstanceId={} jobCode={}"
-                + " error={}",
-            jobInstance.getTenantId(),
-            jobInstance.getId(),
-            jobInstance.getJobCode(),
-            SwallowedExceptionLogger.summary(ex));
-        counter(METRIC_FAILED, "tenant", jobInstance.getTenantId()).increment();
-      }
+        Instant recoveryCheckTime = BatchDateTimeSupport.utcNow();
+        long configuredMinAgeSeconds = properties.getMinAgeSeconds();
+        long minAgeSeconds = Math.max(configuredMinAgeSeconds, 0);
+        Instant olderThan = recoveryCheckTime.minusSeconds(minAgeSeconds);
+        int limit = Math.max(properties.getBatchSize(), 1);
+        List<JobInstanceEntity> candidates = jobInstanceMapper.selectStaleCreatedLaunchCandidates(olderThan, limit);
+        if (EmptyChecks.isEmpty(candidates)) {
+            return;
+        }
+        int recovered = 0;
+        int failed = 0;
+        for (JobInstanceEntity jobInstance : candidates) {
+            try {
+                if (RlsTenantContextHolder.runWithTenant(jobInstance.getTenantId(), () -> recoverOne(jobInstance))) {
+                    recovered++;
+                }
+            } catch (RuntimeException ex) {
+                failed++;
+                log.warn(
+                        "stale CREATED launch recovery failed: tenantId={} jobInstanceId={} jobCode={}" + " error={}",
+                        jobInstance.getTenantId(),
+                        jobInstance.getId(),
+                        jobInstance.getJobCode(),
+                        SwallowedExceptionLogger.summary(ex));
+                counter(METRIC_FAILED, "tenant", jobInstance.getTenantId()).increment();
+            }
+        }
+        log.info(
+                "stale CREATED launch recovery scanned={} recovered={} failed={} olderThan={}",
+                candidates.size(),
+                recovered,
+                failed,
+                olderThan);
     }
-    log.info(
-        "stale CREATED launch recovery scanned={} recovered={} failed={} olderThan={}",
-        candidates.size(),
-        recovered,
-        failed,
-        olderThan);
-  }
 
-  private boolean recoverOne(JobInstanceEntity jobInstance) {
-    TriggerRequestEntity triggerRequest = triggerRequestMapper.selectById(
-        jobInstance.getTenantId(), jobInstance.getTriggerRequestId());
-    if (EmptyChecks.isNull(triggerRequest)
-        || !isRecoverableRequestStatus(jobInstance, triggerRequest)) {
-      return false;
+    private boolean recoverOne(JobInstanceEntity jobInstance) {
+        TriggerRequestEntity triggerRequest =
+                triggerRequestMapper.selectById(jobInstance.getTenantId(), jobInstance.getTriggerRequestId());
+        if (EmptyChecks.isNull(triggerRequest) || !isRecoverableRequestStatus(jobInstance, triggerRequest)) {
+            return false;
+        }
+
+        Map<String, Object> effectiveParams = effectiveParams(jobInstance);
+        LaunchRequest.LaunchRequestBuilder requestBuilder = LaunchRequest.builder()
+                .tenantId(jobInstance.getTenantId())
+                .jobCode(jobInstance.getJobCode())
+                .bizDate(jobInstance.getBizDate());
+        String triggerTypeCode = jobInstance.getTriggerType();
+        TriggerType triggerType = TriggerType.valueOf(triggerTypeCode);
+        LaunchRequest request = requestBuilder
+                .triggerType(triggerType)
+                .requestId(triggerRequest.getRequestId())
+                .traceId(jobInstance.getTraceId())
+                .params(effectiveParams)
+                .dataIntervalStart(jobInstance.getDataIntervalStart())
+                .dataIntervalEnd(jobInstance.getDataIntervalEnd())
+                .replaySessionId(jobInstance.getReplaySessionId())
+                .dryRun(Boolean.TRUE.equals(jobInstance.getDryRun()))
+                .build();
+
+        LaunchValidationService.LaunchLoadResult validatedLaunch = launchValidationService.load(request);
+        JobDefinitionView executionDefinition = validatedLaunch.jobDefinition();
+        boolean recoveredDefinitionIdentityDoesNotMatch = EmptyChecks.isNull(executionDefinition)
+                || !Objects.equals(jobInstance.getJobDefinitionId(), executionDefinition.id())
+                || !Objects.equals(jobInstance.getJobDefinitionVersion(), executionDefinition.version());
+        if (recoveredDefinitionIdentityDoesNotMatch) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+        }
+        PartitionDispatchService.DispatchRequest dispatchRequest = new PartitionDispatchService.DispatchRequest(
+                request, effectiveParams, jobInstance.getTraceId(), executionDefinition);
+        PartitionDispatchService.DispatchRuntime dispatchRuntime = new PartitionDispatchService.DispatchRuntime(
+                jobInstance, null, List.of(), BatchDateTimeSupport.utcNow());
+        PartitionDispatchService.DispatchContext dispatchContext =
+                PartitionDispatchService.DispatchContext.of(dispatchRequest, dispatchRuntime);
+        try {
+            partitionDispatchService.dispatch(dispatchContext);
+        } catch (RuntimeException ex) {
+            BizException invalidBundle = findPermanentBundleFailure(ex);
+            if (EmptyChecks.isNull(invalidBundle)) {
+                throw ex;
+            }
+            launchService.finalizeDispatchFailure(request, jobInstance, invalidBundle);
+            log.info(
+                    "stale CREATED launch rejected as a permanent bundle configuration error:"
+                            + " tenantId={} jobInstanceId={} requestId={}",
+                    jobInstance.getTenantId(),
+                    jobInstance.getId(),
+                    triggerRequest.getRequestId());
+            counter(METRIC_REJECTED, "tenant", jobInstance.getTenantId()).increment();
+            return false;
+        }
+        // dispatch(自带事务)提交后任务已实际恢复;reconcileLaunched 在其事务外,失败不能把本次
+        // 恢复记成 failed(误导监控)——trigger_request 滞留 ACCEPTED 会由 TriggerRequestLaunchReconciler
+        // (ADR-010,扫"ACCEPTED 且已有 job_instance")下一轮自愈,此处降级为 WARN。
+        try {
+            triggerRequestMapper.reconcileRecoveredCreatedLaunch(
+                    triggerRequest.getTenantId(), triggerRequest.getRequestId(), jobInstance.getId());
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "stale CREATED launch recovered but reconcileLaunched failed (will self-heal via"
+                            + " TriggerRequestLaunchReconciler): tenantId={} requestId={} jobInstanceId={}"
+                            + " error={}",
+                    triggerRequest.getTenantId(),
+                    triggerRequest.getRequestId(),
+                    jobInstance.getId(),
+                    SwallowedExceptionLogger.summary(ex));
+        }
+        counter(METRIC_RECOVERED, "tenant", jobInstance.getTenantId()).increment();
+        return true;
     }
 
-    Map<String, Object> effectiveParams = effectiveParams(jobInstance);
-    LaunchRequest.LaunchRequestBuilder requestBuilder = LaunchRequest.builder()
-        .tenantId(jobInstance.getTenantId())
-        .jobCode(jobInstance.getJobCode())
-        .bizDate(jobInstance.getBizDate());
-    String triggerTypeCode = jobInstance.getTriggerType();
-    TriggerType triggerType = TriggerType.valueOf(triggerTypeCode);
-    LaunchRequest request = requestBuilder
-        .triggerType(triggerType)
-        .requestId(triggerRequest.getRequestId())
-        .traceId(jobInstance.getTraceId())
-        .params(effectiveParams)
-        .dataIntervalStart(jobInstance.getDataIntervalStart())
-        .dataIntervalEnd(jobInstance.getDataIntervalEnd())
-        .replaySessionId(jobInstance.getReplaySessionId())
-        .dryRun(Boolean.TRUE.equals(jobInstance.getDryRun()))
-        .build();
+    private BizException findPermanentBundleFailure(RuntimeException exception) {
+        Throwable current = exception;
+        while (EmptyChecks.isNotNull(current)) {
+            if (current instanceof BizException bizException && isPermanentBundleFailure(bizException)) {
+                return bizException;
+            }
+            current = current.getCause();
+        }
+        return null;
+    }
 
-    LaunchValidationService.LaunchLoadResult validatedLaunch =
-        launchValidationService.load(request);
-    JobDefinitionView executionDefinition = validatedLaunch.jobDefinition();
-    boolean recoveredDefinitionIdentityDoesNotMatch = EmptyChecks.isNull(executionDefinition)
-        || !Objects.equals(jobInstance.getJobDefinitionId(), executionDefinition.id())
-        || !Objects.equals(jobInstance.getJobDefinitionVersion(), executionDefinition.version());
-    if (recoveredDefinitionIdentityDoesNotMatch) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+    private boolean isPermanentBundleFailure(BizException exception) {
+        if (!"error.partition.dispatch_business_error".equals(exception.getMessageKey())
+                || !EmptyChecks.isNotEmpty(exception.getMessageArgs())) {
+            return false;
+        }
+        String failureReason = String.valueOf(exception.getMessageArgs()[0]);
+        return "ADR-046_BUNDLE_INVALID".equals(failureReason);
     }
-    PartitionDispatchService.DispatchRequest dispatchRequest =
-        new PartitionDispatchService.DispatchRequest(
-            request, effectiveParams, jobInstance.getTraceId(), executionDefinition);
-    PartitionDispatchService.DispatchRuntime dispatchRuntime =
-        new PartitionDispatchService.DispatchRuntime(
-            jobInstance, null, List.of(), BatchDateTimeSupport.utcNow());
-    PartitionDispatchService.DispatchContext dispatchContext =
-        PartitionDispatchService.DispatchContext.of(dispatchRequest, dispatchRuntime);
-    try {
-      partitionDispatchService.dispatch(dispatchContext);
-    } catch (RuntimeException ex) {
-      BizException invalidBundle = findPermanentBundleFailure(ex);
-      if (EmptyChecks.isNull(invalidBundle)) {
-        throw ex;
-      }
-      launchService.finalizeDispatchFailure(request, jobInstance, invalidBundle);
-      log.info(
-          "stale CREATED launch rejected as a permanent bundle configuration error:"
-              + " tenantId={} jobInstanceId={} requestId={}",
-          jobInstance.getTenantId(),
-          jobInstance.getId(),
-          triggerRequest.getRequestId());
-      counter(METRIC_REJECTED, "tenant", jobInstance.getTenantId()).increment();
-      return false;
-    }
-    // dispatch(自带事务)提交后任务已实际恢复;reconcileLaunched 在其事务外,失败不能把本次
-    // 恢复记成 failed(误导监控)——trigger_request 滞留 ACCEPTED 会由 TriggerRequestLaunchReconciler
-    // (ADR-010,扫"ACCEPTED 且已有 job_instance")下一轮自愈,此处降级为 WARN。
-    try {
-      triggerRequestMapper.reconcileRecoveredCreatedLaunch(
-          triggerRequest.getTenantId(), triggerRequest.getRequestId(), jobInstance.getId());
-    } catch (RuntimeException ex) {
-      log.warn(
-          "stale CREATED launch recovered but reconcileLaunched failed (will self-heal via"
-              + " TriggerRequestLaunchReconciler): tenantId={} requestId={} jobInstanceId={}"
-              + " error={}",
-          triggerRequest.getTenantId(),
-          triggerRequest.getRequestId(),
-          jobInstance.getId(),
-          SwallowedExceptionLogger.summary(ex));
-    }
-    counter(METRIC_RECOVERED, "tenant", jobInstance.getTenantId()).increment();
-    return true;
-  }
 
-  private BizException findPermanentBundleFailure(RuntimeException exception) {
-    Throwable current = exception;
-    while (EmptyChecks.isNotNull(current)) {
-      if (current instanceof BizException bizException && isPermanentBundleFailure(bizException)) {
-        return bizException;
-      }
-      current = current.getCause();
+    private boolean isRecoverableRequestStatus(JobInstanceEntity jobInstance, TriggerRequestEntity triggerRequest) {
+        String requestStatus = triggerRequest.getRequestStatus();
+        return TriggerRequestStatus.ACCEPTED.code().equals(requestStatus)
+                || TriggerRequestStatus.LAUNCHED.code().equals(requestStatus)
+                || (TriggerRequestStatus.DUPLICATE.code().equals(requestStatus)
+                        && jobInstance.getTriggerRequestId() != null
+                        && jobInstance.getTriggerRequestId().equals(triggerRequest.getId()));
     }
-    return null;
-  }
 
-  private boolean isPermanentBundleFailure(BizException exception) {
-    if (!"error.partition.dispatch_business_error".equals(exception.getMessageKey())
-        || !EmptyChecks.isNotEmpty(exception.getMessageArgs())) {
-      return false;
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> effectiveParams(JobInstanceEntity jobInstance) {
+        Map<String, Object> snapshot =
+                JsonUtils.fromJson(jobInstance.getParamsSnapshot(), new TypeReference<Map<String, Object>>() {});
+        Object effective = snapshot.get("effectiveParams");
+        if (effective instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        Object request = snapshot.get("requestParams");
+        if (request instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        return Map.of();
     }
-    String failureReason = String.valueOf(exception.getMessageArgs()[0]);
-    return "ADR-046_BUNDLE_INVALID".equals(failureReason);
-  }
 
-  private boolean isRecoverableRequestStatus(
-      JobInstanceEntity jobInstance, TriggerRequestEntity triggerRequest) {
-    String requestStatus = triggerRequest.getRequestStatus();
-    return TriggerRequestStatus.ACCEPTED.code().equals(requestStatus)
-        || TriggerRequestStatus.LAUNCHED.code().equals(requestStatus)
-        || (TriggerRequestStatus.DUPLICATE.code().equals(requestStatus)
-            && jobInstance.getTriggerRequestId() != null
-            && jobInstance.getTriggerRequestId().equals(triggerRequest.getId()));
-  }
-
-  @SuppressWarnings("unchecked")
-  private Map<String, Object> effectiveParams(JobInstanceEntity jobInstance) {
-    Map<String, Object> snapshot = JsonUtils.fromJson(
-        jobInstance.getParamsSnapshot(), new TypeReference<Map<String, Object>>() {});
-    Object effective = snapshot.get("effectiveParams");
-    if (effective instanceof Map<?, ?> map) {
-      return (Map<String, Object>) map;
+    private Counter counter(String name, String... tagPairs) {
+        return Counter.builder(name).tags(Tags.of(tagPairs)).register(meterRegistry);
     }
-    Object request = snapshot.get("requestParams");
-    if (request instanceof Map<?, ?> map) {
-      return (Map<String, Object>) map;
-    }
-    return Map.of();
-  }
-
-  private Counter counter(String name, String... tagPairs) {
-    return Counter.builder(name).tags(Tags.of(tagPairs)).register(meterRegistry);
-  }
 }

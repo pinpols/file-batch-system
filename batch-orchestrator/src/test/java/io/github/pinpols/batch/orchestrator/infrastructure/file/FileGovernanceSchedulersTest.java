@@ -15,81 +15,77 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("文件治理调度入口 - 校验各治理调度触发后均把执行委派给文件治理服务")
 class FileGovernanceSchedulersTest {
 
-  @Mock
-  private FileGovernanceScheduler fileGovernanceScheduler;
+    @Mock
+    private FileGovernanceScheduler fileGovernanceScheduler;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Mock
-  private ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
+    @Mock
+    private ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
 
-  private FileGovernanceArchiveCleanupScheduler archiveCleanupScheduler;
-  private FileGovernanceReconcileScheduler reconcileScheduler;
-  private FileGovernanceArrivalGroupScheduler arrivalGroupScheduler;
-  private FileGovernanceLatencyScheduler latencyScheduler;
-  private UploadSessionCleanupScheduler uploadSessionCleanupScheduler;
+    private FileGovernanceArchiveCleanupScheduler archiveCleanupScheduler;
+    private FileGovernanceReconcileScheduler reconcileScheduler;
+    private FileGovernanceArrivalGroupScheduler arrivalGroupScheduler;
+    private FileGovernanceLatencyScheduler latencyScheduler;
+    private UploadSessionCleanupScheduler uploadSessionCleanupScheduler;
 
-  @BeforeEach
-  void setUp() {
-    archiveCleanupScheduler = new FileGovernanceArchiveCleanupScheduler(
-        fileGovernanceScheduler, gracefulShutdown, schedulerHealthMetrics);
-    reconcileScheduler =
-        new FileGovernanceReconcileScheduler(fileGovernanceScheduler, gracefulShutdown);
-    arrivalGroupScheduler =
-        new FileGovernanceArrivalGroupScheduler(fileGovernanceScheduler, gracefulShutdown);
-    latencyScheduler =
-        new FileGovernanceLatencyScheduler(fileGovernanceScheduler, gracefulShutdown);
-    uploadSessionCleanupScheduler =
-        new UploadSessionCleanupScheduler(fileGovernanceScheduler, gracefulShutdown);
-  }
+    @BeforeEach
+    void setUp() {
+        archiveCleanupScheduler = new FileGovernanceArchiveCleanupScheduler(
+                fileGovernanceScheduler, gracefulShutdown, schedulerHealthMetrics);
+        reconcileScheduler = new FileGovernanceReconcileScheduler(fileGovernanceScheduler, gracefulShutdown);
+        arrivalGroupScheduler = new FileGovernanceArrivalGroupScheduler(fileGovernanceScheduler, gracefulShutdown);
+        latencyScheduler = new FileGovernanceLatencyScheduler(fileGovernanceScheduler, gracefulShutdown);
+        uploadSessionCleanupScheduler = new UploadSessionCleanupScheduler(fileGovernanceScheduler, gracefulShutdown);
+    }
 
-  @Test
-  @DisplayName("归档文件清理调度触发时委派治理服务执行归档清理")
-  void shouldDelegateArchiveCleanup() {
-    archiveCleanupScheduler.cleanupArchivedFiles();
+    @Test
+    @DisplayName("归档文件清理调度触发时委派治理服务执行归档清理")
+    void shouldDelegateArchiveCleanup() {
+        archiveCleanupScheduler.cleanupArchivedFiles();
 
-    verify(fileGovernanceScheduler).cleanupArchivedFiles();
-    verify(schedulerHealthMetrics).markSuccess("file_governance");
-  }
+        verify(fileGovernanceScheduler).cleanupArchivedFiles();
+        verify(schedulerHealthMetrics).markSuccess("file_governance");
+    }
 
-  @Test
-  @DisplayName("归档文件清理调度初始化时注册健康指标")
-  void shouldRegisterArchiveCleanupHealthMetric() {
-    archiveCleanupScheduler.registerHealthMetric();
+    @Test
+    @DisplayName("归档文件清理调度初始化时注册健康指标")
+    void shouldRegisterArchiveCleanupHealthMetric() {
+        archiveCleanupScheduler.registerHealthMetric();
 
-    verify(schedulerHealthMetrics).register("file_governance");
-  }
+        verify(schedulerHealthMetrics).register("file_governance");
+    }
 
-  @Test
-  @DisplayName("对象存储对账调度触发时委派治理服务执行对账")
-  void shouldDelegateReconcile() {
-    reconcileScheduler.reconcileObjectStorage();
+    @Test
+    @DisplayName("对象存储对账调度触发时委派治理服务执行对账")
+    void shouldDelegateReconcile() {
+        reconcileScheduler.reconcileObjectStorage();
 
-    verify(fileGovernanceScheduler).reconcileObjectStorage();
-  }
+        verify(fileGovernanceScheduler).reconcileObjectStorage();
+    }
 
-  @Test
-  @DisplayName("文件到达分组管理调度触发时委派治理服务执行分组管理")
-  void shouldDelegateArrivalGroupManagement() {
-    arrivalGroupScheduler.manageFileArrivalGroups();
+    @Test
+    @DisplayName("文件到达分组管理调度触发时委派治理服务执行分组管理")
+    void shouldDelegateArrivalGroupManagement() {
+        arrivalGroupScheduler.manageFileArrivalGroups();
 
-    verify(fileGovernanceScheduler).manageFileArrivalGroups();
-  }
+        verify(fileGovernanceScheduler).manageFileArrivalGroups();
+    }
 
-  @Test
-  @DisplayName("孤儿上传会话清理调度触发时委派治理服务执行会话清理")
-  void shouldDelegateOrphanUploadSessionCleanup() {
-    uploadSessionCleanupScheduler.cleanupOrphanUploadSessions();
+    @Test
+    @DisplayName("孤儿上传会话清理调度触发时委派治理服务执行会话清理")
+    void shouldDelegateOrphanUploadSessionCleanup() {
+        uploadSessionCleanupScheduler.cleanupOrphanUploadSessions();
 
-    verify(fileGovernanceScheduler).cleanupOrphanUploadSessions();
-  }
+        verify(fileGovernanceScheduler).cleanupOrphanUploadSessions();
+    }
 
-  @Test
-  @DisplayName("时延指标采集调度触发时委派治理服务执行指标采集")
-  void shouldDelegateLatencyCollection() {
-    latencyScheduler.collectLatencyMetrics();
+    @Test
+    @DisplayName("时延指标采集调度触发时委派治理服务执行指标采集")
+    void shouldDelegateLatencyCollection() {
+        latencyScheduler.collectLatencyMetrics();
 
-    verify(fileGovernanceScheduler).collectLatencyMetrics();
-  }
+        verify(fileGovernanceScheduler).collectLatencyMetrics();
+    }
 }

@@ -32,91 +32,90 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * 任何一边漂移即 fail,强制新加表时同步登记。
  */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional(propagation = Propagation.NEVER)
 @DisplayName("归档表登记清单与物理归档表之间的双向漂移守护")
 class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest {
 
-  /** 已知未注册但故意豁免的 archive 表(临时归档 / 工具表)。 任何新增豁免必须带注释说明原因,代码审查时拒收"无故跳过登记"。 */
-  private static final Set<String> EXEMPTED_ARCHIVE_TABLES = Set.of();
+    /** 已知未注册但故意豁免的 archive 表(临时归档 / 工具表)。 任何新增豁免必须带注释说明原因,代码审查时拒收"无故跳过登记"。 */
+    private static final Set<String> EXEMPTED_ARCHIVE_TABLES = Set.of();
 
-  @Autowired
-  private ArchiveSchemaDriftCheck check;
+    @Autowired
+    private ArchiveSchemaDriftCheck check;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Test
-  @DisplayName("数据库中存在的每张物理归档表都能在登记清单中找到对应登记项")
-  void shouldRegisterEveryPhysicalArchiveTable_whenComparingWithRegistry() {
-    String physicalArchiveTablesSql = """
+    @Test
+    @DisplayName("数据库中存在的每张物理归档表都能在登记清单中找到对应登记项")
+    void shouldRegisterEveryPhysicalArchiveTable_whenComparingWithRegistry() {
+        String physicalArchiveTablesSql = """
         select table_name from information_schema.tables
         where table_schema = 'archive' and table_name like '%_archive'
         order by table_name
         """;
-    List<String> physicalArchiveTables =
-        jdbcTemplate.queryForList(physicalArchiveTablesSql, String.class);
+        List<String> physicalArchiveTables = jdbcTemplate.queryForList(physicalArchiveTablesSql, String.class);
 
-    Set<String> registered = registeredArchivedTables();
+        Set<String> registered = registeredArchivedTables();
 
-    Set<String> physicalHotNames = new HashSet<>();
-    for (String physical : physicalArchiveTables) {
-      // archive.outbox_event_archive → hot 表名 outbox_event
-      if (EXEMPTED_ARCHIVE_TABLES.contains(physical)) continue;
-      String hotName = physical.substring(0, physical.length() - "_archive".length());
-      physicalHotNames.add(hotName);
+        Set<String> physicalHotNames = new HashSet<>();
+        for (String physical : physicalArchiveTables) {
+            // archive.outbox_event_archive → hot 表名 outbox_event
+            if (EXEMPTED_ARCHIVE_TABLES.contains(physical)) continue;
+            String hotName = physical.substring(0, physical.length() - "_archive".length());
+            physicalHotNames.add(hotName);
+        }
+
+        Set<String> missing = new HashSet<>(physicalHotNames);
+        missing.removeAll(registered);
+        assertThat(missing)
+                .as("下列 archive.*_archive 表存在于 DB 但未在 ArchiveSchemaDriftCheck.ARCHIVED_TABLES 登记 — "
+                        + "新加归档表必须同步登记,否则列差异静默漏过。如确为临时表请加入 EXEMPTED_ARCHIVE_TABLES 并注释原因。")
+                .isEmpty();
     }
 
-    Set<String> missing = new HashSet<>(physicalHotNames);
-    missing.removeAll(registered);
-    assertThat(missing)
-        .as("下列 archive.*_archive 表存在于 DB 但未在 ArchiveSchemaDriftCheck.ARCHIVED_TABLES 登记 — "
-            + "新加归档表必须同步登记,否则列差异静默漏过。如确为临时表请加入 EXEMPTED_ARCHIVE_TABLES 并注释原因。")
-        .isEmpty();
-  }
-
-  @Test
-  @DisplayName("登记清单中的每张表都同时存在热表与冷表物理结构")
-  void shouldHaveHotAndColdTables_whenTableIsRegistered() {
-    Set<String> registered = registeredArchivedTables();
-    Set<String> missingHot = new HashSet<>();
-    Set<String> missingCold = new HashSet<>();
-    for (String name : registered) {
-      if (check.columnsOf("batch", name).isEmpty()) missingHot.add(name);
-      if (check.columnsOf("archive", name + "_archive").isEmpty()) missingCold.add(name);
+    @Test
+    @DisplayName("登记清单中的每张表都同时存在热表与冷表物理结构")
+    void shouldHaveHotAndColdTables_whenTableIsRegistered() {
+        Set<String> registered = registeredArchivedTables();
+        Set<String> missingHot = new HashSet<>();
+        Set<String> missingCold = new HashSet<>();
+        for (String name : registered) {
+            if (check.columnsOf("batch", name).isEmpty()) missingHot.add(name);
+            if (check.columnsOf("archive", name + "_archive").isEmpty()) missingCold.add(name);
+        }
+        assertThat(missingHot)
+                .as("ARCHIVED_TABLES 登记的 hot 表在 batch schema 中不存在")
+                .isEmpty();
+        assertThat(missingCold)
+                .as("ARCHIVED_TABLES 登记的 cold 表在 archive schema 中不存在")
+                .isEmpty();
     }
-    assertThat(missingHot).as("ARCHIVED_TABLES 登记的 hot 表在 batch schema 中不存在").isEmpty();
-    assertThat(missingCold)
-        .as("ARCHIVED_TABLES 登记的 cold 表在 archive schema 中不存在")
-        .isEmpty();
-  }
 
-  @Test
-  @DisplayName("扣除豁免项后,登记项数量与物理归档表数量一致")
-  void shouldMatchPhysicalArchiveCount_whenRegistryCompared() {
-    // 数量级冗余守护:登记数应与 DB 中物理 archive 表数(去豁免后)一致
-    String physicalArchiveCountSql = """
+    @Test
+    @DisplayName("扣除豁免项后,登记项数量与物理归档表数量一致")
+    void shouldMatchPhysicalArchiveCount_whenRegistryCompared() {
+        // 数量级冗余守护:登记数应与 DB 中物理 archive 表数(去豁免后)一致
+        String physicalArchiveCountSql = """
         select count(*)::int from information_schema.tables
         where table_schema = 'archive' and table_name like '%_archive'
         """;
-    int physical = jdbcTemplate.queryForObject(physicalArchiveCountSql, Integer.class)
-        - EXEMPTED_ARCHIVE_TABLES.size();
-    int registered = registeredArchivedTables().size();
-    assertThat(registered)
-        .as("ARCHIVED_TABLES 数(%d) ≠ 物理 archive.*_archive 表数(%d),登记漂移", registered, physical)
-        .isEqualTo(physical);
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Set<String> registeredArchivedTables() {
-    try {
-      Field f = ArchiveSchemaDriftCheck.class.getDeclaredField("ARCHIVED_TABLES");
-      f.setAccessible(true);
-      return new HashSet<>((List<String>) f.get(null));
-    } catch (ReflectiveOperationException ex) {
-      throw new AssertionError("无法读取 ArchiveSchemaDriftCheck.ARCHIVED_TABLES", ex);
+        int physical =
+                jdbcTemplate.queryForObject(physicalArchiveCountSql, Integer.class) - EXEMPTED_ARCHIVE_TABLES.size();
+        int registered = registeredArchivedTables().size();
+        assertThat(registered)
+                .as("ARCHIVED_TABLES 数(%d) ≠ 物理 archive.*_archive 表数(%d),登记漂移", registered, physical)
+                .isEqualTo(physical);
     }
-  }
+
+    @SuppressWarnings("unchecked")
+    private static Set<String> registeredArchivedTables() {
+        try {
+            Field f = ArchiveSchemaDriftCheck.class.getDeclaredField("ARCHIVED_TABLES");
+            f.setAccessible(true);
+            return new HashSet<>((List<String>) f.get(null));
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError("无法读取 ArchiveSchemaDriftCheck.ARCHIVED_TABLES", ex);
+        }
+    }
 }

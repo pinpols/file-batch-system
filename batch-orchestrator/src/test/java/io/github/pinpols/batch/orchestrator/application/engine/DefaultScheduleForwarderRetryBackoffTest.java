@@ -16,94 +16,94 @@ import org.junit.jupiter.api.Test;
 @DisplayName("出箱转发重试退避: 指数退避, 抖动与上下界收敛口径")
 class DefaultScheduleForwarderRetryBackoffTest {
 
-  @Test
-  @DisplayName("首次重试使用基础退避时长")
-  void shouldUseBaseDelayForFirstAttempt() {
-    OutboxProperties props = props(60, 2.0, 600, 0.0); // jitter 关
-    Instant before = BatchDateTimeSupport.utcNow();
-    Instant next = DefaultScheduleForwarder.computeNextRetryAt(1, props);
-    long delaySec = Duration.between(before, next).toSeconds();
-    assertThat(delaySec).isBetween(59L, 61L); // ≈ 60s
-  }
-
-  @Test
-  @DisplayName("关闭抖动时退避时长按指数序列逐次倍增")
-  void shouldExponentiallyBackoffWithoutJitter() {
-    OutboxProperties props = props(60, 2.0, 1000, 0.0);
-    // 验证 attempt 1..5 的 base × 2^(N-1) 序列(无 jitter,允许 ±1s clock drift)
-    long[] expected = {60, 120, 240, 480, 960};
-    for (int i = 0; i < expected.length; i++) {
-      Instant before = BatchDateTimeSupport.utcNow();
-      Instant next = DefaultScheduleForwarder.computeNextRetryAt(i + 1, props);
-      long actual = Duration.between(before, next).toSeconds();
-      assertThat(actual)
-          .as("attempt %d should backoff to ~%ds", i + 1, expected[i])
-          .isBetween(expected[i] - 1, expected[i] + 1);
+    @Test
+    @DisplayName("首次重试使用基础退避时长")
+    void shouldUseBaseDelayForFirstAttempt() {
+        OutboxProperties props = props(60, 2.0, 600, 0.0); // jitter 关
+        Instant before = BatchDateTimeSupport.utcNow();
+        Instant next = DefaultScheduleForwarder.computeNextRetryAt(1, props);
+        long delaySec = Duration.between(before, next).toSeconds();
+        assertThat(delaySec).isBetween(59L, 61L); // ≈ 60s
     }
-  }
 
-  @Test
-  @DisplayName("退避时长超过上限时收敛到最大时长")
-  void shouldClampToMaxDelay() {
-    OutboxProperties props = props(60, 2.0, 600, 0.0); // max 600s
-    // attempt 6 = 60 × 2^5 = 1920s,被 clamp 到 600s
-    Instant before = BatchDateTimeSupport.utcNow();
-    Instant next = DefaultScheduleForwarder.computeNextRetryAt(6, props);
-    long delaySec = Duration.between(before, next).toSeconds();
-    assertThat(delaySec).isBetween(599L, 601L);
-  }
-
-  @Test
-  @DisplayName("开启抖动时退避时长落在上下界内且确实产生波动")
-  void shouldApplyJitterWithinBounds() {
-    OutboxProperties props = props(100, 1.0, 100, 0.5); // 100s ± 50%
-    // 跑 50 次,所有结果都应在 [50, 150]s 区间内,且不全相同(jitter 真在生效)
-    Instant earliest = null;
-    Instant latest = null;
-    for (int i = 0; i < 50; i++) {
-      Instant before = BatchDateTimeSupport.utcNow();
-      Instant next = DefaultScheduleForwarder.computeNextRetryAt(1, props);
-      long delaySec = Duration.between(before, next).toSeconds();
-      assertThat(delaySec).isBetween(49L, 151L);
-      if (earliest == null || next.isBefore(earliest)) {
-        earliest = next;
-      }
-      if (latest == null || next.isAfter(latest)) {
-        latest = next;
-      }
+    @Test
+    @DisplayName("关闭抖动时退避时长按指数序列逐次倍增")
+    void shouldExponentiallyBackoffWithoutJitter() {
+        OutboxProperties props = props(60, 2.0, 1000, 0.0);
+        // 验证 attempt 1..5 的 base × 2^(N-1) 序列(无 jitter,允许 ±1s clock drift)
+        long[] expected = {60, 120, 240, 480, 960};
+        for (int i = 0; i < expected.length; i++) {
+            Instant before = BatchDateTimeSupport.utcNow();
+            Instant next = DefaultScheduleForwarder.computeNextRetryAt(i + 1, props);
+            long actual = Duration.between(before, next).toSeconds();
+            assertThat(actual)
+                    .as("attempt %d should backoff to ~%ds", i + 1, expected[i])
+                    .isBetween(expected[i] - 1, expected[i] + 1);
+        }
     }
-    // 50 次抽样的最大 - 最小 应 > 10s(否则说明 jitter 没在抖)
-    assertThat(Duration.between(earliest, latest).toSeconds()).isGreaterThan(10L);
-  }
 
-  @Test
-  @DisplayName("退避因子小于一时仍保证退避时长不低于基础值")
-  void shouldNeverGoBelowBase() {
-    OutboxProperties props = props(60, 0.5, 600, 0.0); // 退避因子 < 1 应被强制为 ≥ 1
-    Instant before = BatchDateTimeSupport.utcNow();
-    Instant next = DefaultScheduleForwarder.computeNextRetryAt(3, props);
-    long delaySec = Duration.between(before, next).toSeconds();
-    assertThat(delaySec).isGreaterThanOrEqualTo(59L); // 至少 base
-  }
+    @Test
+    @DisplayName("退避时长超过上限时收敛到最大时长")
+    void shouldClampToMaxDelay() {
+        OutboxProperties props = props(60, 2.0, 600, 0.0); // max 600s
+        // attempt 6 = 60 × 2^5 = 1920s,被 clamp 到 600s
+        Instant before = BatchDateTimeSupport.utcNow();
+        Instant next = DefaultScheduleForwarder.computeNextRetryAt(6, props);
+        long delaySec = Duration.between(before, next).toSeconds();
+        assertThat(delaySec).isBetween(599L, 601L);
+    }
 
-  @Test
-  @DisplayName("重试次数为零时按首次重试处理")
-  void shouldHandleAttemptZeroAsAttemptOne() {
-    OutboxProperties props = props(60, 2.0, 600, 0.0);
-    Instant before = BatchDateTimeSupport.utcNow();
-    Instant next = DefaultScheduleForwarder.computeNextRetryAt(0, props); // 边界:0 视作 1
-    long delaySec = Duration.between(before, next).toSeconds();
-    assertThat(delaySec).isBetween(59L, 61L);
-  }
+    @Test
+    @DisplayName("开启抖动时退避时长落在上下界内且确实产生波动")
+    void shouldApplyJitterWithinBounds() {
+        OutboxProperties props = props(100, 1.0, 100, 0.5); // 100s ± 50%
+        // 跑 50 次,所有结果都应在 [50, 150]s 区间内,且不全相同(jitter 真在生效)
+        Instant earliest = null;
+        Instant latest = null;
+        for (int i = 0; i < 50; i++) {
+            Instant before = BatchDateTimeSupport.utcNow();
+            Instant next = DefaultScheduleForwarder.computeNextRetryAt(1, props);
+            long delaySec = Duration.between(before, next).toSeconds();
+            assertThat(delaySec).isBetween(49L, 151L);
+            if (earliest == null || next.isBefore(earliest)) {
+                earliest = next;
+            }
+            if (latest == null || next.isAfter(latest)) {
+                latest = next;
+            }
+        }
+        // 50 次抽样的最大 - 最小 应 > 10s(否则说明 jitter 没在抖)
+        assertThat(Duration.between(earliest, latest).toSeconds()).isGreaterThan(10L);
+    }
 
-  // ── helpers ────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("退避因子小于一时仍保证退避时长不低于基础值")
+    void shouldNeverGoBelowBase() {
+        OutboxProperties props = props(60, 0.5, 600, 0.0); // 退避因子 < 1 应被强制为 ≥ 1
+        Instant before = BatchDateTimeSupport.utcNow();
+        Instant next = DefaultScheduleForwarder.computeNextRetryAt(3, props);
+        long delaySec = Duration.between(before, next).toSeconds();
+        assertThat(delaySec).isGreaterThanOrEqualTo(59L); // 至少 base
+    }
 
-  private static OutboxProperties props(long base, double multiplier, long max, double jitter) {
-    OutboxProperties p = new OutboxProperties();
-    p.setRetryDelaySeconds(base);
-    p.setRetryBackoffMultiplier(multiplier);
-    p.setRetryMaxDelaySeconds(max);
-    p.setRetryJitterRatio(jitter);
-    return p;
-  }
+    @Test
+    @DisplayName("重试次数为零时按首次重试处理")
+    void shouldHandleAttemptZeroAsAttemptOne() {
+        OutboxProperties props = props(60, 2.0, 600, 0.0);
+        Instant before = BatchDateTimeSupport.utcNow();
+        Instant next = DefaultScheduleForwarder.computeNextRetryAt(0, props); // 边界:0 视作 1
+        long delaySec = Duration.between(before, next).toSeconds();
+        assertThat(delaySec).isBetween(59L, 61L);
+    }
+
+    // ── helpers ────────────────────────────────────────────────────────────
+
+    private static OutboxProperties props(long base, double multiplier, long max, double jitter) {
+        OutboxProperties p = new OutboxProperties();
+        p.setRetryDelaySeconds(base);
+        p.setRetryBackoffMultiplier(multiplier);
+        p.setRetryMaxDelaySeconds(max);
+        p.setRetryJitterRatio(jitter);
+        return p;
+    }
 }

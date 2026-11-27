@@ -20,83 +20,81 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class FilesystemPresignTokens {
 
-  private static final String HMAC_ALGORITHM = CryptoAlgorithms.HMAC_SHA256;
+    private static final String HMAC_ALGORITHM = CryptoAlgorithms.HMAC_SHA256;
 
-  private FilesystemPresignTokens() {}
+    private FilesystemPresignTokens() {}
 
-  /**
-   * 签发令牌，返回 Base64-URL 编码的签名（不含 padding）。
-   *
-   * @param bucket bucket 名
-   * @param key 对象 key
-   * @param expiresAt 过期时刻（Epoch 秒以下精度被舍去）
-   * @param secret HMAC 密钥
-   * @return Base64-URL 签名串
-   */
-  public static String sign(String bucket, String key, Instant expiresAt, String secret) {
-    if (secret == null || secret.isBlank()) {
-      throw new IllegalArgumentException("presign secret must not be blank");
+    /**
+     * 签发令牌，返回 Base64-URL 编码的签名（不含 padding）。
+     *
+     * @param bucket bucket 名
+     * @param key 对象 key
+     * @param expiresAt 过期时刻（Epoch 秒以下精度被舍去）
+     * @param secret HMAC 密钥
+     * @return Base64-URL 签名串
+     */
+    public static String sign(String bucket, String key, Instant expiresAt, String secret) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalArgumentException("presign secret must not be blank");
+        }
+        long expEpochSec = expiresAt.getEpochSecond();
+        return signRaw(bucket, key, expEpochSec, secret);
     }
-    long expEpochSec = expiresAt.getEpochSecond();
-    return signRaw(bucket, key, expEpochSec, secret);
-  }
 
-  /**
-   * 校验令牌：常时间比较签名 + 检查未过期。任一不通过返回 {@code false}。
-   *
-   * @param bucket bucket 名
-   * @param key 对象 key
-   * @param expEpochSec 令牌内携带的过期 Epoch 秒
-   * @param signature 令牌内携带的签名（Base64-URL）
-   * @param secret HMAC 密钥
-   * @return true 表示签名匹配且未过期
-   */
-  public static boolean verify(
-      String bucket, String key, long expEpochSec, String signature, String secret) {
-    if (signature == null || secret == null || secret.isBlank()) {
-      return false;
+    /**
+     * 校验令牌：常时间比较签名 + 检查未过期。任一不通过返回 {@code false}。
+     *
+     * @param bucket bucket 名
+     * @param key 对象 key
+     * @param expEpochSec 令牌内携带的过期 Epoch 秒
+     * @param signature 令牌内携带的签名（Base64-URL）
+     * @param secret HMAC 密钥
+     * @return true 表示签名匹配且未过期
+     */
+    public static boolean verify(String bucket, String key, long expEpochSec, String signature, String secret) {
+        if (signature == null || secret == null || secret.isBlank()) {
+            return false;
+        }
+        long currentEpochSecond = Instant.now().getEpochSecond();
+        if (currentEpochSecond > expEpochSec) {
+            return false;
+        }
+        String expected = signRaw(bucket, key, expEpochSec, secret);
+        byte[] expectedBytes = expected.getBytes(StandardCharsets.US_ASCII);
+        byte[] actualBytes = signature.getBytes(StandardCharsets.US_ASCII);
+        return MessageDigest.isEqual(expectedBytes, actualBytes);
     }
-    long currentEpochSecond = Instant.now().getEpochSecond();
-    if (currentEpochSecond > expEpochSec) {
-      return false;
-    }
-    String expected = signRaw(bucket, key, expEpochSec, secret);
-    byte[] expectedBytes = expected.getBytes(StandardCharsets.US_ASCII);
-    byte[] actualBytes = signature.getBytes(StandardCharsets.US_ASCII);
-    return MessageDigest.isEqual(expectedBytes, actualBytes);
-  }
 
-  /** 拼装下载 URL：{@code <baseUrl>?b=<bucket>&k=<urlEncoded key>&e=<exp>&s=<sig>}。 */
-  public static String buildUrl(
-      String baseUrl, String bucket, String key, long expEpochSec, String signature) {
-    String encodedKey = URLEncoder.encode(key, StandardCharsets.UTF_8);
-    String encodedBucket = URLEncoder.encode(bucket, StandardCharsets.UTF_8);
-    return baseUrl
-        + (baseUrl.contains("?") ? "&" : "?")
-        + "b="
-        + encodedBucket
-        + "&k="
-        + encodedKey
-        + "&e="
-        + expEpochSec
-        + "&s="
-        + signature;
-  }
-
-  private static String signRaw(String bucket, String key, long expEpochSec, String secret) {
-    String payload = bucket + "|" + key + "|" + expEpochSec;
-    try {
-      Mac mac = Mac.getInstance(HMAC_ALGORITHM);
-      byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
-      SecretKeySpec secretKey = new SecretKeySpec(secretBytes, HMAC_ALGORITHM);
-      mac.init(secretKey);
-      byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
-      byte[] digest = mac.doFinal(payloadBytes);
-      Base64.Encoder urlEncoder = Base64.getUrlEncoder();
-      Base64.Encoder encoderWithoutPadding = urlEncoder.withoutPadding();
-      return encoderWithoutPadding.encodeToString(digest);
-    } catch (Exception ex) {
-      throw new IllegalStateException("failed to compute presign HMAC", ex);
+    /** 拼装下载 URL：{@code <baseUrl>?b=<bucket>&k=<urlEncoded key>&e=<exp>&s=<sig>}。 */
+    public static String buildUrl(String baseUrl, String bucket, String key, long expEpochSec, String signature) {
+        String encodedKey = URLEncoder.encode(key, StandardCharsets.UTF_8);
+        String encodedBucket = URLEncoder.encode(bucket, StandardCharsets.UTF_8);
+        return baseUrl
+                + (baseUrl.contains("?") ? "&" : "?")
+                + "b="
+                + encodedBucket
+                + "&k="
+                + encodedKey
+                + "&e="
+                + expEpochSec
+                + "&s="
+                + signature;
     }
-  }
+
+    private static String signRaw(String bucket, String key, long expEpochSec, String secret) {
+        String payload = bucket + "|" + key + "|" + expEpochSec;
+        try {
+            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
+            byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+            SecretKeySpec secretKey = new SecretKeySpec(secretBytes, HMAC_ALGORITHM);
+            mac.init(secretKey);
+            byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
+            byte[] digest = mac.doFinal(payloadBytes);
+            Base64.Encoder urlEncoder = Base64.getUrlEncoder();
+            Base64.Encoder encoderWithoutPadding = urlEncoder.withoutPadding();
+            return encoderWithoutPadding.encodeToString(digest);
+        } catch (Exception ex) {
+            throw new IllegalStateException("failed to compute presign HMAC", ex);
+        }
+    }
 }

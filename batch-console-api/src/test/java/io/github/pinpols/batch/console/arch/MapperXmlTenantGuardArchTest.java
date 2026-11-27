@@ -13,65 +13,65 @@ import java.util.Set;
  */
 class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
 
-  /**
-   * 已知用 "全局 admin 跨租 + tenant 用户 single-tenant" 双路径的 mapper 白名单。
-   *
-   * <p>这些 XML 用 {@code <if tenantId>AND tenant_id=#{tenantId}} 模式刻意保留 null fallback,以支持 ROLE_ADMIN
-   * 不传 tenantId 时全表扫。**新写 mapper 严禁加入此名单**,要么走 tenantGuard.resolveTenant 服务层回退(典型
-   * OperationAuditQueryService),要么把全局 admin 路径独立成单独的 mapper 方法。
-   *
-   * <p>本测试的核心价值是 **防回退**:有人新写 mapper 用了 if-conditional 模式 → test fail → review; 已存在的逐步治理迁移,**禁止追加**
-   * 新条目除非有明确架构理由。
-   */
-  @Override
-  protected List<String> knownConditionalTenantMappers() {
-    return List.of(
-        // 全局系统表(docs/agent-baseline.md §多租隔离 4 张豁免表)
-        "BizTableSchemaMapper",
-        "StepRegistryMapper",
-        "ShedLockMapper",
-        // 后台 reconciler / archive 跨租户工具:按状态全表扫,无 tenant 参数
-        "ConsoleDashboardQueryMapper", // 全局聚合视图
-        "OperationAuditMapper", // 服务层 A1 修过 tenantGuard 回退
-        // 历史遗留 conditional 模式,治理中:每条均需明确"全局 admin 入口"理由,迁移完成即移除
-        "WorkflowNodeMapper",
-        "WorkflowEdgeMapper",
-        "FileArrivalGroupMapper",
-        "ConsoleUserAccountMapper",
-        "OutboxRetryLogMapper");
-  }
+    /**
+     * 已知用 "全局 admin 跨租 + tenant 用户 single-tenant" 双路径的 mapper 白名单。
+     *
+     * <p>这些 XML 用 {@code <if tenantId>AND tenant_id=#{tenantId}} 模式刻意保留 null fallback,以支持 ROLE_ADMIN
+     * 不传 tenantId 时全表扫。**新写 mapper 严禁加入此名单**,要么走 tenantGuard.resolveTenant 服务层回退(典型
+     * OperationAuditQueryService),要么把全局 admin 路径独立成单独的 mapper 方法。
+     *
+     * <p>本测试的核心价值是 **防回退**:有人新写 mapper 用了 if-conditional 模式 → test fail → review; 已存在的逐步治理迁移,**禁止追加**
+     * 新条目除非有明确架构理由。
+     */
+    @Override
+    protected List<String> knownConditionalTenantMappers() {
+        return List.of(
+                // 全局系统表(docs/agent-baseline.md §多租隔离 4 张豁免表)
+                "BizTableSchemaMapper",
+                "StepRegistryMapper",
+                "ShedLockMapper",
+                // 后台 reconciler / archive 跨租户工具:按状态全表扫,无 tenant 参数
+                "ConsoleDashboardQueryMapper", // 全局聚合视图
+                "OperationAuditMapper", // 服务层 A1 修过 tenantGuard 回退
+                // 历史遗留 conditional 模式,治理中:每条均需明确"全局 admin 入口"理由,迁移完成即移除
+                "WorkflowNodeMapper",
+                "WorkflowEdgeMapper",
+                "FileArrivalGroupMapper",
+                "ConsoleUserAccountMapper",
+                "OutboxRetryLogMapper");
+    }
 
-  /**
-   * batch.* UPDATE/DELETE 缺 tenant_id 谓词的语句级豁免(表带 tenant_id 列,但隔离不在本条 SQL 的 WHERE)。每条注明 by-design
-   * 依据。console-api 是租户可达面,故此处逐条核实过服务层隔离机制。红线:新写用户可达 batch.* 写严禁往此追加。
-   */
-  @Override
-  protected Set<String> knownTenantlessBatchWriteStatements() {
-    return Set.of(
-        // 账号 CRUD:服务层 ConsoleUserAccountService 每次写前先 selectById 再 assertSameTenantOrGlobal(读校验后按
-        // id 写)
-        "ConsoleUserAccountMapper#updateProfile",
-        "ConsoleUserAccountMapper#updatePasswordHash", // 当前无 Java 调用方(死 SQL,保留守护待清理)
-        "ConsoleUserAccountMapper#updatePasswordHashAndMustChange",
-        "ConsoleUserAccountMapper#updateEnabled",
-        "ConsoleUserAccountMapper#deleteById", // 当前无 Java 调用方(死 SQL,保留守护待清理)
-        // 假日子表:业务日历的子表,服务层先 calendarMapper.selectById(tenantId,id) 校验父日历归属,再按 calendar_id/id 改删
-        "CalendarHolidayMapper#update",
-        "CalendarHolidayMapper#deleteByCalendarId", // JSON初始化已按租户读取父日历后整体重建节假日
-        "CalendarHolidayMapper#deleteByCalendarIdAndId",
-        // Web Push:stale 为后台过期清理；provider 回执更新/失效清理必须匹配租户和原凭据版本。
-        "ConsolePushSubscriptionMapper#deleteIfStaleSince",
-        // Webhook 投递重试:重试调度器全局认领后按投递 id 推进状态(非用户可达的按 id 直改)
-        "ConsoleWebhookDeliveryLogMapper#claimForRetryByStatuses",
-        "ConsoleWebhookDeliveryLogMapper#updateRetrySuccess",
-        "ConsoleWebhookDeliveryLogMapper#updateRetryFailure",
-        "ConsoleWebhookDeliveryLogMapper#updateGiveUp",
-        // AI 审计留存是显式开关控制的后台清理任务，按全局截止时间清理所有租户的过期证据。
-        "ConsoleAiAuditLogMapper#deleteBefore",
-        // 维护模式是单例系统状态，不属于任何租户；CAS 更新必须按 singleton id/version 写入。
-        "MaintenanceStateMapper#updateIfVersion",
-        // 工作流定义子表级联删除:按父 workflow_definition_id 删(父定义已按 tenant 校验后整体重建)
-        "WorkflowNodeMapper#deleteByWorkflowDefinitionId",
-        "WorkflowEdgeMapper#deleteByWorkflowDefinitionId");
-  }
+    /**
+     * batch.* UPDATE/DELETE 缺 tenant_id 谓词的语句级豁免(表带 tenant_id 列,但隔离不在本条 SQL 的 WHERE)。每条注明 by-design
+     * 依据。console-api 是租户可达面,故此处逐条核实过服务层隔离机制。红线:新写用户可达 batch.* 写严禁往此追加。
+     */
+    @Override
+    protected Set<String> knownTenantlessBatchWriteStatements() {
+        return Set.of(
+                // 账号 CRUD:服务层 ConsoleUserAccountService 每次写前先 selectById 再 assertSameTenantOrGlobal(读校验后按
+                // id 写)
+                "ConsoleUserAccountMapper#updateProfile",
+                "ConsoleUserAccountMapper#updatePasswordHash", // 当前无 Java 调用方(死 SQL,保留守护待清理)
+                "ConsoleUserAccountMapper#updatePasswordHashAndMustChange",
+                "ConsoleUserAccountMapper#updateEnabled",
+                "ConsoleUserAccountMapper#deleteById", // 当前无 Java 调用方(死 SQL,保留守护待清理)
+                // 假日子表:业务日历的子表,服务层先 calendarMapper.selectById(tenantId,id) 校验父日历归属,再按 calendar_id/id 改删
+                "CalendarHolidayMapper#update",
+                "CalendarHolidayMapper#deleteByCalendarId", // JSON初始化已按租户读取父日历后整体重建节假日
+                "CalendarHolidayMapper#deleteByCalendarIdAndId",
+                // Web Push:stale 为后台过期清理；provider 回执更新/失效清理必须匹配租户和原凭据版本。
+                "ConsolePushSubscriptionMapper#deleteIfStaleSince",
+                // Webhook 投递重试:重试调度器全局认领后按投递 id 推进状态(非用户可达的按 id 直改)
+                "ConsoleWebhookDeliveryLogMapper#claimForRetryByStatuses",
+                "ConsoleWebhookDeliveryLogMapper#updateRetrySuccess",
+                "ConsoleWebhookDeliveryLogMapper#updateRetryFailure",
+                "ConsoleWebhookDeliveryLogMapper#updateGiveUp",
+                // AI 审计留存是显式开关控制的后台清理任务，按全局截止时间清理所有租户的过期证据。
+                "ConsoleAiAuditLogMapper#deleteBefore",
+                // 维护模式是单例系统状态，不属于任何租户；CAS 更新必须按 singleton id/version 写入。
+                "MaintenanceStateMapper#updateIfVersion",
+                // 工作流定义子表级联删除:按父 workflow_definition_id 删(父定义已按 tenant 校验后整体重建)
+                "WorkflowNodeMapper#deleteByWorkflowDefinitionId",
+                "WorkflowEdgeMapper#deleteByWorkflowDefinitionId");
+    }
 }

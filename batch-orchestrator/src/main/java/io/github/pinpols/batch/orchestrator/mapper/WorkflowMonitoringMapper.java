@@ -6,12 +6,12 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowMonitoringMapper {
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  String acquireAlertLock(
-      @Param("tenantId") String tenantId,
-      @Param("resourceKey") String resourceKey,
-      @Param("violation") String violation);
+    String acquireAlertLock(
+            @Param("tenantId") String tenantId,
+            @Param("resourceKey") String resourceKey,
+            @Param("violation") String violation);
 
-  List<WorkflowMonitoringAlertCandidate> selectCandidates(WorkflowMonitoringQuery query);
+    List<WorkflowMonitoringAlertCandidate> selectCandidates(WorkflowMonitoringQuery query);
 }

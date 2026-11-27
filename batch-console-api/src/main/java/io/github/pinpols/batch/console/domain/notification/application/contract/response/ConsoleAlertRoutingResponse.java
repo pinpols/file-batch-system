@@ -23,50 +23,50 @@ import lombok.Builder;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Builder
 public record ConsoleAlertRoutingResponse(
-    Long id,
-    @JsonProperty("tenant_id") String tenantId,
-    @JsonProperty("route_code") String routeCode,
-    @JsonProperty("route_name") String routeName,
-    String team,
-    @JsonProperty("alert_group") String alertGroup,
-    String severity,
-    String receiver,
-    @JsonProperty("group_by") String groupBy,
-    @JsonProperty("group_wait_seconds") Integer groupWaitSeconds,
-    @JsonProperty("group_interval_seconds") Integer groupIntervalSeconds,
-    @JsonProperty("repeat_interval_seconds") Integer repeatIntervalSeconds,
-    Boolean enabled,
-    String description,
-    @JsonProperty("created_by") String createdBy,
-    @JsonProperty("updated_by") String updatedBy,
-    @JsonProperty("created_at") Instant createdAt,
-    @JsonProperty("updated_at") Instant updatedAt,
-    @JsonProperty("is_deleted") Boolean isDeleted) {
+        Long id,
+        @JsonProperty("tenant_id") String tenantId,
+        @JsonProperty("route_code") String routeCode,
+        @JsonProperty("route_name") String routeName,
+        String team,
+        @JsonProperty("alert_group") String alertGroup,
+        String severity,
+        String receiver,
+        @JsonProperty("group_by") String groupBy,
+        @JsonProperty("group_wait_seconds") Integer groupWaitSeconds,
+        @JsonProperty("group_interval_seconds") Integer groupIntervalSeconds,
+        @JsonProperty("repeat_interval_seconds") Integer repeatIntervalSeconds,
+        Boolean enabled,
+        String description,
+        @JsonProperty("created_by") String createdBy,
+        @JsonProperty("updated_by") String updatedBy,
+        @JsonProperty("created_at") Instant createdAt,
+        @JsonProperty("updated_at") Instant updatedAt,
+        @JsonProperty("is_deleted") Boolean isDeleted) {
 
-  public static ConsoleAlertRoutingResponse from(AlertRoutingConfigRow row) {
-    if (row == null) {
-      return null;
+    public static ConsoleAlertRoutingResponse from(AlertRoutingConfigRow row) {
+        if (row == null) {
+            return null;
+        }
+        return ConsoleAlertRoutingResponse.builder()
+                .id(row.id())
+                .tenantId(row.tenantId())
+                .routeCode(row.routeCode())
+                .routeName(row.routeName())
+                .team(row.team())
+                .alertGroup(row.alertGroup())
+                .severity(row.severity())
+                .receiver(row.receiver())
+                .groupBy(row.groupBy())
+                .groupWaitSeconds(row.groupWaitSeconds())
+                .groupIntervalSeconds(row.groupIntervalSeconds())
+                .repeatIntervalSeconds(row.repeatIntervalSeconds())
+                .enabled(row.enabled())
+                .description(row.description())
+                .createdBy(row.createdBy())
+                .updatedBy(row.updatedBy())
+                .createdAt(row.createdAt())
+                .updatedAt(row.updatedAt())
+                .isDeleted(row.isDeleted())
+                .build();
     }
-    return ConsoleAlertRoutingResponse.builder()
-        .id(row.id())
-        .tenantId(row.tenantId())
-        .routeCode(row.routeCode())
-        .routeName(row.routeName())
-        .team(row.team())
-        .alertGroup(row.alertGroup())
-        .severity(row.severity())
-        .receiver(row.receiver())
-        .groupBy(row.groupBy())
-        .groupWaitSeconds(row.groupWaitSeconds())
-        .groupIntervalSeconds(row.groupIntervalSeconds())
-        .repeatIntervalSeconds(row.repeatIntervalSeconds())
-        .enabled(row.enabled())
-        .description(row.description())
-        .createdBy(row.createdBy())
-        .updatedBy(row.updatedBy())
-        .createdAt(row.createdAt())
-        .updatedAt(row.updatedAt())
-        .isDeleted(row.isDeleted())
-        .build();
-  }
 }

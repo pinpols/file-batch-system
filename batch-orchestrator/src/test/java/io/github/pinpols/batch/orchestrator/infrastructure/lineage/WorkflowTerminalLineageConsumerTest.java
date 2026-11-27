@@ -22,97 +22,95 @@ import org.springframework.kafka.support.Acknowledgment;
 @DisplayName("工作流终态血缘消费:有效事件投递,投递失败重投,非法报文丢弃")
 class WorkflowTerminalLineageConsumerTest {
 
-  private OpenLineageEmitter emitter;
-  private OpenLineageProperties properties;
-  private WorkflowTerminalLineageConsumer consumer;
-  private Acknowledgment acknowledgment;
+    private OpenLineageEmitter emitter;
+    private OpenLineageProperties properties;
+    private WorkflowTerminalLineageConsumer consumer;
+    private Acknowledgment acknowledgment;
 
-  @BeforeEach
-  void setUp() {
-    emitter = mock(OpenLineageEmitter.class);
-    properties = new OpenLineageProperties();
-    properties.setRetryBackoffMs(2500L);
-    consumer =
-        new WorkflowTerminalLineageConsumer(emitter, properties, new BatchKafkaTopicNamespace(""));
-    acknowledgment = mock(Acknowledgment.class);
-  }
+    @BeforeEach
+    void setUp() {
+        emitter = mock(OpenLineageEmitter.class);
+        properties = new OpenLineageProperties();
+        properties.setRetryBackoffMs(2500L);
+        consumer = new WorkflowTerminalLineageConsumer(emitter, properties, new BatchKafkaTopicNamespace(""));
+        acknowledgment = mock(Acknowledgment.class);
+    }
 
-  @Test
-  @DisplayName("OpenLineage consumer 的 topic 与组名均带部署 namespace")
-  void shouldNamespaceTopicAndConsumerGroup() {
-    WorkflowTerminalLineageConsumer namespaced = new WorkflowTerminalLineageConsumer(
-        emitter, properties, new BatchKafkaTopicNamespace("run-a"));
+    @Test
+    @DisplayName("OpenLineage consumer 的 topic 与组名均带部署 namespace")
+    void shouldNamespaceTopicAndConsumerGroup() {
+        WorkflowTerminalLineageConsumer namespaced =
+                new WorkflowTerminalLineageConsumer(emitter, properties, new BatchKafkaTopicNamespace("run-a"));
 
-    assertThat(namespaced.topicName()).isEqualTo("run-a.batch.workflow.terminal.v1");
-    assertThat(namespaced.consumerGroupId()).isEqualTo("run-a.batch-openlineage-emitter");
-  }
+        assertThat(namespaced.topicName()).isEqualTo("run-a.batch.workflow.terminal.v1");
+        assertThat(namespaced.consumerGroupId()).isEqualTo("run-a.batch-openlineage-emitter");
+    }
 
-  @Test
-  @DisplayName("有效的终态事件在提交位点前完成投递,且不请求延迟重投")
-  void shouldDeliverTerminalEventBeforeOffsetCommit_whenEventIsValid() {
-    consumer.consume(record(validPayload()), acknowledgment);
+    @Test
+    @DisplayName("有效的终态事件在提交位点前完成投递,且不请求延迟重投")
+    void shouldDeliverTerminalEventBeforeOffsetCommit_whenEventIsValid() {
+        consumer.consume(record(validPayload()), acknowledgment);
 
-    verify(emitter)
-        .emitWorkflowTerminalReliably(
-            any(WorkflowRunEntity.class), eq("SUCCESS"), eq(Instant.parse("2026-05-20T10:00:00Z")));
-    verify(acknowledgment).acknowledge();
-    verify(acknowledgment, never()).nack(any(Duration.class));
-  }
+        verify(emitter)
+                .emitWorkflowTerminalReliably(
+                        any(WorkflowRunEntity.class), eq("SUCCESS"), eq(Instant.parse("2026-05-20T10:00:00Z")));
+        verify(acknowledgment).acknowledge();
+        verify(acknowledgment, never()).nack(any(Duration.class));
+    }
 
-  @Test
-  @DisplayName("投递失败时按配置的退避时长请求延迟重投,且不提交位点")
-  void shouldRetainOffsetForRetry_whenDeliveryFails() {
-    doThrow(new IllegalStateException("endpoint unavailable"))
-        .when(emitter)
-        .emitWorkflowTerminalReliably(any(), any(), any());
+    @Test
+    @DisplayName("投递失败时按配置的退避时长请求延迟重投,且不提交位点")
+    void shouldRetainOffsetForRetry_whenDeliveryFails() {
+        doThrow(new IllegalStateException("endpoint unavailable"))
+                .when(emitter)
+                .emitWorkflowTerminalReliably(any(), any(), any());
 
-    consumer.consume(record(validPayload()), acknowledgment);
+        consumer.consume(record(validPayload()), acknowledgment);
 
-    verify(acknowledgment).nack(Duration.ofMillis(2500L));
-    verify(acknowledgment, never()).acknowledge();
-  }
+        verify(acknowledgment).nack(Duration.ofMillis(2500L));
+        verify(acknowledgment, never()).acknowledge();
+    }
 
-  @Test
-  @DisplayName("运行状态非终态的消息直接确认位点,且不触发对外投递")
-  void shouldAcknowledgePoisonMessage_whenRunStatusIsNotTerminal() {
-    consumer.consume(
-        record("{\"tenantId\":\"ta\",\"workflowRunId\":100,\"runStatus\":\"RUNNING\"}"),
-        acknowledgment);
+    @Test
+    @DisplayName("运行状态非终态的消息直接确认位点,且不触发对外投递")
+    void shouldAcknowledgePoisonMessage_whenRunStatusIsNotTerminal() {
+        consumer.consume(
+                record("{\"tenantId\":\"ta\",\"workflowRunId\":100,\"runStatus\":\"RUNNING\"}"), acknowledgment);
 
-    verify(emitter, never()).emitWorkflowTerminalReliably(any(), any(), any());
-    verify(acknowledgment).acknowledge();
-  }
+        verify(emitter, never()).emitWorkflowTerminalReliably(any(), any(), any());
+        verify(acknowledgment).acknowledge();
+    }
 
-  @Test
-  @DisplayName("解析终态报文时还原租户,运行标识,定义标识,关联作业实例,业务日期,开始时间与链路标识")
-  void shouldRestoreLineageFields_whenTerminalSnapshotIsParsed() {
-    WorkflowTerminalLineageConsumer.TerminalSnapshot snapshot =
-        WorkflowTerminalLineageConsumer.parse(validPayload());
+    @Test
+    @DisplayName("解析终态报文时还原租户,运行标识,定义标识,关联作业实例,业务日期,开始时间与链路标识")
+    void shouldRestoreLineageFields_whenTerminalSnapshotIsParsed() {
+        WorkflowTerminalLineageConsumer.TerminalSnapshot snapshot =
+                WorkflowTerminalLineageConsumer.parse(validPayload());
 
-    assertThat(snapshot.run().getTenantId()).isEqualTo("ta");
-    assertThat(snapshot.run().getId()).isEqualTo(100L);
-    assertThat(snapshot.run().getWorkflowDefinitionId()).isEqualTo(50L);
-    assertThat(snapshot.run().getRelatedJobInstanceId()).isEqualTo(200L);
-    assertThat(snapshot.run().getBizDate()).hasToString("2026-05-20");
-    assertThat(snapshot.run().getStartedAt()).isEqualTo(Instant.parse("2026-05-20T09:00:00Z"));
-    assertThat(snapshot.run().getTraceId()).isEqualTo("trace-xx");
-  }
+        assertThat(snapshot.run().getTenantId()).isEqualTo("ta");
+        assertThat(snapshot.run().getId()).isEqualTo(100L);
+        assertThat(snapshot.run().getWorkflowDefinitionId()).isEqualTo(50L);
+        assertThat(snapshot.run().getRelatedJobInstanceId()).isEqualTo(200L);
+        assertThat(snapshot.run().getBizDate()).hasToString("2026-05-20");
+        assertThat(snapshot.run().getStartedAt()).isEqualTo(Instant.parse("2026-05-20T09:00:00Z"));
+        assertThat(snapshot.run().getTraceId()).isEqualTo("trace-xx");
+    }
 
-  private static ConsumerRecord<String, String> record(String value) {
-    return new ConsumerRecord<>("batch.workflow.terminal.v1", 0, 42L, "workflow-100", value);
-  }
+    private static ConsumerRecord<String, String> record(String value) {
+        return new ConsumerRecord<>("batch.workflow.terminal.v1", 0, 42L, "workflow-100", value);
+    }
 
-  @Test
-  @DisplayName("未知终态载荷版本被拒绝且不触发外部血缘投递")
-  void shouldRejectUnsupportedSnapshotVersion_withoutExternalDelivery() {
-    consumer.consume(record(validPayload().replace("\"v2\"", "\"v999\"")), acknowledgment);
+    @Test
+    @DisplayName("未知终态载荷版本被拒绝且不触发外部血缘投递")
+    void shouldRejectUnsupportedSnapshotVersion_withoutExternalDelivery() {
+        consumer.consume(record(validPayload().replace("\"v2\"", "\"v999\"")), acknowledgment);
 
-    verify(emitter, never()).emitWorkflowTerminalReliably(any(), any(), any());
-    verify(acknowledgment).acknowledge();
-  }
+        verify(emitter, never()).emitWorkflowTerminalReliably(any(), any(), any());
+        verify(acknowledgment).acknowledge();
+    }
 
-  private static String validPayload() {
-    return """
+    private static String validPayload() {
+        return """
         {
           "schemaVersion":"v2",
           "tenantId":"ta",
@@ -126,5 +124,5 @@ class WorkflowTerminalLineageConsumerTest {
           "traceId":"trace-xx"
         }
         """;
-  }
+    }
 }

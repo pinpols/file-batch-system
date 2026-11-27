@@ -14,10 +14,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /** 为 HTTP 请求装配 trace、租户等 MDC 上下文。 */
 public class HttpRequestMdcAutoConfiguration {
 
-  // 本类经 auto-configuration imports 装配,测试切片可能不做组件扫描,故用静态 resolve 而非注入
-  // ApplicationNameProvider bean。
-  @Bean
-  public HttpRequestMdcFilter httpRequestMdcFilter(Environment environment) {
-    return new HttpRequestMdcFilter(ApplicationNameProvider.resolve(environment, "batch"));
-  }
+    // 本类经 auto-configuration imports 装配,测试切片可能不做组件扫描,故用静态 resolve 而非注入
+    // ApplicationNameProvider bean。
+    @Bean
+    public HttpRequestMdcFilter httpRequestMdcFilter(Environment environment) {
+        return new HttpRequestMdcFilter(ApplicationNameProvider.resolve(environment, "batch"));
+    }
 }

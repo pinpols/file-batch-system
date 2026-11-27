@@ -43,288 +43,280 @@ import org.mockito.ArgumentMatchers;
 @DisplayName("重试重排队协调器: 认领丢失, 分区与任务复位及重试派发事件")
 class RetryRequeueCoordinatorTest {
 
-  private RetryScheduleMapper retryScheduleMapper;
-  private JobTaskMapper jobTaskMapper;
-  private JobPartitionMapper jobPartitionMapper;
-  private JobInstanceMapper jobInstanceMapper;
-  private JobStepInstanceMapper jobStepInstanceMapper;
-  private TaskDispatchOutboxService taskDispatchOutboxService;
-  private RetryRequeueCoordinator coordinator;
+    private RetryScheduleMapper retryScheduleMapper;
+    private JobTaskMapper jobTaskMapper;
+    private JobPartitionMapper jobPartitionMapper;
+    private JobInstanceMapper jobInstanceMapper;
+    private JobStepInstanceMapper jobStepInstanceMapper;
+    private TaskDispatchOutboxService taskDispatchOutboxService;
+    private RetryRequeueCoordinator coordinator;
 
-  @BeforeEach
-  void setUp() {
-    retryScheduleMapper = mock(RetryScheduleMapper.class);
-    jobTaskMapper = mock(JobTaskMapper.class);
-    jobPartitionMapper = mock(JobPartitionMapper.class);
-    jobInstanceMapper = mock(JobInstanceMapper.class);
-    jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
-    taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
-    coordinator = new RetryRequeueCoordinator(
-        retryScheduleMapper,
-        jobTaskMapper,
-        jobPartitionMapper,
-        jobInstanceMapper,
-        jobStepInstanceMapper,
-        taskDispatchOutboxService,
-        mock(WorkflowRunMapper.class));
-  }
+    @BeforeEach
+    void setUp() {
+        retryScheduleMapper = mock(RetryScheduleMapper.class);
+        jobTaskMapper = mock(JobTaskMapper.class);
+        jobPartitionMapper = mock(JobPartitionMapper.class);
+        jobInstanceMapper = mock(JobInstanceMapper.class);
+        jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
+        taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+        coordinator = new RetryRequeueCoordinator(
+                retryScheduleMapper,
+                jobTaskMapper,
+                jobPartitionMapper,
+                jobInstanceMapper,
+                jobStepInstanceMapper,
+                taskDispatchOutboxService,
+                mock(WorkflowRunMapper.class));
+    }
 
-  @Test
-  @DisplayName("重试计划认领失败时保持等待状态, 不读取分区与任务")
-  void shouldLeaveRetryScheduleWaitingWhenClaimIsLost() {
-    RetryScheduleEntity schedule = retrySchedule(7L, 10L);
-    when(retryScheduleMapper.markRunning(
-            "tenant-a", 7L, RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()))
-        .thenReturn(0);
+    @Test
+    @DisplayName("重试计划认领失败时保持等待状态, 不读取分区与任务")
+    void shouldLeaveRetryScheduleWaitingWhenClaimIsLost() {
+        RetryScheduleEntity schedule = retrySchedule(7L, 10L);
+        when(retryScheduleMapper.markRunning(
+                        "tenant-a", 7L, RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()))
+                .thenReturn(0);
 
-    coordinator.requeueRetry(schedule);
+        coordinator.requeueRetry(schedule);
 
-    verify(jobPartitionMapper, never()).selectById(anyString(), anyLong());
-    verify(retryScheduleMapper, never())
-        .markSuccess(anyString(), anyLong(), anyString(), anyString());
-  }
+        verify(jobPartitionMapper, never()).selectById(anyString(), anyLong());
+        verify(retryScheduleMapper, never()).markSuccess(anyString(), anyLong(), anyString(), anyString());
+    }
 
-  @Test
-  @DisplayName("分区重排队时复位首个任务及其步骤, 并发出重试派发事件")
-  void shouldResetFirstTaskAndEmitRetryDispatchForPartition() {
-    JobPartitionEntity partition = partition(10L, 20L, 4L);
-    JobInstanceEntity instance = instance(20L);
-    JobTaskEntity firstTask = task(30L, 20L, 0, 8L);
-    JobTaskEntity laterTask = task(31L, 20L, 1, 9L);
-    JobStepInstanceEntity step = step(40L, 2);
-    when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition);
-    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
-    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(laterTask, firstTask));
-    when(jobStepInstanceMapper.selectByJobTaskId("tenant-a", 30L)).thenReturn(step);
-    when(jobPartitionMapper.resetForDispatch("tenant-a", 10L, PartitionStatus.READY.code(), 4L))
-        .thenReturn(1);
-    when(jobTaskMapper.resetForRetry("tenant-a", 30L, TaskStatus.READY.code(), 8L))
-        .thenReturn(1);
+    @Test
+    @DisplayName("分区重排队时复位首个任务及其步骤, 并发出重试派发事件")
+    void shouldResetFirstTaskAndEmitRetryDispatchForPartition() {
+        JobPartitionEntity partition = partition(10L, 20L, 4L);
+        JobInstanceEntity instance = instance(20L);
+        JobTaskEntity firstTask = task(30L, 20L, 0, 8L);
+        JobTaskEntity laterTask = task(31L, 20L, 1, 9L);
+        JobStepInstanceEntity step = step(40L, 2);
+        when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition);
+        when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+        when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(laterTask, firstTask));
+        when(jobStepInstanceMapper.selectByJobTaskId("tenant-a", 30L)).thenReturn(step);
+        when(jobPartitionMapper.resetForDispatch("tenant-a", 10L, PartitionStatus.READY.code(), 4L))
+                .thenReturn(1);
+        when(jobTaskMapper.resetForRetry("tenant-a", 30L, TaskStatus.READY.code(), 8L))
+                .thenReturn(1);
 
-    coordinator.requeuePartition("tenant-a", 10L, "retry-event");
+        coordinator.requeuePartition("tenant-a", 10L, "retry-event");
 
-    verify(jobStepInstanceMapper)
-        .resetForRetryByJobTaskId("tenant-a", 30L, 3, StepInstanceStatus.READY.code());
-    verify(jobPartitionMapper).resetForDispatch("tenant-a", 10L, PartitionStatus.READY.code(), 4L);
-    verify(jobTaskMapper).resetForRetry("tenant-a", 30L, TaskStatus.READY.code(), 8L);
-    verify(taskDispatchOutboxService)
-        .writeDispatchEvent(ArgumentMatchers.argThat(command -> command != null
-            && command.jobInstance() == instance
-            && command.task() == firstTask
-            && command.partition() == partition
-            && Objects.equals(command.traceId(), "trace-20")
-            && Objects.equals(command.eventKey(), "retry-event")
-            && Objects.equals(command.runModeOverride(), RunMode.RETRY)));
-  }
+        verify(jobStepInstanceMapper).resetForRetryByJobTaskId("tenant-a", 30L, 3, StepInstanceStatus.READY.code());
+        verify(jobPartitionMapper).resetForDispatch("tenant-a", 10L, PartitionStatus.READY.code(), 4L);
+        verify(jobTaskMapper).resetForRetry("tenant-a", 30L, TaskStatus.READY.code(), 8L);
+        verify(taskDispatchOutboxService)
+                .writeDispatchEvent(ArgumentMatchers.argThat(command -> command != null
+                        && command.jobInstance() == instance
+                        && command.task() == firstTask
+                        && command.partition() == partition
+                        && Objects.equals(command.traceId(), "trace-20")
+                        && Objects.equals(command.eventKey(), "retry-event")
+                        && Objects.equals(command.runModeOverride(), RunMode.RETRY)));
+    }
 
-  @Test
-  @DisplayName("分区内任一任务副作用结果未知时拒绝重排队且不产生派发副作用")
-  void shouldRejectPartitionRequeueWhenAnyTaskHasUnknownExternalOutcome() {
-    JobPartitionEntity partition = partition(10L, 20L, 4L);
-    JobInstanceEntity instance = instance(20L);
-    JobTaskEntity firstTask = task(30L, 20L, 0, 8L);
-    JobTaskEntity unknownLaterTask = task(31L, 20L, 1, 9L);
-    unknownLaterTask.setErrorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
-    when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition);
-    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
-    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(firstTask, unknownLaterTask));
+    @Test
+    @DisplayName("分区内任一任务副作用结果未知时拒绝重排队且不产生派发副作用")
+    void shouldRejectPartitionRequeueWhenAnyTaskHasUnknownExternalOutcome() {
+        JobPartitionEntity partition = partition(10L, 20L, 4L);
+        JobInstanceEntity instance = instance(20L);
+        JobTaskEntity firstTask = task(30L, 20L, 0, 8L);
+        JobTaskEntity unknownLaterTask = task(31L, 20L, 1, 9L);
+        unknownLaterTask.setErrorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+        when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition);
+        when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+        when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(firstTask, unknownLaterTask));
 
-    assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.task.retry_unknown_outcome_requires_resolution");
+        assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.task.retry_unknown_outcome_requires_resolution");
 
-    verify(jobStepInstanceMapper, never())
-        .resetForRetryByJobTaskId(anyString(), anyLong(), anyInt(), anyString());
-    verify(jobPartitionMapper, never())
-        .resetForDispatch(anyString(), anyLong(), anyString(), anyLong());
-    verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
-    verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
-  }
+        verify(jobStepInstanceMapper, never()).resetForRetryByJobTaskId(anyString(), anyLong(), anyInt(), anyString());
+        verify(jobPartitionMapper, never()).resetForDispatch(anyString(), anyLong(), anyString(), anyLong());
+        verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
+        verify(taskDispatchOutboxService, never())
+                .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
+    }
 
-  @Test
-  @DisplayName("分区复位因版本冲突未命中时中止重排队, 不发重试派发事件")
-  void shouldAbortPartitionRequeueOnVersionConflictBeforeDispatch() {
-    JobPartitionEntity partition = partition(10L, 20L, 4L);
-    JobInstanceEntity instance = instance(20L);
-    JobTaskEntity task = task(30L, 20L, 0, 8L);
-    when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition);
-    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
-    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
-    when(jobPartitionMapper.resetForDispatch("tenant-a", 10L, PartitionStatus.READY.code(), 4L))
-        .thenReturn(0);
+    @Test
+    @DisplayName("分区复位因版本冲突未命中时中止重排队, 不发重试派发事件")
+    void shouldAbortPartitionRequeueOnVersionConflictBeforeDispatch() {
+        JobPartitionEntity partition = partition(10L, 20L, 4L);
+        JobInstanceEntity instance = instance(20L);
+        JobTaskEntity task = task(30L, 20L, 0, 8L);
+        when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition);
+        when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+        when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
+        when(jobPartitionMapper.resetForDispatch("tenant-a", 10L, PartitionStatus.READY.code(), 4L))
+                .thenReturn(0);
 
-    assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
-        .isInstanceOf(RetryRequeueCoordinator.TransientConflictException.class)
-        .hasMessageContaining("partition version conflict");
+        assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
+                .isInstanceOf(RetryRequeueCoordinator.TransientConflictException.class)
+                .hasMessageContaining("partition version conflict");
 
-    verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
-    verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
-  }
+        verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
+        verify(taskDispatchOutboxService, never())
+                .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
+    }
 
-  @Test
-  @DisplayName("没有分区时只复位任务并发出重试派发事件")
-  void shouldResetTaskAndEmitRetryDispatchWithoutPartition() {
-    JobInstanceEntity instance = instance(20L);
-    JobTaskEntity task = task(30L, 20L, 0, 8L);
-    JobStepInstanceEntity step = step(40L, 0);
-    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
-    when(jobStepInstanceMapper.selectByJobTaskId("tenant-a", 30L)).thenReturn(step);
-    when(jobTaskMapper.resetForRetry("tenant-a", 30L, TaskStatus.READY.code(), 8L))
-        .thenReturn(1);
+    @Test
+    @DisplayName("没有分区时只复位任务并发出重试派发事件")
+    void shouldResetTaskAndEmitRetryDispatchWithoutPartition() {
+        JobInstanceEntity instance = instance(20L);
+        JobTaskEntity task = task(30L, 20L, 0, 8L);
+        JobStepInstanceEntity step = step(40L, 0);
+        when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+        when(jobStepInstanceMapper.selectByJobTaskId("tenant-a", 30L)).thenReturn(step);
+        when(jobTaskMapper.resetForRetry("tenant-a", 30L, TaskStatus.READY.code(), 8L))
+                .thenReturn(1);
 
-    coordinator.requeueTaskWithoutPartition("tenant-a", task, "retry-task");
+        coordinator.requeueTaskWithoutPartition("tenant-a", task, "retry-task");
 
-    verify(jobStepInstanceMapper)
-        .resetForRetryByJobTaskId("tenant-a", 30L, 1, StepInstanceStatus.READY.code());
-    verify(taskDispatchOutboxService)
-        .writeDispatchEvent(ArgumentMatchers.argThat(command -> command != null
-            && command.jobInstance() == instance
-            && command.task() == task
-            && Objects.equals(command.partition(), null)
-            && Objects.equals(command.traceId(), "trace-20")
-            && Objects.equals(command.eventKey(), "retry-task")
-            && Objects.equals(command.runModeOverride(), RunMode.RETRY)));
-  }
+        verify(jobStepInstanceMapper).resetForRetryByJobTaskId("tenant-a", 30L, 1, StepInstanceStatus.READY.code());
+        verify(taskDispatchOutboxService)
+                .writeDispatchEvent(ArgumentMatchers.argThat(command -> command != null
+                        && command.jobInstance() == instance
+                        && command.task() == task
+                        && Objects.equals(command.partition(), null)
+                        && Objects.equals(command.traceId(), "trace-20")
+                        && Objects.equals(command.eventKey(), "retry-task")
+                        && Objects.equals(command.runModeOverride(), RunMode.RETRY)));
+    }
 
-  @Test
-  @DisplayName("无分区任务副作用结果未知时拒绝重排队且不重置任务")
-  void shouldRejectUnpartitionedRetryWhenExternalOutcomeIsUnknown() {
-    JobInstanceEntity instance = instance(20L);
-    JobTaskEntity task = task(30L, 20L, 0, 8L);
-    task.setErrorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
-    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+    @Test
+    @DisplayName("无分区任务副作用结果未知时拒绝重排队且不重置任务")
+    void shouldRejectUnpartitionedRetryWhenExternalOutcomeIsUnknown() {
+        JobInstanceEntity instance = instance(20L);
+        JobTaskEntity task = task(30L, 20L, 0, 8L);
+        task.setErrorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+        when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
 
-    assertThatThrownBy(
-            () -> coordinator.requeueTaskWithoutPartition("tenant-a", task, "retry-task"))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.task.retry_unknown_outcome_requires_resolution");
+        assertThatThrownBy(() -> coordinator.requeueTaskWithoutPartition("tenant-a", task, "retry-task"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.task.retry_unknown_outcome_requires_resolution");
 
-    verify(jobStepInstanceMapper, never())
-        .resetForRetryByJobTaskId(anyString(), anyLong(), anyInt(), anyString());
-    verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
-    verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
-  }
+        verify(jobStepInstanceMapper, never()).resetForRetryByJobTaskId(anyString(), anyLong(), anyInt(), anyString());
+        verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
+        verify(taskDispatchOutboxService, never())
+                .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
+    }
 
-  @Test
-  @DisplayName("来源分区不存在时拒绝重排队并抛出业务异常")
-  void shouldRejectPartitionRequeueWhenSourcePartitionIsMissing() {
-    when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(null);
+    @Test
+    @DisplayName("来源分区不存在时拒绝重排队并抛出业务异常")
+    void shouldRejectPartitionRequeueWhenSourcePartitionIsMissing() {
+        when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(null);
 
-    assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.partition.retry_not_found");
+        assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.partition.retry_not_found");
 
-    verify(jobInstanceMapper, never()).selectById(anyString(), anyLong());
-    verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
-  }
+        verify(jobInstanceMapper, never()).selectById(anyString(), anyLong());
+        verify(taskDispatchOutboxService, never())
+                .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
+    }
 
-  @ParameterizedTest
-  @EnumSource(
-      value = JobInstanceStatus.class,
-      names = {
-        "SUCCESS",
-        "FAILED",
-        "PARTIAL_FAILED",
-        "CANCELLED",
-        "TERMINATED",
-        "SUCCESS_DRY_RUN",
-        "FAILED_DRY_RUN",
-        "PAUSED"
-      })
-  @DisplayName("父实例已终结或暂停时不能原地复活分区与任务")
-  void shouldRejectPartitionRetry_whenParentCannotExecute(JobInstanceStatus status) {
-    JobInstanceEntity instance = instance(20L);
-    instance.setInstanceStatus(status.code());
-    when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition(10L, 20L, 4L));
-    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+    @ParameterizedTest
+    @EnumSource(
+            value = JobInstanceStatus.class,
+            names = {
+                "SUCCESS",
+                "FAILED",
+                "PARTIAL_FAILED",
+                "CANCELLED",
+                "TERMINATED",
+                "SUCCESS_DRY_RUN",
+                "FAILED_DRY_RUN",
+                "PAUSED"
+            })
+    @DisplayName("父实例已终结或暂停时不能原地复活分区与任务")
+    void shouldRejectPartitionRetry_whenParentCannotExecute(JobInstanceStatus status) {
+        JobInstanceEntity instance = instance(20L);
+        instance.setInstanceStatus(status.code());
+        when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition(10L, 20L, 4L));
+        when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
 
-    assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
-        .isInstanceOf(
-            status == JobInstanceStatus.PAUSED
-                ? RetryRequeueCoordinator.ExecutionPausedException.class
-                : BizException.class);
+        assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
+                .isInstanceOf(
+                        status == JobInstanceStatus.PAUSED
+                                ? RetryRequeueCoordinator.ExecutionPausedException.class
+                                : BizException.class);
 
-    verify(jobTaskMapper, never()).selectByQuery(any());
-    verify(jobPartitionMapper, never())
-        .resetForDispatch(anyString(), anyLong(), anyString(), anyLong());
-    verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
-  }
+        verify(jobTaskMapper, never()).selectByQuery(any());
+        verify(jobPartitionMapper, never()).resetForDispatch(anyString(), anyLong(), anyString(), anyLong());
+        verify(taskDispatchOutboxService, never())
+                .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
+    }
 
-  @ParameterizedTest
-  @EnumSource(
-      value = JobInstanceStatus.class,
-      names = {
-        "SUCCESS",
-        "FAILED",
-        "PARTIAL_FAILED",
-        "CANCELLED",
-        "TERMINATED",
-        "SUCCESS_DRY_RUN",
-        "FAILED_DRY_RUN",
-        "PAUSED"
-      })
-  @DisplayName("无分区任务也不能绕过父实例终态与暂停保护")
-  void shouldRejectUnpartitionedRetry_whenParentCannotExecute(JobInstanceStatus status) {
-    JobInstanceEntity instance = instance(20L);
-    instance.setInstanceStatus(status.code());
-    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+    @ParameterizedTest
+    @EnumSource(
+            value = JobInstanceStatus.class,
+            names = {
+                "SUCCESS",
+                "FAILED",
+                "PARTIAL_FAILED",
+                "CANCELLED",
+                "TERMINATED",
+                "SUCCESS_DRY_RUN",
+                "FAILED_DRY_RUN",
+                "PAUSED"
+            })
+    @DisplayName("无分区任务也不能绕过父实例终态与暂停保护")
+    void shouldRejectUnpartitionedRetry_whenParentCannotExecute(JobInstanceStatus status) {
+        JobInstanceEntity instance = instance(20L);
+        instance.setInstanceStatus(status.code());
+        when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
 
-    assertThatThrownBy(() -> coordinator.requeueTaskWithoutPartition(
-            "tenant-a", task(30L, 20L, 0, 8L), "retry-task"))
-        .isInstanceOf(
-            status == JobInstanceStatus.PAUSED
-                ? RetryRequeueCoordinator.ExecutionPausedException.class
-                : BizException.class);
+        assertThatThrownBy(
+                        () -> coordinator.requeueTaskWithoutPartition("tenant-a", task(30L, 20L, 0, 8L), "retry-task"))
+                .isInstanceOf(
+                        status == JobInstanceStatus.PAUSED
+                                ? RetryRequeueCoordinator.ExecutionPausedException.class
+                                : BizException.class);
 
-    verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
-    verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
-  }
+        verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
+        verify(taskDispatchOutboxService, never())
+                .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
+    }
 
-  private static RetryScheduleEntity retrySchedule(Long id, Long relatedId) {
-    RetryScheduleEntity schedule = new RetryScheduleEntity();
-    schedule.setId(id);
-    schedule.setTenantId("tenant-a");
-    schedule.setRelatedId(relatedId);
-    return schedule;
-  }
+    private static RetryScheduleEntity retrySchedule(Long id, Long relatedId) {
+        RetryScheduleEntity schedule = new RetryScheduleEntity();
+        schedule.setId(id);
+        schedule.setTenantId("tenant-a");
+        schedule.setRelatedId(relatedId);
+        return schedule;
+    }
 
-  private static JobPartitionEntity partition(Long id, Long instanceId, Long version) {
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(id);
-    partition.setJobInstanceId(instanceId);
-    partition.setVersion(version);
-    return partition;
-  }
+    private static JobPartitionEntity partition(Long id, Long instanceId, Long version) {
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(id);
+        partition.setJobInstanceId(instanceId);
+        partition.setVersion(version);
+        return partition;
+    }
 
-  private static JobInstanceEntity instance(Long id) {
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(id);
-    instance.setTenantId("tenant-a");
-    instance.setInstanceStatus(JobInstanceStatus.RUNNING.code());
-    instance.setTraceId("trace-" + id);
-    return instance;
-  }
+    private static JobInstanceEntity instance(Long id) {
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setId(id);
+        instance.setTenantId("tenant-a");
+        instance.setInstanceStatus(JobInstanceStatus.RUNNING.code());
+        instance.setTraceId("trace-" + id);
+        return instance;
+    }
 
-  private static JobTaskEntity task(Long id, Long instanceId, Integer sequence, Long version) {
-    JobTaskEntity task = new JobTaskEntity();
-    task.setId(id);
-    task.setTenantId("tenant-a");
-    task.setJobInstanceId(instanceId);
-    task.setTaskSeq(sequence);
-    task.setVersion(version);
-    return task;
-  }
+    private static JobTaskEntity task(Long id, Long instanceId, Integer sequence, Long version) {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(id);
+        task.setTenantId("tenant-a");
+        task.setJobInstanceId(instanceId);
+        task.setTaskSeq(sequence);
+        task.setVersion(version);
+        return task;
+    }
 
-  private static JobStepInstanceEntity step(Long id, Integer retryCount) {
-    JobStepInstanceEntity step = new JobStepInstanceEntity();
-    step.setId(id);
-    step.setRetryCount(retryCount);
-    return step;
-  }
+    private static JobStepInstanceEntity step(Long id, Integer retryCount) {
+        JobStepInstanceEntity step = new JobStepInstanceEntity();
+        step.setId(id);
+        step.setRetryCount(retryCount);
+        return step;
+    }
 }

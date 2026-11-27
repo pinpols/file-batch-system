@@ -48,156 +48,148 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
  */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleFileDownloadApplicationService
-    implements ConsoleFileDownloadApplicationService {
+public class DefaultConsoleFileDownloadApplicationService implements ConsoleFileDownloadApplicationService {
 
-  private final TenantIdResolver tenantGuard;
-  private final FileRecordMapper fileRecordMapper;
-  private final FileErrorRecordMapper fileErrorRecordMapper;
-  private final FileTemplateConfigMapper fileTemplateConfigMapper;
-  private final S3StorageProperties s3StorageProperties;
-  // R2-P0-5：复用 Spring 管理的对象存储 bean（其内部 S3Client 共享 Apache HttpClient 连接池 + 后台线程）。
-  // 之前每次 download() 都 new 一个 S3Client，各自带连接池 + 非守护线程，并发下载下持续堆积 socket/线程。
-  private final BatchObjectStore objectStore;
-  private final BatchObjectCryptoService cryptoService;
-  private final BatchSecurityProperties batchSecurityProperties;
-  private final OrchestratorApprovalClient approvalClient;
+    private final TenantIdResolver tenantGuard;
+    private final FileRecordMapper fileRecordMapper;
+    private final FileErrorRecordMapper fileErrorRecordMapper;
+    private final FileTemplateConfigMapper fileTemplateConfigMapper;
+    private final S3StorageProperties s3StorageProperties;
+    // R2-P0-5：复用 Spring 管理的对象存储 bean（其内部 S3Client 共享 Apache HttpClient 连接池 + 后台线程）。
+    // 之前每次 download() 都 new 一个 S3Client，各自带连接池 + 非守护线程，并发下载下持续堆积 socket/线程。
+    private final BatchObjectStore objectStore;
+    private final BatchObjectCryptoService cryptoService;
+    private final BatchSecurityProperties batchSecurityProperties;
+    private final OrchestratorApprovalClient approvalClient;
 
-  @Override
-  public FileDownloadArtifact download(String tenantId, Long fileId, String approvalId) {
-    String effectiveTenant = tenantGuard.resolveTenant(tenantId);
-    FileRecordStorageView fileRecord =
-        fileRecordMapper.selectFileRecordById(effectiveTenant, fileId);
-    if (fileRecord == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
+    @Override
+    public FileDownloadArtifact download(String tenantId, Long fileId, String approvalId) {
+        String effectiveTenant = tenantGuard.resolveTenant(tenantId);
+        FileRecordStorageView fileRecord = fileRecordMapper.selectFileRecordById(effectiveTenant, fileId);
+        if (fileRecord == null) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
+        }
+        String templateCode = fileRecordMapper.selectTemplateCodeByFileId(effectiveTenant, fileId);
+        FileTemplateSecurityFlagsView security = Texts.hasText(templateCode)
+                ? fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(effectiveTenant, templateCode)
+                : null;
+        boolean downloadApprovalRequired = requiresDownloadApproval(security)
+                && !Texts.hasText(approvalId)
+                && !batchSecurityProperties.isBypassMode();
+        if (downloadApprovalRequired) {
+            throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
+        }
+        if (Texts.hasText(approvalId)) {
+            approvalClient.requireApprovedApproval(effectiveTenant, approvalId, ApprovalTargetBinding.file(fileId));
+        }
+        String bucket = fileRecord.storageBucket();
+        if (!Texts.hasText(bucket)) {
+            bucket = s3StorageProperties.getBucket();
+        }
+        String objectName = fileRecord.storagePath();
+        if (!Texts.hasText(objectName)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
+        }
+        String fileName = fileRecord.fileName();
+        String contentType = fileRecord.mimeType();
+        if (!Texts.hasText(contentType)) {
+            contentType = "application/octet-stream";
+        }
+        try {
+            InputStream inputStream = objectStore.get(bucket, objectName);
+            InputStream payload =
+                    batchSecurityProperties.isBypassMode() ? inputStream : cryptoService.decryptIfNeeded(inputStream);
+            return new FileDownloadArtifact(
+                    payload, EmptyChecks.isNull(fileName) ? objectName : fileName, contentType, true);
+        } catch (ObjectNotFoundException exception) {
+            // 存储中对象不存在(NoSuchKey,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
+            // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。
+            throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
+        } catch (Exception exception) {
+            // bucket 整体缺失(NoSuchBucket)同样视作"内容已失效"→ 404；其余存储异常按系统错误抛。
+            if (isNoSuchBucket(exception)) {
+                throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
+            }
+            throw new IllegalStateException("failed to open download stream", exception);
+        }
     }
-    String templateCode = fileRecordMapper.selectTemplateCodeByFileId(effectiveTenant, fileId);
-    FileTemplateSecurityFlagsView security = Texts.hasText(templateCode)
-        ? fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(effectiveTenant, templateCode)
-        : null;
-    boolean downloadApprovalRequired = requiresDownloadApproval(security)
-        && !Texts.hasText(approvalId)
-        && !batchSecurityProperties.isBypassMode();
-    if (downloadApprovalRequired) {
-      throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
-    }
-    if (Texts.hasText(approvalId)) {
-      approvalClient.requireApprovedApproval(
-          effectiveTenant, approvalId, ApprovalTargetBinding.file(fileId));
-    }
-    String bucket = fileRecord.storageBucket();
-    if (!Texts.hasText(bucket)) {
-      bucket = s3StorageProperties.getBucket();
-    }
-    String objectName = fileRecord.storagePath();
-    if (!Texts.hasText(objectName)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
-    }
-    String fileName = fileRecord.fileName();
-    String contentType = fileRecord.mimeType();
-    if (!Texts.hasText(contentType)) {
-      contentType = "application/octet-stream";
-    }
-    try {
-      InputStream inputStream = objectStore.get(bucket, objectName);
-      InputStream payload = batchSecurityProperties.isBypassMode()
-          ? inputStream
-          : cryptoService.decryptIfNeeded(inputStream);
-      return new FileDownloadArtifact(
-          payload, EmptyChecks.isNull(fileName) ? objectName : fileName, contentType, true);
-    } catch (ObjectNotFoundException exception) {
-      // 存储中对象不存在(NoSuchKey,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
-      // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。
-      throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
-    } catch (Exception exception) {
-      // bucket 整体缺失(NoSuchBucket)同样视作"内容已失效"→ 404；其余存储异常按系统错误抛。
-      if (isNoSuchBucket(exception)) {
-        throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
-      }
-      throw new IllegalStateException("failed to open download stream", exception);
-    }
-  }
 
-  @Override
-  public FileDownloadArtifact exportFileErrors(String tenantId, Long fileId, String errorStage) {
-    String effectiveTenant = tenantGuard.resolveTenant(tenantId);
-    FileErrorRecordQuery query =
-        FileErrorRecordQuery.ofFileAndStage(effectiveTenant, fileId, errorStage);
-    List<FileErrorRecordEntity> errors = fileErrorRecordMapper.selectByQuery(query);
-    StringBuilder csv = new StringBuilder();
-    csv.append(
-        "id,fileId,recordNo,errorStage,errorCode,errorMessage,skipped,skipAction,rawRecord,createdAt\n");
-    for (FileErrorRecordEntity e : errors) {
-      csv.append(e.getId())
-          .append(',')
-          .append(e.getFileId())
-          .append(',')
-          .append(e.getRecordNo() == null ? "" : e.getRecordNo())
-          .append(',')
-          .append(escape(e.getErrorStage()))
-          .append(',')
-          .append(escape(e.getErrorCode()))
-          .append(',')
-          .append(escape(e.getErrorMessage()))
-          .append(',')
-          .append(e.getSkipped() == null ? "" : e.getSkipped())
-          .append(',')
-          .append(escape(e.getSkipAction()))
-          .append(',')
-          .append(escape(e.getRawRecord()))
-          .append(',')
-          .append(e.getCreatedAt())
-          .append('\n');
+    @Override
+    public FileDownloadArtifact exportFileErrors(String tenantId, Long fileId, String errorStage) {
+        String effectiveTenant = tenantGuard.resolveTenant(tenantId);
+        FileErrorRecordQuery query = FileErrorRecordQuery.ofFileAndStage(effectiveTenant, fileId, errorStage);
+        List<FileErrorRecordEntity> errors = fileErrorRecordMapper.selectByQuery(query);
+        StringBuilder csv = new StringBuilder();
+        csv.append("id,fileId,recordNo,errorStage,errorCode,errorMessage,skipped,skipAction,rawRecord,createdAt\n");
+        for (FileErrorRecordEntity e : errors) {
+            csv.append(e.getId())
+                    .append(',')
+                    .append(e.getFileId())
+                    .append(',')
+                    .append(e.getRecordNo() == null ? "" : e.getRecordNo())
+                    .append(',')
+                    .append(escape(e.getErrorStage()))
+                    .append(',')
+                    .append(escape(e.getErrorCode()))
+                    .append(',')
+                    .append(escape(e.getErrorMessage()))
+                    .append(',')
+                    .append(e.getSkipped() == null ? "" : e.getSkipped())
+                    .append(',')
+                    .append(escape(e.getSkipAction()))
+                    .append(',')
+                    .append(escape(e.getRawRecord()))
+                    .append(',')
+                    .append(e.getCreatedAt())
+                    .append('\n');
+        }
+        String csvText = csv.toString();
+        byte[] bytes = csvText.getBytes(StandardCharsets.UTF_8);
+        String filename = "file-errors-" + fileId + ".csv";
+        return new FileDownloadArtifact(new ByteArrayInputStream(bytes), filename, "text/csv", false);
     }
-    String csvText = csv.toString();
-    byte[] bytes = csvText.getBytes(StandardCharsets.UTF_8);
-    String filename = "file-errors-" + fileId + ".csv";
-    return new FileDownloadArtifact(new ByteArrayInputStream(bytes), filename, "text/csv", false);
-  }
 
-  private static String escape(String value) {
-    if (value == null) {
-      return "";
+    private static String escape(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
-    if (value.contains(",")
-        || value.contains("\"")
-        || value.contains("\n")
-        || value.contains("\r")) {
-      return "\"" + value.replace("\"", "\"\"") + "\"";
-    }
-    return value;
-  }
 
-  /**
-   * 透过 {@link BatchObjectStore} 包装后的异常链识别底层 {@code NoSuchBucket}（保留旧的桶缺失→404 语义）。
-   *
-   * <p>{@code S3ObjectStore} 把 NoSuchBucket 归入默认分支 {@code ObjectStoreException}，原始 {@link
-   * S3Exception} 作为 cause 保留；这里 unwrap 到 {@link S3Exception} 后按 {@code
-   * awsErrorDetails().errorCode()} 含 "NoSuch" 或 HTTP 404 判定。
-   */
-  private static boolean isNoSuchBucket(Throwable exception) {
-    Throwable current = exception;
-    while (current != null) {
-      if (current instanceof S3Exception s3) {
-        String code = s3.awsErrorDetails() == null ? null : s3.awsErrorDetails().errorCode();
-        return s3.statusCode() == 404 || (code != null && code.contains("NoSuch"));
-      }
-      current = current.getCause();
+    /**
+     * 透过 {@link BatchObjectStore} 包装后的异常链识别底层 {@code NoSuchBucket}（保留旧的桶缺失→404 语义）。
+     *
+     * <p>{@code S3ObjectStore} 把 NoSuchBucket 归入默认分支 {@code ObjectStoreException}，原始 {@link
+     * S3Exception} 作为 cause 保留；这里 unwrap 到 {@link S3Exception} 后按 {@code
+     * awsErrorDetails().errorCode()} 含 "NoSuch" 或 HTTP 404 判定。
+     */
+    private static boolean isNoSuchBucket(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof S3Exception s3) {
+                String code = s3.awsErrorDetails() == null
+                        ? null
+                        : s3.awsErrorDetails().errorCode();
+                return s3.statusCode() == 404 || (code != null && code.contains("NoSuch"));
+            }
+            current = current.getCause();
+        }
+        return false;
     }
-    return false;
-  }
 
-  private boolean requiresDownloadApproval(FileTemplateSecurityFlagsView security) {
-    boolean downloadApprovalIsNotRequired =
-        batchSecurityProperties.isBypassMode() || EmptyChecks.isNull(security);
-    if (downloadApprovalIsNotRequired) {
-      return false;
+    private boolean requiresDownloadApproval(FileTemplateSecurityFlagsView security) {
+        boolean downloadApprovalIsNotRequired = batchSecurityProperties.isBypassMode() || EmptyChecks.isNull(security);
+        if (downloadApprovalIsNotRequired) {
+            return false;
+        }
+        return Boolean.TRUE.equals(security.downloadRequiresApproval())
+                || Boolean.TRUE.equals(security.contentEncryptionEnabled());
     }
-    return Boolean.TRUE.equals(security.downloadRequiresApproval())
-        || Boolean.TRUE.equals(security.contentEncryptionEnabled());
-  }
 
-  private String stringValue(Object value) {
-    return value == null ? null : String.valueOf(value);
-  }
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
 }

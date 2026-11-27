@@ -49,822 +49,714 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 @DisplayName("处理阶段执行器:默认步骤定义、五阶段顺序与失败短路、插件解析回退,以及阶段级续跑的开关与降级边界")
 class DefaultProcessStageExecutorTest {
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  @Mock
-  private TaskExecutionClient taskExecutionClient;
+    @Mock
+    private TaskExecutionClient taskExecutionClient;
 
-  private static final Long PIPELINE_INSTANCE_ID = 100L;
-  private static final Long STEP_RUN_ID = 200L;
+    private static final Long PIPELINE_INSTANCE_ID = 100L;
+    private static final Long STEP_RUN_ID = 200L;
 
-  @BeforeEach
-  void setUp() {
-    when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
-  }
-
-  @Test
-  @DisplayName("默认步骤定义按准备、计算、校验、提交、反馈顺序排列,阶段码与步骤码一一对应")
-  void defaultStepDefinitions_useWapBookendsOrder() {
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
-
-    List<PipelineStepTemplate> templates = executor.defaultStepDefinitions();
-
-    assertThat(templates)
-        .extracting(PipelineStepTemplate::stageCode)
-        .containsExactly("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK");
-    assertThat(templates)
-        .extracting(PipelineStepTemplate::stepCode)
-        .containsExactly(
-            "PROCESS_PREPARE",
-            "PROCESS_COMPUTE",
-            "PROCESS_VALIDATE",
-            "PROCESS_COMMIT",
-            "PROCESS_FEEDBACK");
-  }
-
-  @Test
-  @DisplayName("PROCESS 重放能力由实际选择的插件按冻结配置解析")
-  void replayCapability_resolvesSelectedPluginAndConfig() {
-    Map<String, Object> frozenConfig = Map.of("target", "ledger");
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("ledger_compute");
-    ReplayCapabilityDeclaration expectedDeclaration =
-        ReplayCapabilityDeclaration.unknown("ledger_compute");
-    when(plugin.replayCapability(frozenConfig)).thenReturn(expectedDeclaration);
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip());
-
-    ReplayCapabilityDeclaration actualDeclaration =
-        executor.replayCapability("ledger_compute", frozenConfig);
-
-    assertThat(actualDeclaration).isEqualTo(expectedDeclaration);
-  }
-
-  @Test
-  @DisplayName("PROCESS 能力预检复用执行时的 payload 插件回退和冻结 COMPUTE 参数")
-  void replayCapability_resolvesPayloadPluginFromSystemComputeDefinition() {
-    Map<String, Object> frozenConfig = Map.of("targetTable", "daily_summary");
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("dailySummary");
-    ReplayCapabilityDeclaration expectedDeclaration =
-        ReplayCapabilityDeclaration.unknown("dailySummary");
-    when(plugin.replayCapability(frozenConfig)).thenReturn(expectedDeclaration);
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip());
-    PipelineStepDefinition computeStep = PipelineStepDefinition.builder()
-        .stageCode(ProcessStage.COMPUTE.name())
-        .implCode("PROCESS_COMPUTE")
-        .stepParams(frozenConfig)
-        .build();
-    Map<String, Object> attributes = Map.of("processImplCode", "dailySummary");
-
-    ReplayCapabilityDeclaration actualDeclaration =
-        executor.replayCapability(List.of(computeStep), attributes);
-
-    assertThat(actualDeclaration).isEqualTo(expectedDeclaration);
-    verify(plugin).replayCapability(frozenConfig);
-  }
-
-  @Test
-  @DisplayName("PROCESS 能力预检对未注册的 COMPUTE 插件返回 UNKNOWN")
-  void replayCapability_returnsUnknownForUnregisteredComputePlugin() {
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
-    PipelineStepDefinition computeStep = PipelineStepDefinition.builder()
-        .stageCode(ProcessStage.COMPUTE.name())
-        .implCode("missingCompute")
-        .stepParams(Map.of())
-        .build();
-
-    ReplayCapabilityDeclaration actualDeclaration =
-        executor.replayCapability(List.of(computeStep), Map.of());
-
-    assertThat(actualDeclaration).isEqualTo(ReplayCapabilityDeclaration.unknown("missingCompute"));
-  }
-
-  @Test
-  @DisplayName("PROCESS 插件未注册时拒绝返回能力声明")
-  void replayCapability_rejectsUnknownPlugin() {
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
-
-    Assertions.assertThatThrownBy(() -> executor.replayCapability("missing", Map.of()))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("missing");
-  }
-
-  @Test
-  @DisplayName("每个实际执行的 PROCESS 阶段都经过 invocation fence")
-  void execute_fencesEveryStage() {
-    AtomicInteger fenceCalls = new AtomicInteger();
-    ProcessInvocationFence invocationFence = (context, stage, stageExecution) -> {
-      fenceCalls.incrementAndGet();
-      return stageExecution.get();
-    };
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip(),
-        invocationFence);
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith(null));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
-    assertThat(fenceCalls).hasValue(5);
-  }
-
-  @Test
-  @DisplayName("未知幂等能力的 PROCESS 插件先持久化执行围栏,围栏失败时不进入业务阶段")
-  void execute_rejectsPluginWrite_whenReplayFenceCannotBeConfirmed() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("externalPlugin");
-    when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
-    when(taskExecutionClient.markNonIdempotentExecutionStarted("t1", 42L, "w1", "inv-1"))
-        .thenReturn(false);
-    AtomicInteger invocationFenceCalls = new AtomicInteger();
-    ProcessInvocationFence invocationFence = (context, stage, stageExecution) -> {
-      invocationFenceCalls.incrementAndGet();
-      return stageExecution.get();
-    };
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip(),
-        invocationFence,
-        new ProcessPluginExecutionFence(taskExecutionClient));
-
-    ProcessJobContext context = newContext();
-    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("externalPlugin"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(2);
-    assertThat(results.get(1).success()).isFalse();
-    assertThat(results.get(1).code()).isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
-    assertThat(invocationFenceCalls).hasValue(1);
-    verify(taskExecutionClient).markNonIdempotentExecutionStarted("t1", 42L, "w1", "inv-1");
-    verify(plugin, never()).compute(any());
-  }
-
-  @Test
-  @DisplayName("未知幂等能力的 PROCESS 插件缺少持久任务身份时失败关闭")
-  void execute_rejectsPluginWrite_whenPersistedTaskIdentityIsMissing() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("externalPlugin");
-    when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
-    when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
-    AtomicInteger invocationFenceCalls = new AtomicInteger();
-    ProcessInvocationFence invocationFence = (context, stage, stageExecution) -> {
-      invocationFenceCalls.incrementAndGet();
-      return stageExecution.get();
-    };
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip(),
-        invocationFence,
-        new ProcessPluginExecutionFence(taskExecutionClient));
-
-    ProcessJobContext context = newContext();
-    context.getAttributes().remove(PipelineRuntimeKeys.TASK_ID);
-    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("externalPlugin"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(2);
-    assertThat(results.get(1).success()).isFalse();
-    assertThat(results.get(1).code()).isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
-    assertThat(invocationFenceCalls).hasValue(1);
-    verify(taskExecutionClient, never())
-        .markNonIdempotentExecutionStarted(any(), any(), any(), any());
-    verify(plugin, never()).compute(any());
-  }
-
-  @Test
-  @DisplayName("明确声明幂等的 PROCESS 插件不需要非幂等执行围栏")
-  void execute_skipsReplayFence_whenPluginDeclaresReplaySafety() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("idempotentPlugin");
-    when(plugin.idempotencyCapability())
-        .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC);
-    when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip(),
-        (context, stage, stageExecution) -> stageExecution.get(),
-        new ProcessPluginExecutionFence(taskExecutionClient));
-
-    ProcessJobContext context = newContext();
-    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("idempotentPlugin"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
-    verify(taskExecutionClient, never())
-        .markNonIdempotentExecutionStarted(any(), any(), any(), any());
-    verify(plugin).compute(context);
-  }
-
-  @Test
-  @DisplayName("dry-run 跳过 PROCESS 业务写阶段时不设置非幂等执行围栏")
-  void execute_skipsReplayFence_whenDryRunSkipsPluginWrites() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("externalPlugin");
-    when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip(),
-        (context, stage, stageExecution) -> stageExecution.get(),
-        new ProcessPluginExecutionFence(taskExecutionClient));
-
-    ProcessJobContext context = newContext();
-    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
-    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("externalPlugin"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
-    verify(taskExecutionClient, never())
-        .markNonIdempotentExecutionStarted(any(), any(), any(), any());
-    verify(plugin, never()).compute(any());
-    verify(plugin, never()).commit(any());
-    verify(plugin, never()).feedback(any());
-  }
-
-  @Test
-  @DisplayName("流水线声明完整时按序跑完五个阶段且全部成功,同时解析出插件、生成批次键并把处理数写回上下文")
-  void execute_runsAll5Stages_inOrder_whenPipelineDeclared() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("dailySummary");
-    when(plugin.compute(any())).thenAnswer(inv -> {
-      ProcessJobContext ctx = inv.getArgument(0);
-      ctx.getAttributes().put("processedCount", 7);
-      return ProcessStageResult.success(ProcessStage.COMPUTE);
-    });
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(5);
-    assertThat(results)
-        .extracting(ProcessStageResult::stage)
-        .containsExactly(
-            ProcessStage.PREPARE,
-            ProcessStage.COMPUTE,
-            ProcessStage.VALIDATE,
-            ProcessStage.COMMIT,
-            ProcessStage.FEEDBACK);
-    assertThat(results).allMatch(ProcessStageResult::success);
-    assertThat(context.getResolvedPlugin()).isSameAs(plugin);
-    assertThat(context.getBatchKey()).isNotBlank();
-    assertThat(context.getAttributes()).containsEntry("processedCount", 7);
-    verify(plugin).prepare(context);
-    verify(plugin).compute(context);
-    verify(plugin).validate(context);
-    verify(plugin).commit(context);
-    verify(plugin).feedback(context);
-  }
-
-  @Test
-  @DisplayName("计算阶段失败即短路:只执行准备与计算,校验、提交与反馈都不再执行")
-  void execute_skipsRemainingStages_whenComputeFails() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("failingPlugin");
-    when(plugin.compute(any()))
-        .thenReturn(ProcessStageResult.failure(ProcessStage.COMPUTE, "ERR", "boom"));
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("failingPlugin"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(2);
-    assertThat(results.get(1).success()).isFalse();
-    assertThat(results.get(1).stage()).isEqualTo(ProcessStage.COMPUTE);
-    verify(plugin).prepare(context);
-    verify(plugin).compute(context);
-    verify(plugin, never()).validate(any());
-    verify(plugin, never()).commit(any());
-    verify(plugin, never()).feedback(any());
-  }
-
-  @Test
-  @DisplayName("插件准备抛业务异常时不向上传播,结果映射为业务错误码并回带错误键与参数摘要")
-  void execute_returnsBusinessError_whenPluginPrepareThrowsBizException() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("p1");
-    willThrow(BizException.of(
-            ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"))
-        .given(plugin)
-        .prepare(any());
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("p1"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).success()).isFalse();
-    assertThat(results.get(0).code()).isEqualTo(StageFailureCode.BUSINESS_ERROR.name());
-    assertThat(results.get(0).message()).isEqualTo("error.common.invalid_argument");
-    assertThat(results.get(0).errorKey()).isEqualTo("error.common.invalid_argument");
-    assertThat(results.get(0).errorArgs()).isEqualTo("[\"bad spec\"]");
-    verify(pipelineRuns)
-        .finishStepRunFailure(
-            eq(STEP_RUN_ID),
-            eq(StageFailureCode.BUSINESS_ERROR.name()),
-            eq("error.common.invalid_argument"),
-            eq("error.common.invalid_argument"),
-            eq("[\"bad spec\"]"),
-            any());
-  }
-
-  @Test
-  @DisplayName("插件准备抛运行时异常时不向上传播,结果映射为基础设施错误码并回带异常信息")
-  void execute_returnsInfraError_whenPluginPrepareThrowsRuntimeException(CapturedOutput output) {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("p1");
-    willThrow(new RuntimeException("io token=probe-secret fail")).given(plugin).prepare(any());
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("p1"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).success()).isFalse();
-    assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
-    assertThat(results.get(0).message()).contains("io").doesNotContain("probe-secret");
-    assertThat(results.get(0).errorArgs()).doesNotContain("probe-secret");
-    assertThat(output.getOut()).doesNotContain("probe-secret");
-  }
-
-  @Test
-  @DisplayName("计算步骤的实现码为默认占位时,回退按载荷里的插件码解析插件并执行计算")
-  void execute_resolvesPluginViaPayloadFallback_whenComputeStepImplCodeIsSentinel() {
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("payloadDriven");
-    when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    // COMPUTE step impl_code 是默认 sentinel(PROCESS_COMPUTE),走 payload 注入的 processImplCode 回退
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("PROCESS_COMPUTE"));
-    context.getAttributes().put("processImplCode", "payloadDriven");
-
-    executor.execute(context);
-
-    assertThat(context.getResolvedPlugin()).isSameAs(plugin);
-    verify(plugin).compute(context);
-  }
-
-  @Test
-  @DisplayName("未配置任何插件时五个阶段都空操作成功,不解析插件且处理数置零")
-  void execute_runsAll5StagesAsNoOp_whenNoPluginConfigured() {
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("PROCESS_COMPUTE"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
-    assertThat(context.getResolvedPlugin()).isNull();
-    assertThat(context.getAttributes()).containsEntry("processedCount", 0);
-  }
-
-  @Test
-  @DisplayName("上下文与库中都没有流水线步骤定义时,结果映射为流水线步骤缺失")
-  void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).success()).isFalse();
-    assertThat(results.get(0).code()).isEqualTo(StageFailureCode.PIPELINE_STEP_MISSING.name());
-  }
-
-  @Test
-  @DisplayName("计算步骤指定的插件码未注册时准备阶段快速失败:给出插件未找到错误码与插件名,且不解析插件")
-  void execute_failsFastWithPluginNotFound_whenComputeImplCodeNotRegistered() {
-    // P2-5:COMPUTE step 显式配了 impl_code "ghostPlugin"(非默认 sentinel),但 plugin 注册表里没有
-    // → PrepareStep 应直接返回 PROCESS_COMPUTE_PLUGIN_NOT_FOUND failure,后续 stage 全部跳过。
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("ghostPlugin"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(1);
-    assertThat(results.get(0).stage()).isEqualTo(ProcessStage.PREPARE);
-    assertThat(results.get(0).success()).isFalse();
-    assertThat(results.get(0).code()).isEqualTo("PROCESS_COMPUTE_PLUGIN_NOT_FOUND");
-    assertThat(results.get(0).message()).contains("ghostPlugin");
-    assertThat(context.getResolvedPlugin()).isNull();
-    assertThat(context.getAttributes())
-        .containsEntry(ProcessRuntimeKeys.PROCESS_PLUGIN_NOT_FOUND, "ghostPlugin");
-  }
-
-  @Test
-  @DisplayName("缺少某个阶段的步骤 Bean 时执行器构造即失败,并提示该阶段缺少步骤 Bean")
-  void execute_failsWithStepNotFound_whenStageBeanMissingForConfiguredStage() {
-    // 故意构造缺 PREPARE bean 的 step 列表(模拟 Spring DI 漏注册)
-    List<ProcessStageStep> incomplete = new ArrayList<>();
-    for (ProcessStage stage : ProcessStage.values()) {
-      if (stage != ProcessStage.PREPARE) {
-        incomplete.add(realStep(stage));
-      }
+    @BeforeEach
+    void setUp() {
+        when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
     }
-    // executor 构造期会因 buildDefaultStepDefinitions 缺 PREPARE bean 抛 IllegalStateException
-    Assertions.assertThatThrownBy(() -> new DefaultProcessStageExecutor(
-            incomplete, List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip()))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("missing process step bean for stage");
-  }
 
-  // ─── P1 阶段级续跑(stage-skip)────────────────────────────────────────────────
+    @Test
+    @DisplayName("默认步骤定义按准备、计算、校验、提交、反馈顺序排列,阶段码与步骤码一一对应")
+    void defaultStepDefinitions_useWapBookendsOrder() {
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
 
-  @Test
-  @DisplayName("开关开启且上一轮计算与校验已成功时跳过二者,只跑准备、提交与反馈,不重算")
-  void stageSkip_skipsPriorSucceededComputeAndValidate_stillRunsCommitAndFeedback() {
-    // 上一 attempt COMPUTE + VALIDATE 已成功(pipeline_step_run 有 SUCCESS 记录),COMMIT 前崩溃重派。
-    // 开关开:跳过 COMPUTE/VALIDATE(不重算),COMMIT/FEEDBACK 恒跑(原子发布决策每次重做)。
-    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
-        .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("dailySummary");
+        List<PipelineStepTemplate> templates = executor.defaultStepDefinitions();
 
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        enabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    // 跳过的 stage 不进 results;只剩 PREPARE(未声明跳过)+ COMMIT + FEEDBACK。
-    assertThat(results)
-        .extracting(ProcessStageResult::stage)
-        .containsExactly(ProcessStage.PREPARE, ProcessStage.COMMIT, ProcessStage.FEEDBACK);
-    assertThat(results).allMatch(ProcessStageResult::success);
-    verify(plugin).prepare(context);
-    verify(plugin, never()).compute(any()); // 跳过,不重算
-    verify(plugin, never()).validate(any()); // 跳过
-    verify(plugin).commit(context); // 恒跑:原子发布决策
-    verify(plugin).feedback(context); // 恒跑:清 staging / 推水位
-  }
-
-  @Test
-  @DisplayName("跳过计算时把上一轮成功产出的水位与处理数回灌上下文,避免下游重读重发")
-  void stageSkip_carriesForwardWatermarkFromPriorSuccessOutputSummary() {
-    // P1-1:跳过 COMPUTE 时,须从上次 SUCCESS 的 output_summary 回灌 highWaterMarkOut / processedCount 到
-    // attributes,否则 report 水位 null → 下周期 INCREMENTAL 重读重发。
-    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
-        .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
-    when(pipelineRuns.loadLatestSucceededStepOutputSummary(PIPELINE_INSTANCE_ID, "PROCESS_COMPUTE"))
-        .thenReturn(Map.of("highWaterMarkOut", "20260708120000", "processedCount", 42));
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("dailySummary");
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        enabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
-
-    executor.execute(context);
-
-    // COMPUTE 被跳过,但其上次成功产出的水位/计数已回灌 attributes(供 report 正常推水位)。
-    assertThat(context.getAttributes())
-        .containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "20260708120000");
-    assertThat(context.getAttributes()).containsEntry("processedCount", 42);
-    verify(plugin, never()).compute(any());
-  }
-
-  @Test
-  @DisplayName("没有历史成功记录时,即使开关开启也全量跑完五个阶段")
-  void stageSkip_runsFullPipeline_whenNoPriorSuccess() {
-    // 首次运行(无历史 SUCCESS 记录):即使开关开,也全量跑(回归保护)。
-    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID)).thenReturn(Set.of());
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("dailySummary");
-    when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        enabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(5);
-    verify(plugin).compute(context);
-    verify(plugin).validate(context);
-  }
-
-  @Test
-  @DisplayName("开关关闭时即使存在历史成功记录也全量重跑,且完全不查询历史成功记录")
-  void stageSkip_disabled_runsFullPipeline_evenWithPriorSuccess() {
-    // 开关关(本 PR 默认):即使有历史 SUCCESS 记录,也从首 stage 全量重跑(彻底回归保护)。
-    // 关开关时甚至不查历史记录 —— 验证 loadSucceededStepCodes 从不被调用。
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("dailySummary");
-    when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        disabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(5);
-    verify(plugin).compute(context);
-    verify(plugin).validate(context);
-    verify(pipelineRuns, never()).loadSucceededStepCodes(any());
-  }
-
-  @Test
-  @DisplayName("提交阶段不在可跳过集合:即使历史提交曾经成功,重派仍然重跑提交")
-  void stageSkip_neverSkipsCommit_evenIfPriorCommitSucceeded() {
-    // COMMIT 不在 skip-safe 集:即便历史上 COMMIT 也成功过(极端场景),重派仍重跑 COMMIT
-    // (原子发布幂等:staging 已清则发布 0 行),绝不因"曾成功"跳过发布决策。
-    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
-        .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE", "PROCESS_COMMIT"));
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("dailySummary");
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        enabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results)
-        .extracting(ProcessStageResult::stage)
-        .containsExactly(ProcessStage.PREPARE, ProcessStage.COMMIT, ProcessStage.FEEDBACK);
-    verify(plugin).commit(context); // COMMIT 恒跑
-  }
-
-  @Test
-  @DisplayName("多分区任务整体降级为不跳:兄弟分区的成功不会让本任务跳过,且不再查询历史成功记录")
-  void stageSkip_degradedByMultiPartition_siblingSuccessDoesNotCauseSkip() {
-    // Critical 守卫(与 P0 LoadStep.checkpointDegradedByMultiPartition 对称):
-    // partitionCount=2 时 K 个 partition task 共享同一 pipeline_instance,但 staging 副作用是
-    // task 级(process-<taskId>)。兄弟 partition 的 COMPUTE SUCCESS step_run 不得让本 task 跳过
-    // COMPUTE(否则本 task 的 staging 从未生成 → COMMIT 读 0 行静默少发布)。
-    // 期望:多分区整体降级为不跳 —— 全量跑,且从不查历史成功记录。
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("dailySummary");
-    when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        enabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results).hasSize(5); // 全量跑,零跳过
-    verify(plugin).compute(context); // COMPUTE 未被兄弟 SUCCESS 误跳
-    verify(plugin).validate(context);
-    verify(pipelineRuns, never()).loadSucceededStepCodes(any()); // 降级后甚至不查历史
-  }
-
-  @Test
-  @DisplayName("显式单分区不触发降级,跳过逻辑照常生效:只跑准备、提交与反馈")
-  void stageSkip_singlePartition_partitionCountOne_stillSkips() {
-    // 边界:partitionCount=1(显式单分区)不触发降级,跳过逻辑照常生效。
-    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
-        .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
-    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
-    when(plugin.implCode()).thenReturn("dailySummary");
-
-    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
-        allStageStepBeans(),
-        List.of(plugin),
-        pipelineRuns,
-        ProcessMetrics.noop(),
-        enabledStageSkip());
-
-    ProcessJobContext context = newContext();
-    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 1);
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
-
-    List<ProcessStageResult> results = executor.execute(context);
-
-    assertThat(results)
-        .extracting(ProcessStageResult::stage)
-        .containsExactly(ProcessStage.PREPARE, ProcessStage.COMMIT, ProcessStage.FEEDBACK);
-    verify(plugin, never()).compute(any());
-  }
-
-  private WorkerCheckpointProperties disabledStageSkip() {
-    return new WorkerCheckpointProperties(); // stageSkip.enabled 默认 false
-  }
-
-  private WorkerCheckpointProperties enabledStageSkip() {
-    WorkerCheckpointProperties properties = new WorkerCheckpointProperties();
-    properties.getStageSkip().setEnabled(true);
-    return properties;
-  }
-
-  // ─── 辅助 ────────────────────────────────────────────────────────────────────
-
-  private ProcessJobContext newContext() {
-    ProcessJobContext context = new ProcessJobContext();
-    context.setTenantId("t1");
-    context.setWorkerId("w1");
-    context.setJobCode("JOB_PROCESS");
-    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
-    context.getAttributes().put(PipelineRuntimeKeys.TASK_ID, 42L);
-    return context;
-  }
-
-  private List<PipelineStepDefinition> fullPipelineWith(String computeImplCode) {
-    List<PipelineStepDefinition> steps = new ArrayList<>();
-    int order = 1;
-    for (ProcessStage stage : List.of(
-        ProcessStage.PREPARE,
-        ProcessStage.COMPUTE,
-        ProcessStage.VALIDATE,
-        ProcessStage.COMMIT,
-        ProcessStage.FEEDBACK)) {
-      String implCode = stage == ProcessStage.COMPUTE ? computeImplCode : "PROCESS_" + stage.name();
-      PipelineStepDefinition step = PipelineStepDefinition.builder()
-          .id((long) order)
-          .stepCode("PROCESS_" + stage.name())
-          .stepName("Process " + stage.name())
-          .stageCode(stage.name())
-          .stepOrder(order++)
-          .implCode(implCode)
-          .stepParams(Map.of())
-          .timeoutSeconds(0)
-          .retryPolicy("NONE")
-          .retryMaxCount(0)
-          .enabled(true)
-          .build();
-      steps.add(step);
+        assertThat(templates)
+                .extracting(PipelineStepTemplate::stageCode)
+                .containsExactly("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK");
+        assertThat(templates)
+                .extracting(PipelineStepTemplate::stepCode)
+                .containsExactly(
+                        "PROCESS_PREPARE", "PROCESS_COMPUTE", "PROCESS_VALIDATE", "PROCESS_COMMIT", "PROCESS_FEEDBACK");
     }
-    return steps;
-  }
 
-  private List<ProcessStageStep> allStageStepBeans() {
-    List<ProcessStageStep> steps = new ArrayList<>();
-    for (ProcessStage stage : ProcessStage.values()) {
-      steps.add(realStep(stage));
+    @Test
+    @DisplayName("PROCESS 重放能力由实际选择的插件按冻结配置解析")
+    void replayCapability_resolvesSelectedPluginAndConfig() {
+        Map<String, Object> frozenConfig = Map.of("target", "ledger");
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("ledger_compute");
+        ReplayCapabilityDeclaration expectedDeclaration = ReplayCapabilityDeclaration.unknown("ledger_compute");
+        when(plugin.replayCapability(frozenConfig)).thenReturn(expectedDeclaration);
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ReplayCapabilityDeclaration actualDeclaration = executor.replayCapability("ledger_compute", frozenConfig);
+
+        assertThat(actualDeclaration).isEqualTo(expectedDeclaration);
     }
-    return steps;
-  }
 
-  /** 用真实的 stage step 实现(都委托到 plugin 或 noop)代替 mock,保持新 5-stage 行为可观察。 */
-  private ProcessStageStep realStep(ProcessStage stage) {
-    return switch (stage) {
-      case PREPARE -> new PrepareStep();
-      case COMPUTE -> new ComputeStep();
-      case VALIDATE -> new ValidateStep();
-      case COMMIT -> new CommitStep();
-      case FEEDBACK -> new FeedbackStep(ProcessMetrics.noop());
-    };
-  }
+    @Test
+    @DisplayName("PROCESS 能力预检复用执行时的 payload 插件回退和冻结 COMPUTE 参数")
+    void replayCapability_resolvesPayloadPluginFromSystemComputeDefinition() {
+        Map<String, Object> frozenConfig = Map.of("targetTable", "daily_summary");
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("dailySummary");
+        ReplayCapabilityDeclaration expectedDeclaration = ReplayCapabilityDeclaration.unknown("dailySummary");
+        when(plugin.replayCapability(frozenConfig)).thenReturn(expectedDeclaration);
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+        PipelineStepDefinition computeStep = PipelineStepDefinition.builder()
+                .stageCode(ProcessStage.COMPUTE.name())
+                .implCode("PROCESS_COMPUTE")
+                .stepParams(frozenConfig)
+                .build();
+        Map<String, Object> attributes = Map.of("processImplCode", "dailySummary");
+
+        ReplayCapabilityDeclaration actualDeclaration = executor.replayCapability(List.of(computeStep), attributes);
+
+        assertThat(actualDeclaration).isEqualTo(expectedDeclaration);
+        verify(plugin).replayCapability(frozenConfig);
+    }
+
+    @Test
+    @DisplayName("PROCESS 能力预检对未注册的 COMPUTE 插件返回 UNKNOWN")
+    void replayCapability_returnsUnknownForUnregisteredComputePlugin() {
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+        PipelineStepDefinition computeStep = PipelineStepDefinition.builder()
+                .stageCode(ProcessStage.COMPUTE.name())
+                .implCode("missingCompute")
+                .stepParams(Map.of())
+                .build();
+
+        ReplayCapabilityDeclaration actualDeclaration = executor.replayCapability(List.of(computeStep), Map.of());
+
+        assertThat(actualDeclaration).isEqualTo(ReplayCapabilityDeclaration.unknown("missingCompute"));
+    }
+
+    @Test
+    @DisplayName("PROCESS 插件未注册时拒绝返回能力声明")
+    void replayCapability_rejectsUnknownPlugin() {
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        Assertions.assertThatThrownBy(() -> executor.replayCapability("missing", Map.of()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("missing");
+    }
+
+    @Test
+    @DisplayName("每个实际执行的 PROCESS 阶段都经过 invocation fence")
+    void execute_fencesEveryStage() {
+        AtomicInteger fenceCalls = new AtomicInteger();
+        ProcessInvocationFence invocationFence = (context, stage, stageExecution) -> {
+            fenceCalls.incrementAndGet();
+            return stageExecution.get();
+        };
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(),
+                List.of(),
+                pipelineRuns,
+                ProcessMetrics.noop(),
+                disabledStageSkip(),
+                invocationFence);
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith(null));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
+        assertThat(fenceCalls).hasValue(5);
+    }
+
+    @Test
+    @DisplayName("未知幂等能力的 PROCESS 插件先持久化执行围栏,围栏失败时不进入业务阶段")
+    void execute_rejectsPluginWrite_whenReplayFenceCannotBeConfirmed() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("externalPlugin");
+        when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
+        when(taskExecutionClient.markNonIdempotentExecutionStarted("t1", 42L, "w1", "inv-1"))
+                .thenReturn(false);
+        AtomicInteger invocationFenceCalls = new AtomicInteger();
+        ProcessInvocationFence invocationFence = (context, stage, stageExecution) -> {
+            invocationFenceCalls.incrementAndGet();
+            return stageExecution.get();
+        };
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(),
+                List.of(plugin),
+                pipelineRuns,
+                ProcessMetrics.noop(),
+                disabledStageSkip(),
+                invocationFence,
+                new ProcessPluginExecutionFence(taskExecutionClient));
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("externalPlugin"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(1).success()).isFalse();
+        assertThat(results.get(1).code()).isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+        assertThat(invocationFenceCalls).hasValue(1);
+        verify(taskExecutionClient).markNonIdempotentExecutionStarted("t1", 42L, "w1", "inv-1");
+        verify(plugin, never()).compute(any());
+    }
+
+    @Test
+    @DisplayName("未知幂等能力的 PROCESS 插件缺少持久任务身份时失败关闭")
+    void execute_rejectsPluginWrite_whenPersistedTaskIdentityIsMissing() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("externalPlugin");
+        when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
+        when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
+        AtomicInteger invocationFenceCalls = new AtomicInteger();
+        ProcessInvocationFence invocationFence = (context, stage, stageExecution) -> {
+            invocationFenceCalls.incrementAndGet();
+            return stageExecution.get();
+        };
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(),
+                List.of(plugin),
+                pipelineRuns,
+                ProcessMetrics.noop(),
+                disabledStageSkip(),
+                invocationFence,
+                new ProcessPluginExecutionFence(taskExecutionClient));
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().remove(PipelineRuntimeKeys.TASK_ID);
+        context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("externalPlugin"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(1).success()).isFalse();
+        assertThat(results.get(1).code()).isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+        assertThat(invocationFenceCalls).hasValue(1);
+        verify(taskExecutionClient, never()).markNonIdempotentExecutionStarted(any(), any(), any(), any());
+        verify(plugin, never()).compute(any());
+    }
+
+    @Test
+    @DisplayName("明确声明幂等的 PROCESS 插件不需要非幂等执行围栏")
+    void execute_skipsReplayFence_whenPluginDeclaresReplaySafety() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("idempotentPlugin");
+        when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC);
+        when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(),
+                List.of(plugin),
+                pipelineRuns,
+                ProcessMetrics.noop(),
+                disabledStageSkip(),
+                (context, stage, stageExecution) -> stageExecution.get(),
+                new ProcessPluginExecutionFence(taskExecutionClient));
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
+        context.getAttributes()
+                .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("idempotentPlugin"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
+        verify(taskExecutionClient, never()).markNonIdempotentExecutionStarted(any(), any(), any(), any());
+        verify(plugin).compute(context);
+    }
+
+    @Test
+    @DisplayName("dry-run 跳过 PROCESS 业务写阶段时不设置非幂等执行围栏")
+    void execute_skipsReplayFence_whenDryRunSkipsPluginWrites() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("externalPlugin");
+        when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(),
+                List.of(plugin),
+                pipelineRuns,
+                ProcessMetrics.noop(),
+                disabledStageSkip(),
+                (context, stage, stageExecution) -> stageExecution.get(),
+                new ProcessPluginExecutionFence(taskExecutionClient));
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+        context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("externalPlugin"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
+        verify(taskExecutionClient, never()).markNonIdempotentExecutionStarted(any(), any(), any(), any());
+        verify(plugin, never()).compute(any());
+        verify(plugin, never()).commit(any());
+        verify(plugin, never()).feedback(any());
+    }
+
+    @Test
+    @DisplayName("流水线声明完整时按序跑完五个阶段且全部成功,同时解析出插件、生成批次键并把处理数写回上下文")
+    void execute_runsAll5Stages_inOrder_whenPipelineDeclared() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("dailySummary");
+        when(plugin.compute(any())).thenAnswer(inv -> {
+            ProcessJobContext ctx = inv.getArgument(0);
+            ctx.getAttributes().put("processedCount", 7);
+            return ProcessStageResult.success(ProcessStage.COMPUTE);
+        });
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(5);
+        assertThat(results)
+                .extracting(ProcessStageResult::stage)
+                .containsExactly(
+                        ProcessStage.PREPARE,
+                        ProcessStage.COMPUTE,
+                        ProcessStage.VALIDATE,
+                        ProcessStage.COMMIT,
+                        ProcessStage.FEEDBACK);
+        assertThat(results).allMatch(ProcessStageResult::success);
+        assertThat(context.getResolvedPlugin()).isSameAs(plugin);
+        assertThat(context.getBatchKey()).isNotBlank();
+        assertThat(context.getAttributes()).containsEntry("processedCount", 7);
+        verify(plugin).prepare(context);
+        verify(plugin).compute(context);
+        verify(plugin).validate(context);
+        verify(plugin).commit(context);
+        verify(plugin).feedback(context);
+    }
+
+    @Test
+    @DisplayName("计算阶段失败即短路:只执行准备与计算,校验、提交与反馈都不再执行")
+    void execute_skipsRemainingStages_whenComputeFails() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("failingPlugin");
+        when(plugin.compute(any())).thenReturn(ProcessStageResult.failure(ProcessStage.COMPUTE, "ERR", "boom"));
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("failingPlugin"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(1).success()).isFalse();
+        assertThat(results.get(1).stage()).isEqualTo(ProcessStage.COMPUTE);
+        verify(plugin).prepare(context);
+        verify(plugin).compute(context);
+        verify(plugin, never()).validate(any());
+        verify(plugin, never()).commit(any());
+        verify(plugin, never()).feedback(any());
+    }
+
+    @Test
+    @DisplayName("插件准备抛业务异常时不向上传播,结果映射为业务错误码并回带错误键与参数摘要")
+    void execute_returnsBusinessError_whenPluginPrepareThrowsBizException() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("p1");
+        willThrow(BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"))
+                .given(plugin)
+                .prepare(any());
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("p1"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).success()).isFalse();
+        assertThat(results.get(0).code()).isEqualTo(StageFailureCode.BUSINESS_ERROR.name());
+        assertThat(results.get(0).message()).isEqualTo("error.common.invalid_argument");
+        assertThat(results.get(0).errorKey()).isEqualTo("error.common.invalid_argument");
+        assertThat(results.get(0).errorArgs()).isEqualTo("[\"bad spec\"]");
+        verify(pipelineRuns)
+                .finishStepRunFailure(
+                        eq(STEP_RUN_ID),
+                        eq(StageFailureCode.BUSINESS_ERROR.name()),
+                        eq("error.common.invalid_argument"),
+                        eq("error.common.invalid_argument"),
+                        eq("[\"bad spec\"]"),
+                        any());
+    }
+
+    @Test
+    @DisplayName("插件准备抛运行时异常时不向上传播,结果映射为基础设施错误码并回带异常信息")
+    void execute_returnsInfraError_whenPluginPrepareThrowsRuntimeException(CapturedOutput output) {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("p1");
+        willThrow(new RuntimeException("io token=probe-secret fail"))
+                .given(plugin)
+                .prepare(any());
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("p1"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).success()).isFalse();
+        assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
+        assertThat(results.get(0).message()).contains("io").doesNotContain("probe-secret");
+        assertThat(results.get(0).errorArgs()).doesNotContain("probe-secret");
+        assertThat(output.getOut()).doesNotContain("probe-secret");
+    }
+
+    @Test
+    @DisplayName("计算步骤的实现码为默认占位时,回退按载荷里的插件码解析插件并执行计算")
+    void execute_resolvesPluginViaPayloadFallback_whenComputeStepImplCodeIsSentinel() {
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("payloadDriven");
+        when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        // COMPUTE step impl_code 是默认 sentinel(PROCESS_COMPUTE),走 payload 注入的 processImplCode 回退
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("PROCESS_COMPUTE"));
+        context.getAttributes().put("processImplCode", "payloadDriven");
+
+        executor.execute(context);
+
+        assertThat(context.getResolvedPlugin()).isSameAs(plugin);
+        verify(plugin).compute(context);
+    }
+
+    @Test
+    @DisplayName("未配置任何插件时五个阶段都空操作成功,不解析插件且处理数置零")
+    void execute_runsAll5StagesAsNoOp_whenNoPluginConfigured() {
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("PROCESS_COMPUTE"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
+        assertThat(context.getResolvedPlugin()).isNull();
+        assertThat(context.getAttributes()).containsEntry("processedCount", 0);
+    }
+
+    @Test
+    @DisplayName("上下文与库中都没有流水线步骤定义时,结果映射为流水线步骤缺失")
+    void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).success()).isFalse();
+        assertThat(results.get(0).code()).isEqualTo(StageFailureCode.PIPELINE_STEP_MISSING.name());
+    }
+
+    @Test
+    @DisplayName("计算步骤指定的插件码未注册时准备阶段快速失败:给出插件未找到错误码与插件名,且不解析插件")
+    void execute_failsFastWithPluginNotFound_whenComputeImplCodeNotRegistered() {
+        // P2-5:COMPUTE step 显式配了 impl_code "ghostPlugin"(非默认 sentinel),但 plugin 注册表里没有
+        // → PrepareStep 应直接返回 PROCESS_COMPUTE_PLUGIN_NOT_FOUND failure,后续 stage 全部跳过。
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("ghostPlugin"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).stage()).isEqualTo(ProcessStage.PREPARE);
+        assertThat(results.get(0).success()).isFalse();
+        assertThat(results.get(0).code()).isEqualTo("PROCESS_COMPUTE_PLUGIN_NOT_FOUND");
+        assertThat(results.get(0).message()).contains("ghostPlugin");
+        assertThat(context.getResolvedPlugin()).isNull();
+        assertThat(context.getAttributes()).containsEntry(ProcessRuntimeKeys.PROCESS_PLUGIN_NOT_FOUND, "ghostPlugin");
+    }
+
+    @Test
+    @DisplayName("缺少某个阶段的步骤 Bean 时执行器构造即失败,并提示该阶段缺少步骤 Bean")
+    void execute_failsWithStepNotFound_whenStageBeanMissingForConfiguredStage() {
+        // 故意构造缺 PREPARE bean 的 step 列表(模拟 Spring DI 漏注册)
+        List<ProcessStageStep> incomplete = new ArrayList<>();
+        for (ProcessStage stage : ProcessStage.values()) {
+            if (stage != ProcessStage.PREPARE) {
+                incomplete.add(realStep(stage));
+            }
+        }
+        // executor 构造期会因 buildDefaultStepDefinitions 缺 PREPARE bean 抛 IllegalStateException
+        Assertions.assertThatThrownBy(() -> new DefaultProcessStageExecutor(
+                        incomplete, List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("missing process step bean for stage");
+    }
+
+    // ─── P1 阶段级续跑(stage-skip)────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("开关开启且上一轮计算与校验已成功时跳过二者,只跑准备、提交与反馈,不重算")
+    void stageSkip_skipsPriorSucceededComputeAndValidate_stillRunsCommitAndFeedback() {
+        // 上一 attempt COMPUTE + VALIDATE 已成功(pipeline_step_run 有 SUCCESS 记录),COMMIT 前崩溃重派。
+        // 开关开:跳过 COMPUTE/VALIDATE(不重算),COMMIT/FEEDBACK 恒跑(原子发布决策每次重做)。
+        when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+                .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("dailySummary");
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), enabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        // 跳过的 stage 不进 results;只剩 PREPARE(未声明跳过)+ COMMIT + FEEDBACK。
+        assertThat(results)
+                .extracting(ProcessStageResult::stage)
+                .containsExactly(ProcessStage.PREPARE, ProcessStage.COMMIT, ProcessStage.FEEDBACK);
+        assertThat(results).allMatch(ProcessStageResult::success);
+        verify(plugin).prepare(context);
+        verify(plugin, never()).compute(any()); // 跳过,不重算
+        verify(plugin, never()).validate(any()); // 跳过
+        verify(plugin).commit(context); // 恒跑:原子发布决策
+        verify(plugin).feedback(context); // 恒跑:清 staging / 推水位
+    }
+
+    @Test
+    @DisplayName("跳过计算时把上一轮成功产出的水位与处理数回灌上下文,避免下游重读重发")
+    void stageSkip_carriesForwardWatermarkFromPriorSuccessOutputSummary() {
+        // P1-1:跳过 COMPUTE 时,须从上次 SUCCESS 的 output_summary 回灌 highWaterMarkOut / processedCount 到
+        // attributes,否则 report 水位 null → 下周期 INCREMENTAL 重读重发。
+        when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+                .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
+        when(pipelineRuns.loadLatestSucceededStepOutputSummary(PIPELINE_INSTANCE_ID, "PROCESS_COMPUTE"))
+                .thenReturn(Map.of("highWaterMarkOut", "20260708120000", "processedCount", 42));
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("dailySummary");
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), enabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+        executor.execute(context);
+
+        // COMPUTE 被跳过,但其上次成功产出的水位/计数已回灌 attributes(供 report 正常推水位)。
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "20260708120000");
+        assertThat(context.getAttributes()).containsEntry("processedCount", 42);
+        verify(plugin, never()).compute(any());
+    }
+
+    @Test
+    @DisplayName("没有历史成功记录时,即使开关开启也全量跑完五个阶段")
+    void stageSkip_runsFullPipeline_whenNoPriorSuccess() {
+        // 首次运行(无历史 SUCCESS 记录):即使开关开,也全量跑(回归保护)。
+        when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID)).thenReturn(Set.of());
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("dailySummary");
+        when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), enabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(5);
+        verify(plugin).compute(context);
+        verify(plugin).validate(context);
+    }
+
+    @Test
+    @DisplayName("开关关闭时即使存在历史成功记录也全量重跑,且完全不查询历史成功记录")
+    void stageSkip_disabled_runsFullPipeline_evenWithPriorSuccess() {
+        // 开关关(本 PR 默认):即使有历史 SUCCESS 记录,也从首 stage 全量重跑(彻底回归保护)。
+        // 关开关时甚至不查历史记录 —— 验证 loadSucceededStepCodes 从不被调用。
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("dailySummary");
+        when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(5);
+        verify(plugin).compute(context);
+        verify(plugin).validate(context);
+        verify(pipelineRuns, never()).loadSucceededStepCodes(any());
+    }
+
+    @Test
+    @DisplayName("提交阶段不在可跳过集合:即使历史提交曾经成功,重派仍然重跑提交")
+    void stageSkip_neverSkipsCommit_evenIfPriorCommitSucceeded() {
+        // COMMIT 不在 skip-safe 集:即便历史上 COMMIT 也成功过(极端场景),重派仍重跑 COMMIT
+        // (原子发布幂等:staging 已清则发布 0 行),绝不因"曾成功"跳过发布决策。
+        when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+                .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE", "PROCESS_COMMIT"));
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("dailySummary");
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), enabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results)
+                .extracting(ProcessStageResult::stage)
+                .containsExactly(ProcessStage.PREPARE, ProcessStage.COMMIT, ProcessStage.FEEDBACK);
+        verify(plugin).commit(context); // COMMIT 恒跑
+    }
+
+    @Test
+    @DisplayName("多分区任务整体降级为不跳:兄弟分区的成功不会让本任务跳过,且不再查询历史成功记录")
+    void stageSkip_degradedByMultiPartition_siblingSuccessDoesNotCauseSkip() {
+        // Critical 守卫(与 P0 LoadStep.checkpointDegradedByMultiPartition 对称):
+        // partitionCount=2 时 K 个 partition task 共享同一 pipeline_instance,但 staging 副作用是
+        // task 级(process-<taskId>)。兄弟 partition 的 COMPUTE SUCCESS step_run 不得让本 task 跳过
+        // COMPUTE(否则本 task 的 staging 从未生成 → COMMIT 读 0 行静默少发布)。
+        // 期望:多分区整体降级为不跳 —— 全量跑,且从不查历史成功记录。
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("dailySummary");
+        when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), enabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results).hasSize(5); // 全量跑,零跳过
+        verify(plugin).compute(context); // COMPUTE 未被兄弟 SUCCESS 误跳
+        verify(plugin).validate(context);
+        verify(pipelineRuns, never()).loadSucceededStepCodes(any()); // 降级后甚至不查历史
+    }
+
+    @Test
+    @DisplayName("显式单分区不触发降级,跳过逻辑照常生效:只跑准备、提交与反馈")
+    void stageSkip_singlePartition_partitionCountOne_stillSkips() {
+        // 边界:partitionCount=1(显式单分区)不触发降级,跳过逻辑照常生效。
+        when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+                .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
+        ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+        when(plugin.implCode()).thenReturn("dailySummary");
+
+        DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+                allStageStepBeans(), List.of(plugin), pipelineRuns, ProcessMetrics.noop(), enabledStageSkip());
+
+        ProcessJobContext context = newContext();
+        context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 1);
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+        List<ProcessStageResult> results = executor.execute(context);
+
+        assertThat(results)
+                .extracting(ProcessStageResult::stage)
+                .containsExactly(ProcessStage.PREPARE, ProcessStage.COMMIT, ProcessStage.FEEDBACK);
+        verify(plugin, never()).compute(any());
+    }
+
+    private WorkerCheckpointProperties disabledStageSkip() {
+        return new WorkerCheckpointProperties(); // stageSkip.enabled 默认 false
+    }
+
+    private WorkerCheckpointProperties enabledStageSkip() {
+        WorkerCheckpointProperties properties = new WorkerCheckpointProperties();
+        properties.getStageSkip().setEnabled(true);
+        return properties;
+    }
+
+    // ─── 辅助 ────────────────────────────────────────────────────────────────────
+
+    private ProcessJobContext newContext() {
+        ProcessJobContext context = new ProcessJobContext();
+        context.setTenantId("t1");
+        context.setWorkerId("w1");
+        context.setJobCode("JOB_PROCESS");
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
+        context.getAttributes().put(PipelineRuntimeKeys.TASK_ID, 42L);
+        return context;
+    }
+
+    private List<PipelineStepDefinition> fullPipelineWith(String computeImplCode) {
+        List<PipelineStepDefinition> steps = new ArrayList<>();
+        int order = 1;
+        for (ProcessStage stage : List.of(
+                ProcessStage.PREPARE,
+                ProcessStage.COMPUTE,
+                ProcessStage.VALIDATE,
+                ProcessStage.COMMIT,
+                ProcessStage.FEEDBACK)) {
+            String implCode = stage == ProcessStage.COMPUTE ? computeImplCode : "PROCESS_" + stage.name();
+            PipelineStepDefinition step = PipelineStepDefinition.builder()
+                    .id((long) order)
+                    .stepCode("PROCESS_" + stage.name())
+                    .stepName("Process " + stage.name())
+                    .stageCode(stage.name())
+                    .stepOrder(order++)
+                    .implCode(implCode)
+                    .stepParams(Map.of())
+                    .timeoutSeconds(0)
+                    .retryPolicy("NONE")
+                    .retryMaxCount(0)
+                    .enabled(true)
+                    .build();
+            steps.add(step);
+        }
+        return steps;
+    }
+
+    private List<ProcessStageStep> allStageStepBeans() {
+        List<ProcessStageStep> steps = new ArrayList<>();
+        for (ProcessStage stage : ProcessStage.values()) {
+            steps.add(realStep(stage));
+        }
+        return steps;
+    }
+
+    /** 用真实的 stage step 实现(都委托到 plugin 或 noop)代替 mock,保持新 5-stage 行为可观察。 */
+    private ProcessStageStep realStep(ProcessStage stage) {
+        return switch (stage) {
+            case PREPARE -> new PrepareStep();
+            case COMPUTE -> new ComputeStep();
+            case VALIDATE -> new ValidateStep();
+            case COMMIT -> new CommitStep();
+            case FEEDBACK -> new FeedbackStep(ProcessMetrics.noop());
+        };
+    }
 }

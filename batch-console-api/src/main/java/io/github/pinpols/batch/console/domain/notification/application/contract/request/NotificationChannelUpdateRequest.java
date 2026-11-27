@@ -12,15 +12,15 @@ import lombok.Data;
 @Data
 public class NotificationChannelUpdateRequest {
 
-  @NotBlank
-  @Size(max = 128)
-  private String channelName;
+    @NotBlank
+    @Size(max = 128)
+    private String channelName;
 
-  @NotBlank
-  @Size(max = 32)
-  private String channelType;
+    @NotBlank
+    @Size(max = 32)
+    private String channelType;
 
-  private String configJson;
+    private String configJson;
 
-  private Boolean enabled = Boolean.TRUE;
+    private Boolean enabled = Boolean.TRUE;
 }

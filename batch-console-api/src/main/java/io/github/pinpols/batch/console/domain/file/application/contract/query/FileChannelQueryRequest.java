@@ -8,8 +8,8 @@ import lombok.EqualsAndHashCode;
 @Data
 public class FileChannelQueryRequest extends PageQueryRequest {
 
-  private String tenantId;
-  private String channelCode;
-  private String channelType;
-  private Boolean enabled = true;
+    private String tenantId;
+    private String channelCode;
+    private String channelType;
+    private Boolean enabled = true;
 }

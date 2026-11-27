@@ -18,59 +18,58 @@ import java.util.Set;
  */
 public final class WorkflowExcelTextUtils {
 
-  private WorkflowExcelTextUtils() {}
+    private WorkflowExcelTextUtils() {}
 
-  static String normalize(String value) {
-    return ConsoleTextSanitizer.normalize(value);
-  }
+    static String normalize(String value) {
+        return ConsoleTextSanitizer.normalize(value);
+    }
 
-  static boolean hasText(String value) {
-    return Texts.hasText(normalize(value));
-  }
+    static boolean hasText(String value) {
+        return Texts.hasText(normalize(value));
+    }
 
-  static String tenantOrDefault(String value, String tenantId) {
-    String normalized = normalize(value);
-    return Texts.hasText(normalized) ? normalized : tenantId;
-  }
+    static String tenantOrDefault(String value, String tenantId) {
+        String normalized = normalize(value);
+        return Texts.hasText(normalized) ? normalized : tenantId;
+    }
 
-  /**
-   * 注意:原 service 实现是"upper case 后无论 allowed 是否包含都返回 upper",这里保持同义(避免行为漂移)。 真要 strict
-   * enforce,validator 层会另外 fail row。
-   */
-  static String normalizeEnum(String value, Set<String> allowed) {
-    String normalized = normalize(value);
-    if (!Texts.hasText(normalized)) {
-      return null;
+    /**
+     * 注意:原 service 实现是"upper case 后无论 allowed 是否包含都返回 upper",这里保持同义(避免行为漂移)。 真要 strict
+     * enforce,validator 层会另外 fail row。
+     */
+    static String normalizeEnum(String value, Set<String> allowed) {
+        String normalized = normalize(value);
+        if (!Texts.hasText(normalized)) {
+            return null;
+        }
+        return normalized.toUpperCase(Locale.ROOT);
     }
-    return normalized.toUpperCase(Locale.ROOT);
-  }
 
-  static Integer parseInteger(String value) {
-    String normalized = normalize(value);
-    if (!Texts.hasText(normalized)) {
-      return null;
+    static Integer parseInteger(String value) {
+        String normalized = normalize(value);
+        if (!Texts.hasText(normalized)) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(normalized);
+        } catch (NumberFormatException exception) {
+            SwallowedExceptionLogger.info(WorkflowExcelTextUtils.class, "catch:NumberFormatException", exception);
+            return null;
+        }
     }
-    try {
-      return Integer.valueOf(normalized);
-    } catch (NumberFormatException exception) {
-      SwallowedExceptionLogger.info(
-          WorkflowExcelTextUtils.class, "catch:NumberFormatException", exception);
-      return null;
-    }
-  }
 
-  static Boolean parseBoolean(String value, Boolean defaultValue) {
-    String normalized = normalize(value);
-    if (!Texts.hasText(normalized)) {
-      return defaultValue;
+    static Boolean parseBoolean(String value, Boolean defaultValue) {
+        String normalized = normalize(value);
+        if (!Texts.hasText(normalized)) {
+            return defaultValue;
+        }
+        String upper = normalized.toUpperCase(Locale.ROOT);
+        if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
+            return true;
+        }
+        if (List.of(GUIDE_FALSE, "N", "0", "NO").contains(upper)) {
+            return false;
+        }
+        return defaultValue;
     }
-    String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
-      return true;
-    }
-    if (List.of(GUIDE_FALSE, "N", "0", "NO").contains(upper)) {
-      return false;
-    }
-    return defaultValue;
-  }
 }

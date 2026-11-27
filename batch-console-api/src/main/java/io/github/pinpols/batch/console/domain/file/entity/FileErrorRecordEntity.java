@@ -9,17 +9,17 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = false)
 public class FileErrorRecordEntity extends AbstractLocalizedErrorEntity {
 
-  private Long id;
-  private String tenantId;
-  private Long fileId;
-  private Long pipelineInstanceId;
-  private Long pipelineStepRunId;
-  private Long recordNo;
-  private String errorCode;
+    private Long id;
+    private String tenantId;
+    private Long fileId;
+    private Long pipelineInstanceId;
+    private Long pipelineStepRunId;
+    private Long recordNo;
+    private String errorCode;
 
-  private String errorStage;
-  private Boolean skipped;
-  private String skipAction;
-  private String rawRecord;
-  private Instant createdAt;
+    private String errorStage;
+    private Boolean skipped;
+    private String skipAction;
+    private String rawRecord;
+    private Instant createdAt;
 }

@@ -35,153 +35,150 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("资源队列规范引用的一致性")
 class DefaultConsoleResourceQueueApplicationServiceTest {
 
-  @Mock
-  private ResourceQueueMapper mapper;
+    @Mock
+    private ResourceQueueMapper mapper;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @InjectMocks
-  private DefaultConsoleResourceQueueApplicationService service;
+    @InjectMocks
+    private DefaultConsoleResourceQueueApplicationService service;
 
-  @Captor
-  private ArgumentCaptor<ResourceQueueInsertParam> paramsCaptor;
+    @Captor
+    private ArgumentCaptor<ResourceQueueInsertParam> paramsCaptor;
 
-  @BeforeEach
-  void setUp() {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
-  }
+    @BeforeEach
+    void setUp() {
+        when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+    }
 
-  @DisplayName("持久化队列编码与作业引用一致")
-  @Test
-  void shouldStoreSameQueueCodeAsJobReferences() {
-    ResourceQueueCreateRequest request = request("Dispatch-Queue");
-    when(mapper.selectByUniqueKey(eq("ta"), anyString())).thenReturn(null);
-    doAnswer(invocation -> {
-          ResourceQueueInsertParam params = invocation.getArgument(0);
-          params.setId(9L);
-          return 1;
-        })
-        .when(mapper)
-        .insert(any(ResourceQueueInsertParam.class));
-    when(mapper.selectById("ta", 9L))
-        .thenReturn(new ResourceQueueRow(
-            9L,
-            "ta",
-            "dispatch_queue",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null));
+    @DisplayName("持久化队列编码与作业引用一致")
+    @Test
+    void shouldStoreSameQueueCodeAsJobReferences() {
+        ResourceQueueCreateRequest request = request("Dispatch-Queue");
+        when(mapper.selectByUniqueKey(eq("ta"), anyString())).thenReturn(null);
+        doAnswer(invocation -> {
+                    ResourceQueueInsertParam params = invocation.getArgument(0);
+                    params.setId(9L);
+                    return 1;
+                })
+                .when(mapper)
+                .insert(any(ResourceQueueInsertParam.class));
+        when(mapper.selectById("ta", 9L))
+                .thenReturn(new ResourceQueueRow(
+                        9L,
+                        "ta",
+                        "dispatch_queue",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
 
-    assertThat(service.create(request).queueCode()).isEqualTo("dispatch_queue");
+        assertThat(service.create(request).queueCode()).isEqualTo("dispatch_queue");
 
-    verify(mapper).selectByUniqueKey("ta", "dispatch_queue");
-    verify(mapper).insert(paramsCaptor.capture());
-    assertThat(paramsCaptor.getValue().getQueueCode()).isEqualTo("dispatch_queue");
-  }
+        verify(mapper).selectByUniqueKey("ta", "dispatch_queue");
+        verify(mapper).insert(paramsCaptor.capture());
+        assertThat(paramsCaptor.getValue().getQueueCode()).isEqualTo("dispatch_queue");
+    }
 
-  @DisplayName("拒绝已有规范队列的别名")
-  @Test
-  void shouldRejectAliasOfExistingCanonicalQueue() {
-    when(mapper.selectByUniqueKey(eq("ta"), anyString()))
-        .thenReturn(new ResourceQueueRow(
-            9L, "ta", null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null));
+    @DisplayName("拒绝已有规范队列的别名")
+    @Test
+    void shouldRejectAliasOfExistingCanonicalQueue() {
+        when(mapper.selectByUniqueKey(eq("ta"), anyString()))
+                .thenReturn(new ResourceQueueRow(
+                        9L, "ta", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                        null, null, null, null));
 
-    assertThatThrownBy(() -> service.create(request("Dispatch-Queue")))
-        .isInstanceOf(BizException.class);
+        assertThatThrownBy(() -> service.create(request("Dispatch-Queue"))).isInstanceOf(BizException.class);
 
-    verify(mapper).selectByUniqueKey("ta", "dispatch_queue");
-    verify(mapper, never()).insert(any(ResourceQueueInsertParam.class));
-  }
+        verify(mapper).selectByUniqueKey("ta", "dispatch_queue");
+        verify(mapper, never()).insert(any(ResourceQueueInsertParam.class));
+    }
 
-  @DisplayName("查询使用规范队列引用")
-  @Test
-  void shouldQueryQueueUsingCanonicalReference() {
-    ResourceQueueListRequest request =
-        new ResourceQueueListRequest("ta", "Dispatch-Queue", null, true, 1, 20);
-    ResourceQueueQuery expected =
-        new ResourceQueueQuery("ta", "dispatch_queue", null, true, new PageRequest(1, 20));
+    @DisplayName("查询使用规范队列引用")
+    @Test
+    void shouldQueryQueueUsingCanonicalReference() {
+        ResourceQueueListRequest request = new ResourceQueueListRequest("ta", "Dispatch-Queue", null, true, 1, 20);
+        ResourceQueueQuery expected =
+                new ResourceQueueQuery("ta", "dispatch_queue", null, true, new PageRequest(1, 20));
 
-    service.list(request);
+        service.list(request);
 
-    verify(mapper).countByQuery(expected);
-    verify(mapper).selectByQuery(expected);
-  }
+        verify(mapper).countByQuery(expected);
+        verify(mapper).selectByQuery(expected);
+    }
 
-  @DisplayName("更新时请求里给出的字段覆盖原值，未给出的字段保留原值")
-  @Test
-  void shouldOverrideOnlyProvidedFieldsOnUpdate() {
-    ResourceQueueRow existing = new ResourceQueueRow(
-        9L,
-        "ta",
-        "dispatch_queue",
-        "旧名称",
-        "MIXED",
-        3,
-        6,
-        50,
-        "group-a",
-        "tag-a",
-        "FIFO",
-        2,
-        true,
-        "旧说明",
-        null,
-        null,
-        null,
-        null,
-        null,
-        null);
-    when(mapper.selectById("ta", 9L)).thenReturn(existing);
-    ResourceQueueUpdateRequest request = new ResourceQueueUpdateRequest();
-    request.setTenantId("ta");
-    request.setQueueName("新名称");
-    request.setMaxRunningJobs(8);
-    request.setPriorityPolicy("PRIORITY");
-    request.setEnabled(false);
+    @DisplayName("更新时请求里给出的字段覆盖原值，未给出的字段保留原值")
+    @Test
+    void shouldOverrideOnlyProvidedFieldsOnUpdate() {
+        ResourceQueueRow existing = new ResourceQueueRow(
+                9L,
+                "ta",
+                "dispatch_queue",
+                "旧名称",
+                "MIXED",
+                3,
+                6,
+                50,
+                "group-a",
+                "tag-a",
+                "FIFO",
+                2,
+                true,
+                "旧说明",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        when(mapper.selectById("ta", 9L)).thenReturn(existing);
+        ResourceQueueUpdateRequest request = new ResourceQueueUpdateRequest();
+        request.setTenantId("ta");
+        request.setQueueName("新名称");
+        request.setMaxRunningJobs(8);
+        request.setPriorityPolicy("PRIORITY");
+        request.setEnabled(false);
 
-    service.update(9L, request);
+        service.update(9L, request);
 
-    ArgumentCaptor<ResourceQueueUpdateParam> captor =
-        ArgumentCaptor.forClass(ResourceQueueUpdateParam.class);
-    verify(mapper).update(captor.capture());
-    ResourceQueueUpdateParam params = captor.getValue();
-    assertThat(params.tenantId()).isEqualTo("ta");
-    assertThat(params.id()).isEqualTo(9L);
-    assertThat(params.queueName()).isEqualTo("新名称");
-    assertThat(params.maxRunningJobs()).isEqualTo(8);
-    assertThat(params.priorityPolicy()).isEqualTo("PRIORITY");
-    assertThat(params.enabled()).isFalse();
-    assertThat(params.queueType()).isEqualTo("MIXED");
-    assertThat(params.maxRunningPartitions()).isEqualTo(6);
-    assertThat(params.maxQps()).isEqualTo(50);
-    assertThat(params.workerGroup()).isEqualTo("group-a");
-    assertThat(params.resourceTag()).isEqualTo("tag-a");
-    assertThat(params.fairShareWeight()).isEqualTo(2);
-    assertThat(params.description()).isEqualTo("旧说明");
-  }
+        ArgumentCaptor<ResourceQueueUpdateParam> captor = ArgumentCaptor.forClass(ResourceQueueUpdateParam.class);
+        verify(mapper).update(captor.capture());
+        ResourceQueueUpdateParam params = captor.getValue();
+        assertThat(params.tenantId()).isEqualTo("ta");
+        assertThat(params.id()).isEqualTo(9L);
+        assertThat(params.queueName()).isEqualTo("新名称");
+        assertThat(params.maxRunningJobs()).isEqualTo(8);
+        assertThat(params.priorityPolicy()).isEqualTo("PRIORITY");
+        assertThat(params.enabled()).isFalse();
+        assertThat(params.queueType()).isEqualTo("MIXED");
+        assertThat(params.maxRunningPartitions()).isEqualTo(6);
+        assertThat(params.maxQps()).isEqualTo(50);
+        assertThat(params.workerGroup()).isEqualTo("group-a");
+        assertThat(params.resourceTag()).isEqualTo("tag-a");
+        assertThat(params.fairShareWeight()).isEqualTo(2);
+        assertThat(params.description()).isEqualTo("旧说明");
+    }
 
-  private static ResourceQueueCreateRequest request(String code) {
-    ResourceQueueCreateRequest request = new ResourceQueueCreateRequest();
-    request.setTenantId("ta");
-    request.setQueueCode(code);
-    request.setQueueType("MIXED");
-    request.setMaxRunningJobs(1);
-    return request;
-  }
+    private static ResourceQueueCreateRequest request(String code) {
+        ResourceQueueCreateRequest request = new ResourceQueueCreateRequest();
+        request.setTenantId("ta");
+        request.setQueueCode(code);
+        request.setQueueType("MIXED");
+        request.setMaxRunningJobs(1);
+        return request;
+    }
 }

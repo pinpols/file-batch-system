@@ -8,10 +8,10 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum FileCompressType implements DictEnum {
-  NONE("NONE", "无压缩"),
-  ZIP("ZIP", "ZIP"),
-  GZIP("GZIP", "GZIP");
+    NONE("NONE", "无压缩"),
+    ZIP("ZIP", "ZIP"),
+    GZIP("GZIP", "GZIP");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

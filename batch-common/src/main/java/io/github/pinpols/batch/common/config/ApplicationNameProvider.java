@@ -17,35 +17,35 @@ import org.springframework.stereotype.Component;
 @Component
 public class ApplicationNameProvider {
 
-  /** 统一维护的配置 key。 */
-  public static final String APPLICATION_NAME_KEY = "spring.application.name";
+    /** 统一维护的配置 key。 */
+    public static final String APPLICATION_NAME_KEY = "spring.application.name";
 
-  private final Environment environment;
+    private final Environment environment;
 
-  public ApplicationNameProvider(Environment environment) {
-    this.environment = environment;
-  }
+    public ApplicationNameProvider(Environment environment) {
+        this.environment = environment;
+    }
 
-  /**
-   * 读取 {@code spring.application.name}。
-   *
-   * @param fallback 未配置或值为空白时的回退值，由调用方按各模块语义提供
-   * @return 实际生效的应用名，或 {@code fallback}
-   */
-  public String name(String fallback) {
-    return resolve(environment, fallback);
-  }
+    /**
+     * 读取 {@code spring.application.name}。
+     *
+     * @param fallback 未配置或值为空白时的回退值，由调用方按各模块语义提供
+     * @return 实际生效的应用名，或 {@code fallback}
+     */
+    public String name(String fallback) {
+        return resolve(environment, fallback);
+    }
 
-  /**
-   * 静态变体：供无法注入本 bean 的早期装配场景使用（例如 {@code BeanPostProcessor} 工厂刻意只注入 {@link
-   * Environment}，以免过早实例化配置属性 bean）。
-   *
-   * @param environment Spring 环境
-   * @param fallback 未配置或值为空白时的回退值
-   * @return 实际生效的应用名，或 {@code fallback}
-   */
-  public static String resolve(Environment environment, String fallback) {
-    String value = environment.getProperty(APPLICATION_NAME_KEY);
-    return Texts.hasText(value) ? value : fallback;
-  }
+    /**
+     * 静态变体：供无法注入本 bean 的早期装配场景使用（例如 {@code BeanPostProcessor} 工厂刻意只注入 {@link
+     * Environment}，以免过早实例化配置属性 bean）。
+     *
+     * @param environment Spring 环境
+     * @param fallback 未配置或值为空白时的回退值
+     * @return 实际生效的应用名，或 {@code fallback}
+     */
+    public static String resolve(Environment environment, String fallback) {
+        String value = environment.getProperty(APPLICATION_NAME_KEY);
+        return Texts.hasText(value) ? value : fallback;
+    }
 }

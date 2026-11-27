@@ -47,168 +47,168 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleLoginKeyPairService {
 
-  /** 登录加密 RSA 密钥长度（bit）。 */
-  private static final int RSA_KEY_SIZE_BITS = 2048;
+    /** 登录加密 RSA 密钥长度（bit）。 */
+    private static final int RSA_KEY_SIZE_BITS = 2048;
 
-  private static final String RSA_TRANSFORM = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
-  private static final String AES_TRANSFORM = CryptoAlgorithms.AES_GCM_NO_PADDING;
-  private static final int GCM_TAG_BITS = 128;
+    private static final String RSA_TRANSFORM = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
+    private static final String AES_TRANSFORM = CryptoAlgorithms.AES_GCM_NO_PADDING;
+    private static final int GCM_TAG_BITS = 128;
 
-  private final ConsoleSecurityProperties properties;
+    private final ConsoleSecurityProperties properties;
 
-  private RSAPublicKey publicKey;
-  private RSAPrivateKey privateKey;
-  private String publicKeyPem;
-  private String fingerprint;
+    private RSAPublicKey publicKey;
+    private RSAPrivateKey privateKey;
+    private String publicKeyPem;
+    private String fingerprint;
 
-  @PostConstruct
-  void init() {
-    if (!properties.getLoginEncryption().isEnabled()) {
-      log.info("console login encryption disabled (login-encryption.enabled=false)");
-      return;
+    @PostConstruct
+    void init() {
+        if (!properties.getLoginEncryption().isEnabled()) {
+            log.info("console login encryption disabled (login-encryption.enabled=false)");
+            return;
+        }
+        String configuredPriv = properties.getLoginEncryption().getPrivateKeyPem();
+        String configuredPub = properties.getLoginEncryption().getPublicKeyPem();
+        if (!configuredPriv.isBlank() && !configuredPub.isBlank()) {
+            this.privateKey = parsePrivateKey(configuredPriv);
+            this.publicKey = parsePublicKey(configuredPub);
+            this.publicKeyPem = normalizePem(configuredPub, "PUBLIC KEY");
+            this.fingerprint = computeFingerprint(publicKey);
+            log.info("console login RSA keypair loaded from configuration (fp={})", fingerprint);
+            return;
+        }
+        KeyPair pair = generateKeyPair();
+        this.publicKey = (RSAPublicKey) pair.getPublic();
+        this.privateKey = (RSAPrivateKey) pair.getPrivate();
+        this.publicKeyPem = encodePublicKey(publicKey);
+        this.fingerprint = computeFingerprint(publicKey);
+        log.warn(
+                "console login RSA keypair generated at startup (fp={}); for multi-replica prod, set"
+                        + " batch.console.security.login-encryption.{private,public}-key-pem from Helm Secret",
+                fingerprint);
     }
-    String configuredPriv = properties.getLoginEncryption().getPrivateKeyPem();
-    String configuredPub = properties.getLoginEncryption().getPublicKeyPem();
-    if (!configuredPriv.isBlank() && !configuredPub.isBlank()) {
-      this.privateKey = parsePrivateKey(configuredPriv);
-      this.publicKey = parsePublicKey(configuredPub);
-      this.publicKeyPem = normalizePem(configuredPub, "PUBLIC KEY");
-      this.fingerprint = computeFingerprint(publicKey);
-      log.info("console login RSA keypair loaded from configuration (fp={})", fingerprint);
-      return;
+
+    /** 返回 PEM 编码的公钥;FE 取这个加密 login body。enabled=false 时返回 null,controller 给 404。 */
+    public String publicKeyPem() {
+        return publicKeyPem;
     }
-    KeyPair pair = generateKeyPair();
-    this.publicKey = (RSAPublicKey) pair.getPublic();
-    this.privateKey = (RSAPrivateKey) pair.getPrivate();
-    this.publicKeyPem = encodePublicKey(publicKey);
-    this.fingerprint = computeFingerprint(publicKey);
-    log.warn(
-        "console login RSA keypair generated at startup (fp={}); for multi-replica prod, set"
-            + " batch.console.security.login-encryption.{private,public}-key-pem from Helm Secret",
-        fingerprint);
-  }
 
-  /** 返回 PEM 编码的公钥;FE 取这个加密 login body。enabled=false 时返回 null,controller 给 404。 */
-  public String publicKeyPem() {
-    return publicKeyPem;
-  }
-
-  /** 公钥指纹（SHA-256 前 8 字节 hex）,用于 FE 缓存 / key 轮换识别。 */
-  public String fingerprint() {
-    return fingerprint;
-  }
-
-  /**
-   * 解密前端发来的混合密文,返回原始 body 明文 JSON 字符串。
-   *
-   * @param encryptedAesKeyBase64 RSA-OAEP(aesKey) base64
-   * @param ivBase64 AES-GCM 12 字节 IV base64
-   * @param ciphertextBase64 AES-GCM(plaintext) base64
-   */
-  public String decrypt(String encryptedAesKeyBase64, String ivBase64, String ciphertextBase64) {
-    if (privateKey == null) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_unavailable");
+    /** 公钥指纹（SHA-256 前 8 字节 hex）,用于 FE 缓存 / key 轮换识别。 */
+    public String fingerprint() {
+        return fingerprint;
     }
-    try {
-      byte[] wrappedKey = Base64.getDecoder().decode(encryptedAesKeyBase64);
-      byte[] iv = Base64.getDecoder().decode(ivBase64);
-      byte[] ciphertext = Base64.getDecoder().decode(ciphertextBase64);
 
-      Cipher rsa = Cipher.getInstance(RSA_TRANSFORM);
-      // 显式指定 MGF1 hash = SHA-256，否则 JDK 默认 MGF1-SHA-1，与 Web Crypto
-      // RSA-OAEP(SHA-256) 不匹配，密文解不开。
-      OAEPParameterSpec oaep = new OAEPParameterSpec(
-          CryptoAlgorithms.SHA_256, "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
-      rsa.init(Cipher.DECRYPT_MODE, privateKey, oaep);
-      byte[] aesKeyBytes = rsa.doFinal(wrappedKey);
+    /**
+     * 解密前端发来的混合密文,返回原始 body 明文 JSON 字符串。
+     *
+     * @param encryptedAesKeyBase64 RSA-OAEP(aesKey) base64
+     * @param ivBase64 AES-GCM 12 字节 IV base64
+     * @param ciphertextBase64 AES-GCM(plaintext) base64
+     */
+    public String decrypt(String encryptedAesKeyBase64, String ivBase64, String ciphertextBase64) {
+        if (privateKey == null) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_unavailable");
+        }
+        try {
+            byte[] wrappedKey = Base64.getDecoder().decode(encryptedAesKeyBase64);
+            byte[] iv = Base64.getDecoder().decode(ivBase64);
+            byte[] ciphertext = Base64.getDecoder().decode(ciphertextBase64);
 
-      Cipher aes = Cipher.getInstance(AES_TRANSFORM);
-      SecretKeySpec aesKey = new SecretKeySpec(aesKeyBytes, CryptoAlgorithms.AES);
-      GCMParameterSpec gcmParameters = new GCMParameterSpec(GCM_TAG_BITS, iv);
-      aes.init(Cipher.DECRYPT_MODE, aesKey, gcmParameters);
-      byte[] plaintext = aes.doFinal(ciphertext);
-      return new String(plaintext, StandardCharsets.UTF_8);
-    } catch (RuntimeException e) {
-      throw e;
-    } catch (Exception e) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
+            Cipher rsa = Cipher.getInstance(RSA_TRANSFORM);
+            // 显式指定 MGF1 hash = SHA-256，否则 JDK 默认 MGF1-SHA-1，与 Web Crypto
+            // RSA-OAEP(SHA-256) 不匹配，密文解不开。
+            OAEPParameterSpec oaep = new OAEPParameterSpec(
+                    CryptoAlgorithms.SHA_256, "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
+            rsa.init(Cipher.DECRYPT_MODE, privateKey, oaep);
+            byte[] aesKeyBytes = rsa.doFinal(wrappedKey);
+
+            Cipher aes = Cipher.getInstance(AES_TRANSFORM);
+            SecretKeySpec aesKey = new SecretKeySpec(aesKeyBytes, CryptoAlgorithms.AES);
+            GCMParameterSpec gcmParameters = new GCMParameterSpec(GCM_TAG_BITS, iv);
+            aes.init(Cipher.DECRYPT_MODE, aesKey, gcmParameters);
+            byte[] plaintext = aes.doFinal(ciphertext);
+            return new String(plaintext, StandardCharsets.UTF_8);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
+        }
     }
-  }
 
-  private KeyPair generateKeyPair() {
-    try {
-      KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-      gen.initialize(RSA_KEY_SIZE_BITS);
-      return gen.generateKeyPair();
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("RSA not available", e);
+    private KeyPair generateKeyPair() {
+        try {
+            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+            gen.initialize(RSA_KEY_SIZE_BITS);
+            return gen.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("RSA not available", e);
+        }
     }
-  }
 
-  private RSAPublicKey parsePublicKey(String pem) {
-    try {
-      Base64.Decoder decoder = Base64.getDecoder();
-      String publicKeyPayload = stripPem(pem, "PUBLIC KEY");
-      byte[] publicKeyDer = decoder.decode(publicKeyPayload);
-      KeyFactory kf = KeyFactory.getInstance("RSA");
-      X509EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyDer);
-      PublicKey publicKey = kf.generatePublic(publicKeySpec);
-      return (RSAPublicKey) publicKey;
-    } catch (Exception e) {
-      throw new IllegalStateException(
-          "Failed to parse batch.console.security.login-encryption.public-key-pem", e);
+    private RSAPublicKey parsePublicKey(String pem) {
+        try {
+            Base64.Decoder decoder = Base64.getDecoder();
+            String publicKeyPayload = stripPem(pem, "PUBLIC KEY");
+            byte[] publicKeyDer = decoder.decode(publicKeyPayload);
+            KeyFactory kf = KeyFactory.getInstance("RSA");
+            X509EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyDer);
+            PublicKey publicKey = kf.generatePublic(publicKeySpec);
+            return (RSAPublicKey) publicKey;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to parse batch.console.security.login-encryption.public-key-pem", e);
+        }
     }
-  }
 
-  private RSAPrivateKey parsePrivateKey(String pem) {
-    try {
-      Base64.Decoder decoder = Base64.getDecoder();
-      String privateKeyPayload = stripPem(pem, "PRIVATE KEY");
-      byte[] privateKeyDer = decoder.decode(privateKeyPayload);
-      KeyFactory kf = KeyFactory.getInstance("RSA");
-      PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(privateKeyDer);
-      PrivateKey privateKey = kf.generatePrivate(privateKeySpec);
-      return (RSAPrivateKey) privateKey;
-    } catch (Exception e) {
-      throw new IllegalStateException(
-          "Failed to parse batch.console.security.login-encryption.private-key-pem", e);
+    private RSAPrivateKey parsePrivateKey(String pem) {
+        try {
+            Base64.Decoder decoder = Base64.getDecoder();
+            String privateKeyPayload = stripPem(pem, "PRIVATE KEY");
+            byte[] privateKeyDer = decoder.decode(privateKeyPayload);
+            KeyFactory kf = KeyFactory.getInstance("RSA");
+            PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(privateKeyDer);
+            PrivateKey privateKey = kf.generatePrivate(privateKeySpec);
+            return (RSAPrivateKey) privateKey;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to parse batch.console.security.login-encryption.private-key-pem", e);
+        }
     }
-  }
 
-  private String stripPem(String pem, String label) {
-    String beginMarker = "-----BEGIN " + label + "-----";
-    String withoutBeginMarker = pem.replace(beginMarker, "");
-    String endMarker = "-----END " + label + "-----";
-    String withoutPemMarkers = withoutBeginMarker.replace(endMarker, "");
-    return withoutPemMarkers.replaceAll("\\s", "");
-  }
-
-  private String normalizePem(String pem, String label) {
-    String body = stripPem(pem, label);
-    StringBuilder sb = new StringBuilder();
-    sb.append("-----BEGIN ").append(label).append("-----\n");
-    for (int i = 0; i < body.length(); i += 64) {
-      sb.append(body, i, Math.min(i + 64, body.length())).append('\n');
+    private String stripPem(String pem, String label) {
+        String beginMarker = "-----BEGIN " + label + "-----";
+        String withoutBeginMarker = pem.replace(beginMarker, "");
+        String endMarker = "-----END " + label + "-----";
+        String withoutPemMarkers = withoutBeginMarker.replace(endMarker, "");
+        return withoutPemMarkers.replaceAll("\\s", "");
     }
-    sb.append("-----END ").append(label).append("-----\n");
-    return sb.toString();
-  }
 
-  private String encodePublicKey(PublicKey pk) {
-    String base64 = Base64.getEncoder().encodeToString(pk.getEncoded());
-    return normalizePem(base64, "PUBLIC KEY");
-  }
-
-  private String computeFingerprint(PublicKey pk) {
-    try {
-      MessageDigest digestGenerator = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] encodedPublicKey = pk.getEncoded();
-      byte[] sha = digestGenerator.digest(encodedPublicKey);
-      byte[] head = new byte[8];
-      System.arraycopy(sha, 0, head, 0, 8);
-      return HexFormat.of().formatHex(head);
-    } catch (NoSuchAlgorithmException e) {
-      return "unknown";
+    private String normalizePem(String pem, String label) {
+        String body = stripPem(pem, label);
+        StringBuilder sb = new StringBuilder();
+        sb.append("-----BEGIN ").append(label).append("-----\n");
+        for (int i = 0; i < body.length(); i += 64) {
+            sb.append(body, i, Math.min(i + 64, body.length())).append('\n');
+        }
+        sb.append("-----END ").append(label).append("-----\n");
+        return sb.toString();
     }
-  }
+
+    private String encodePublicKey(PublicKey pk) {
+        String base64 = Base64.getEncoder().encodeToString(pk.getEncoded());
+        return normalizePem(base64, "PUBLIC KEY");
+    }
+
+    private String computeFingerprint(PublicKey pk) {
+        try {
+            MessageDigest digestGenerator = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] encodedPublicKey = pk.getEncoded();
+            byte[] sha = digestGenerator.digest(encodedPublicKey);
+            byte[] head = new byte[8];
+            System.arraycopy(sha, 0, head, 0, 8);
+            return HexFormat.of().formatHex(head);
+        } catch (NoSuchAlgorithmException e) {
+            return "unknown";
+        }
+    }
 }

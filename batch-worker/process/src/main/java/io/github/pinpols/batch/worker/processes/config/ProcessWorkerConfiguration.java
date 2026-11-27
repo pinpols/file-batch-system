@@ -11,16 +11,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "batch.worker.process")
 public record ProcessWorkerConfiguration(
-    String workerCode,
-    String workerType,
-    String tenantId,
-    Long heartbeatIntervalMillis,
-    String topic,
-    String consumerGroupId,
-    List<String> capabilityTags)
-    implements WorkerConfiguration {
+        String workerCode,
+        String workerType,
+        String tenantId,
+        Long heartbeatIntervalMillis,
+        String topic,
+        String consumerGroupId,
+        List<String> capabilityTags)
+        implements WorkerConfiguration {
 
-  public ProcessWorkerConfiguration {
-    capabilityTags = BaseWorkerProperties.normalizeCapabilityTags(capabilityTags);
-  }
+    public ProcessWorkerConfiguration {
+        capabilityTags = BaseWorkerProperties.normalizeCapabilityTags(capabilityTags);
+    }
 }

@@ -9,45 +9,45 @@ import lombok.Data;
 
 @Data
 public class AlertRoutingSaveRequest {
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @ValidResourceCode
-  private String routeCode;
+    @ValidResourceCode
+    private String routeCode;
 
-  @Size(max = 128)
-  private String routeName;
+    @Size(max = 128)
+    private String routeName;
 
-  @NotBlank
-  @Size(max = 64)
-  private String team;
+    @NotBlank
+    @Size(max = 64)
+    private String team;
 
-  @NotBlank
-  @Size(max = 64)
-  private String alertGroup;
+    @NotBlank
+    @Size(max = 64)
+    private String alertGroup;
 
-  @NotBlank
-  @Size(max = 32)
-  private String severity;
+    @NotBlank
+    @Size(max = 32)
+    private String severity;
 
-  @NotBlank
-  @Size(max = 256)
-  private String receiver;
+    @NotBlank
+    @Size(max = 256)
+    private String receiver;
 
-  @Size(max = 128)
-  private String groupBy;
+    @Size(max = 128)
+    private String groupBy;
 
-  @Min(0)
-  private Integer groupWaitSeconds;
+    @Min(0)
+    private Integer groupWaitSeconds;
 
-  @Min(0)
-  private Integer groupIntervalSeconds;
+    @Min(0)
+    private Integer groupIntervalSeconds;
 
-  @Min(0)
-  private Integer repeatIntervalSeconds;
+    @Min(0)
+    private Integer repeatIntervalSeconds;
 
-  private Boolean enabled;
+    private Boolean enabled;
 
-  @Size(max = 512)
-  private String description;
+    @Size(max = 512)
+    private String description;
 }

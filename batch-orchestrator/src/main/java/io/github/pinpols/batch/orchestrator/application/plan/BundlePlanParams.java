@@ -31,118 +31,114 @@ import java.util.Set;
  */
 public final class BundlePlanParams {
 
-  /** 单个文件包计划允许绑定的文件数上限。 */
-  private static final int MAX_BUNDLE_FILES = 256;
+    /** 单个文件包计划允许绑定的文件数上限。 */
+    private static final int MAX_BUNDLE_FILES = 256;
 
-  /** launch params 里承载文件束清单的键。 */
-  public static final String PARAM_BUNDLE_FILES = "bundleFiles";
+    /** launch params 里承载文件束清单的键。 */
+    public static final String PARAM_BUNDLE_FILES = "bundleFiles";
 
-  private BundlePlanParams() {}
+    private BundlePlanParams() {}
 
-  /** 一束内单个绑定项(文件/模板/目标视类型而定,可部分为空)。 */
-  public record BundleFile(Long sourceFileId, String templateCode, String targetRef) {}
+    /** 一束内单个绑定项(文件/模板/目标视类型而定,可部分为空)。 */
+    public record BundleFile(Long sourceFileId, String templateCode, String targetRef) {}
 
-  /** 解析 params.bundleFiles。必填绑定字段校验按束类型(绑定 profile)区分;非束类型或绑定缺失 → 跳过/空列表(走原同构路径)。 */
-  @SuppressWarnings("unchecked")
-  public static List<BundleFile> extract(Map<String, Object> params, JobType bundleType) {
-    List<BundleFile> result = new ArrayList<>();
-    boolean bundleParametersAreUnavailable =
-        EmptyChecks.isNull(params) || EmptyChecks.isNull(bundleType) || !bundleType.isBundle();
-    if (bundleParametersAreUnavailable) {
-      return result;
+    /** 解析 params.bundleFiles。必填绑定字段校验按束类型(绑定 profile)区分;非束类型或绑定缺失 → 跳过/空列表(走原同构路径)。 */
+    @SuppressWarnings("unchecked")
+    public static List<BundleFile> extract(Map<String, Object> params, JobType bundleType) {
+        List<BundleFile> result = new ArrayList<>();
+        boolean bundleParametersAreUnavailable =
+                EmptyChecks.isNull(params) || EmptyChecks.isNull(bundleType) || !bundleType.isBundle();
+        if (bundleParametersAreUnavailable) {
+            return result;
+        }
+        Object raw = params.get(PARAM_BUNDLE_FILES);
+        if (!(raw instanceof List<?> list)) {
+            return result;
+        }
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map)) {
+                continue;
+            }
+            Map<String, Object> entry = (Map<String, Object>) map;
+            Long fileId = toLong(entry.get("sourceFileId"));
+            String templateCode = toStr(entry.get("templateCode"));
+            String targetRef = toStr(entry.get("targetRef"));
+            if (!hasRequiredBinding(bundleType, fileId, templateCode, targetRef)) {
+                continue;
+            }
+            result.add(new BundleFile(fileId, templateCode, targetRef));
+        }
+        return result;
     }
-    Object raw = params.get(PARAM_BUNDLE_FILES);
-    if (!(raw instanceof List<?> list)) {
-      return result;
-    }
-    for (Object item : list) {
-      if (!(item instanceof Map<?, ?> map)) {
-        continue;
-      }
-      Map<String, Object> entry = (Map<String, Object>) map;
-      Long fileId = toLong(entry.get("sourceFileId"));
-      String templateCode = toStr(entry.get("templateCode"));
-      String targetRef = toStr(entry.get("targetRef"));
-      if (!hasRequiredBinding(bundleType, fileId, templateCode, targetRef)) {
-        continue;
-      }
-      result.add(new BundleFile(fileId, templateCode, targetRef));
-    }
-    return result;
-  }
 
-  /** 校验束作业的 launch 参数；在 T1 创建实例前调用，避免永久无效请求进入 CREATED 恢复队列。 */
-  public static void validate(Map<String, Object> params, JobType bundleType) {
-    if (EmptyChecks.isNull(bundleType) || !bundleType.isBundle()) {
-      return;
+    /** 校验束作业的 launch 参数；在 T1 创建实例前调用，避免永久无效请求进入 CREATED 恢复队列。 */
+    public static void validate(Map<String, Object> params, JobType bundleType) {
+        if (EmptyChecks.isNull(bundleType) || !bundleType.isBundle()) {
+            return;
+        }
+        List<BundleFile> bundleFiles = extract(params, bundleType);
+        if (EmptyChecks.isEmpty(bundleFiles)) {
+            throw invalidBundle("bundleFiles must contain usable bindings for " + bundleType);
+        }
+        if (bundleFiles.size() > MAX_BUNDLE_FILES) {
+            throw invalidBundle("bundleFiles exceeds the maximum of 256 items for " + bundleType);
+        }
     }
-    List<BundleFile> bundleFiles = extract(params, bundleType);
-    if (EmptyChecks.isEmpty(bundleFiles)) {
-      throw invalidBundle("bundleFiles must contain usable bindings for " + bundleType);
-    }
-    if (bundleFiles.size() > MAX_BUNDLE_FILES) {
-      throw invalidBundle("bundleFiles exceeds the maximum of 256 items for " + bundleType);
-    }
-  }
 
-  /** 与分区展开共享同一份文件束解析结果，避免业务参数中的同名字段被识别为渠道。 */
-  public static Set<String> dispatchChannelCodes(Map<String, Object> params) {
-    Set<String> channels = new LinkedHashSet<>();
-    for (BundleFile file : extract(params, JobType.BUNDLE_DISPATCH)) {
-      channels.add(file.targetRef());
+    /** 与分区展开共享同一份文件束解析结果，避免业务参数中的同名字段被识别为渠道。 */
+    public static Set<String> dispatchChannelCodes(Map<String, Object> params) {
+        Set<String> channels = new LinkedHashSet<>();
+        for (BundleFile file : extract(params, JobType.BUNDLE_DISPATCH)) {
+            channels.add(file.targetRef());
+        }
+        return channels;
     }
-    return channels;
-  }
 
-  public static BizException invalidBundle(String reason) {
-    return BizException.of(
-        ResultCode.BUSINESS_ERROR,
-        "error.partition.dispatch_business_error",
-        "ADR-046_BUNDLE_INVALID",
-        reason);
-  }
+    public static BizException invalidBundle(String reason) {
+        return BizException.of(
+                ResultCode.BUSINESS_ERROR, "error.partition.dispatch_business_error", "ADR-046_BUNDLE_INVALID", reason);
+    }
 
-  /** 按绑定 profile 校验必填绑定字段是否齐备。 */
-  private static boolean hasRequiredBinding(
-      JobType bundleType, Long fileId, String templateCode, String targetRef) {
-    return switch (bundleType) {
-      case BUNDLE_IMPORT -> EmptyChecks.isNotNull(fileId) && EmptyChecks.isNotNull(templateCode);
-      case BUNDLE_EXPORT -> EmptyChecks.isNotNull(templateCode);
-      case BUNDLE_DISPATCH -> EmptyChecks.isNotNull(fileId) && EmptyChecks.isNotNull(targetRef);
-      default -> false;
-    };
-  }
+    /** 按绑定 profile 校验必填绑定字段是否齐备。 */
+    private static boolean hasRequiredBinding(JobType bundleType, Long fileId, String templateCode, String targetRef) {
+        return switch (bundleType) {
+            case BUNDLE_IMPORT -> EmptyChecks.isNotNull(fileId) && EmptyChecks.isNotNull(templateCode);
+            case BUNDLE_EXPORT -> EmptyChecks.isNotNull(templateCode);
+            case BUNDLE_DISPATCH -> EmptyChecks.isNotNull(fileId) && EmptyChecks.isNotNull(targetRef);
+            default -> false;
+        };
+    }
 
-  private static Long toLong(Object value) {
-    // JSON 浮点数可能在反序列化时已舍入成整数，不能再作为精确文件身份。
-    if (value instanceof Double || value instanceof Float) {
-      return null;
+    private static Long toLong(Object value) {
+        // JSON 浮点数可能在反序列化时已舍入成整数，不能再作为精确文件身份。
+        if (value instanceof Double || value instanceof Float) {
+            return null;
+        }
+        if (value instanceof Number n) {
+            try {
+                return new BigDecimal(n.toString()).longValueExact();
+            } catch (ArithmeticException | NumberFormatException invalidNumber) {
+                return null;
+            }
+        }
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        try {
+            String rawValue = String.valueOf(value);
+            String normalizedValue = rawValue.trim();
+            return Long.parseLong(normalizedValue);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
-    if (value instanceof Number n) {
-      try {
-        return new BigDecimal(n.toString()).longValueExact();
-      } catch (ArithmeticException | NumberFormatException invalidNumber) {
-        return null;
-      }
-    }
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    try {
-      String rawValue = String.valueOf(value);
-      String normalizedValue = rawValue.trim();
-      return Long.parseLong(normalizedValue);
-    } catch (NumberFormatException ignored) {
-      return null;
-    }
-  }
 
-  private static String toStr(Object value) {
-    if (EmptyChecks.isNull(value)) {
-      return null;
+    private static String toStr(Object value) {
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        String rawValue = String.valueOf(value);
+        String trimmedValue = rawValue.trim();
+        return EmptyChecks.isEmpty(Objects.requireNonNull(trimmedValue)) ? null : trimmedValue;
     }
-    String rawValue = String.valueOf(value);
-    String trimmedValue = rawValue.trim();
-    return EmptyChecks.isEmpty(Objects.requireNonNull(trimmedValue)) ? null : trimmedValue;
-  }
 }

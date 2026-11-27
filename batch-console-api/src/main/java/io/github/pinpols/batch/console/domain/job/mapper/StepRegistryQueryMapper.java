@@ -9,8 +9,8 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface StepRegistryQueryMapper {
 
-  List<String> selectImplCodesByModule(@Param("module") String module);
+    List<String> selectImplCodesByModule(@Param("module") String module);
 
-  /** 所有模块的 impl_code 并集；模板下载时用作跨模块的总下拉选项。 */
-  List<String> selectAllImplCodes();
+    /** 所有模块的 impl_code 并集；模板下载时用作跨模块的总下拉选项。 */
+    List<String> selectAllImplCodes();
 }

@@ -11,31 +11,30 @@ import org.apache.ibatis.annotations.Param;
 
 public interface BusinessCalendarMapper {
 
-  ActiveCalendarRow selectActiveByTenantAndCalendarCode(
-      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
+    ActiveCalendarRow selectActiveByTenantAndCalendarCode(
+            @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
 
-  CalendarQueryRow selectByTenantAndCalendarCode(
-      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
+    CalendarQueryRow selectByTenantAndCalendarCode(
+            @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
 
-  List<CalendarQueryRow> selectByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("enabled") Boolean enabled,
-      @Param("pageRequest") PageRequest pageRequest);
+    List<CalendarQueryRow> selectByQuery(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("enabled") Boolean enabled,
+            @Param("pageRequest") PageRequest pageRequest);
 
-  long countByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("enabled") Boolean enabled);
+    long countByQuery(
+            @Param("tenantId") String tenantId,
+            @Param("calendarCode") String calendarCode,
+            @Param("enabled") Boolean enabled);
 
-  CalendarQueryRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    CalendarQueryRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int upsertBusinessCalendar(BusinessCalendarUpsertParam param);
+    int upsertBusinessCalendar(BusinessCalendarUpsertParam param);
 
-  int insert(BusinessCalendarInsertParam params);
+    int insert(BusinessCalendarInsertParam params);
 
-  int update(BusinessCalendarUpdateParam params);
+    int update(BusinessCalendarUpdateParam params);
 
-  int toggleEnabled(
-      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
+    int toggleEnabled(@Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 }

@@ -31,95 +31,94 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @DisplayName("实时事件订阅消费者: 跨实例去重与快照类消息的分流")
 class ConsoleRealtimeRedisPubSubConsumerTest {
 
-  @Mock
-  private StringRedisTemplate redisTemplate;
+    @Mock
+    private StringRedisTemplate redisTemplate;
 
-  @Mock
-  private ConsoleRealtimeEventHub realtimeEventHub;
+    @Mock
+    private ConsoleRealtimeEventHub realtimeEventHub;
 
-  @Mock
-  private ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
+    @Mock
+    private ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
 
-  @Mock
-  private ConsoleRealtimeInstanceIdProvider instanceIdProvider;
+    @Mock
+    private ConsoleRealtimeInstanceIdProvider instanceIdProvider;
 
-  private final ConsoleRealtimeMetrics realtimeMetrics =
-      new ConsoleRealtimeMetrics(new SimpleMeterRegistry());
+    private final ConsoleRealtimeMetrics realtimeMetrics = new ConsoleRealtimeMetrics(new SimpleMeterRegistry());
 
-  private ConsoleRealtimeRedisPubSubConsumer consumer;
+    private ConsoleRealtimeRedisPubSubConsumer consumer;
 
-  @BeforeEach
-  void setUp() {
-    when(instanceIdProvider.instanceId()).thenReturn("console-a");
-    consumer = new ConsoleRealtimeRedisPubSubConsumer(
-        redisTemplate,
-        new BatchRedisNamespace(""),
-        realtimeEventHub,
-        summaryRealtimeStream,
-        instanceIdProvider,
-        realtimeMetrics);
-  }
+    @BeforeEach
+    void setUp() {
+        when(instanceIdProvider.instanceId()).thenReturn("console-a");
+        consumer = new ConsoleRealtimeRedisPubSubConsumer(
+                redisTemplate,
+                new BatchRedisNamespace(""),
+                realtimeEventHub,
+                summaryRealtimeStream,
+                instanceIdProvider,
+                realtimeMetrics);
+    }
 
-  @Test
-  @DisplayName("消息来源实例与自身相同时不向本地事件中心转发")
-  void shouldIgnoreMessagesPublishedBySameInstance() {
-    ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
-        "console-a",
-        "t1",
-        "workflow-definitions",
-        "workflow-definition-updated",
-        "cursor-1",
-        false,
-        JsonUtils.toJson("payload"),
-        Instant.parse("2026-04-05T10:00:00Z"));
+    @Test
+    @DisplayName("消息来源实例与自身相同时不向本地事件中心转发")
+    void shouldIgnoreMessagesPublishedBySameInstance() {
+        ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
+                "console-a",
+                "t1",
+                "workflow-definitions",
+                "workflow-definition-updated",
+                "cursor-1",
+                false,
+                JsonUtils.toJson("payload"),
+                Instant.parse("2026-04-05T10:00:00Z"));
 
-    consumer.onMessage(message(envelope), null);
+        consumer.onMessage(message(envelope), null);
 
-    verify(realtimeEventHub, never()).publish(any());
-  }
+        verify(realtimeEventHub, never()).publish(any());
+    }
 
-  @Test
-  @DisplayName("消息来源实例为其它实例时向本地事件中心转发")
-  void shouldForwardMessagesFromOtherInstances() {
-    ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
-        "console-b",
-        "t1",
-        "workflow-definitions",
-        "workflow-definition-updated",
-        "cursor-1",
-        false,
-        JsonUtils.toJson("payload"),
-        Instant.parse("2026-04-05T10:00:00Z"));
+    @Test
+    @DisplayName("消息来源实例为其它实例时向本地事件中心转发")
+    void shouldForwardMessagesFromOtherInstances() {
+        ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
+                "console-b",
+                "t1",
+                "workflow-definitions",
+                "workflow-definition-updated",
+                "cursor-1",
+                false,
+                JsonUtils.toJson("payload"),
+                Instant.parse("2026-04-05T10:00:00Z"));
 
-    consumer.onMessage(message(envelope), null);
+        consumer.onMessage(message(envelope), null);
 
-    verify(realtimeEventHub).publish(any());
-  }
+        verify(realtimeEventHub).publish(any());
+    }
 
-  @Test
-  @DisplayName("概览快照类消息直接用消息体发布快照, 不重新查询数据库")
-  void shouldUseSummarySnapshotFromPayloadWithoutReloadingDb() {
-    ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
-        "console-b",
-        "t1",
-        "ops-summary",
-        "ops-summary-updated",
-        "cursor-2",
-        true,
-        "",
-        Instant.parse("2026-04-05T10:00:01Z"));
+    @Test
+    @DisplayName("概览快照类消息直接用消息体发布快照, 不重新查询数据库")
+    void shouldUseSummarySnapshotFromPayloadWithoutReloadingDb() {
+        ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
+                "console-b",
+                "t1",
+                "ops-summary",
+                "ops-summary-updated",
+                "cursor-2",
+                true,
+                "",
+                Instant.parse("2026-04-05T10:00:01Z"));
 
-    consumer.onMessage(message(envelope), null);
+        consumer.onMessage(message(envelope), null);
 
-    verify(summaryRealtimeStream).publishSnapshot("t1");
-    verify(realtimeEventHub, never()).publish(any());
-  }
+        verify(summaryRealtimeStream).publishSnapshot("t1");
+        verify(realtimeEventHub, never()).publish(any());
+    }
 
-  private Message message(ConsoleRealtimeStreamEnvelope envelope) {
-    Message message = mock(Message.class);
-    when(message.getBody()).thenReturn(JsonUtils.toJson(envelope).getBytes(StandardCharsets.UTF_8));
-    when(message.getChannel())
-        .thenReturn(ConsoleRealtimeRedisPublisher.CHANNEL_KEY.getBytes(StandardCharsets.UTF_8));
-    return message;
-  }
+    private Message message(ConsoleRealtimeStreamEnvelope envelope) {
+        Message message = mock(Message.class);
+        when(message.getBody()).thenReturn(JsonUtils.toJson(envelope).getBytes(StandardCharsets.UTF_8));
+        when(message.getChannel())
+                .thenReturn(ConsoleRealtimeRedisPublisher.CHANNEL_KEY.getBytes(StandardCharsets.UTF_8));
+        return message;
+    }
 }

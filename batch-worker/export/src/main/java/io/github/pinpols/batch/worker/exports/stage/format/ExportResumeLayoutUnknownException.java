@@ -7,16 +7,16 @@ package io.github.pinpols.batch.worker.exports.stage.format;
  */
 public final class ExportResumeLayoutUnknownException extends RuntimeException {
 
-  private final String formatType;
+    private final String formatType;
 
-  public ExportResumeLayoutUnknownException(String formatType) {
-    super("export GENERATE resume cannot reconstruct " + formatType
-        + " column layout: first page is empty and neither template nor plugin declares columns;"
-        + " checkpoint and partial file kept");
-    this.formatType = formatType;
-  }
+    public ExportResumeLayoutUnknownException(String formatType) {
+        super("export GENERATE resume cannot reconstruct " + formatType
+                + " column layout: first page is empty and neither template nor plugin declares columns;"
+                + " checkpoint and partial file kept");
+        this.formatType = formatType;
+    }
 
-  public String formatType() {
-    return formatType;
-  }
+    public String formatType() {
+        return formatType;
+    }
 }

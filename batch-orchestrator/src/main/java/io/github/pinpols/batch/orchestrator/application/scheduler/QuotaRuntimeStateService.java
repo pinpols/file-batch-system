@@ -27,58 +27,53 @@ import java.time.Instant;
  */
 public interface QuotaRuntimeStateService {
 
-  record QuotaRuntimeSnapshot(
-      String quotaResetPolicy,
-      Integer burstLimit,
-      Integer peakBorrowedCount,
-      Integer remainingBurst,
-      Instant windowStartedAt,
-      Instant windowExpiresAt,
-      Instant lastResetAt) {
+    record QuotaRuntimeSnapshot(
+            String quotaResetPolicy,
+            Integer burstLimit,
+            Integer peakBorrowedCount,
+            Integer remainingBurst,
+            Instant windowStartedAt,
+            Instant windowExpiresAt,
+            Instant lastResetAt) {
 
-    /** 配额不使用运行时窗口或当前没有有效窗口时，返回完整可用的突发额度快照。 */
-    public static QuotaRuntimeSnapshot withoutWindow(String quotaResetPolicy, int burstLimit) {
-      int availableBurst = Math.max(0, burstLimit);
-      return new QuotaRuntimeSnapshot(
-          quotaResetPolicy, availableBurst, 0, availableBurst, null, null, null);
+        /** 配额不使用运行时窗口或当前没有有效窗口时，返回完整可用的突发额度快照。 */
+        public static QuotaRuntimeSnapshot withoutWindow(String quotaResetPolicy, int burstLimit) {
+            int availableBurst = Math.max(0, burstLimit);
+            return new QuotaRuntimeSnapshot(quotaResetPolicy, availableBurst, 0, availableBurst, null, null, null);
+        }
     }
-  }
 
-  record QuotaReservationOwner(String tenantId, String quotaScope, String ownerCode) {}
+    record QuotaReservationOwner(String tenantId, String quotaScope, String ownerCode) {}
 
-  record QuotaReservationPolicy(
-      String quotaResetPolicy, int baseCap, int burstLimit, int slidingWindowHours) {}
+    record QuotaReservationPolicy(String quotaResetPolicy, int baseCap, int burstLimit, int slidingWindowHours) {}
 
-  record QuotaReservationReason(String reasonCode, String reasonMessage) {}
+    record QuotaReservationReason(String reasonCode, String reasonMessage) {}
 
-  record QuotaReservationRequest(
-      QuotaReservationOwner owner,
-      QuotaReservationPolicy policy,
-      long currentActiveCount,
-      int requestedCount,
-      QuotaReservationReason reason) {}
+    record QuotaReservationRequest(
+            QuotaReservationOwner owner,
+            QuotaReservationPolicy policy,
+            long currentActiveCount,
+            int requestedCount,
+            QuotaReservationReason reason) {}
 
-  record QuotaDescribeRequest(
-      QuotaReservationOwner owner,
-      String quotaResetPolicy,
-      int burstLimit,
-      int slidingWindowHours) {}
+    record QuotaDescribeRequest(
+            QuotaReservationOwner owner, String quotaResetPolicy, int burstLimit, int slidingWindowHours) {}
 
-  /**
-   * 判断当前活跃数+请求数是否超过 baseCap+burst。需要 burst 时持久化峰值（{@code peakBorrowedCount}）。
-   *
-   * <p>返回 {@link ResourceCheck#allow()} 或 {@link ResourceCheck#waitForCapacity(String, String)}。
-   */
-  ResourceCheck evaluateAndReserve(QuotaReservationRequest request);
+    /**
+     * 判断当前活跃数+请求数是否超过 baseCap+burst。需要 burst 时持久化峰值（{@code peakBorrowedCount}）。
+     *
+     * <p>返回 {@link ResourceCheck#allow()} 或 {@link ResourceCheck#waitForCapacity(String, String)}。
+     */
+    ResourceCheck evaluateAndReserve(QuotaReservationRequest request);
 
-  /** Console / 监控读路径：返回当前窗口状态快照，不修改持久化数据。 */
-  QuotaRuntimeSnapshot describe(QuotaDescribeRequest request);
+    /** Console / 监控读路径：返回当前窗口状态快照，不修改持久化数据。 */
+    QuotaRuntimeSnapshot describe(QuotaDescribeRequest request);
 
-  /**
-   * 周期 reconcile 入口：清扫过期窗口的状态。
-   *
-   * <p>Redis 实现：no-op（TTL 自动回收）。<br>
-   * PG 实现：扫描 {@code window_expires_at <= now} 的行，重置峰值。
-   */
-  void reconcileExpiredStates(int slidingWindowHours);
+    /**
+     * 周期 reconcile 入口：清扫过期窗口的状态。
+     *
+     * <p>Redis 实现：no-op（TTL 自动回收）。<br>
+     * PG 实现：扫描 {@code window_expires_at <= now} 的行，重置峰值。
+     */
+    void reconcileExpiredStates(int slidingWindowHours);
 }

@@ -17,14 +17,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class DispatchObjectStoreCompensator extends AbstractObjectStoreRunCompensator {
 
-  public DispatchObjectStoreCompensator(
-      PlatformFileRecordRepository fileRecords,
-      ObjectProvider<BatchObjectStore> objectStoreProvider) {
-    super(fileRecords, objectStoreProvider);
-  }
+    public DispatchObjectStoreCompensator(
+            PlatformFileRecordRepository fileRecords, ObjectProvider<BatchObjectStore> objectStoreProvider) {
+        super(fileRecords, objectStoreProvider);
+    }
 
-  @Override
-  public String pipelineType() {
-    return DispatchWorkerType.DISPATCH;
-  }
+    @Override
+    public String pipelineType() {
+        return DispatchWorkerType.DISPATCH;
+    }
 }

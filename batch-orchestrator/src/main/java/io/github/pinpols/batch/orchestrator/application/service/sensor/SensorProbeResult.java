@@ -17,24 +17,26 @@ import java.util.Map;
  * </ul>
  */
 public record SensorProbeResult(
-    SensorProbeStatus status, Map<String, Object> output, String errorKey, List<String> errorArgs) {
+        SensorProbeStatus status, Map<String, Object> output, String errorKey, List<String> errorArgs) {
 
-  public SensorProbeResult {
-    // 错误参数最终持久化并可能经 Console 回显,统一净化所有策略及直接构造的结果。
-    if (status == SensorProbeStatus.ERROR && EmptyChecks.isNotNull(errorArgs)) {
-      errorArgs = errorArgs.stream().map(SwallowedExceptionLogger::safeMessage).toList();
+    public SensorProbeResult {
+        // 错误参数最终持久化并可能经 Console 回显,统一净化所有策略及直接构造的结果。
+        if (status == SensorProbeStatus.ERROR && EmptyChecks.isNotNull(errorArgs)) {
+            errorArgs = errorArgs.stream()
+                    .map(SwallowedExceptionLogger::safeMessage)
+                    .toList();
+        }
     }
-  }
 
-  public static SensorProbeResult matched(Map<String, Object> output) {
-    return new SensorProbeResult(SensorProbeStatus.MATCHED, output, null, List.of());
-  }
+    public static SensorProbeResult matched(Map<String, Object> output) {
+        return new SensorProbeResult(SensorProbeStatus.MATCHED, output, null, List.of());
+    }
 
-  public static SensorProbeResult notYet() {
-    return new SensorProbeResult(SensorProbeStatus.NOT_YET, Map.of(), null, List.of());
-  }
+    public static SensorProbeResult notYet() {
+        return new SensorProbeResult(SensorProbeStatus.NOT_YET, Map.of(), null, List.of());
+    }
 
-  public static SensorProbeResult error(String errorKey, List<String> errorArgs) {
-    return new SensorProbeResult(SensorProbeStatus.ERROR, Map.of(), errorKey, errorArgs);
-  }
+    public static SensorProbeResult error(String errorKey, List<String> errorArgs) {
+        return new SensorProbeResult(SensorProbeStatus.ERROR, Map.of(), errorKey, errorArgs);
+    }
 }

@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public record OrchestratorConfigMappers(
-    JobDefinitionMapper jobDefinition,
-    WorkflowDefinitionMapper workflowDefinition,
-    BusinessCalendarMapper businessCalendar,
-    BatchWindowMapper batchWindow,
-    TenantQuotaPolicyMapper tenantQuotaPolicy) {}
+        JobDefinitionMapper jobDefinition,
+        WorkflowDefinitionMapper workflowDefinition,
+        BusinessCalendarMapper businessCalendar,
+        BatchWindowMapper batchWindow,
+        TenantQuotaPolicyMapper tenantQuotaPolicy) {}

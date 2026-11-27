@@ -29,148 +29,130 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("进度完整快照的共享采样与连接资源回收")
 class ConsoleProgressSnapshotPublisherTest {
-  @Mock
-  private ConsoleRealtimeSubscriptionPort subscriptions;
+    @Mock
+    private ConsoleRealtimeSubscriptionPort subscriptions;
 
-  @Mock
-  private ConsoleRealtimeEventPort events;
+    @Mock
+    private ConsoleRealtimeEventPort events;
 
-  @Mock
-  private TaskScheduler scheduler;
+    @Mock
+    private TaskScheduler scheduler;
 
-  @Mock
-  private ScheduledFuture<?> future;
+    @Mock
+    private ScheduledFuture<?> future;
 
-  @Mock
-  private SseEmitter emitter;
+    @Mock
+    private SseEmitter emitter;
 
-  private ConsoleProgressSnapshotPublisher publisher;
+    private ConsoleProgressSnapshotPublisher publisher;
 
-  @BeforeEach
-  void setUp() {
-    publisher = new ConsoleProgressSnapshotPublisher(subscriptions, events, scheduler);
-  }
+    @BeforeEach
+    void setUp() {
+        publisher = new ConsoleProgressSnapshotPublisher(subscriptions, events, scheduler);
+    }
 
-  @Test
-  @DisplayName("同一租户和日期共享采样且只有最后连接结束才停止")
-  void shouldShareAndReleaseSampling_whenSubscriptionsClose() {
-    doReturn(future)
-        .when(scheduler)
-        .scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
-    when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
-    AtomicInteger count = new AtomicInteger();
-    publisher.subscribe("ta", "daily-2040", "daily-progress", 0, count::get, value -> value);
-    publisher.subscribe("ta", "daily-2040", "daily-progress", 0, count::get, value -> value);
-    var sample = ArgumentCaptor.forClass(Runnable.class);
-    verify(scheduler).scheduleWithFixedDelay(sample.capture(), any(Duration.class));
-    sample.getValue().run();
-    verify(events, times(2)).publishChanged("ta", "daily-2040", "daily-progress", 0);
-    count.incrementAndGet();
-    sample.getValue().run();
-    verify(events).publishChanged("ta", "daily-2040", "daily-progress", 1);
-    var close = ArgumentCaptor.forClass(Runnable.class);
-    verify(emitter, times(2)).onCompletion(close.capture());
-    close.getAllValues().get(0).run();
-    close.getAllValues().get(0).run();
-    verify(future, never()).cancel(false);
-    close.getAllValues().get(1).run();
-    verify(future).cancel(false);
-  }
+    @Test
+    @DisplayName("同一租户和日期共享采样且只有最后连接结束才停止")
+    void shouldShareAndReleaseSampling_whenSubscriptionsClose() {
+        doReturn(future).when(scheduler).scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
+        when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
+        AtomicInteger count = new AtomicInteger();
+        publisher.subscribe("ta", "daily-2040", "daily-progress", 0, count::get, value -> value);
+        publisher.subscribe("ta", "daily-2040", "daily-progress", 0, count::get, value -> value);
+        var sample = ArgumentCaptor.forClass(Runnable.class);
+        verify(scheduler).scheduleWithFixedDelay(sample.capture(), any(Duration.class));
+        sample.getValue().run();
+        verify(events, times(2)).publishChanged("ta", "daily-2040", "daily-progress", 0);
+        count.incrementAndGet();
+        sample.getValue().run();
+        verify(events).publishChanged("ta", "daily-2040", "daily-progress", 1);
+        var close = ArgumentCaptor.forClass(Runnable.class);
+        verify(emitter, times(2)).onCompletion(close.capture());
+        close.getAllValues().get(0).run();
+        close.getAllValues().get(0).run();
+        verify(future, never()).cancel(false);
+        close.getAllValues().get(1).run();
+        verify(future).cancel(false);
+    }
 
-  @Test
-  @DisplayName("订阅失败取消后台任务，不泄漏采样槽")
-  void shouldReleaseSampler_whenStreamFailsToOpen() {
-    doReturn(future)
-        .when(scheduler)
-        .scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
-    when(subscriptions.subscribe("ta", "daily-2040", null, null, null))
-        .thenThrow(new IllegalStateException("closed"));
-    assertThatThrownBy(() ->
-            publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value))
-        .isInstanceOf(IllegalStateException.class);
-    verify(future).cancel(false);
-  }
+    @Test
+    @DisplayName("订阅失败取消后台任务，不泄漏采样槽")
+    void shouldReleaseSampler_whenStreamFailsToOpen() {
+        doReturn(future).when(scheduler).scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
+        when(subscriptions.subscribe("ta", "daily-2040", null, null, null))
+                .thenThrow(new IllegalStateException("closed"));
+        assertThatThrownBy(() -> publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value))
+                .isInstanceOf(IllegalStateException.class);
+        verify(future).cancel(false);
+    }
 
-  @Test
-  @DisplayName("初始快照发布失败时关闭已建立的订阅并释放采样")
-  void shouldCloseSubscription_whenInitialPublishFails() {
-    doReturn(future)
-        .when(scheduler)
-        .scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
-    when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
-    doThrow(new IllegalStateException("publish failed"))
-        .when(events)
-        .publishChanged("ta", "daily-2040", "daily-progress", 0);
-    assertThatThrownBy(() ->
-            publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("publish failed");
-    verify(subscriptions).close(emitter);
-    verify(future).cancel(false);
-  }
+    @Test
+    @DisplayName("初始快照发布失败时关闭已建立的订阅并释放采样")
+    void shouldCloseSubscription_whenInitialPublishFails() {
+        doReturn(future).when(scheduler).scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
+        when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
+        doThrow(new IllegalStateException("publish failed"))
+                .when(events)
+                .publishChanged("ta", "daily-2040", "daily-progress", 0);
+        assertThatThrownBy(() -> publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("publish failed");
+        verify(subscriptions).close(emitter);
+        verify(future).cancel(false);
+    }
 
-  @Test
-  @DisplayName("初始发布失败后的清理异常作为 suppressed 保留，不覆盖原始失败")
-  void shouldSuppressCleanupFailure_whenInitialPublishFails() {
-    doReturn(future)
-        .when(scheduler)
-        .scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
-    when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
-    doThrow(new IllegalStateException("publish failed"))
-        .when(events)
-        .publishChanged("ta", "daily-2040", "daily-progress", 0);
-    doThrow(new IllegalStateException("cleanup failed")).when(subscriptions).close(emitter);
-    assertThatThrownBy(() ->
-            publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("publish failed")
-        .satisfies(error -> assertThat(error.getSuppressed()).hasSize(1));
-    verify(future).cancel(false);
-  }
+    @Test
+    @DisplayName("初始发布失败后的清理异常作为 suppressed 保留，不覆盖原始失败")
+    void shouldSuppressCleanupFailure_whenInitialPublishFails() {
+        doReturn(future).when(scheduler).scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
+        when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
+        doThrow(new IllegalStateException("publish failed"))
+                .when(events)
+                .publishChanged("ta", "daily-2040", "daily-progress", 0);
+        doThrow(new IllegalStateException("cleanup failed")).when(subscriptions).close(emitter);
+        assertThatThrownBy(() -> publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("publish failed")
+                .satisfies(error -> assertThat(error.getSuppressed()).hasSize(1));
+        verify(future).cancel(false);
+    }
 
-  @Test
-  @DisplayName("失败推送不提前推进水位，恢复后仍发布完整状态且不泄露原始异常")
-  void shouldRetryChangedSnapshot_whenPublisherFails() {
-    doReturn(future)
-        .when(scheduler)
-        .scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
-    when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
-    publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value);
-    var sample = ArgumentCaptor.forClass(Runnable.class);
-    verify(scheduler).scheduleWithFixedDelay(sample.capture(), any(Duration.class));
-    doThrow(new IllegalStateException("sensitive"))
-        .doNothing()
-        .when(events)
-        .publishChanged("ta", "daily-2040", "daily-progress", 1);
-    sample.getValue().run();
-    sample.getValue().run();
-    verify(events, times(2)).publishChanged("ta", "daily-2040", "daily-progress", 1);
-    verify(events)
-        .publishChanged(
-            "ta", "daily-2040", "daily-progress-error", Map.of("reason", "SNAPSHOT_UNAVAILABLE"));
-    publisher.stop();
-  }
+    @Test
+    @DisplayName("失败推送不提前推进水位，恢复后仍发布完整状态且不泄露原始异常")
+    void shouldRetryChangedSnapshot_whenPublisherFails() {
+        doReturn(future).when(scheduler).scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
+        when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
+        publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value);
+        var sample = ArgumentCaptor.forClass(Runnable.class);
+        verify(scheduler).scheduleWithFixedDelay(sample.capture(), any(Duration.class));
+        doThrow(new IllegalStateException("sensitive"))
+                .doNothing()
+                .when(events)
+                .publishChanged("ta", "daily-2040", "daily-progress", 1);
+        sample.getValue().run();
+        sample.getValue().run();
+        verify(events, times(2)).publishChanged("ta", "daily-2040", "daily-progress", 1);
+        verify(events)
+                .publishChanged("ta", "daily-2040", "daily-progress-error", Map.of("reason", "SNAPSHOT_UNAVAILABLE"));
+        publisher.stop();
+    }
 
-  @Test
-  @DisplayName("错误推送也失败时记录净化后的上下文且不向调用方抛出")
-  void shouldLogSanitizedContext_whenErrorPublisherAlsoFails() {
-    doReturn(future)
-        .when(scheduler)
-        .scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
-    when(subscriptions.subscribe("ta\nforged", "daily-2040\nforged", null, null, null))
-        .thenReturn(emitter);
-    publisher.subscribe(
-        "ta\nforged", "daily-2040\nforged", "daily-progress", 0, () -> 1, value -> value);
-    var sample = ArgumentCaptor.forClass(Runnable.class);
-    verify(scheduler).scheduleWithFixedDelay(sample.capture(), any(Duration.class));
-    doThrow(new IllegalStateException("sensitive"))
-        .when(events)
-        .publishChanged("ta\nforged", "daily-2040\nforged", "daily-progress", 1);
-    doThrow(new IllegalStateException("sensitive"))
-        .when(events)
-        .publishChanged(
-            eq("ta\nforged"), eq("daily-2040\nforged"), eq("daily-progress-error"), any());
-    assertThatCode(() -> sample.getValue().run()).doesNotThrowAnyException();
-    publisher.stop();
-  }
+    @Test
+    @DisplayName("错误推送也失败时记录净化后的上下文且不向调用方抛出")
+    void shouldLogSanitizedContext_whenErrorPublisherAlsoFails() {
+        doReturn(future).when(scheduler).scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
+        when(subscriptions.subscribe("ta\nforged", "daily-2040\nforged", null, null, null))
+                .thenReturn(emitter);
+        publisher.subscribe("ta\nforged", "daily-2040\nforged", "daily-progress", 0, () -> 1, value -> value);
+        var sample = ArgumentCaptor.forClass(Runnable.class);
+        verify(scheduler).scheduleWithFixedDelay(sample.capture(), any(Duration.class));
+        doThrow(new IllegalStateException("sensitive"))
+                .when(events)
+                .publishChanged("ta\nforged", "daily-2040\nforged", "daily-progress", 1);
+        doThrow(new IllegalStateException("sensitive"))
+                .when(events)
+                .publishChanged(eq("ta\nforged"), eq("daily-2040\nforged"), eq("daily-progress-error"), any());
+        assertThatCode(() -> sample.getValue().run()).doesNotThrowAnyException();
+        publisher.stop();
+    }
 }

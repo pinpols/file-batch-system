@@ -7,10 +7,10 @@ import lombok.Data;
 @Data
 public class ConfigApprovalActionRequest {
 
-  @NotBlank
-  @Size(max = 64)
-  private String tenantId;
+    @NotBlank
+    @Size(max = 64)
+    private String tenantId;
 
-  @Size(max = 512)
-  private String reason;
+    @Size(max = 512)
+    private String reason;
 }

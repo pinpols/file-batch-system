@@ -16,30 +16,30 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @EnableConfigurationProperties(KafkaNamespaceProperties.class)
 public class BatchKafkaNamespaceAutoConfiguration {
 
-  @Bean
-  public BatchKafkaTopicNamespace batchKafkaTopicNamespace(KafkaNamespaceProperties properties) {
-    return new BatchKafkaTopicNamespace(properties.getNamespace());
-  }
+    @Bean
+    public BatchKafkaTopicNamespace batchKafkaTopicNamespace(KafkaNamespaceProperties properties) {
+        return new BatchKafkaTopicNamespace(properties.getNamespace());
+    }
 
-  @Bean
-  public BatchRedisNamespace batchRedisNamespace(KafkaNamespaceProperties properties) {
-    return new BatchRedisNamespace(properties.getNamespace());
-  }
+    @Bean
+    public BatchRedisNamespace batchRedisNamespace(KafkaNamespaceProperties properties) {
+        return new BatchRedisNamespace(properties.getNamespace());
+    }
 
-  @Bean
-  public static BeanPostProcessor batchRedisNamespaceTemplatePostProcessor(
-      Environment environment) {
-    String namespaceValue =
-        Binder.get(environment).bind("batch.kafka.namespace", String.class).orElse("");
-    BatchRedisNamespace namespace = new BatchRedisNamespace(namespaceValue);
-    return new BeanPostProcessor() {
-      @Override
-      public Object postProcessAfterInitialization(Object bean, String beanName) {
-        if (bean instanceof StringRedisTemplate template && namespace.isNamespaced()) {
-          template.setKeySerializer(new BatchRedisNamespaceSerializer(namespace));
-        }
-        return bean;
-      }
-    };
-  }
+    @Bean
+    public static BeanPostProcessor batchRedisNamespaceTemplatePostProcessor(Environment environment) {
+        String namespaceValue = Binder.get(environment)
+                .bind("batch.kafka.namespace", String.class)
+                .orElse("");
+        BatchRedisNamespace namespace = new BatchRedisNamespace(namespaceValue);
+        return new BeanPostProcessor() {
+            @Override
+            public Object postProcessAfterInitialization(Object bean, String beanName) {
+                if (bean instanceof StringRedisTemplate template && namespace.isNamespaced()) {
+                    template.setKeySerializer(new BatchRedisNamespaceSerializer(namespace));
+                }
+                return bean;
+            }
+        };
+    }
 }

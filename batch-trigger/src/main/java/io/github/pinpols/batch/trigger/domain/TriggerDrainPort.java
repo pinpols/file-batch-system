@@ -4,13 +4,13 @@ import java.time.Instant;
 
 /** 排水用例所需的调度器操作，屏蔽具体调度器异常。 */
 public interface TriggerDrainPort {
-  boolean isDraining();
+    boolean isDraining();
 
-  void enable();
+    void enable();
 
-  void disable();
+    void disable();
 
-  Status status();
+    Status status();
 
-  record Status(boolean draining, Instant drainingSince, String reason, String schedulerStatus) {}
+    record Status(boolean draining, Instant drainingSince, String reason, String schedulerStatus) {}
 }

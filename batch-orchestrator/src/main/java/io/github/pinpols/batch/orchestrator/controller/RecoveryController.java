@@ -13,37 +13,36 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class RecoveryController {
 
-  private final ManualReplayApplicationService manualReplayApplicationService;
+    private final ManualReplayApplicationService manualReplayApplicationService;
 
-  /**
-   * 任务重放（按 job_task 粒度重排队）。
-   *
-   * <p>该操作会把任务/step 重置到可 dispatch 的状态，并写入 dispatch outbox。
-   */
-  @PostMapping("/tasks/{taskId}/replay")
-  public RecoveryResponse replayTask(
-      @PathVariable Long taskId, @RequestBody TaskReplayRequest request) {
-    String tenantId = request == null ? null : request.tenantId();
-    String operationNo = manualReplayApplicationService.replayTask(tenantId, taskId);
-    return new RecoveryResponse(operationNo);
-  }
+    /**
+     * 任务重放（按 job_task 粒度重排队）。
+     *
+     * <p>该操作会把任务/step 重置到可 dispatch 的状态，并写入 dispatch outbox。
+     */
+    @PostMapping("/tasks/{taskId}/replay")
+    public RecoveryResponse replayTask(@PathVariable Long taskId, @RequestBody TaskReplayRequest request) {
+        String tenantId = request == null ? null : request.tenantId();
+        String operationNo = manualReplayApplicationService.replayTask(tenantId, taskId);
+        return new RecoveryResponse(operationNo);
+    }
 
-  /**
-   * 分区重放（按 job_partition 粒度重排队）。
-   *
-   * <p>该操作会把 partition 及其任务重置到可 dispatch 的状态，并写入 dispatch outbox。
-   */
-  @PostMapping("/partitions/{partitionId}/replay")
-  public RecoveryResponse replayPartition(
-      @PathVariable Long partitionId, @RequestBody PartitionReplayRequest request) {
-    String tenantId = request == null ? null : request.tenantId();
-    String operationNo = manualReplayApplicationService.replayPartition(tenantId, partitionId);
-    return new RecoveryResponse(operationNo);
-  }
+    /**
+     * 分区重放（按 job_partition 粒度重排队）。
+     *
+     * <p>该操作会把 partition 及其任务重置到可 dispatch 的状态，并写入 dispatch outbox。
+     */
+    @PostMapping("/partitions/{partitionId}/replay")
+    public RecoveryResponse replayPartition(
+            @PathVariable Long partitionId, @RequestBody PartitionReplayRequest request) {
+        String tenantId = request == null ? null : request.tenantId();
+        String operationNo = manualReplayApplicationService.replayPartition(tenantId, partitionId);
+        return new RecoveryResponse(operationNo);
+    }
 
-  public record RecoveryResponse(String operationNo) {}
+    public record RecoveryResponse(String operationNo) {}
 
-  public record TaskReplayRequest(String tenantId) {}
+    public record TaskReplayRequest(String tenantId) {}
 
-  public record PartitionReplayRequest(String tenantId) {}
+    public record PartitionReplayRequest(String tenantId) {}
 }

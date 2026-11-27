@@ -49,70 +49,62 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  */
 @Configuration
 @EnableAutoConfiguration(
-    exclude = {
-      BatchObjectStoreAutoConfiguration.class,
-      S3AutoConfiguration.class,
-      HttpRequestMdcAutoConfiguration.class,
-      AnthropicChatAutoConfiguration.class,
-      OpenAiChatAutoConfiguration.class,
-      OpenAiDecisionAutoConfiguration.class,
-      OpenAiAudioSpeechAutoConfiguration.class,
-      OpenAiAudioTranscriptionAutoConfiguration.class,
-      OpenAiEmbeddingAutoConfiguration.class,
-      OpenAiImageAutoConfiguration.class,
-      OpenAiModerationAutoConfiguration.class,
-      SecurityAutoConfiguration.class,
-      UserDetailsServiceAutoConfiguration.class,
-      SecurityFilterAutoConfiguration.class,
-      ServletWebSecurityAutoConfiguration.class,
-      ManagementWebSecurityAutoConfiguration.class,
-    })
+        exclude = {
+            BatchObjectStoreAutoConfiguration.class,
+            S3AutoConfiguration.class,
+            HttpRequestMdcAutoConfiguration.class,
+            AnthropicChatAutoConfiguration.class,
+            OpenAiChatAutoConfiguration.class,
+            OpenAiDecisionAutoConfiguration.class,
+            OpenAiAudioSpeechAutoConfiguration.class,
+            OpenAiAudioTranscriptionAutoConfiguration.class,
+            OpenAiEmbeddingAutoConfiguration.class,
+            OpenAiImageAutoConfiguration.class,
+            OpenAiModerationAutoConfiguration.class,
+            SecurityAutoConfiguration.class,
+            UserDetailsServiceAutoConfiguration.class,
+            SecurityFilterAutoConfiguration.class,
+            ServletWebSecurityAutoConfiguration.class,
+            ManagementWebSecurityAutoConfiguration.class,
+        })
 @EnableKafka
 @Import({
-  BatchClockConfig.class,
-  E2ePlatformDataSourceConfiguration.class,
-  E2ePlatformMybatisConfiguration.class,
-  E2eShedLockConfiguration.class,
-  E2eKafkaProducerConfiguration.class
+    BatchClockConfig.class,
+    E2ePlatformDataSourceConfiguration.class,
+    E2ePlatformMybatisConfiguration.class,
+    E2eShedLockConfiguration.class,
+    E2eKafkaProducerConfiguration.class
 })
 @ComponentScan(
-    basePackages = {"io.github.pinpols.batch.common.spi.task", "io.github.pinpols.batch.trigger"},
-    excludeFilters = {
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = BatchTriggerApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = E2eTriggerApplication.class)
-    })
+        basePackages = {"io.github.pinpols.batch.common.spi.task", "io.github.pinpols.batch.trigger"},
+        excludeFilters = {
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchTriggerApplication.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eTriggerApplication.class)
+        })
 @ImportAutoConfiguration({
-  BatchJsonAutoConfiguration.class,
-  BatchObjectCryptoAutoConfiguration.class,
-  RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "io.github.pinpols.batch")
-@MapperScan(
-    basePackages = "io.github.pinpols.batch.common.mapper",
-    sqlSessionFactoryRef = "sqlSessionFactory")
-@MapperScan(
-    basePackages = "io.github.pinpols.batch.trigger.mapper",
-    sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "io.github.pinpols.batch.common.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "io.github.pinpols.batch.trigger.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
 public class E2eTriggerApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(E2eTriggerApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(E2eTriggerApplication.class, args);
+    }
 
-  // KafkaOutboxPublisher 需要 @Qualifier("applicationTaskExecutor") Executor;
-  // 此 slice 下 TaskExecutionAutoConfiguration 未触发,显式补一个最小线程池。
-  @Bean(name = "applicationTaskExecutor")
-  public Executor applicationTaskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(2);
-    executor.setMaxPoolSize(4);
-    executor.setThreadNamePrefix("e2e-app-task-");
-    executor.initialize();
-    return executor;
-  }
+    // KafkaOutboxPublisher 需要 @Qualifier("applicationTaskExecutor") Executor;
+    // 此 slice 下 TaskExecutionAutoConfiguration 未触发,显式补一个最小线程池。
+    @Bean(name = "applicationTaskExecutor")
+    public Executor applicationTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setThreadNamePrefix("e2e-app-task-");
+        executor.initialize();
+        return executor;
+    }
 }

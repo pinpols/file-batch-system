@@ -10,53 +10,52 @@ import org.junit.jupiter.api.Test;
 @DisplayName("trailer 控制记录解析单测:声明笔数与控制总额的提取及空值语义")
 class TrailerControlRecordTest {
 
-  @Test
-  @DisplayName("DELIMITED trailer:按 index 抽出声明记录数 + 控制总额")
-  void shouldParseDeclaredCountAndTotal_whenDelimitedTrailerGiven() {
-    Map<String, Object> tmpl =
-        Map.of("present", true, "delimiter", ",", "recordCountIndex", 1, "controlTotalIndex", 2);
-    TrailerControlRecord t = TrailerControlRecord.parse("T,1000,50000000.00", tmpl);
-    assertThat(t.declaredRecordCount()).isEqualTo(1000L);
-    assertThat(t.declaredControlTotal()).isEqualByComparingTo(new BigDecimal("50000000.00"));
-    assertThat(t.isPresent()).isTrue();
-  }
+    @Test
+    @DisplayName("DELIMITED trailer:按 index 抽出声明记录数 + 控制总额")
+    void shouldParseDeclaredCountAndTotal_whenDelimitedTrailerGiven() {
+        Map<String, Object> tmpl =
+                Map.of("present", true, "delimiter", ",", "recordCountIndex", 1, "controlTotalIndex", 2);
+        TrailerControlRecord t = TrailerControlRecord.parse("T,1000,50000000.00", tmpl);
+        assertThat(t.declaredRecordCount()).isEqualTo(1000L);
+        assertThat(t.declaredControlTotal()).isEqualByComparingTo(new BigDecimal("50000000.00"));
+        assertThat(t.isPresent()).isTrue();
+    }
 
-  @Test
-  @DisplayName("present=false 或空模板 → 空记录(不参与校验)")
-  void shouldReportAbsent_whenTemplateDisabledOrLineMissing() {
-    assertThat(TrailerControlRecord.parse("T,1,2", Map.of("present", false)).isPresent())
-        .isFalse();
-    assertThat(TrailerControlRecord.parse("T,1,2", Map.of()).isPresent()).isFalse();
-    assertThat(TrailerControlRecord.parse(null, Map.of("present", true)).isPresent())
-        .isFalse();
-  }
+    @Test
+    @DisplayName("present=false 或空模板 → 空记录(不参与校验)")
+    void shouldReportAbsent_whenTemplateDisabledOrLineMissing() {
+        assertThat(TrailerControlRecord.parse("T,1,2", Map.of("present", false)).isPresent())
+                .isFalse();
+        assertThat(TrailerControlRecord.parse("T,1,2", Map.of()).isPresent()).isFalse();
+        assertThat(TrailerControlRecord.parse(null, Map.of("present", true)).isPresent())
+                .isFalse();
+    }
 
-  @Test
-  @DisplayName("缺字段 / 非数字 → 对应值 null(不抛),交校验侧处置")
-  void shouldReturnNullFields_whenIndexOutOfRangeOrValueNotNumeric() {
-    Map<String, Object> tmpl =
-        Map.of("present", true, "recordCountIndex", 5, "controlTotalIndex", 1);
-    TrailerControlRecord t = TrailerControlRecord.parse("T,notanumber", tmpl);
-    assertThat(t.declaredRecordCount()).isNull(); // index 5 越界
-    assertThat(t.declaredControlTotal()).isNull(); // 非数字
-  }
+    @Test
+    @DisplayName("缺字段 / 非数字 → 对应值 null(不抛),交校验侧处置")
+    void shouldReturnNullFields_whenIndexOutOfRangeOrValueNotNumeric() {
+        Map<String, Object> tmpl = Map.of("present", true, "recordCountIndex", 5, "controlTotalIndex", 1);
+        TrailerControlRecord t = TrailerControlRecord.parse("T,notanumber", tmpl);
+        assertThat(t.declaredRecordCount()).isNull(); // index 5 越界
+        assertThat(t.declaredControlTotal()).isNull(); // 非数字
+    }
 
-  @Test
-  @DisplayName("自定义分隔符(|)")
-  void shouldParseDeclaredCount_whenCustomDelimiterConfigured() {
-    Map<String, Object> tmpl = Map.of("present", true, "delimiter", "|", "recordCountIndex", 0);
-    assertThat(TrailerControlRecord.parse("42|x", tmpl).declaredRecordCount()).isEqualTo(42L);
-  }
+    @Test
+    @DisplayName("自定义分隔符(|)")
+    void shouldParseDeclaredCount_whenCustomDelimiterConfigured() {
+        Map<String, Object> tmpl = Map.of("present", true, "delimiter", "|", "recordCountIndex", 0);
+        assertThat(TrailerControlRecord.parse("42|x", tmpl).declaredRecordCount())
+                .isEqualTo(42L);
+    }
 
-  @Test
-  @DisplayName("空字段不触发 trim 空指针")
-  void shouldReturnNullFields_whenDeclaredFieldsAreEmpty() {
-    Map<String, Object> tmpl =
-        Map.of("present", true, "recordCountIndex", 1, "controlTotalIndex", 2);
+    @Test
+    @DisplayName("空字段不触发 trim 空指针")
+    void shouldReturnNullFields_whenDeclaredFieldsAreEmpty() {
+        Map<String, Object> tmpl = Map.of("present", true, "recordCountIndex", 1, "controlTotalIndex", 2);
 
-    TrailerControlRecord result = TrailerControlRecord.parse("T,,", tmpl);
+        TrailerControlRecord result = TrailerControlRecord.parse("T,,", tmpl);
 
-    assertThat(result.declaredRecordCount()).isNull();
-    assertThat(result.declaredControlTotal()).isNull();
-  }
+        assertThat(result.declaredRecordCount()).isNull();
+        assertThat(result.declaredControlTotal()).isNull();
+    }
 }

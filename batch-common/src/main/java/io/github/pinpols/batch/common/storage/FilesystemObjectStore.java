@@ -49,395 +49,384 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class FilesystemObjectStore implements BatchObjectStore {
 
-  /** 未指定时的预签名有效期，与 batch.storage.filesystem.default-presign-ttl 默认值 5m 一致。 */
-  private static final Duration DEFAULT_PRESIGN_TTL = Duration.ofMinutes(5);
+    /** 未指定时的预签名有效期，与 batch.storage.filesystem.default-presign-ttl 默认值 5m 一致。 */
+    private static final Duration DEFAULT_PRESIGN_TTL = Duration.ofMinutes(5);
 
-  /**
-   * 未指定时 list 最多扫描的目录项数，
-   * 与 batch.storage.filesystem.max-list-scan-entries 默认值一致。
-   */
-  private static final long DEFAULT_MAX_LIST_SCAN_ENTRIES = 200_000L;
+    /**
+     * 未指定时 list 最多扫描的目录项数，
+     * 与 batch.storage.filesystem.max-list-scan-entries 默认值一致。
+     */
+    private static final long DEFAULT_MAX_LIST_SCAN_ENTRIES = 200_000L;
 
-  /** 临时文件名后缀前缀；list 时跳过这些与 . 开头的隐藏文件（§4③）。 */
-  static final String TEMP_SUFFIX_MARKER = ".tmp.";
+    /** 临时文件名后缀前缀；list 时跳过这些与 . 开头的隐藏文件（§4③）。 */
+    static final String TEMP_SUFFIX_MARKER = ".tmp.";
 
-  private final Path root;
-  private final String downloadBaseUrl;
-  private final String presignSecret;
-  private final Duration defaultPresignTtl;
-  private final long maxListScanEntries;
-  private final AtomicFileMover atomicFileMover;
+    private final Path root;
+    private final String downloadBaseUrl;
+    private final String presignSecret;
+    private final Duration defaultPresignTtl;
+    private final long maxListScanEntries;
+    private final AtomicFileMover atomicFileMover;
 
-  public FilesystemObjectStore(String root, String downloadBaseUrl, String presignSecret) {
-    this(root, downloadBaseUrl, presignSecret, DEFAULT_PRESIGN_TTL, DEFAULT_MAX_LIST_SCAN_ENTRIES);
-  }
-
-  public FilesystemObjectStore(
-      String root, String downloadBaseUrl, String presignSecret, long maxListScanEntries) {
-    this(root, downloadBaseUrl, presignSecret, DEFAULT_PRESIGN_TTL, maxListScanEntries);
-  }
-
-  public FilesystemObjectStore(
-      String root,
-      String downloadBaseUrl,
-      String presignSecret,
-      Duration defaultPresignTtl,
-      long maxListScanEntries) {
-    this(root, downloadBaseUrl, presignSecret, defaultPresignTtl, maxListScanEntries, Files::move);
-  }
-
-  FilesystemObjectStore(
-      String root,
-      String downloadBaseUrl,
-      String presignSecret,
-      Duration defaultPresignTtl,
-      long maxListScanEntries,
-      AtomicFileMover atomicFileMover) {
-    if (root == null || root.isBlank()) {
-      throw new IllegalArgumentException("filesystem storage root must not be blank");
+    public FilesystemObjectStore(String root, String downloadBaseUrl, String presignSecret) {
+        this(root, downloadBaseUrl, presignSecret, DEFAULT_PRESIGN_TTL, DEFAULT_MAX_LIST_SCAN_ENTRIES);
     }
-    this.root = Paths.get(root).toAbsolutePath().normalize();
-    this.downloadBaseUrl = downloadBaseUrl;
-    this.presignSecret = presignSecret;
-    this.defaultPresignTtl =
-        defaultPresignTtl == null || defaultPresignTtl.isNegative() || defaultPresignTtl.isZero()
-            ? Duration.ofMinutes(5)
-            : defaultPresignTtl;
-    this.maxListScanEntries = maxListScanEntries <= 0 ? Long.MAX_VALUE : maxListScanEntries;
-    this.atomicFileMover = atomicFileMover;
-    try {
-      Files.createDirectories(this.root);
-    } catch (IOException ex) {
-      throw new ObjectStoreException("failed to create filesystem storage root: " + this.root, ex);
-    }
-  }
 
-  @Override
-  public void put(String bucket, String key, InputStream in, long size, String contentType) {
-    Path target = resolveKey(bucket, key);
-    Path temp = null;
-    try {
-      OwnerOnlyFiles.createDirectories(target.getParent());
-      temp = target.resolveSibling(target.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
-      try (FileChannel ch = openOwnerOnlyTempFile(temp)) {
-        OwnerOnlyFiles.protectExisting(temp, false);
-        ExactSizeInputStream exact =
-            ExactSizeInputStream.exact(in, "filesystem", bucket, key, size);
-        exact.transferTo(Channels.newOutputStream(ch));
-        exact.verifyFullyRead();
-        // 强制 metadata + data 落盘，避免 rename 后崩溃丢数据
-        ch.force(true);
-      }
-      try {
-        atomicFileMover.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
-      } catch (AtomicMoveNotSupportedException atomicEx) {
-        throw new ObjectStoreException(
-            "filesystem store requires atomic move to publish object safely", atomicEx);
-      } catch (IOException moveEx) {
-        // best-effort 清理临时文件
-        Files.deleteIfExists(temp);
-        throw moveEx;
-      }
-    } catch (ObjectStoreException ex) {
-      cleanupTemp(temp);
-      throw ex;
-    } catch (IOException | UncheckedIOException ex) {
-      cleanupTemp(temp);
-      throw mapException("put", bucket, key, ex);
+    public FilesystemObjectStore(String root, String downloadBaseUrl, String presignSecret, long maxListScanEntries) {
+        this(root, downloadBaseUrl, presignSecret, DEFAULT_PRESIGN_TTL, maxListScanEntries);
     }
-  }
 
-  @Override
-  public void copy(String bucket, String srcKey, String dstKey) {
-    Path src = resolveKey(bucket, srcKey);
-    Path dst = resolveKey(bucket, dstKey);
-    Path temp = null;
-    try {
-      if (!Files.exists(src)) {
-        throw new NoSuchFileException(src.toString());
-      }
-      OwnerOnlyFiles.createDirectories(dst.getParent());
-      temp = dst.resolveSibling(dst.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
-      try (InputStream in = Files.newInputStream(src);
-          FileChannel ch = openOwnerOnlyTempFile(temp)) {
-        OwnerOnlyFiles.protectExisting(temp, false);
-        in.transferTo(Channels.newOutputStream(ch));
-        // 与 put 路径保持同一持久性语义：发布前先把临时文件内容刷盘。
-        ch.force(true);
-      }
-      Files.setLastModifiedTime(temp, Files.getLastModifiedTime(src));
-      try {
-        atomicFileMover.move(temp, dst, StandardCopyOption.ATOMIC_MOVE);
-      } catch (AtomicMoveNotSupportedException atomicEx) {
-        cleanupTemp(temp);
-        throw new ObjectStoreException(
-            "filesystem store requires atomic move to publish copied object safely", atomicEx);
-      }
-    } catch (IOException | UncheckedIOException ex) {
-      // 任何失败(copy 或 move 阶段)都清理临时文件,避免残留 .tmp 文件泄漏。
-      cleanupTemp(temp);
-      throw mapException("copy", bucket, srcKey, ex);
+    public FilesystemObjectStore(
+            String root,
+            String downloadBaseUrl,
+            String presignSecret,
+            Duration defaultPresignTtl,
+            long maxListScanEntries) {
+        this(root, downloadBaseUrl, presignSecret, defaultPresignTtl, maxListScanEntries, Files::move);
     }
-  }
 
-  private static FileChannel openOwnerOnlyTempFile(Path temp) throws IOException {
-    Set<StandardOpenOption> creationOptions =
-        Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-    FileAttribute<?>[] ownerOnlyAttributes = OwnerOnlyFiles.attributes(temp, false);
-    return FileChannel.open(temp, creationOptions, ownerOnlyAttributes);
-  }
-
-  @FunctionalInterface
-  interface AtomicFileMover {
-    Path move(Path source, Path target, CopyOption... options) throws IOException;
-  }
-
-  @Override
-  public void delete(String bucket, String key) {
-    Path target = resolveKey(bucket, key);
-    try {
-      Files.deleteIfExists(target);
-    } catch (IOException ex) {
-      throw mapException("delete", bucket, key, ex);
-    }
-  }
-
-  @Override
-  public InputStream get(String bucket, String key) {
-    Path target = resolveKey(bucket, key);
-    try {
-      return Files.newInputStream(target, StandardOpenOption.READ);
-    } catch (IOException ex) {
-      throw mapException("get", bucket, key, ex);
-    }
-  }
-
-  @Override
-  public InputStream getFrom(String bucket, String key, long offset) {
-    Path target = resolveKey(bucket, key);
-    try {
-      FileChannel ch = FileChannel.open(target, StandardOpenOption.READ);
-      try {
-        ch.position(offset);
-      } catch (IOException positionEx) {
-        ch.close();
-        throw positionEx;
-      }
-      // Channels.newInputStream 的 close 会级联 close 底层 channel（JDK 标准实现）。
-      return Channels.newInputStream(ch);
-    } catch (IOException ex) {
-      throw mapException("getFrom", bucket, key, ex);
-    }
-  }
-
-  @Override
-  public long statSize(String bucket, String key) {
-    Path target = resolveKey(bucket, key);
-    try {
-      return Files.size(target);
-    } catch (IOException ex) {
-      throw mapException("statSize", bucket, key, ex);
-    }
-  }
-
-  @Override
-  public boolean exists(String bucket, String key) {
-    Path target = resolveKey(bucket, key);
-    return Files.isRegularFile(target);
-  }
-
-  @Override
-  public ObjectListing list(String bucket, String prefix, String afterMarker, int maxKeys) {
-    if (maxKeys <= 0) {
-      return new ObjectListing(List.of(), null);
-    }
-    Path bucketRoot = resolveBucketRoot(bucket);
-    if (!Files.isDirectory(bucketRoot)) {
-      return new ObjectListing(List.of(), null);
-    }
-    String safePrefix = prefix == null ? "" : prefix;
-    if (safePrefix.contains("..") || safePrefix.startsWith("/")) {
-      throw new ObjectStoreException(
-          "filesystem object list prefix contains illegal traversal sequence: " + safePrefix);
-    }
-    Path scanRoot = resolvePrefixScanRoot(bucketRoot, safePrefix);
-    if (!Files.isDirectory(scanRoot)) {
-      return new ObjectListing(List.of(), null);
-    }
-    PriorityQueue<ObjectSummary> smallestKeys =
-        new PriorityQueue<>(Comparator.comparing(ObjectSummary::key).reversed());
-    try (Stream<Path> walk = Files.walk(scanRoot)) {
-      Iterator<Path> iterator = walk.iterator();
-      long scanned = 0L;
-      while (iterator.hasNext()) {
-        Path p = iterator.next();
-        scanned++;
-        if (scanned > maxListScanEntries) {
-          throw new ObjectStoreException(
-              "filesystem object list scan entries exceeded limit: bucket="
-                  + bucket
-                  + ", prefix="
-                  + safePrefix
-                  + ", maxListScanEntries="
-                  + maxListScanEntries);
+    FilesystemObjectStore(
+            String root,
+            String downloadBaseUrl,
+            String presignSecret,
+            Duration defaultPresignTtl,
+            long maxListScanEntries,
+            AtomicFileMover atomicFileMover) {
+        if (root == null || root.isBlank()) {
+            throw new IllegalArgumentException("filesystem storage root must not be blank");
         }
-        if (!Files.isRegularFile(p) || isHiddenOrTemp(p)) {
-          continue;
+        this.root = Paths.get(root).toAbsolutePath().normalize();
+        this.downloadBaseUrl = downloadBaseUrl;
+        this.presignSecret = presignSecret;
+        this.defaultPresignTtl =
+                defaultPresignTtl == null || defaultPresignTtl.isNegative() || defaultPresignTtl.isZero()
+                        ? Duration.ofMinutes(5)
+                        : defaultPresignTtl;
+        this.maxListScanEntries = maxListScanEntries <= 0 ? Long.MAX_VALUE : maxListScanEntries;
+        this.atomicFileMover = atomicFileMover;
+        try {
+            Files.createDirectories(this.root);
+        } catch (IOException ex) {
+            throw new ObjectStoreException("failed to create filesystem storage root: " + this.root, ex);
         }
-        String relKey = relativeKey(bucketRoot, p);
-        if (!relKey.startsWith(safePrefix)) {
-          continue;
+    }
+
+    @Override
+    public void put(String bucket, String key, InputStream in, long size, String contentType) {
+        Path target = resolveKey(bucket, key);
+        Path temp = null;
+        try {
+            OwnerOnlyFiles.createDirectories(target.getParent());
+            temp = target.resolveSibling(target.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
+            try (FileChannel ch = openOwnerOnlyTempFile(temp)) {
+                OwnerOnlyFiles.protectExisting(temp, false);
+                ExactSizeInputStream exact = ExactSizeInputStream.exact(in, "filesystem", bucket, key, size);
+                exact.transferTo(Channels.newOutputStream(ch));
+                exact.verifyFullyRead();
+                // 强制 metadata + data 落盘，避免 rename 后崩溃丢数据
+                ch.force(true);
+            }
+            try {
+                atomicFileMover.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException atomicEx) {
+                throw new ObjectStoreException(
+                        "filesystem store requires atomic move to publish object safely", atomicEx);
+            } catch (IOException moveEx) {
+                // best-effort 清理临时文件
+                Files.deleteIfExists(temp);
+                throw moveEx;
+            }
+        } catch (ObjectStoreException ex) {
+            cleanupTemp(temp);
+            throw ex;
+        } catch (IOException | UncheckedIOException ex) {
+            cleanupTemp(temp);
+            throw mapException("put", bucket, key, ex);
         }
-        if (afterMarker != null && relKey.compareTo(afterMarker) <= 0) {
-          continue;
+    }
+
+    @Override
+    public void copy(String bucket, String srcKey, String dstKey) {
+        Path src = resolveKey(bucket, srcKey);
+        Path dst = resolveKey(bucket, dstKey);
+        Path temp = null;
+        try {
+            if (!Files.exists(src)) {
+                throw new NoSuchFileException(src.toString());
+            }
+            OwnerOnlyFiles.createDirectories(dst.getParent());
+            temp = dst.resolveSibling(dst.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
+            try (InputStream in = Files.newInputStream(src);
+                    FileChannel ch = openOwnerOnlyTempFile(temp)) {
+                OwnerOnlyFiles.protectExisting(temp, false);
+                in.transferTo(Channels.newOutputStream(ch));
+                // 与 put 路径保持同一持久性语义：发布前先把临时文件内容刷盘。
+                ch.force(true);
+            }
+            Files.setLastModifiedTime(temp, Files.getLastModifiedTime(src));
+            try {
+                atomicFileMover.move(temp, dst, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException atomicEx) {
+                cleanupTemp(temp);
+                throw new ObjectStoreException(
+                        "filesystem store requires atomic move to publish copied object safely", atomicEx);
+            }
+        } catch (IOException | UncheckedIOException ex) {
+            // 任何失败(copy 或 move 阶段)都清理临时文件,避免残留 .tmp 文件泄漏。
+            cleanupTemp(temp);
+            throw mapException("copy", bucket, srcKey, ex);
         }
-        long size = Files.size(p);
-        FileTime mtime = Files.getLastModifiedTime(p);
-        Instant lastModified = mtime.toInstant();
-        String etag = syntheticEtag(size, lastModified);
-        smallestKeys.add(new ObjectSummary(relKey, size, lastModified, etag));
-        if (smallestKeys.size() > maxKeys + 1) {
-          smallestKeys.poll();
+    }
+
+    private static FileChannel openOwnerOnlyTempFile(Path temp) throws IOException {
+        Set<StandardOpenOption> creationOptions = Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        FileAttribute<?>[] ownerOnlyAttributes = OwnerOnlyFiles.attributes(temp, false);
+        return FileChannel.open(temp, creationOptions, ownerOnlyAttributes);
+    }
+
+    @FunctionalInterface
+    interface AtomicFileMover {
+        Path move(Path source, Path target, CopyOption... options) throws IOException;
+    }
+
+    @Override
+    public void delete(String bucket, String key) {
+        Path target = resolveKey(bucket, key);
+        try {
+            Files.deleteIfExists(target);
+        } catch (IOException ex) {
+            throw mapException("delete", bucket, key, ex);
         }
-      }
-    } catch (IOException | UncheckedIOException ex) {
-      throw mapException("list", bucket, safePrefix, ex);
     }
-    List<ObjectSummary> sorted = new ArrayList<>(smallestKeys);
-    sorted.sort(Comparator.comparing(ObjectSummary::key));
-    boolean hasMore = sorted.size() > maxKeys;
-    List<ObjectSummary> page = hasMore ? new ArrayList<>(sorted.subList(0, maxKeys)) : sorted;
-    String nextMarker = hasMore && !page.isEmpty() ? page.get(page.size() - 1).key() : null;
-    return new ObjectListing(List.copyOf(page), nextMarker);
-  }
 
-  @Override
-  public String presign(String bucket, String key, Duration ttl) {
-    // 校验 key 合法性 + 在 root 内（即便不真读文件也应防止生成穿越 URL）
-    resolveKey(bucket, key);
-    if (downloadBaseUrl == null || downloadBaseUrl.isBlank()) {
-      throw new ObjectStoreException(
-          "filesystem presign requires batch.storage.filesystem.download-base-url");
+    @Override
+    public InputStream get(String bucket, String key) {
+        Path target = resolveKey(bucket, key);
+        try {
+            return Files.newInputStream(target, StandardOpenOption.READ);
+        } catch (IOException ex) {
+            throw mapException("get", bucket, key, ex);
+        }
     }
-    if (presignSecret == null || presignSecret.isBlank()) {
-      throw new ObjectStoreException("filesystem presign requires non-blank secret (set"
-          + " batch.storage.filesystem.presign-secret or batch.security.internal-secret)");
-    }
-    Duration effectiveTtl = ttl == null ? defaultPresignTtl : ttl;
-    if (effectiveTtl.isNegative() || effectiveTtl.isZero()) {
-      throw new ObjectStoreException("filesystem presign ttl must be positive");
-    }
-    Instant now = Instant.now();
-    Instant expiresAt = now.plus(effectiveTtl);
-    String sig = FilesystemPresignTokens.sign(bucket, key, expiresAt, presignSecret);
-    return FilesystemPresignTokens.buildUrl(
-        downloadBaseUrl, bucket, key, expiresAt.getEpochSecond(), sig);
-  }
 
-  /** 解析 key 对应的 Path 并做 traversal 校验。 */
-  Path resolveKey(String bucket, String key) {
-    if (key == null || key.isBlank()) {
-      throw new ObjectStoreException("filesystem object key must not be blank");
+    @Override
+    public InputStream getFrom(String bucket, String key, long offset) {
+        Path target = resolveKey(bucket, key);
+        try {
+            FileChannel ch = FileChannel.open(target, StandardOpenOption.READ);
+            try {
+                ch.position(offset);
+            } catch (IOException positionEx) {
+                ch.close();
+                throw positionEx;
+            }
+            // Channels.newInputStream 的 close 会级联 close 底层 channel（JDK 标准实现）。
+            return Channels.newInputStream(ch);
+        } catch (IOException ex) {
+            throw mapException("getFrom", bucket, key, ex);
+        }
     }
-    if (key.contains("..") || key.startsWith("/")) {
-      throw new ObjectStoreException(
-          "filesystem object key contains illegal traversal sequence: " + key);
-    }
-    Path bucketRoot = resolveBucketRoot(bucket);
-    Path resolved = bucketRoot.resolve(key).normalize();
-    if (!resolved.startsWith(bucketRoot)) {
-      throw new ObjectStoreException(
-          "filesystem object key resolved outside bucket root: bucket=" + bucket + ", key=" + key);
-    }
-    rejectSymlinkPath(bucketRoot, resolved);
-    return resolved;
-  }
 
-  /** 拒绝 bucket/key 路径中的符号链接，避免合法化路径绕过 root 边界。 */
-  private void rejectSymlinkPath(Path bucketRoot, Path resolved) {
-    Path current = bucketRoot;
-    for (Path part : bucketRoot.relativize(resolved)) {
-      current = current.resolve(part);
-      if (Files.isSymbolicLink(current)) {
-        throw new ObjectStoreException(
-            "filesystem object path must not contain symbolic link: " + current);
-      }
+    @Override
+    public long statSize(String bucket, String key) {
+        Path target = resolveKey(bucket, key);
+        try {
+            return Files.size(target);
+        } catch (IOException ex) {
+            throw mapException("statSize", bucket, key, ex);
+        }
     }
-  }
 
-  private Path resolveBucketRoot(String bucket) {
-    if (bucket == null || bucket.isBlank()) {
-      throw new ObjectStoreException("filesystem bucket must not be blank");
+    @Override
+    public boolean exists(String bucket, String key) {
+        Path target = resolveKey(bucket, key);
+        return Files.isRegularFile(target);
     }
-    boolean bucketContainsPathTraversal =
-        bucket.contains("..") || bucket.contains("/") || bucket.contains("\\");
-    if (bucketContainsPathTraversal) {
-      throw new ObjectStoreException("filesystem bucket name illegal: " + bucket);
-    }
-    Path bucketRoot = root.resolve(bucket).normalize();
-    if (!bucketRoot.startsWith(root)) {
-      throw new ObjectStoreException("filesystem bucket escapes root: " + bucket);
-    }
-    return bucketRoot;
-  }
 
-  private String relativeKey(Path bucketRoot, Path path) {
-    Path relativePath = bucketRoot.relativize(path);
-    String relativeKey = relativePath.toString();
-    return relativeKey.replace('\\', '/');
-  }
+    @Override
+    public ObjectListing list(String bucket, String prefix, String afterMarker, int maxKeys) {
+        if (maxKeys <= 0) {
+            return new ObjectListing(List.of(), null);
+        }
+        Path bucketRoot = resolveBucketRoot(bucket);
+        if (!Files.isDirectory(bucketRoot)) {
+            return new ObjectListing(List.of(), null);
+        }
+        String safePrefix = prefix == null ? "" : prefix;
+        if (safePrefix.contains("..") || safePrefix.startsWith("/")) {
+            throw new ObjectStoreException(
+                    "filesystem object list prefix contains illegal traversal sequence: " + safePrefix);
+        }
+        Path scanRoot = resolvePrefixScanRoot(bucketRoot, safePrefix);
+        if (!Files.isDirectory(scanRoot)) {
+            return new ObjectListing(List.of(), null);
+        }
+        PriorityQueue<ObjectSummary> smallestKeys =
+                new PriorityQueue<>(Comparator.comparing(ObjectSummary::key).reversed());
+        try (Stream<Path> walk = Files.walk(scanRoot)) {
+            Iterator<Path> iterator = walk.iterator();
+            long scanned = 0L;
+            while (iterator.hasNext()) {
+                Path p = iterator.next();
+                scanned++;
+                if (scanned > maxListScanEntries) {
+                    throw new ObjectStoreException("filesystem object list scan entries exceeded limit: bucket="
+                            + bucket
+                            + ", prefix="
+                            + safePrefix
+                            + ", maxListScanEntries="
+                            + maxListScanEntries);
+                }
+                if (!Files.isRegularFile(p) || isHiddenOrTemp(p)) {
+                    continue;
+                }
+                String relKey = relativeKey(bucketRoot, p);
+                if (!relKey.startsWith(safePrefix)) {
+                    continue;
+                }
+                if (afterMarker != null && relKey.compareTo(afterMarker) <= 0) {
+                    continue;
+                }
+                long size = Files.size(p);
+                FileTime mtime = Files.getLastModifiedTime(p);
+                Instant lastModified = mtime.toInstant();
+                String etag = syntheticEtag(size, lastModified);
+                smallestKeys.add(new ObjectSummary(relKey, size, lastModified, etag));
+                if (smallestKeys.size() > maxKeys + 1) {
+                    smallestKeys.poll();
+                }
+            }
+        } catch (IOException | UncheckedIOException ex) {
+            throw mapException("list", bucket, safePrefix, ex);
+        }
+        List<ObjectSummary> sorted = new ArrayList<>(smallestKeys);
+        sorted.sort(Comparator.comparing(ObjectSummary::key));
+        boolean hasMore = sorted.size() > maxKeys;
+        List<ObjectSummary> page = hasMore ? new ArrayList<>(sorted.subList(0, maxKeys)) : sorted;
+        String nextMarker =
+                hasMore && !page.isEmpty() ? page.get(page.size() - 1).key() : null;
+        return new ObjectListing(List.copyOf(page), nextMarker);
+    }
 
-  private Path resolvePrefixScanRoot(Path bucketRoot, String safePrefix) {
-    int slash = safePrefix.lastIndexOf('/');
-    if (slash < 0) {
-      return bucketRoot;
+    @Override
+    public String presign(String bucket, String key, Duration ttl) {
+        // 校验 key 合法性 + 在 root 内（即便不真读文件也应防止生成穿越 URL）
+        resolveKey(bucket, key);
+        if (downloadBaseUrl == null || downloadBaseUrl.isBlank()) {
+            throw new ObjectStoreException("filesystem presign requires batch.storage.filesystem.download-base-url");
+        }
+        if (presignSecret == null || presignSecret.isBlank()) {
+            throw new ObjectStoreException("filesystem presign requires non-blank secret (set"
+                    + " batch.storage.filesystem.presign-secret or batch.security.internal-secret)");
+        }
+        Duration effectiveTtl = ttl == null ? defaultPresignTtl : ttl;
+        if (effectiveTtl.isNegative() || effectiveTtl.isZero()) {
+            throw new ObjectStoreException("filesystem presign ttl must be positive");
+        }
+        Instant now = Instant.now();
+        Instant expiresAt = now.plus(effectiveTtl);
+        String sig = FilesystemPresignTokens.sign(bucket, key, expiresAt, presignSecret);
+        return FilesystemPresignTokens.buildUrl(downloadBaseUrl, bucket, key, expiresAt.getEpochSecond(), sig);
     }
-    String directoryPrefix = safePrefix.substring(0, slash);
-    if (directoryPrefix.isBlank()) {
-      return bucketRoot;
-    }
-    Path resolved = bucketRoot.resolve(directoryPrefix).normalize();
-    if (!resolved.startsWith(bucketRoot)) {
-      throw new ObjectStoreException(
-          "filesystem object list prefix resolved outside bucket root: " + safePrefix);
-    }
-    return resolved;
-  }
 
-  private boolean isHiddenOrTemp(Path path) {
-    String name = path.getFileName().toString();
-    if (name.startsWith(".")) {
-      return true;
+    /** 解析 key 对应的 Path 并做 traversal 校验。 */
+    Path resolveKey(String bucket, String key) {
+        if (key == null || key.isBlank()) {
+            throw new ObjectStoreException("filesystem object key must not be blank");
+        }
+        if (key.contains("..") || key.startsWith("/")) {
+            throw new ObjectStoreException("filesystem object key contains illegal traversal sequence: " + key);
+        }
+        Path bucketRoot = resolveBucketRoot(bucket);
+        Path resolved = bucketRoot.resolve(key).normalize();
+        if (!resolved.startsWith(bucketRoot)) {
+            throw new ObjectStoreException(
+                    "filesystem object key resolved outside bucket root: bucket=" + bucket + ", key=" + key);
+        }
+        rejectSymlinkPath(bucketRoot, resolved);
+        return resolved;
     }
-    return name.contains(TEMP_SUFFIX_MARKER);
-  }
 
-  private String syntheticEtag(long size, Instant mtime) {
-    return size + "-" + mtime.toEpochMilli();
-  }
+    /** 拒绝 bucket/key 路径中的符号链接，避免合法化路径绕过 root 边界。 */
+    private void rejectSymlinkPath(Path bucketRoot, Path resolved) {
+        Path current = bucketRoot;
+        for (Path part : bucketRoot.relativize(resolved)) {
+            current = current.resolve(part);
+            if (Files.isSymbolicLink(current)) {
+                throw new ObjectStoreException("filesystem object path must not contain symbolic link: " + current);
+            }
+        }
+    }
 
-  private void cleanupTemp(Path temp) {
-    if (temp == null) {
-      return;
+    private Path resolveBucketRoot(String bucket) {
+        if (bucket == null || bucket.isBlank()) {
+            throw new ObjectStoreException("filesystem bucket must not be blank");
+        }
+        boolean bucketContainsPathTraversal = bucket.contains("..") || bucket.contains("/") || bucket.contains("\\");
+        if (bucketContainsPathTraversal) {
+            throw new ObjectStoreException("filesystem bucket name illegal: " + bucket);
+        }
+        Path bucketRoot = root.resolve(bucket).normalize();
+        if (!bucketRoot.startsWith(root)) {
+            throw new ObjectStoreException("filesystem bucket escapes root: " + bucket);
+        }
+        return bucketRoot;
     }
-    try {
-      Files.deleteIfExists(temp);
-    } catch (IOException ignored) {
-      log.warn("filesystem object store failed to cleanup temp file: {}", temp, ignored);
-    }
-  }
 
-  private ObjectStoreException mapException(
-      String operation, String bucket, String key, Throwable ex) {
-    Throwable cause = ex instanceof UncheckedIOException u ? u.getCause() : ex;
-    String message =
-        "filesystem object store %s failed: bucket=%s, key=%s".formatted(operation, bucket, key);
-    if (cause instanceof NoSuchFileException) {
-      return new ObjectNotFoundException(message, cause);
+    private String relativeKey(Path bucketRoot, Path path) {
+        Path relativePath = bucketRoot.relativize(path);
+        String relativeKey = relativePath.toString();
+        return relativeKey.replace('\\', '/');
     }
-    if (cause instanceof AccessDeniedException) {
-      return new ObjectStoreAccessException(message, cause);
+
+    private Path resolvePrefixScanRoot(Path bucketRoot, String safePrefix) {
+        int slash = safePrefix.lastIndexOf('/');
+        if (slash < 0) {
+            return bucketRoot;
+        }
+        String directoryPrefix = safePrefix.substring(0, slash);
+        if (directoryPrefix.isBlank()) {
+            return bucketRoot;
+        }
+        Path resolved = bucketRoot.resolve(directoryPrefix).normalize();
+        if (!resolved.startsWith(bucketRoot)) {
+            throw new ObjectStoreException("filesystem object list prefix resolved outside bucket root: " + safePrefix);
+        }
+        return resolved;
     }
-    return new ObjectStoreException(message, cause);
-  }
+
+    private boolean isHiddenOrTemp(Path path) {
+        String name = path.getFileName().toString();
+        if (name.startsWith(".")) {
+            return true;
+        }
+        return name.contains(TEMP_SUFFIX_MARKER);
+    }
+
+    private String syntheticEtag(long size, Instant mtime) {
+        return size + "-" + mtime.toEpochMilli();
+    }
+
+    private void cleanupTemp(Path temp) {
+        if (temp == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(temp);
+        } catch (IOException ignored) {
+            log.warn("filesystem object store failed to cleanup temp file: {}", temp, ignored);
+        }
+    }
+
+    private ObjectStoreException mapException(String operation, String bucket, String key, Throwable ex) {
+        Throwable cause = ex instanceof UncheckedIOException u ? u.getCause() : ex;
+        String message = "filesystem object store %s failed: bucket=%s, key=%s".formatted(operation, bucket, key);
+        if (cause instanceof NoSuchFileException) {
+            return new ObjectNotFoundException(message, cause);
+        }
+        if (cause instanceof AccessDeniedException) {
+            return new ObjectStoreAccessException(message, cause);
+        }
+        return new ObjectStoreException(message, cause);
+    }
 }

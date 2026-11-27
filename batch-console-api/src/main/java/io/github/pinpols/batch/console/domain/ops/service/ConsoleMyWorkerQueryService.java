@@ -13,25 +13,25 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleMyWorkerQueryService {
 
-  private final WorkerRegistryMapper mapper;
-  private final TenantIdResolver tenantGuard;
-  private final ConsoleQueryCacheService cacheService;
+    private final WorkerRegistryMapper mapper;
+    private final TenantIdResolver tenantGuard;
+    private final ConsoleQueryCacheService cacheService;
 
-  public List<WorkerRegistryView> listSelfHosted(String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return cacheService.getOrLoad(
-        "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":self-hosted",
-        ConsoleQueryCacheService.DIAGNOSTIC_TTL,
-        new TypeReference<List<WorkerRegistryView>>() {},
-        () -> mapper.selectSelfHostedByTenant(resolved));
-  }
+    public List<WorkerRegistryView> listSelfHosted(String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        return cacheService.getOrLoad(
+                "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":self-hosted",
+                ConsoleQueryCacheService.DIAGNOSTIC_TTL,
+                new TypeReference<List<WorkerRegistryView>>() {},
+                () -> mapper.selectSelfHostedByTenant(resolved));
+    }
 
-  public long countSelfHosted(String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return cacheService.getOrLoad(
-        "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":self-hosted-count",
-        ConsoleQueryCacheService.DIAGNOSTIC_TTL,
-        Long.class,
-        () -> mapper.countSelfHostedByTenant(resolved));
-  }
+    public long countSelfHosted(String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        return cacheService.getOrLoad(
+                "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":self-hosted-count",
+                ConsoleQueryCacheService.DIAGNOSTIC_TTL,
+                Long.class,
+                () -> mapper.countSelfHostedByTenant(resolved));
+    }
 }

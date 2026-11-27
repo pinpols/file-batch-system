@@ -22,111 +22,109 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
 
-  private static final String KEY_PREFIX = "batch:console:realtime:buffer:";
+    private static final String KEY_PREFIX = "batch:console:realtime:buffer:";
 
-  private final StringRedisTemplate redisTemplate;
-  private final BatchRedisNamespace redisNamespace;
-  private final ConsoleRealtimeProperties realtimeProperties;
-  private final ConsoleRealtimeMetrics realtimeMetrics;
+    private final StringRedisTemplate redisTemplate;
+    private final BatchRedisNamespace redisNamespace;
+    private final ConsoleRealtimeProperties realtimeProperties;
+    private final ConsoleRealtimeMetrics realtimeMetrics;
 
-  @Override
-  public void append(ConsoleRealtimeStreamEnvelope envelope) {
-    boolean envelopeIsIncomplete = EmptyChecks.isNull(envelope)
-        || envelope.tenantId() == null
-        || envelope.stream() == null
-        || EmptyChecks.isNull(envelope.cursor());
-    if (envelopeIsIncomplete) {
-      return;
-    }
-    String key = redisNamespace.key(bufferKey(envelope.tenantId(), envelope.stream()));
-    String payload = JsonUtils.toJson(envelope);
-    long maxEntries = realtimeProperties.getReplayMaxEntries();
-    long ttlSeconds = realtimeProperties.getReplayTtl() != null
-            && !realtimeProperties.getReplayTtl().isZero()
-            && !realtimeProperties.getReplayTtl().isNegative()
-        ? realtimeProperties.getReplayTtl().getSeconds()
-        : 0L;
-    redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
-      byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
-      byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
-      connection.listCommands().rPush(keyBytes, payloadBytes);
-      if (maxEntries > 0) {
-        connection.listCommands().lTrim(keyBytes, -maxEntries, -1);
-      }
-      if (ttlSeconds > 0) {
-        connection.keyCommands().expire(keyBytes, ttlSeconds);
-      }
-      return null;
-    });
-  }
-
-  @Override
-  public ReplayBatch replay(String tenantId, String stream, String afterCursor, String eventType) {
-    boolean replayRequestIsIncomplete = EmptyChecks.isNull(tenantId)
-        || tenantId.isBlank()
-        || stream == null
-        || stream.isBlank()
-        || afterCursor == null
-        || EmptyChecks.isBlank(afterCursor);
-    if (replayRequestIsIncomplete) {
-      return new ReplayBatch(List.of(), true);
-    }
-    // P1(2026-05-23 audit):读端按写端 replayMaxEntries 上限截断,避免配置漂移或被旁路写入造成
-    //   LRANGE 0 -1 拉全量大列表导致 SSE 线程 GC 抖动。后续 cursor 匹配仍按截断后的窗口判定。
-    long maxEntries = realtimeProperties.getReplayMaxEntries();
-    long endIndex = maxEntries > 0 ? maxEntries - 1 : -1L;
-    List<String> rawEntries =
-        redisTemplate.opsForList().range(bufferKey(tenantId, stream), 0, endIndex);
-    if (rawEntries == null || rawEntries.isEmpty()) {
-      return new ReplayBatch(List.of(), false);
-    }
-    List<ConsoleRealtimeStreamEnvelope> envelopes = new ArrayList<>(rawEntries.size());
-    for (String raw : rawEntries) {
-      try {
-        ConsoleRealtimeStreamEnvelope envelope =
-            JsonUtils.fromJson(raw, ConsoleRealtimeStreamEnvelope.class);
-        if (envelope != null) {
-          envelopes.add(envelope);
+    @Override
+    public void append(ConsoleRealtimeStreamEnvelope envelope) {
+        boolean envelopeIsIncomplete = EmptyChecks.isNull(envelope)
+                || envelope.tenantId() == null
+                || envelope.stream() == null
+                || EmptyChecks.isNull(envelope.cursor());
+        if (envelopeIsIncomplete) {
+            return;
         }
-      } catch (Exception exception) {
-        log.warn(
-            "console realtime replay buffer decode failed: tenantId={}, stream={}",
-            logValue(tenantId),
-            logValue(stream),
-            exception);
-        realtimeMetrics.recordReplayDecodeFailure(stream);
-      }
-    }
-    if (envelopes.isEmpty()) {
-      return new ReplayBatch(List.of(), false);
+        String key = redisNamespace.key(bufferKey(envelope.tenantId(), envelope.stream()));
+        String payload = JsonUtils.toJson(envelope);
+        long maxEntries = realtimeProperties.getReplayMaxEntries();
+        long ttlSeconds = realtimeProperties.getReplayTtl() != null
+                        && !realtimeProperties.getReplayTtl().isZero()
+                        && !realtimeProperties.getReplayTtl().isNegative()
+                ? realtimeProperties.getReplayTtl().getSeconds()
+                : 0L;
+        redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
+            byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
+            connection.listCommands().rPush(keyBytes, payloadBytes);
+            if (maxEntries > 0) {
+                connection.listCommands().lTrim(keyBytes, -maxEntries, -1);
+            }
+            if (ttlSeconds > 0) {
+                connection.keyCommands().expire(keyBytes, ttlSeconds);
+            }
+            return null;
+        });
     }
 
-    int cursorIndex = -1;
-    for (int index = 0; index < envelopes.size(); index++) {
-      if (afterCursor.equals(envelopes.get(index).cursor())) {
-        cursorIndex = index;
-        break;
-      }
-    }
-    List<ConsoleRealtimeStreamEnvelope> result = new ArrayList<>();
-    int startIndex = cursorIndex >= 0 ? cursorIndex + 1 : 0;
-    for (int index = startIndex; index < envelopes.size(); index++) {
-      ConsoleRealtimeStreamEnvelope envelope = envelopes.get(index);
-      boolean eventTypeDoesNotMatchFilter =
-          EmptyChecks.isNotBlank(eventType) && !eventType.equals(envelope.eventType());
-      if (eventTypeDoesNotMatchFilter) {
-        continue;
-      }
-      result.add(envelope);
-    }
-    return new ReplayBatch(Collections.unmodifiableList(result), cursorIndex >= 0);
-  }
+    @Override
+    public ReplayBatch replay(String tenantId, String stream, String afterCursor, String eventType) {
+        boolean replayRequestIsIncomplete = EmptyChecks.isNull(tenantId)
+                || tenantId.isBlank()
+                || stream == null
+                || stream.isBlank()
+                || afterCursor == null
+                || EmptyChecks.isBlank(afterCursor);
+        if (replayRequestIsIncomplete) {
+            return new ReplayBatch(List.of(), true);
+        }
+        // P1(2026-05-23 audit):读端按写端 replayMaxEntries 上限截断,避免配置漂移或被旁路写入造成
+        //   LRANGE 0 -1 拉全量大列表导致 SSE 线程 GC 抖动。后续 cursor 匹配仍按截断后的窗口判定。
+        long maxEntries = realtimeProperties.getReplayMaxEntries();
+        long endIndex = maxEntries > 0 ? maxEntries - 1 : -1L;
+        List<String> rawEntries = redisTemplate.opsForList().range(bufferKey(tenantId, stream), 0, endIndex);
+        if (rawEntries == null || rawEntries.isEmpty()) {
+            return new ReplayBatch(List.of(), false);
+        }
+        List<ConsoleRealtimeStreamEnvelope> envelopes = new ArrayList<>(rawEntries.size());
+        for (String raw : rawEntries) {
+            try {
+                ConsoleRealtimeStreamEnvelope envelope = JsonUtils.fromJson(raw, ConsoleRealtimeStreamEnvelope.class);
+                if (envelope != null) {
+                    envelopes.add(envelope);
+                }
+            } catch (Exception exception) {
+                log.warn(
+                        "console realtime replay buffer decode failed: tenantId={}, stream={}",
+                        logValue(tenantId),
+                        logValue(stream),
+                        exception);
+                realtimeMetrics.recordReplayDecodeFailure(stream);
+            }
+        }
+        if (envelopes.isEmpty()) {
+            return new ReplayBatch(List.of(), false);
+        }
 
-  private String bufferKey(String tenantId, String stream) {
-    return KEY_PREFIX + tenantId + ":" + stream;
-  }
+        int cursorIndex = -1;
+        for (int index = 0; index < envelopes.size(); index++) {
+            if (afterCursor.equals(envelopes.get(index).cursor())) {
+                cursorIndex = index;
+                break;
+            }
+        }
+        List<ConsoleRealtimeStreamEnvelope> result = new ArrayList<>();
+        int startIndex = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+        for (int index = startIndex; index < envelopes.size(); index++) {
+            ConsoleRealtimeStreamEnvelope envelope = envelopes.get(index);
+            boolean eventTypeDoesNotMatchFilter =
+                    EmptyChecks.isNotBlank(eventType) && !eventType.equals(envelope.eventType());
+            if (eventTypeDoesNotMatchFilter) {
+                continue;
+            }
+            result.add(envelope);
+        }
+        return new ReplayBatch(Collections.unmodifiableList(result), cursorIndex >= 0);
+    }
 
-  private static String logValue(String value) {
-    return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
-  }
+    private String bufferKey(String tenantId, String stream) {
+        return KEY_PREFIX + tenantId + ":" + stream;
+    }
+
+    private static String logValue(String value) {
+        return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
+    }
 }

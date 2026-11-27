@@ -20,76 +20,72 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @DisplayName("领域事件监听器: 分发前置条件与事务提交后的异步投递声明")
 class ConsoleWebhookDomainEventListenerTest {
 
-  private WebhookDispatcher webhookDispatcher;
-  private SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher;
-  private ConsoleWebhookDomainEventListener listener;
+    private WebhookDispatcher webhookDispatcher;
+    private SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher;
+    private ConsoleWebhookDomainEventListener listener;
 
-  @BeforeEach
-  void setUp() {
-    webhookDispatcher = mock(WebhookDispatcher.class);
-    subscriptionRuleWebhookDispatcher = mock(SubscriptionRuleWebhookDispatcher.class);
-    listener =
-        new ConsoleWebhookDomainEventListener(webhookDispatcher, subscriptionRuleWebhookDispatcher);
-  }
+    @BeforeEach
+    void setUp() {
+        webhookDispatcher = mock(WebhookDispatcher.class);
+        subscriptionRuleWebhookDispatcher = mock(SubscriptionRuleWebhookDispatcher.class);
+        listener = new ConsoleWebhookDomainEventListener(webhookDispatcher, subscriptionRuleWebhookDispatcher);
+    }
 
-  @Test
-  @DisplayName("收到领域事件后同时触发外部通知与订阅规则分发, 字段逐项透传")
-  void shouldDispatchEvent() {
-    Instant now = BatchDateTimeSupport.utcNow();
-    ConsoleRealtimeDomainEvent event =
-        ConsoleRealtimeDomainEvent.builder().tenantId("tenant1").stream("job-instance")
-            .eventType("JOB_COMPLETED")
-            .cursor("cursor-1")
-            .data("payload")
-            .emittedAt(now)
-            .build();
+    @Test
+    @DisplayName("收到领域事件后同时触发外部通知与订阅规则分发, 字段逐项透传")
+    void shouldDispatchEvent() {
+        Instant now = BatchDateTimeSupport.utcNow();
+        ConsoleRealtimeDomainEvent event = ConsoleRealtimeDomainEvent.builder().tenantId("tenant1").stream(
+                        "job-instance")
+                .eventType("JOB_COMPLETED")
+                .cursor("cursor-1")
+                .data("payload")
+                .emittedAt(now)
+                .build();
 
-    listener.onDomainEvent(event);
+        listener.onDomainEvent(event);
 
-    verify(webhookDispatcher)
-        .dispatchAsync("tenant1", "JOB_COMPLETED", "job-instance", "cursor-1", "payload", now);
-    verify(subscriptionRuleWebhookDispatcher)
-        .dispatch("tenant1", "JOB_COMPLETED", "job-instance", "cursor-1", "payload", now);
-  }
+        verify(webhookDispatcher).dispatchAsync("tenant1", "JOB_COMPLETED", "job-instance", "cursor-1", "payload", now);
+        verify(subscriptionRuleWebhookDispatcher)
+                .dispatch("tenant1", "JOB_COMPLETED", "job-instance", "cursor-1", "payload", now);
+    }
 
-  @Test
-  @DisplayName("事件对象缺失时不触发任何分发")
-  void shouldSkipNullEvent() {
-    listener.onDomainEvent(null);
+    @Test
+    @DisplayName("事件对象缺失时不触发任何分发")
+    void shouldSkipNullEvent() {
+        listener.onDomainEvent(null);
 
-    verifyNoInteractions(webhookDispatcher, subscriptionRuleWebhookDispatcher);
-  }
+        verifyNoInteractions(webhookDispatcher, subscriptionRuleWebhookDispatcher);
+    }
 
-  @Test
-  @DisplayName("租户标识仅含空白字符时不触发任何分发")
-  void shouldSkipEventWithBlankTenantId() {
-    ConsoleRealtimeDomainEvent event = ConsoleRealtimeDomainEvent.builder().tenantId("  ").stream(
-            "job-instance")
-        .eventType("JOB_COMPLETED")
-        .cursor("cursor-1")
-        .data("payload")
-        .emittedAt(BatchDateTimeSupport.utcNow())
-        .build();
+    @Test
+    @DisplayName("租户标识仅含空白字符时不触发任何分发")
+    void shouldSkipEventWithBlankTenantId() {
+        ConsoleRealtimeDomainEvent event = ConsoleRealtimeDomainEvent.builder().tenantId("  ").stream("job-instance")
+                .eventType("JOB_COMPLETED")
+                .cursor("cursor-1")
+                .data("payload")
+                .emittedAt(BatchDateTimeSupport.utcNow())
+                .build();
 
-    listener.onDomainEvent(event);
+        listener.onDomainEvent(event);
 
-    verifyNoInteractions(webhookDispatcher, subscriptionRuleWebhookDispatcher);
-  }
+        verifyNoInteractions(webhookDispatcher, subscriptionRuleWebhookDispatcher);
+    }
 
-  @Test
-  @DisplayName("外部通知只在事务提交后通过有界异步执行器分发")
-  void shouldDeclareAfterCommitAsyncDelivery() throws NoSuchMethodException {
-    var method = ConsoleWebhookDomainEventListener.class.getMethod(
-        "onDomainEvent", ConsoleRealtimeDomainEvent.class);
+    @Test
+    @DisplayName("外部通知只在事务提交后通过有界异步执行器分发")
+    void shouldDeclareAfterCommitAsyncDelivery() throws NoSuchMethodException {
+        var method =
+                ConsoleWebhookDomainEventListener.class.getMethod("onDomainEvent", ConsoleRealtimeDomainEvent.class);
 
-    TransactionalEventListener transactional =
-        method.getAnnotation(TransactionalEventListener.class);
-    Async async = method.getAnnotation(Async.class);
+        TransactionalEventListener transactional = method.getAnnotation(TransactionalEventListener.class);
+        Async async = method.getAnnotation(Async.class);
 
-    assertThat(transactional).isNotNull();
-    assertThat(transactional.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
-    assertThat(transactional.fallbackExecution()).isTrue();
-    assertThat(async).isNotNull();
-    assertThat(async.value()).isEqualTo("pushTaskExecutor");
-  }
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+        assertThat(transactional.fallbackExecution()).isTrue();
+        assertThat(async).isNotNull();
+        assertThat(async.value()).isEqualTo("pushTaskExecutor");
+    }
 }

@@ -46,353 +46,342 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkflowNodePayloadBuilder {
 
-  private final OrchestratorJobMappers jobMappers;
-  private final OrchestratorWorkflowMappers workflowMappers;
-  private final WorkflowParamResolver workflowParamResolver;
-  private final FileRecordLookupMapper fileRecordLookupMapper;
+    private final OrchestratorJobMappers jobMappers;
+    private final OrchestratorWorkflowMappers workflowMappers;
+    private final WorkflowParamResolver workflowParamResolver;
+    private final FileRecordLookupMapper fileRecordLookupMapper;
 
-  /**
-   * 组装下游节点的 task payload。各来源的合并规则:
-   *
-   * <ol>
-   *   <li>workflow 实例的 {@code sourcePayload}(整条链路共享的根 params)
-   *   <li>上游兄弟分区产出({@code job_partition.output_summary} 里带的 {@code fileId} 等),保证 SETTLE 生成的
-   *       file_record id 自动流向 DISPATCH 节点,而不是靠每条 workflow 手工声明
-   *   <li>当前节点的 {@code workflow_node.node_params}(节点级默认配置,如 DISPATCH 的 {@code channelCode})
-   *       仅补齐已有 payload 中缺失的键，显式根参数优先。
-   *   <li>workflow 元数据({@code workflowNodeCode / workflowNodeType / targetJobCode}),供 worker
-   *       侧用作上下文日志、幂等键计算
-   * </ol>
-   */
-  @SuppressWarnings("unchecked")
-  String buildTaskPayload(
-      String sourcePayload,
-      WorkflowDagService.DagNodeResolution node,
-      String targetJobCode,
-      WorkflowNodeEntity workflowNode,
-      JobInstanceEntity jobInstance,
-      WorkflowRunEntity workflowRun) {
-    Map<String, Object> payload = new LinkedHashMap<>();
-    if (EmptyChecks.isNotBlank(sourcePayload)) {
-      try {
-        Object payloadObject = JsonUtils.fromJson(sourcePayload, Object.class);
-        if (payloadObject instanceof Map<?, ?> payloadMap) {
-          payload.putAll((Map<String, Object>) payloadMap);
-        } else {
-          payload.put("upstreamPayload", payloadObject);
-        }
-      } catch (IllegalArgumentException exception) {
-        SwallowedExceptionLogger.info(
-            WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", exception);
+    /**
+     * 组装下游节点的 task payload。各来源的合并规则:
+     *
+     * <ol>
+     *   <li>workflow 实例的 {@code sourcePayload}(整条链路共享的根 params)
+     *   <li>上游兄弟分区产出({@code job_partition.output_summary} 里带的 {@code fileId} 等),保证 SETTLE 生成的
+     *       file_record id 自动流向 DISPATCH 节点,而不是靠每条 workflow 手工声明
+     *   <li>当前节点的 {@code workflow_node.node_params}(节点级默认配置,如 DISPATCH 的 {@code channelCode})
+     *       仅补齐已有 payload 中缺失的键，显式根参数优先。
+     *   <li>workflow 元数据({@code workflowNodeCode / workflowNodeType / targetJobCode}),供 worker
+     *       侧用作上下文日志、幂等键计算
+     * </ol>
+     */
+    @SuppressWarnings("unchecked")
+    String buildTaskPayload(
+            String sourcePayload,
+            WorkflowDagService.DagNodeResolution node,
+            String targetJobCode,
+            WorkflowNodeEntity workflowNode,
+            JobInstanceEntity jobInstance,
+            WorkflowRunEntity workflowRun) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (EmptyChecks.isNotBlank(sourcePayload)) {
+            try {
+                Object payloadObject = JsonUtils.fromJson(sourcePayload, Object.class);
+                if (payloadObject instanceof Map<?, ?> payloadMap) {
+                    payload.putAll((Map<String, Object>) payloadMap);
+                } else {
+                    payload.put("upstreamPayload", payloadObject);
+                }
+            } catch (IllegalArgumentException exception) {
+                SwallowedExceptionLogger.info(
+                        WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", exception);
 
-        payload.put("upstreamPayloadRaw", sourcePayload);
-      }
-    }
-    mergeUpstreamPartitionOutputs(payload, jobInstance);
-    mergeNodeParams(payload, workflowNode, workflowRun);
-    payload.put("workflowNodeCode", node.nodeCode());
-    payload.put("workflowNodeType", node.nodeType());
-    payload.put("targetJobCode", targetJobCode);
-    return JsonUtils.toJson(payload);
-  }
-
-  /** 将 Worker 选定的系统 Pipeline 契约固定到任务中，以便确定性重放。 */
-  String pinSystemPipelineIdentity(String taskPayload, String workerType) {
-    SystemPipelineDefinition definition =
-        SystemPipelineCatalog.forJobType(workerType).orElse(null);
-    if (EmptyChecks.isNull(definition)) {
-      return taskPayload;
-    }
-    Map<String, Object> parsedPayload = parsePayloadMap(taskPayload);
-    Map<String, Object> payload = new LinkedHashMap<>(parsedPayload);
-    if (payload.containsKey(SystemPipelineTaskKeys.CODE)
-        || payload.containsKey(SystemPipelineTaskKeys.VERSION)) {
-      return taskPayload;
-    }
-    payload.put(SystemPipelineTaskKeys.CODE, definition.code());
-    payload.put(SystemPipelineTaskKeys.VERSION, definition.semanticVersion());
-    return JsonUtils.toJson(payload);
-  }
-
-  /**
-   * 扫描当前 workflow_run 同一 job_instance 下已 SUCCESS 的兄弟分区的 {@code output_summary},把 {@code fileId} /
-   * {@code fileCode} 这类跨节点常用字段挑出来写入 payload。保守做法:只挑已知少量字段(避免把 partition 内部诊断字段污染到 worker
-   * payload)。多分区并存时最新成功的胜出。
-   */
-  private static final List<String> UPSTREAM_OUTPUT_WHITELIST =
-      List.of("fileId", "fileCode", "batchNo", "recordCount", "bizDate");
-
-  private void mergeUpstreamPartitionOutputs(
-      Map<String, Object> payload, JobInstanceEntity jobInstance) {
-    if (EmptyChecks.isNull(jobInstance) || EmptyChecks.isNull(jobInstance.getId())) {
-      return;
-    }
-    JobPartitionQuery siblingPartitionQuery =
-        JobPartitionQuery.ofJobInstance(jobInstance.getTenantId(), jobInstance.getId());
-    List<JobPartitionEntity> siblings =
-        jobMappers.jobPartitionMapper.selectByQuery(siblingPartitionQuery);
-    if (EmptyChecks.isEmpty(siblings)) {
-      return;
-    }
-    JobPartitionEntity latestSuccess = findLatestSuccessPartition(siblings);
-    mergeWhitelistedOutputFields(payload, latestSuccess);
-    fallbackFileIdLookup(payload, jobInstance);
-  }
-
-  private static JobPartitionEntity findLatestSuccessPartition(List<JobPartitionEntity> siblings) {
-    JobPartitionEntity latest = null;
-    for (JobPartitionEntity p : siblings) {
-      if (EmptyChecks.isNull(p)) {
-        continue;
-      }
-      if (!PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus())) {
-        continue;
-      }
-      if (latest == null || isFinishedLater(p, latest)) { // empty-check: allow - Sonar S2259
-        latest = p;
-      }
-    }
-    return latest;
-  }
-
-  private static boolean isFinishedLater(JobPartitionEntity p, JobPartitionEntity reference) {
-    return p.getFinishedAt() != null // empty-check: allow - Sonar S2259
-        && reference.getFinishedAt() != null // empty-check: allow - Sonar S2259
-        && p.getFinishedAt().isAfter(reference.getFinishedAt());
-  }
-
-  @SuppressWarnings("unchecked")
-  private static void mergeWhitelistedOutputFields(
-      Map<String, Object> payload, JobPartitionEntity latestSuccess) {
-    if (latestSuccess == null // empty-check: allow - Sonar S2259
-        || latestSuccess.getOutputSummary() == null) { // empty-check: allow - Sonar S2259
-      return;
-    }
-    try {
-      String outputSummary = latestSuccess.getOutputSummary();
-      Object outputObj = JsonUtils.fromJson(outputSummary, Object.class);
-      if (!(outputObj instanceof Map<?, ?> outMap)) {
-        return;
-      }
-      Map<String, Object> out = (Map<String, Object>) outMap;
-      // 保守白名单：只把已知的跨节点常用字段挑出来
-      for (String key : UPSTREAM_OUTPUT_WHITELIST) {
-        Object v = out.get(key);
-        if (EmptyChecks.isNotNull(v) && !payload.containsKey(key)) {
-          payload.put(key, v);
-        }
-      }
-    } catch (IllegalArgumentException ignored) {
-      SwallowedExceptionLogger.info(
-          WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", ignored);
-
-      // 跳过脏 outputSummary
-    }
-  }
-
-  // 回退：partition.output_summary 不含 fileId 时，通过 trace_id 或 batchNo 反查 file_record。
-  // 两条独立的线索都要查：
-  //   (a) trace_id - 本次 run 期间 EXPORT worker 新建的 file_record 会打同一 trace_id
-  //   (b) source_ref = batchNo - 文件按 batchNo 幂等复用时，trace_id 不更新但 source_ref 一致
-  //       （settlement-2026-04-22 这种业务上每日唯一的文件就是这种场景）
-  private void fallbackFileIdLookup(Map<String, Object> payload, JobInstanceEntity jobInstance) {
-    if (payload.containsKey("fileId") || EmptyChecks.isNull(jobInstance.getTenantId())) {
-      return;
-    }
-    Long fileId = null;
-    if (EmptyChecks.isNotBlank(jobInstance.getTraceId())) {
-      fileId = safeFileIdLookup(
-          fileRecordLookupMapper::selectIdByTenantAndTraceId,
-          jobInstance.getTenantId(),
-          jobInstance.getTraceId(),
-          "traceId");
-    }
-    if (EmptyChecks.isNull(fileId)) {
-      Object batchNo = payload.get("batchNo");
-      if (EmptyChecks.isNotBlank(String.valueOf(batchNo))) {
-        fileId = safeFileIdLookup(
-            fileRecordLookupMapper::selectIdByTenantAndSourceRef,
-            jobInstance.getTenantId(),
-            String.valueOf(batchNo),
-            "sourceRef");
-      }
-    }
-    if (EmptyChecks.isNotNull(fileId)) {
-      payload.put("fileId", String.valueOf(fileId));
-    }
-  }
-
-  /** Mapper 调用回退：查询失败（DB 异常）记 warn 返 null，不让 dispatch 链路因此失败。 */
-  private Long safeFileIdLookup(
-      BiFunction<String, String, Long> lookup,
-      String tenantId,
-      String secondArg,
-      String secondArgName) {
-    try {
-      return lookup.apply(tenantId, secondArg);
-    } catch (RuntimeException ex) {
-      log.warn(
-          "file_record lookup failed: tenantId={}, {}={}, error={}",
-          tenantId,
-          secondArgName,
-          secondArg,
-          SwallowedExceptionLogger.summary(ex));
-      return null;
-    }
-  }
-
-  /**
-   * 合并当前节点的 {@code workflow_node.node_params}(JSON 对象)到 payload。用户在 workflow 设计器配的 templateCode /
-   * channelCode 等静态字段由此流入 worker,无需每次触发时手工重复。
-   *
-   * <p>ADR-009 Stage 3: node_params 中形如 {@code $.nodes.<X>.output.<key>} / {@code
-   * $.workflowRun.<key>} 的引用,会先经 {@link WorkflowParamResolver} 用 {@code workflow_run} 上下文替换为
-   * 实际值,再合并到 payload。
-   */
-  @SuppressWarnings("unchecked")
-  public void mergeNodeParams(
-      Map<String, Object> payload, WorkflowNodeEntity workflowNode, WorkflowRunEntity workflowRun) {
-    if (EmptyChecks.isNull(workflowNode) || EmptyChecks.isNull(workflowNode.getNodeParams())) {
-      return;
-    }
-    String raw = workflowNode.getNodeParams();
-    if (EmptyChecks.isBlank(raw)) {
-      return;
-    }
-    try {
-      Object parsed = JsonUtils.fromJson(raw, Object.class);
-      if (parsed instanceof Map<?, ?> map) {
-        WorkflowRunContext workflowRunContext = loadWorkflowRunContext(workflowRun);
-        Object resolved = workflowParamResolver.resolve(map, workflowRunContext);
-        if (resolved instanceof Map<?, ?> resolvedMap) {
-          ((Map<String, Object>) resolvedMap).forEach((key, value) -> {
-            if (!payload.containsKey(key)) {
-              payload.put(key, value);
+                payload.put("upstreamPayloadRaw", sourcePayload);
             }
-          });
         }
-      }
-    } catch (IllegalArgumentException ignored) {
-      SwallowedExceptionLogger.info(
-          WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", ignored);
-
-      // node_params 非 Map 或畸形——静默跳过，不让坏数据阻断派发
+        mergeUpstreamPartitionOutputs(payload, jobInstance);
+        mergeNodeParams(payload, workflowNode, workflowRun);
+        payload.put("workflowNodeCode", node.nodeCode());
+        payload.put("workflowNodeType", node.nodeType());
+        payload.put("targetJobCode", targetJobCode);
+        return JsonUtils.toJson(payload);
     }
-  }
 
-  /**
-   * ADR-009 Stage 3: 加载 workflow_run 内所有已完成节点的 output → 构造 {@link WorkflowRunContext}。 派发前调用,不持久化;
-   * 仅为本次派发的 node_params DSL 解析提供 {@code $.nodes.<X>.output.<key>} 数据源。
-   *
-   * <p>workflowRun 为 null 时返回空 context(老路径不走 workflow,resolver 见到 nodes/workflowRun 引用会 fail-fast,
-   * 但实际只有 workflow 派发路径会调到 mergeNodeParams,所以这里 null-safe 仅作防御)。
-   */
-  private WorkflowRunContext loadWorkflowRunContext(WorkflowRunEntity workflowRun) {
-    if (EmptyChecks.isNull(workflowRun)) {
-      return new WorkflowRunContext() {
-        @Override
-        public boolean hasNode(String nodeCode) {
-          return false;
+    /** 将 Worker 选定的系统 Pipeline 契约固定到任务中，以便确定性重放。 */
+    String pinSystemPipelineIdentity(String taskPayload, String workerType) {
+        SystemPipelineDefinition definition =
+                SystemPipelineCatalog.forJobType(workerType).orElse(null);
+        if (EmptyChecks.isNull(definition)) {
+            return taskPayload;
         }
-
-        @Override
-        public Map<String, Object> nodeOutput(String nodeCode) {
-          return null;
+        Map<String, Object> parsedPayload = parsePayloadMap(taskPayload);
+        Map<String, Object> payload = new LinkedHashMap<>(parsedPayload);
+        if (payload.containsKey(SystemPipelineTaskKeys.CODE) || payload.containsKey(SystemPipelineTaskKeys.VERSION)) {
+            return taskPayload;
         }
+        payload.put(SystemPipelineTaskKeys.CODE, definition.code());
+        payload.put(SystemPipelineTaskKeys.VERSION, definition.semanticVersion());
+        return JsonUtils.toJson(payload);
+    }
 
-        @Override
-        public Map<String, Object> workflowRunFields() {
-          return Map.of();
+    /**
+     * 扫描当前 workflow_run 同一 job_instance 下已 SUCCESS 的兄弟分区的 {@code output_summary},把 {@code fileId} /
+     * {@code fileCode} 这类跨节点常用字段挑出来写入 payload。保守做法:只挑已知少量字段(避免把 partition 内部诊断字段污染到 worker
+     * payload)。多分区并存时最新成功的胜出。
+     */
+    private static final List<String> UPSTREAM_OUTPUT_WHITELIST =
+            List.of("fileId", "fileCode", "batchNo", "recordCount", "bizDate");
+
+    private void mergeUpstreamPartitionOutputs(Map<String, Object> payload, JobInstanceEntity jobInstance) {
+        if (EmptyChecks.isNull(jobInstance) || EmptyChecks.isNull(jobInstance.getId())) {
+            return;
         }
-      };
+        JobPartitionQuery siblingPartitionQuery =
+                JobPartitionQuery.ofJobInstance(jobInstance.getTenantId(), jobInstance.getId());
+        List<JobPartitionEntity> siblings = jobMappers.jobPartitionMapper.selectByQuery(siblingPartitionQuery);
+        if (EmptyChecks.isEmpty(siblings)) {
+            return;
+        }
+        JobPartitionEntity latestSuccess = findLatestSuccessPartition(siblings);
+        mergeWhitelistedOutputFields(payload, latestSuccess);
+        fallbackFileIdLookup(payload, jobInstance);
     }
-    List<WorkflowNodeRunEntity> nodeRuns =
-        workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId());
-    Map<String, Map<String, Object>> nodeOutputs = new LinkedHashMap<>();
-    for (WorkflowNodeRunEntity run : nodeRuns) {
-      String code = run.getNodeCode();
-      // 同 nodeCode 多次执行(retry / 循环)取最新一次的 output;selectByWorkflowRunId 按 run_seq asc 返回,
-      // 后续覆盖前面 → 自然结果 = 最新 run_seq 的 output。
-      Map<String, Object> parsedOutput = parseOutputJson(run.getOutput());
-      nodeOutputs.put(code, parsedOutput);
-    }
-    Map<String, Object> workflowRunFields = new LinkedHashMap<>();
-    if (EmptyChecks.isNotNull(workflowRun.getBizDate())) {
-      workflowRunFields.put("bizDate", workflowRun.getBizDate().toString());
-    }
-    if (EmptyChecks.isNotNull(workflowRun.getTraceId())) {
-      workflowRunFields.put("traceId", workflowRun.getTraceId());
-    }
-    return new WorkflowRunContext() {
-      @Override
-      public boolean hasNode(String nodeCode) {
-        return nodeOutputs.containsKey(nodeCode);
-      }
 
-      @Override
-      public Map<String, Object> nodeOutput(String nodeCode) {
-        return nodeOutputs.get(nodeCode);
-      }
-
-      @Override
-      public Map<String, Object> workflowRunFields() {
-        return workflowRunFields;
-      }
-    };
-  }
-
-  /**
-   * P1 动态 fan-out:把 {@code itemsExpr}(形如 {@code $.nodes.<上游>.output.<arrayKey>})对当前 workflow_run
-   * 上下文解析成元素列表。解析结果必须是 JSON 数组,否则 fail-fast(配置错)。供 {@link DefaultWorkflowNodeDispatchService} 在
-   * TASK 节点派发前决定展开几个并行分区。
-   */
-  public List<Object> resolveFanOutItems(String itemsExpr, WorkflowRunEntity workflowRun) {
-    WorkflowRunContext workflowRunContext = loadWorkflowRunContext(workflowRun);
-    Object resolved = workflowParamResolver.resolve(itemsExpr, workflowRunContext);
-    if (resolved instanceof List<?> list) {
-      return List.copyOf(list);
+    private static JobPartitionEntity findLatestSuccessPartition(List<JobPartitionEntity> siblings) {
+        JobPartitionEntity latest = null;
+        for (JobPartitionEntity p : siblings) {
+            if (EmptyChecks.isNull(p)) {
+                continue;
+            }
+            if (!PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus())) {
+                continue;
+            }
+            if (latest == null || isFinishedLater(p, latest)) { // empty-check: allow - Sonar S2259
+                latest = p;
+            }
+        }
+        return latest;
     }
-    throw BizException.of(
-        ResultCode.INVALID_ARGUMENT, "error.workflow.fan_out_items_not_array", itemsExpr);
-  }
 
-  // ── 公共 JSON 反序列化助手(主 service + ChildJobLaunchSupport 共用) ────────
-
-  @SuppressWarnings("unchecked")
-  public static Map<String, Object> parsePayloadMap(String payloadJson) {
-    if (EmptyChecks.isBlank(payloadJson)) {
-      return Map.of();
+    private static boolean isFinishedLater(JobPartitionEntity p, JobPartitionEntity reference) {
+        return p.getFinishedAt() != null // empty-check: allow - Sonar S2259
+                && reference.getFinishedAt() != null // empty-check: allow - Sonar S2259
+                && p.getFinishedAt().isAfter(reference.getFinishedAt());
     }
-    try {
-      Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
-      if (payloadObject instanceof Map<?, ?> payloadMap) {
-        return new LinkedHashMap<>((Map<String, Object>) payloadMap);
-      }
-    } catch (IllegalArgumentException exception) {
-      SwallowedExceptionLogger.info(
-          WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", exception);
 
-      return Map.of();
-    }
-    return Map.of();
-  }
+    @SuppressWarnings("unchecked")
+    private static void mergeWhitelistedOutputFields(Map<String, Object> payload, JobPartitionEntity latestSuccess) {
+        if (latestSuccess == null // empty-check: allow - Sonar S2259
+                || latestSuccess.getOutputSummary() == null) { // empty-check: allow - Sonar S2259
+            return;
+        }
+        try {
+            String outputSummary = latestSuccess.getOutputSummary();
+            Object outputObj = JsonUtils.fromJson(outputSummary, Object.class);
+            if (!(outputObj instanceof Map<?, ?> outMap)) {
+                return;
+            }
+            Map<String, Object> out = (Map<String, Object>) outMap;
+            // 保守白名单：只把已知的跨节点常用字段挑出来
+            for (String key : UPSTREAM_OUTPUT_WHITELIST) {
+                Object v = out.get(key);
+                if (EmptyChecks.isNotNull(v) && !payload.containsKey(key)) {
+                    payload.put(key, v);
+                }
+            }
+        } catch (IllegalArgumentException ignored) {
+            SwallowedExceptionLogger.info(WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", ignored);
 
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> parseOutputJson(String outputJson) {
-    if (EmptyChecks.isBlank(outputJson)) {
-      return null;
+            // 跳过脏 outputSummary
+        }
     }
-    try {
-      Object parsed = JsonUtils.fromJson(outputJson, Object.class);
-      if (parsed instanceof Map<?, ?> map) {
-        return new LinkedHashMap<>((Map<String, Object>) map);
-      }
-    } catch (IllegalArgumentException ignored) {
-      SwallowedExceptionLogger.info(
-          WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", ignored);
 
-      // 数据库里 output 列异常,不影响派发,按"无产出"语义返回 null
+    // 回退：partition.output_summary 不含 fileId 时，通过 trace_id 或 batchNo 反查 file_record。
+    // 两条独立的线索都要查：
+    //   (a) trace_id - 本次 run 期间 EXPORT worker 新建的 file_record 会打同一 trace_id
+    //   (b) source_ref = batchNo - 文件按 batchNo 幂等复用时，trace_id 不更新但 source_ref 一致
+    //       （settlement-2026-04-22 这种业务上每日唯一的文件就是这种场景）
+    private void fallbackFileIdLookup(Map<String, Object> payload, JobInstanceEntity jobInstance) {
+        if (payload.containsKey("fileId") || EmptyChecks.isNull(jobInstance.getTenantId())) {
+            return;
+        }
+        Long fileId = null;
+        if (EmptyChecks.isNotBlank(jobInstance.getTraceId())) {
+            fileId = safeFileIdLookup(
+                    fileRecordLookupMapper::selectIdByTenantAndTraceId,
+                    jobInstance.getTenantId(),
+                    jobInstance.getTraceId(),
+                    "traceId");
+        }
+        if (EmptyChecks.isNull(fileId)) {
+            Object batchNo = payload.get("batchNo");
+            if (EmptyChecks.isNotBlank(String.valueOf(batchNo))) {
+                fileId = safeFileIdLookup(
+                        fileRecordLookupMapper::selectIdByTenantAndSourceRef,
+                        jobInstance.getTenantId(),
+                        String.valueOf(batchNo),
+                        "sourceRef");
+            }
+        }
+        if (EmptyChecks.isNotNull(fileId)) {
+            payload.put("fileId", String.valueOf(fileId));
+        }
     }
-    return null;
-  }
+
+    /** Mapper 调用回退：查询失败（DB 异常）记 warn 返 null，不让 dispatch 链路因此失败。 */
+    private Long safeFileIdLookup(
+            BiFunction<String, String, Long> lookup, String tenantId, String secondArg, String secondArgName) {
+        try {
+            return lookup.apply(tenantId, secondArg);
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "file_record lookup failed: tenantId={}, {}={}, error={}",
+                    tenantId,
+                    secondArgName,
+                    secondArg,
+                    SwallowedExceptionLogger.summary(ex));
+            return null;
+        }
+    }
+
+    /**
+     * 合并当前节点的 {@code workflow_node.node_params}(JSON 对象)到 payload。用户在 workflow 设计器配的 templateCode /
+     * channelCode 等静态字段由此流入 worker,无需每次触发时手工重复。
+     *
+     * <p>ADR-009 Stage 3: node_params 中形如 {@code $.nodes.<X>.output.<key>} / {@code
+     * $.workflowRun.<key>} 的引用,会先经 {@link WorkflowParamResolver} 用 {@code workflow_run} 上下文替换为
+     * 实际值,再合并到 payload。
+     */
+    @SuppressWarnings("unchecked")
+    public void mergeNodeParams(
+            Map<String, Object> payload, WorkflowNodeEntity workflowNode, WorkflowRunEntity workflowRun) {
+        if (EmptyChecks.isNull(workflowNode) || EmptyChecks.isNull(workflowNode.getNodeParams())) {
+            return;
+        }
+        String raw = workflowNode.getNodeParams();
+        if (EmptyChecks.isBlank(raw)) {
+            return;
+        }
+        try {
+            Object parsed = JsonUtils.fromJson(raw, Object.class);
+            if (parsed instanceof Map<?, ?> map) {
+                WorkflowRunContext workflowRunContext = loadWorkflowRunContext(workflowRun);
+                Object resolved = workflowParamResolver.resolve(map, workflowRunContext);
+                if (resolved instanceof Map<?, ?> resolvedMap) {
+                    ((Map<String, Object>) resolvedMap).forEach((key, value) -> {
+                        if (!payload.containsKey(key)) {
+                            payload.put(key, value);
+                        }
+                    });
+                }
+            }
+        } catch (IllegalArgumentException ignored) {
+            SwallowedExceptionLogger.info(WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", ignored);
+
+            // node_params 非 Map 或畸形——静默跳过，不让坏数据阻断派发
+        }
+    }
+
+    /**
+     * ADR-009 Stage 3: 加载 workflow_run 内所有已完成节点的 output → 构造 {@link WorkflowRunContext}。 派发前调用,不持久化;
+     * 仅为本次派发的 node_params DSL 解析提供 {@code $.nodes.<X>.output.<key>} 数据源。
+     *
+     * <p>workflowRun 为 null 时返回空 context(老路径不走 workflow,resolver 见到 nodes/workflowRun 引用会 fail-fast,
+     * 但实际只有 workflow 派发路径会调到 mergeNodeParams,所以这里 null-safe 仅作防御)。
+     */
+    private WorkflowRunContext loadWorkflowRunContext(WorkflowRunEntity workflowRun) {
+        if (EmptyChecks.isNull(workflowRun)) {
+            return new WorkflowRunContext() {
+                @Override
+                public boolean hasNode(String nodeCode) {
+                    return false;
+                }
+
+                @Override
+                public Map<String, Object> nodeOutput(String nodeCode) {
+                    return null;
+                }
+
+                @Override
+                public Map<String, Object> workflowRunFields() {
+                    return Map.of();
+                }
+            };
+        }
+        List<WorkflowNodeRunEntity> nodeRuns =
+                workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId());
+        Map<String, Map<String, Object>> nodeOutputs = new LinkedHashMap<>();
+        for (WorkflowNodeRunEntity run : nodeRuns) {
+            String code = run.getNodeCode();
+            // 同 nodeCode 多次执行(retry / 循环)取最新一次的 output;selectByWorkflowRunId 按 run_seq asc 返回,
+            // 后续覆盖前面 → 自然结果 = 最新 run_seq 的 output。
+            Map<String, Object> parsedOutput = parseOutputJson(run.getOutput());
+            nodeOutputs.put(code, parsedOutput);
+        }
+        Map<String, Object> workflowRunFields = new LinkedHashMap<>();
+        if (EmptyChecks.isNotNull(workflowRun.getBizDate())) {
+            workflowRunFields.put("bizDate", workflowRun.getBizDate().toString());
+        }
+        if (EmptyChecks.isNotNull(workflowRun.getTraceId())) {
+            workflowRunFields.put("traceId", workflowRun.getTraceId());
+        }
+        return new WorkflowRunContext() {
+            @Override
+            public boolean hasNode(String nodeCode) {
+                return nodeOutputs.containsKey(nodeCode);
+            }
+
+            @Override
+            public Map<String, Object> nodeOutput(String nodeCode) {
+                return nodeOutputs.get(nodeCode);
+            }
+
+            @Override
+            public Map<String, Object> workflowRunFields() {
+                return workflowRunFields;
+            }
+        };
+    }
+
+    /**
+     * P1 动态 fan-out:把 {@code itemsExpr}(形如 {@code $.nodes.<上游>.output.<arrayKey>})对当前 workflow_run
+     * 上下文解析成元素列表。解析结果必须是 JSON 数组,否则 fail-fast(配置错)。供 {@link DefaultWorkflowNodeDispatchService} 在
+     * TASK 节点派发前决定展开几个并行分区。
+     */
+    public List<Object> resolveFanOutItems(String itemsExpr, WorkflowRunEntity workflowRun) {
+        WorkflowRunContext workflowRunContext = loadWorkflowRunContext(workflowRun);
+        Object resolved = workflowParamResolver.resolve(itemsExpr, workflowRunContext);
+        if (resolved instanceof List<?> list) {
+            return List.copyOf(list);
+        }
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.fan_out_items_not_array", itemsExpr);
+    }
+
+    // ── 公共 JSON 反序列化助手(主 service + ChildJobLaunchSupport 共用) ────────
+
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> parsePayloadMap(String payloadJson) {
+        if (EmptyChecks.isBlank(payloadJson)) {
+            return Map.of();
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                return new LinkedHashMap<>((Map<String, Object>) payloadMap);
+            }
+        } catch (IllegalArgumentException exception) {
+            SwallowedExceptionLogger.info(
+                    WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", exception);
+
+            return Map.of();
+        }
+        return Map.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parseOutputJson(String outputJson) {
+        if (EmptyChecks.isBlank(outputJson)) {
+            return null;
+        }
+        try {
+            Object parsed = JsonUtils.fromJson(outputJson, Object.class);
+            if (parsed instanceof Map<?, ?> map) {
+                return new LinkedHashMap<>((Map<String, Object>) map);
+            }
+        } catch (IllegalArgumentException ignored) {
+            SwallowedExceptionLogger.info(WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", ignored);
+
+            // 数据库里 output 列异常,不影响派发,按"无产出"语义返回 null
+        }
+        return null;
+    }
 }

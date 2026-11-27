@@ -8,11 +8,11 @@ import lombok.Builder;
 /** 触发用例接收的输入字段。 */
 @Builder(toBuilder = true)
 public record ExternalEventLaunchInput(
-    String tenantId,
-    String externalEventCode,
-    String externalEventId,
-    LocalDate bizDate,
-    Map<String, Object> params,
-    Instant dataIntervalStart,
-    Instant dataIntervalEnd,
-    Boolean dryRun) {}
+        String tenantId,
+        String externalEventCode,
+        String externalEventId,
+        LocalDate bizDate,
+        Map<String, Object> params,
+        Instant dataIntervalStart,
+        Instant dataIntervalEnd,
+        Boolean dryRun) {}

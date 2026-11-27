@@ -42,59 +42,56 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleBatchDayController {
 
-  private final ConsoleOrchestratorPort orchestratorProxyService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver metadataResolver;
+    private final ConsoleOrchestratorPort orchestratorProxyService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver metadataResolver;
 
-  @GetMapping("/catch-up-preview")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
-  public CommonResponse<ConsoleBatchDayCatchupPreviewResponse> previewCatchup(
-      @RequestParam String tenantId, @RequestParam String calendarCode) {
-    return responseFactory.success(
-        orchestratorProxyService.previewBatchDayCatchup(tenantId, calendarCode));
-  }
+    @GetMapping("/catch-up-preview")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+    public CommonResponse<ConsoleBatchDayCatchupPreviewResponse> previewCatchup(
+            @RequestParam String tenantId, @RequestParam String calendarCode) {
+        return responseFactory.success(orchestratorProxyService.previewBatchDayCatchup(tenantId, calendarCode));
+    }
 
-  @GetMapping("/historical-gap-candidates")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
-  public CommonResponse<ConsoleBatchDayHistoricalGapInventoryResponse> historicalGapCandidates(
-      @RequestParam @NotBlank @Size(max = 64) String tenantId,
-      @RequestParam @NotBlank @Size(max = 128) String calendarCode,
-      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate throughDate) {
-    return responseFactory.success(orchestratorProxyService.inventoryBatchDayHistoricalGaps(
-        tenantId, calendarCode, fromDate, throughDate));
-  }
+    @GetMapping("/historical-gap-candidates")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+    public CommonResponse<ConsoleBatchDayHistoricalGapInventoryResponse> historicalGapCandidates(
+            @RequestParam @NotBlank @Size(max = 64) String tenantId,
+            @RequestParam @NotBlank @Size(max = 128) String calendarCode,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate throughDate) {
+        return responseFactory.success(orchestratorProxyService.inventoryBatchDayHistoricalGaps(
+                tenantId, calendarCode, fromDate, throughDate));
+    }
 
-  @PostMapping("/catch-up-control")
-  public CommonResponse<ConsoleBatchDayCatchupPreviewResponse> changeCatchupControl(
-      @Valid @RequestBody CatchupControlRequest request) {
-    ConsoleBatchDayCatchupPreviewResponse preview =
-        orchestratorProxyService.changeBatchDayCatchupControl(
-            request.tenantId(),
-            request.calendarCode(),
-            request.action(),
-            metadataResolver.current().operatorId(),
-            request.reason());
-    return responseFactory.success(preview);
-  }
+    @PostMapping("/catch-up-control")
+    public CommonResponse<ConsoleBatchDayCatchupPreviewResponse> changeCatchupControl(
+            @Valid @RequestBody CatchupControlRequest request) {
+        ConsoleBatchDayCatchupPreviewResponse preview = orchestratorProxyService.changeBatchDayCatchupControl(
+                request.tenantId(),
+                request.calendarCode(),
+                request.action(),
+                metadataResolver.current().operatorId(),
+                request.reason());
+        return responseFactory.success(preview);
+    }
 
-  @PostMapping("/operate")
-  public CommonResponse<ConsoleBatchDayOperateResponse> operate(
-      @Valid @RequestBody BatchDayOperateRequest request) {
-    BatchDayOperationCommand command = new BatchDayOperationCommand(
-        request.getTenantId(),
-        request.getCalendarCode(),
-        request.getBizDate(),
-        request.getAction(),
-        metadataResolver.current().operatorId(),
-        request.getReason());
-    ConsoleBatchDayOperateResponse result = orchestratorProxyService.batchDayOperate(command);
-    return responseFactory.success(result);
-  }
+    @PostMapping("/operate")
+    public CommonResponse<ConsoleBatchDayOperateResponse> operate(@Valid @RequestBody BatchDayOperateRequest request) {
+        BatchDayOperationCommand command = new BatchDayOperationCommand(
+                request.getTenantId(),
+                request.getCalendarCode(),
+                request.getBizDate(),
+                request.getAction(),
+                metadataResolver.current().operatorId(),
+                request.getReason());
+        ConsoleBatchDayOperateResponse result = orchestratorProxyService.batchDayOperate(command);
+        return responseFactory.success(result);
+    }
 
-  public record CatchupControlRequest(
-      @NotBlank @Size(max = 64) String tenantId,
-      @NotBlank @Size(max = 128) String calendarCode,
-      @NotBlank @Pattern(regexp = "^(PAUSE|RESUME)$") String action,
-      @NotBlank @Size(max = 1024) String reason) {}
+    public record CatchupControlRequest(
+            @NotBlank @Size(max = 64) String tenantId,
+            @NotBlank @Size(max = 128) String calendarCode,
+            @NotBlank @Pattern(regexp = "^(PAUSE|RESUME)$") String action,
+            @NotBlank @Size(max = 1024) String reason) {}
 }

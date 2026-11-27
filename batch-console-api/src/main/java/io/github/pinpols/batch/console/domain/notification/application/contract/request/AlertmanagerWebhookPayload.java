@@ -16,19 +16,19 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record AlertmanagerWebhookPayload(
-    String version,
-    String groupKey,
-    Integer truncatedAlerts,
-    String status,
-    String receiver,
-    Map<String, String> groupLabels,
-    Map<String, String> commonLabels,
-    Map<String, String> commonAnnotations,
-    String externalURL,
-    List<AlertmanagerAlert> alerts) {
+        String version,
+        String groupKey,
+        Integer truncatedAlerts,
+        String status,
+        String receiver,
+        Map<String, String> groupLabels,
+        Map<String, String> commonLabels,
+        Map<String, String> commonAnnotations,
+        String externalURL,
+        List<AlertmanagerAlert> alerts) {
 
-  /** 空安全:返回不可变的 alerts 列表,永不为 null。 */
-  public List<AlertmanagerAlert> safeAlerts() {
-    return alerts == null ? List.of() : alerts;
-  }
+    /** 空安全:返回不可变的 alerts 列表,永不为 null。 */
+    public List<AlertmanagerAlert> safeAlerts() {
+        return alerts == null ? List.of() : alerts;
+    }
 }

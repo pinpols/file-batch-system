@@ -62,395 +62,377 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DefaultResourceScheduler implements ResourceScheduler {
 
-  /**
-   * 未配置或非正时的优先级老化步长秒数，
-   * 与 ResourceSchedulerProperties.priorityAgingStepSeconds 默认值一致。
-   */
-  private static final long DEFAULT_PRIORITY_AGING_STEP_SECONDS = 60L;
+    /**
+     * 未配置或非正时的优先级老化步长秒数，
+     * 与 ResourceSchedulerProperties.priorityAgingStepSeconds 默认值一致。
+     */
+    private static final long DEFAULT_PRIORITY_AGING_STEP_SECONDS = 60L;
 
-  /**
-   * tick 级别活跃计数缓存:在一个调度 tick 内 (如 WaitingPartitionDispatchScheduler 批量评估若干 partition) 对相同
-   * (tenantId, queueCode/workerGroup) 的 4 个 COUNT 查询去重,消除重复 DB round-trip。
-   *
-   * <p>由调用方通过 {@link #openTickCache()} / {@link #closeTickCache()} 包裹 schedule() 批次显式开启。
-   * 不开启时(默认),所有 resolveXxxActive 走原始无缓存路径,保持单次 schedule() 调用语义不变。
-   */
-  private static final ThreadLocal<Map<String, Long>> TICK_CACHE = new ThreadLocal<>();
+    /**
+     * tick 级别活跃计数缓存:在一个调度 tick 内 (如 WaitingPartitionDispatchScheduler 批量评估若干 partition) 对相同
+     * (tenantId, queueCode/workerGroup) 的 4 个 COUNT 查询去重,消除重复 DB round-trip。
+     *
+     * <p>由调用方通过 {@link #openTickCache()} / {@link #closeTickCache()} 包裹 schedule() 批次显式开启。
+     * 不开启时(默认),所有 resolveXxxActive 走原始无缓存路径,保持单次 schedule() 调用语义不变。
+     */
+    private static final ThreadLocal<Map<String, Long>> TICK_CACHE = new ThreadLocal<>();
 
-  /** 调用方在批量评估前开启 tick 缓存;同一批次内对同一 key 的活跃数查询将命中本地 Map。 */
-  public static void openTickCache() {
-    TICK_CACHE.set(new HashMap<>());
-  }
-
-  /** 调用方必须在 finally 中关闭以避免 ThreadLocal 泄漏。 */
-  public static void closeTickCache() {
-    TICK_CACHE.remove();
-  }
-
-  private record FairnessWeights(
-      Integer priority, String priorityBand, int tenantWeight, int queueWeight) {}
-
-  private record FairnessLoad(
-      int tenantActiveJobs,
-      int tenantActivePartitions,
-      int queueActiveJobs,
-      int queueActivePartitions) {}
-
-  private record FairnessScoreContext(FairnessWeights weights, FairnessLoad load) {}
-
-  private final ResourceQueueManager resourceQueueManager;
-  private final ConcurrencyLimiter concurrencyLimiter;
-  private final PartitionThrottle partitionThrottle;
-  private final DispatchAdmissionLimiter dispatchAdmissionLimiter;
-  private final DownstreamAdmissionGuard downstreamAdmissionGuard;
-  private final WorkerSelector workerSelector;
-  private final PriorityScheduler priorityScheduler;
-  private final OrchestratorConfigCacheService configCacheService;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final JobPartitionMapper jobPartitionMapper;
-  private final BatchTimezoneProvider timezoneProvider;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final ResourceSchedulerProperties resourceSchedulerProperties;
-
-  /** 资源调度统一收敛在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
-  @Override
-  public ResourceSchedulingDecision schedule(ResourceSchedulingRequest request) {
-    return evaluate(request, false);
-  }
-
-  @Override
-  public ResourceSchedulingDecision preview(ResourceSchedulingRequest request) {
-    return evaluate(request, true);
-  }
-
-  private ResourceSchedulingDecision evaluate(ResourceSchedulingRequest request, boolean preview) {
-    ResourceQueueEntity queue = resourceQueueManager.resolveQueue(request);
-    Integer priority = priorityScheduler.resolvePriority(request, queue);
-    String priorityBand = priorityScheduler.resolvePriorityBand(priority);
-    ResourceCheck windowCheck = checkBatchWindow(request);
-    if (!windowCheck.allowed()) {
-      return blockedDecision(request, queue, priority, priorityBand, windowCheck);
+    /** 调用方在批量评估前开启 tick 缓存;同一批次内对同一 key 的活跃数查询将命中本地 Map。 */
+    public static void openTickCache() {
+        TICK_CACHE.set(new HashMap<>());
     }
-    // worker、下游和派发速率都不改变活跃计数。放在租户准入锁之前，避免选路和外部检查占着事务锁。
-    WorkerRouteModel route = workerSelector.select(request, queue, priority);
-    if (route == null || !Boolean.TRUE.equals(route.getAvailable())) {
-      return blockedDecision(
-          request,
-          queue,
-          priority,
-          priorityBand,
-          ResourceCheck.waitForCapacity(
-              "NO_AVAILABLE_WORKER", "no online worker matches current route"));
-    }
-    ResourceCheck downstreamCheck = downstreamAdmissionGuard.check(request);
-    if (!downstreamCheck.allowed()) {
-      return blockedDecision(request, queue, priority, priorityBand, downstreamCheck);
-    }
-    if (!preview) {
-      ResourceCheck dispatchRateCheck = dispatchAdmissionLimiter.check(request, queue);
-      if (!dispatchRateCheck.allowed()) {
-        return blockedDecision(request, queue, priority, priorityBand, dispatchRateCheck);
-      }
-      ResourceCheck concurrencyCheck = concurrencyLimiter.check(request, queue);
-      if (!concurrencyCheck.allowed()) {
-        return blockedDecision(request, queue, priority, priorityBand, concurrencyCheck);
-      }
-      ResourceCheck partitionCheck = partitionThrottle.check(request, queue);
-      if (!partitionCheck.allowed()) {
-        return blockedDecision(request, queue, priority, priorityBand, partitionCheck);
-      }
-    }
-    ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
-    decision.setAdmissionAction(ResourceAdmissionAction.ACCEPT);
-    decision.setDispatchable(true);
-    decision.setFailFast(false);
-    decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
-    String workerGroup = resolveWorkerGroup(request, queue);
-    decision.setWorkerGroup(workerGroup);
-    decision.setPriority(priority);
-    decision.setPriorityBand(priorityBand);
-    decision.setPartitionStatus(PartitionStatus.CREATED.code());
-    decision.setTaskStatus(TaskStatus.CREATED.code());
-    decision.setRoute(route);
-    // 公平分数只参与 WAITING 分区的下一轮排序。首次准入的分区会立即派发，计算四组
-    // 跨分区活跃数不会改变结果，却会在高吞吐入口额外放大数据库读压力。
-    if (isWaitingRetry(request)) {
-      enrichFairnessScore(request, queue, priority, priorityBand, decision);
-    }
-    return decision;
-  }
 
-  private ResourceSchedulingDecision blockedDecision(
-      ResourceSchedulingRequest request,
-      ResourceQueueEntity queue,
-      Integer priority,
-      String priorityBand,
-      ResourceCheck check) {
-    // V89 DEGRADE_PRIORITY: limiter 在 reasonCode 末尾打 _DEGRADED 标记，这里把决策 priority/band 降到最低，
-    // 让 enrichFairnessScore 给出最低分，WaitingPartitionDispatchScheduler 的 fairness 排序自然把它沉到队尾
-    boolean degraded = check.reasonCode() != null && check.reasonCode().endsWith("_DEGRADED");
-    Integer effectivePriority = degraded ? 1 : priority;
-    String effectiveBand = degraded ? "LOW" : priorityBand;
-    ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
-    decision.setAdmissionAction(
-        check.failFast() ? ResourceAdmissionAction.REJECT : ResourceAdmissionAction.DEFER);
-    decision.setDispatchable(false);
-    decision.setFailFast(check.failFast());
-    decision.setReasonCode(check.reasonCode());
-    decision.setReasonMessage(check.reasonMessage());
-    decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
-    String workerGroup = resolveWorkerGroup(request, queue);
-    decision.setWorkerGroup(workerGroup);
-    decision.setPriority(effectivePriority);
-    decision.setPriorityBand(effectiveBand);
-    decision.setPartitionStatus(PartitionStatus.WAITING.code());
-    decision.setTaskStatus(TaskStatus.CREATED.code());
-    enrichFairnessScore(request, queue, effectivePriority, effectiveBand, decision);
-    return decision;
-  }
+    /** 调用方必须在 finally 中关闭以避免 ThreadLocal 泄漏。 */
+    public static void closeTickCache() {
+        TICK_CACHE.remove();
+    }
 
-  private ResourceCheck checkBatchWindow(ResourceSchedulingRequest request) {
-    if (request == null
-        || !Texts.hasText(request.getTenantId())
-        || !Texts.hasText(request.getWindowCode())) {
-      return ResourceCheck.allow();
-    }
-    BatchWindowEntity window =
-        configCacheService.findEnabledBatchWindow(request.getTenantId(), request.getWindowCode());
-    if (window == null || isWithinWindow(window)) {
-      return ResourceCheck.allow();
-    }
-    if ("FAIL".equalsIgnoreCase(window.outOfWindowAction())) {
-      return ResourceCheck.reject(
-          "OUT_OF_WINDOW", "current execution time is outside batch window");
-    }
-    return ResourceCheck.waitForCapacity("OUT_OF_WINDOW_WAIT", "waiting for batch window");
-  }
+    private record FairnessWeights(Integer priority, String priorityBand, int tenantWeight, int queueWeight) {}
 
-  private boolean isWithinWindow(BatchWindowEntity window) {
-    boolean batchWindowIsIncomplete = EmptyChecks.isNull(window)
-        || EmptyChecks.isNull(window.startTime())
-        || EmptyChecks.isNull(window.endTime());
-    if (batchWindowIsIncomplete) {
-      return true;
-    }
-    ZoneId zoneId = timezoneProvider.resolveOrDefault(window.timezone());
-    Instant currentInstant = dateTimeSupport.nowInstant();
-    ZonedDateTime currentTimeInWindowZone = currentInstant.atZone(zoneId);
-    LocalTime now = currentTimeInWindowZone.toLocalTime();
-    LocalTime start = window.startTime();
-    LocalTime end = window.endTime();
-    if (start.equals(end)) {
-      return true;
-    }
-    boolean crossDay = Boolean.TRUE.equals(window.allowCrossDay()) || end.isBefore(start);
-    if (crossDay) {
-      return !now.isBefore(start) || !now.isAfter(end);
-    }
-    return !now.isBefore(start) && !now.isAfter(end);
-  }
+    private record FairnessLoad(
+            int tenantActiveJobs, int tenantActivePartitions, int queueActiveJobs, int queueActivePartitions) {}
 
-  private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    if (request != null && Texts.hasText(request.getWorkerGroup())) {
-      return request.getWorkerGroup();
+    private record FairnessScoreContext(FairnessWeights weights, FairnessLoad load) {}
+
+    private final ResourceQueueManager resourceQueueManager;
+    private final ConcurrencyLimiter concurrencyLimiter;
+    private final PartitionThrottle partitionThrottle;
+    private final DispatchAdmissionLimiter dispatchAdmissionLimiter;
+    private final DownstreamAdmissionGuard downstreamAdmissionGuard;
+    private final WorkerSelector workerSelector;
+    private final PriorityScheduler priorityScheduler;
+    private final OrchestratorConfigCacheService configCacheService;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final JobPartitionMapper jobPartitionMapper;
+    private final BatchTimezoneProvider timezoneProvider;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final ResourceSchedulerProperties resourceSchedulerProperties;
+
+    /** 资源调度统一收敛在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
+    @Override
+    public ResourceSchedulingDecision schedule(ResourceSchedulingRequest request) {
+        return evaluate(request, false);
     }
-    return queue == null ? null : queue.workerGroup();
-  }
 
-  private static boolean isWaitingRetry(ResourceSchedulingRequest request) {
-    return request != null && request.getWaitingSince() != null;
-  }
-
-  private void enrichFairnessScore(
-      ResourceSchedulingRequest request,
-      ResourceQueueEntity queue,
-      Integer priority,
-      String priorityBand,
-      ResourceSchedulingDecision decision) {
-    if (decision == null) {
-      return;
+    @Override
+    public ResourceSchedulingDecision preview(ResourceSchedulingRequest request) {
+        return evaluate(request, true);
     }
-    int tenantWeight = resolveTenantWeight(request == null ? null : request.getTenantId());
-    int queueWeight = resolveQueueWeight(queue);
-    int tenantActiveJobs = resolveTenantActiveJobs(request);
-    int tenantActivePartitions = resolveTenantActivePartitions(request);
-    int queueActiveJobs = resolveQueueActiveJobs(request, queue);
-    int queueActivePartitions = resolveQueueActivePartitions(request, queue);
-    FairnessWeights fairnessWeights =
-        new FairnessWeights(priority, priorityBand, tenantWeight, queueWeight);
-    FairnessLoad fairnessLoad = new FairnessLoad(
-        tenantActiveJobs, tenantActivePartitions, queueActiveJobs, queueActivePartitions);
-    FairnessScoreContext fairnessContext = new FairnessScoreContext(fairnessWeights, fairnessLoad);
-    long baseScore = resolveFairnessScore(fairnessContext);
-    long agingBonus = resolveAgingBonus(request);
-    long fairnessScore =
-        baseScore > Long.MAX_VALUE - agingBonus ? Long.MAX_VALUE : baseScore + agingBonus;
-    decision.setTenantWeight(tenantWeight);
-    decision.setQueueWeight(queueWeight);
-    decision.setTenantActiveJobs(tenantActiveJobs);
-    decision.setTenantActivePartitions(tenantActivePartitions);
-    decision.setQueueActiveJobs(queueActiveJobs);
-    decision.setQueueActivePartitions(queueActivePartitions);
-    decision.setFairnessScore(fairnessScore);
-  }
 
-  private int resolveTenantWeight(String tenantId) {
-    if (!Texts.hasText(tenantId)) {
-      return 1;
+    private ResourceSchedulingDecision evaluate(ResourceSchedulingRequest request, boolean preview) {
+        ResourceQueueEntity queue = resourceQueueManager.resolveQueue(request);
+        Integer priority = priorityScheduler.resolvePriority(request, queue);
+        String priorityBand = priorityScheduler.resolvePriorityBand(priority);
+        ResourceCheck windowCheck = checkBatchWindow(request);
+        if (!windowCheck.allowed()) {
+            return blockedDecision(request, queue, priority, priorityBand, windowCheck);
+        }
+        // worker、下游和派发速率都不改变活跃计数。放在租户准入锁之前，避免选路和外部检查占着事务锁。
+        WorkerRouteModel route = workerSelector.select(request, queue, priority);
+        if (route == null || !Boolean.TRUE.equals(route.getAvailable())) {
+            return blockedDecision(
+                    request,
+                    queue,
+                    priority,
+                    priorityBand,
+                    ResourceCheck.waitForCapacity("NO_AVAILABLE_WORKER", "no online worker matches current route"));
+        }
+        ResourceCheck downstreamCheck = downstreamAdmissionGuard.check(request);
+        if (!downstreamCheck.allowed()) {
+            return blockedDecision(request, queue, priority, priorityBand, downstreamCheck);
+        }
+        if (!preview) {
+            ResourceCheck dispatchRateCheck = dispatchAdmissionLimiter.check(request, queue);
+            if (!dispatchRateCheck.allowed()) {
+                return blockedDecision(request, queue, priority, priorityBand, dispatchRateCheck);
+            }
+            ResourceCheck concurrencyCheck = concurrencyLimiter.check(request, queue);
+            if (!concurrencyCheck.allowed()) {
+                return blockedDecision(request, queue, priority, priorityBand, concurrencyCheck);
+            }
+            ResourceCheck partitionCheck = partitionThrottle.check(request, queue);
+            if (!partitionCheck.allowed()) {
+                return blockedDecision(request, queue, priority, priorityBand, partitionCheck);
+            }
+        }
+        ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+        decision.setAdmissionAction(ResourceAdmissionAction.ACCEPT);
+        decision.setDispatchable(true);
+        decision.setFailFast(false);
+        decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
+        String workerGroup = resolveWorkerGroup(request, queue);
+        decision.setWorkerGroup(workerGroup);
+        decision.setPriority(priority);
+        decision.setPriorityBand(priorityBand);
+        decision.setPartitionStatus(PartitionStatus.CREATED.code());
+        decision.setTaskStatus(TaskStatus.CREATED.code());
+        decision.setRoute(route);
+        // 公平分数只参与 WAITING 分区的下一轮排序。首次准入的分区会立即派发，计算四组
+        // 跨分区活跃数不会改变结果，却会在高吞吐入口额外放大数据库读压力。
+        if (isWaitingRetry(request)) {
+            enrichFairnessScore(request, queue, priority, priorityBand, decision);
+        }
+        return decision;
     }
-    TenantQuotaPolicyEntity policy = configCacheService.findEnabledQuotaPolicy(tenantId);
-    return hasValidFairShareWeight(policy == null ? null : policy.fairShareWeight())
-        ? policy.fairShareWeight()
-        : 1;
-  }
 
-  private int resolveQueueWeight(ResourceQueueEntity queue) {
-    return hasValidFairShareWeight(queue == null ? null : queue.fairShareWeight())
-        ? queue.fairShareWeight()
-        : 1;
-  }
-
-  private boolean hasValidFairShareWeight(Integer weight) {
-    return weight != null && weight > 0;
-  }
-
-  /** long -> int 安全窄化:Long.MAX_VALUE 量级的活跃计数现实不可能,但溢出会让 fairnessScore 排序紊乱。 */
-  private static int safeNarrow(long count) {
-    return (int) Math.min(count, Integer.MAX_VALUE);
-  }
-
-  private long cachedCount(String key, LongSupplier loader) {
-    Map<String, Long> cache = TICK_CACHE.get();
-    if (cache == null) {
-      return loader.getAsLong();
+    private ResourceSchedulingDecision blockedDecision(
+            ResourceSchedulingRequest request,
+            ResourceQueueEntity queue,
+            Integer priority,
+            String priorityBand,
+            ResourceCheck check) {
+        // V89 DEGRADE_PRIORITY: limiter 在 reasonCode 末尾打 _DEGRADED 标记，这里把决策 priority/band 降到最低，
+        // 让 enrichFairnessScore 给出最低分，WaitingPartitionDispatchScheduler 的 fairness 排序自然把它沉到队尾
+        boolean degraded = check.reasonCode() != null && check.reasonCode().endsWith("_DEGRADED");
+        Integer effectivePriority = degraded ? 1 : priority;
+        String effectiveBand = degraded ? "LOW" : priorityBand;
+        ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+        decision.setAdmissionAction(check.failFast() ? ResourceAdmissionAction.REJECT : ResourceAdmissionAction.DEFER);
+        decision.setDispatchable(false);
+        decision.setFailFast(check.failFast());
+        decision.setReasonCode(check.reasonCode());
+        decision.setReasonMessage(check.reasonMessage());
+        decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
+        String workerGroup = resolveWorkerGroup(request, queue);
+        decision.setWorkerGroup(workerGroup);
+        decision.setPriority(effectivePriority);
+        decision.setPriorityBand(effectiveBand);
+        decision.setPartitionStatus(PartitionStatus.WAITING.code());
+        decision.setTaskStatus(TaskStatus.CREATED.code());
+        enrichFairnessScore(request, queue, effectivePriority, effectiveBand, decision);
+        return decision;
     }
-    return cache.computeIfAbsent(key, k -> loader.getAsLong());
-  }
 
-  private int resolveTenantActiveJobs(ResourceSchedulingRequest request) {
-    if (request == null || !Texts.hasText(request.getTenantId())) {
-      return 0;
+    private ResourceCheck checkBatchWindow(ResourceSchedulingRequest request) {
+        if (request == null || !Texts.hasText(request.getTenantId()) || !Texts.hasText(request.getWindowCode())) {
+            return ResourceCheck.allow();
+        }
+        BatchWindowEntity window =
+                configCacheService.findEnabledBatchWindow(request.getTenantId(), request.getWindowCode());
+        if (window == null || isWithinWindow(window)) {
+            return ResourceCheck.allow();
+        }
+        if ("FAIL".equalsIgnoreCase(window.outOfWindowAction())) {
+            return ResourceCheck.reject("OUT_OF_WINDOW", "current execution time is outside batch window");
+        }
+        return ResourceCheck.waitForCapacity("OUT_OF_WINDOW_WAIT", "waiting for batch window");
     }
-    String tenantId = request.getTenantId();
-    long count =
-        cachedCount("tj:" + tenantId, () -> jobInstanceMapper.countActiveByTenant(tenantId));
-    return safeNarrow(count);
-  }
 
-  private int resolveTenantActivePartitions(ResourceSchedulingRequest request) {
-    if (request == null || !Texts.hasText(request.getTenantId())) {
-      return 0;
+    private boolean isWithinWindow(BatchWindowEntity window) {
+        boolean batchWindowIsIncomplete = EmptyChecks.isNull(window)
+                || EmptyChecks.isNull(window.startTime())
+                || EmptyChecks.isNull(window.endTime());
+        if (batchWindowIsIncomplete) {
+            return true;
+        }
+        ZoneId zoneId = timezoneProvider.resolveOrDefault(window.timezone());
+        Instant currentInstant = dateTimeSupport.nowInstant();
+        ZonedDateTime currentTimeInWindowZone = currentInstant.atZone(zoneId);
+        LocalTime now = currentTimeInWindowZone.toLocalTime();
+        LocalTime start = window.startTime();
+        LocalTime end = window.endTime();
+        if (start.equals(end)) {
+            return true;
+        }
+        boolean crossDay = Boolean.TRUE.equals(window.allowCrossDay()) || end.isBefore(start);
+        if (crossDay) {
+            return !now.isBefore(start) || !now.isAfter(end);
+        }
+        return !now.isBefore(start) && !now.isAfter(end);
     }
-    String tenantId = request.getTenantId();
-    long count = cachedCount("tp:" + tenantId, () -> {
-      JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery =
-          JobPartitionActiveByTenantCountQuery.builder()
-              .tenantId(tenantId)
-              .waitingStatus(PartitionStatus.WAITING.code())
-              .readyStatus(PartitionStatus.READY.code())
-              .runningStatus(PartitionStatus.RUNNING.code())
-              .retryingStatus(PartitionStatus.RETRYING.code())
-              .build();
-      return jobPartitionMapper.countActiveByTenant(jobPartitionActiveByTenantCountQuery);
-    });
-    return safeNarrow(count);
-  }
 
-  private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    boolean queueJobQueryContextIncomplete = EmptyChecks.isNull(request)
-        || !Texts.hasText(request.getTenantId())
-        || queue == null
-        || !Texts.hasText(queue.queueCode());
-    if (queueJobQueryContextIncomplete) {
-      return 0;
+    private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
+        if (request != null && Texts.hasText(request.getWorkerGroup())) {
+            return request.getWorkerGroup();
+        }
+        return queue == null ? null : queue.workerGroup();
     }
-    String tenantId = request.getTenantId();
-    String queueCode = queue.queueCode();
-    long count = cachedCount(
-        "qj:" + tenantId + ":" + queueCode,
-        () -> jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, queueCode));
-    return safeNarrow(count);
-  }
 
-  private int resolveQueueActivePartitions(
-      ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    boolean queuePartitionQueryContextIncomplete = EmptyChecks.isNull(request)
-        || !Texts.hasText(request.getTenantId())
-        || queue == null
-        || !Texts.hasText(queue.workerGroup());
-    if (queuePartitionQueryContextIncomplete) {
-      return 0;
+    private static boolean isWaitingRetry(ResourceSchedulingRequest request) {
+        return request != null && request.getWaitingSince() != null;
     }
-    String tenantId = request.getTenantId();
-    String workerGroup = queue.workerGroup();
-    long count = cachedCount(
-        "qp:" + tenantId + ":" + workerGroup,
-        () -> jobPartitionMapper.countActiveByTenantAndWorkerGroup(CountActiveByGroupParam.builder()
-            .tenantId(tenantId)
-            .workerGroup(workerGroup)
-            .waitingStatus(PartitionStatus.WAITING.code())
-            .readyStatus(PartitionStatus.READY.code())
-            .runningStatus(PartitionStatus.RUNNING.code())
-            .retryingStatus(PartitionStatus.RETRYING.code())
-            .build()));
-    return safeNarrow(count);
-  }
 
-  private long resolveFairnessScore(FairnessScoreContext context) {
-    FairnessWeights weights = context.weights();
-    FairnessLoad load = context.load();
-    long bandWeight =
-        switch (weights.priorityBand() == null ? "" : weights.priorityBand()) {
-          case "HIGH" -> 300L;
-          case "MEDIUM" -> 200L;
-          default -> 100L;
-        };
-    int normalizedPriority;
-    if (EmptyChecks.isNull(weights.priority())) {
-      normalizedPriority = 5;
-    } else {
-      int requestedPriority = weights.priority();
-      int upperBoundPriority = Math.min(requestedPriority, 9);
-      normalizedPriority = Math.max(1, upperBoundPriority);
+    private void enrichFairnessScore(
+            ResourceSchedulingRequest request,
+            ResourceQueueEntity queue,
+            Integer priority,
+            String priorityBand,
+            ResourceSchedulingDecision decision) {
+        if (decision == null) {
+            return;
+        }
+        int tenantWeight = resolveTenantWeight(request == null ? null : request.getTenantId());
+        int queueWeight = resolveQueueWeight(queue);
+        int tenantActiveJobs = resolveTenantActiveJobs(request);
+        int tenantActivePartitions = resolveTenantActivePartitions(request);
+        int queueActiveJobs = resolveQueueActiveJobs(request, queue);
+        int queueActivePartitions = resolveQueueActivePartitions(request, queue);
+        FairnessWeights fairnessWeights = new FairnessWeights(priority, priorityBand, tenantWeight, queueWeight);
+        FairnessLoad fairnessLoad =
+                new FairnessLoad(tenantActiveJobs, tenantActivePartitions, queueActiveJobs, queueActivePartitions);
+        FairnessScoreContext fairnessContext = new FairnessScoreContext(fairnessWeights, fairnessLoad);
+        long baseScore = resolveFairnessScore(fairnessContext);
+        long agingBonus = resolveAgingBonus(request);
+        long fairnessScore = baseScore > Long.MAX_VALUE - agingBonus ? Long.MAX_VALUE : baseScore + agingBonus;
+        decision.setTenantWeight(tenantWeight);
+        decision.setQueueWeight(queueWeight);
+        decision.setTenantActiveJobs(tenantActiveJobs);
+        decision.setTenantActivePartitions(tenantActivePartitions);
+        decision.setQueueActiveJobs(queueActiveJobs);
+        decision.setQueueActivePartitions(queueActivePartitions);
+        decision.setFairnessScore(fairnessScore);
     }
-    long loadPenalty = (long) load.tenantActiveJobs()
-        + load.tenantActivePartitions()
-        + load.queueActiveJobs()
-        + load.queueActivePartitions();
-    return bandWeight * 10_000L
-        + normalizedPriority * 1_000L
-        + weights.tenantWeight() * 100L
-        + weights.queueWeight() * 10L
-        - loadPenalty;
-  }
 
-  private long resolveAgingBonus(ResourceSchedulingRequest request) {
-    boolean priorityAgingUnavailable = EmptyChecks.isNull(request)
-        || request.getWaitingSince() == null
-        || !resourceSchedulerProperties.isPriorityAgingEnabled();
-    if (priorityAgingUnavailable) {
-      return 0L;
+    private int resolveTenantWeight(String tenantId) {
+        if (!Texts.hasText(tenantId)) {
+            return 1;
+        }
+        TenantQuotaPolicyEntity policy = configCacheService.findEnabledQuotaPolicy(tenantId);
+        return hasValidFairShareWeight(policy == null ? null : policy.fairShareWeight()) ? policy.fairShareWeight() : 1;
     }
-    Instant waitingSince = request.getWaitingSince();
-    Instant now = dateTimeSupport.nowInstant();
-    Duration waitedDuration = Duration.between(waitingSince, now);
-    long elapsedSeconds = waitedDuration.toSeconds();
-    long waitedSeconds = Math.max(0L, elapsedSeconds);
-    long configuredStepSeconds = resourceSchedulerProperties.getPriorityAgingStepSeconds();
-    long stepSeconds =
-        configuredStepSeconds > 0 ? configuredStepSeconds : DEFAULT_PRIORITY_AGING_STEP_SECONDS;
-    long steps = waitedSeconds / stepSeconds;
-    long configuredBonusPerStep = resourceSchedulerProperties.getPriorityAgingBonusPerStep();
-    long bonusPerStep = Math.max(0L, configuredBonusPerStep);
-    long configuredMaximumBonus = resourceSchedulerProperties.getPriorityAgingMaxBonus();
-    long nonnegativeMaximumBonus = Math.max(0L, configuredMaximumBonus);
-    if (steps == 0 || bonusPerStep == 0 || nonnegativeMaximumBonus == 0) {
-      return 0;
+
+    private int resolveQueueWeight(ResourceQueueEntity queue) {
+        return hasValidFairShareWeight(queue == null ? null : queue.fairShareWeight()) ? queue.fairShareWeight() : 1;
     }
-    // 先比较商再乘，避免上限截断前发生 long 溢出并颠倒调度顺序。
-    if (steps > nonnegativeMaximumBonus / bonusPerStep) {
-      return nonnegativeMaximumBonus;
+
+    private boolean hasValidFairShareWeight(Integer weight) {
+        return weight != null && weight > 0;
     }
-    return steps * bonusPerStep;
-  }
+
+    /** long -> int 安全窄化:Long.MAX_VALUE 量级的活跃计数现实不可能,但溢出会让 fairnessScore 排序紊乱。 */
+    private static int safeNarrow(long count) {
+        return (int) Math.min(count, Integer.MAX_VALUE);
+    }
+
+    private long cachedCount(String key, LongSupplier loader) {
+        Map<String, Long> cache = TICK_CACHE.get();
+        if (cache == null) {
+            return loader.getAsLong();
+        }
+        return cache.computeIfAbsent(key, k -> loader.getAsLong());
+    }
+
+    private int resolveTenantActiveJobs(ResourceSchedulingRequest request) {
+        if (request == null || !Texts.hasText(request.getTenantId())) {
+            return 0;
+        }
+        String tenantId = request.getTenantId();
+        long count = cachedCount("tj:" + tenantId, () -> jobInstanceMapper.countActiveByTenant(tenantId));
+        return safeNarrow(count);
+    }
+
+    private int resolveTenantActivePartitions(ResourceSchedulingRequest request) {
+        if (request == null || !Texts.hasText(request.getTenantId())) {
+            return 0;
+        }
+        String tenantId = request.getTenantId();
+        long count = cachedCount("tp:" + tenantId, () -> {
+            JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery =
+                    JobPartitionActiveByTenantCountQuery.builder()
+                            .tenantId(tenantId)
+                            .waitingStatus(PartitionStatus.WAITING.code())
+                            .readyStatus(PartitionStatus.READY.code())
+                            .runningStatus(PartitionStatus.RUNNING.code())
+                            .retryingStatus(PartitionStatus.RETRYING.code())
+                            .build();
+            return jobPartitionMapper.countActiveByTenant(jobPartitionActiveByTenantCountQuery);
+        });
+        return safeNarrow(count);
+    }
+
+    private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
+        boolean queueJobQueryContextIncomplete = EmptyChecks.isNull(request)
+                || !Texts.hasText(request.getTenantId())
+                || queue == null
+                || !Texts.hasText(queue.queueCode());
+        if (queueJobQueryContextIncomplete) {
+            return 0;
+        }
+        String tenantId = request.getTenantId();
+        String queueCode = queue.queueCode();
+        long count = cachedCount(
+                "qj:" + tenantId + ":" + queueCode,
+                () -> jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, queueCode));
+        return safeNarrow(count);
+    }
+
+    private int resolveQueueActivePartitions(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
+        boolean queuePartitionQueryContextIncomplete = EmptyChecks.isNull(request)
+                || !Texts.hasText(request.getTenantId())
+                || queue == null
+                || !Texts.hasText(queue.workerGroup());
+        if (queuePartitionQueryContextIncomplete) {
+            return 0;
+        }
+        String tenantId = request.getTenantId();
+        String workerGroup = queue.workerGroup();
+        long count = cachedCount(
+                "qp:" + tenantId + ":" + workerGroup,
+                () -> jobPartitionMapper.countActiveByTenantAndWorkerGroup(CountActiveByGroupParam.builder()
+                        .tenantId(tenantId)
+                        .workerGroup(workerGroup)
+                        .waitingStatus(PartitionStatus.WAITING.code())
+                        .readyStatus(PartitionStatus.READY.code())
+                        .runningStatus(PartitionStatus.RUNNING.code())
+                        .retryingStatus(PartitionStatus.RETRYING.code())
+                        .build()));
+        return safeNarrow(count);
+    }
+
+    private long resolveFairnessScore(FairnessScoreContext context) {
+        FairnessWeights weights = context.weights();
+        FairnessLoad load = context.load();
+        long bandWeight =
+                switch (weights.priorityBand() == null ? "" : weights.priorityBand()) {
+                    case "HIGH" -> 300L;
+                    case "MEDIUM" -> 200L;
+                    default -> 100L;
+                };
+        int normalizedPriority;
+        if (EmptyChecks.isNull(weights.priority())) {
+            normalizedPriority = 5;
+        } else {
+            int requestedPriority = weights.priority();
+            int upperBoundPriority = Math.min(requestedPriority, 9);
+            normalizedPriority = Math.max(1, upperBoundPriority);
+        }
+        long loadPenalty = (long) load.tenantActiveJobs()
+                + load.tenantActivePartitions()
+                + load.queueActiveJobs()
+                + load.queueActivePartitions();
+        return bandWeight * 10_000L
+                + normalizedPriority * 1_000L
+                + weights.tenantWeight() * 100L
+                + weights.queueWeight() * 10L
+                - loadPenalty;
+    }
+
+    private long resolveAgingBonus(ResourceSchedulingRequest request) {
+        boolean priorityAgingUnavailable = EmptyChecks.isNull(request)
+                || request.getWaitingSince() == null
+                || !resourceSchedulerProperties.isPriorityAgingEnabled();
+        if (priorityAgingUnavailable) {
+            return 0L;
+        }
+        Instant waitingSince = request.getWaitingSince();
+        Instant now = dateTimeSupport.nowInstant();
+        Duration waitedDuration = Duration.between(waitingSince, now);
+        long elapsedSeconds = waitedDuration.toSeconds();
+        long waitedSeconds = Math.max(0L, elapsedSeconds);
+        long configuredStepSeconds = resourceSchedulerProperties.getPriorityAgingStepSeconds();
+        long stepSeconds = configuredStepSeconds > 0 ? configuredStepSeconds : DEFAULT_PRIORITY_AGING_STEP_SECONDS;
+        long steps = waitedSeconds / stepSeconds;
+        long configuredBonusPerStep = resourceSchedulerProperties.getPriorityAgingBonusPerStep();
+        long bonusPerStep = Math.max(0L, configuredBonusPerStep);
+        long configuredMaximumBonus = resourceSchedulerProperties.getPriorityAgingMaxBonus();
+        long nonnegativeMaximumBonus = Math.max(0L, configuredMaximumBonus);
+        if (steps == 0 || bonusPerStep == 0 || nonnegativeMaximumBonus == 0) {
+            return 0;
+        }
+        // 先比较商再乘，避免上限截断前发生 long 溢出并颠倒调度顺序。
+        if (steps > nonnegativeMaximumBonus / bonusPerStep) {
+            return nonnegativeMaximumBonus;
+        }
+        return steps * bonusPerStep;
+    }
 }

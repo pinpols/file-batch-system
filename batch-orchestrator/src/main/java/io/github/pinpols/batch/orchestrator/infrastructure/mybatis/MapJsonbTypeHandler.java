@@ -25,47 +25,44 @@ import org.apache.ibatis.type.MappedJdbcTypes;
 @MappedJdbcTypes(JdbcType.VARCHAR)
 public class MapJsonbTypeHandler extends BaseTypeHandler<Map<String, Object>> {
 
-  @Override
-  public void setNonNullParameter(
-      PreparedStatement ps, int i, Map<String, Object> parameter, JdbcType jdbcType)
-      throws SQLException {
-    String json = JsonUtils.toJson(parameter);
-    ps.setString(i, json);
-  }
-
-  @Override
-  public Map<String, Object> getNullableResult(ResultSet rs, String columnName)
-      throws SQLException {
-    return parse(rs.getString(columnName));
-  }
-
-  @Override
-  public Map<String, Object> getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
-    return parse(rs.getString(columnIndex));
-  }
-
-  @Override
-  public Map<String, Object> getNullableResult(CallableStatement cs, int columnIndex)
-      throws SQLException {
-    return parse(cs.getString(columnIndex));
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> parse(String json) {
-    if (json == null || json.isBlank()) {
-      return null;
+    @Override
+    public void setNonNullParameter(PreparedStatement ps, int i, Map<String, Object> parameter, JdbcType jdbcType)
+            throws SQLException {
+        String json = JsonUtils.toJson(parameter);
+        ps.setString(i, json);
     }
-    try {
-      Object parsed = JsonUtils.fromJson(json, Object.class);
-      if (parsed instanceof Map<?, ?> map) {
-        return new LinkedHashMap<>((Map<String, Object>) map);
-      }
-      return null;
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.warn(MapJsonbTypeHandler.class, "catch:RuntimeException", ex);
 
-      // JSONB 列里出现格式错乱（历史异常数据 / 手工改库）→ 不让单条记录读取打崩整个查询
-      return null;
+    @Override
+    public Map<String, Object> getNullableResult(ResultSet rs, String columnName) throws SQLException {
+        return parse(rs.getString(columnName));
     }
-  }
+
+    @Override
+    public Map<String, Object> getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
+        return parse(rs.getString(columnIndex));
+    }
+
+    @Override
+    public Map<String, Object> getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
+        return parse(cs.getString(columnIndex));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parse(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            Object parsed = JsonUtils.fromJson(json, Object.class);
+            if (parsed instanceof Map<?, ?> map) {
+                return new LinkedHashMap<>((Map<String, Object>) map);
+            }
+            return null;
+        } catch (RuntimeException ex) {
+            SwallowedExceptionLogger.warn(MapJsonbTypeHandler.class, "catch:RuntimeException", ex);
+
+            // JSONB 列里出现格式错乱（历史异常数据 / 手工改库）→ 不让单条记录读取打崩整个查询
+            return null;
+        }
+    }
 }

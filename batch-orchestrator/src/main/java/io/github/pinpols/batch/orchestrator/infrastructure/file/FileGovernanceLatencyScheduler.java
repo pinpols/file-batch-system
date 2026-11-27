@@ -17,15 +17,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class FileGovernanceLatencyScheduler {
 
-  private final FileGovernanceScheduler fileGovernanceScheduler;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final FileGovernanceScheduler fileGovernanceScheduler;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.file-governance.latency.poll-interval-millis:30000}")
-  @SchedulerLock(name = "file_governance_latency", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
-  public void collectLatencyMetrics() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.file-governance.latency.poll-interval-millis:30000}")
+    @SchedulerLock(name = "file_governance_latency", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
+    public void collectLatencyMetrics() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        fileGovernanceScheduler.collectLatencyMetrics();
     }
-    fileGovernanceScheduler.collectLatencyMetrics();
-  }
 }

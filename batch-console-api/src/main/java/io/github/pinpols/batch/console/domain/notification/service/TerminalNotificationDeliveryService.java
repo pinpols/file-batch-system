@@ -36,272 +36,264 @@ import org.springframework.web.util.HtmlUtils;
 @Slf4j
 public class TerminalNotificationDeliveryService {
 
-  /** 重试退避基数（秒）：第 n 次重试等待 5·2^n 秒。 */
-  private static final long RETRY_BACKOFF_BASE_SECONDS = 5L;
+    /** 重试退避基数（秒）：第 n 次重试等待 5·2^n 秒。 */
+    private static final long RETRY_BACKOFF_BASE_SECONDS = 5L;
 
-  /** 退避指数上限，attempt 超过 8 后不再翻倍。 */
-  private static final int MAX_RETRY_BACKOFF_EXPONENT = 8;
+    /** 退避指数上限，attempt 超过 8 后不再翻倍。 */
+    private static final int MAX_RETRY_BACKOFF_EXPONENT = 8;
 
-  /** 单次重试等待上限（30 分钟）。 */
-  private static final long MAX_RETRY_DELAY_SECONDS = 1800L;
+    /** 单次重试等待上限（30 分钟）。 */
+    private static final long MAX_RETRY_DELAY_SECONDS = 1800L;
 
-  /**
-   * 终态通知投递失败原因长度上限。WEBHOOK 写 webhook_delivery_log.response_body VARCHAR(2048)（V45），
-   * 其他渠道写 notification_delivery_log.error_message VARCHAR(1024)（V49），取较小值。
-   */
-  private static final int DELIVERY_ERROR_MAX_LENGTH = 1024;
+    /**
+     * 终态通知投递失败原因长度上限。WEBHOOK 写 webhook_delivery_log.response_body VARCHAR(2048)（V45），
+     * 其他渠道写 notification_delivery_log.error_message VARCHAR(1024)（V49），取较小值。
+     */
+    private static final int DELIVERY_ERROR_MAX_LENGTH = 1024;
 
-  private final WorkflowTerminalNotificationMapper deliveries;
-  private final ConsoleWebhookSubscriptionMapper subscriptions;
-  private final SubscriptionRuleMapper rules;
-  private final NotificationChannelMapper channels;
-  private final WebhookDispatcher webhooks;
-  private final NotificationSenderRegistry senders;
-  private final WebhookRelayProperties properties;
-  private final TransactionTemplate transactions;
+    private final WorkflowTerminalNotificationMapper deliveries;
+    private final ConsoleWebhookSubscriptionMapper subscriptions;
+    private final SubscriptionRuleMapper rules;
+    private final NotificationChannelMapper channels;
+    private final WebhookDispatcher webhooks;
+    private final NotificationSenderRegistry senders;
+    private final WebhookRelayProperties properties;
+    private final TransactionTemplate transactions;
 
-  public TerminalNotificationDeliveryService(
-      WorkflowTerminalNotificationMapper deliveries,
-      ConsoleWebhookSubscriptionMapper subscriptions,
-      SubscriptionRuleMapper rules,
-      NotificationChannelMapper channels,
-      WebhookDispatcher webhooks,
-      NotificationSenderRegistry senders,
-      WebhookRelayProperties properties,
-      @Qualifier("transactionManager") PlatformTransactionManager transactionManager) {
-    this.deliveries = deliveries;
-    this.subscriptions = subscriptions;
-    this.rules = rules;
-    this.channels = channels;
-    this.webhooks = webhooks;
-    this.senders = senders;
-    this.properties = properties;
-    this.transactions = new TransactionTemplate(transactionManager);
-  }
-
-  public void poll() {
-    poll(() -> false);
-  }
-
-  public void poll(BooleanSupplier stopping) {
-    if (stopping.getAsBoolean() || Thread.currentThread().isInterrupted()) {
-      return;
-    }
-    Instant pollTime = BatchDateTimeSupport.utcNow();
-    int effectiveBatchSize = Math.max(1, properties.getBatchSize());
-    for (TerminalNotificationDelivery row : deliveries.pending(pollTime, effectiveBatchSize)) {
-      if (stopping.getAsBoolean() || Thread.currentThread().isInterrupted()) {
-        return;
-      }
-      try {
-        deliver(row);
-      } catch (RuntimeException failure) {
-        // 已提交的领取记录会过期；完成事务丢失不会清除重试义务。
-        log.warn(
-            "Terminal notification delivery interrupted; claim remains recoverable: tenant={} id={} source={} cause={}",
-            row.tenantId(),
-            row.id(),
-            row.source(),
-            safeDeliveryError(SwallowedExceptionLogger.summary(failure)));
-      }
-    }
-  }
-
-  private void deliver(TerminalNotificationDelivery row) {
-    Instant now = BatchDateTimeSupport.utcNow();
-    UUID tokenId = UUID.randomUUID();
-    String token = tokenId.toString();
-    int maxAttempts = Math.max(1, properties.getAbsoluteMaxAttempts());
-    String tenantId = row.tenantId();
-    Integer claimResult = inTenant(tenantId, () -> {
-      Instant leaseExpiresAt = now.plus(Duration.ofMinutes(2));
-      WorkflowTerminalNotificationClaimParam workflowTerminalNotificationClaimParam =
-          WorkflowTerminalNotificationClaimParam.builder()
-              .row(row)
-              .token(token)
-              .now(now)
-              .until(leaseExpiresAt)
-              .maxAttempts(maxAttempts)
-              .build();
-      return deliveries.claim(workflowTerminalNotificationClaimParam);
-    });
-    if (!Integer.valueOf(1).equals(claimResult)) {
-      return;
-    }
-    if (row.attempt() >= maxAttempts) {
-      inTenant(row.tenantId(), () -> {
-        WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam =
-            WorkflowTerminalNotificationFinishParam.builder()
-                .row(row)
-                .token(token)
-                .status("EXHAUSTED")
-                .error("delivery attempt budget exhausted; manual reconciliation required")
-                .nextRetry(null)
-                .build();
-        return deliveries.finish(workflowTerminalNotificationFinishParam);
-      });
-      return;
-    }
-    Destination destination = inTenant(row.tenantId(), () -> destination(row));
-    if (row.attempt() > 0 && EmptyChecks.isNotNull(destination.message())) {
-      inTenant(row.tenantId(), () -> {
-        WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam2 =
-            WorkflowTerminalNotificationFinishParam.builder()
-                .row(row)
-                .token(token)
-                .status("EXHAUSTED")
-                .error("previous provider delivery outcome unknown; manual reconciliation required")
-                .nextRetry(null)
-                .build();
-        return deliveries.finish(workflowTerminalNotificationFinishParam2);
-      });
-      return;
-    }
-    WebhookDeliveryResult result = deliverToDestination(destination, row);
-    boolean success = result.success();
-    // Webhook 协议携带稳定的 Idempotency-Key。其他服务方未声明
-    // 幂等能力，因此结果不确定的失败必须保留并供人工协调。
-    boolean retry =
-        !success && EmptyChecks.isNotNull(destination.webhook()) && row.attempt() + 1 < maxAttempts;
-    Instant nextRetry = null;
-    if (retry) {
-      Instant retryScheduledAt = BatchDateTimeSupport.utcNow();
-      int boundedBackoffExponent = Math.min(row.attempt(), MAX_RETRY_BACKOFF_EXPONENT);
-      long retryDelaySeconds =
-          Math.min(MAX_RETRY_DELAY_SECONDS, RETRY_BACKOFF_BASE_SECONDS << boundedBackoffExponent);
-      nextRetry = retryScheduledAt.plusSeconds(retryDelaySeconds);
-    }
-    String boundedError = safeDeliveryError(result.errorSummary());
-    Instant retryAt = nextRetry;
-    int completed = inTenant(row.tenantId(), () -> {
-      WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam3 =
-          WorkflowTerminalNotificationFinishParam.builder()
-              .row(row)
-              .token(token)
-              .status(success ? "SUCCESS" : "EXHAUSTED")
-              .error(boundedError)
-              .nextRetry(retryAt)
-              .build();
-      return deliveries.finish(workflowTerminalNotificationFinishParam3);
-    });
-    if (completed == 0) {
-      log.info(
-          "Terminal notification completion fenced: tenant={} id={} source={}",
-          row.tenantId(),
-          row.id(),
-          row.source());
-    } else if (!success) {
-      log.warn(
-          "Terminal notification not delivered: tenant={} id={} source={} retry={} cause={}",
-          row.tenantId(),
-          row.id(),
-          row.source(),
-          retry,
-          boundedError);
-    }
-  }
-
-  private WebhookDeliveryResult deliverToDestination(
-      Destination destination, TerminalNotificationDelivery row) {
-    WebhookDeliveryResult result;
-    try {
-      if (EmptyChecks.isNotNull(destination.problem())) {
-        result = WebhookDeliveryResult.failure(null, destination.problem());
-      } else if (EmptyChecks.isNotNull(destination.webhook())) {
-        result = webhooks.attemptDelivery(
-            destination.webhook(), destination.payload(), row.payloadJson());
-      } else {
-        NotificationSender sender = senders.resolve(destination.message().channelType());
-        result = EmptyChecks.isNull(sender)
-            ? WebhookDeliveryResult.failure(null, "notification sender unavailable")
-            : sender.send(destination.message());
-      }
-    } catch (RuntimeException failure) {
-      result = WebhookDeliveryResult.failure(null, SwallowedExceptionLogger.summary(failure));
-    }
-    return result;
-  }
-
-  private static String safeDeliveryError(String error) {
-    if (EmptyChecks.isNull(error)) {
-      return null;
-    }
-    String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(error));
-    return SwallowedExceptionLogger.safeMessage(normalized, DELIVERY_ERROR_MAX_LENGTH);
-  }
-
-  private Destination destination(TerminalNotificationDelivery row) {
-    WebhookEventPayload payload = JsonUtils.fromJson(row.payloadJson(), WebhookEventPayload.class);
-    if ("WEBHOOK".equals(row.source())) {
-      Optional<WebhookSubscriptionEntity> subscription =
-          subscriptions.findByTenantAndId(row.tenantId(), row.recipientId());
-      return subscription
-          .filter(s -> Boolean.TRUE.equals(s.getEnabled()))
-          .map(s -> Destination.webhook(s, payload))
-          .orElseGet(() -> Destination.unavailable(payload, "subscription disabled or deleted"));
-    }
-    SubscriptionRuleRow rule = rules.selectById(row.tenantId(), row.recipientId());
-    NotificationChannelRow channel = channels.selectByCode(row.tenantId(), row.channelCode());
-    boolean ruleOrChannelIsUnavailableForDelivery = EmptyChecks.isNull(rule)
-        || !Boolean.TRUE.equals(rule.enabled())
-        || !row.channelCode().equals(rule.channelCode())
-        || EmptyChecks.isNull(channel)
-        || !Boolean.TRUE.equals(channel.enabled());
-    if (ruleOrChannelIsUnavailableForDelivery) {
-      return Destination.unavailable(
-          payload, "selected rule or channel disabled, deleted or reassigned");
-    }
-    String type = channel.channelType();
-    String configJson = channel.configJson();
-    if ("WEBHOOK".equals(type)) {
-      Map<?, ?> config = JsonUtils.fromJson(configJson, Map.class);
-      if (EmptyChecks.isNull(config)
-          || !(config.get("url") instanceof String url)
-          || EmptyChecks.isBlank(url)) {
-        return Destination.unavailable(payload, "webhook channel URL missing");
-      }
-      WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
-      subscription.setTenantId(row.tenantId());
-      subscription.setCallbackUrl(url);
-      Object configuredSecret = config.get("secret");
-      String webhookSecret =
-          EmptyChecks.isNull(configuredSecret) ? null : String.valueOf(configuredSecret);
-      subscription.setSecret(webhookSecret);
-      subscription.setEnabled(true);
-      return Destination.webhook(subscription, payload);
-    }
-    NotificationMessage message = new NotificationMessage(
-        row.tenantId(), row.channelCode(), type, configJson, payload, row.payloadJson());
-    return Destination.notification(message, payload);
-  }
-
-  private <T> T inTenant(String tenant, Supplier<T> action) {
-    return RlsTenantContextHolder.runWithTenant(
-        tenant,
-        () -> transactions.execute(ignored -> {
-          deliveries.bindTenant(tenant);
-          return action.get();
-        }));
-  }
-
-  private record Destination(
-      WebhookSubscriptionEntity webhook,
-      NotificationMessage message,
-      WebhookEventPayload payload,
-      String problem) {
-
-    private static Destination webhook(
-        WebhookSubscriptionEntity subscription, WebhookEventPayload payload) {
-      return new Destination(subscription, null, payload, null);
+    public TerminalNotificationDeliveryService(
+            WorkflowTerminalNotificationMapper deliveries,
+            ConsoleWebhookSubscriptionMapper subscriptions,
+            SubscriptionRuleMapper rules,
+            NotificationChannelMapper channels,
+            WebhookDispatcher webhooks,
+            NotificationSenderRegistry senders,
+            WebhookRelayProperties properties,
+            @Qualifier("transactionManager") PlatformTransactionManager transactionManager) {
+        this.deliveries = deliveries;
+        this.subscriptions = subscriptions;
+        this.rules = rules;
+        this.channels = channels;
+        this.webhooks = webhooks;
+        this.senders = senders;
+        this.properties = properties;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
-    private static Destination notification(
-        NotificationMessage message, WebhookEventPayload payload) {
-      return new Destination(null, message, payload, null);
+    public void poll() {
+        poll(() -> false);
     }
 
-    private static Destination unavailable(WebhookEventPayload payload, String problem) {
-      return new Destination(null, null, payload, problem);
+    public void poll(BooleanSupplier stopping) {
+        if (stopping.getAsBoolean() || Thread.currentThread().isInterrupted()) {
+            return;
+        }
+        Instant pollTime = BatchDateTimeSupport.utcNow();
+        int effectiveBatchSize = Math.max(1, properties.getBatchSize());
+        for (TerminalNotificationDelivery row : deliveries.pending(pollTime, effectiveBatchSize)) {
+            if (stopping.getAsBoolean() || Thread.currentThread().isInterrupted()) {
+                return;
+            }
+            try {
+                deliver(row);
+            } catch (RuntimeException failure) {
+                // 已提交的领取记录会过期；完成事务丢失不会清除重试义务。
+                log.warn(
+                        "Terminal notification delivery interrupted; claim remains recoverable: tenant={} id={} source={} cause={}",
+                        row.tenantId(),
+                        row.id(),
+                        row.source(),
+                        safeDeliveryError(SwallowedExceptionLogger.summary(failure)));
+            }
+        }
     }
-  }
+
+    private void deliver(TerminalNotificationDelivery row) {
+        Instant now = BatchDateTimeSupport.utcNow();
+        UUID tokenId = UUID.randomUUID();
+        String token = tokenId.toString();
+        int maxAttempts = Math.max(1, properties.getAbsoluteMaxAttempts());
+        String tenantId = row.tenantId();
+        Integer claimResult = inTenant(tenantId, () -> {
+            Instant leaseExpiresAt = now.plus(Duration.ofMinutes(2));
+            WorkflowTerminalNotificationClaimParam workflowTerminalNotificationClaimParam =
+                    WorkflowTerminalNotificationClaimParam.builder()
+                            .row(row)
+                            .token(token)
+                            .now(now)
+                            .until(leaseExpiresAt)
+                            .maxAttempts(maxAttempts)
+                            .build();
+            return deliveries.claim(workflowTerminalNotificationClaimParam);
+        });
+        if (!Integer.valueOf(1).equals(claimResult)) {
+            return;
+        }
+        if (row.attempt() >= maxAttempts) {
+            inTenant(row.tenantId(), () -> {
+                WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam =
+                        WorkflowTerminalNotificationFinishParam.builder()
+                                .row(row)
+                                .token(token)
+                                .status("EXHAUSTED")
+                                .error("delivery attempt budget exhausted; manual reconciliation required")
+                                .nextRetry(null)
+                                .build();
+                return deliveries.finish(workflowTerminalNotificationFinishParam);
+            });
+            return;
+        }
+        Destination destination = inTenant(row.tenantId(), () -> destination(row));
+        if (row.attempt() > 0 && EmptyChecks.isNotNull(destination.message())) {
+            inTenant(row.tenantId(), () -> {
+                WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam2 =
+                        WorkflowTerminalNotificationFinishParam.builder()
+                                .row(row)
+                                .token(token)
+                                .status("EXHAUSTED")
+                                .error("previous provider delivery outcome unknown; manual reconciliation required")
+                                .nextRetry(null)
+                                .build();
+                return deliveries.finish(workflowTerminalNotificationFinishParam2);
+            });
+            return;
+        }
+        WebhookDeliveryResult result = deliverToDestination(destination, row);
+        boolean success = result.success();
+        // Webhook 协议携带稳定的 Idempotency-Key。其他服务方未声明
+        // 幂等能力，因此结果不确定的失败必须保留并供人工协调。
+        boolean retry = !success && EmptyChecks.isNotNull(destination.webhook()) && row.attempt() + 1 < maxAttempts;
+        Instant nextRetry = null;
+        if (retry) {
+            Instant retryScheduledAt = BatchDateTimeSupport.utcNow();
+            int boundedBackoffExponent = Math.min(row.attempt(), MAX_RETRY_BACKOFF_EXPONENT);
+            long retryDelaySeconds =
+                    Math.min(MAX_RETRY_DELAY_SECONDS, RETRY_BACKOFF_BASE_SECONDS << boundedBackoffExponent);
+            nextRetry = retryScheduledAt.plusSeconds(retryDelaySeconds);
+        }
+        String boundedError = safeDeliveryError(result.errorSummary());
+        Instant retryAt = nextRetry;
+        int completed = inTenant(row.tenantId(), () -> {
+            WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam3 =
+                    WorkflowTerminalNotificationFinishParam.builder()
+                            .row(row)
+                            .token(token)
+                            .status(success ? "SUCCESS" : "EXHAUSTED")
+                            .error(boundedError)
+                            .nextRetry(retryAt)
+                            .build();
+            return deliveries.finish(workflowTerminalNotificationFinishParam3);
+        });
+        if (completed == 0) {
+            log.info(
+                    "Terminal notification completion fenced: tenant={} id={} source={}",
+                    row.tenantId(),
+                    row.id(),
+                    row.source());
+        } else if (!success) {
+            log.warn(
+                    "Terminal notification not delivered: tenant={} id={} source={} retry={} cause={}",
+                    row.tenantId(),
+                    row.id(),
+                    row.source(),
+                    retry,
+                    boundedError);
+        }
+    }
+
+    private WebhookDeliveryResult deliverToDestination(Destination destination, TerminalNotificationDelivery row) {
+        WebhookDeliveryResult result;
+        try {
+            if (EmptyChecks.isNotNull(destination.problem())) {
+                result = WebhookDeliveryResult.failure(null, destination.problem());
+            } else if (EmptyChecks.isNotNull(destination.webhook())) {
+                result = webhooks.attemptDelivery(destination.webhook(), destination.payload(), row.payloadJson());
+            } else {
+                NotificationSender sender =
+                        senders.resolve(destination.message().channelType());
+                result = EmptyChecks.isNull(sender)
+                        ? WebhookDeliveryResult.failure(null, "notification sender unavailable")
+                        : sender.send(destination.message());
+            }
+        } catch (RuntimeException failure) {
+            result = WebhookDeliveryResult.failure(null, SwallowedExceptionLogger.summary(failure));
+        }
+        return result;
+    }
+
+    private static String safeDeliveryError(String error) {
+        if (EmptyChecks.isNull(error)) {
+            return null;
+        }
+        String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(error));
+        return SwallowedExceptionLogger.safeMessage(normalized, DELIVERY_ERROR_MAX_LENGTH);
+    }
+
+    private Destination destination(TerminalNotificationDelivery row) {
+        WebhookEventPayload payload = JsonUtils.fromJson(row.payloadJson(), WebhookEventPayload.class);
+        if ("WEBHOOK".equals(row.source())) {
+            Optional<WebhookSubscriptionEntity> subscription =
+                    subscriptions.findByTenantAndId(row.tenantId(), row.recipientId());
+            return subscription
+                    .filter(s -> Boolean.TRUE.equals(s.getEnabled()))
+                    .map(s -> Destination.webhook(s, payload))
+                    .orElseGet(() -> Destination.unavailable(payload, "subscription disabled or deleted"));
+        }
+        SubscriptionRuleRow rule = rules.selectById(row.tenantId(), row.recipientId());
+        NotificationChannelRow channel = channels.selectByCode(row.tenantId(), row.channelCode());
+        boolean ruleOrChannelIsUnavailableForDelivery = EmptyChecks.isNull(rule)
+                || !Boolean.TRUE.equals(rule.enabled())
+                || !row.channelCode().equals(rule.channelCode())
+                || EmptyChecks.isNull(channel)
+                || !Boolean.TRUE.equals(channel.enabled());
+        if (ruleOrChannelIsUnavailableForDelivery) {
+            return Destination.unavailable(payload, "selected rule or channel disabled, deleted or reassigned");
+        }
+        String type = channel.channelType();
+        String configJson = channel.configJson();
+        if ("WEBHOOK".equals(type)) {
+            Map<?, ?> config = JsonUtils.fromJson(configJson, Map.class);
+            if (EmptyChecks.isNull(config) || !(config.get("url") instanceof String url) || EmptyChecks.isBlank(url)) {
+                return Destination.unavailable(payload, "webhook channel URL missing");
+            }
+            WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
+            subscription.setTenantId(row.tenantId());
+            subscription.setCallbackUrl(url);
+            Object configuredSecret = config.get("secret");
+            String webhookSecret = EmptyChecks.isNull(configuredSecret) ? null : String.valueOf(configuredSecret);
+            subscription.setSecret(webhookSecret);
+            subscription.setEnabled(true);
+            return Destination.webhook(subscription, payload);
+        }
+        NotificationMessage message = new NotificationMessage(
+                row.tenantId(), row.channelCode(), type, configJson, payload, row.payloadJson());
+        return Destination.notification(message, payload);
+    }
+
+    private <T> T inTenant(String tenant, Supplier<T> action) {
+        return RlsTenantContextHolder.runWithTenant(
+                tenant,
+                () -> transactions.execute(ignored -> {
+                    deliveries.bindTenant(tenant);
+                    return action.get();
+                }));
+    }
+
+    private record Destination(
+            WebhookSubscriptionEntity webhook,
+            NotificationMessage message,
+            WebhookEventPayload payload,
+            String problem) {
+
+        private static Destination webhook(WebhookSubscriptionEntity subscription, WebhookEventPayload payload) {
+            return new Destination(subscription, null, payload, null);
+        }
+
+        private static Destination notification(NotificationMessage message, WebhookEventPayload payload) {
+            return new Destination(null, message, payload, null);
+        }
+
+        private static Destination unavailable(WebhookEventPayload payload, String problem) {
+            return new Destination(null, null, payload, problem);
+        }
+    }
 }

@@ -17,65 +17,62 @@ import java.util.Set;
  */
 public final class SheetValidationHelpers {
 
-  private SheetValidationHelpers() {}
+    private SheetValidationHelpers() {}
 
-  /** "field is required" — 仅检查 blank。 */
-  public static void requireField(List<String> ri, String value, String field) {
-    if (!Texts.hasText(value)) {
-      ri.add(field + " is required");
+    /** "field is required" — 仅检查 blank。 */
+    public static void requireField(List<String> ri, String value, String field) {
+        if (!Texts.hasText(value)) {
+            ri.add(field + " is required");
+        }
     }
-  }
 
-  /** "field is required" + "field must be one of allowed"。命中即抛错并返回。 */
-  public static void requiredEnum(
-      String value, String field, Set<String> allowed, List<String> ri) {
-    if (!Texts.hasText(value)) {
-      ri.add(field + " is required");
-      return;
+    /** "field is required" + "field must be one of allowed"。命中即抛错并返回。 */
+    public static void requiredEnum(String value, String field, Set<String> allowed, List<String> ri) {
+        if (!Texts.hasText(value)) {
+            ri.add(field + " is required");
+            return;
+        }
+        if (!allowed.contains(value)) {
+            ri.add(field + " must be one of " + allowed);
+        }
     }
-    if (!allowed.contains(value)) {
-      ri.add(field + " must be one of " + allowed);
-    }
-  }
 
-  /** "if present, must be one of allowed" — 空白允许跳过。 */
-  public static void optionalEnum(
-      String value, String field, Set<String> allowed, List<String> ri) {
-    if (Texts.hasText(value) && !allowed.contains(value)) {
-      ri.add(field + " must be one of " + allowed);
+    /** "if present, must be one of allowed" — 空白允许跳过。 */
+    public static void optionalEnum(String value, String field, Set<String> allowed, List<String> ri) {
+        if (Texts.hasText(value) && !allowed.contains(value)) {
+            ri.add(field + " must be one of " + allowed);
+        }
     }
-  }
 
-  /** 整数字段：required=true 时空白报"is required"；非空必须可解析为 int。 */
-  public static void requireIntField(String value, String field, List<String> ri) {
-    if (!Texts.hasText(value)) {
-      ri.add(field + " is required");
-      return;
-    }
-    try {
-      Integer.parseInt(value);
-    } catch (NumberFormatException e) {
-      SwallowedExceptionLogger.info(SheetValidationHelpers.class, "catch:NumberFormatException", e);
+    /** 整数字段：required=true 时空白报"is required"；非空必须可解析为 int。 */
+    public static void requireIntField(String value, String field, List<String> ri) {
+        if (!Texts.hasText(value)) {
+            ri.add(field + " is required");
+            return;
+        }
+        try {
+            Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            SwallowedExceptionLogger.info(SheetValidationHelpers.class, "catch:NumberFormatException", e);
 
-      ri.add(field + " must be integer");
+            ri.add(field + " must be integer");
+        }
     }
-  }
 
-  /** JSON 字段：required=true 时空白报错；非空必须可解析。 */
-  public static void validateJsonField(
-      String value, String field, boolean required, List<String> ri) {
-    if (!Texts.hasText(value)) {
-      if (required) {
-        ri.add(field + " is required");
-      }
-      return;
-    }
-    try {
-      JsonUtils.fromJson(value, Object.class);
-    } catch (Exception e) {
-      SwallowedExceptionLogger.warn(SheetValidationHelpers.class, "catch:Exception", e);
+    /** JSON 字段：required=true 时空白报错；非空必须可解析。 */
+    public static void validateJsonField(String value, String field, boolean required, List<String> ri) {
+        if (!Texts.hasText(value)) {
+            if (required) {
+                ri.add(field + " is required");
+            }
+            return;
+        }
+        try {
+            JsonUtils.fromJson(value, Object.class);
+        } catch (Exception e) {
+            SwallowedExceptionLogger.warn(SheetValidationHelpers.class, "catch:Exception", e);
 
-      ri.add(field + " must be valid JSON");
+            ri.add(field + " must be valid JSON");
+        }
     }
-  }
 }

@@ -14,18 +14,18 @@ import lombok.Data;
 @Data
 public class JobBundleImportRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotEmpty
-  @Size(max = 50)
-  private List<@NotBlank @Size(min = 1, max = 64) String> targetTenantIds;
+    @NotEmpty
+    @Size(max = 50)
+    private List<@NotBlank @Size(min = 1, max = 64) String> targetTenantIds;
 
-  private InitMode mode = InitMode.UPSERT;
+    private InitMode mode = InitMode.UPSERT;
 
-  private boolean dryRun;
+    private boolean dryRun;
 
-  @Valid
-  @NotNull
-  private ConfigSyncBundlePayload bundle;
+    @Valid
+    @NotNull
+    private ConfigSyncBundlePayload bundle;
 }

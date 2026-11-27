@@ -25,18 +25,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleFilePipelineObservabilityController {
 
-  private final ConsoleQueryApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleQueryApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/file-pipeline-observability")
-  public CommonResponse<PageResponse<ConsoleFilePipelineResponse>> filePipelineObservability(
-      @Valid @ModelAttribute FilePipelineQueryRequest request) {
-    return responseFactory.success(applicationService.filePipelines(request));
-  }
+    @GetMapping("/file-pipeline-observability")
+    public CommonResponse<PageResponse<ConsoleFilePipelineResponse>> filePipelineObservability(
+            @Valid @ModelAttribute FilePipelineQueryRequest request) {
+        return responseFactory.success(applicationService.filePipelines(request));
+    }
 
-  @GetMapping("/file-pipeline-observability/{id}")
-  public CommonResponse<ConsoleFilePipelineResponse> filePipelineObservabilityDetail(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.filePipelineDetail(tenantId, id));
-  }
+    @GetMapping("/file-pipeline-observability/{id}")
+    public CommonResponse<ConsoleFilePipelineResponse> filePipelineObservabilityDetail(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.filePipelineDetail(tenantId, id));
+    }
 }

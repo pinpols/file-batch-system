@@ -12,11 +12,11 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "batch.job-monitoring.defaults")
 public class JobMonitoringDefaultsProperties {
 
-  @Min(0)
-  @Max(86_400)
-  private int softRuntimeSeconds;
+    @Min(0)
+    @Max(86_400)
+    private int softRuntimeSeconds;
 
-  @Min(0)
-  @Max(86_400)
-  private int startGraceSeconds = 300;
+    @Min(0)
+    @Max(86_400)
+    private int startGraceSeconds = 300;
 }

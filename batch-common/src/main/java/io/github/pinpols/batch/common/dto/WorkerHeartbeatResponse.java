@@ -27,35 +27,32 @@ import java.util.List;
  * WorkerRegistryEntity”切到本 DTO 不破坏旧 worker，同时允许新 worker 在心跳周期内响应排空。
  */
 public record WorkerHeartbeatResponse(
-    String platformStatus,
-    Integer desiredMaxConcurrent,
-    boolean shouldDrain,
-    List<String> pausedTaskTypes,
-    Integer nextHeartbeatHint) {
+        String platformStatus,
+        Integer desiredMaxConcurrent,
+        boolean shouldDrain,
+        List<String> pausedTaskTypes,
+        Integer nextHeartbeatHint) {
 
-  /** 平台期望态:正常。 */
-  public static final String STATUS_NORMAL = "NORMAL";
+    /** 平台期望态:正常。 */
+    public static final String STATUS_NORMAL = "NORMAL";
 
-  /** 平台期望态:排空中。 */
-  public static final String STATUS_DRAINING = "DRAINING";
+    /** 平台期望态:排空中。 */
+    public static final String STATUS_DRAINING = "DRAINING";
 
-  /** 平台期望态:注册已终止;停止认领,但不改写本进程上报的注册状态。 */
-  public static final String STATUS_DECOMMISSIONED = "DECOMMISSIONED";
+    /** 平台期望态:注册已终止;停止认领,但不改写本进程上报的注册状态。 */
+    public static final String STATUS_DECOMMISSIONED = "DECOMMISSIONED";
 
-  /**
-   * 从 worker_registry 当前状态 + 并发上限构造指令。仅依赖 batch-common 内的 {@link WorkerRegistryStatus},不引
-   * orchestrator 类型。
-   *
-   * <p>DRAINING 与 DECOMMISSIONED 都要求停止认领({@code shouldDrain=true}),但 {@code platformStatus} 保留差异:
-   * 前者要求 worker 把上报状态改成 DRAINING,后者要求保留存活状态,让进程重启后的新注册能重新上线。
-   */
-  public static WorkerHeartbeatResponse fromWorkerState(
-      String workerStatus, Integer maxConcurrent) {
-    boolean decommissioned = WorkerRegistryStatus.DECOMMISSIONED.name().equals(workerStatus);
-    boolean draining = WorkerRegistryStatus.DRAINING.name().equals(workerStatus);
-    String platformStatus =
-        decommissioned ? STATUS_DECOMMISSIONED : draining ? STATUS_DRAINING : STATUS_NORMAL;
-    return new WorkerHeartbeatResponse(
-        platformStatus, maxConcurrent, draining || decommissioned, List.of(), null);
-  }
+    /**
+     * 从 worker_registry 当前状态 + 并发上限构造指令。仅依赖 batch-common 内的 {@link WorkerRegistryStatus},不引
+     * orchestrator 类型。
+     *
+     * <p>DRAINING 与 DECOMMISSIONED 都要求停止认领({@code shouldDrain=true}),但 {@code platformStatus} 保留差异:
+     * 前者要求 worker 把上报状态改成 DRAINING,后者要求保留存活状态,让进程重启后的新注册能重新上线。
+     */
+    public static WorkerHeartbeatResponse fromWorkerState(String workerStatus, Integer maxConcurrent) {
+        boolean decommissioned = WorkerRegistryStatus.DECOMMISSIONED.name().equals(workerStatus);
+        boolean draining = WorkerRegistryStatus.DRAINING.name().equals(workerStatus);
+        String platformStatus = decommissioned ? STATUS_DECOMMISSIONED : draining ? STATUS_DRAINING : STATUS_NORMAL;
+        return new WorkerHeartbeatResponse(platformStatus, maxConcurrent, draining || decommissioned, List.of(), null);
+    }
 }

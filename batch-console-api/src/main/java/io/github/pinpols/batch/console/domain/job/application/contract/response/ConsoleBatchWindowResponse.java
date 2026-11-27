@@ -19,40 +19,40 @@ import lombok.Builder;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Builder
 public record ConsoleBatchWindowResponse(
-    Long id,
-    @JsonProperty("tenant_id") String tenantId,
-    @JsonProperty("window_code") String windowCode,
-    @JsonProperty("window_name") String windowName,
-    String timezone,
-    @JsonProperty("start_time") String startTime,
-    @JsonProperty("end_time") String endTime,
-    @JsonProperty("end_strategy") String endStrategy,
-    @JsonProperty("out_of_window_action") String outOfWindowAction,
-    @JsonProperty("allow_cross_day") Boolean allowCrossDay,
-    Boolean enabled,
-    String description,
-    @JsonProperty("created_at") Instant createdAt,
-    @JsonProperty("updated_at") Instant updatedAt) {
+        Long id,
+        @JsonProperty("tenant_id") String tenantId,
+        @JsonProperty("window_code") String windowCode,
+        @JsonProperty("window_name") String windowName,
+        String timezone,
+        @JsonProperty("start_time") String startTime,
+        @JsonProperty("end_time") String endTime,
+        @JsonProperty("end_strategy") String endStrategy,
+        @JsonProperty("out_of_window_action") String outOfWindowAction,
+        @JsonProperty("allow_cross_day") Boolean allowCrossDay,
+        Boolean enabled,
+        String description,
+        @JsonProperty("created_at") Instant createdAt,
+        @JsonProperty("updated_at") Instant updatedAt) {
 
-  public static ConsoleBatchWindowResponse from(BatchWindowRow row) {
-    if (EmptyChecks.isNull(row)) {
-      return null;
+    public static ConsoleBatchWindowResponse from(BatchWindowRow row) {
+        if (EmptyChecks.isNull(row)) {
+            return null;
+        }
+        return ConsoleBatchWindowResponse.builder()
+                .id(row.id())
+                .tenantId(row.tenantId())
+                .windowCode(row.windowCode())
+                .windowName(row.windowName())
+                .timezone(row.timezone())
+                .startTime(row.startTime())
+                .endTime(row.endTime())
+                .endStrategy(row.endStrategy())
+                .outOfWindowAction(row.outOfWindowAction())
+                .allowCrossDay(row.allowCrossDay())
+                .enabled(row.enabled())
+                .description(row.description())
+                .createdAt(row.createdAt())
+                .updatedAt(row.updatedAt())
+                .build();
     }
-    return ConsoleBatchWindowResponse.builder()
-        .id(row.id())
-        .tenantId(row.tenantId())
-        .windowCode(row.windowCode())
-        .windowName(row.windowName())
-        .timezone(row.timezone())
-        .startTime(row.startTime())
-        .endTime(row.endTime())
-        .endStrategy(row.endStrategy())
-        .outOfWindowAction(row.outOfWindowAction())
-        .allowCrossDay(row.allowCrossDay())
-        .enabled(row.enabled())
-        .description(row.description())
-        .createdAt(row.createdAt())
-        .updatedAt(row.updatedAt())
-        .build();
-  }
 }

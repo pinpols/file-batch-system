@@ -9,14 +9,14 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum ReplayOperationStatus implements DictEnum {
-  PENDING_APPROVAL("PENDING_APPROVAL", "待审批"),
-  REJECTED("REJECTED", "已拒绝"),
-  RUNNING("RUNNING", "执行中"),
-  SUCCEEDED("SUCCEEDED", "成功"),
-  PARTIAL_FAILED("PARTIAL_FAILED", "部分失败"),
-  FAILED("FAILED", "失败"),
-  CANCELLED("CANCELLED", "已取消");
+    PENDING_APPROVAL("PENDING_APPROVAL", "待审批"),
+    REJECTED("REJECTED", "已拒绝"),
+    RUNNING("RUNNING", "执行中"),
+    SUCCEEDED("SUCCEEDED", "成功"),
+    PARTIAL_FAILED("PARTIAL_FAILED", "部分失败"),
+    FAILED("FAILED", "失败"),
+    CANCELLED("CANCELLED", "已取消");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

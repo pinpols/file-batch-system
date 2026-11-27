@@ -8,5 +8,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.storage.backend-guard")
 public class StorageBackendGuardProperties {
 
-  private String cutoverId = "";
+    private String cutoverId = "";
 }

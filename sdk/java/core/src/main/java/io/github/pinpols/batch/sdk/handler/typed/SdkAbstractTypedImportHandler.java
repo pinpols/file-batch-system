@@ -64,105 +64,102 @@ import java.util.stream.Stream;
  */
 // S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，收窄会破坏租户编译兼容性。
 @SuppressWarnings("java:S112")
-public abstract class SdkAbstractTypedImportHandler<I, O, R>
-    extends SdkAbstractTypedRowStreamHandler<I, O, R> {
+public abstract class SdkAbstractTypedImportHandler<I, O, R> extends SdkAbstractTypedRowStreamHandler<I, O, R> {
 
-  protected SdkAbstractTypedImportHandler() {
-    super(SdkTypedParameters.defaultObjectMapper(), SdkAbstractTypedImportHandler.class);
-  }
-
-  protected SdkAbstractTypedImportHandler(ObjectMapper objectMapper) {
-    super(objectMapper, SdkAbstractTypedImportHandler.class);
-  }
-
-  /** 打开数据源(连 SFTP / 下载文件 / 开 stream)。默认 no-op。 */
-  protected void openSource(I input, SdkTaskContext ctx) throws Exception {
-    // 无操作
-  }
-
-  /**
-   * 返回行流(逐行解析)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} / {@code InputStream} 在读完或异常时都释放。
-   */
-  protected abstract Stream<R> readRows(I input, SdkTaskContext ctx) throws Exception;
-
-  /** 批量写入租户自家目标表。 */
-  protected abstract void loadBatch(I input, SdkTaskContext ctx, List<R> batch) throws Exception;
-
-  /** 批大小,默认 1000,可覆盖。 */
-  protected int batchSize() {
-    return 1000;
-  }
-
-  /**
-   * ADR-037 决策一 — 计算本批<b>断点坐标</b>(已处理到的最后一条记录主键 / 排序键 / 行号)。默认返回空 Map(不续跑,仅有上报 / 取消语义)。
-   *
-   * <p>要真正断点续跑的租户应 override:返回 {@code batch} 最后一行的业务主键,如 {@code Map.of("id",
-   * batch.get(batch.size()-1).id())}; 与 {@link #readRows} 的 {@code WHERE key > :breakPosition}
-   * 同坐标系,使重派从断点往后续,而非从头重跑。
-   */
-  protected Map<String, Object> breakPosition(I input, List<R> batch) {
-    return emptyBreakPosition();
-  }
-
-  /** 汇总成业务结果 {@code O};默认返 null(则走计数器 output)。 */
-  protected O summarize(I input, SdkRowResult counts) {
-    return null;
-  }
-
-  @Override
-  protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
-    I input;
-    try {
-      input = parseInput(ctx);
-    } catch (IllegalArgumentException ex) {
-      return SdkTaskResult.fail(
-          "invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
+    protected SdkAbstractTypedImportHandler() {
+        super(SdkTypedParameters.defaultObjectMapper(), SdkAbstractTypedImportHandler.class);
     }
-    SdkRowResult counts = new SdkRowResult();
-    Optional<SdkTaskResult> resumed =
-        restoreCheckpoint(ctx, counts, "import already completed (resumed checkpoint), skipped");
-    if (resumed.isPresent()) {
-      return resumed.get();
+
+    protected SdkAbstractTypedImportHandler(ObjectMapper objectMapper) {
+        super(objectMapper, SdkAbstractTypedImportHandler.class);
     }
-    try {
-      openSource(input, ctx);
-      List<R> buf = new ArrayList<>(batchSize());
-      try (Stream<R> rows = readRows(input, ctx)) {
-        Iterator<R> it = rows.iterator();
-        while (it.hasNext()) {
-          buf.add(it.next());
-          if (buf.size() >= batchSize()) {
-            flush(input, ctx, buf, counts);
-          }
+
+    /** 打开数据源(连 SFTP / 下载文件 / 开 stream)。默认 no-op。 */
+    protected void openSource(I input, SdkTaskContext ctx) throws Exception {
+        // 无操作
+    }
+
+    /**
+     * 返回行流(逐行解析)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} / {@code InputStream} 在读完或异常时都释放。
+     */
+    protected abstract Stream<R> readRows(I input, SdkTaskContext ctx) throws Exception;
+
+    /** 批量写入租户自家目标表。 */
+    protected abstract void loadBatch(I input, SdkTaskContext ctx, List<R> batch) throws Exception;
+
+    /** 批大小,默认 1000,可覆盖。 */
+    protected int batchSize() {
+        return 1000;
+    }
+
+    /**
+     * ADR-037 决策一 — 计算本批<b>断点坐标</b>(已处理到的最后一条记录主键 / 排序键 / 行号)。默认返回空 Map(不续跑,仅有上报 / 取消语义)。
+     *
+     * <p>要真正断点续跑的租户应 override:返回 {@code batch} 最后一行的业务主键,如 {@code Map.of("id",
+     * batch.get(batch.size()-1).id())}; 与 {@link #readRows} 的 {@code WHERE key > :breakPosition}
+     * 同坐标系,使重派从断点往后续,而非从头重跑。
+     */
+    protected Map<String, Object> breakPosition(I input, List<R> batch) {
+        return emptyBreakPosition();
+    }
+
+    /** 汇总成业务结果 {@code O};默认返 null(则走计数器 output)。 */
+    protected O summarize(I input, SdkRowResult counts) {
+        return null;
+    }
+
+    @Override
+    protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
+        I input;
+        try {
+            input = parseInput(ctx);
+        } catch (IllegalArgumentException ex) {
+            return SdkTaskResult.fail("invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
         }
-      }
-      if (!buf.isEmpty()) {
-        flush(input, ctx, buf, counts);
-      }
-      List<R> emptyBatch = List.of();
-      Map<String, Object> completedBreakPosition = breakPosition(input, emptyBatch);
-      ctx.commitCoordinator().markCompleted(completedBreakPosition);
-      return result(input, counts, "imported " + counts.success() + " rows");
-    } catch (SdkTaskStoppedException stopped) {
-      throw stopped; // 决策三:协作取消穿透到模板顶层落 cancelled,业务不得吞。
-    } catch (Exception e) {
-      return SdkTaskResult.fail(e);
+        SdkRowResult counts = new SdkRowResult();
+        Optional<SdkTaskResult> resumed =
+                restoreCheckpoint(ctx, counts, "import already completed (resumed checkpoint), skipped");
+        if (resumed.isPresent()) {
+            return resumed.get();
+        }
+        try {
+            openSource(input, ctx);
+            List<R> buf = new ArrayList<>(batchSize());
+            try (Stream<R> rows = readRows(input, ctx)) {
+                Iterator<R> it = rows.iterator();
+                while (it.hasNext()) {
+                    buf.add(it.next());
+                    if (buf.size() >= batchSize()) {
+                        flush(input, ctx, buf, counts);
+                    }
+                }
+            }
+            if (!buf.isEmpty()) {
+                flush(input, ctx, buf, counts);
+            }
+            List<R> emptyBatch = List.of();
+            Map<String, Object> completedBreakPosition = breakPosition(input, emptyBatch);
+            ctx.commitCoordinator().markCompleted(completedBreakPosition);
+            return result(input, counts, "imported " + counts.success() + " rows");
+        } catch (SdkTaskStoppedException stopped) {
+            throw stopped; // 决策三:协作取消穿透到模板顶层落 cancelled,业务不得吞。
+        } catch (Exception e) {
+            return SdkTaskResult.fail(e);
+        }
     }
-  }
 
-  private void flush(I input, SdkTaskContext ctx, List<R> buf, SdkRowResult counts)
-      throws Exception {
-    loadBatch(input, ctx, buf);
-    counts.addSuccess(buf.size());
-    // ADR-037 决策二:业务写 + 断点保存 + 限流上报三合一(同事务);决策三:提交后命中取消则在安全点抛停止。
-    ctx.commitCoordinator().recordBatch(buf.size(), 0);
-    Map<String, Object> batchBreakPosition = breakPosition(input, buf);
-    ctx.commit(batchBreakPosition);
-    buf.clear();
-  }
+    private void flush(I input, SdkTaskContext ctx, List<R> buf, SdkRowResult counts) throws Exception {
+        loadBatch(input, ctx, buf);
+        counts.addSuccess(buf.size());
+        // ADR-037 决策二:业务写 + 断点保存 + 限流上报三合一(同事务);决策三:提交后命中取消则在安全点抛停止。
+        ctx.commitCoordinator().recordBatch(buf.size(), 0);
+        Map<String, Object> batchBreakPosition = breakPosition(input, buf);
+        ctx.commit(batchBreakPosition);
+        buf.clear();
+    }
 
-  private SdkTaskResult result(I input, SdkRowResult counts, String defaultMessage) {
-    O output = summarize(input, counts);
-    return result(input, counts, defaultMessage, output);
-  }
+    private SdkTaskResult result(I input, SdkRowResult counts, String defaultMessage) {
+        O output = summarize(input, counts);
+        return result(input, counts, defaultMessage, output);
+    }
 }

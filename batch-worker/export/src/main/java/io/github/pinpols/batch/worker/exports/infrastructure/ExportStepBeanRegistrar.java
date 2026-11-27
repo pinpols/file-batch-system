@@ -14,16 +14,16 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Component
 public class ExportStepBeanRegistrar extends AbstractStepBeanRegistrar<ExportStageStep> {
 
-  public ExportStepBeanRegistrar(
-      ApplicationContext applicationContext,
-      StepRegistryMapper stepRegistryMapper,
-      PlatformTransactionManager transactionManager) {
-    super(
-        applicationContext,
-        stepRegistryMapper,
-        transactionManager,
-        ExportStageStep.class,
-        "EXPORT",
-        ExportStageStep::implCode);
-  }
+    public ExportStepBeanRegistrar(
+            ApplicationContext applicationContext,
+            StepRegistryMapper stepRegistryMapper,
+            PlatformTransactionManager transactionManager) {
+        super(
+                applicationContext,
+                stepRegistryMapper,
+                transactionManager,
+                ExportStageStep.class,
+                "EXPORT",
+                ExportStageStep::implCode);
+    }
 }

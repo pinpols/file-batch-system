@@ -32,64 +32,64 @@ import org.quartz.CronExpression;
 @Slf4j
 public class CronExpressionAdapter {
 
-  /** 表达式与时区组合的缓存上限。按活跃租户 × 调度 × 时区的量级估算,超出后由 Caffeine 按使用情况淘汰。 */
-  static final int CACHED_EXPRESSION_LIMIT = 1024;
+    /** 表达式与时区组合的缓存上限。按活跃租户 × 调度 × 时区的量级估算,超出后由 Caffeine 按使用情况淘汰。 */
+    static final int CACHED_EXPRESSION_LIMIT = 1024;
 
-  /** 缓存键含 zoneId，instance 时区固化，避免跨线程 setTimeZone 污染。 */
-  private final Cache<String, CronExpression> cache;
+    /** 缓存键含 zoneId，instance 时区固化，避免跨线程 setTimeZone 污染。 */
+    private final Cache<String, CronExpression> cache;
 
-  public CronExpressionAdapter() {
-    this(CACHED_EXPRESSION_LIMIT);
-  }
-
-  CronExpressionAdapter(int cachedExpressionLimit) {
-    if (cachedExpressionLimit <= 0) {
-      throw new IllegalArgumentException("cachedExpressionLimit must be positive");
+    public CronExpressionAdapter() {
+        this(CACHED_EXPRESSION_LIMIT);
     }
-    this.cache = Caffeine.newBuilder().maximumSize(cachedExpressionLimit).build();
-  }
 
-  /**
-   * 计算 cron 表达式在指定时区下、{@code after} 之后的下一次 fire 时刻。
-   *
-   * @param cronExpr Quartz 6 字段 cron(秒 分 时 日 月 星期);7 字段(年)也支持
-   * @param zone 时区(由 BatchTimezoneProvider 解析,从不为 null)
-   * @param after 起始时刻(包含,但 Quartz 实际是"之后,不含")
-   * @return 下次 fire 时刻;cron 已无未来 fire 时刻(如固定年份已过)返回 {@code null}
-   * @throws IllegalArgumentException cron 表达式语法错误
-   */
-  public Instant next(String cronExpr, ZoneId zone, Instant after) {
-    CronExpression expression = parseOrCache(cronExpr, zone);
-    // setTimeZone 不再调（已在构建时固化），避免跨线程写
-    Date afterDate = Date.from(after);
-    Date nextFire = expression.getNextValidTimeAfter(afterDate);
-    return EmptyChecks.isNull(nextFire) ? null : nextFire.toInstant();
-  }
-
-  /** 校验 cron 表达式合法。Reconciler 同步前预检用。 */
-  public boolean isValid(String cronExpr) {
-    if (EmptyChecks.isBlank(cronExpr)) {
-      return false;
+    CronExpressionAdapter(int cachedExpressionLimit) {
+        if (cachedExpressionLimit <= 0) {
+            throw new IllegalArgumentException("cachedExpressionLimit must be positive");
+        }
+        this.cache = Caffeine.newBuilder().maximumSize(cachedExpressionLimit).build();
     }
-    return CronExpression.isValidExpression(cronExpr);
-  }
 
-  /** 测试断言容量上限：先做一次维护，再返回当前条目数。 */
-  long cachedExpressionCount() {
-    cache.cleanUp();
-    return cache.estimatedSize();
-  }
+    /**
+     * 计算 cron 表达式在指定时区下、{@code after} 之后的下一次 fire 时刻。
+     *
+     * @param cronExpr Quartz 6 字段 cron(秒 分 时 日 月 星期);7 字段(年)也支持
+     * @param zone 时区(由 BatchTimezoneProvider 解析,从不为 null)
+     * @param after 起始时刻(包含,但 Quartz 实际是"之后,不含")
+     * @return 下次 fire 时刻;cron 已无未来 fire 时刻(如固定年份已过)返回 {@code null}
+     * @throws IllegalArgumentException cron 表达式语法错误
+     */
+    public Instant next(String cronExpr, ZoneId zone, Instant after) {
+        CronExpression expression = parseOrCache(cronExpr, zone);
+        // setTimeZone 不再调（已在构建时固化），避免跨线程写
+        Date afterDate = Date.from(after);
+        Date nextFire = expression.getNextValidTimeAfter(afterDate);
+        return EmptyChecks.isNull(nextFire) ? null : nextFire.toInstant();
+    }
 
-  private CronExpression parseOrCache(String cronExpr, ZoneId zone) {
-    String cacheKey = cronExpr + "|" + zone.getId();
-    return cache.get(cacheKey, k -> {
-      try {
-        CronExpression expr = new CronExpression(cronExpr);
-        expr.setTimeZone(TimeZone.getTimeZone(zone));
-        return expr;
-      } catch (ParseException e) {
-        throw new IllegalArgumentException("invalid cron expression: " + cronExpr, e);
-      }
-    });
-  }
+    /** 校验 cron 表达式合法。Reconciler 同步前预检用。 */
+    public boolean isValid(String cronExpr) {
+        if (EmptyChecks.isBlank(cronExpr)) {
+            return false;
+        }
+        return CronExpression.isValidExpression(cronExpr);
+    }
+
+    /** 测试断言容量上限：先做一次维护，再返回当前条目数。 */
+    long cachedExpressionCount() {
+        cache.cleanUp();
+        return cache.estimatedSize();
+    }
+
+    private CronExpression parseOrCache(String cronExpr, ZoneId zone) {
+        String cacheKey = cronExpr + "|" + zone.getId();
+        return cache.get(cacheKey, k -> {
+            try {
+                CronExpression expr = new CronExpression(cronExpr);
+                expr.setTimeZone(TimeZone.getTimeZone(zone));
+                return expr;
+            } catch (ParseException e) {
+                throw new IllegalArgumentException("invalid cron expression: " + cronExpr, e);
+            }
+        });
+    }
 }

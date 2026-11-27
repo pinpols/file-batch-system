@@ -45,135 +45,133 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Object>> {
 
-  private static final Set<String> IDEMPOTENT_METHODS = Set.of("GET", "HEAD", "PUT", "DELETE");
+    private static final Set<String> IDEMPOTENT_METHODS = Set.of("GET", "HEAD", "PUT", "DELETE");
 
-  private final HttpAtomicConfig config;
-  private final HttpClient httpClient;
+    private final HttpAtomicConfig config;
+    private final HttpClient httpClient;
 
-  public HttpAtomicHandler(HttpAtomicConfig config) {
-    this.config = Objects.requireNonNull(config, "config");
-    HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
-    Duration connectTimeout = Duration.ofSeconds(config.timeoutSeconds());
-    this.httpClient = httpClientBuilder.connectTimeout(connectTimeout).build();
-  }
-
-  @Override
-  public String taskType() {
-    return config.taskType();
-  }
-
-  @Override
-  public boolean isSafeToReplay(SdkTaskContext ctx) {
-    Map<String, Object> parameters = ctx.parameters();
-    String configuredMethod = asString(parameters.get("method"));
-    String method = Objects.requireNonNullElse(configuredMethod, "GET").toUpperCase(Locale.ROOT);
-    if (IDEMPOTENT_METHODS.contains(method)) {
-      return true;
-    }
-    Object rawHeaders = parameters.get("headers");
-    if (!(rawHeaders instanceof Map<?, ?> headers)) {
-      return false;
-    }
-    return headers.entrySet().stream()
-        .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
-            && entry.getValue() instanceof String value
-            && EmptyChecks.isNotBlank(value));
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  protected Map<String, Object> doInvoke(SdkTaskContext ctx) throws Exception {
-    Map<String, Object> params = ctx.parameters();
-    String url = asString(params.get("url"));
-    if (url == null || url.isBlank()) {
-      throw new IllegalArgumentException("missing required parameter: url");
-    }
-    Object methodValue = params.get("method");
-    String configuredMethod = asString(methodValue);
-    String method = Objects.requireNonNullElse(configuredMethod, "GET").toUpperCase(Locale.ROOT);
-    Map<String, String> headers = (Map<String, String>) params.get("headers");
-    String body = asString(params.get("body"));
-
-    // method 闸
-    if (!config.allowedMethods().contains(method)) {
-      throw new IllegalArgumentException("HTTP method not allowed: " + method);
+    public HttpAtomicHandler(HttpAtomicConfig config) {
+        this.config = Objects.requireNonNull(config, "config");
+        HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+        Duration connectTimeout = Duration.ofSeconds(config.timeoutSeconds());
+        this.httpClient = httpClientBuilder.connectTimeout(connectTimeout).build();
     }
 
-    URI uri = URI.create(url);
-    String host = uri.getHost();
-    if (host == null || host.isBlank()) {
-      throw new IllegalArgumentException("invalid url, no host: " + url);
+    @Override
+    public String taskType() {
+        return config.taskType();
     }
 
-    // SSRF 闸 — 必须在发请求之前
-    checkSsrf(host);
-
-    // 构造请求
-    HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(uri);
-    Duration requestTimeout = Duration.ofSeconds(config.timeoutSeconds());
-    reqBuilder
-        .timeout(requestTimeout)
-        .method(
-            method,
-            body == null
-                ? BodyPublishers.noBody()
-                : BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-    if (headers != null) {
-      headers.forEach(reqBuilder::header);
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+        Map<String, Object> parameters = ctx.parameters();
+        String configuredMethod = asString(parameters.get("method"));
+        String method = Objects.requireNonNullElse(configuredMethod, "GET").toUpperCase(Locale.ROOT);
+        if (IDEMPOTENT_METHODS.contains(method)) {
+            return true;
+        }
+        Object rawHeaders = parameters.get("headers");
+        if (!(rawHeaders instanceof Map<?, ?> headers)) {
+            return false;
+        }
+        return headers.entrySet().stream()
+                .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
+                        && entry.getValue() instanceof String value
+                        && EmptyChecks.isNotBlank(value));
     }
 
-    HttpResponse<byte[]> resp = httpClient.send(reqBuilder.build(), BodyHandlers.ofByteArray());
+    @Override
+    @SuppressWarnings("unchecked")
+    protected Map<String, Object> doInvoke(SdkTaskContext ctx) throws Exception {
+        Map<String, Object> params = ctx.parameters();
+        String url = asString(params.get("url"));
+        if (url == null || url.isBlank()) {
+            throw new IllegalArgumentException("missing required parameter: url");
+        }
+        Object methodValue = params.get("method");
+        String configuredMethod = asString(methodValue);
+        String method = Objects.requireNonNullElse(configuredMethod, "GET").toUpperCase(Locale.ROOT);
+        Map<String, String> headers = (Map<String, String>) params.get("headers");
+        String body = asString(params.get("body"));
 
-    byte[] raw = resp.body() == null ? new byte[0] : resp.body();
-    boolean truncated = raw.length > config.maxResponseBytes();
-    int len = truncated ? config.maxResponseBytes() : raw.length;
-    String responseBody = new String(raw, 0, len, StandardCharsets.UTF_8);
+        // method 闸
+        if (!config.allowedMethods().contains(method)) {
+            throw new IllegalArgumentException("HTTP method not allowed: " + method);
+        }
 
-    Map<String, Object> out = new LinkedHashMap<>();
-    out.put("statusCode", resp.statusCode());
-    out.put("responseBody", responseBody);
-    out.put("responseTruncated", truncated);
-    return out;
-  }
+        URI uri = URI.create(url);
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("invalid url, no host: " + url);
+        }
 
-  private void checkSsrf(String host) throws UnknownHostException {
-    if (config.blockPrivateIps()) {
-      InetAddress addr = InetAddress.getByName(host);
-      boolean resolvedAddressIsPrivate = addr.isLoopbackAddress()
-          || addr.isAnyLocalAddress()
-          || addr.isLinkLocalAddress()
-          || addr.isSiteLocalAddress();
-      if (resolvedAddressIsPrivate) {
-        throw new SecurityException("SSRF blocked: private/loopback IP for host " + host);
-      }
+        // SSRF 闸 — 必须在发请求之前
+        checkSsrf(host);
+
+        // 构造请求
+        HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(uri);
+        Duration requestTimeout = Duration.ofSeconds(config.timeoutSeconds());
+        reqBuilder
+                .timeout(requestTimeout)
+                .method(
+                        method,
+                        body == null ? BodyPublishers.noBody() : BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+        if (headers != null) {
+            headers.forEach(reqBuilder::header);
+        }
+
+        HttpResponse<byte[]> resp = httpClient.send(reqBuilder.build(), BodyHandlers.ofByteArray());
+
+        byte[] raw = resp.body() == null ? new byte[0] : resp.body();
+        boolean truncated = raw.length > config.maxResponseBytes();
+        int len = truncated ? config.maxResponseBytes() : raw.length;
+        String responseBody = new String(raw, 0, len, StandardCharsets.UTF_8);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("statusCode", resp.statusCode());
+        out.put("responseBody", responseBody);
+        out.put("responseTruncated", truncated);
+        return out;
     }
-    for (String pattern : config.blockedHostPatterns()) {
-      if (host.contains(pattern) || matchesRegex(host, pattern)) {
-        throw new SecurityException("SSRF blocked: host matches blocked pattern " + pattern);
-      }
+
+    private void checkSsrf(String host) throws UnknownHostException {
+        if (config.blockPrivateIps()) {
+            InetAddress addr = InetAddress.getByName(host);
+            boolean resolvedAddressIsPrivate = addr.isLoopbackAddress()
+                    || addr.isAnyLocalAddress()
+                    || addr.isLinkLocalAddress()
+                    || addr.isSiteLocalAddress();
+            if (resolvedAddressIsPrivate) {
+                throw new SecurityException("SSRF blocked: private/loopback IP for host " + host);
+            }
+        }
+        for (String pattern : config.blockedHostPatterns()) {
+            if (host.contains(pattern) || matchesRegex(host, pattern)) {
+                throw new SecurityException("SSRF blocked: host matches blocked pattern " + pattern);
+            }
+        }
     }
-  }
 
-  /** 黑名单可填正则;非法正则 fail-closed —— 视为匹配(block),避免坏正则静默放行 host(SSRF)。 */
-  private static boolean matchesRegex(String host, String pattern) {
-    try {
-      return host.matches(pattern);
-    } catch (PatternSyntaxException ex) {
-      log.warn(
-          "invalid blocked host pattern '{}', failing closed (blocking host {}): {}",
-          pattern,
-          host,
-          ExceptionLogSummary.of(ex));
-      return true;
+    /** 黑名单可填正则;非法正则 fail-closed —— 视为匹配(block),避免坏正则静默放行 host(SSRF)。 */
+    private static boolean matchesRegex(String host, String pattern) {
+        try {
+            return host.matches(pattern);
+        } catch (PatternSyntaxException ex) {
+            log.warn(
+                    "invalid blocked host pattern '{}', failing closed (blocking host {}): {}",
+                    pattern,
+                    host,
+                    ExceptionLogSummary.of(ex));
+            return true;
+        }
     }
-  }
 
-  private static String asString(Object v) {
-    return v == null ? null : v.toString();
-  }
+    private static String asString(Object v) {
+        return v == null ? null : v.toString();
+    }
 
-  @Override
-  protected Map<String, Object> asOutput(Map<String, Object> r) {
-    return r;
-  }
+    @Override
+    protected Map<String, Object> asOutput(Map<String, Object> r) {
+        return r;
+    }
 }

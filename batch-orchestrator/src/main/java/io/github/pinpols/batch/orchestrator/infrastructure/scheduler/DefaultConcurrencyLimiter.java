@@ -35,193 +35,186 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
 
-  private final JobInstanceMapper jobInstanceMapper;
-  private final GlobalJobAdmission globalJobAdmission;
-  private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
-  private final OrchestratorConfigCacheService configCacheService;
-  private final QuotaRuntimeStateService quotaRuntimeStateService;
-  private final BatchOrchestratorGovernanceProperties governance;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final GlobalJobAdmission globalJobAdmission;
+    private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
+    private final OrchestratorConfigCacheService configCacheService;
+    private final QuotaRuntimeStateService quotaRuntimeStateService;
+    private final BatchOrchestratorGovernanceProperties governance;
 
-  @Override
-  public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    if (request == null || !Texts.hasText(request.getTenantId())) {
-      return ResourceCheck.allow();
+    @Override
+    public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
+        if (request == null || !Texts.hasText(request.getTenantId())) {
+            return ResourceCheck.allow();
+        }
+
+        ResourceCheck globalCheck = checkGlobalLimit(request);
+        if (!globalCheck.allowed()) {
+            return globalCheck;
+        }
+
+        TenantQuotaPolicyEntity quotaPolicy = configCacheService.findEnabledQuotaPolicy(request.getTenantId());
+        ResourceCheck fairShareCheck = checkFairShareLimit(request, quotaPolicy);
+        if (!fairShareCheck.allowed()) {
+            return fairShareCheck;
+        }
+        // 顺序固定为 global -> fair-share group -> tenant。分区重派也必须持有 tenant 锁，
+        // 使后续分区计数与 READY/Outbox 提交和新 Job 的首次准入互斥。
+        if (hasResourceCaps(quotaPolicy, queue)) {
+            jobInstanceMapper.acquireTenantResourceAdmissionLock(request.getTenantId());
+        }
+        if (!request.isNewJobAdmission()) {
+            return ResourceCheck.allow();
+        }
+        ResourceCheck tenantCheck = checkTenantLimit(request, quotaPolicy);
+        if (!tenantCheck.allowed()) {
+            return tenantCheck;
+        }
+
+        ResourceCheck queueCheck = checkQueueLimit(request, queue);
+        if (!queueCheck.allowed()) {
+            return queueCheck;
+        }
+
+        return ResourceCheck.allow();
     }
 
-    ResourceCheck globalCheck = checkGlobalLimit(request);
-    if (!globalCheck.allowed()) {
-      return globalCheck;
+    private ResourceCheck checkGlobalLimit(ResourceSchedulingRequest request) {
+        if (!request.isNewJobAdmission()) {
+            return ResourceCheck.allow();
+        }
+        if (!globalJobAdmission.hasCapacity()) {
+            return ResourceCheck.waitForCapacity("GLOBAL_RUNNING_JOB_LIMIT", "global running jobs exceed cap");
+        }
+        return ResourceCheck.allow();
     }
 
-    TenantQuotaPolicyEntity quotaPolicy =
-        configCacheService.findEnabledQuotaPolicy(request.getTenantId());
-    ResourceCheck fairShareCheck = checkFairShareLimit(request, quotaPolicy);
-    if (!fairShareCheck.allowed()) {
-      return fairShareCheck;
-    }
-    // 顺序固定为 global -> fair-share group -> tenant。分区重派也必须持有 tenant 锁，
-    // 使后续分区计数与 READY/Outbox 提交和新 Job 的首次准入互斥。
-    if (hasResourceCaps(quotaPolicy, queue)) {
-      jobInstanceMapper.acquireTenantResourceAdmissionLock(request.getTenantId());
-    }
-    if (!request.isNewJobAdmission()) {
-      return ResourceCheck.allow();
-    }
-    ResourceCheck tenantCheck = checkTenantLimit(request, quotaPolicy);
-    if (!tenantCheck.allowed()) {
-      return tenantCheck;
-    }
-
-    ResourceCheck queueCheck = checkQueueLimit(request, queue);
-    if (!queueCheck.allowed()) {
-      return queueCheck;
+    private ResourceCheck checkFairShareLimit(ResourceSchedulingRequest request, TenantQuotaPolicyEntity quotaPolicy) {
+        if (!request.isNewJobAdmission() || EmptyChecks.isNull(quotaPolicy)) {
+            return ResourceCheck.allow();
+        }
+        boolean fairShareGroupLimitIsConfigured = Texts.hasText(quotaPolicy.fairShareGroup())
+                && quotaPolicy.groupSharedMaxRunningJobs() != null
+                && quotaPolicy.groupSharedMaxRunningJobs() > 0;
+        if (fairShareGroupLimitIsConfigured) {
+            if (!fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)) {
+                QuotaExceededStrategy strategy = resolveStrategy(quotaPolicy.exceededStrategy());
+                return applyStrategy(
+                        strategy,
+                        "FAIR_SHARE_GROUP_JOB_LIMIT",
+                        "fair-share group job cap reached for group " + quotaPolicy.fairShareGroup());
+            }
+        }
+        return ResourceCheck.allow();
     }
 
-    return ResourceCheck.allow();
-  }
+    private boolean hasResourceCaps(TenantQuotaPolicyEntity policy, ResourceQueueEntity queue) {
+        return (EmptyChecks.isNotNull(policy)
+                        && (isPositive(policy.maxRunningJobsPerTenant())
+                                || isPositive(policy.maxPartitionsPerTenant())))
+                || (EmptyChecks.isNotNull(queue)
+                        && (isPositive(queue.maxRunningJobs()) || isPositive(queue.maxRunningPartitions())));
+    }
 
-  private ResourceCheck checkGlobalLimit(ResourceSchedulingRequest request) {
-    if (!request.isNewJobAdmission()) {
-      return ResourceCheck.allow();
+    private static boolean isPositive(Integer value) {
+        return EmptyChecks.isNotNull(value) && value > 0;
     }
-    if (!globalJobAdmission.hasCapacity()) {
-      return ResourceCheck.waitForCapacity(
-          "GLOBAL_RUNNING_JOB_LIMIT", "global running jobs exceed cap");
-    }
-    return ResourceCheck.allow();
-  }
 
-  private ResourceCheck checkFairShareLimit(
-      ResourceSchedulingRequest request, TenantQuotaPolicyEntity quotaPolicy) {
-    if (!request.isNewJobAdmission() || EmptyChecks.isNull(quotaPolicy)) {
-      return ResourceCheck.allow();
-    }
-    boolean fairShareGroupLimitIsConfigured = Texts.hasText(quotaPolicy.fairShareGroup())
-        && quotaPolicy.groupSharedMaxRunningJobs() != null
-        && quotaPolicy.groupSharedMaxRunningJobs() > 0;
-    if (fairShareGroupLimitIsConfigured) {
-      if (!fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)) {
+    private ResourceCheck checkTenantLimit(ResourceSchedulingRequest request, TenantQuotaPolicyEntity quotaPolicy) {
+        if (EmptyChecks.isNull(quotaPolicy)) {
+            return ResourceCheck.allow();
+        }
         QuotaExceededStrategy strategy = resolveStrategy(quotaPolicy.exceededStrategy());
-        return applyStrategy(
-            strategy,
-            "FAIR_SHARE_GROUP_JOB_LIMIT",
-            "fair-share group job cap reached for group " + quotaPolicy.fairShareGroup());
-      }
-    }
-    return ResourceCheck.allow();
-  }
 
-  private boolean hasResourceCaps(TenantQuotaPolicyEntity policy, ResourceQueueEntity queue) {
-    return (EmptyChecks.isNotNull(policy)
-            && (isPositive(policy.maxRunningJobsPerTenant())
-                || isPositive(policy.maxPartitionsPerTenant())))
-        || (EmptyChecks.isNotNull(queue)
-            && (isPositive(queue.maxRunningJobs()) || isPositive(queue.maxRunningPartitions())));
-  }
+        if (quotaPolicy.maxRunningJobsPerTenant() != null && quotaPolicy.maxRunningJobsPerTenant() > 0) {
+            long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(request.getTenantId());
+            int burst = quotaPolicy.burstLimit() == null ? 0 : Math.max(0, quotaPolicy.burstLimit());
+            QuotaRuntimeStateService.QuotaReservationOwner reservationOwner =
+                    new QuotaRuntimeStateService.QuotaReservationOwner(
+                            request.getTenantId(), "TENANT_JOBS", request.getTenantId());
+            String quotaResetPolicy = quotaPolicy.quotaResetPolicy();
+            int maximumRunningJobs = quotaPolicy.maxRunningJobsPerTenant();
+            int slidingWindowHours = governance.resourceScheduler().getQuotaResetSlidingWindowHours();
+            QuotaRuntimeStateService.QuotaReservationPolicy reservationPolicy =
+                    new QuotaRuntimeStateService.QuotaReservationPolicy(
+                            quotaResetPolicy, maximumRunningJobs, burst, slidingWindowHours);
+            QuotaRuntimeStateService.QuotaReservationReason reservationReason =
+                    new QuotaRuntimeStateService.QuotaReservationReason(
+                            "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)");
+            QuotaRuntimeStateService.QuotaReservationRequest reservationRequest =
+                    new QuotaRuntimeStateService.QuotaReservationRequest(
+                            reservationOwner, reservationPolicy, tenantActiveJobs, 1, reservationReason);
+            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(reservationRequest);
+            if (!burstCheck.allowed()) {
+                return applyStrategy(strategy, burstCheck.reasonCode(), burstCheck.reasonMessage());
+            }
+        }
 
-  private static boolean isPositive(Integer value) {
-    return EmptyChecks.isNotNull(value) && value > 0;
-  }
-
-  private ResourceCheck checkTenantLimit(
-      ResourceSchedulingRequest request, TenantQuotaPolicyEntity quotaPolicy) {
-    if (EmptyChecks.isNull(quotaPolicy)) {
-      return ResourceCheck.allow();
-    }
-    QuotaExceededStrategy strategy = resolveStrategy(quotaPolicy.exceededStrategy());
-
-    if (quotaPolicy.maxRunningJobsPerTenant() != null
-        && quotaPolicy.maxRunningJobsPerTenant() > 0) {
-      long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(request.getTenantId());
-      int burst = quotaPolicy.burstLimit() == null ? 0 : Math.max(0, quotaPolicy.burstLimit());
-      QuotaRuntimeStateService.QuotaReservationOwner reservationOwner =
-          new QuotaRuntimeStateService.QuotaReservationOwner(
-              request.getTenantId(), "TENANT_JOBS", request.getTenantId());
-      String quotaResetPolicy = quotaPolicy.quotaResetPolicy();
-      int maximumRunningJobs = quotaPolicy.maxRunningJobsPerTenant();
-      int slidingWindowHours = governance.resourceScheduler().getQuotaResetSlidingWindowHours();
-      QuotaRuntimeStateService.QuotaReservationPolicy reservationPolicy =
-          new QuotaRuntimeStateService.QuotaReservationPolicy(
-              quotaResetPolicy, maximumRunningJobs, burst, slidingWindowHours);
-      QuotaRuntimeStateService.QuotaReservationReason reservationReason =
-          new QuotaRuntimeStateService.QuotaReservationReason(
-              "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)");
-      QuotaRuntimeStateService.QuotaReservationRequest reservationRequest =
-          new QuotaRuntimeStateService.QuotaReservationRequest(
-              reservationOwner, reservationPolicy, tenantActiveJobs, 1, reservationReason);
-      ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(reservationRequest);
-      if (!burstCheck.allowed()) {
-        return applyStrategy(strategy, burstCheck.reasonCode(), burstCheck.reasonMessage());
-      }
+        return ResourceCheck.allow();
     }
 
-    return ResourceCheck.allow();
-  }
-
-  /**
-   * ADR-041 Phase2.3:租户显式配了 {@code exceeded_strategy} 以其为准;未配则走平台默认 {@code
-   * batch.resource-scheduler.default-exceeded-strategy}(默认 {@code QUEUE_DEFER} 有界队列 + 背压), 而非旧的硬拒默认
-   * —— 峰值流量下不误拒未单独配策略的正常租户。
-   */
-  private QuotaExceededStrategy resolveStrategy(String configured) {
-    if (Texts.hasText(configured)) {
-      return QuotaExceededStrategy.from(configured);
-    }
-    return governance.resourceScheduler().getDefaultExceededStrategy();
-  }
-
-  /**
-   * V89: 把租户级超额检查的结果按 {@link QuotaExceededStrategy} 转换。
-   *
-   * <ul>
-   *   <li>{@code REJECT} → fail-fast，launch 立刻抛 BizException
-   *   <li>{@code QUEUE_DEFER} → 维持 V89 之前的隐式行为（{@code waitForCapacity}），partition 留 WAITING
-   *   <li>{@code DEGRADE_PRIORITY} → 仍 defer 但 reasonCode 加 {@code _DEGRADED} 后缀， {@code
-   *       DefaultResourceScheduler} 见此后缀会把决策 priority/band 降到最低， fairnessScore 自然落到 WAITING 队尾
-   * </ul>
-   */
-  private static ResourceCheck applyStrategy(
-      QuotaExceededStrategy strategy, String reasonCode, String reasonMessage) {
-    return switch (strategy) {
-      case REJECT -> ResourceCheck.reject(reasonCode, reasonMessage);
-      case QUEUE_DEFER -> ResourceCheck.waitForCapacity(reasonCode, reasonMessage);
-      case DEGRADE_PRIORITY ->
-        ResourceCheck.waitForCapacity(reasonCode + "_DEGRADED", reasonMessage);
-    };
-  }
-
-  private ResourceCheck checkQueueLimit(
-      ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    boolean queueLimitUnavailable = EmptyChecks.isNull(queue)
-        || !Texts.hasText(queue.queueCode())
-        || queue.maxRunningJobs() == null
-        || queue.maxRunningJobs() <= 0;
-    if (queueLimitUnavailable) {
-      return ResourceCheck.allow();
+    /**
+     * ADR-041 Phase2.3:租户显式配了 {@code exceeded_strategy} 以其为准;未配则走平台默认 {@code
+     * batch.resource-scheduler.default-exceeded-strategy}(默认 {@code QUEUE_DEFER} 有界队列 + 背压), 而非旧的硬拒默认
+     * —— 峰值流量下不误拒未单独配策略的正常租户。
+     */
+    private QuotaExceededStrategy resolveStrategy(String configured) {
+        if (Texts.hasText(configured)) {
+            return QuotaExceededStrategy.from(configured);
+        }
+        return governance.resourceScheduler().getDefaultExceededStrategy();
     }
 
-    long queueActiveJobs =
-        jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.queueCode());
-    int qburst = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
-    QuotaRuntimeStateService.QuotaReservationOwner reservationOwner =
-        new QuotaRuntimeStateService.QuotaReservationOwner(
-            request.getTenantId(), "QUEUE_JOBS", queue.queueCode());
-    String quotaResetPolicy = queue.quotaResetPolicy();
-    int maximumRunningJobs = queue.maxRunningJobs();
-    int slidingWindowHours = governance.resourceScheduler().getQuotaResetSlidingWindowHours();
-    QuotaRuntimeStateService.QuotaReservationPolicy reservationPolicy =
-        new QuotaRuntimeStateService.QuotaReservationPolicy(
-            quotaResetPolicy, maximumRunningJobs, qburst, slidingWindowHours);
-    QuotaRuntimeStateService.QuotaReservationReason reservationReason =
-        new QuotaRuntimeStateService.QuotaReservationReason(
-            "QUEUE_JOB_LIMIT", "resource queue running jobs exceed limit (including" + " burst)");
-    QuotaRuntimeStateService.QuotaReservationRequest reservationRequest =
-        new QuotaRuntimeStateService.QuotaReservationRequest(
-            reservationOwner, reservationPolicy, queueActiveJobs, 1, reservationReason);
-    ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(reservationRequest);
-    if (!burstCheck.allowed()) {
-      return burstCheck;
+    /**
+     * V89: 把租户级超额检查的结果按 {@link QuotaExceededStrategy} 转换。
+     *
+     * <ul>
+     *   <li>{@code REJECT} → fail-fast，launch 立刻抛 BizException
+     *   <li>{@code QUEUE_DEFER} → 维持 V89 之前的隐式行为（{@code waitForCapacity}），partition 留 WAITING
+     *   <li>{@code DEGRADE_PRIORITY} → 仍 defer 但 reasonCode 加 {@code _DEGRADED} 后缀， {@code
+     *       DefaultResourceScheduler} 见此后缀会把决策 priority/band 降到最低， fairnessScore 自然落到 WAITING 队尾
+     * </ul>
+     */
+    private static ResourceCheck applyStrategy(
+            QuotaExceededStrategy strategy, String reasonCode, String reasonMessage) {
+        return switch (strategy) {
+            case REJECT -> ResourceCheck.reject(reasonCode, reasonMessage);
+            case QUEUE_DEFER -> ResourceCheck.waitForCapacity(reasonCode, reasonMessage);
+            case DEGRADE_PRIORITY -> ResourceCheck.waitForCapacity(reasonCode + "_DEGRADED", reasonMessage);
+        };
     }
-    return ResourceCheck.allow();
-  }
+
+    private ResourceCheck checkQueueLimit(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
+        boolean queueLimitUnavailable = EmptyChecks.isNull(queue)
+                || !Texts.hasText(queue.queueCode())
+                || queue.maxRunningJobs() == null
+                || queue.maxRunningJobs() <= 0;
+        if (queueLimitUnavailable) {
+            return ResourceCheck.allow();
+        }
+
+        long queueActiveJobs =
+                jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.queueCode());
+        int qburst = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
+        QuotaRuntimeStateService.QuotaReservationOwner reservationOwner =
+                new QuotaRuntimeStateService.QuotaReservationOwner(
+                        request.getTenantId(), "QUEUE_JOBS", queue.queueCode());
+        String quotaResetPolicy = queue.quotaResetPolicy();
+        int maximumRunningJobs = queue.maxRunningJobs();
+        int slidingWindowHours = governance.resourceScheduler().getQuotaResetSlidingWindowHours();
+        QuotaRuntimeStateService.QuotaReservationPolicy reservationPolicy =
+                new QuotaRuntimeStateService.QuotaReservationPolicy(
+                        quotaResetPolicy, maximumRunningJobs, qburst, slidingWindowHours);
+        QuotaRuntimeStateService.QuotaReservationReason reservationReason =
+                new QuotaRuntimeStateService.QuotaReservationReason(
+                        "QUEUE_JOB_LIMIT", "resource queue running jobs exceed limit (including" + " burst)");
+        QuotaRuntimeStateService.QuotaReservationRequest reservationRequest =
+                new QuotaRuntimeStateService.QuotaReservationRequest(
+                        reservationOwner, reservationPolicy, queueActiveJobs, 1, reservationReason);
+        ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(reservationRequest);
+        if (!burstCheck.allowed()) {
+            return burstCheck;
+        }
+        return ResourceCheck.allow();
+    }
 }

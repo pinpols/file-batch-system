@@ -37,153 +37,152 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("派发出箱服务行为: 优先级分档, 幂等键与事件键推导口径")
 class TaskDispatchOutboxServiceBehaviorTest {
 
-  @Mock
-  private DomainEventPublisher domainEventPublisher;
+    @Mock
+    private DomainEventPublisher domainEventPublisher;
 
-  @Mock
-  private JobTaskMapper jobTaskMapper;
+    @Mock
+    private JobTaskMapper jobTaskMapper;
 
-  private TaskDispatchOutboxService service;
+    private TaskDispatchOutboxService service;
 
-  @BeforeEach
-  void setUp() {
-    service =
-        new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper, new BizDateArithmetic());
-  }
+    @BeforeEach
+    void setUp() {
+        service = new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper, new BizDateArithmetic());
+    }
 
-  private JobInstanceEntity instance(int priority) {
-    JobInstanceEntity ji = new JobInstanceEntity();
-    ji.setId(1L);
-    ji.setInstanceNo("inst-001");
-    ji.setJobCode("JOB_A");
-    ji.setPriority(priority);
-    return ji;
-  }
+    private JobInstanceEntity instance(int priority) {
+        JobInstanceEntity ji = new JobInstanceEntity();
+        ji.setId(1L);
+        ji.setInstanceNo("inst-001");
+        ji.setJobCode("JOB_A");
+        ji.setPriority(priority);
+        return ji;
+    }
 
-  private JobTaskEntity task(Integer priority) {
-    JobTaskEntity t = new JobTaskEntity();
-    t.setId(10L);
-    t.setTenantId("ta");
-    t.setTaskType("IMPORT");
-    t.setJobInstanceId(1L);
-    t.setPriority(priority);
-    return t;
-  }
+    private JobTaskEntity task(Integer priority) {
+        JobTaskEntity t = new JobTaskEntity();
+        t.setId(10L);
+        t.setTenantId("ta");
+        t.setTaskType("IMPORT");
+        t.setJobInstanceId(1L);
+        t.setPriority(priority);
+        return t;
+    }
 
-  private JobPartitionEntity partition(String idempotencyKey) {
-    JobPartitionEntity p = new JobPartitionEntity();
-    p.setId(100L);
-    p.setIdempotencyKey(idempotencyKey);
-    return p;
-  }
+    private JobPartitionEntity partition(String idempotencyKey) {
+        JobPartitionEntity p = new JobPartitionEntity();
+        p.setId(100L);
+        p.setIdempotencyKey(idempotencyKey);
+        return p;
+    }
 
-  private DomainEvent capture() {
-    ArgumentCaptor<DomainEvent> c = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(domainEventPublisher).publish(c.capture());
-    return c.getValue();
-  }
+    private DomainEvent capture() {
+        ArgumentCaptor<DomainEvent> c = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher).publish(c.capture());
+        return c.getValue();
+    }
 
-  @Test
-  @DisplayName("优先级不大于三时映射为高优先级分档")
-  void shouldMapToHighBand_whenPriorityAtMostThree() {
-    service.writeDispatchEvent(instance(2), task(null), partition("k"), "tr", "evt");
-    Map<String, Object> msg = capture().payload();
-    assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.HIGH.code());
-  }
+    @Test
+    @DisplayName("优先级不大于三时映射为高优先级分档")
+    void shouldMapToHighBand_whenPriorityAtMostThree() {
+        service.writeDispatchEvent(instance(2), task(null), partition("k"), "tr", "evt");
+        Map<String, Object> msg = capture().payload();
+        assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.HIGH.code());
+    }
 
-  @Test
-  @DisplayName("优先级为四到六时映射为中优先级分档")
-  void shouldMapToMediumBand_whenPriorityBetweenFourAndSix() {
-    service.writeDispatchEvent(instance(5), task(null), partition("k"), "tr", "evt");
-    Map<String, Object> msg = capture().payload();
-    assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.MEDIUM.code());
-  }
+    @Test
+    @DisplayName("优先级为四到六时映射为中优先级分档")
+    void shouldMapToMediumBand_whenPriorityBetweenFourAndSix() {
+        service.writeDispatchEvent(instance(5), task(null), partition("k"), "tr", "evt");
+        Map<String, Object> msg = capture().payload();
+        assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.MEDIUM.code());
+    }
 
-  @Test
-  @DisplayName("优先级不小于七时映射为低优先级分档")
-  void shouldMapToLowBand_whenPriorityAtLeastSeven() {
-    service.writeDispatchEvent(instance(9), task(null), partition("k"), "tr", "evt");
-    Map<String, Object> msg = capture().payload();
-    assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.LOW.code());
-  }
+    @Test
+    @DisplayName("优先级不小于七时映射为低优先级分档")
+    void shouldMapToLowBand_whenPriorityAtLeastSeven() {
+        service.writeDispatchEvent(instance(9), task(null), partition("k"), "tr", "evt");
+        Map<String, Object> msg = capture().payload();
+        assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.LOW.code());
+    }
 
-  @Test
-  @DisplayName("存在分区时优先使用分区自带的幂等键")
-  void shouldPreferPartitionKey_whenDerivingIdempotencyKey() {
-    service.writeDispatchEvent(instance(3), task(null), partition("partition-idem-1"), "tr", "evt");
-    Map<String, Object> msg = capture().payload();
-    assertThat(msg).containsEntry("idempotencyKey", "partition-idem-1");
-  }
+    @Test
+    @DisplayName("存在分区时优先使用分区自带的幂等键")
+    void shouldPreferPartitionKey_whenDerivingIdempotencyKey() {
+        service.writeDispatchEvent(instance(3), task(null), partition("partition-idem-1"), "tr", "evt");
+        Map<String, Object> msg = capture().payload();
+        assertThat(msg).containsEntry("idempotencyKey", "partition-idem-1");
+    }
 
-  @Test
-  @DisplayName("没有分区但给出事件键时用事件键作为幂等键")
-  void shouldUseEventKey_whenPartitionMissing() {
-    service.writeDispatchEvent(instance(3), task(null), null, "tr", "custom-event-key");
-    Map<String, Object> msg = capture().payload();
-    assertThat(msg).containsEntry("idempotencyKey", "custom-event-key");
-  }
+    @Test
+    @DisplayName("没有分区但给出事件键时用事件键作为幂等键")
+    void shouldUseEventKey_whenPartitionMissing() {
+        service.writeDispatchEvent(instance(3), task(null), null, "tr", "custom-event-key");
+        Map<String, Object> msg = capture().payload();
+        assertThat(msg).containsEntry("idempotencyKey", "custom-event-key");
+    }
 
-  @Test
-  @DisplayName("没有分区且事件键为空白时按租户, 任务与实例标识拼出幂等键")
-  void shouldFallBackToTenantTaskInstance_whenPartitionAndEventKeyMissing() {
-    service.writeDispatchEvent(instance(3), task(null), null, "tr", "");
-    Map<String, Object> msg = capture().payload();
-    assertThat(msg).containsEntry("idempotencyKey", "ta:task:10:instance:1");
-  }
+    @Test
+    @DisplayName("没有分区且事件键为空白时按租户, 任务与实例标识拼出幂等键")
+    void shouldFallBackToTenantTaskInstance_whenPartitionAndEventKeyMissing() {
+        service.writeDispatchEvent(instance(3), task(null), null, "tr", "");
+        Map<String, Object> msg = capture().payload();
+        assertThat(msg).containsEntry("idempotencyKey", "ta:task:10:instance:1");
+    }
 
-  @Test
-  @DisplayName("事件键为空白时退化为租户加任务标识")
-  void shouldFallBackToTenantTaskId_whenEventKeyBlank() {
-    service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "");
-    DomainEvent event = capture();
-    assertThat(event.eventKey()).isEqualTo("ta:10");
-  }
+    @Test
+    @DisplayName("事件键为空白时退化为租户加任务标识")
+    void shouldFallBackToTenantTaskId_whenEventKeyBlank() {
+        service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "");
+        DomainEvent event = capture();
+        assertThat(event.eventKey()).isEqualTo("ta:10");
+    }
 
-  @Test
-  @DisplayName("给出事件键时原样使用")
-  void shouldUseProvidedEventKey_whenSet() {
-    service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "custom-event-key");
-    assertThat(capture().eventKey()).isEqualTo("custom-event-key");
-  }
+    @Test
+    @DisplayName("给出事件键时原样使用")
+    void shouldUseProvidedEventKey_whenSet() {
+        service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "custom-event-key");
+        assertThat(capture().eventKey()).isEqualTo("custom-event-key");
+    }
 
-  @Test
-  @DisplayName("任务与实例都带优先级时取任务优先级")
-  void shouldPreferTaskPriority_whenBothPresent() {
-    service.writeDispatchEvent(instance(7), task(2), partition("k"), "tr", "evt");
-    assertThat(capture().priority()).isEqualTo(2);
-  }
+    @Test
+    @DisplayName("任务与实例都带优先级时取任务优先级")
+    void shouldPreferTaskPriority_whenBothPresent() {
+        service.writeDispatchEvent(instance(7), task(2), partition("k"), "tr", "evt");
+        assertThat(capture().priority()).isEqualTo(2);
+    }
 
-  @Test
-  @DisplayName("任务优先级为空时回退取实例优先级")
-  void shouldFallBackToInstancePriority_whenTaskPriorityMissing() {
-    service.writeDispatchEvent(instance(7), task(null), partition("k"), "tr", "evt");
-    assertThat(capture().priority()).isEqualTo(7);
-  }
+    @Test
+    @DisplayName("任务优先级为空时回退取实例优先级")
+    void shouldFallBackToInstancePriority_whenTaskPriorityMissing() {
+        service.writeDispatchEvent(instance(7), task(null), partition("k"), "tr", "evt");
+        assertThat(capture().priority()).isEqualTo(7);
+    }
 
-  @Test
-  @DisplayName("写入事件时发布状态为新建且尝试次数为零, 事件元数据完整")
-  void shouldInitializePublishState_whenWritingEvent() {
-    service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "evt");
-    DomainEvent event = capture();
-    assertThat(event.traceId()).isEqualTo("tr");
-    assertThat(event.aggregateType()).isEqualTo("JOB_TASK");
-    assertThat(event.aggregateId()).isEqualTo(10L);
-    assertThat(event.eventType()).isEqualTo("IMPORT");
-  }
+    @Test
+    @DisplayName("写入事件时发布状态为新建且尝试次数为零, 事件元数据完整")
+    void shouldInitializePublishState_whenWritingEvent() {
+        service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "evt");
+        DomainEvent event = capture();
+        assertThat(event.traceId()).isEqualTo("tr");
+        assertThat(event.aggregateType()).isEqualTo("JOB_TASK");
+        assertThat(event.aggregateId()).isEqualTo(10L);
+        assertThat(event.eventType()).isEqualTo("IMPORT");
+    }
 
-  @Test
-  @DisplayName("没有分区时消息中不带分区标识, 且带出消息版本")
-  void shouldOmitPartitionId_whenNoPartition() {
-    service.writeDispatchEvent(instance(3), task(null), null, "tr", "evt");
-    Map<String, Object> msg = capture().payload();
-    assertThat(msg.get("jobPartitionId")).isNull();
-    assertThat(msg).containsEntry("schemaVersion", "v2");
-  }
+    @Test
+    @DisplayName("没有分区时消息中不带分区标识, 且带出消息版本")
+    void shouldOmitPartitionId_whenNoPartition() {
+        service.writeDispatchEvent(instance(3), task(null), null, "tr", "evt");
+        Map<String, Object> msg = capture().payload();
+        assertThat(msg.get("jobPartitionId")).isNull();
+        assertThat(msg).containsEntry("schemaVersion", "v2");
+    }
 
-  @Test
-  @DisplayName("没有运行模式时不更新任务载荷")
-  void shouldSkipPayloadUpdate_whenRunModeMissing() {
-    service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "evt");
-    verify(jobTaskMapper, never()).updatePayload(any(), any(), any());
-  }
+    @Test
+    @DisplayName("没有运行模式时不更新任务载荷")
+    void shouldSkipPayloadUpdate_whenRunModeMissing() {
+        service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "evt");
+        verify(jobTaskMapper, never()).updatePayload(any(), any(), any());
+    }
 }

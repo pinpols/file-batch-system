@@ -19,11 +19,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.mq.routing")
 public class MqRoutingProperties {
 
-  public enum Mode {
-    SINGLE,
-    TENANT,
-    PRIORITY
-  }
+    public enum Mode {
+        SINGLE,
+        TENANT,
+        PRIORITY
+    }
 
-  private Mode mode = Mode.SINGLE;
+    private Mode mode = Mode.SINGLE;
 }

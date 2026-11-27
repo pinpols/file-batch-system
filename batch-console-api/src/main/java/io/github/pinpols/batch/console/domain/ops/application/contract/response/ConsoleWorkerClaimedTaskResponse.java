@@ -5,15 +5,15 @@ import java.time.Instant;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ConsoleWorkerClaimedTaskResponse(
-    Long id,
-    Long jobInstanceId,
-    Long jobPartitionId,
-    String taskType,
-    Integer taskSeq,
-    String taskStatus,
-    String assignedWorkerCode,
-    String errorCode,
-    Instant startedAt,
-    Instant finishedAt,
-    Instant createdAt,
-    Instant updatedAt) {}
+        Long id,
+        Long jobInstanceId,
+        Long jobPartitionId,
+        String taskType,
+        Integer taskSeq,
+        String taskStatus,
+        String assignedWorkerCode,
+        String errorCode,
+        Instant startedAt,
+        Instant finishedAt,
+        Instant createdAt,
+        Instant updatedAt) {}

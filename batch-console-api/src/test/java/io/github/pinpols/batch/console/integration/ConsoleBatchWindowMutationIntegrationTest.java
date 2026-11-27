@@ -20,14 +20,12 @@ import org.springframework.http.MediaType;
  *   <li>(tenant_id, window_code) 重复创建 → 唯一约束撞
  * </ul>
  */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("批次日窗口写路径: 编码格式校验,落库字段透传与唯一约束")
 class ConsoleBatchWindowMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
-  private String body(String code) {
-    return """
+    private String body(String code) {
+        return """
         {
           "tenantId": "int-win-ta",
           "windowCode": "%s",
@@ -41,101 +39,96 @@ class ConsoleBatchWindowMutationIntegrationTest extends AbstractMutationIntegrat
           "enabled": false
         }
         """.formatted(code).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("创建批次日窗口: 返回成功,落库的租户,编码与结束策略与请求一致")
-  void shouldCreateBatchWindowWithValidCode() {
-    String code = "int_win_create_" + System.currentTimeMillis();
+    @Test
+    @DisplayName("创建批次日窗口: 返回成功,落库的租户,编码与结束策略与请求一致")
+    void shouldCreateBatchWindowWithValidCode() {
+        String code = "int_win_create_" + System.currentTimeMillis();
 
-    client
-        .post()
-        .uri("/api/console/batch-windows")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        client.post()
+                .uri("/api/console/batch-windows")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    String batchWindowSnapshotSql = """
+        String batchWindowSnapshotSql = """
         select tenant_id, window_code, timezone, end_strategy from batch.batch_window
         where window_code = ?
         """;
-    var row = jdbcTemplate.queryForMap(batchWindowSnapshotSql, code);
-    assertThat(row).containsEntry("tenant_id", "int-win-ta");
-    assertThat(row).containsEntry("window_code", code);
-    assertThat(row).containsEntry("end_strategy", "FINISH_RUNNING");
+        var row = jdbcTemplate.queryForMap(batchWindowSnapshotSql, code);
+        assertThat(row).containsEntry("tenant_id", "int-win-ta");
+        assertThat(row).containsEntry("window_code", code);
+        assertThat(row).containsEntry("end_strategy", "FINISH_RUNNING");
 
-    String deleteBatchWindowSql = """
+        String deleteBatchWindowSql = """
         delete from batch.batch_window where window_code = ?
     """;
-    jdbcTemplate.update(deleteBatchWindowSql, code);
-  }
+        jdbcTemplate.update(deleteBatchWindowSql, code);
+    }
 
-  @Test
-  @DisplayName("编码含空格: 返回校验错误且不落库")
-  void shouldRejectInvalidWindowCodeWithSpaces() {
-    client
-        .post()
-        .uri("/api/console/batch-windows")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-bad-1")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("q q q"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest()
-        .expectBody(String.class)
-        .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
+    @Test
+    @DisplayName("编码含空格: 返回校验错误且不落库")
+    void shouldRejectInvalidWindowCodeWithSpaces() {
+        client.post()
+                .uri("/api/console/batch-windows")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-bad-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("q q q"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(String.class)
+                .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    String batchWindowCountSql = """
+        String batchWindowCountSql = """
         select count(*) from batch.batch_window where window_code = ?
         """;
-    Long cnt = jdbcTemplate.queryForObject(batchWindowCountSql, Long.class, "q q q");
-    assertThat(cnt).isZero();
-  }
+        Long cnt = jdbcTemplate.queryForObject(batchWindowCountSql, Long.class, "q q q");
+        assertThat(cnt).isZero();
+    }
 
-  @Test
-  @DisplayName("编码为中文: 返回请求不合法")
-  void shouldRejectChineseWindowCode() {
-    client
-        .post()
-        .uri("/api/console/batch-windows")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-bad-2")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("窗口测试"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
+    @Test
+    @DisplayName("编码为中文: 返回请求不合法")
+    void shouldRejectChineseWindowCode() {
+        client.post()
+                .uri("/api/console/batch-windows")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-bad-2")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("窗口测试"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
 
-  @Test
-  @DisplayName("编码重复: 第二次写入失败,不产生重复窗口")
-  void shouldRejectDuplicateWindowCode() {
-    String code = "int_win_dup_" + System.currentTimeMillis();
-    client
-        .post()
-        .uri("/api/console/batch-windows")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-dup-1-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+    @Test
+    @DisplayName("编码重复: 第二次写入失败,不产生重复窗口")
+    void shouldRejectDuplicateWindowCode() {
+        String code = "int_win_dup_" + System.currentTimeMillis();
+        client.post()
+                .uri("/api/console/batch-windows")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-dup-1-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    client
-        .post()
-        .uri("/api/console/batch-windows")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-dup-2-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .value(s -> assertThat(s).isIn(400, 409, 500));
+        client.post()
+                .uri("/api/console/batch-windows")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-win-dup-2-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    String deleteBatchWindowSql = """
+        String deleteBatchWindowSql = """
         delete from batch.batch_window where window_code = ?
     """;
-    jdbcTemplate.update(deleteBatchWindowSql, code);
-  }
+        jdbcTemplate.update(deleteBatchWindowSql, code);
+    }
 }

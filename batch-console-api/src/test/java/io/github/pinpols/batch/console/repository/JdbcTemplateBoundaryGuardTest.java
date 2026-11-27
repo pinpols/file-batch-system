@@ -24,87 +24,88 @@ import org.junit.jupiter.api.Test;
 @DisplayName("持久化边界守护: 主源码使用模板类必须命中显式允许清单")
 class JdbcTemplateBoundaryGuardTest {
 
-  private static final Set<String> ALLOWED_MAIN_JAVA_FILES = Set.of(
-      "batch-common/src/main/java/io/github/pinpols/batch/common/config/ShedLockProviderFactory.java",
-      "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dataquality/DataQualityCheckExecutor.java",
-      "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dryrun/DefaultDryRunPlanService.java",
-      "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dryrun/DryRunSqlProbe.java",
-      "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dataquality/JdbcDataQualitySqlRuleProbe.java",
-      "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dryrun/JdbcDryRunSqlProbe.java",
-      "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/DbRowExistsSensorPolicy.java",
-      "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/sensor/DbRowExistsSensorPolicy.java",
-      "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxConfiguration.java",
-      "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxRepository.java",
-      "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java",
-      "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java",
-      "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/JdbcMappedImportCompensator.java",
-      "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java",
-      "batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java");
+    private static final Set<String> ALLOWED_MAIN_JAVA_FILES = Set.of(
+            "batch-common/src/main/java/io/github/pinpols/batch/common/config/ShedLockProviderFactory.java",
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dataquality/DataQualityCheckExecutor.java",
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dryrun/DefaultDryRunPlanService.java",
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dryrun/DryRunSqlProbe.java",
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dataquality/JdbcDataQualitySqlRuleProbe.java",
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dryrun/JdbcDryRunSqlProbe.java",
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/DbRowExistsSensorPolicy.java",
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/sensor/DbRowExistsSensorPolicy.java",
+            "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxConfiguration.java",
+            "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxRepository.java",
+            "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java",
+            "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java",
+            "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/JdbcMappedImportCompensator.java",
+            "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java",
+            "batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java");
 
-  private static final List<String> SPRING_JDBC_IMPORTS = List.of(
-      "import org.springframework.jdbc.core.JdbcTemplate;",
-      "import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;");
+    private static final List<String> SPRING_JDBC_IMPORTS = List.of(
+            "import org.springframework.jdbc.core.JdbcTemplate;",
+            "import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;");
 
-  @Test
-  @DisplayName("扫描主源码时, 引入模板类的文件必须全部命中允许清单, 越界文件被逐条列出")
-  void shouldKeepSpringJdbcTemplateUsageOnAllowList_whenScanningMainSources() throws IOException {
-    Path repoRoot = locateRepositoryRoot();
-    List<String> violations = new ArrayList<>();
-    try (Stream<Path> files = Files.walk(repoRoot)) {
-      files
-          .filter(Files::isRegularFile)
-          .filter(path -> path.toString().endsWith(".java"))
-          .filter(JdbcTemplateBoundaryGuardTest::isMainJava)
-          .forEach(path -> scan(path, repoRoot, violations));
-    }
+    @Test
+    @DisplayName("扫描主源码时, 引入模板类的文件必须全部命中允许清单, 越界文件被逐条列出")
+    void shouldKeepSpringJdbcTemplateUsageOnAllowList_whenScanningMainSources() throws IOException {
+        Path repoRoot = locateRepositoryRoot();
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(repoRoot)) {
+            files.filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .filter(JdbcTemplateBoundaryGuardTest::isMainJava)
+                    .forEach(path -> scan(path, repoRoot, violations));
+        }
 
-    assertThat(violations).as("""
+        assertThat(violations)
+                .as("""
             Spring JdbcTemplate / NamedParameterJdbcTemplate 只能出现在明确允许的生产边界。
             平台业务 CRUD、状态推进、幂等写、控制面查询请走 MyBatis mapper + XML。
             动态 SQL / 外部业务库 / ShedLock / 本地 outbox 初始化等例外，先补 ALLOWED_MAIN_JAVA_FILES 并说明边界。
             越界文件:
             %s
-            """, String.join("\n", new TreeSet<>(violations))).isEmpty();
-  }
-
-  private static void scan(Path file, Path repoRoot, List<String> violations) {
-    String content = readFile(file);
-    boolean usesSpringJdbc = SPRING_JDBC_IMPORTS.stream().anyMatch(content::contains);
-    if (!usesSpringJdbc) {
-      return;
+            """, String.join("\n", new TreeSet<>(violations)))
+                .isEmpty();
     }
-    String relative = repoRoot.relativize(file).toString().replace('\\', '/');
-    if (!ALLOWED_MAIN_JAVA_FILES.contains(relative)) {
-      violations.add(relative);
-    }
-  }
 
-  private static boolean isMainJava(Path path) {
-    String normalized = path.toString().replace('\\', '/');
-    return normalized.contains("/src/main/java/") && !normalized.contains("/target/");
-  }
-
-  private static Path locateRepositoryRoot() {
-    Path candidate = Path.of(System.getProperty("maven.multiModuleProjectDirectory", "."))
-        .toAbsolutePath()
-        .normalize();
-    while (candidate != null) {
-      boolean candidateIsBackendRepositoryRoot = Files.isRegularFile(candidate.resolve("pom.xml"))
-          && Files.isDirectory(candidate.resolve("batch-common"))
-          && Files.isDirectory(candidate.resolve("batch-worker"));
-      if (candidateIsBackendRepositoryRoot) {
-        return candidate;
-      }
-      candidate = candidate.getParent();
+    private static void scan(Path file, Path repoRoot, List<String> violations) {
+        String content = readFile(file);
+        boolean usesSpringJdbc = SPRING_JDBC_IMPORTS.stream().anyMatch(content::contains);
+        if (!usesSpringJdbc) {
+            return;
+        }
+        String relative = repoRoot.relativize(file).toString().replace('\\', '/');
+        if (!ALLOWED_MAIN_JAVA_FILES.contains(relative)) {
+            violations.add(relative);
+        }
     }
-    throw new IllegalStateException("cannot locate repository root");
-  }
 
-  private static String readFile(Path file) {
-    try {
-      return Files.readString(file, StandardCharsets.UTF_8);
-    } catch (IOException ex) {
-      throw new IllegalStateException("read failed: " + file, ex);
+    private static boolean isMainJava(Path path) {
+        String normalized = path.toString().replace('\\', '/');
+        return normalized.contains("/src/main/java/") && !normalized.contains("/target/");
     }
-  }
+
+    private static Path locateRepositoryRoot() {
+        Path candidate = Path.of(System.getProperty("maven.multiModuleProjectDirectory", "."))
+                .toAbsolutePath()
+                .normalize();
+        while (candidate != null) {
+            boolean candidateIsBackendRepositoryRoot = Files.isRegularFile(candidate.resolve("pom.xml"))
+                    && Files.isDirectory(candidate.resolve("batch-common"))
+                    && Files.isDirectory(candidate.resolve("batch-worker"));
+            if (candidateIsBackendRepositoryRoot) {
+                return candidate;
+            }
+            candidate = candidate.getParent();
+        }
+        throw new IllegalStateException("cannot locate repository root");
+    }
+
+    private static String readFile(Path file) {
+        try {
+            return Files.readString(file, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new IllegalStateException("read failed: " + file, ex);
+        }
+    }
 }

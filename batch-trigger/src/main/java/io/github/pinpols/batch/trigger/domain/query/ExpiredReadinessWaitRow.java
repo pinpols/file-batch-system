@@ -7,8 +7,8 @@ import lombok.Data;
 @Data
 public class ExpiredReadinessWaitRow {
 
-  private String tenantId;
-  private Long workflowDefinitionId;
-  private Instant scheduledFireTime;
-  private Instant deadline;
+    private String tenantId;
+    private Long workflowDefinitionId;
+    private Instant scheduledFireTime;
+    private Instant deadline;
 }

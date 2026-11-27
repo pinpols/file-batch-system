@@ -10,23 +10,23 @@ import org.springframework.stereotype.Component;
 @Component
 public class JdbcPersistenceConflictDetectionAdapter implements PersistenceConflictDetectionPort {
 
-  private static final String UNIQUE_VIOLATION_SQL_STATE = "23505";
+    private static final String UNIQUE_VIOLATION_SQL_STATE = "23505";
 
-  @Override
-  public boolean isUniqueConstraintViolation(Throwable throwable, String constraintName) {
-    if (!Texts.hasText(constraintName)) {
-      return false;
-    }
-    for (Throwable cursor = throwable; EmptyChecks.isNotNull(cursor); cursor = cursor.getCause()) {
-      if (cursor instanceof SQLException sql) {
-        if (UNIQUE_VIOLATION_SQL_STATE.equals(sql.getSQLState())) {
-          return true;
+    @Override
+    public boolean isUniqueConstraintViolation(Throwable throwable, String constraintName) {
+        if (!Texts.hasText(constraintName)) {
+            return false;
         }
-        if (Texts.hasText(sql.getMessage()) && sql.getMessage().contains(constraintName)) {
-          return true;
+        for (Throwable cursor = throwable; EmptyChecks.isNotNull(cursor); cursor = cursor.getCause()) {
+            if (cursor instanceof SQLException sql) {
+                if (UNIQUE_VIOLATION_SQL_STATE.equals(sql.getSQLState())) {
+                    return true;
+                }
+                if (Texts.hasText(sql.getMessage()) && sql.getMessage().contains(constraintName)) {
+                    return true;
+                }
+            }
         }
-      }
+        return false;
     }
-    return false;
-  }
 }

@@ -14,47 +14,47 @@ import java.util.function.LongSupplier;
  */
 public final class ThrottledLogger {
 
-  private final long cooldownNanos;
-  private final LongSupplier clock;
-  private final ConcurrentHashMap<String, State> states = new ConcurrentHashMap<>();
+    private final long cooldownNanos;
+    private final LongSupplier clock;
+    private final ConcurrentHashMap<String, State> states = new ConcurrentHashMap<>();
 
-  public ThrottledLogger(Duration cooldown) {
-    this(cooldown, System::nanoTime);
-  }
-
-  /** 测试入口:允许注入虚拟时钟。 */
-  public ThrottledLogger(Duration cooldown, LongSupplier nanoClock) {
-    if (cooldown == null || cooldown.isNegative() || cooldown.isZero()) {
-      throw new IllegalArgumentException("cooldown must be positive");
+    public ThrottledLogger(Duration cooldown) {
+        this(cooldown, System::nanoTime);
     }
-    this.cooldownNanos = cooldown.toNanos();
-    this.clock = nanoClock;
-  }
 
-  /** 评估 key 是否应该立即输出日志。 */
-  public Decision evaluate(String key) {
-    if (key == null) {
-      return new Decision(true, 0L);
+    /** 测试入口:允许注入虚拟时钟。 */
+    public ThrottledLogger(Duration cooldown, LongSupplier nanoClock) {
+        if (cooldown == null || cooldown.isNegative() || cooldown.isZero()) {
+            throw new IllegalArgumentException("cooldown must be positive");
+        }
+        this.cooldownNanos = cooldown.toNanos();
+        this.clock = nanoClock;
     }
-    long now = clock.getAsLong();
-    State s = states.computeIfAbsent(key, k -> new State());
-    synchronized (s) {
-      if (now >= s.nextAllowedAt) {
-        long suppressed = s.suppressedCount;
-        s.suppressedCount = 0L;
-        s.nextAllowedAt = now + cooldownNanos;
-        return new Decision(true, suppressed);
-      }
-      s.suppressedCount++;
-      return new Decision(false, 0L);
+
+    /** 评估 key 是否应该立即输出日志。 */
+    public Decision evaluate(String key) {
+        if (key == null) {
+            return new Decision(true, 0L);
+        }
+        long now = clock.getAsLong();
+        State s = states.computeIfAbsent(key, k -> new State());
+        synchronized (s) {
+            if (now >= s.nextAllowedAt) {
+                long suppressed = s.suppressedCount;
+                s.suppressedCount = 0L;
+                s.nextAllowedAt = now + cooldownNanos;
+                return new Decision(true, suppressed);
+            }
+            s.suppressedCount++;
+            return new Decision(false, 0L);
+        }
     }
-  }
 
-  /** 节流决策。{@code suppressedSincePrevious} 仅在 {@code shouldLog=true} 时有意义(本次输出之前累计抑制条数)。 */
-  public record Decision(boolean shouldLog, long suppressedSincePrevious) {}
+    /** 节流决策。{@code suppressedSincePrevious} 仅在 {@code shouldLog=true} 时有意义(本次输出之前累计抑制条数)。 */
+    public record Decision(boolean shouldLog, long suppressedSincePrevious) {}
 
-  private static final class State {
-    long nextAllowedAt; // nanoTime
-    long suppressedCount;
-  }
+    private static final class State {
+        long nextAllowedAt; // nanoTime
+        long suppressedCount;
+    }
 }

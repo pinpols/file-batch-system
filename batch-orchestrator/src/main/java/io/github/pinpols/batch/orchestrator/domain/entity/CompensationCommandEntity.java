@@ -10,27 +10,27 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = false)
 public class CompensationCommandEntity extends AbstractLocalizedErrorEntity {
 
-  private Long id;
-  private String tenantId;
-  private String commandNo;
-  private String compensationType;
-  private Long targetId;
-  private Long sourceWorkflowRunId;
-  private String jobCode;
-  private LocalDate bizDate;
-  private String batchNo;
-  private Long relatedJobInstanceId;
-  private Long relatedFileId;
-  private String approvalId;
-  private String requestFingerprint;
-  private String operatorId;
-  private String reason;
-  private String strategy;
-  private String commandStatus;
-  private String traceId;
-  private String resultSummary;
-  private String errorCode;
+    private Long id;
+    private String tenantId;
+    private String commandNo;
+    private String compensationType;
+    private Long targetId;
+    private Long sourceWorkflowRunId;
+    private String jobCode;
+    private LocalDate bizDate;
+    private String batchNo;
+    private Long relatedJobInstanceId;
+    private Long relatedFileId;
+    private String approvalId;
+    private String requestFingerprint;
+    private String operatorId;
+    private String reason;
+    private String strategy;
+    private String commandStatus;
+    private String traceId;
+    private String resultSummary;
+    private String errorCode;
 
-  private Instant createdAt;
-  private Instant finishedAt;
+    private Instant createdAt;
+    private Instant finishedAt;
 }

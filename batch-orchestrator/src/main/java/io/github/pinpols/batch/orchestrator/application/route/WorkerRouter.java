@@ -11,5 +11,5 @@ import io.github.pinpols.batch.common.model.WorkerRouteModel;
  */
 public interface WorkerRouter {
 
-  WorkerRouteModel route(String tenantId, String jobCode, String stepCode);
+    WorkerRouteModel route(String tenantId, String jobCode, String stepCode);
 }

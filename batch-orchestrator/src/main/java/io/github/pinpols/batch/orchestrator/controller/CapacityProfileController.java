@@ -17,18 +17,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CapacityProfileController {
 
-  private final CapacityProfileService capacityProfileService;
+    private final CapacityProfileService capacityProfileService;
 
-  @GetMapping
-  public CommonResponse<CapacityProfileReport> query(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "from", required = false) Instant from,
-      @RequestParam(value = "to", required = false) Instant to,
-      @RequestParam(value = "groupBy", required = false) String groupBy,
-      @RequestParam(value = "limit", required = false) Integer limit) {
-    CapacityProfileGroupBy grouping = CapacityProfileGroupBy.fromNullable(groupBy);
-    CapacityProfileReport report =
-        capacityProfileService.query(tenantId, from, to, grouping, limit);
-    return CommonResponse.success(report);
-  }
+    @GetMapping
+    public CommonResponse<CapacityProfileReport> query(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "from", required = false) Instant from,
+            @RequestParam(value = "to", required = false) Instant to,
+            @RequestParam(value = "groupBy", required = false) String groupBy,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        CapacityProfileGroupBy grouping = CapacityProfileGroupBy.fromNullable(groupBy);
+        CapacityProfileReport report = capacityProfileService.query(tenantId, from, to, grouping, limit);
+        return CommonResponse.success(report);
+    }
 }

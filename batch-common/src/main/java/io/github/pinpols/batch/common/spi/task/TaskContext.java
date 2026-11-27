@@ -28,44 +28,44 @@ import java.util.Objects;
  * @param runtimeAttributes 框架注入的运行时属性(traceId / bizDate / pipelineInstanceId 等)
  */
 public record TaskContext(
-    String tenantId,
-    String jobCode,
-    String taskInstanceId,
-    String workerId,
-    Map<String, Object> parameters,
-    Map<String, Object> runtimeAttributes) {
+        String tenantId,
+        String jobCode,
+        String taskInstanceId,
+        String workerId,
+        Map<String, Object> parameters,
+        Map<String, Object> runtimeAttributes) {
 
-  public TaskContext {
-    Objects.requireNonNull(tenantId, "tenantId");
-    Objects.requireNonNull(jobCode, "jobCode");
-    parameters = immutableNullableMap(parameters);
-    runtimeAttributes = immutableNullableMap(runtimeAttributes);
-  }
-
-  private static Map<String, Object> immutableNullableMap(Map<String, Object> source) {
-    if (EmptyChecks.isEmpty(source)) {
-      return Map.of();
+    public TaskContext {
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(jobCode, "jobCode");
+        parameters = immutableNullableMap(parameters);
+        runtimeAttributes = immutableNullableMap(runtimeAttributes);
     }
-    Map<String, Object> snapshot = new LinkedHashMap<>(source);
-    return Collections.unmodifiableMap(snapshot);
-  }
 
-  /**
-   * ADR-026 dry-run 演练标记。orchestrator 在 task 派发链路把 {@code dryRun=true} 透传到 {@link
-   * #runtimeAttributes} 顶层(主路径);兼容旧调用方塞 {@link #parameters} 顶层。任意一方为 true 即视为 dry-run。
-   *
-   * <p>语义:dry-run = 演练,executor 必须不发出任何真副作用(不发 SQL / 不 fork 进程 / 不发 HTTP / 不调存过), 直接返回成功并通过 {@code
-   * TaskResult.output["plannedAction"]} 把"会执行什么"反馈给运维。
-   */
-  public boolean isDryRun() {
-    return readDryRunFlag(runtimeAttributes) || readDryRunFlag(parameters);
-  }
-
-  private static boolean readDryRunFlag(Map<String, Object> source) {
-    Object value = source.get("dryRun");
-    if (value instanceof Boolean b) {
-      return b;
+    private static Map<String, Object> immutableNullableMap(Map<String, Object> source) {
+        if (EmptyChecks.isEmpty(source)) {
+            return Map.of();
+        }
+        Map<String, Object> snapshot = new LinkedHashMap<>(source);
+        return Collections.unmodifiableMap(snapshot);
     }
-    return value != null && "true".equalsIgnoreCase(String.valueOf(value));
-  }
+
+    /**
+     * ADR-026 dry-run 演练标记。orchestrator 在 task 派发链路把 {@code dryRun=true} 透传到 {@link
+     * #runtimeAttributes} 顶层(主路径);兼容旧调用方塞 {@link #parameters} 顶层。任意一方为 true 即视为 dry-run。
+     *
+     * <p>语义:dry-run = 演练,executor 必须不发出任何真副作用(不发 SQL / 不 fork 进程 / 不发 HTTP / 不调存过), 直接返回成功并通过 {@code
+     * TaskResult.output["plannedAction"]} 把"会执行什么"反馈给运维。
+     */
+    public boolean isDryRun() {
+        return readDryRunFlag(runtimeAttributes) || readDryRunFlag(parameters);
+    }
+
+    private static boolean readDryRunFlag(Map<String, Object> source) {
+        Object value = source.get("dryRun");
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        return value != null && "true".equalsIgnoreCase(String.valueOf(value));
+    }
 }

@@ -5,14 +5,14 @@ import lombok.Builder;
 
 @Builder
 public record TriggerStatusInfo(
-    String tenantId,
-    String jobCode,
-    Long workflowDefinitionId,
-    String workflowCode,
-    String scheduleType,
-    String scheduleExpression,
-    String timezone,
-    String triggerMode,
-    String status,
-    Instant previousFireTime,
-    Instant nextFireTime) {}
+        String tenantId,
+        String jobCode,
+        Long workflowDefinitionId,
+        String workflowCode,
+        String scheduleType,
+        String scheduleExpression,
+        String timezone,
+        String triggerMode,
+        String status,
+        Instant previousFireTime,
+        Instant nextFireTime) {}

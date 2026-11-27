@@ -47,127 +47,119 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class BatchDayWaitingReleaseScheduler {
 
-  /**
-   * 与 {@link
-   * io.github.pinpols.batch.orchestrator.service.BatchDayGateService#isPreviousDayReleasable} 同义。
-   */
-  static final Set<String> RELEASABLE_PREVIOUS_DAY_STATUSES =
-      Set.of("SETTLED", "SKIPPED", "MANUAL_RELEASED");
+    /**
+     * 与 {@link
+     * io.github.pinpols.batch.orchestrator.service.BatchDayGateService#isPreviousDayReleasable} 同义。
+     */
+    static final Set<String> RELEASABLE_PREVIOUS_DAY_STATUSES = Set.of("SETTLED", "SKIPPED", "MANUAL_RELEASED");
 
-  /** 单 tick 扫描的 WAITING 行数上限,防一次性扫表打挂。 */
-  static final int WAITING_SCAN_LIMIT = 500;
+    /** 单 tick 扫描的 WAITING 行数上限,防一次性扫表打挂。 */
+    static final int WAITING_SCAN_LIMIT = 500;
 
-  static final String AUTO_RELEASE_OPERATOR = "AUTO_RELEASE";
+    static final String AUTO_RELEASE_OPERATOR = "AUTO_RELEASE";
 
-  private final BatchDayWaitingLaunchMapper waitingLaunchMapper;
-  private final BatchDayInstanceMapper batchDayInstanceMapper;
-  private final BatchDayOperationService batchDayOperationService;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final BatchDayWaitingLaunchMapper waitingLaunchMapper;
+    private final BatchDayInstanceMapper batchDayInstanceMapper;
+    private final BatchDayOperationService batchDayOperationService;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.batch-day.waiting-release-scan-interval-millis:60000}")
-  @SchedulerLock(
-      name = "batch_day_waiting_release",
-      lockAtMostFor = "PT3M",
-      lockAtLeastFor = "PT30S")
-  public void scheduledRelease() {
-    release();
-  }
+    @Scheduled(fixedDelayString = "${batch.batch-day.waiting-release-scan-interval-millis:60000}")
+    @SchedulerLock(name = "batch_day_waiting_release", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
+    public void scheduledRelease() {
+        release();
+    }
 
-  /** 扫描入口 — 暴露给测试直接调用,scheduled 包装层只负责 lock + draining gate。 */
-  public void release() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    /** 扫描入口 — 暴露给测试直接调用,scheduled 包装层只负责 lock + draining gate。 */
+    public void release() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        List<BatchDayWaitingLaunchEntity> waiting = waitingLaunchMapper.selectWaiting(null, WAITING_SCAN_LIMIT);
+        if (EmptyChecks.isEmpty(waiting)) {
+            return;
+        }
+        Set<PreviousDayKey> seen = new HashSet<>();
+        int releasedTotal = 0;
+        int previousDaysChecked = 0;
+        for (BatchDayWaitingLaunchEntity entity : waiting) {
+            if (entity == null || entity.bizDate() == null) {
+                continue;
+            }
+            String tenantId = entity.tenantId();
+            if (tenantId == null || tenantId.isBlank()) {
+                continue;
+            }
+            LocalDate previousBizDate = entity.bizDate().minusDays(1);
+            PreviousDayKey key = new PreviousDayKey(entity.tenantId(), entity.calendarCode(), previousBizDate);
+            if (!seen.add(key)) {
+                // 同一前一日已处理过(或已确认未放行),本轮跳过
+                continue;
+            }
+            previousDaysChecked++;
+            // RLS Phase B：previousDay 查询 + releaseWaitingLaunchesForBatchDay 内部 launch 重投均要带租户。
+            // try/catch 仍包在 runWithTenant 外，保留"单 day 异常隔离 → 不影响其它 key"语义，且 holder finally 清理。
+            Integer releasedCount = null;
+            try {
+                releasedCount = RlsTenantContextHolder.runWithTenant(
+                        tenantId, () -> releasePreviousDayInTenant(entity, previousBizDate));
+            } catch (Exception ex) {
+                // 单 day 异常隔离 — 不影响其它 key,下 tick 重试
+                String failedTenantId = entity.tenantId();
+                String failedCalendarCode = entity.calendarCode();
+                String causeSummary = SwallowedExceptionLogger.summary(ex);
+                log.warn(
+                        "auto-release failed: tenantId={}, calendarCode={}, previousBizDate={}, msg={}",
+                        failedTenantId,
+                        failedCalendarCode,
+                        previousBizDate,
+                        causeSummary);
+            }
+            if (releasedCount != null) {
+                releasedTotal += releasedCount;
+            }
+        }
+        if (releasedTotal > 0 || previousDaysChecked > 0) {
+            log.debug(
+                    "waiting release tick: scanned={}, previousDaysChecked={}, releasedTotal={}",
+                    waiting.size(),
+                    previousDaysChecked,
+                    releasedTotal);
+        }
     }
-    List<BatchDayWaitingLaunchEntity> waiting =
-        waitingLaunchMapper.selectWaiting(null, WAITING_SCAN_LIMIT);
-    if (EmptyChecks.isEmpty(waiting)) {
-      return;
-    }
-    Set<PreviousDayKey> seen = new HashSet<>();
-    int releasedTotal = 0;
-    int previousDaysChecked = 0;
-    for (BatchDayWaitingLaunchEntity entity : waiting) {
-      if (entity == null || entity.bizDate() == null) {
-        continue;
-      }
-      String tenantId = entity.tenantId();
-      if (tenantId == null || tenantId.isBlank()) {
-        continue;
-      }
-      LocalDate previousBizDate = entity.bizDate().minusDays(1);
-      PreviousDayKey key =
-          new PreviousDayKey(entity.tenantId(), entity.calendarCode(), previousBizDate);
-      if (!seen.add(key)) {
-        // 同一前一日已处理过(或已确认未放行),本轮跳过
-        continue;
-      }
-      previousDaysChecked++;
-      // RLS Phase B：previousDay 查询 + releaseWaitingLaunchesForBatchDay 内部 launch 重投均要带租户。
-      // try/catch 仍包在 runWithTenant 外，保留"单 day 异常隔离 → 不影响其它 key"语义，且 holder finally 清理。
-      Integer releasedCount = null;
-      try {
-        releasedCount = RlsTenantContextHolder.runWithTenant(
-            tenantId, () -> releasePreviousDayInTenant(entity, previousBizDate));
-      } catch (Exception ex) {
-        // 单 day 异常隔离 — 不影响其它 key,下 tick 重试
-        String failedTenantId = entity.tenantId();
-        String failedCalendarCode = entity.calendarCode();
-        String causeSummary = SwallowedExceptionLogger.summary(ex);
-        log.warn(
-            "auto-release failed: tenantId={}, calendarCode={}, previousBizDate={}, msg={}",
-            failedTenantId,
-            failedCalendarCode,
-            previousBizDate,
-            causeSummary);
-      }
-      if (releasedCount != null) {
-        releasedTotal += releasedCount;
-      }
-    }
-    if (releasedTotal > 0 || previousDaysChecked > 0) {
-      log.debug(
-          "waiting release tick: scanned={}, previousDaysChecked={}, releasedTotal={}",
-          waiting.size(),
-          previousDaysChecked,
-          releasedTotal);
-    }
-  }
 
-  private int releasePreviousDayInTenant(
-      BatchDayWaitingLaunchEntity waiting, LocalDate previousBizDate) {
-    BatchDayInstanceEntity previousDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
-        waiting.tenantId(), waiting.calendarCode(), previousBizDate);
-    if (EmptyChecks.isNull(previousDay) || !isReleasable(previousDay.dayStatus())) {
-      return 0;
+    private int releasePreviousDayInTenant(BatchDayWaitingLaunchEntity waiting, LocalDate previousBizDate) {
+        BatchDayInstanceEntity previousDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+                waiting.tenantId(), waiting.calendarCode(), previousBizDate);
+        if (EmptyChecks.isNull(previousDay) || !isReleasable(previousDay.dayStatus())) {
+            return 0;
+        }
+        int released = batchDayOperationService.releaseWaitingLaunchesForBatchDay(previousDay, AUTO_RELEASE_OPERATOR);
+        if (released > 0) {
+            log.info(
+                    "auto-released {} waiting launch(es): tenantId={}, calendarCode={}, previousBizDate={}",
+                    released,
+                    previousDay.tenantId(),
+                    previousDay.calendarCode(),
+                    previousBizDate);
+        }
+        return released;
     }
-    int released = batchDayOperationService.releaseWaitingLaunchesForBatchDay(
-        previousDay, AUTO_RELEASE_OPERATOR);
-    if (released > 0) {
-      log.info(
-          "auto-released {} waiting launch(es): tenantId={}, calendarCode={}, previousBizDate={}",
-          released,
-          previousDay.tenantId(),
-          previousDay.calendarCode(),
-          previousBizDate);
-    }
-    return released;
-  }
 
-  private static boolean isReleasable(String status) {
-    if (status == null) {
-      return false;
+    private static boolean isReleasable(String status) {
+        if (status == null) {
+            return false;
+        }
+        String trimmedStatus = status.trim();
+        String normalizedStatus = trimmedStatus.toUpperCase(Locale.ROOT);
+        return RELEASABLE_PREVIOUS_DAY_STATUSES.contains(normalizedStatus);
     }
-    String trimmedStatus = status.trim();
-    String normalizedStatus = trimmedStatus.toUpperCase(Locale.ROOT);
-    return RELEASABLE_PREVIOUS_DAY_STATUSES.contains(normalizedStatus);
-  }
 
-  /** 用于按"前一日"去重的复合 key,避免一个 batch_day 内多条 waiting 重复探测/释放。 */
-  private record PreviousDayKey(String tenantId, String calendarCode, LocalDate previousBizDate) {
-    PreviousDayKey {
-      Objects.requireNonNull(tenantId, "tenantId");
-      Objects.requireNonNull(calendarCode, "calendarCode");
-      Objects.requireNonNull(previousBizDate, "previousBizDate");
+    /** 用于按"前一日"去重的复合 key,避免一个 batch_day 内多条 waiting 重复探测/释放。 */
+    private record PreviousDayKey(String tenantId, String calendarCode, LocalDate previousBizDate) {
+        PreviousDayKey {
+            Objects.requireNonNull(tenantId, "tenantId");
+            Objects.requireNonNull(calendarCode, "calendarCode");
+            Objects.requireNonNull(previousBizDate, "previousBizDate");
+        }
     }
-  }
 }

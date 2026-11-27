@@ -17,6 +17,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.timezone")
 public class BatchTimezoneProperties {
 
-  /** IANA 时区字符串（如 {@code Asia/Shanghai} / {@code UTC} / {@code America/New_York}）。 */
-  private String defaultZone = CommonConstants.DEFAULT_TIMEZONE_ID;
+    /** IANA 时区字符串（如 {@code Asia/Shanghai} / {@code UTC} / {@code America/New_York}）。 */
+    private String defaultZone = CommonConstants.DEFAULT_TIMEZONE_ID;
 }

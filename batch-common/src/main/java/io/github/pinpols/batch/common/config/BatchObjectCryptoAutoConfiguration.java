@@ -17,74 +17,69 @@ import org.springframework.core.env.Environment;
 @EnableConfigurationProperties({BatchSecurityProperties.class, BatchKmsProperties.class})
 public class BatchObjectCryptoAutoConfiguration {
 
-  private static final Set<Integer> AES_KEY_LENGTHS = Set.of(16, 24, 32);
+    private static final Set<Integer> AES_KEY_LENGTHS = Set.of(16, 24, 32);
 
-  @Bean
-  public BatchObjectCryptoService batchObjectCryptoService(
-      BatchSecurityProperties securityProperties,
-      BatchKmsProperties kmsProperties,
-      Environment environment) {
-    validateKmsKeys(kmsProperties, environment);
-    return new BatchObjectCryptoService(securityProperties, kmsProperties);
-  }
-
-  @Bean
-  @ConditionalOnMissingBean
-  public SecretPayloadProtector secretPayloadProtector(
-      BatchObjectCryptoService batchObjectCryptoService) {
-    return new SecretPayloadProtector(batchObjectCryptoService);
-  }
-
-  /**
-   * 启动期校验 KMS 密钥配置。所有环境都必须保证默认 key 引用存在、密钥能 base64 解码且长度符合 AES 要求；生产 profile 额外拒绝弱/占位密钥(如
-   * batch-defaults 的 {@code DEFAULT_TEST=AAAA...==} 全零密钥)。否则未注入 {@code BATCH_SECURITY_KMS_KEYS_*} 时会用公开已知密钥加密生产数据。
-   */
-  static void validateKmsKeys(BatchKmsProperties kmsProperties, Environment environment) {
-    Map<String, String> keys = kmsProperties.getKeys();
-    String defaultKeyRef = kmsProperties.getDefaultKeyRef();
-    if (EmptyChecks.isBlank(defaultKeyRef) || !keys.containsKey(defaultKeyRef)) {
-      throw new IllegalStateException(
-          "FATAL: batch.security.kms.default-key-ref must reference an existing batch.security.kms.keys entry");
+    @Bean
+    public BatchObjectCryptoService batchObjectCryptoService(
+            BatchSecurityProperties securityProperties, BatchKmsProperties kmsProperties, Environment environment) {
+        validateKmsKeys(kmsProperties, environment);
+        return new BatchObjectCryptoService(securityProperties, kmsProperties);
     }
 
-    boolean production = BatchProfileSupport.isProductionProfile(environment);
-    for (Map.Entry<String, String> entry : keys.entrySet()) {
-      byte[] decoded = decodeKmsKey(entry.getKey(), entry.getValue());
-      if (!AES_KEY_LENGTHS.contains(decoded.length)) {
-        throw new IllegalStateException("FATAL: batch.security.kms.keys."
-            + entry.getKey()
-            + " must decode to a 16, 24, or 32 byte AES key");
-      }
-      if (production && isAllZero(decoded)) {
-        throw new IllegalStateException(
-            "FATAL: production batch.security.kms.keys."
-                + entry.getKey()
-                + " is weak or a placeholder (empty or all-zero); inject a real key through the BATCH_SECURITY_KMS_KEYS_* environment variable");
-      }
+    @Bean
+    @ConditionalOnMissingBean
+    public SecretPayloadProtector secretPayloadProtector(BatchObjectCryptoService batchObjectCryptoService) {
+        return new SecretPayloadProtector(batchObjectCryptoService);
     }
-  }
 
-  private static byte[] decodeKmsKey(String keyRef, String value) {
-    if (EmptyChecks.isBlank(value)) {
-      throw new IllegalStateException(
-          "FATAL: batch.security.kms.keys." + keyRef + " must not be blank");
-    }
-    try {
-      String trimmedValue = value.trim();
-      return Base64.getDecoder().decode(trimmedValue);
-    } catch (IllegalArgumentException ex) {
-      throw new IllegalStateException(
-          "FATAL: batch.security.kms.keys." + keyRef + " must be valid base64", ex);
-    }
-  }
+    /**
+     * 启动期校验 KMS 密钥配置。所有环境都必须保证默认 key 引用存在、密钥能 base64 解码且长度符合 AES 要求；生产 profile 额外拒绝弱/占位密钥(如
+     * batch-defaults 的 {@code DEFAULT_TEST=AAAA...==} 全零密钥)。否则未注入 {@code BATCH_SECURITY_KMS_KEYS_*} 时会用公开已知密钥加密生产数据。
+     */
+    static void validateKmsKeys(BatchKmsProperties kmsProperties, Environment environment) {
+        Map<String, String> keys = kmsProperties.getKeys();
+        String defaultKeyRef = kmsProperties.getDefaultKeyRef();
+        if (EmptyChecks.isBlank(defaultKeyRef) || !keys.containsKey(defaultKeyRef)) {
+            throw new IllegalStateException(
+                    "FATAL: batch.security.kms.default-key-ref must reference an existing batch.security.kms.keys entry");
+        }
 
-  /** 弱密钥判定:解码后全零字节。 */
-  private static boolean isAllZero(byte[] decoded) {
-    for (byte b : decoded) {
-      if (b != 0) {
-        return false;
-      }
+        boolean production = BatchProfileSupport.isProductionProfile(environment);
+        for (Map.Entry<String, String> entry : keys.entrySet()) {
+            byte[] decoded = decodeKmsKey(entry.getKey(), entry.getValue());
+            if (!AES_KEY_LENGTHS.contains(decoded.length)) {
+                throw new IllegalStateException("FATAL: batch.security.kms.keys."
+                        + entry.getKey()
+                        + " must decode to a 16, 24, or 32 byte AES key");
+            }
+            if (production && isAllZero(decoded)) {
+                throw new IllegalStateException(
+                        "FATAL: production batch.security.kms.keys."
+                                + entry.getKey()
+                                + " is weak or a placeholder (empty or all-zero); inject a real key through the BATCH_SECURITY_KMS_KEYS_* environment variable");
+            }
+        }
     }
-    return true;
-  }
+
+    private static byte[] decodeKmsKey(String keyRef, String value) {
+        if (EmptyChecks.isBlank(value)) {
+            throw new IllegalStateException("FATAL: batch.security.kms.keys." + keyRef + " must not be blank");
+        }
+        try {
+            String trimmedValue = value.trim();
+            return Base64.getDecoder().decode(trimmedValue);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException("FATAL: batch.security.kms.keys." + keyRef + " must be valid base64", ex);
+        }
+    }
+
+    /** 弱密钥判定:解码后全零字节。 */
+    private static boolean isAllZero(byte[] decoded) {
+        for (byte b : decoded) {
+            if (b != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

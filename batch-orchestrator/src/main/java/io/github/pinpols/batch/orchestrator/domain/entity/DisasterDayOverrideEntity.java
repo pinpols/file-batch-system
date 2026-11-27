@@ -11,19 +11,19 @@ import lombok.Builder;
  */
 @Builder(toBuilder = true)
 public record DisasterDayOverrideEntity(
-    Long id,
-    String tenantId,
-    String calendarCode,
-    LocalDate bizDate,
-    String action,
-    String reason,
-    String approvedBy,
-    Instant approvedAt,
-    Instant effectiveAt,
-    Instant ttlUntil,
-    Instant createdAt,
-    Instant updatedAt) {
+        Long id,
+        String tenantId,
+        String calendarCode,
+        LocalDate bizDate,
+        String action,
+        String reason,
+        String approvedBy,
+        Instant approvedAt,
+        Instant effectiveAt,
+        Instant ttlUntil,
+        Instant createdAt,
+        Instant updatedAt) {
 
-  public static final String ACTION_SKIP = "SKIP";
-  public static final String ACTION_DEFER_TO_NEXT_BIZDAY = "DEFER_TO_NEXT_BIZDAY";
+    public static final String ACTION_SKIP = "SKIP";
+    public static final String ACTION_DEFER_TO_NEXT_BIZDAY = "DEFER_TO_NEXT_BIZDAY";
 }

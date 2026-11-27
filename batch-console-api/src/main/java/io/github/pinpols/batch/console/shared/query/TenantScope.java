@@ -11,19 +11,19 @@ import io.github.pinpols.batch.common.exception.BizException;
  */
 public final class TenantScope {
 
-  private TenantScope() {}
+    private TenantScope() {}
 
-  /**
-   * 断言租户作用域 tenantId 非空,返回原值以便链式使用。
-   *
-   * @param tenantId 已经过租户解析 Port 解析的租户 ID
-   * @return 非空的 tenantId
-   * @throws BizException null / 空 / 全空白 → {@code FORBIDDEN error.tenant.context_missing}
-   */
-  public static String requireTenant(String tenantId) {
-    if (tenantId == null || tenantId.isBlank()) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
+    /**
+     * 断言租户作用域 tenantId 非空,返回原值以便链式使用。
+     *
+     * @param tenantId 已经过租户解析 Port 解析的租户 ID
+     * @return 非空的 tenantId
+     * @throws BizException null / 空 / 全空白 → {@code FORBIDDEN error.tenant.context_missing}
+     */
+    public static String requireTenant(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
+        }
+        return tenantId;
     }
-    return tenantId;
-  }
 }

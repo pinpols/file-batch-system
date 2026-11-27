@@ -6,5 +6,5 @@ import java.io.IOException;
 @FunctionalInterface
 public interface OutboundHttpTransport {
 
-  OutboundHttpResponse execute(OutboundHttpRequest request) throws IOException;
+    OutboundHttpResponse execute(OutboundHttpRequest request) throws IOException;
 }

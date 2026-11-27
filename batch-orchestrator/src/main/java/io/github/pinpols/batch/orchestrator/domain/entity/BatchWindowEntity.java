@@ -12,14 +12,14 @@ import java.time.LocalTime;
  * Repository。
  */
 public record BatchWindowEntity(
-    Long id,
-    String tenantId,
-    String windowCode,
-    String windowName,
-    String timezone,
-    LocalTime startTime,
-    LocalTime endTime,
-    String endStrategy,
-    String outOfWindowAction,
-    Boolean allowCrossDay,
-    Boolean enabled) {}
+        Long id,
+        String tenantId,
+        String windowCode,
+        String windowName,
+        String timezone,
+        LocalTime startTime,
+        LocalTime endTime,
+        String endStrategy,
+        String outOfWindowAction,
+        Boolean allowCrossDay,
+        Boolean enabled) {}

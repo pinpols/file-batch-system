@@ -27,82 +27,79 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class WorkflowNodeTerminalFinalizer {
 
-  private static final Set<String> TERMINAL_NODE_STATUSES = Set.of(
-      WorkflowNodeRunStatus.SUCCESS.code(),
-      WorkflowNodeRunStatus.FAILED.code(),
-      WorkflowNodeRunStatus.SKIPPED.code());
-  private static final List<String> LIVE_RUN_STATUSES =
-      List.of(WorkflowRunStatus.CREATED.code(), WorkflowRunStatus.RUNNING.code());
+    private static final Set<String> TERMINAL_NODE_STATUSES = Set.of(
+            WorkflowNodeRunStatus.SUCCESS.code(),
+            WorkflowNodeRunStatus.FAILED.code(),
+            WorkflowNodeRunStatus.SKIPPED.code());
+    private static final List<String> LIVE_RUN_STATUSES =
+            List.of(WorkflowRunStatus.CREATED.code(), WorkflowRunStatus.RUNNING.code());
 
-  private final OrchestratorWorkflowMappers workflowMappers;
-  private final WorkflowTerminalOutboxService terminalOutboxService;
+    private final OrchestratorWorkflowMappers workflowMappers;
+    private final WorkflowTerminalOutboxService terminalOutboxService;
 
-  @Transactional(propagation = Propagation.MANDATORY)
-  public void finalizeIfAllNodesTerminal(WorkflowRunEntity workflowRun) {
-    WorkflowRunEntity currentRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
-        workflowRun.getTenantId(), workflowRun.getId());
-    if (EmptyChecks.isNull(currentRun) || !LIVE_RUN_STATUSES.contains(currentRun.getRunStatus())) {
-      return;
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void finalizeIfAllNodesTerminal(WorkflowRunEntity workflowRun) {
+        WorkflowRunEntity currentRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
+                workflowRun.getTenantId(), workflowRun.getId());
+        if (EmptyChecks.isNull(currentRun) || !LIVE_RUN_STATUSES.contains(currentRun.getRunStatus())) {
+            return;
+        }
+        List<WorkflowNodeRunEntity> allNodeRuns =
+                workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(currentRun.getId());
+        Map<String, WorkflowNodeRunEntity> latestByNode = new HashMap<>();
+        for (WorkflowNodeRunEntity nodeRun : allNodeRuns) {
+            latestByNode.merge(
+                    nodeRun.getNodeCode(),
+                    nodeRun,
+                    (left, right) -> left.getRunSeq() >= right.getRunSeq() ? left : right);
+        }
+        // 尚未派发的并行分支没有 node_run，必须以冻结图确认节点是否齐全。
+        WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(currentRun);
+        if (EmptyChecks.isNotNull(snapshot)) {
+            boolean missingNode = snapshot.nodes().stream()
+                    .filter(node -> !Boolean.FALSE.equals(node.getEnabled()))
+                    // END 是控制边界；跳过全部业务分支时允许它不被激活。
+                    .filter(node -> !WorkflowNodeType.END.code().equals(node.getNodeType()))
+                    .anyMatch(node -> !latestByNode.containsKey(node.getNodeCode()));
+            if (missingNode) {
+                return;
+            }
+        }
+        List<WorkflowNodeRunEntity> nodeRuns = List.copyOf(latestByNode.values());
+        if (EmptyChecks.isEmpty(nodeRuns)
+                || nodeRuns.stream().anyMatch(node -> !TERMINAL_NODE_STATUSES.contains(node.getNodeStatus()))) {
+            return;
+        }
+        boolean failed = nodeRuns.stream()
+                .anyMatch(node -> WorkflowNodeRunStatus.FAILED.code().equals(node.getNodeStatus()));
+        boolean dryRun = Boolean.TRUE.equals(currentRun.getDryRun());
+        String status = terminalRunStatus(failed, dryRun);
+        Instant finishedAt = BatchDateTimeSupport.utcNow();
+        int updated = workflowMappers.workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
+                .tenantId(currentRun.getTenantId())
+                .id(currentRun.getId())
+                .runStatus(status)
+                .currentNodeCode(WorkflowNodeCode.END.code())
+                .finishedAt(finishedAt)
+                .expectedStatuses(LIVE_RUN_STATUSES)
+                .build());
+        if (updated > 0) {
+            terminalOutboxService.writeTerminalEvent(currentRun, status, finishedAt);
+        } else {
+            log.debug("workflow node completion finalization lost CAS: workflowRunId={}", currentRun.getId());
+        }
     }
-    List<WorkflowNodeRunEntity> allNodeRuns =
-        workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(currentRun.getId());
-    Map<String, WorkflowNodeRunEntity> latestByNode = new HashMap<>();
-    for (WorkflowNodeRunEntity nodeRun : allNodeRuns) {
-      latestByNode.merge(
-          nodeRun.getNodeCode(),
-          nodeRun,
-          (left, right) -> left.getRunSeq() >= right.getRunSeq() ? left : right);
-    }
-    // 尚未派发的并行分支没有 node_run，必须以冻结图确认节点是否齐全。
-    WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(currentRun);
-    if (EmptyChecks.isNotNull(snapshot)) {
-      boolean missingNode = snapshot.nodes().stream()
-          .filter(node -> !Boolean.FALSE.equals(node.getEnabled()))
-          // END 是控制边界；跳过全部业务分支时允许它不被激活。
-          .filter(node -> !WorkflowNodeType.END.code().equals(node.getNodeType()))
-          .anyMatch(node -> !latestByNode.containsKey(node.getNodeCode()));
-      if (missingNode) {
-        return;
-      }
-    }
-    List<WorkflowNodeRunEntity> nodeRuns = List.copyOf(latestByNode.values());
-    if (EmptyChecks.isEmpty(nodeRuns)
-        || nodeRuns.stream()
-            .anyMatch(node -> !TERMINAL_NODE_STATUSES.contains(node.getNodeStatus()))) {
-      return;
-    }
-    boolean failed = nodeRuns.stream()
-        .anyMatch(node -> WorkflowNodeRunStatus.FAILED.code().equals(node.getNodeStatus()));
-    boolean dryRun = Boolean.TRUE.equals(currentRun.getDryRun());
-    String status = terminalRunStatus(failed, dryRun);
-    Instant finishedAt = BatchDateTimeSupport.utcNow();
-    int updated =
-        workflowMappers.workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
-            .tenantId(currentRun.getTenantId())
-            .id(currentRun.getId())
-            .runStatus(status)
-            .currentNodeCode(WorkflowNodeCode.END.code())
-            .finishedAt(finishedAt)
-            .expectedStatuses(LIVE_RUN_STATUSES)
-            .build());
-    if (updated > 0) {
-      terminalOutboxService.writeTerminalEvent(currentRun, status, finishedAt);
-    } else {
-      log.debug(
-          "workflow node completion finalization lost CAS: workflowRunId={}", currentRun.getId());
-    }
-  }
 
-  private static String terminalRunStatus(boolean failed, boolean dryRun) {
-    if (failed && dryRun) {
-      return WorkflowRunStatus.FAILED_DRY_RUN.code();
+    private static String terminalRunStatus(boolean failed, boolean dryRun) {
+        if (failed && dryRun) {
+            return WorkflowRunStatus.FAILED_DRY_RUN.code();
+        }
+        if (failed) {
+            return WorkflowRunStatus.FAILED.code();
+        }
+        if (dryRun) {
+            return WorkflowRunStatus.SUCCESS_DRY_RUN.code();
+        }
+        return WorkflowRunStatus.SUCCESS.code();
     }
-    if (failed) {
-      return WorkflowRunStatus.FAILED.code();
-    }
-    if (dryRun) {
-      return WorkflowRunStatus.SUCCESS_DRY_RUN.code();
-    }
-    return WorkflowRunStatus.SUCCESS.code();
-  }
 }

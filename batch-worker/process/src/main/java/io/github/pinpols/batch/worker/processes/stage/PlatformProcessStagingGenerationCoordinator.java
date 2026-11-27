@@ -16,84 +16,80 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** 在独立平台库事务中按当前调用身份切换或读取 PROCESS staging 代际。 */
 @Component
-public class PlatformProcessStagingGenerationCoordinator
-    implements ProcessStagingGenerationCoordinator {
+public class PlatformProcessStagingGenerationCoordinator implements ProcessStagingGenerationCoordinator {
 
-  private final ProcessInvocationFenceMapper mapper;
-  private final TransactionTemplate requiresNew;
+    private final ProcessInvocationFenceMapper mapper;
+    private final TransactionTemplate requiresNew;
 
-  public PlatformProcessStagingGenerationCoordinator(
-      ProcessInvocationFenceMapper mapper,
-      @Qualifier("transactionManager") PlatformTransactionManager transactionManager) {
-    this.mapper = mapper;
-    this.requiresNew = new TransactionTemplate(transactionManager);
-    this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    this.requiresNew.setName("process-staging-generation");
-  }
-
-  @Override
-  public String startComputeGeneration(ProcessInvocationIdentity identity, String batchKey) {
-    String tenantId = identity.tenantId();
-    Long taskId = identity.taskId();
-    Long jobInstanceId = identity.jobInstanceId();
-    Long jobPartitionId = identity.jobPartitionId();
-    String workerId = identity.workerId();
-    String invocationId = identity.invocationId();
-
-    UUID generationUuid = UUID.randomUUID();
-    String generationId = generationUuid.toString();
-    Integer updated = requiresNew.execute(status -> {
-      ProcessInvocationFenceRotateCurrentStagingGenerationParam
-          processInvocationFenceRotateCurrentStagingGenerationParam =
-              ProcessInvocationFenceRotateCurrentStagingGenerationParam.builder()
-                  .tenantId(tenantId)
-                  .taskId(taskId)
-                  .jobInstanceId(jobInstanceId)
-                  .jobPartitionId(jobPartitionId)
-                  .workerId(workerId)
-                  .invocationId(invocationId)
-                  .batchKey(batchKey)
-                  .generationId(generationId)
-                  .build();
-      return mapper.rotateCurrentStagingGeneration(
-          processInvocationFenceRotateCurrentStagingGenerationParam);
-    });
-    if (EmptyChecks.isNull(updated) || updated != 1) {
-      throw stateConflict();
+    public PlatformProcessStagingGenerationCoordinator(
+            ProcessInvocationFenceMapper mapper,
+            @Qualifier("transactionManager") PlatformTransactionManager transactionManager) {
+        this.mapper = mapper;
+        this.requiresNew = new TransactionTemplate(transactionManager);
+        this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.requiresNew.setName("process-staging-generation");
     }
-    return generationId;
-  }
 
-  @Override
-  public String currentGeneration(ProcessInvocationIdentity identity) {
-    String tenantId = identity.tenantId();
-    Long taskId = identity.taskId();
-    Long jobInstanceId = identity.jobInstanceId();
-    Long jobPartitionId = identity.jobPartitionId();
-    String workerId = identity.workerId();
-    String invocationId = identity.invocationId();
+    @Override
+    public String startComputeGeneration(ProcessInvocationIdentity identity, String batchKey) {
+        String tenantId = identity.tenantId();
+        Long taskId = identity.taskId();
+        Long jobInstanceId = identity.jobInstanceId();
+        Long jobPartitionId = identity.jobPartitionId();
+        String workerId = identity.workerId();
+        String invocationId = identity.invocationId();
 
-    String generationId = requiresNew.execute(status -> {
-      ProcessInvocationFenceCurrentStagingGenerationQuery
-          processInvocationFenceCurrentStagingGenerationQuery =
-              ProcessInvocationFenceCurrentStagingGenerationQuery.builder()
-                  .tenantId(tenantId)
-                  .taskId(taskId)
-                  .jobInstanceId(jobInstanceId)
-                  .jobPartitionId(jobPartitionId)
-                  .workerId(workerId)
-                  .invocationId(invocationId)
-                  .build();
-      return mapper.selectCurrentStagingGeneration(
-          processInvocationFenceCurrentStagingGenerationQuery);
-    });
-    if (EmptyChecks.isBlank(generationId)) {
-      throw stateConflict();
+        UUID generationUuid = UUID.randomUUID();
+        String generationId = generationUuid.toString();
+        Integer updated = requiresNew.execute(status -> {
+            ProcessInvocationFenceRotateCurrentStagingGenerationParam
+                    processInvocationFenceRotateCurrentStagingGenerationParam =
+                            ProcessInvocationFenceRotateCurrentStagingGenerationParam.builder()
+                                    .tenantId(tenantId)
+                                    .taskId(taskId)
+                                    .jobInstanceId(jobInstanceId)
+                                    .jobPartitionId(jobPartitionId)
+                                    .workerId(workerId)
+                                    .invocationId(invocationId)
+                                    .batchKey(batchKey)
+                                    .generationId(generationId)
+                                    .build();
+            return mapper.rotateCurrentStagingGeneration(processInvocationFenceRotateCurrentStagingGenerationParam);
+        });
+        if (EmptyChecks.isNull(updated) || updated != 1) {
+            throw stateConflict();
+        }
+        return generationId;
     }
-    return generationId;
-  }
 
-  private static BizException stateConflict() {
-    return BizException.of(ResultCode.STATE_CONFLICT, "error.process.staging_generation_missing");
-  }
+    @Override
+    public String currentGeneration(ProcessInvocationIdentity identity) {
+        String tenantId = identity.tenantId();
+        Long taskId = identity.taskId();
+        Long jobInstanceId = identity.jobInstanceId();
+        Long jobPartitionId = identity.jobPartitionId();
+        String workerId = identity.workerId();
+        String invocationId = identity.invocationId();
+
+        String generationId = requiresNew.execute(status -> {
+            ProcessInvocationFenceCurrentStagingGenerationQuery processInvocationFenceCurrentStagingGenerationQuery =
+                    ProcessInvocationFenceCurrentStagingGenerationQuery.builder()
+                            .tenantId(tenantId)
+                            .taskId(taskId)
+                            .jobInstanceId(jobInstanceId)
+                            .jobPartitionId(jobPartitionId)
+                            .workerId(workerId)
+                            .invocationId(invocationId)
+                            .build();
+            return mapper.selectCurrentStagingGeneration(processInvocationFenceCurrentStagingGenerationQuery);
+        });
+        if (EmptyChecks.isBlank(generationId)) {
+            throw stateConflict();
+        }
+        return generationId;
+    }
+
+    private static BizException stateConflict() {
+        return BizException.of(ResultCode.STATE_CONFLICT, "error.process.staging_generation_missing");
+    }
 }

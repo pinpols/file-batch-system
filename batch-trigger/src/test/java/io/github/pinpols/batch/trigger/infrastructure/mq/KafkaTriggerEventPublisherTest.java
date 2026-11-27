@@ -44,96 +44,95 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("Kafka 触发器事件发布:校验发送消息头与 trace 透传,并覆盖序列化与发送失败的返回值")
 class KafkaTriggerEventPublisherTest {
 
-  @Mock
-  private MqMessagePublisher mqMessagePublisher;
+    @Mock
+    private MqMessagePublisher mqMessagePublisher;
 
-  private KafkaTriggerEventPublisher publisher;
+    private KafkaTriggerEventPublisher publisher;
 
-  @BeforeEach
-  void setUp() {
-    TriggerKafkaProperties props = new TriggerKafkaProperties();
-    props.setSendTimeoutSeconds(1);
-    publisher = new KafkaTriggerEventPublisher(mqMessagePublisher, props);
-  }
+    @BeforeEach
+    void setUp() {
+        TriggerKafkaProperties props = new TriggerKafkaProperties();
+        props.setSendTimeoutSeconds(1);
+        publisher = new KafkaTriggerEventPublisher(mqMessagePublisher, props);
+    }
 
-  @Test
-  @DisplayName("合法 envelope 发布返回成功,消息头带上 traceId、租户与 envelope 版本")
-  void publish_validEnvelope_sendsWithHeadersAndReturnsOk() {
-    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-1");
-    when(mqMessagePublisher.publish(any(MqMessage.class)))
-        .thenReturn(CompletableFuture.completedFuture(new MqPublishResult(0, 100L)));
+    @Test
+    @DisplayName("合法 envelope 发布返回成功,消息头带上 traceId、租户与 envelope 版本")
+    void publish_validEnvelope_sendsWithHeadersAndReturnsOk() {
+        LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-1");
+        when(mqMessagePublisher.publish(any(MqMessage.class)))
+                .thenReturn(CompletableFuture.completedFuture(new MqPublishResult(0, 100L)));
 
-    TriggerEventPublisher.PublishResult result =
-        publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-1", envelope, "trace-1");
+        TriggerEventPublisher.PublishResult result =
+                publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-1", envelope, "trace-1");
 
-    assertThat(result.success()).isTrue();
-    ArgumentCaptor<MqMessage> captor = ArgumentCaptor.forClass(MqMessage.class);
-    verify(mqMessagePublisher).publish(captor.capture());
-    MqMessage sent = captor.getValue();
-    assertThat(sent.topic()).isEqualTo(BatchTopics.TRIGGER_LAUNCH_V1);
-    assertThat(sent.key()).isEqualTo("tenant-a:req-1");
-    assertThat(sent.headers()).containsEntry("X-Trace-Id", "trace-1");
-    assertThat(sent.headers()).containsEntry("X-Tenant-Id", "tenant-a");
-    assertThat(sent.headers()).containsEntry("X-Envelope-Version", "2");
-  }
+        assertThat(result.success()).isTrue();
+        ArgumentCaptor<MqMessage> captor = ArgumentCaptor.forClass(MqMessage.class);
+        verify(mqMessagePublisher).publish(captor.capture());
+        MqMessage sent = captor.getValue();
+        assertThat(sent.topic()).isEqualTo(BatchTopics.TRIGGER_LAUNCH_V1);
+        assertThat(sent.key()).isEqualTo("tenant-a:req-1");
+        assertThat(sent.headers()).containsEntry("X-Trace-Id", "trace-1");
+        assertThat(sent.headers()).containsEntry("X-Tenant-Id", "tenant-a");
+        assertThat(sent.headers()).containsEntry("X-Envelope-Version", "2");
+    }
 
-  @Test
-  @DisplayName("envelope 带已持久化 W3C trace 时,发送期间以该 traceId 作为当前父上下文")
-  void publish_withPersistedTraceContext_restoresParentDuringKafkaSend() {
-    String traceId = "11111111111111111111111111111111";
-    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-trace")
-        .withTraceContext(new W3cTraceContext("00-" + traceId + "-2222222222222222-01", null));
-    String[] activeTraceId = new String[1];
-    when(mqMessagePublisher.publish(any(MqMessage.class))).thenAnswer(invocation -> {
-      activeTraceId[0] = Span.current().getSpanContext().getTraceId();
-      return CompletableFuture.completedFuture(new MqPublishResult(0, 101L));
-    });
+    @Test
+    @DisplayName("envelope 带已持久化 W3C trace 时,发送期间以该 traceId 作为当前父上下文")
+    void publish_withPersistedTraceContext_restoresParentDuringKafkaSend() {
+        String traceId = "11111111111111111111111111111111";
+        LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-trace")
+                .withTraceContext(new W3cTraceContext("00-" + traceId + "-2222222222222222-01", null));
+        String[] activeTraceId = new String[1];
+        when(mqMessagePublisher.publish(any(MqMessage.class))).thenAnswer(invocation -> {
+            activeTraceId[0] = Span.current().getSpanContext().getTraceId();
+            return CompletableFuture.completedFuture(new MqPublishResult(0, 101L));
+        });
 
-    TriggerEventPublisher.PublishResult result = publisher.publish(
-        BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-trace", envelope, "business-trace");
+        TriggerEventPublisher.PublishResult result =
+                publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-trace", envelope, "business-trace");
 
-    assertThat(result.success()).isTrue();
-    assertThat(activeTraceId[0]).isEqualTo(traceId);
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(activeTraceId[0]).isEqualTo(traceId);
+    }
 
-  @Test
-  @DisplayName("envelope 为 null 时直接返回失败并说明原因,不调用底层 MQ 发布")
-  void publish_nullEnvelope_failsWithoutSending() {
-    TriggerEventPublisher.PublishResult result =
-        publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "key", null, "trace");
+    @Test
+    @DisplayName("envelope 为 null 时直接返回失败并说明原因,不调用底层 MQ 发布")
+    void publish_nullEnvelope_failsWithoutSending() {
+        TriggerEventPublisher.PublishResult result =
+                publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "key", null, "trace");
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorMessage()).contains("null");
-    verify(mqMessagePublisher, never()).publish(any(MqMessage.class));
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorMessage()).contains("null");
+        verify(mqMessagePublisher, never()).publish(any(MqMessage.class));
+    }
 
-  @Test
-  @DisplayName("Kafka 发送抛 ExecutionException 时返回失败,错误信息标明是 kafka send 问题")
-  void publish_kafkaExecutionException_returnsFailure() {
-    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-2");
-    CompletableFuture<MqPublishResult> failed = new CompletableFuture<>();
-    failed.completeExceptionally(
-        new ExecutionException(new RuntimeException("broker not reachable")));
-    when(mqMessagePublisher.publish(any(MqMessage.class))).thenReturn(failed);
+    @Test
+    @DisplayName("Kafka 发送抛 ExecutionException 时返回失败,错误信息标明是 kafka send 问题")
+    void publish_kafkaExecutionException_returnsFailure() {
+        LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-2");
+        CompletableFuture<MqPublishResult> failed = new CompletableFuture<>();
+        failed.completeExceptionally(new ExecutionException(new RuntimeException("broker not reachable")));
+        when(mqMessagePublisher.publish(any(MqMessage.class))).thenReturn(failed);
 
-    TriggerEventPublisher.PublishResult result =
-        publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-2", envelope, "trace-2");
+        TriggerEventPublisher.PublishResult result =
+                publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-2", envelope, "trace-2");
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorMessage()).contains("kafka send");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorMessage()).contains("kafka send");
+    }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+    // ── helpers ────────────────────────────────────────────────────────────────
 
-  private static LaunchEnvelope sampleEnvelope(String tenantId, String requestId) {
-    LaunchRequest request = new LaunchRequest(
-        tenantId,
-        101L,
-        LocalDate.parse("2026-04-30"),
-        TriggerType.MANUAL,
-        requestId,
-        "trace-" + requestId,
-        Map.of());
-    return LaunchEnvelope.of(request, tenantId + ":" + requestId, BatchDateTimeSupport.utcNow());
-  }
+    private static LaunchEnvelope sampleEnvelope(String tenantId, String requestId) {
+        LaunchRequest request = new LaunchRequest(
+                tenantId,
+                101L,
+                LocalDate.parse("2026-04-30"),
+                TriggerType.MANUAL,
+                requestId,
+                "trace-" + requestId,
+                Map.of());
+        return LaunchEnvelope.of(request, tenantId + ":" + requestId, BatchDateTimeSupport.utcNow());
+    }
 }

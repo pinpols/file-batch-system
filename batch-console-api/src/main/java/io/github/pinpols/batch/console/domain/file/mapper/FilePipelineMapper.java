@@ -7,10 +7,9 @@ import org.apache.ibatis.annotations.Param;
 
 public interface FilePipelineMapper {
 
-  List<FilePipelineQueryView> selectByQuery(@Param("q") FilePipelineQuery q);
+    List<FilePipelineQueryView> selectByQuery(@Param("q") FilePipelineQuery q);
 
-  long countByQuery(@Param("q") FilePipelineQuery q);
+    long countByQuery(@Param("q") FilePipelineQuery q);
 
-  long countByStatuses(
-      @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
+    long countByStatuses(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 }

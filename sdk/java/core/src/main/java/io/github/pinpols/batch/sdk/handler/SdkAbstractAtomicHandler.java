@@ -12,22 +12,22 @@ import java.util.Map;
 @SuppressWarnings("java:S112")
 public abstract class SdkAbstractAtomicHandler<R> extends SdkAbstractTaskHandler {
 
-  /** 子类实现单次原子调用。 */
-  protected abstract R doInvoke(SdkTaskContext ctx) throws Exception;
+    /** 子类实现单次原子调用。 */
+    protected abstract R doInvoke(SdkTaskContext ctx) throws Exception;
 
-  /** 可选:把返回值映射成 output(默认 {"result": r},r 为 null 则空 Map)。 */
-  protected Map<String, Object> asOutput(R result) {
-    return result == null ? Map.of() : Map.of("result", result);
-  }
-
-  @Override
-  protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
-    try {
-      R invocationResult = doInvoke(ctx);
-      Map<String, Object> outputs = asOutput(invocationResult);
-      return SdkTaskResult.ok("invoked", outputs);
-    } catch (Exception e) {
-      return SdkTaskResult.fail(e);
+    /** 可选:把返回值映射成 output(默认 {"result": r},r 为 null 则空 Map)。 */
+    protected Map<String, Object> asOutput(R result) {
+        return result == null ? Map.of() : Map.of("result", result);
     }
-  }
+
+    @Override
+    protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
+        try {
+            R invocationResult = doInvoke(ctx);
+            Map<String, Object> outputs = asOutput(invocationResult);
+            return SdkTaskResult.ok("invoked", outputs);
+        } catch (Exception e) {
+            return SdkTaskResult.fail(e);
+        }
+    }
 }

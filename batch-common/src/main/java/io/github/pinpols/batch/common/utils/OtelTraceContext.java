@@ -17,31 +17,31 @@ import javax.annotation.Nullable;
  */
 public final class OtelTraceContext {
 
-  /** OTel 全 0 traceId 表示无效 span (TraceId.getInvalid())，按 null 处理。 */
-  private static final String INVALID_TRACE_ID = "00000000000000000000000000000000";
+    /** OTel 全 0 traceId 表示无效 span (TraceId.getInvalid())，按 null 处理。 */
+    private static final String INVALID_TRACE_ID = "00000000000000000000000000000000";
 
-  private OtelTraceContext() {}
+    private OtelTraceContext() {}
 
-  /**
-   * 取当前 OTel active span 的 traceId（32 hex chars）。
-   *
-   * @return 有效 traceId，或 null（无 active span / span context invalid / 全 0）
-   */
-  @Nullable
-  public static String currentTraceIdOrNull() {
-    Span current = Span.current();
-    if (current == null) {
-      return null;
+    /**
+     * 取当前 OTel active span 的 traceId（32 hex chars）。
+     *
+     * @return 有效 traceId，或 null（无 active span / span context invalid / 全 0）
+     */
+    @Nullable
+    public static String currentTraceIdOrNull() {
+        Span current = Span.current();
+        if (current == null) {
+            return null;
+        }
+        SpanContext ctx = current.getSpanContext();
+        if (!ctx.isValid()) {
+            return null;
+        }
+        String traceId = ctx.getTraceId();
+        boolean traceIdIsInvalid = EmptyChecks.isEmpty(traceId) || INVALID_TRACE_ID.equals(traceId);
+        if (traceIdIsInvalid) {
+            return null;
+        }
+        return traceId;
     }
-    SpanContext ctx = current.getSpanContext();
-    if (!ctx.isValid()) {
-      return null;
-    }
-    String traceId = ctx.getTraceId();
-    boolean traceIdIsInvalid = EmptyChecks.isEmpty(traceId) || INVALID_TRACE_ID.equals(traceId);
-    if (traceIdIsInvalid) {
-      return null;
-    }
-    return traceId;
-  }
 }

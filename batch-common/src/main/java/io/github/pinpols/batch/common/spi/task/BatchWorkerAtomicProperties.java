@@ -31,29 +31,29 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @SuppressWarnings("ConfigurationProperties") // 与 AtomicWorkerConfiguration 共享前缀，子键互不重叠。
 public class BatchWorkerAtomicProperties {
 
-  /**
-   * 启用的 taskType 白名单。
-   *
-   * <ul>
-   *   <li>空集合(默认)= 不过滤,classpath 上所有 {@link BatchTaskExecutor} 实现都注册
-   *   <li>非空 = 只注册其 {@code taskType()} 在本集合的实现;未启用的 bean 仍在 Spring 容器,但 {@link
-   *       BatchTaskExecutorRegistry#find(String)} 找不到
-   * </ul>
-   */
-  private Set<String> enabledTaskTypes = Set.of();
+    /**
+     * 启用的 taskType 白名单。
+     *
+     * <ul>
+     *   <li>空集合(默认)= 不过滤,classpath 上所有 {@link BatchTaskExecutor} 实现都注册
+     *   <li>非空 = 只注册其 {@code taskType()} 在本集合的实现;未启用的 bean 仍在 Spring 容器,但 {@link
+     *       BatchTaskExecutorRegistry#find(String)} 找不到
+     * </ul>
+     */
+    private Set<String> enabledTaskTypes = Set.of();
 
-  /**
-   * 兼容早期配置中误用的 {@code enabled-types} 键。
-   *
-   * <p>新配置统一使用 {@code enabled-task-types};保留此别名避免已有部署升级后白名单行为突变。
-   */
-  @Deprecated(forRemoval = false)
-  public Set<String> getEnabledTypes() {
-    return enabledTaskTypes;
-  }
+    /**
+     * 兼容早期配置中误用的 {@code enabled-types} 键。
+     *
+     * <p>新配置统一使用 {@code enabled-task-types};保留此别名避免已有部署升级后白名单行为突变。
+     */
+    @Deprecated(forRemoval = false)
+    public Set<String> getEnabledTypes() {
+        return enabledTaskTypes;
+    }
 
-  @Deprecated(forRemoval = false)
-  public void setEnabledTypes(Set<String> enabledTypes) {
-    this.enabledTaskTypes = enabledTypes == null ? Set.of() : enabledTypes;
-  }
+    @Deprecated(forRemoval = false)
+    public void setEnabledTypes(Set<String> enabledTypes) {
+        this.enabledTaskTypes = enabledTypes == null ? Set.of() : enabledTypes;
+    }
 }

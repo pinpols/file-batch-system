@@ -26,34 +26,33 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SlidingWindowRateLimiter {
 
-  private static final long WINDOW_MILLIS = 60_000L;
+    private static final long WINDOW_MILLIS = 60_000L;
 
-  private final RateLimitStore rateLimitStore;
-  private final BatchDateTimeSupport dateTimeSupport;
+    private final RateLimitStore rateLimitStore;
+    private final BatchDateTimeSupport dateTimeSupport;
 
-  /**
-   * 尝试为指定 key 消费一个令牌。
-   *
-   * @param key 限流 key（如 "login:ip:1.2.3.4" 或 "sensitive:user:alice"）
-   * @param limit 滑动窗口（1 分钟）内最大请求次数
-   * @return {@code true} 表示允许通过，{@code false} 表示超限
-   */
-  public boolean tryAcquire(String key, int limit) {
-    return tryAcquire(key, limit, Duration.ofMinutes(1));
-  }
+    /**
+     * 尝试为指定 key 消费一个令牌。
+     *
+     * @param key 限流 key（如 "login:ip:1.2.3.4" 或 "sensitive:user:alice"）
+     * @param limit 滑动窗口（1 分钟）内最大请求次数
+     * @return {@code true} 表示允许通过，{@code false} 表示超限
+     */
+    public boolean tryAcquire(String key, int limit) {
+        return tryAcquire(key, limit, Duration.ofMinutes(1));
+    }
 
-  /** 使用自定义窗口消费令牌，日预算与分钟限流共用同一原子 Redis 实现。 */
-  public boolean tryAcquire(String key, int limit, Duration window) {
-    long now = dateTimeSupport.currentEpochMillis();
-    long configuredWindowMillis = window.toMillis();
-    long windowMillis = Math.max(1L, configuredWindowMillis);
-    long windowStart = now - windowMillis;
-    long ttlCandidateSeconds = (windowMillis / 1000) + 1;
-    long ttlSeconds = Math.max(1L, ttlCandidateSeconds);
-    UUID memberId = UUID.randomUUID();
-    String member = memberId.toString();
+    /** 使用自定义窗口消费令牌，日预算与分钟限流共用同一原子 Redis 实现。 */
+    public boolean tryAcquire(String key, int limit, Duration window) {
+        long now = dateTimeSupport.currentEpochMillis();
+        long configuredWindowMillis = window.toMillis();
+        long windowMillis = Math.max(1L, configuredWindowMillis);
+        long windowStart = now - windowMillis;
+        long ttlCandidateSeconds = (windowMillis / 1000) + 1;
+        long ttlSeconds = Math.max(1L, ttlCandidateSeconds);
+        UUID memberId = UUID.randomUUID();
+        String member = memberId.toString();
 
-    return rateLimitStore.tryAcquire(
-        "rate_limit:" + key, now, windowStart, limit, member, ttlSeconds);
-  }
+        return rateLimitStore.tryAcquire("rate_limit:" + key, now, windowStart, limit, member, ttlSeconds);
+    }
 }

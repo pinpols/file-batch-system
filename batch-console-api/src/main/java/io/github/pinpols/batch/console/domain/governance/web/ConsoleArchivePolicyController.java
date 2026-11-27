@@ -32,43 +32,41 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleArchivePolicyController {
 
-  private final ConsoleArchivePolicyService archivePolicyService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleArchivePolicyService archivePolicyService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @GetMapping
-  public CommonResponse<List<ArchivePolicyResponse>> list(
-      @RequestParam("tenantId") String tenantId) {
-    List<ArchivePolicyResponse> responses = archivePolicyService.list(tenantId).stream()
-        .map(ArchivePolicyResponse::from)
-        .toList();
-    return responseFactory.success(responses);
-  }
+    @GetMapping
+    public CommonResponse<List<ArchivePolicyResponse>> list(@RequestParam("tenantId") String tenantId) {
+        List<ArchivePolicyResponse> responses = archivePolicyService.list(tenantId).stream()
+                .map(ArchivePolicyResponse::from)
+                .toList();
+        return responseFactory.success(responses);
+    }
 
-  @PutMapping
-  public CommonResponse<Void> upsert(
-      @RequestParam("tenantId") String tenantId,
-      @Valid @RequestBody UpsertArchivePolicyRequest request) {
-    String operator = requestMetadataResolver.current().operatorId();
-    ArchivePolicyUpsertCommand command = ArchivePolicyUpsertCommand.builder()
-        .tenantId(tenantId)
-        .targetTable(request.targetTable())
-        .retentionDays(request.retentionDays())
-        .archiveEnabled(request.archiveEnabled())
-        .cleanupEnabled(request.cleanupEnabled())
-        .batchSize(request.batchSize())
-        .description(request.description())
-        .operator(operator)
-        .build();
-    archivePolicyService.upsert(command);
-    return responseFactory.success(null);
-  }
+    @PutMapping
+    public CommonResponse<Void> upsert(
+            @RequestParam("tenantId") String tenantId, @Valid @RequestBody UpsertArchivePolicyRequest request) {
+        String operator = requestMetadataResolver.current().operatorId();
+        ArchivePolicyUpsertCommand command = ArchivePolicyUpsertCommand.builder()
+                .tenantId(tenantId)
+                .targetTable(request.targetTable())
+                .retentionDays(request.retentionDays())
+                .archiveEnabled(request.archiveEnabled())
+                .cleanupEnabled(request.cleanupEnabled())
+                .batchSize(request.batchSize())
+                .description(request.description())
+                .operator(operator)
+                .build();
+        archivePolicyService.upsert(command);
+        return responseFactory.success(null);
+    }
 
-  record UpsertArchivePolicyRequest(
-      @NotBlank @Size(max = 64) String targetTable,
-      @Min(1) int retentionDays,
-      boolean archiveEnabled,
-      boolean cleanupEnabled,
-      @Min(100) int batchSize,
-      @Size(max = 512) String description) {}
+    record UpsertArchivePolicyRequest(
+            @NotBlank @Size(max = 64) String targetTable,
+            @Min(1) int retentionDays,
+            boolean archiveEnabled,
+            boolean cleanupEnabled,
+            @Min(100) int batchSize,
+            @Size(max = 512) String description) {}
 }

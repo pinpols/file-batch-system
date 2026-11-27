@@ -17,19 +17,17 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "batch.storage.encryption")
 public class ObjectStoreEncryptionProperties {
 
-  /**
-   * 是否在 {@code BatchObjectStore} 装配链路最外层包装 {@link
-   * io.github.pinpols.batch.common.storage.EncryptingObjectStore}。
-   */
-  private boolean decoratorEnabled = false;
+    /**
+     * 是否在 {@code BatchObjectStore} 装配链路最外层包装 {@link
+     * io.github.pinpols.batch.common.storage.EncryptingObjectStore}。
+     */
+    private boolean decoratorEnabled = false;
 
-  /**
-   * 加密装饰层当前使用内存缓冲生成密文，超过该阈值直接拒绝，避免大文件上传把 JVM 堆打满。
-   *
-   * <p>后续若改成临时文件或分片加密，可放宽该限制。
-   */
-  @Min(
-      value = 1,
-      message = "batch.storage.encryption.max-in-memory-encrypt-bytes must be at least 1")
-  private long maxInMemoryEncryptBytes = 32L * 1024 * 1024;
+    /**
+     * 加密装饰层当前使用内存缓冲生成密文，超过该阈值直接拒绝，避免大文件上传把 JVM 堆打满。
+     *
+     * <p>后续若改成临时文件或分片加密，可放宽该限制。
+     */
+    @Min(value = 1, message = "batch.storage.encryption.max-in-memory-encrypt-bytes must be at least 1")
+    private long maxInMemoryEncryptBytes = 32L * 1024 * 1024;
 }

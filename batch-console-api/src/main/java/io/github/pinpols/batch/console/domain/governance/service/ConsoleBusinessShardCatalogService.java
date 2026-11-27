@@ -19,36 +19,36 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleBusinessShardCatalogService {
 
-  private final ConsoleBusinessShardCatalogMapper catalogMapper;
+    private final ConsoleBusinessShardCatalogMapper catalogMapper;
 
-  public List<BusinessShardCatalogEntity> list() {
-    return catalogMapper.findAll();
-  }
+    public List<BusinessShardCatalogEntity> list() {
+        return catalogMapper.findAll();
+    }
 
-  /** enabled 的 placement key 集合(placement 指派白名单)。 */
-  public List<String> enabledKeys() {
-    return catalogMapper.findEnabledKeys();
-  }
+    /** enabled 的 placement key 集合(placement 指派白名单)。 */
+    public List<String> enabledKeys() {
+        return catalogMapper.findEnabledKeys();
+    }
 
-  @Transactional
-  public void upsert(BusinessShardCatalogUpsertCommand command) {
-    BusinessShardCatalogUpsertParam param = BusinessShardCatalogUpsertParam.builder()
-        .placementKey(command.placementKey())
-        .host(command.host())
-        .port(command.port())
-        .dbName(command.dbName())
-        .secretRef(command.secretRef())
-        .poolMaxSize(command.poolMaxSize())
-        .enabled(command.enabled())
-        .description(command.description())
-        .operator(command.operator())
-        .build();
-    catalogMapper.upsert(param);
-  }
+    @Transactional
+    public void upsert(BusinessShardCatalogUpsertCommand command) {
+        BusinessShardCatalogUpsertParam param = BusinessShardCatalogUpsertParam.builder()
+                .placementKey(command.placementKey())
+                .host(command.host())
+                .port(command.port())
+                .dbName(command.dbName())
+                .secretRef(command.secretRef())
+                .poolMaxSize(command.poolMaxSize())
+                .enabled(command.enabled())
+                .description(command.description())
+                .operator(command.operator())
+                .build();
+        catalogMapper.upsert(param);
+    }
 
-  /** 删片登记;返回是否实际删除(幂等)。 */
-  @Transactional
-  public boolean delete(String placementKey) {
-    return catalogMapper.deleteByKey(placementKey) > 0;
-  }
+    /** 删片登记;返回是否实际删除(幂等)。 */
+    @Transactional
+    public boolean delete(String placementKey) {
+        return catalogMapper.deleteByKey(placementKey) > 0;
+    }
 }

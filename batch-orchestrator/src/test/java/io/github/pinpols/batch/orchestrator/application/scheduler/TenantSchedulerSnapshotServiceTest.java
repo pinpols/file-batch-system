@@ -46,282 +46,267 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class TenantSchedulerSnapshotServiceTest {
 
-  @Mock
-  private TenantQuotaPolicyMapper quotaMapper;
+    @Mock
+    private TenantQuotaPolicyMapper quotaMapper;
 
-  @Mock
-  private TenantSchedulerSnapshotMapper snapshotMapper;
+    @Mock
+    private TenantSchedulerSnapshotMapper snapshotMapper;
 
-  @Mock
-  private ResourceQueueMapper queueMapper;
+    @Mock
+    private ResourceQueueMapper queueMapper;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private WorkerRegistryMapper workerRegistryMapper;
+    @Mock
+    private WorkerRegistryMapper workerRegistryMapper;
 
-  @Mock
-  private QuotaRuntimeStateService quotaRuntimeStateService;
+    @Mock
+    private QuotaRuntimeStateService quotaRuntimeStateService;
 
-  @Mock
-  private ResourceSchedulerProperties resourceSchedulerProperties;
+    @Mock
+    private ResourceSchedulerProperties resourceSchedulerProperties;
 
-  private TenantSchedulerSnapshotService service;
+    private TenantSchedulerSnapshotService service;
 
-  @BeforeEach
-  void setUp() {
-    service = new TenantSchedulerSnapshotService(
-        quotaMapper,
-        snapshotMapper,
-        queueMapper,
-        jobInstanceMapper,
-        jobPartitionMapper,
-        workerRegistryMapper,
-        quotaRuntimeStateService,
-        resourceSchedulerProperties);
-  }
+    @BeforeEach
+    void setUp() {
+        service = new TenantSchedulerSnapshotService(
+                quotaMapper,
+                snapshotMapper,
+                queueMapper,
+                jobInstanceMapper,
+                jobPartitionMapper,
+                workerRegistryMapper,
+                quotaRuntimeStateService,
+                resourceSchedulerProperties);
+    }
 
-  @Test
-  @DisplayName("buildLive: null tenantId → 返空快照,不读任何 mapper")
-  void buildLive_null_tenant_returns_empty() {
-    SchedulerSnapshotResponse resp = service.buildLive(null);
-    assertThat(resp).isNotNull();
-    assertThat(resp.policies()).isEmpty();
-    assertThat(resp.queues()).isEmpty();
-    assertThat(resp.workers()).isEmpty();
-    verify(jobInstanceMapper, never()).countActiveByTenant(anyString());
-    verify(quotaMapper, never()).selectByTenantAndEnabled(anyString(), anyBoolean());
-  }
+    @Test
+    @DisplayName("buildLive: null tenantId → 返空快照,不读任何 mapper")
+    void buildLive_null_tenant_returns_empty() {
+        SchedulerSnapshotResponse resp = service.buildLive(null);
+        assertThat(resp).isNotNull();
+        assertThat(resp.policies()).isEmpty();
+        assertThat(resp.queues()).isEmpty();
+        assertThat(resp.workers()).isEmpty();
+        verify(jobInstanceMapper, never()).countActiveByTenant(anyString());
+        verify(quotaMapper, never()).selectByTenantAndEnabled(anyString(), anyBoolean());
+    }
 
-  @Test
-  @DisplayName("buildLive: 空白 tenantId → 同样不读 DB")
-  void buildLive_blank_tenant_returns_empty() {
-    SchedulerSnapshotResponse resp = service.buildLive("   ");
-    assertThat(resp.policies()).isEmpty();
-    verify(jobInstanceMapper, never()).countActiveByTenant(anyString());
-  }
+    @Test
+    @DisplayName("buildLive: 空白 tenantId → 同样不读 DB")
+    void buildLive_blank_tenant_returns_empty() {
+        SchedulerSnapshotResponse resp = service.buildLive("   ");
+        assertThat(resp.policies()).isEmpty();
+        verify(jobInstanceMapper, never()).countActiveByTenant(anyString());
+    }
 
-  @Test
-  @DisplayName("buildLive: queue snapshot 带出分区积压、等待年龄和饱和度")
-  void shouldIncludeBacklog_whenBuildingLiveSnapshot() {
-    when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(2L);
-    when(jobPartitionMapper.countActiveByTenant(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && parameters.tenantId() != null
-                && parameters.waitingStatus() != null
-                && parameters.readyStatus() != null
-                && parameters.runningStatus() != null
-                && parameters.retryingStatus() != null)))
-        .thenReturn(3L);
-    when(quotaMapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
-    when(queueMapper.selectByTenantAndEnabled("ta", true))
-        .thenReturn(List.of(queue("import_queue", "IMPORT", 10, 5, "IMPORT")));
-    when(workerRegistryMapper.selectByTenantAndStatus("ta", "ONLINE"))
-        .thenReturn(List.of(worker("IMPORT")));
-    when(jobInstanceMapper.countActiveByTenantAndQueueCodes(
-            argThat("ta"::equals), argThat(c -> c.contains("import_queue"))))
-        .thenReturn(List.of(new QueueActiveCountView("import_queue", 2L)));
-    when(jobPartitionMapper.summarizeQueueBacklogByTenantAndQueueCodes(
-            argThat(p -> p.tenantId().equals("ta") && p.queueCodes().contains("import_queue"))))
-        .thenReturn(List.of(new QueuePartitionBacklogStats("import_queue", 1, 3, 2, 1, 0, 120)));
-    when(quotaRuntimeStateService.describe(ArgumentMatchers.any()))
-        .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 0));
+    @Test
+    @DisplayName("buildLive: queue snapshot 带出分区积压、等待年龄和饱和度")
+    void shouldIncludeBacklog_whenBuildingLiveSnapshot() {
+        when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(2L);
+        when(jobPartitionMapper.countActiveByTenant(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.waitingStatus() != null
+                        && parameters.readyStatus() != null
+                        && parameters.runningStatus() != null
+                        && parameters.retryingStatus() != null)))
+                .thenReturn(3L);
+        when(quotaMapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
+        when(queueMapper.selectByTenantAndEnabled("ta", true))
+                .thenReturn(List.of(queue("import_queue", "IMPORT", 10, 5, "IMPORT")));
+        when(workerRegistryMapper.selectByTenantAndStatus("ta", "ONLINE")).thenReturn(List.of(worker("IMPORT")));
+        when(jobInstanceMapper.countActiveByTenantAndQueueCodes(
+                        argThat("ta"::equals), argThat(c -> c.contains("import_queue"))))
+                .thenReturn(List.of(new QueueActiveCountView("import_queue", 2L)));
+        when(jobPartitionMapper.summarizeQueueBacklogByTenantAndQueueCodes(
+                        argThat(p -> p.tenantId().equals("ta") && p.queueCodes().contains("import_queue"))))
+                .thenReturn(List.of(new QueuePartitionBacklogStats("import_queue", 1, 3, 2, 1, 0, 120)));
+        when(quotaRuntimeStateService.describe(ArgumentMatchers.any()))
+                .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 0));
 
-    SchedulerSnapshotResponse resp = service.buildLive("ta");
+        SchedulerSnapshotResponse resp = service.buildLive("ta");
 
-    assertThat(resp.queues()).hasSize(1);
-    SchedulerSnapshotResponse.QueueSnapshot q = resp.queues().getFirst();
-    assertThat(q.queueCode()).isEqualTo("import_queue");
-    assertThat(q.activeJobs()).isEqualTo(2);
-    assertThat(q.createdPartitions()).isEqualTo(1);
-    assertThat(q.waitingPartitions()).isEqualTo(3);
-    assertThat(q.readyPartitions()).isEqualTo(2);
-    assertThat(q.runningPartitions()).isEqualTo(1);
-    assertThat(q.queuedPartitions()).isEqualTo(6);
-    assertThat(q.activePartitions()).isEqualTo(3);
-    assertThat(q.oldestWaitingSeconds()).isEqualTo(120);
-    assertThat(q.tenantWaitingSharePermille()).isEqualTo(1000);
-    assertThat(q.partitionSaturationPermille()).isEqualTo(600);
-    assertThat(q.bottleneckReason()).isEqualTo("WAITING_DISPATCH_BACKLOG");
-  }
+        assertThat(resp.queues()).hasSize(1);
+        SchedulerSnapshotResponse.QueueSnapshot q = resp.queues().getFirst();
+        assertThat(q.queueCode()).isEqualTo("import_queue");
+        assertThat(q.activeJobs()).isEqualTo(2);
+        assertThat(q.createdPartitions()).isEqualTo(1);
+        assertThat(q.waitingPartitions()).isEqualTo(3);
+        assertThat(q.readyPartitions()).isEqualTo(2);
+        assertThat(q.runningPartitions()).isEqualTo(1);
+        assertThat(q.queuedPartitions()).isEqualTo(6);
+        assertThat(q.activePartitions()).isEqualTo(3);
+        assertThat(q.oldestWaitingSeconds()).isEqualTo(120);
+        assertThat(q.tenantWaitingSharePermille()).isEqualTo(1000);
+        assertThat(q.partitionSaturationPermille()).isEqualTo(600);
+        assertThat(q.bottleneckReason()).isEqualTo("WAITING_DISPATCH_BACKLOG");
+    }
 
-  @Test
-  @DisplayName("buildLive: 配额快照区分租户活跃作业与公平组活跃作业并计算有效上限")
-  void shouldMapTenantAndFairShareCounts_whenBuildingLiveQuotaSnapshot() {
-    when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(4L);
-    when(jobPartitionMapper.countActiveByTenant(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && parameters.tenantId() != null
-                && parameters.waitingStatus() != null
-                && parameters.readyStatus() != null
-                && parameters.runningStatus() != null
-                && parameters.retryingStatus() != null)))
-        .thenReturn(6L);
-    when(quotaMapper.selectByTenantAndEnabled("ta", true))
-        .thenReturn(List.of(new TenantQuotaPolicyEntity(
-            1L,
-            "ta",
-            "settlement-policy",
-            3,
-            10,
-            0,
-            2,
-            "settlement",
-            2,
-            4,
-            "NONE",
-            8,
-            true,
-            "QUEUE_DEFER")));
-    when(jobInstanceMapper.countActiveByFairShareGroups(Set.of("settlement")))
-        .thenReturn(List.of(new FairShareGroupActiveCountView("settlement", 7L)));
-    when(quotaRuntimeStateService.describe(ArgumentMatchers.any()))
-        .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 1));
-    when(queueMapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
-    when(workerRegistryMapper.selectByTenantAndStatus("ta", "ONLINE")).thenReturn(List.of());
+    @Test
+    @DisplayName("buildLive: 配额快照区分租户活跃作业与公平组活跃作业并计算有效上限")
+    void shouldMapTenantAndFairShareCounts_whenBuildingLiveQuotaSnapshot() {
+        when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(4L);
+        when(jobPartitionMapper.countActiveByTenant(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.waitingStatus() != null
+                        && parameters.readyStatus() != null
+                        && parameters.runningStatus() != null
+                        && parameters.retryingStatus() != null)))
+                .thenReturn(6L);
+        when(quotaMapper.selectByTenantAndEnabled("ta", true))
+                .thenReturn(List.of(new TenantQuotaPolicyEntity(
+                        1L,
+                        "ta",
+                        "settlement-policy",
+                        3,
+                        10,
+                        0,
+                        2,
+                        "settlement",
+                        2,
+                        4,
+                        "NONE",
+                        8,
+                        true,
+                        "QUEUE_DEFER")));
+        when(jobInstanceMapper.countActiveByFairShareGroups(Set.of("settlement")))
+                .thenReturn(List.of(new FairShareGroupActiveCountView("settlement", 7L)));
+        when(quotaRuntimeStateService.describe(ArgumentMatchers.any()))
+                .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 1));
+        when(queueMapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
+        when(workerRegistryMapper.selectByTenantAndStatus("ta", "ONLINE")).thenReturn(List.of());
 
-    SchedulerSnapshotResponse.PolicySnapshot snapshot =
-        service.buildLive("ta").policies().getFirst();
+        SchedulerSnapshotResponse.PolicySnapshot snapshot =
+                service.buildLive("ta").policies().getFirst();
 
-    assertThat(snapshot.activeJobs()).isEqualTo(4);
-    assertThat(snapshot.activePartitions()).isEqualTo(6);
-    assertThat(snapshot.groupActiveJobs()).isEqualTo(7);
-    assertThat(snapshot.effectiveTenantJobCap()).isEqualTo(5);
-    assertThat(snapshot.effectiveTenantPartitionCap()).isEqualTo(14);
-    assertThat(snapshot.groupSharedMaxRunningJobs()).isEqualTo(8);
-  }
+        assertThat(snapshot.activeJobs()).isEqualTo(4);
+        assertThat(snapshot.activePartitions()).isEqualTo(6);
+        assertThat(snapshot.groupActiveJobs()).isEqualTo(7);
+        assertThat(snapshot.effectiveTenantJobCap()).isEqualTo(5);
+        assertThat(snapshot.effectiveTenantPartitionCap()).isEqualTo(14);
+        assertThat(snapshot.groupSharedMaxRunningJobs()).isEqualTo(8);
+    }
 
-  @Test
-  @DisplayName("buildLive: WAITING 队列无在线 worker group → bottleneckReason=NO_ONLINE_WORKER")
-  void shouldMarkNoOnlineWorker_whenQueueHasNoOnlineWorker() {
-    when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(0L);
-    when(jobPartitionMapper.countActiveByTenant(
-            ArgumentMatchers.argThat(parameters -> parameters != null
-                && parameters.tenantId() != null
-                && parameters.waitingStatus() != null
-                && parameters.readyStatus() != null
-                && parameters.runningStatus() != null
-                && parameters.retryingStatus() != null)))
-        .thenReturn(0L);
-    when(quotaMapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
-    when(queueMapper.selectByTenantAndEnabled("ta", true))
-        .thenReturn(List.of(queue("dispatch_queue", "DISPATCH", 10, 5, "DISPATCH")));
-    when(workerRegistryMapper.selectByTenantAndStatus("ta", "ONLINE")).thenReturn(List.of());
-    when(jobInstanceMapper.countActiveByTenantAndQueueCodes(
-            argThat("ta"::equals), argThat(c -> c.contains("dispatch_queue"))))
-        .thenReturn(List.of());
-    when(jobPartitionMapper.summarizeQueueBacklogByTenantAndQueueCodes(
-            argThat(p -> p.tenantId().equals("ta") && p.queueCodes().contains("dispatch_queue"))))
-        .thenReturn(List.of(new QueuePartitionBacklogStats("dispatch_queue", 0, 1, 0, 0, 0, 30)));
-    when(quotaRuntimeStateService.describe(ArgumentMatchers.any()))
-        .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 0));
+    @Test
+    @DisplayName("buildLive: WAITING 队列无在线 worker group → bottleneckReason=NO_ONLINE_WORKER")
+    void shouldMarkNoOnlineWorker_whenQueueHasNoOnlineWorker() {
+        when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(0L);
+        when(jobPartitionMapper.countActiveByTenant(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.waitingStatus() != null
+                        && parameters.readyStatus() != null
+                        && parameters.runningStatus() != null
+                        && parameters.retryingStatus() != null)))
+                .thenReturn(0L);
+        when(quotaMapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
+        when(queueMapper.selectByTenantAndEnabled("ta", true))
+                .thenReturn(List.of(queue("dispatch_queue", "DISPATCH", 10, 5, "DISPATCH")));
+        when(workerRegistryMapper.selectByTenantAndStatus("ta", "ONLINE")).thenReturn(List.of());
+        when(jobInstanceMapper.countActiveByTenantAndQueueCodes(
+                        argThat("ta"::equals), argThat(c -> c.contains("dispatch_queue"))))
+                .thenReturn(List.of());
+        when(jobPartitionMapper.summarizeQueueBacklogByTenantAndQueueCodes(
+                        argThat(p -> p.tenantId().equals("ta") && p.queueCodes().contains("dispatch_queue"))))
+                .thenReturn(List.of(new QueuePartitionBacklogStats("dispatch_queue", 0, 1, 0, 0, 0, 30)));
+        when(quotaRuntimeStateService.describe(ArgumentMatchers.any()))
+                .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 0));
 
-    SchedulerSnapshotResponse resp = service.buildLive("ta");
+        SchedulerSnapshotResponse resp = service.buildLive("ta");
 
-    assertThat(resp.queues()).hasSize(1);
-    assertThat(resp.queues().getFirst().bottleneckReason()).isEqualTo("NO_ONLINE_WORKER");
-  }
+        assertThat(resp.queues()).hasSize(1);
+        assertThat(resp.queues().getFirst().bottleneckReason()).isEqualTo("NO_ONLINE_WORKER");
+    }
 
-  @Test
-  @DisplayName("history: limit > 100 → clamp 到 100")
-  void shouldClampToUpperBound_whenHistoryLimitTooLarge() {
-    when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
+    @Test
+    @DisplayName("history: limit > 100 → clamp 到 100")
+    void shouldClampToUpperBound_whenHistoryLimitTooLarge() {
+        when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
-    service.history("ta", 9999);
+        service.history("ta", 9999);
 
-    ArgumentCaptor<Integer> cap = ArgumentCaptor.forClass(Integer.class);
-    verify(snapshotMapper).listRecent(anyString(), cap.capture());
-    assertThat(cap.getValue()).isEqualTo(100);
-  }
+        ArgumentCaptor<Integer> cap = ArgumentCaptor.forClass(Integer.class);
+        verify(snapshotMapper).listRecent(anyString(), cap.capture());
+        assertThat(cap.getValue()).isEqualTo(100);
+    }
 
-  @Test
-  @DisplayName("history: limit < 1 → clamp 到 1")
-  void shouldClampToLowerBound_whenHistoryLimitTooSmall() {
-    when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
+    @Test
+    @DisplayName("history: limit < 1 → clamp 到 1")
+    void shouldClampToLowerBound_whenHistoryLimitTooSmall() {
+        when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
-    service.history("ta", 0);
+        service.history("ta", 0);
 
-    ArgumentCaptor<Integer> cap = ArgumentCaptor.forClass(Integer.class);
-    verify(snapshotMapper).listRecent(anyString(), cap.capture());
-    assertThat(cap.getValue()).isEqualTo(1);
-  }
+        ArgumentCaptor<Integer> cap = ArgumentCaptor.forClass(Integer.class);
+        verify(snapshotMapper).listRecent(anyString(), cap.capture());
+        assertThat(cap.getValue()).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("history: 负数 limit → clamp 到 1")
-  void shouldClampToOne_whenHistoryLimitNegative() {
-    when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
+    @Test
+    @DisplayName("history: 负数 limit → clamp 到 1")
+    void shouldClampToOne_whenHistoryLimitNegative() {
+        when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
-    service.history("ta", -50);
+        service.history("ta", -50);
 
-    ArgumentCaptor<Integer> cap = ArgumentCaptor.forClass(Integer.class);
-    verify(snapshotMapper).listRecent(anyString(), cap.capture());
-    assertThat(cap.getValue()).isEqualTo(1);
-  }
+        ArgumentCaptor<Integer> cap = ArgumentCaptor.forClass(Integer.class);
+        verify(snapshotMapper).listRecent(anyString(), cap.capture());
+        assertThat(cap.getValue()).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("history: 合法范围内 limit 透传")
-  void shouldPassThroughLimit_whenHistoryLimitValid() {
-    when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
+    @Test
+    @DisplayName("history: 合法范围内 limit 透传")
+    void shouldPassThroughLimit_whenHistoryLimitValid() {
+        when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
-    service.history("ta", 25);
+        service.history("ta", 25);
 
-    verify(snapshotMapper).listRecent("ta", 25);
-  }
+        verify(snapshotMapper).listRecent("ta", 25);
+    }
 
-  @Test
-  @DisplayName("history: 返回 mapper 的列表(无需关心 entity 字段)")
-  @SuppressWarnings("unchecked")
-  void shouldReturnMapperResult_whenQueryingHistory() {
-    @SuppressWarnings("rawtypes")
-    List mockList = List.of();
-    when(snapshotMapper.listRecent("ta", 10)).thenReturn(mockList);
+    @Test
+    @DisplayName("history: 返回 mapper 的列表(无需关心 entity 字段)")
+    @SuppressWarnings("unchecked")
+    void shouldReturnMapperResult_whenQueryingHistory() {
+        @SuppressWarnings("rawtypes")
+        List mockList = List.of();
+        when(snapshotMapper.listRecent("ta", 10)).thenReturn(mockList);
 
-    assertThat(service.history("ta", 10)).isSameAs(mockList);
-  }
+        assertThat(service.history("ta", 10)).isSameAs(mockList);
+    }
 
-  private static ResourceQueueEntity queue(
-      String queueCode,
-      String queueType,
-      Integer maxRunningJobs,
-      Integer maxRunningPartitions,
-      String workerGroup) {
-    return new ResourceQueueEntity(
-        1L,
-        "ta",
-        queueCode,
-        queueCode,
-        queueType,
-        maxRunningJobs,
-        maxRunningPartitions,
-        100,
-        workerGroup,
-        null,
-        "FIFO",
-        1,
-        null,
-        0,
-        "NONE",
-        null,
-        true);
-  }
+    private static ResourceQueueEntity queue(
+            String queueCode,
+            String queueType,
+            Integer maxRunningJobs,
+            Integer maxRunningPartitions,
+            String workerGroup) {
+        return new ResourceQueueEntity(
+                1L,
+                "ta",
+                queueCode,
+                queueCode,
+                queueType,
+                maxRunningJobs,
+                maxRunningPartitions,
+                100,
+                workerGroup,
+                null,
+                "FIFO",
+                1,
+                null,
+                0,
+                "NONE",
+                null,
+                true);
+    }
 
-  private static WorkerRegistryEntity worker(String workerGroup) {
-    return new WorkerRegistryEntity(
-        1L,
-        "ta",
-        "worker-" + workerGroup,
-        workerGroup,
-        null,
-        null,
-        "ONLINE",
-        Instant.now(),
-        0,
-        10,
-        null,
-        null);
-  }
+    private static WorkerRegistryEntity worker(String workerGroup) {
+        return new WorkerRegistryEntity(
+                1L, "ta", "worker-" + workerGroup, workerGroup, null, null, "ONLINE", Instant.now(), 0, 10, null, null);
+    }
 }

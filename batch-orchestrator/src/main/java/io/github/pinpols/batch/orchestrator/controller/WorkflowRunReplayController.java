@@ -19,41 +19,38 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class WorkflowRunReplayController {
 
-  private final WorkflowRunReplayPreviewService previewService;
+    private final WorkflowRunReplayPreviewService previewService;
 
-  @PostMapping("/preview")
-  public CommonResponse<WorkflowRunReplayPreviewResponse> preview(
-      @RequestBody WorkflowRunReplayCommand command) {
-    WorkflowRunReplayPreviewResponse preview = previewService.preview(command);
-    return CommonResponse.success(preview);
-  }
+    @PostMapping("/preview")
+    public CommonResponse<WorkflowRunReplayPreviewResponse> preview(@RequestBody WorkflowRunReplayCommand command) {
+        WorkflowRunReplayPreviewResponse preview = previewService.preview(command);
+        return CommonResponse.success(preview);
+    }
 
-  @PostMapping("/submit")
-  public CommonResponse<ReplayOperationResponse> submitForApproval(
-      @RequestBody WorkflowRunReplayCommand command) {
-    ReplayOperationEntity operation = previewService.submitForApproval(command);
-    ReplayOperationResponse response = ReplayOperationResponse.from(operation);
-    return CommonResponse.success(response);
-  }
+    @PostMapping("/submit")
+    public CommonResponse<ReplayOperationResponse> submitForApproval(@RequestBody WorkflowRunReplayCommand command) {
+        ReplayOperationEntity operation = previewService.submitForApproval(command);
+        ReplayOperationResponse response = ReplayOperationResponse.from(operation);
+        return CommonResponse.success(response);
+    }
 
-  @PostMapping("/operations/{operationId}/reject")
-  public CommonResponse<ReplayOperationResponse> reject(
-      @PathVariable Long operationId, @RequestBody ReplayOperationRejectRequest request) {
-    ReplayOperationEntity operation = previewService.reject(request.tenantId(), operationId);
-    ReplayOperationResponse response = ReplayOperationResponse.from(operation);
-    return CommonResponse.success(response);
-  }
+    @PostMapping("/operations/{operationId}/reject")
+    public CommonResponse<ReplayOperationResponse> reject(
+            @PathVariable Long operationId, @RequestBody ReplayOperationRejectRequest request) {
+        ReplayOperationEntity operation = previewService.reject(request.tenantId(), operationId);
+        ReplayOperationResponse response = ReplayOperationResponse.from(operation);
+        return CommonResponse.success(response);
+    }
 
-  @PostMapping("/operations/{operationId}/approve")
-  public CommonResponse<ReplayOperationResponse> approve(
-      @PathVariable Long operationId, @RequestBody ReplayOperationApproveRequest request) {
-    ReplayOperationEntity operation =
-        previewService.approve(request.tenantId(), operationId, request.approver());
-    ReplayOperationResponse response = ReplayOperationResponse.from(operation);
-    return CommonResponse.success(response);
-  }
+    @PostMapping("/operations/{operationId}/approve")
+    public CommonResponse<ReplayOperationResponse> approve(
+            @PathVariable Long operationId, @RequestBody ReplayOperationApproveRequest request) {
+        ReplayOperationEntity operation = previewService.approve(request.tenantId(), operationId, request.approver());
+        ReplayOperationResponse response = ReplayOperationResponse.from(operation);
+        return CommonResponse.success(response);
+    }
 
-  public record ReplayOperationRejectRequest(String tenantId) {}
+    public record ReplayOperationRejectRequest(String tenantId) {}
 
-  public record ReplayOperationApproveRequest(String tenantId, String approver) {}
+    public record ReplayOperationApproveRequest(String tenantId, String approver) {}
 }

@@ -37,187 +37,176 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 @RequiredArgsConstructor
 class TenantConfigInitTenantExecutor {
 
-  private final TenantConfigInitApplyHandlers applyHandlers;
-  private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
-  private final ConfigBatchOperationMapper operationMapper;
+    private final TenantConfigInitApplyHandlers applyHandlers;
+    private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
+    private final ConfigBatchOperationMapper operationMapper;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  TenantInitResult execute(
-      String tenantId, TenantConfigBatchInitRequest request, String operator, boolean dryRun) {
-    return applyWithinTransaction(tenantId, request, operator, dryRun);
-  }
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    TenantInitResult execute(String tenantId, TenantConfigBatchInitRequest request, String operator, boolean dryRun) {
+        return applyWithinTransaction(tenantId, request, operator, dryRun);
+    }
 
-  /** 成功结果与目标变更共同提交；返回失败时事务由执行逻辑标记回滚。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  TenantInitResult executeRecoverable(
-      String tenantId,
-      TenantConfigBatchInitRequest request,
-      String operator,
-      ConfigBatchOperationContext context,
-      int targetOrdinal) {
-    TenantInitResult result = applyWithinTransaction(tenantId, request, operator, false);
-    if (result.success()) {
-      insertReceipt(context, targetOrdinal, tenantId, result);
+    /** 成功结果与目标变更共同提交；返回失败时事务由执行逻辑标记回滚。 */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    TenantInitResult executeRecoverable(
+            String tenantId,
+            TenantConfigBatchInitRequest request,
+            String operator,
+            ConfigBatchOperationContext context,
+            int targetOrdinal) {
+        TenantInitResult result = applyWithinTransaction(tenantId, request, operator, false);
+        if (result.success()) {
+            insertReceipt(context, targetOrdinal, tenantId, result);
+        }
+        return result;
     }
-    return result;
-  }
 
-  /** 目标事务确认回滚后，独立保存失败结果。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  void recordRolledBack(
-      ConfigBatchOperationContext context,
-      int targetOrdinal,
-      String tenantId,
-      TenantInitResult result) {
-    insertReceipt(context, targetOrdinal, tenantId, result);
-  }
+    /** 目标事务确认回滚后，独立保存失败结果。 */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void recordRolledBack(
+            ConfigBatchOperationContext context, int targetOrdinal, String tenantId, TenantInitResult result) {
+        insertReceipt(context, targetOrdinal, tenantId, result);
+    }
 
-  private void insertReceipt(
-      ConfigBatchOperationContext context,
-      int targetOrdinal,
-      String tenantId,
-      TenantInitResult result) {
-    operationMapper.setTenantContext(tenantId);
-    String resultJson = JsonUtils.toJson(result);
-    ConfigBatchTargetReceiptInsertParam params = new ConfigBatchTargetReceiptInsertParam(
-        context.auditTenantId(), context.operationId(), targetOrdinal, tenantId, resultJson);
-    if (operationMapper.insertReceipt(params) != 1) {
-      throw new IllegalStateException("目标配置回执写入失败");
+    private void insertReceipt(
+            ConfigBatchOperationContext context, int targetOrdinal, String tenantId, TenantInitResult result) {
+        operationMapper.setTenantContext(tenantId);
+        String resultJson = JsonUtils.toJson(result);
+        ConfigBatchTargetReceiptInsertParam params = new ConfigBatchTargetReceiptInsertParam(
+                context.auditTenantId(), context.operationId(), targetOrdinal, tenantId, resultJson);
+        if (operationMapper.insertReceipt(params) != 1) {
+            throw new IllegalStateException("目标配置回执写入失败");
+        }
     }
-  }
 
-  TenantInitResult applyWithinTransaction(
-      String tenantId, TenantConfigBatchInitRequest request, String operator, boolean dryRun) {
-    applyHandlers.bindTenantContext(tenantId);
-    InitMode mode = Nullables.coalesce(request.getMode(), InitMode.SKIP_EXISTING);
-    ApplyContext ctx = new ApplyContext(tenantId, mode, operator, dryRun);
-    ItemStats jobStats;
-    ItemStats workflowStats;
-    ItemStats channelStats;
-    ItemStats templateStats;
-    ItemStats queueStats;
-    ItemStats windowStats;
-    ItemStats calendarStats;
-    ItemStats quotaStats;
-    ItemStats alertStats;
-    List<JobDefinitionSpec> jobSpecs;
-    try {
-      calendarStats = applyHandlers.applyBusinessCalendars(request.getBusinessCalendars(), ctx);
-      jobSpecs = copyJobSpecs(request.getJobDefinitions());
-      jobStats = applyHandlers.applyJobDefinitions(jobSpecs, ctx);
-      workflowStats = applyHandlers.applyWorkflowDefinitions(request.getWorkflowDefinitions(), ctx);
-      if (!dryRun) {
-        applyHandlers.ensureManagedSingleJobWorkflows(jobSpecs, tenantId);
-      }
-      channelStats = applyHandlers.applyFileChannels(request.getFileChannels(), ctx);
-      templateStats = applyHandlers.applyFileTemplates(request.getFileTemplates(), ctx);
-      queueStats = applyHandlers.applyResourceQueues(request.getResourceQueues(), ctx);
-      windowStats = applyHandlers.applyBatchWindows(request.getBatchWindows(), ctx);
-      quotaStats = applyHandlers.applyQuotaPolicies(request.getQuotaPolicies(), ctx);
-      alertStats = applyHandlers.applyAlertRoutings(request.getAlertRoutings(), ctx);
-    } catch (Exception ex) {
-      log.warn(
-          "[TenantConfigBatchInit] failed for tenant={}: {}",
-          LogSanitizer.value(tenantId),
-          SwallowedExceptionLogger.summary(ex));
-      // 拒绝闭合环路的那条边，严格模式会回滚该租户事务。
-      TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-      String failureMessage = TenantConfigFailureMessages.forFailure(ex);
-      return TenantInitResult.failed(tenantId, failureMessage);
+    TenantInitResult applyWithinTransaction(
+            String tenantId, TenantConfigBatchInitRequest request, String operator, boolean dryRun) {
+        applyHandlers.bindTenantContext(tenantId);
+        InitMode mode = Nullables.coalesce(request.getMode(), InitMode.SKIP_EXISTING);
+        ApplyContext ctx = new ApplyContext(tenantId, mode, operator, dryRun);
+        ItemStats jobStats;
+        ItemStats workflowStats;
+        ItemStats channelStats;
+        ItemStats templateStats;
+        ItemStats queueStats;
+        ItemStats windowStats;
+        ItemStats calendarStats;
+        ItemStats quotaStats;
+        ItemStats alertStats;
+        List<JobDefinitionSpec> jobSpecs;
+        try {
+            calendarStats = applyHandlers.applyBusinessCalendars(request.getBusinessCalendars(), ctx);
+            jobSpecs = copyJobSpecs(request.getJobDefinitions());
+            jobStats = applyHandlers.applyJobDefinitions(jobSpecs, ctx);
+            workflowStats = applyHandlers.applyWorkflowDefinitions(request.getWorkflowDefinitions(), ctx);
+            if (!dryRun) {
+                applyHandlers.ensureManagedSingleJobWorkflows(jobSpecs, tenantId);
+            }
+            channelStats = applyHandlers.applyFileChannels(request.getFileChannels(), ctx);
+            templateStats = applyHandlers.applyFileTemplates(request.getFileTemplates(), ctx);
+            queueStats = applyHandlers.applyResourceQueues(request.getResourceQueues(), ctx);
+            windowStats = applyHandlers.applyBatchWindows(request.getBatchWindows(), ctx);
+            quotaStats = applyHandlers.applyQuotaPolicies(request.getQuotaPolicies(), ctx);
+            alertStats = applyHandlers.applyAlertRoutings(request.getAlertRoutings(), ctx);
+        } catch (Exception ex) {
+            log.warn(
+                    "[TenantConfigBatchInit] failed for tenant={}: {}",
+                    LogSanitizer.value(tenantId),
+                    SwallowedExceptionLogger.summary(ex));
+            // 拒绝闭合环路的那条边，严格模式会回滚该租户事务。
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            String failureMessage = TenantConfigFailureMessages.forFailure(ex);
+            return TenantInitResult.failed(tenantId, failureMessage);
+        }
+        if (request.isStrict()) {
+            int totalFailed = jobStats.failed()
+                    + workflowStats.failed()
+                    + channelStats.failed()
+                    + templateStats.failed()
+                    + queueStats.failed()
+                    + windowStats.failed()
+                    + calendarStats.failed()
+                    + quotaStats.failed()
+                    + alertStats.failed();
+            if (totalFailed > 0) {
+                throw new StrictBundleAbortedException(
+                        "strict bundle aborted: " + totalFailed + " spec(s) failed for tenant=" + tenantId);
+            }
+        }
+        invalidateRuntimeCaches(
+                tenantId,
+                dryRun,
+                new ItemStatsBundle(jobStats, workflowStats, windowStats, calendarStats, quotaStats, queueStats),
+                !EmptyChecks.isEmpty(jobSpecs));
+        return TenantInitResult.builder()
+                .tenantId(tenantId)
+                .success(true)
+                .errorMessage(null)
+                .jobDefinitions(jobStats)
+                .workflowDefinitions(workflowStats)
+                .fileChannels(channelStats)
+                .fileTemplates(templateStats)
+                .resourceQueues(queueStats)
+                .batchWindows(windowStats)
+                .businessCalendars(calendarStats)
+                .quotaPolicies(quotaStats)
+                .alertRoutings(alertStats)
+                .build();
     }
-    if (request.isStrict()) {
-      int totalFailed = jobStats.failed()
-          + workflowStats.failed()
-          + channelStats.failed()
-          + templateStats.failed()
-          + queueStats.failed()
-          + windowStats.failed()
-          + calendarStats.failed()
-          + quotaStats.failed()
-          + alertStats.failed();
-      if (totalFailed > 0) {
-        throw new StrictBundleAbortedException(
-            "strict bundle aborted: " + totalFailed + " spec(s) failed for tenant=" + tenantId);
-      }
-    }
-    invalidateRuntimeCaches(
-        tenantId,
-        dryRun,
-        new ItemStatsBundle(
-            jobStats, workflowStats, windowStats, calendarStats, quotaStats, queueStats),
-        !EmptyChecks.isEmpty(jobSpecs));
-    return TenantInitResult.builder()
-        .tenantId(tenantId)
-        .success(true)
-        .errorMessage(null)
-        .jobDefinitions(jobStats)
-        .workflowDefinitions(workflowStats)
-        .fileChannels(channelStats)
-        .fileTemplates(templateStats)
-        .resourceQueues(queueStats)
-        .batchWindows(windowStats)
-        .businessCalendars(calendarStats)
-        .quotaPolicies(quotaStats)
-        .alertRoutings(alertStats)
-        .build();
-  }
 
-  private record ItemStatsBundle(
-      ItemStats jobStats,
-      ItemStats workflowStats,
-      ItemStats windowStats,
-      ItemStats calendarStats,
-      ItemStats quotaStats,
-      ItemStats queueStats) {}
+    private record ItemStatsBundle(
+            ItemStats jobStats,
+            ItemStats workflowStats,
+            ItemStats windowStats,
+            ItemStats calendarStats,
+            ItemStats quotaStats,
+            ItemStats queueStats) {}
 
-  private void invalidateRuntimeCaches(
-      String tenantId,
-      boolean dryRun,
-      ItemStatsBundle stats,
-      boolean managedWorkflowProvisioningMayRun) {
-    ItemStats jobStats = stats.jobStats();
-    ItemStats workflowStats = stats.workflowStats();
-    ItemStats windowStats = stats.windowStats();
-    ItemStats calendarStats = stats.calendarStats();
-    ItemStats quotaStats = stats.quotaStats();
-    ItemStats queueStats = stats.queueStats();
-    if (dryRun) {
-      return;
+    private void invalidateRuntimeCaches(
+            String tenantId, boolean dryRun, ItemStatsBundle stats, boolean managedWorkflowProvisioningMayRun) {
+        ItemStats jobStats = stats.jobStats();
+        ItemStats workflowStats = stats.workflowStats();
+        ItemStats windowStats = stats.windowStats();
+        ItemStats calendarStats = stats.calendarStats();
+        ItemStats quotaStats = stats.quotaStats();
+        ItemStats queueStats = stats.queueStats();
+        if (dryRun) {
+            return;
+        }
+        if (hasChanges(jobStats)) {
+            cacheInvalidationService.evictAllJobDefinitions(tenantId);
+        }
+        if (hasChanges(workflowStats) || managedWorkflowProvisioningMayRun) {
+            cacheInvalidationService.evictAllWorkflowDefinitions(tenantId);
+        }
+        if (hasChanges(windowStats)) {
+            cacheInvalidationService.evictAllBatchWindows(tenantId);
+        }
+        if (hasChanges(calendarStats)) {
+            cacheInvalidationService.evictAllBusinessCalendars(tenantId);
+        }
+        if (hasChanges(quotaStats)) {
+            cacheInvalidationService.evictQuotaPolicies(tenantId);
+        }
+        if (hasChanges(windowStats) || hasChanges(calendarStats) || hasChanges(queueStats)) {
+            cacheInvalidationService.evictMetaOptions(tenantId);
+        }
     }
-    if (hasChanges(jobStats)) {
-      cacheInvalidationService.evictAllJobDefinitions(tenantId);
-    }
-    if (hasChanges(workflowStats) || managedWorkflowProvisioningMayRun) {
-      cacheInvalidationService.evictAllWorkflowDefinitions(tenantId);
-    }
-    if (hasChanges(windowStats)) {
-      cacheInvalidationService.evictAllBatchWindows(tenantId);
-    }
-    if (hasChanges(calendarStats)) {
-      cacheInvalidationService.evictAllBusinessCalendars(tenantId);
-    }
-    if (hasChanges(quotaStats)) {
-      cacheInvalidationService.evictQuotaPolicies(tenantId);
-    }
-    if (hasChanges(windowStats) || hasChanges(calendarStats) || hasChanges(queueStats)) {
-      cacheInvalidationService.evictMetaOptions(tenantId);
-    }
-  }
 
-  private static boolean hasChanges(ItemStats stats) {
-    return stats.created() > 0 || stats.updated() > 0 || stats.migrated() > 0;
-  }
+    private static boolean hasChanges(ItemStats stats) {
+        return stats.created() > 0 || stats.updated() > 0 || stats.migrated() > 0;
+    }
 
-  private static List<JobDefinitionSpec> copyJobSpecs(List<JobDefinitionSpec> source) {
-    if (EmptyChecks.isEmpty(source)) {
-      return new ArrayList<>();
+    private static List<JobDefinitionSpec> copyJobSpecs(List<JobDefinitionSpec> source) {
+        if (EmptyChecks.isEmpty(source)) {
+            return new ArrayList<>();
+        }
+        List<JobDefinitionSpec> copies = new ArrayList<>(source.size());
+        for (JobDefinitionSpec spec : source) {
+            JobDefinitionSpec copy = new JobDefinitionSpec();
+            BeanUtils.copyProperties(spec, copy);
+            copies.add(copy);
+        }
+        return copies;
     }
-    List<JobDefinitionSpec> copies = new ArrayList<>(source.size());
-    for (JobDefinitionSpec spec : source) {
-      JobDefinitionSpec copy = new JobDefinitionSpec();
-      BeanUtils.copyProperties(spec, copy);
-      copies.add(copy);
-    }
-    return copies;
-  }
 }

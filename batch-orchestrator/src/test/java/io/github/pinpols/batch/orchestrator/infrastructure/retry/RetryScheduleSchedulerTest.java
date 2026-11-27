@@ -22,56 +22,56 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("重试调度轮询组件,验证到期重试的派发以及并发轮询时的重复执行防护")
 class RetryScheduleSchedulerTest {
 
-  @Mock
-  private RetryGovernanceService retryGovernanceService;
+    @Mock
+    private RetryGovernanceService retryGovernanceService;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  private RetryScheduleScheduler scheduler;
+    private RetryScheduleScheduler scheduler;
 
-  @BeforeEach
-  void setUp() {
-    scheduler = new RetryScheduleScheduler(retryGovernanceService, gracefulShutdown);
-  }
-
-  @Test
-  @DisplayName("轮询触发时,应派发所有已到期的重试任务")
-  void shouldDispatchDueRetries() {
-    scheduler.poll();
-
-    verify(retryGovernanceService).dispatchDueRetries();
-  }
-
-  @Test
-  @DisplayName("并发轮询且首次派发尚未结束时,应只派发一次,避免同一批到期重试被重复处理")
-  void shouldDispatchOnlyOnceWhenPollIsCalledConcurrently() throws Exception {
-    CountDownLatch entered = new CountDownLatch(1);
-    CountDownLatch release = new CountDownLatch(1);
-    doAnswer(invocation -> {
-          entered.countDown();
-          release.await();
-          return null;
-        })
-        .when(retryGovernanceService)
-        .dispatchDueRetries();
-
-    ExecutorService pool = Executors.newFixedThreadPool(2);
-    try {
-      Future<?> first = pool.submit(scheduler::poll);
-      entered.await();
-
-      Future<?> second = pool.submit(scheduler::poll);
-      // 确保第二个 poll() 在第一个仍阻塞在 dispatch 内部时执行（并在 CAS 上提前返回）；
-      // 否则第一个可能先完成并清除 `running`，导致第二个 poll 也触发了 dispatch。
-      second.get(5, TimeUnit.SECONDS);
-      release.countDown();
-
-      first.get(5, TimeUnit.SECONDS);
-    } finally {
-      pool.shutdownNow();
+    @BeforeEach
+    void setUp() {
+        scheduler = new RetryScheduleScheduler(retryGovernanceService, gracefulShutdown);
     }
 
-    verify(retryGovernanceService, times(1)).dispatchDueRetries();
-  }
+    @Test
+    @DisplayName("轮询触发时,应派发所有已到期的重试任务")
+    void shouldDispatchDueRetries() {
+        scheduler.poll();
+
+        verify(retryGovernanceService).dispatchDueRetries();
+    }
+
+    @Test
+    @DisplayName("并发轮询且首次派发尚未结束时,应只派发一次,避免同一批到期重试被重复处理")
+    void shouldDispatchOnlyOnceWhenPollIsCalledConcurrently() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        doAnswer(invocation -> {
+                    entered.countDown();
+                    release.await();
+                    return null;
+                })
+                .when(retryGovernanceService)
+                .dispatchDueRetries();
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> first = pool.submit(scheduler::poll);
+            entered.await();
+
+            Future<?> second = pool.submit(scheduler::poll);
+            // 确保第二个 poll() 在第一个仍阻塞在 dispatch 内部时执行（并在 CAS 上提前返回）；
+            // 否则第一个可能先完成并清除 `running`，导致第二个 poll 也触发了 dispatch。
+            second.get(5, TimeUnit.SECONDS);
+            release.countDown();
+
+            first.get(5, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        verify(retryGovernanceService, times(1)).dispatchDueRetries();
+    }
 }

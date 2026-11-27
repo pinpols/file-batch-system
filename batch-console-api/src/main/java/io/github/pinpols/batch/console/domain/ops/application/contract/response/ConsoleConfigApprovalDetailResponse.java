@@ -10,27 +10,27 @@ import lombok.Builder;
  * <p>{@code approval} 为最新审批行；无审批时保留显式 {@code "approval": null} 键。嵌套审批行省略空字段，保持历史响应键集。
  */
 public record ConsoleConfigApprovalDetailResponse(
-    Long releaseId,
-    String tenantId,
-    String configType,
-    String configKey,
-    String configStatus,
-    ApprovalRow approval) {
+        Long releaseId,
+        String tenantId,
+        String configType,
+        String configKey,
+        String configStatus,
+        ApprovalRow approval) {
 
-  /** 单条 config_approval 行的响应投影。 */
-  @JsonInclude(JsonInclude.Include.NON_NULL)
-  @Builder
-  public record ApprovalRow(
-      Long id,
-      String tenantId,
-      Long releaseId,
-      String approvalStatus,
-      String requestedBy,
-      Instant requestedAt,
-      String reviewedBy,
-      Instant reviewedAt,
-      String reviewComment,
-      Instant expiredAt,
-      Instant createdAt,
-      Instant updatedAt) {}
+    /** 单条 config_approval 行的响应投影。 */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Builder
+    public record ApprovalRow(
+            Long id,
+            String tenantId,
+            Long releaseId,
+            String approvalStatus,
+            String requestedBy,
+            Instant requestedAt,
+            String reviewedBy,
+            Instant reviewedAt,
+            String reviewComment,
+            Instant expiredAt,
+            Instant createdAt,
+            Instant updatedAt) {}
 }

@@ -5,13 +5,13 @@ import java.time.LocalDate;
 import java.util.List;
 
 public record ConsoleScheduledOccurrenceResponse(
-    Long workflowDefinitionId,
-    String workflowCode,
-    String catchUpPolicy,
-    Integer scheduleVersion,
-    Instant scheduledFireTime,
-    LocalDate bizDate,
-    String occurrenceStatus,
-    String requestId,
-    String lastRejectionReason,
-    List<ConsoleScheduledOccurrenceFireResponse> actualFires) {}
+        Long workflowDefinitionId,
+        String workflowCode,
+        String catchUpPolicy,
+        Integer scheduleVersion,
+        Instant scheduledFireTime,
+        LocalDate bizDate,
+        String occurrenceStatus,
+        String requestId,
+        String lastRejectionReason,
+        List<ConsoleScheduledOccurrenceFireResponse> actualFires) {}

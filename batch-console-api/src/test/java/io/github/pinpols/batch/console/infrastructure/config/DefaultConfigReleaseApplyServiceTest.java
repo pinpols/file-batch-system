@@ -23,75 +23,74 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("配置发布单应用服务: 严格上送,载荷校验与类型别名规范化")
 class DefaultConfigReleaseApplyServiceTest {
 
-  private ConsoleTenantConfigInitApplicationService initService;
-  private ConsoleConfigCacheInvalidationService invalidationService;
-  private DefaultConfigReleaseApplyService service;
+    private ConsoleTenantConfigInitApplicationService initService;
+    private ConsoleConfigCacheInvalidationService invalidationService;
+    private DefaultConfigReleaseApplyService service;
 
-  @BeforeEach
-  void setUp() {
-    initService = mock(ConsoleTenantConfigInitApplicationService.class);
-    invalidationService = mock(ConsoleConfigCacheInvalidationService.class);
-    service = new DefaultConfigReleaseApplyService(
-        initService, invalidationService, new ConfigReleaseTypeRegistry());
-  }
+    @BeforeEach
+    void setUp() {
+        initService = mock(ConsoleTenantConfigInitApplicationService.class);
+        invalidationService = mock(ConsoleConfigCacheInvalidationService.class);
+        service =
+                new DefaultConfigReleaseApplyService(initService, invalidationService, new ConfigReleaseTypeRegistry());
+    }
 
-  @Test
-  @DisplayName("应用作业类发布单时,按严格模式上送并清理对应缓存")
-  void shouldApplyJobReleaseThroughStrictHandler_whenReleaseIsApplied() {
-    ConfigReleaseEntity release = release("JOB", "JOB1", "{\"jobCode\":\"JOB1\"}");
-    when(initService.batchInit(any(), eq("approver"), eq("operation-1")))
-        .thenReturn(new TenantConfigBatchInitResponse("operation-1", 1, 1, 0, false, List.of()));
+    @Test
+    @DisplayName("应用作业类发布单时,按严格模式上送并清理对应缓存")
+    void shouldApplyJobReleaseThroughStrictHandler_whenReleaseIsApplied() {
+        ConfigReleaseEntity release = release("JOB", "JOB1", "{\"jobCode\":\"JOB1\"}");
+        when(initService.batchInit(any(), eq("approver"), eq("operation-1")))
+                .thenReturn(new TenantConfigBatchInitResponse("operation-1", 1, 1, 0, false, List.of()));
 
-    service.apply(release, "approver", "operation-1");
+        service.apply(release, "approver", "operation-1");
 
-    ArgumentCaptor<TenantConfigBatchInitRequest> requestCaptor =
-        ArgumentCaptor.forClass(TenantConfigBatchInitRequest.class);
-    verify(initService).batchInit(requestCaptor.capture(), eq("approver"), eq("operation-1"));
-    TenantConfigBatchInitRequest request = requestCaptor.getValue();
-    assertThat(request.isStrict()).isTrue();
-    assertThat(request.getTargetTenantIds()).containsExactly("t1");
-    assertThat(request.getJobDefinitions())
-        .singleElement()
-        .extracting("jobCode")
-        .isEqualTo("JOB1");
-    verify(invalidationService).evictJobDefinition("t1", "JOB1");
-  }
+        ArgumentCaptor<TenantConfigBatchInitRequest> requestCaptor =
+                ArgumentCaptor.forClass(TenantConfigBatchInitRequest.class);
+        verify(initService).batchInit(requestCaptor.capture(), eq("approver"), eq("operation-1"));
+        TenantConfigBatchInitRequest request = requestCaptor.getValue();
+        assertThat(request.isStrict()).isTrue();
+        assertThat(request.getTargetTenantIds()).containsExactly("t1");
+        assertThat(request.getJobDefinitions())
+                .singleElement()
+                .extracting("jobCode")
+                .isEqualTo("JOB1");
+        verify(invalidationService).evictJobDefinition("t1", "JOB1");
+    }
 
-  @Test
-  @DisplayName("载荷内的标识与发布单键不一致时,校验直接拒绝")
-  void shouldReject_whenPayloadIdentityDiffersFromReleaseKey() {
-    assertThatThrownBy(() -> service.validate("JOB", "JOB1", "{\"jobCode\":\"JOB2\"}"))
-        .isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("载荷内的标识与发布单键不一致时,校验直接拒绝")
+    void shouldReject_whenPayloadIdentityDiffersFromReleaseKey() {
+        assertThatThrownBy(() -> service.validate("JOB", "JOB1", "{\"jobCode\":\"JOB2\"}"))
+                .isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("配置类型不在支持范围内时,校验直接拒绝")
-  void shouldReject_whenConfigTypeIsUnsupported() {
-    assertThatThrownBy(() -> service.validate("UNKNOWN", "KEY1", "{}"))
-        .isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("配置类型不在支持范围内时,校验直接拒绝")
+    void shouldReject_whenConfigTypeIsUnsupported() {
+        assertThatThrownBy(() -> service.validate("UNKNOWN", "KEY1", "{}")).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("租户 Pipeline 配置已退役，发布单校验阶段直接拒绝")
-  void shouldReject_whenPipelineDefinitionReleaseIsValidated() {
-    assertThatThrownBy(() -> service.validate(
-            "PIPELINE_DEFINITION", "JOB1", "{\"jobCode\":\"JOB1\",\"pipelineType\":\"IMPORT\"}"))
-        .isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("租户 Pipeline 配置已退役，发布单校验阶段直接拒绝")
+    void shouldReject_whenPipelineDefinitionReleaseIsValidated() {
+        assertThatThrownBy(() -> service.validate(
+                        "PIPELINE_DEFINITION", "JOB1", "{\"jobCode\":\"JOB1\",\"pipelineType\":\"IMPORT\"}"))
+                .isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("受支持的配置类型别名,被规范化成标准类型码")
-  void shouldCanonicalize_whenConfigTypeAliasIsSupported() {
-    assertThat(service.canonicalType(" job_definition ")).isEqualTo("JOB");
-    assertThat(service.canonicalType("queue")).isEqualTo("RESOURCE_QUEUE");
-  }
+    @Test
+    @DisplayName("受支持的配置类型别名,被规范化成标准类型码")
+    void shouldCanonicalize_whenConfigTypeAliasIsSupported() {
+        assertThat(service.canonicalType(" job_definition ")).isEqualTo("JOB");
+        assertThat(service.canonicalType("queue")).isEqualTo("RESOURCE_QUEUE");
+    }
 
-  private static ConfigReleaseEntity release(String type, String key, String payload) {
-    ConfigReleaseEntity release = new ConfigReleaseEntity();
-    release.setTenantId("t1");
-    release.setConfigType(type);
-    release.setConfigKey(key);
-    release.setConfigPayload(payload);
-    return release;
-  }
+    private static ConfigReleaseEntity release(String type, String key, String payload) {
+        ConfigReleaseEntity release = new ConfigReleaseEntity();
+        release.setTenantId("t1");
+        release.setConfigType(type);
+        release.setConfigKey(key);
+        release.setConfigPayload(payload);
+        return release;
+    }
 }

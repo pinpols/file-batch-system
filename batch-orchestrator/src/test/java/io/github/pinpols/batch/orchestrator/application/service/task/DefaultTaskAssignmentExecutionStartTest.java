@@ -34,199 +34,197 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Job 实际执行开始：续租身份、实例锁顺序与取消边界")
 class DefaultTaskAssignmentExecutionStartTest {
-  @Mock
-  private JobTaskMapper taskMapper;
+    @Mock
+    private JobTaskMapper taskMapper;
 
-  @Mock
-  private JobPartitionMapper partitionMapper;
+    @Mock
+    private JobPartitionMapper partitionMapper;
 
-  @Mock
-  private JobInstanceMapper instanceMapper;
+    @Mock
+    private JobInstanceMapper instanceMapper;
 
-  @Mock
-  private JobStepInstanceMapper stepMapper;
+    @Mock
+    private JobStepInstanceMapper stepMapper;
 
-  @Mock
-  private JobExecutionLogMapper logMapper;
+    @Mock
+    private JobExecutionLogMapper logMapper;
 
-  @Mock
-  private WorkerRegistryMapper workerMapper;
+    @Mock
+    private WorkerRegistryMapper workerMapper;
 
-  @Mock
-  private JobDefinitionMapper definitionMapper;
+    @Mock
+    private JobDefinitionMapper definitionMapper;
 
-  private DefaultTaskAssignmentService service;
+    private DefaultTaskAssignmentService service;
 
-  @BeforeEach
-  void setUp() {
-    PartitionLeaseProperties leaseProperties = new PartitionLeaseProperties();
-    ResourceSchedulerProperties resourceProperties = new ResourceSchedulerProperties();
-    SimpleMeterRegistry registry = new SimpleMeterRegistry();
-    service = new DefaultTaskAssignmentService(
-        taskMapper,
-        partitionMapper,
-        instanceMapper,
-        stepMapper,
-        logMapper,
-        workerMapper,
-        definitionMapper,
-        leaseProperties,
-        resourceProperties,
-        registry);
-  }
+    @BeforeEach
+    void setUp() {
+        PartitionLeaseProperties leaseProperties = new PartitionLeaseProperties();
+        ResourceSchedulerProperties resourceProperties = new ResourceSchedulerProperties();
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        service = new DefaultTaskAssignmentService(
+                taskMapper,
+                partitionMapper,
+                instanceMapper,
+                stepMapper,
+                logMapper,
+                workerMapper,
+                definitionMapper,
+                leaseProperties,
+                resourceProperties,
+                registry);
+    }
 
-  @Test
-  @DisplayName("执行开始确认先锁实例，再续租并持久化真实执行起点")
-  void shouldRecordExecutionStartAfterOwnershipConfirmation() {
-    runningTask(false);
-    when(partitionMapper.renewLease(any())).thenReturn(1);
-    when(instanceMapper.markExecutionStarted("ta", 90L)).thenReturn(1);
-    String details = """
+    @Test
+    @DisplayName("执行开始确认先锁实例，再续租并持久化真实执行起点")
+    void shouldRecordExecutionStartAfterOwnershipConfirmation() {
+        runningTask(false);
+        when(partitionMapper.renewLease(any())).thenReturn(1);
+        when(instanceMapper.markExecutionStarted("ta", 90L)).thenReturn(1);
+        String details = """
         {"executionStarted":true}
         """;
 
-    TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
+        TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
 
-    assertThat(result.leaseRenewed()).isTrue();
-    InOrder order = inOrder(instanceMapper, partitionMapper);
-    order.verify(instanceMapper).acquireInstanceAdvisoryLock("ta", 90L);
-    order.verify(partitionMapper).renewLease(any());
-    order.verify(instanceMapper).markExecutionStarted("ta", 90L);
-    verify(taskMapper, never())
-        .markNonIdempotentExecutionStarted(anyString(), anyLong(), anyString(), anyString());
-  }
+        assertThat(result.leaseRenewed()).isTrue();
+        InOrder order = inOrder(instanceMapper, partitionMapper);
+        order.verify(instanceMapper).acquireInstanceAdvisoryLock("ta", 90L);
+        order.verify(partitionMapper).renewLease(any());
+        order.verify(instanceMapper).markExecutionStarted("ta", 90L);
+        verify(taskMapper, never()).markNonIdempotentExecutionStarted(anyString(), anyLong(), anyString(), anyString());
+    }
 
-  @Test
-  @DisplayName("租约 CAS 拒绝时不能记录开始，也不能运行后续动作")
-  void shouldNotRecordStartWhenInvocationWasRejected() {
-    runningTask(false);
-    String details = """
+    @Test
+    @DisplayName("租约 CAS 拒绝时不能记录开始，也不能运行后续动作")
+    void shouldNotRecordStartWhenInvocationWasRejected() {
+        runningTask(false);
+        String details = """
         {"executionStarted":true}
         """;
 
-    TaskHeartbeatResult result =
-        service.recordHeartbeat("ta", 100L, "w1", "stale-invocation", details);
+        TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "stale-invocation", details);
 
-    assertThat(result.leaseRenewed()).isFalse();
-    verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
-  }
+        assertThat(result.leaseRenewed()).isFalse();
+        verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
+    }
 
-  @Test
-  @DisplayName("任务已请求取消时返回取消指令，不记录尚未发生的执行开始")
-  void shouldNotRecordStartForCancelledTask() {
-    runningTask(true);
-    when(partitionMapper.renewLease(any())).thenReturn(1);
-    String details = """
+    @Test
+    @DisplayName("任务已请求取消时返回取消指令，不记录尚未发生的执行开始")
+    void shouldNotRecordStartForCancelledTask() {
+        runningTask(true);
+        when(partitionMapper.renewLease(any())).thenReturn(1);
+        String details = """
         {"executionStarted":true}
         """;
 
-    TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
+        TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
 
-    assertThat(result.cancelRequested()).isTrue();
-    verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
-  }
+        assertThat(result.cancelRequested()).isTrue();
+        verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
+    }
 
-  @Test
-  @DisplayName("普通续租和非布尔的同名进度字段不能误触发执行开始")
-  void shouldIgnoreNonBooleanProgressField() {
-    runningTask(false);
-    when(partitionMapper.renewLease(any())).thenReturn(1);
-    String details = """
+    @Test
+    @DisplayName("普通续租和非布尔的同名进度字段不能误触发执行开始")
+    void shouldIgnoreNonBooleanProgressField() {
+        runningTask(false);
+        when(partitionMapper.renewLease(any())).thenReturn(1);
+        String details = """
         {"executionStarted":"true","processed":42}
         """;
 
-    service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
+        service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
 
-    verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
-  }
+        verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
+    }
 
-  @Test
-  @DisplayName("不带进度和执行开始标记的普通续租不额外取得实例锁")
-  void shouldKeepOrdinaryRenewalIndependentOfExecutionTiming() {
-    runningTask(false);
-    when(partitionMapper.renewLease(any())).thenReturn(1);
+    @Test
+    @DisplayName("不带进度和执行开始标记的普通续租不额外取得实例锁")
+    void shouldKeepOrdinaryRenewalIndependentOfExecutionTiming() {
+        runningTask(false);
+        when(partitionMapper.renewLease(any())).thenReturn(1);
 
-    TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", null);
+        TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", null);
 
-    assertThat(result.leaseRenewed()).isTrue();
-    verify(instanceMapper, never()).acquireInstanceAdvisoryLock(anyString(), anyLong());
-    verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
-  }
+        assertThat(result.leaseRenewed()).isTrue();
+        verify(instanceMapper, never()).acquireInstanceAdvisoryLock(anyString(), anyLong());
+        verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
+    }
 
-  @Test
-  @DisplayName("开始事实写入失败必须使当前续租事务失败，不能确认可以执行业务")
-  void shouldPropagateStartPersistenceFailure() {
-    runningTask(false);
-    when(partitionMapper.renewLease(any())).thenReturn(1);
-    when(instanceMapper.markExecutionStarted("ta", 90L))
-        .thenThrow(new IllegalStateException("injected execution-start persistence failure"));
-    String details = """
+    @Test
+    @DisplayName("开始事实写入失败必须使当前续租事务失败，不能确认可以执行业务")
+    void shouldPropagateStartPersistenceFailure() {
+        runningTask(false);
+        when(partitionMapper.renewLease(any())).thenReturn(1);
+        when(instanceMapper.markExecutionStarted("ta", 90L))
+                .thenThrow(new IllegalStateException("injected execution-start persistence failure"));
+        String details = """
         {"executionStarted":true}
         """;
 
-    assertThatThrownBy(() -> service.recordHeartbeat("ta", 100L, "w1", "inv-1", details))
-        .isInstanceOf(IllegalStateException.class);
-  }
+        assertThatThrownBy(() -> service.recordHeartbeat("ta", 100L, "w1", "inv-1", details))
+                .isInstanceOf(IllegalStateException.class);
+    }
 
-  @Test
-  @DisplayName("相同认领下不同执行尝试不得续租或进入业务")
-  void heartbeat_shouldRejectDifferentExecutionAttempt() {
-    JobTaskEntity task = runningTask(false);
-    task.setExecutionAttemptId("attempt-original");
-    String details = """
+    @Test
+    @DisplayName("相同认领下不同执行尝试不得续租或进入业务")
+    void heartbeat_shouldRejectDifferentExecutionAttempt() {
+        JobTaskEntity task = runningTask(false);
+        task.setExecutionAttemptId("attempt-original");
+        String details = """
         {"executionStarted":true,"executionAttemptId":"attempt-replayed"}
         """;
 
-    TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
+        TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
 
-    assertThat(result.leaseRenewed()).isFalse();
-    verify(partitionMapper, never()).renewLease(any());
-    verify(taskMapper, never()).confirmExecutionAttempt(anyString(), anyLong(), anyString());
-    verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
-  }
+        assertThat(result.leaseRenewed()).isFalse();
+        verify(partitionMapper, never()).renewLease(any());
+        verify(taskMapper, never()).confirmExecutionAttempt(anyString(), anyLong(), anyString());
+        verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
+    }
 
-  @Test
-  @DisplayName("相同执行尝试的确认重试可续租并保留相同围栏标识")
-  void heartbeat_shouldAcceptTheSameExecutionAttempt() {
-    JobTaskEntity task = runningTask(false);
-    task.setExecutionAttemptId("attempt-original");
-    when(partitionMapper.renewLease(any())).thenReturn(1);
-    when(taskMapper.confirmExecutionAttempt("ta", 100L, "attempt-original")).thenReturn(1);
-    when(instanceMapper.markExecutionStarted("ta", 90L)).thenReturn(1);
-    String details = """
+    @Test
+    @DisplayName("相同执行尝试的确认重试可续租并保留相同围栏标识")
+    void heartbeat_shouldAcceptTheSameExecutionAttempt() {
+        JobTaskEntity task = runningTask(false);
+        task.setExecutionAttemptId("attempt-original");
+        when(partitionMapper.renewLease(any())).thenReturn(1);
+        when(taskMapper.confirmExecutionAttempt("ta", 100L, "attempt-original")).thenReturn(1);
+        when(instanceMapper.markExecutionStarted("ta", 90L)).thenReturn(1);
+        String details = """
         {"executionStarted":true,"executionAttemptId":"attempt-original"}
         """;
 
-    TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
+        TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
 
-    assertThat(result.leaseRenewed()).isTrue();
-    verify(taskMapper).confirmExecutionAttempt("ta", 100L, "attempt-original");
-    verify(instanceMapper).markExecutionStarted("ta", 90L);
-  }
+        assertThat(result.leaseRenewed()).isTrue();
+        verify(taskMapper).confirmExecutionAttempt("ta", 100L, "attempt-original");
+        verify(instanceMapper).markExecutionStarted("ta", 90L);
+    }
 
-  @Test
-  @DisplayName("无效执行尝试标识不能降级为旧客户端的无围栏确认")
-  void heartbeat_shouldRejectInvalidExecutionAttempt() {
-    String details = """
+    @Test
+    @DisplayName("无效执行尝试标识不能降级为旧客户端的无围栏确认")
+    void heartbeat_shouldRejectInvalidExecutionAttempt() {
+        String details = """
         {"executionStarted":true,"executionAttemptId":"   "}
         """;
 
-    assertThatThrownBy(() -> service.recordHeartbeat("ta", 100L, "w1", "inv-1", details))
-        .isInstanceOf(BizException.class);
-    verify(partitionMapper, never()).renewLease(any());
-    verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
-  }
+        assertThatThrownBy(() -> service.recordHeartbeat("ta", 100L, "w1", "inv-1", details))
+                .isInstanceOf(BizException.class);
+        verify(partitionMapper, never()).renewLease(any());
+        verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
+    }
 
-  private JobTaskEntity runningTask(boolean cancelled) {
-    JobTaskEntity task = new JobTaskEntity();
-    task.setId(100L);
-    task.setTenantId("ta");
-    task.setJobInstanceId(90L);
-    task.setJobPartitionId(50L);
-    task.setTaskStatus("RUNNING");
-    task.setAssignedWorkerCode("w1");
-    task.setCancelRequested(cancelled);
-    when(taskMapper.selectById("ta", 100L)).thenReturn(task);
-    return task;
-  }
+    private JobTaskEntity runningTask(boolean cancelled) {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(100L);
+        task.setTenantId("ta");
+        task.setJobInstanceId(90L);
+        task.setJobPartitionId(50L);
+        task.setTaskStatus("RUNNING");
+        task.setAssignedWorkerCode("w1");
+        task.setCancelRequested(cancelled);
+        when(taskMapper.selectById("ta", 100L)).thenReturn(task);
+        return task;
+    }
 }

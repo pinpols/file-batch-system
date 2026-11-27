@@ -34,61 +34,56 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class ConsoleInternalRequestSizeFilter extends OncePerRequestFilter {
 
-  private static final String PAYLOAD_TOO_LARGE_BODY =
-      "{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"internal request body exceeds the configured"
-          + " limit\"}";
+    private static final String PAYLOAD_TOO_LARGE_BODY =
+            "{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"internal request body exceeds the configured" + " limit\"}";
 
-  private final ConsoleInternalRequestProperties properties;
+    private final ConsoleInternalRequestProperties properties;
 
-  @Override
-  protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-      throws ServletException, IOException {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
 
-    long max = properties.getMaxBodyBytes();
-    String uri = request.getRequestURI();
-    boolean shouldBypassBodySizeLimit = max <= 0
-        || EmptyChecks.isNull(uri)
-        || !uri.startsWith("/internal/")
-        || !isWriteMethod(request);
-    if (shouldBypassBodySizeLimit) {
-      chain.doFilter(request, response);
-      return;
+        long max = properties.getMaxBodyBytes();
+        String uri = request.getRequestURI();
+        boolean shouldBypassBodySizeLimit =
+                max <= 0 || EmptyChecks.isNull(uri) || !uri.startsWith("/internal/") || !isWriteMethod(request);
+        if (shouldBypassBodySizeLimit) {
+            chain.doFilter(request, response);
+            return;
+        }
+        if (isMultipart(request)) {
+            chain.doFilter(request, response);
+            return;
+        }
+        long contentLength = request.getContentLengthLong();
+        if (contentLength > max) {
+            writePayloadTooLarge(response);
+            return;
+        }
+        try {
+            chain.doFilter(BoundedRequestBodyReader.readAndCache(request, max, "console-internal"), response);
+        } catch (RequestBodyLimitExceededException ex) {
+            writePayloadTooLarge(response);
+        }
     }
-    if (isMultipart(request)) {
-      chain.doFilter(request, response);
-      return;
-    }
-    long contentLength = request.getContentLengthLong();
-    if (contentLength > max) {
-      writePayloadTooLarge(response);
-      return;
-    }
-    try {
-      chain.doFilter(
-          BoundedRequestBodyReader.readAndCache(request, max, "console-internal"), response);
-    } catch (RequestBodyLimitExceededException ex) {
-      writePayloadTooLarge(response);
-    }
-  }
 
-  private static boolean isWriteMethod(HttpServletRequest request) {
-    String method = request.getMethod();
-    return HttpMethod.POST.matches(method)
-        || HttpMethod.PUT.matches(method)
-        || HttpMethod.PATCH.matches(method)
-        || HttpMethod.DELETE.matches(method);
-  }
+    private static boolean isWriteMethod(HttpServletRequest request) {
+        String method = request.getMethod();
+        return HttpMethod.POST.matches(method)
+                || HttpMethod.PUT.matches(method)
+                || HttpMethod.PATCH.matches(method)
+                || HttpMethod.DELETE.matches(method);
+    }
 
-  private static boolean isMultipart(HttpServletRequest request) {
-    String contentType = request.getContentType();
-    return contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/");
-  }
+    private static boolean isMultipart(HttpServletRequest request) {
+        String contentType = request.getContentType();
+        return contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/");
+    }
 
-  private static void writePayloadTooLarge(HttpServletResponse response) throws IOException {
-    response.setStatus(HttpStatus.CONTENT_TOO_LARGE.value());
-    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-    response.setHeader(HttpHeaders.CONNECTION, "close");
-    response.getWriter().write(PAYLOAD_TOO_LARGE_BODY);
-  }
+    private static void writePayloadTooLarge(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpStatus.CONTENT_TOO_LARGE.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setHeader(HttpHeaders.CONNECTION, "close");
+        response.getWriter().write(PAYLOAD_TOO_LARGE_BODY);
+    }
 }

@@ -33,19 +33,19 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 public abstract class AbstractMutationIntegrationTest extends AbstractIntegrationTest {
 
-  @LocalServerPort
-  protected int port;
+    @LocalServerPort
+    protected int port;
 
-  @Autowired
-  protected JdbcTemplate jdbcTemplate;
+    @Autowired
+    protected JdbcTemplate jdbcTemplate;
 
-  protected WebTestClient client;
+    protected WebTestClient client;
 
-  @BeforeEach
-  void initMutationClient() {
-    client = WebTestClient.bindToServer()
-        .baseUrl("http://localhost:" + port)
-        .responseTimeout(Duration.ofSeconds(60))
-        .build();
-  }
+    @BeforeEach
+    void initMutationClient() {
+        client = WebTestClient.bindToServer()
+                .baseUrl("http://localhost:" + port)
+                .responseTimeout(Duration.ofSeconds(60))
+                .build();
+    }
 }

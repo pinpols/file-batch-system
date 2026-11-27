@@ -13,45 +13,39 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConfigurationGovernanceCatalog {
 
-  private static final String RESOURCE = "/config-governance-registry.json";
+    private static final String RESOURCE = "/config-governance-registry.json";
 
-  private final List<ConfigGovernanceItemResponse> items;
+    private final List<ConfigGovernanceItemResponse> items;
 
-  public ConfigurationGovernanceCatalog() {
-    try (InputStream input = ConfigurationGovernanceCatalog.class.getResourceAsStream(RESOURCE)) {
-      if (EmptyChecks.isNull(input)) {
-        throw new IllegalStateException("Missing configuration governance registry: " + RESOURCE);
-      }
-      byte[] registryBytes = input.readAllBytes();
-      String json = new String(registryBytes, StandardCharsets.UTF_8);
-      RegistryDocument document = JsonUtils.fromJson(json, RegistryDocument.class);
-      items = document.configurationProperties().stream()
-          .map(item -> new ConfigGovernanceItemResponse(
-              item.id(),
-              item.className(),
-              item.prefix(),
-              item.source(),
-              item.activation(),
-              item.sensitivity(),
-              "RESTART_REQUIRED".equals(item.activation())))
-          .toList();
-    } catch (IOException exception) {
-      throw new IllegalStateException(
-          "Failed to load configuration governance registry", exception);
+    public ConfigurationGovernanceCatalog() {
+        try (InputStream input = ConfigurationGovernanceCatalog.class.getResourceAsStream(RESOURCE)) {
+            if (EmptyChecks.isNull(input)) {
+                throw new IllegalStateException("Missing configuration governance registry: " + RESOURCE);
+            }
+            byte[] registryBytes = input.readAllBytes();
+            String json = new String(registryBytes, StandardCharsets.UTF_8);
+            RegistryDocument document = JsonUtils.fromJson(json, RegistryDocument.class);
+            items = document.configurationProperties().stream()
+                    .map(item -> new ConfigGovernanceItemResponse(
+                            item.id(),
+                            item.className(),
+                            item.prefix(),
+                            item.source(),
+                            item.activation(),
+                            item.sensitivity(),
+                            "RESTART_REQUIRED".equals(item.activation())))
+                    .toList();
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to load configuration governance registry", exception);
+        }
     }
-  }
 
-  public List<ConfigGovernanceItemResponse> items() {
-    return items;
-  }
+    public List<ConfigGovernanceItemResponse> items() {
+        return items;
+    }
 
-  private record RegistryDocument(List<RegistryItem> configurationProperties) {}
+    private record RegistryDocument(List<RegistryItem> configurationProperties) {}
 
-  private record RegistryItem(
-      String id,
-      String className,
-      String prefix,
-      String source,
-      String activation,
-      String sensitivity) {}
+    private record RegistryItem(
+            String id, String className, String prefix, String source, String activation, String sensitivity) {}
 }

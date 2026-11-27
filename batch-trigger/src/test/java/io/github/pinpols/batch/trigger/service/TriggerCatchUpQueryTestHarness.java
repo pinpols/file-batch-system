@@ -13,21 +13,20 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 /** 用受限连接执行真实 Mapper 和查询服务。 */
 public final class TriggerCatchUpQueryTestHarness {
-  private TriggerCatchUpQueryTestHarness() {}
+    private TriggerCatchUpQueryTestHarness() {}
 
-  public static LaunchResponse verify(Connection connection, LaunchRequest expected, String key)
-      throws Exception {
-    var dataSource = new SingleConnectionDataSource(connection, true);
-    var factory = new SqlSessionFactoryBean();
-    factory.setDataSource(dataSource);
-    factory.setMapperLocations(
-        new ClassPathResource("mapper/TriggerRequestMapper.xml"),
-        new ClassPathResource("mapper/ExternalEventDeliveryMapper.xml"));
-    var session = new SqlSessionTemplate(factory.getObject());
-    var query = new TriggerLaunchQueryService(
-        session.getMapper(TriggerRequestMapper.class),
-        session.getMapper(ExternalEventDeliveryMapper.class),
-        new DataSourceTransactionManager(dataSource));
-    return query.verifyCatchUpSubmission(expected, key);
-  }
+    public static LaunchResponse verify(Connection connection, LaunchRequest expected, String key) throws Exception {
+        var dataSource = new SingleConnectionDataSource(connection, true);
+        var factory = new SqlSessionFactoryBean();
+        factory.setDataSource(dataSource);
+        factory.setMapperLocations(
+                new ClassPathResource("mapper/TriggerRequestMapper.xml"),
+                new ClassPathResource("mapper/ExternalEventDeliveryMapper.xml"));
+        var session = new SqlSessionTemplate(factory.getObject());
+        var query = new TriggerLaunchQueryService(
+                session.getMapper(TriggerRequestMapper.class),
+                session.getMapper(ExternalEventDeliveryMapper.class),
+                new DataSourceTransactionManager(dataSource));
+        return query.verifyCatchUpSubmission(expected, key);
+    }
 }

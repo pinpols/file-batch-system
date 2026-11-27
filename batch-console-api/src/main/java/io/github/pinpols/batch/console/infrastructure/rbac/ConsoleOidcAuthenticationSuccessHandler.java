@@ -28,111 +28,105 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSuccessHandler {
 
-  /**
-   * console_external_identity.subject VARCHAR(255)（V222__console_oidc_external_identity.sql）。
-   */
-  private static final int OIDC_SUBJECT_MAX_LENGTH = 255;
+    /**
+     * console_external_identity.subject VARCHAR(255)（V222__console_oidc_external_identity.sql）。
+     */
+    private static final int OIDC_SUBJECT_MAX_LENGTH = 255;
 
-  private final ConsoleOidcProperties properties;
-  private final ConsoleOidcIdentityMapper identityMapper;
-  private final ConsoleAuthApplicationService authApplicationService;
-  private final ConsoleTokenCookieWriter tokenCookieWriter;
-  private final ConsoleOidcLoginAudit loginAudit;
+    private final ConsoleOidcProperties properties;
+    private final ConsoleOidcIdentityMapper identityMapper;
+    private final ConsoleAuthApplicationService authApplicationService;
+    private final ConsoleTokenCookieWriter tokenCookieWriter;
+    private final ConsoleOidcLoginAudit loginAudit;
 
-  @Override
-  public void onAuthenticationSuccess(
-      HttpServletRequest request, HttpServletResponse response, Authentication authentication)
-      throws IOException, ServletException {
-    Optional<OidcUser> trusted = trustedOidcUser(authentication);
-    if (trusted.isEmpty()) { // empty-check: allow - Optional 判空，不是字符串或集合
-      loginAudit.failed(properties.getTenantId(), "OIDC_IDENTITY_INVALID");
-      redirectFailure(response);
-      return;
-    }
-    OidcUser oidcUser = trusted.get();
+    @Override
+    public void onAuthenticationSuccess(
+            HttpServletRequest request, HttpServletResponse response, Authentication authentication)
+            throws IOException, ServletException {
+        Optional<OidcUser> trusted = trustedOidcUser(authentication);
+        if (trusted.isEmpty()) { // empty-check: allow - Optional 判空，不是字符串或集合
+            loginAudit.failed(properties.getTenantId(), "OIDC_IDENTITY_INVALID");
+            redirectFailure(response);
+            return;
+        }
+        OidcUser oidcUser = trusted.get();
 
-    ConsolePrincipal principal = identityMapper
-        .findEnabledAccount(
-            properties.getTenantId(), properties.getIssuerUri(), oidcUser.getSubject())
-        .filter(account -> properties.getTenantId().equals(account.getTenantId()))
-        .map(account -> localPrincipal(
-            account.getUsername(), account.getTenantId(), account.getAuthoritiesCsv()))
-        .orElse(null);
-    if (EmptyChecks.isNull(principal)) {
-      loginAudit.failed(properties.getTenantId(), "OIDC_IDENTITY_UNBOUND");
-      redirectFailure(response);
-      return;
+        ConsolePrincipal principal = identityMapper
+                .findEnabledAccount(properties.getTenantId(), properties.getIssuerUri(), oidcUser.getSubject())
+                .filter(account -> properties.getTenantId().equals(account.getTenantId()))
+                .map(account ->
+                        localPrincipal(account.getUsername(), account.getTenantId(), account.getAuthoritiesCsv()))
+                .orElse(null);
+        if (EmptyChecks.isNull(principal)) {
+            loginAudit.failed(properties.getTenantId(), "OIDC_IDENTITY_UNBOUND");
+            redirectFailure(response);
+            return;
+        }
+        issueLocalSession(principal, response);
     }
-    issueLocalSession(principal, response);
-  }
 
-  // 按阶段校验 OIDC 身份：开关、认证类型、registration、issuer、subject 依次检查；
-  // 任一阶段不满足即返回空，后续阶段不再求值，保持原短路顺序。
-  private Optional<OidcUser> trustedOidcUser(Authentication authentication) {
-    if (!properties.isEnabled()) {
-      return Optional.empty();
+    // 按阶段校验 OIDC 身份：开关、认证类型、registration、issuer、subject 依次检查；
+    // 任一阶段不满足即返回空，后续阶段不再求值，保持原短路顺序。
+    private Optional<OidcUser> trustedOidcUser(Authentication authentication) {
+        if (!properties.isEnabled()) {
+            return Optional.empty();
+        }
+        if (!(authentication instanceof OAuth2AuthenticationToken oauthAuthentication)) {
+            return Optional.empty();
+        }
+        if (!(authentication.getPrincipal() instanceof OidcUser oidcUser)) {
+            return Optional.empty();
+        }
+        if (!properties.getRegistrationId().equals(oauthAuthentication.getAuthorizedClientRegistrationId())) {
+            return Optional.empty();
+        }
+        // issuer 判空必须先于 toString()，避免 IdP 缺少 iss 时抛出空指针
+        if (EmptyChecks.isNull(oidcUser.getIssuer())
+                || !properties.getIssuerUri().equals(oidcUser.getIssuer().toString())) {
+            return Optional.empty();
+        }
+        // subject 判空白必须先于长度与 ASCII 检查
+        if (EmptyChecks.isBlank(oidcUser.getSubject())
+                || oidcUser.getSubject().length() > OIDC_SUBJECT_MAX_LENGTH
+                || !isAscii(oidcUser.getSubject())) {
+            return Optional.empty();
+        }
+        return Optional.of(oidcUser);
     }
-    if (!(authentication instanceof OAuth2AuthenticationToken oauthAuthentication)) {
-      return Optional.empty();
-    }
-    if (!(authentication.getPrincipal() instanceof OidcUser oidcUser)) {
-      return Optional.empty();
-    }
-    if (!properties
-        .getRegistrationId()
-        .equals(oauthAuthentication.getAuthorizedClientRegistrationId())) {
-      return Optional.empty();
-    }
-    // issuer 判空必须先于 toString()，避免 IdP 缺少 iss 时抛出空指针
-    if (EmptyChecks.isNull(oidcUser.getIssuer())
-        || !properties.getIssuerUri().equals(oidcUser.getIssuer().toString())) {
-      return Optional.empty();
-    }
-    // subject 判空白必须先于长度与 ASCII 检查
-    if (EmptyChecks.isBlank(oidcUser.getSubject())
-        || oidcUser.getSubject().length() > OIDC_SUBJECT_MAX_LENGTH
-        || !isAscii(oidcUser.getSubject())) {
-      return Optional.empty();
-    }
-    return Optional.of(oidcUser);
-  }
 
-  private ConsolePrincipal localPrincipal(String username, String tenantId, String authoritiesCsv) {
-    if (EmptyChecks.isNull(username)
-        || EmptyChecks.isNull(tenantId)
-        || EmptyChecks.isNull(authoritiesCsv)) {
-      return null;
+    private ConsolePrincipal localPrincipal(String username, String tenantId, String authoritiesCsv) {
+        if (EmptyChecks.isNull(username) || EmptyChecks.isNull(tenantId) || EmptyChecks.isNull(authoritiesCsv)) {
+            return null;
+        }
+        LinkedHashSet<String> authorities = Arrays.stream(authoritiesCsv.split(","))
+                .map(String::trim)
+                .filter(EmptyChecks::isNotEmpty)
+                .map(value -> value.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        return new ConsolePrincipal(username, tenantId, authorities);
     }
-    LinkedHashSet<String> authorities = Arrays.stream(authoritiesCsv.split(","))
-        .map(String::trim)
-        .filter(EmptyChecks::isNotEmpty)
-        .map(value -> value.toUpperCase(Locale.ROOT))
-        .collect(Collectors.toCollection(LinkedHashSet::new));
-    return new ConsolePrincipal(username, tenantId, authorities);
-  }
 
-  private static boolean isAscii(String value) {
-    return value.chars().allMatch(character -> character <= 0x7f);
-  }
-
-  private void issueLocalSession(ConsolePrincipal principal, HttpServletResponse response)
-      throws IOException {
-    try {
-      tokenCookieWriter.write(authApplicationService.issueToken(principal), response);
-      loginAudit.succeeded(principal.tenantId(), principal.username());
-    } catch (RuntimeException exception) {
-      loginAudit.failed(properties.getTenantId(), "OIDC_LOCAL_SESSION_FAILED");
-      redirectFailure(response);
-      return;
+    private static boolean isAscii(String value) {
+        return value.chars().allMatch(character -> character <= 0x7f);
     }
-    response.sendRedirect("/");
-  }
 
-  private void redirectFailure(HttpServletResponse response) {
-    try {
-      response.sendRedirect("/login?authError=oidc");
-    } catch (IOException ignored) {
-      response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+    private void issueLocalSession(ConsolePrincipal principal, HttpServletResponse response) throws IOException {
+        try {
+            tokenCookieWriter.write(authApplicationService.issueToken(principal), response);
+            loginAudit.succeeded(principal.tenantId(), principal.username());
+        } catch (RuntimeException exception) {
+            loginAudit.failed(properties.getTenantId(), "OIDC_LOCAL_SESSION_FAILED");
+            redirectFailure(response);
+            return;
+        }
+        response.sendRedirect("/");
     }
-  }
+
+    private void redirectFailure(HttpServletResponse response) {
+        try {
+            response.sendRedirect("/login?authError=oidc");
+        } catch (IOException ignored) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        }
+    }
 }

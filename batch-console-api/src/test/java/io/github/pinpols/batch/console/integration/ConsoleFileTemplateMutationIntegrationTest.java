@@ -20,14 +20,12 @@ import org.springframework.http.MediaType;
  *   <li>同 tenantId + templateCode 重复创建 → 唯一约束撞
  * </ul>
  */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("文件模板写路径: 编码格式校验,落库字段透传与唯一约束")
 class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
-  private String body(String code) {
-    return """
+    private String body(String code) {
+        return """
         {
           "tenantId": "int-ft-ta",
           "templateCode": "%s",
@@ -45,103 +43,98 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
           "version": 1
         }
         """.formatted(code).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("创建文件模板: 返回成功,落库的租户,编码,类型,字符集与加密方式与请求一致")
-  void shouldCreateFileTemplateWithValidCode() {
-    String code = "int_ft_create_" + System.currentTimeMillis();
+    @Test
+    @DisplayName("创建文件模板: 返回成功,落库的租户,编码,类型,字符集与加密方式与请求一致")
+    void shouldCreateFileTemplateWithValidCode() {
+        String code = "int_ft_create_" + System.currentTimeMillis();
 
-    client
-        .post()
-        .uri("/api/console/file-templates")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        client.post()
+                .uri("/api/console/file-templates")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    String fileTemplateSnapshotSql = """
+        String fileTemplateSnapshotSql = """
         select tenant_id, template_code, template_type, charset, encrypt_type
         from batch.file_template_config where template_code = ?
         """;
-    var row = jdbcTemplate.queryForMap(fileTemplateSnapshotSql, code);
-    assertThat(row).containsEntry("tenant_id", "int-ft-ta");
-    assertThat(row).containsEntry("template_code", code);
-    assertThat(row).containsEntry("template_type", "IMPORT");
-    assertThat(row).containsEntry("charset", "UTF-8");
-    assertThat(row).containsEntry("encrypt_type", "NONE");
+        var row = jdbcTemplate.queryForMap(fileTemplateSnapshotSql, code);
+        assertThat(row).containsEntry("tenant_id", "int-ft-ta");
+        assertThat(row).containsEntry("template_code", code);
+        assertThat(row).containsEntry("template_type", "IMPORT");
+        assertThat(row).containsEntry("charset", "UTF-8");
+        assertThat(row).containsEntry("encrypt_type", "NONE");
 
-    String deleteFileTemplateConfigSql = """
+        String deleteFileTemplateConfigSql = """
         delete from batch.file_template_config where template_code = ?
     """;
-    jdbcTemplate.update(deleteFileTemplateConfigSql, code);
-  }
+        jdbcTemplate.update(deleteFileTemplateConfigSql, code);
+    }
 
-  @Test
-  @DisplayName("编码含空格: 返回校验错误且不落库")
-  void shouldRejectInvalidTemplateCodeWithSpaces() {
-    client
-        .post()
-        .uri("/api/console/file-templates")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-bad-1")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("q q q"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest()
-        .expectBody(String.class)
-        .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
+    @Test
+    @DisplayName("编码含空格: 返回校验错误且不落库")
+    void shouldRejectInvalidTemplateCodeWithSpaces() {
+        client.post()
+                .uri("/api/console/file-templates")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-bad-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("q q q"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(String.class)
+                .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    String fileTemplateCountSql = """
+        String fileTemplateCountSql = """
         select count(*) from batch.file_template_config where template_code = ?
         """;
-    Long cnt = jdbcTemplate.queryForObject(fileTemplateCountSql, Long.class, "q q q");
-    assertThat(cnt).isZero();
-  }
+        Long cnt = jdbcTemplate.queryForObject(fileTemplateCountSql, Long.class, "q q q");
+        assertThat(cnt).isZero();
+    }
 
-  @Test
-  @DisplayName("编码为中文: 返回请求不合法")
-  void shouldRejectChineseTemplateCode() {
-    client
-        .post()
-        .uri("/api/console/file-templates")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-bad-2")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("中文模板"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
+    @Test
+    @DisplayName("编码为中文: 返回请求不合法")
+    void shouldRejectChineseTemplateCode() {
+        client.post()
+                .uri("/api/console/file-templates")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-bad-2")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("中文模板"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
 
-  @Test
-  @DisplayName("编码重复: 第二次写入失败,不产生重复模板")
-  void shouldRejectDuplicateTemplateCode() {
-    String code = "int_ft_dup_" + System.currentTimeMillis();
-    client
-        .post()
-        .uri("/api/console/file-templates")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-dup-1-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+    @Test
+    @DisplayName("编码重复: 第二次写入失败,不产生重复模板")
+    void shouldRejectDuplicateTemplateCode() {
+        String code = "int_ft_dup_" + System.currentTimeMillis();
+        client.post()
+                .uri("/api/console/file-templates")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-dup-1-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    client
-        .post()
-        .uri("/api/console/file-templates")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-dup-2-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .value(s -> assertThat(s).isIn(400, 409, 500));
+        client.post()
+                .uri("/api/console/file-templates")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ft-dup-2-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    String deleteFileTemplateConfigSql = """
+        String deleteFileTemplateConfigSql = """
         delete from batch.file_template_config where template_code = ?
     """;
-    jdbcTemplate.update(deleteFileTemplateConfigSql, code);
-  }
+        jdbcTemplate.update(deleteFileTemplateConfigSql, code);
+    }
 }

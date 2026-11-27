@@ -19,23 +19,23 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RetryScheduleScheduler {
 
-  private final RetryGovernanceService retryGovernanceService;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final AtomicBoolean running = new AtomicBoolean(false);
+    private final RetryGovernanceService retryGovernanceService;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
-  @Scheduled(fixedDelayString = "${batch.retry.poll-interval-millis:10000}")
-  @SchedulerLock(name = "retry_schedule_poll", lockAtMostFor = "PT1M", lockAtLeastFor = "PT5S")
-  public void poll() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.retry.poll-interval-millis:10000}")
+    @SchedulerLock(name = "retry_schedule_poll", lockAtMostFor = "PT1M", lockAtLeastFor = "PT5S")
+    public void poll() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!running.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            retryGovernanceService.dispatchDueRetries();
+        } finally {
+            running.set(false);
+        }
     }
-    if (!running.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      retryGovernanceService.dispatchDueRetries();
-    } finally {
-      running.set(false);
-    }
-  }
 }

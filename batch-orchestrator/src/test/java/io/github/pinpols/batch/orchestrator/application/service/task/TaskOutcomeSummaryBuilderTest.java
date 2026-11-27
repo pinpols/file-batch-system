@@ -18,202 +18,188 @@ import org.junit.jupiter.api.Test;
 @DisplayName("任务结果摘要构建器: 输出聚合, 分片计数与分片过滤口径")
 class TaskOutcomeSummaryBuilderTest {
 
-  @Test
-  @DisplayName("buildOutputSummary: 持久化 worker outputs 和 verifierFailures")
-  void shouldPersistOutputsAndVerifierFailures_whenBuildingOutputSummary() {
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId("ta")
-        .taskId(10L)
-        .success(true)
-        .outputs(Map.of("rows", 100, "objectKey", "exports/a.csv"))
-        .verifierFailures(List.of(Map.of("code", "COUNT_MISMATCH")))
-        .build();
+    @Test
+    @DisplayName("buildOutputSummary: 持久化 worker outputs 和 verifierFailures")
+    void shouldPersistOutputsAndVerifierFailures_whenBuildingOutputSummary() {
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId("ta")
+                .taskId(10L)
+                .success(true)
+                .outputs(Map.of("rows", 100, "objectKey", "exports/a.csv"))
+                .verifierFailures(List.of(Map.of("code", "COUNT_MISMATCH")))
+                .build();
 
-    Map<String, Object> summary = JsonUtils.fromJson(
-        TaskOutcomeSummaryBuilder.buildOutputSummary(command, null), new TypeReference<>() {});
+        Map<String, Object> summary = JsonUtils.fromJson(
+                TaskOutcomeSummaryBuilder.buildOutputSummary(command, null), new TypeReference<>() {});
 
-    assertThat(summary).containsEntry("outputs", Map.of("rows", 100, "objectKey", "exports/a.csv"));
-    assertThat(summary)
-        .containsEntry("verifierFailures", List.of(Map.of("code", "COUNT_MISMATCH")));
-  }
+        assertThat(summary).containsEntry("outputs", Map.of("rows", 100, "objectKey", "exports/a.csv"));
+        assertThat(summary).containsEntry("verifierFailures", List.of(Map.of("code", "COUNT_MISMATCH")));
+    }
 
-  @Test
-  @DisplayName("aggregateSuccessfulPartitionOutputs: 单分片保持旧 outputs 形状")
-  void shouldKeepLegacyOutputShape_whenSinglePartition() {
-    JobPartitionEntity partition =
-        partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
+    @Test
+    @DisplayName("aggregateSuccessfulPartitionOutputs: 单分片保持旧 outputs 形状")
+    void shouldKeepLegacyOutputShape_whenSinglePartition() {
+        JobPartitionEntity partition = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
 
-    Map<String, Object> outputs = TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-        List.of(partition), commandOutputs(Map.of("rows", 999)));
+        Map<String, Object> outputs = TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+                List.of(partition), commandOutputs(Map.of("rows", 999)));
 
-    assertThat(outputs).isEqualTo(Map.of("rows", 100));
-  }
+        assertThat(outputs).isEqualTo(Map.of("rows", 100));
+    }
 
-  @Test
-  @DisplayName("失败分片的最后报告不能补作成功分片缺失的输出")
-  void shouldNotUseFailedReportOutputsAsSuccessfulPartitionFallback() {
-    JobPartitionEntity success = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
-    JobPartitionEntity failed =
-        partition(2L, 2, "p2", PartitionStatus.FAILED.code(), Map.of("rows", 999));
-    TaskOutcomeCommand failedReport = TaskOutcomeCommand.builder()
-        .tenantId("ta")
-        .taskId(10L)
-        .success(false)
-        .outputs(Map.of("rows", 999))
-        .build();
+    @Test
+    @DisplayName("失败分片的最后报告不能补作成功分片缺失的输出")
+    void shouldNotUseFailedReportOutputsAsSuccessfulPartitionFallback() {
+        JobPartitionEntity success = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
+        JobPartitionEntity failed = partition(2L, 2, "p2", PartitionStatus.FAILED.code(), Map.of("rows", 999));
+        TaskOutcomeCommand failedReport = TaskOutcomeCommand.builder()
+                .tenantId("ta")
+                .taskId(10L)
+                .success(false)
+                .outputs(Map.of("rows", 999))
+                .build();
 
-    assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-            List.of(success, failed), failedReport))
-        .isEmpty();
-    assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-            List.of(failed), failedReport))
-        .isEmpty();
-  }
+        assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+                        List.of(success, failed), failedReport))
+                .isEmpty();
+        assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(List.of(failed), failedReport))
+                .isEmpty();
+    }
 
-  @Test
-  @DisplayName("单个成功报告仍可补足历史分片缺失的输出")
-  void shouldKeepSuccessfulReportFallbackForLegacyPartition() {
-    JobPartitionEntity success = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
-    assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-            List.of(success), commandOutputs(Map.of("rows", 100))))
-        .containsEntry("rows", 100);
-  }
+    @Test
+    @DisplayName("单个成功报告仍可补足历史分片缺失的输出")
+    void shouldKeepSuccessfulReportFallbackForLegacyPartition() {
+        JobPartitionEntity success = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
+        assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+                        List.of(success), commandOutputs(Map.of("rows", 100))))
+                .containsEntry("rows", 100);
+    }
 
-  @Test
-  @DisplayName("aggregateSuccessfulPartitionOutputs: 多分片包装为 partitionedOutputs")
-  void shouldWrapPartitionedOutputs_whenMultiplePartitions() {
-    JobPartitionEntity first =
-        partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
-    JobPartitionEntity second =
-        partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of("rows", 200));
-    JobPartitionEntity failed =
-        partition(3L, 3, "p3", PartitionStatus.FAILED.code(), Map.of("rows", 300));
+    @Test
+    @DisplayName("aggregateSuccessfulPartitionOutputs: 多分片包装为 partitionedOutputs")
+    void shouldWrapPartitionedOutputs_whenMultiplePartitions() {
+        JobPartitionEntity first = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
+        JobPartitionEntity second = partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of("rows", 200));
+        JobPartitionEntity failed = partition(3L, 3, "p3", PartitionStatus.FAILED.code(), Map.of("rows", 300));
 
-    Map<String, Object> outputs = TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-        List.of(first, second, failed), commandOutputs(Map.of("rows", 999)));
+        Map<String, Object> outputs = TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+                List.of(first, second, failed), commandOutputs(Map.of("rows", 999)));
 
-    assertThat(outputs)
-        .containsEntry("partitioned", true)
-        .containsEntry("partitionCount", 3)
-        .containsEntry("successPartitionCount", 2)
-        .containsEntry("failedPartitionCount", 1L);
-    assertThat(outputs)
-        .containsEntry(
-            "partitionedOutputs",
-            List.of(
-                Map.of(
-                    "partitionId",
-                    1L,
-                    "partitionNo",
-                    1,
-                    "partitionKey",
-                    "p1",
-                    "outputs",
-                    Map.of("rows", 100)),
-                Map.of(
-                    "partitionId",
-                    2L,
-                    "partitionNo",
-                    2,
-                    "partitionKey",
-                    "p2",
-                    "outputs",
-                    Map.of("rows", 200))));
-  }
+        assertThat(outputs)
+                .containsEntry("partitioned", true)
+                .containsEntry("partitionCount", 3)
+                .containsEntry("successPartitionCount", 2)
+                .containsEntry("failedPartitionCount", 1L);
+        assertThat(outputs)
+                .containsEntry(
+                        "partitionedOutputs",
+                        List.of(
+                                Map.of(
+                                        "partitionId",
+                                        1L,
+                                        "partitionNo",
+                                        1,
+                                        "partitionKey",
+                                        "p1",
+                                        "outputs",
+                                        Map.of("rows", 100)),
+                                Map.of(
+                                        "partitionId",
+                                        2L,
+                                        "partitionNo",
+                                        2,
+                                        "partitionKey",
+                                        "p2",
+                                        "outputs",
+                                        Map.of("rows", 200))));
+    }
 
-  @Test
-  @DisplayName("failed partition count: FAILED/CANCELLED/TERMINATED 都计入失败分片")
-  void shouldCountFailedCancelledAndTerminated_whenCountingFailedPartitions() {
-    JobPartitionEntity success =
-        partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
-    JobPartitionEntity secondSuccess =
-        partition(5L, 5, "p5", PartitionStatus.SUCCESS.code(), Map.of("rows", 200));
-    JobPartitionEntity failed = partition(2L, 2, "p2", PartitionStatus.FAILED.code(), Map.of());
-    JobPartitionEntity cancelled =
-        partition(3L, 3, "p3", PartitionStatus.CANCELLED.code(), Map.of());
-    JobPartitionEntity terminated =
-        partition(4L, 4, "p4", PartitionStatus.TERMINATED.code(), Map.of());
+    @Test
+    @DisplayName("failed partition count: FAILED/CANCELLED/TERMINATED 都计入失败分片")
+    void shouldCountFailedCancelledAndTerminated_whenCountingFailedPartitions() {
+        JobPartitionEntity success = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
+        JobPartitionEntity secondSuccess = partition(5L, 5, "p5", PartitionStatus.SUCCESS.code(), Map.of("rows", 200));
+        JobPartitionEntity failed = partition(2L, 2, "p2", PartitionStatus.FAILED.code(), Map.of());
+        JobPartitionEntity cancelled = partition(3L, 3, "p3", PartitionStatus.CANCELLED.code(), Map.of());
+        JobPartitionEntity terminated = partition(4L, 4, "p4", PartitionStatus.TERMINATED.code(), Map.of());
 
-    Map<String, Object> aggregated = TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-        List.of(success, secondSuccess, failed, cancelled, terminated), commandOutputs(Map.of()));
+        Map<String, Object> aggregated = TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+                List.of(success, secondSuccess, failed, cancelled, terminated), commandOutputs(Map.of()));
 
-    assertThat(aggregated).containsEntry("failedPartitionCount", 3L);
-  }
+        assertThat(aggregated).containsEntry("failedPartitionCount", 3L);
+    }
 
-  @Test
-  @DisplayName("perf(#5): 计数版 buildJobInstanceResultSummary 与列表版逐字段等价")
-  void shouldEqualListBased_whenBuildingCountBasedSummary() {
-    JobInstanceEntity jobInstance = new JobInstanceEntity();
-    jobInstance.setId(77L);
-    List<JobPartitionEntity> partitions = List.of(
-        partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of()),
-        partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of()),
-        partition(3L, 3, "p3", PartitionStatus.FAILED.code(), Map.of()),
-        partition(4L, 4, "p4", PartitionStatus.CANCELLED.code(), Map.of()),
-        partition(5L, 5, "p5", PartitionStatus.TERMINATED.code(), Map.of()),
-        partition(6L, 6, "p6", PartitionStatus.RUNNING.code(), Map.of()));
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId("ta")
-        .taskId(10L)
-        .success(false)
-        .errorCode("E_X")
-        .errorMessage("boom")
-        .build();
+    @Test
+    @DisplayName("perf(#5): 计数版 buildJobInstanceResultSummary 与列表版逐字段等价")
+    void shouldEqualListBased_whenBuildingCountBasedSummary() {
+        JobInstanceEntity jobInstance = new JobInstanceEntity();
+        jobInstance.setId(77L);
+        List<JobPartitionEntity> partitions = List.of(
+                partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of()),
+                partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of()),
+                partition(3L, 3, "p3", PartitionStatus.FAILED.code(), Map.of()),
+                partition(4L, 4, "p4", PartitionStatus.CANCELLED.code(), Map.of()),
+                partition(5L, 5, "p5", PartitionStatus.TERMINATED.code(), Map.of()),
+                partition(6L, 6, "p6", PartitionStatus.RUNNING.code(), Map.of()));
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId("ta")
+                .taskId(10L)
+                .success(false)
+                .errorCode("E_X")
+                .errorMessage("boom")
+                .build();
 
-    // 轻量投影(与列表同一批分区状态)。
-    List<PartitionStatusRef> statusRefs = partitions.stream()
-        .map(p -> new PartitionStatusRef(p.getId(), p.getPartitionStatus()))
-        .toList();
-    long successCount = statusRefs.stream()
-        .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
-        .count();
+        // 轻量投影(与列表同一批分区状态)。
+        List<PartitionStatusRef> statusRefs = partitions.stream()
+                .map(p -> new PartitionStatusRef(p.getId(), p.getPartitionStatus()))
+                .toList();
+        long successCount = statusRefs.stream()
+                .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
+                .count();
 
-    Map<String, Object> listBased = JsonUtils.fromJson(
-        TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(jobInstance, partitions, command),
-        new TypeReference<>() {});
-    Map<String, Object> countBased = JsonUtils.fromJson(
-        TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
-            jobInstance,
-            successCount,
-            TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs),
-            command),
-        new TypeReference<>() {});
+        Map<String, Object> listBased = JsonUtils.fromJson(
+                TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(jobInstance, partitions, command),
+                new TypeReference<>() {});
+        Map<String, Object> countBased = JsonUtils.fromJson(
+                TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
+                        jobInstance, successCount, TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs), command),
+                new TypeReference<>() {});
 
-    assertThat(countBased).containsEntry("successPartitions", listBased.get("successPartitions"));
-    assertThat(countBased).containsEntry("failedPartitions", listBased.get("failedPartitions"));
-    assertThat(countBased).containsEntry("successPartitions", 2);
-    assertThat(countBased).containsEntry("failedPartitions", 3); // FAILED + CANCELLED + TERMINATED
-    assertThat(countBased).containsEntry("jobInstanceId", listBased.get("jobInstanceId"));
-    assertThat(countBased).containsEntry("lastErrorCode", listBased.get("lastErrorCode"));
-  }
+        assertThat(countBased).containsEntry("successPartitions", listBased.get("successPartitions"));
+        assertThat(countBased).containsEntry("failedPartitions", listBased.get("failedPartitions"));
+        assertThat(countBased).containsEntry("successPartitions", 2);
+        assertThat(countBased).containsEntry("failedPartitions", 3); // FAILED + CANCELLED + TERMINATED
+        assertThat(countBased).containsEntry("jobInstanceId", listBased.get("jobInstanceId"));
+        assertThat(countBased).containsEntry("lastErrorCode", listBased.get("lastErrorCode"));
+    }
 
-  @Test
-  @DisplayName("filterPartitionsByIds: 只保留当前 workflow node 的分片")
-  void shouldKeepCurrentNodePartitions_whenFilteringByIds() {
-    JobPartitionEntity first = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
-    JobPartitionEntity second = partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of());
+    @Test
+    @DisplayName("filterPartitionsByIds: 只保留当前 workflow node 的分片")
+    void shouldKeepCurrentNodePartitions_whenFilteringByIds() {
+        JobPartitionEntity first = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
+        JobPartitionEntity second = partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of());
 
-    assertThat(TaskOutcomeSummaryBuilder.filterPartitionsByIds(List.of(first, second), Set.of(2L)))
-        .containsExactly(second);
-  }
+        assertThat(TaskOutcomeSummaryBuilder.filterPartitionsByIds(List.of(first, second), Set.of(2L)))
+                .containsExactly(second);
+    }
 
-  private TaskOutcomeCommand commandOutputs(Map<String, Object> outputs) {
-    return TaskOutcomeCommand.builder()
-        .tenantId("ta")
-        .taskId(10L)
-        .success(true)
-        .outputs(outputs)
-        .build();
-  }
+    private TaskOutcomeCommand commandOutputs(Map<String, Object> outputs) {
+        return TaskOutcomeCommand.builder()
+                .tenantId("ta")
+                .taskId(10L)
+                .success(true)
+                .outputs(outputs)
+                .build();
+    }
 
-  private JobPartitionEntity partition(
-      long id, int partitionNo, String partitionKey, String status, Map<String, Object> outputs) {
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(id);
-    partition.setPartitionNo(partitionNo);
-    partition.setPartitionKey(partitionKey);
-    partition.setPartitionStatus(status);
-    partition.setOutputSummary(JsonUtils.toJson(Map.of("outputs", outputs)));
-    return partition;
-  }
+    private JobPartitionEntity partition(
+            long id, int partitionNo, String partitionKey, String status, Map<String, Object> outputs) {
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(id);
+        partition.setPartitionNo(partitionNo);
+        partition.setPartitionKey(partitionKey);
+        partition.setPartitionStatus(status);
+        partition.setOutputSummary(JsonUtils.toJson(Map.of("outputs", outputs)));
+        return partition;
+    }
 }

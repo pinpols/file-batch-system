@@ -43,153 +43,153 @@ import org.springframework.core.env.Environment;
 @RequiredArgsConstructor
 public class AtomicExecutorProductionGuard {
 
-  /** Atomic 进程的平台库 DataSource bean 名（Spring Boot 主数据源），SQL/存储过程任务不得使用。 */
-  static final String PLATFORM_DATA_SOURCE_BEAN = "dataSource";
+    /** Atomic 进程的平台库 DataSource bean 名（Spring Boot 主数据源），SQL/存储过程任务不得使用。 */
+    static final String PLATFORM_DATA_SOURCE_BEAN = "dataSource";
 
-  private final Environment environment;
-  private final AtomicExecutorGuardProperties guardProperties;
-  private final ObjectProvider<SqlExecutorProperties> sqlProps;
-  private final ObjectProvider<StoredProcExecutorProperties> storedProcProps;
-  private final ObjectProvider<HttpExecutorProperties> httpProps;
-  private final ObjectProvider<ShellExecutorProperties> shellProps;
-  private final ObjectProvider<SparkSubmitExecutorProperties> sparkProps;
+    private final Environment environment;
+    private final AtomicExecutorGuardProperties guardProperties;
+    private final ObjectProvider<SqlExecutorProperties> sqlProps;
+    private final ObjectProvider<StoredProcExecutorProperties> storedProcProps;
+    private final ObjectProvider<HttpExecutorProperties> httpProps;
+    private final ObjectProvider<ShellExecutorProperties> shellProps;
+    private final ObjectProvider<SparkSubmitExecutorProperties> sparkProps;
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void verifyProductionFailClosed() {
-    boolean enforce = isEnforcedProfile(environment.getActiveProfiles());
-    List<String> violations = collectViolations();
-    if (violations.isEmpty()) {
-      if (enforce) {
-        log.info("atomic executor production guard passed (enforced profile)");
-      }
-      return;
-    }
-    if (enforce) {
-      throw new IllegalStateException(
-          "atomic worker fail-closed check failed:\n - " + String.join("\n - ", violations));
-    }
-    // 明确非生产环境检出空白名单 = 放行全部:不静默,WARN 暴露风险,
-    // 让运维即便没开强制也能看到 dual-use 执行器是大开的。要拦截:把本 profile 加进
-    // batch.worker.executors.guard.enforce-profiles,或置 always-enforce=true。
-    log.warn(
-        """
+    @EventListener(ApplicationReadyEvent.class)
+    public void verifyProductionFailClosed() {
+        boolean enforce = isEnforcedProfile(environment.getActiveProfiles());
+        List<String> violations = collectViolations();
+        if (violations.isEmpty()) {
+            if (enforce) {
+                log.info("atomic executor production guard passed (enforced profile)");
+            }
+            return;
+        }
+        if (enforce) {
+            throw new IllegalStateException(
+                    "atomic worker fail-closed check failed:\n - " + String.join("\n - ", violations));
+        }
+        // 明确非生产环境检出空白名单 = 放行全部:不静默,WARN 暴露风险,
+        // 让运维即便没开强制也能看到 dual-use 执行器是大开的。要拦截:把本 profile 加进
+        // batch.worker.executors.guard.enforce-profiles,或置 always-enforce=true。
+        log.warn(
+                """
         Atomic dual-use executor in profile ({}) detected 'empty allowlist = allow all' without enforcement
         (accepted only in dev). For staging/uat/production-like environments, harden it:
          - {}
         """.stripTrailing(),
-        Arrays.toString(environment.getActiveProfiles()),
-        String.join("\n - ", violations));
-  }
+                Arrays.toString(environment.getActiveProfiles()),
+                String.join("\n - ", violations));
+    }
 
-  /** 是否在强制拦截范围:prod profile / 配置的 enforce-profiles / always-enforce。 */
-  private boolean isEnforcedProfile(String[] activeProfiles) {
-    if (guardProperties.isAlwaysEnforce()) {
-      return true;
-    }
-    if (BatchProfileSupport.isProductionProfile(environment)) {
-      return true;
-    }
-    Set<String> enforced = new HashSet<>();
-    for (String p : guardProperties.getEnforceProfiles()) {
-      if (EmptyChecks.isNotBlank(p)) {
-        String trimmedProfile = p.trim();
-        String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
-        enforced.add(normalizedProfile);
-      }
-    }
-    if (EmptyChecks.isEmpty(enforced) || EmptyChecks.isNull(activeProfiles)) {
-      return false;
-    }
-    for (String active : activeProfiles) {
-      if (EmptyChecks.isNotNull(active)) {
-        String trimmedProfile = active.trim();
-        String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
-        if (enforced.contains(normalizedProfile)) {
-          return true;
+    /** 是否在强制拦截范围:prod profile / 配置的 enforce-profiles / always-enforce。 */
+    private boolean isEnforcedProfile(String[] activeProfiles) {
+        if (guardProperties.isAlwaysEnforce()) {
+            return true;
         }
-      }
+        if (BatchProfileSupport.isProductionProfile(environment)) {
+            return true;
+        }
+        Set<String> enforced = new HashSet<>();
+        for (String p : guardProperties.getEnforceProfiles()) {
+            if (EmptyChecks.isNotBlank(p)) {
+                String trimmedProfile = p.trim();
+                String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
+                enforced.add(normalizedProfile);
+            }
+        }
+        if (EmptyChecks.isEmpty(enforced) || EmptyChecks.isNull(activeProfiles)) {
+            return false;
+        }
+        for (String active : activeProfiles) {
+            if (EmptyChecks.isNotNull(active)) {
+                String trimmedProfile = active.trim();
+                String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
+                if (enforced.contains(normalizedProfile)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
-    return false;
-  }
 
-  /** 包私有:供单测直接喂 mock properties 触发同样逻辑,不必拉 Spring context。 */
-  List<String> collectViolations() {
-    List<String> violations = new ArrayList<>();
-    SqlExecutorProperties sql = sqlProps.getIfAvailable();
-    boolean enabledSqlHasNoDataSourceAllowlist = EmptyChecks.isNotNull(sql)
-        && sql.isEnabled()
-        && EmptyChecks.isEmpty(Objects.requireNonNull(sql.getAllowedDataSourceBeans()));
-    if (enabledSqlHasNoDataSourceAllowlist) {
-      violations.add("batch.worker.executors.sql.enabled=true 但 allowedDataSourceBeans 为空"
-          + " — prod profile 必须显式配 batch.worker.executors.sql.allowed-data-source-beans"
-          + " 列出可用 DataSource bean 名(防业务方借 parameters.dataSourceBean 切到任意高权限连接)");
+    /** 包私有:供单测直接喂 mock properties 触发同样逻辑,不必拉 Spring context。 */
+    List<String> collectViolations() {
+        List<String> violations = new ArrayList<>();
+        SqlExecutorProperties sql = sqlProps.getIfAvailable();
+        boolean enabledSqlHasNoDataSourceAllowlist = EmptyChecks.isNotNull(sql)
+                && sql.isEnabled()
+                && EmptyChecks.isEmpty(Objects.requireNonNull(sql.getAllowedDataSourceBeans()));
+        if (enabledSqlHasNoDataSourceAllowlist) {
+            violations.add("batch.worker.executors.sql.enabled=true 但 allowedDataSourceBeans 为空"
+                    + " — prod profile 必须显式配 batch.worker.executors.sql.allowed-data-source-beans"
+                    + " 列出可用 DataSource bean 名(防业务方借 parameters.dataSourceBean 切到任意高权限连接)");
+        }
+        if (EmptyChecks.isNotNull(sql) && sql.isEnabled()) {
+            addBusinessDataSourceViolations(
+                    violations, "sql", sql.getDataSourceBeanName(), sql.getAllowedDataSourceBeans());
+        }
+        StoredProcExecutorProperties sp = storedProcProps.getIfAvailable();
+        boolean enabledStoredProcedureHasNoSchemaAllowlist = EmptyChecks.isNotNull(sp)
+                && sp.isEnabled()
+                && EmptyChecks.isEmpty(Objects.requireNonNull(sp.getAllowedSchemas()));
+        if (enabledStoredProcedureHasNoSchemaAllowlist) {
+            violations.add("batch.worker.executors.stored-proc.enabled=true 但 allowedSchemas 为空"
+                    + " — prod profile 必须配 batch.worker.executors.stored-proc.allowed-schemas"
+                    + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
+        }
+        if (EmptyChecks.isNotNull(sp) && sp.isEnabled()) {
+            addBusinessDataSourceViolations(
+                    violations, "stored-proc", sp.getDataSourceBeanName(), sp.getAllowedDataSourceBeans());
+        }
+        HttpExecutorProperties http = httpProps.getIfAvailable();
+        boolean httpEnabledWithEmptyUnenforcedAllowlist = EmptyChecks.isNotNull(http)
+                && http.isEnabled()
+                && EmptyChecks.isEmpty(Objects.requireNonNull(http.getAllowedHostPatterns()))
+                && !http.isEnforceAllowlist();
+        if (httpEnabledWithEmptyUnenforcedAllowlist) {
+            violations.add("batch.worker.executors.http.enabled=true 但 allowedHostPatterns 为空且"
+                    + " enforceAllowlist=false — prod profile 必须二选一:"
+                    + "(a) 配 batch.worker.executors.http.allowed-host-patterns 列出可访问的出口域名 glob;"
+                    + "(b) 置 batch.worker.executors.http.enforce-allowlist=true 让空白名单语义变成"
+                    + " fail-closed 拒绝全部");
+        }
+        ShellExecutorProperties shell = shellProps.getIfAvailable();
+        boolean enabledShellHasNoCommandAllowlist = EmptyChecks.isNotNull(shell)
+                && shell.isEnabled()
+                && EmptyChecks.isEmpty(Objects.requireNonNull(shell.getCommandWhitelist()));
+        if (enabledShellHasNoCommandAllowlist) {
+            violations.add("batch.worker.executors.shell.enabled=true 但 commandWhitelist 为空"
+                    + " — prod profile 必须配 batch.worker.executors.shell.command-whitelist"
+                    + " 列出允许执行的程序绝对路径(默认空=允许全部 program,任意 RCE 风险)");
+        }
+        SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
+        boolean enabledSparkHasNoResourceAllowlist = EmptyChecks.isNotNull(spark)
+                && spark.isEnabled()
+                && EmptyChecks.isEmpty(Objects.requireNonNull(spark.getAppResourceAllowlist()));
+        if (enabledSparkHasNoResourceAllowlist) {
+            violations.add("batch.worker.executors.spark-submit.enabled=true 但 appResourceAllowlist 为空"
+                    + " — prod profile 必须配 batch.worker.executors.spark-submit.app-resource-allowlist"
+                    + " 列出允许提交的 jar/.py 前缀(默认空=允许提交任意 jar,等同任意代码执行 RCE)");
+        }
+        return violations;
     }
-    if (EmptyChecks.isNotNull(sql) && sql.isEnabled()) {
-      addBusinessDataSourceViolations(
-          violations, "sql", sql.getDataSourceBeanName(), sql.getAllowedDataSourceBeans());
-    }
-    StoredProcExecutorProperties sp = storedProcProps.getIfAvailable();
-    boolean enabledStoredProcedureHasNoSchemaAllowlist = EmptyChecks.isNotNull(sp)
-        && sp.isEnabled()
-        && EmptyChecks.isEmpty(Objects.requireNonNull(sp.getAllowedSchemas()));
-    if (enabledStoredProcedureHasNoSchemaAllowlist) {
-      violations.add("batch.worker.executors.stored-proc.enabled=true 但 allowedSchemas 为空"
-          + " — prod profile 必须配 batch.worker.executors.stored-proc.allowed-schemas"
-          + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
-    }
-    if (EmptyChecks.isNotNull(sp) && sp.isEnabled()) {
-      addBusinessDataSourceViolations(
-          violations, "stored-proc", sp.getDataSourceBeanName(), sp.getAllowedDataSourceBeans());
-    }
-    HttpExecutorProperties http = httpProps.getIfAvailable();
-    boolean httpEnabledWithEmptyUnenforcedAllowlist = EmptyChecks.isNotNull(http)
-        && http.isEnabled()
-        && EmptyChecks.isEmpty(Objects.requireNonNull(http.getAllowedHostPatterns()))
-        && !http.isEnforceAllowlist();
-    if (httpEnabledWithEmptyUnenforcedAllowlist) {
-      violations.add("batch.worker.executors.http.enabled=true 但 allowedHostPatterns 为空且"
-          + " enforceAllowlist=false — prod profile 必须二选一:"
-          + "(a) 配 batch.worker.executors.http.allowed-host-patterns 列出可访问的出口域名 glob;"
-          + "(b) 置 batch.worker.executors.http.enforce-allowlist=true 让空白名单语义变成"
-          + " fail-closed 拒绝全部");
-    }
-    ShellExecutorProperties shell = shellProps.getIfAvailable();
-    boolean enabledShellHasNoCommandAllowlist = EmptyChecks.isNotNull(shell)
-        && shell.isEnabled()
-        && EmptyChecks.isEmpty(Objects.requireNonNull(shell.getCommandWhitelist()));
-    if (enabledShellHasNoCommandAllowlist) {
-      violations.add("batch.worker.executors.shell.enabled=true 但 commandWhitelist 为空"
-          + " — prod profile 必须配 batch.worker.executors.shell.command-whitelist"
-          + " 列出允许执行的程序绝对路径(默认空=允许全部 program,任意 RCE 风险)");
-    }
-    SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
-    boolean enabledSparkHasNoResourceAllowlist = EmptyChecks.isNotNull(spark)
-        && spark.isEnabled()
-        && EmptyChecks.isEmpty(Objects.requireNonNull(spark.getAppResourceAllowlist()));
-    if (enabledSparkHasNoResourceAllowlist) {
-      violations.add("batch.worker.executors.spark-submit.enabled=true 但 appResourceAllowlist 为空"
-          + " — prod profile 必须配 batch.worker.executors.spark-submit.app-resource-allowlist"
-          + " 列出允许提交的 jar/.py 前缀(默认空=允许提交任意 jar,等同任意代码执行 RCE)");
-    }
-    return violations;
-  }
 
-  /**
-   * SQL/存储过程任务只能连业务库：未配置默认 bean 时任务会回落到 Atomic 进程的平台库，用 Worker 账号读写平台表，
-   * 绕过 Orchestrator 的状态所有权；把平台库 bean 列为默认或白名单同理。
-   */
-  private static void addBusinessDataSourceViolations(
-      List<String> violations, String executor, String defaultBean, Set<String> allowedBeans) {
-    String prefix = "batch.worker.executors." + executor;
-    if (EmptyChecks.isBlank(defaultBean)) {
-      violations.add(prefix + ".enabled=true 但未配置 " + prefix + ".data-source-bean-name"
-          + " — 任务不带 dataSourceBean 时会回落到平台库,必须显式指定业务库 DataSource bean");
+    /**
+     * SQL/存储过程任务只能连业务库：未配置默认 bean 时任务会回落到 Atomic 进程的平台库，用 Worker 账号读写平台表，
+     * 绕过 Orchestrator 的状态所有权；把平台库 bean 列为默认或白名单同理。
+     */
+    private static void addBusinessDataSourceViolations(
+            List<String> violations, String executor, String defaultBean, Set<String> allowedBeans) {
+        String prefix = "batch.worker.executors." + executor;
+        if (EmptyChecks.isBlank(defaultBean)) {
+            violations.add(prefix + ".enabled=true 但未配置 " + prefix + ".data-source-bean-name"
+                    + " — 任务不带 dataSourceBean 时会回落到平台库,必须显式指定业务库 DataSource bean");
+        }
+        boolean usesPlatformDataSource = PLATFORM_DATA_SOURCE_BEAN.equals(defaultBean)
+                || Objects.requireNonNull(allowedBeans).contains(PLATFORM_DATA_SOURCE_BEAN);
+        if (usesPlatformDataSource) {
+            violations.add(prefix + " 的 data-source-bean-name / allowed-data-source-beans 含平台库 bean '"
+                    + PLATFORM_DATA_SOURCE_BEAN + "' — 原子任务只能连业务库,不能使用平台库连接");
+        }
     }
-    boolean usesPlatformDataSource = PLATFORM_DATA_SOURCE_BEAN.equals(defaultBean)
-        || Objects.requireNonNull(allowedBeans).contains(PLATFORM_DATA_SOURCE_BEAN);
-    if (usesPlatformDataSource) {
-      violations.add(prefix + " 的 data-source-bean-name / allowed-data-source-beans 含平台库 bean '"
-          + PLATFORM_DATA_SOURCE_BEAN + "' — 原子任务只能连业务库,不能使用平台库连接");
-    }
-  }
 }

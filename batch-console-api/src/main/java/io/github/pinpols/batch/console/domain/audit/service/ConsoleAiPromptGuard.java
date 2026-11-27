@@ -18,162 +18,162 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleAiPromptGuard {
 
-  private static final Pattern EXPLICITLY_UNRELATED =
-      Pattern.compile("(?:与|跟|和)(?:本|该|这个)?(?:批量调度|作业调度)(?:系统|平台)?(?:完全)?无关");
+    private static final Pattern EXPLICITLY_UNRELATED =
+            Pattern.compile("(?:与|跟|和)(?:本|该|这个)?(?:批量调度|作业调度)(?:系统|平台)?(?:完全)?无关");
 
-  private static final Set<String> SPECIFIC_DOMAIN_PHRASES = Set.of(
-      "job instance",
-      "job instances",
-      "job_instance",
-      "partition status",
-      "workflow dag",
-      "file import",
-      "file imports",
-      "file export",
-      "file exports",
-      "file governance",
-      "worker lease",
-      "worker heartbeat",
-      "worker pool",
-      "orchestrator",
-      "outbox",
-      "dead letter",
-      "dead-letter",
-      "tenant quota",
-      "business calendar",
-      "business date",
-      "trigger schedule",
-      "readiness defer",
-      "misfire",
-      "batch day",
-      "batch-day",
-      "作业实例",
-      "任务实例",
-      "分片状态",
-      "工作流 dag",
-      "文件导入",
-      "文件导出",
-      "文件治理",
-      "worker 租约",
-      "worker 心跳",
-      "租户配额",
-      "业务日历",
-      "业务日期",
-      "批量日",
-      "批量调度",
-      "触发器",
-      "就绪延迟",
-      "死信队列",
-      "发布箱");
+    private static final Set<String> SPECIFIC_DOMAIN_PHRASES = Set.of(
+            "job instance",
+            "job instances",
+            "job_instance",
+            "partition status",
+            "workflow dag",
+            "file import",
+            "file imports",
+            "file export",
+            "file exports",
+            "file governance",
+            "worker lease",
+            "worker heartbeat",
+            "worker pool",
+            "orchestrator",
+            "outbox",
+            "dead letter",
+            "dead-letter",
+            "tenant quota",
+            "business calendar",
+            "business date",
+            "trigger schedule",
+            "readiness defer",
+            "misfire",
+            "batch day",
+            "batch-day",
+            "作业实例",
+            "任务实例",
+            "分片状态",
+            "工作流 dag",
+            "文件导入",
+            "文件导出",
+            "文件治理",
+            "worker 租约",
+            "worker 心跳",
+            "租户配额",
+            "业务日历",
+            "业务日期",
+            "批量日",
+            "批量调度",
+            "触发器",
+            "就绪延迟",
+            "死信队列",
+            "发布箱");
 
-  private static final Set<String> GENERIC_DOMAIN_KEYWORDS = Set.of(
-      "batch",
-      "workflow",
-      "job",
-      "instance",
-      "partition",
-      "task",
-      "file",
-      "worker",
-      "script",
-      "dependency",
-      "version",
-      "release",
-      "docker",
-      "maven",
-      "trivy",
-      "console",
-      "audit");
+    private static final Set<String> GENERIC_DOMAIN_KEYWORDS = Set.of(
+            "batch",
+            "workflow",
+            "job",
+            "instance",
+            "partition",
+            "task",
+            "file",
+            "worker",
+            "script",
+            "dependency",
+            "version",
+            "release",
+            "docker",
+            "maven",
+            "trivy",
+            "console",
+            "audit");
 
-  private final ConsoleAiProperties properties;
+    private final ConsoleAiProperties properties;
 
-  public AiPromptGateResult check(String prompt) {
-    if (!properties.isEnabled()) {
-      return AiPromptGateResult.rejected(
-          AiPromptDecision.REJECTED_DISABLED,
-          AiPromptCategory.OUT_OF_SCOPE,
-          CommonErrorMessages.AI_ASSISTANT_DISABLED);
-    }
-    if (!Texts.hasText(prompt)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.prompt.required");
-    }
-    if (prompt.length() > properties.getMaxPromptLength()) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.prompt.too_long");
-    }
-    String normalized = prompt.trim();
-    String lower = normalized.toLowerCase(Locale.ROOT);
-    for (String blockedKeyword : properties.getBlockedKeywords()) {
-      if (contains(normalized, lower, blockedKeyword)) {
+    public AiPromptGateResult check(String prompt) {
+        if (!properties.isEnabled()) {
+            return AiPromptGateResult.rejected(
+                    AiPromptDecision.REJECTED_DISABLED,
+                    AiPromptCategory.OUT_OF_SCOPE,
+                    CommonErrorMessages.AI_ASSISTANT_DISABLED);
+        }
+        if (!Texts.hasText(prompt)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.prompt.required");
+        }
+        if (prompt.length() > properties.getMaxPromptLength()) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.prompt.too_long");
+        }
+        String normalized = prompt.trim();
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        for (String blockedKeyword : properties.getBlockedKeywords()) {
+            if (contains(normalized, lower, blockedKeyword)) {
+                return AiPromptGateResult.rejected(
+                        AiPromptDecision.REJECTED_SAFETY,
+                        AiPromptCategory.OUT_OF_SCOPE,
+                        CommonErrorMessages.PROMPT_VIOLATES_SAFETY_POLICY);
+            }
+        }
+        if (EXPLICITLY_UNRELATED.matcher(normalized).find()) {
+            return AiPromptGateResult.rejected(
+                    AiPromptDecision.REJECTED_SCOPE,
+                    AiPromptCategory.OUT_OF_SCOPE,
+                    CommonErrorMessages.PROMPT_OUT_OF_SCOPE);
+        }
+        String matchedPhrase = SPECIFIC_DOMAIN_PHRASES.stream()
+                .filter(phrase -> lower.contains(phrase.toLowerCase(Locale.ROOT)))
+                .findFirst()
+                .orElse(null);
+        if (matchedPhrase != null) { // empty-check: allow - Sonar 需识别匹配结果非空分支
+            String categoryKeyword = properties.getDomainKeywords().stream()
+                    .filter(keyword -> !GENERIC_DOMAIN_KEYWORDS.contains(keyword.toLowerCase(Locale.ROOT)))
+                    .filter(keyword -> contains(normalized, lower, keyword))
+                    .findFirst()
+                    .orElse(matchedPhrase);
+            AiPromptCategory resolvedCategory = resolveCategory(categoryKeyword);
+            return AiPromptGateResult.approved(resolvedCategory, normalized);
+        }
         return AiPromptGateResult.rejected(
-            AiPromptDecision.REJECTED_SAFETY,
-            AiPromptCategory.OUT_OF_SCOPE,
-            CommonErrorMessages.PROMPT_VIOLATES_SAFETY_POLICY);
-      }
+                AiPromptDecision.REJECTED_SCOPE,
+                AiPromptCategory.OUT_OF_SCOPE,
+                CommonErrorMessages.PROMPT_OUT_OF_SCOPE);
     }
-    if (EXPLICITLY_UNRELATED.matcher(normalized).find()) {
-      return AiPromptGateResult.rejected(
-          AiPromptDecision.REJECTED_SCOPE,
-          AiPromptCategory.OUT_OF_SCOPE,
-          CommonErrorMessages.PROMPT_OUT_OF_SCOPE);
-    }
-    String matchedPhrase = SPECIFIC_DOMAIN_PHRASES.stream()
-        .filter(phrase -> lower.contains(phrase.toLowerCase(Locale.ROOT)))
-        .findFirst()
-        .orElse(null);
-    if (matchedPhrase != null) { // empty-check: allow - Sonar 需识别匹配结果非空分支
-      String categoryKeyword = properties.getDomainKeywords().stream()
-          .filter(keyword -> !GENERIC_DOMAIN_KEYWORDS.contains(keyword.toLowerCase(Locale.ROOT)))
-          .filter(keyword -> contains(normalized, lower, keyword))
-          .findFirst()
-          .orElse(matchedPhrase);
-      AiPromptCategory resolvedCategory = resolveCategory(categoryKeyword);
-      return AiPromptGateResult.approved(resolvedCategory, normalized);
-    }
-    return AiPromptGateResult.rejected(
-        AiPromptDecision.REJECTED_SCOPE,
-        AiPromptCategory.OUT_OF_SCOPE,
-        CommonErrorMessages.PROMPT_OUT_OF_SCOPE);
-  }
 
-  private boolean contains(String normalized, String lower, String keyword) {
-    if (!Texts.hasText(keyword)) {
-      return false;
+    private boolean contains(String normalized, String lower, String keyword) {
+        if (!Texts.hasText(keyword)) {
+            return false;
+        }
+        String needle = keyword.toLowerCase(Locale.ROOT);
+        return normalized.contains(keyword) || lower.contains(needle);
     }
-    String needle = keyword.toLowerCase(Locale.ROOT);
-    return normalized.contains(keyword) || lower.contains(needle);
-  }
 
-  private AiPromptCategory resolveCategory(String keyword) {
-    String normalized = keyword.toLowerCase(Locale.ROOT);
-    boolean promptTargetsFileGovernance = normalized.contains("file")
-        || normalized.contains("文件")
-        || normalized.contains("archive")
-        || normalized.contains("dispatch")
-        || normalized.contains("reconcile")
-        || normalized.contains("归档")
-        || normalized.contains("重分发");
-    if (promptTargetsFileGovernance) {
-      return AiPromptCategory.FILE_GOVERNANCE;
+    private AiPromptCategory resolveCategory(String keyword) {
+        String normalized = keyword.toLowerCase(Locale.ROOT);
+        boolean promptTargetsFileGovernance = normalized.contains("file")
+                || normalized.contains("文件")
+                || normalized.contains("archive")
+                || normalized.contains("dispatch")
+                || normalized.contains("reconcile")
+                || normalized.contains("归档")
+                || normalized.contains("重分发");
+        if (promptTargetsFileGovernance) {
+            return AiPromptCategory.FILE_GOVERNANCE;
+        }
+        boolean promptTargetsWorkflow = normalized.contains("workflow")
+                || normalized.contains("dag")
+                || normalized.contains("节点")
+                || normalized.contains("工作流");
+        if (promptTargetsWorkflow) {
+            return AiPromptCategory.WORKFLOW;
+        }
+        boolean promptTargetsExecutionOperations = normalized.contains("worker")
+                || normalized.contains("trigger")
+                || normalized.contains("orchestrator")
+                || normalized.contains("job")
+                || normalized.contains("partition")
+                || normalized.contains("task")
+                || normalized.contains("调度")
+                || normalized.contains("实例")
+                || normalized.contains("分片");
+        if (promptTargetsExecutionOperations) {
+            return AiPromptCategory.PLATFORM;
+        }
+        return AiPromptCategory.OPERATIONS;
     }
-    boolean promptTargetsWorkflow = normalized.contains("workflow")
-        || normalized.contains("dag")
-        || normalized.contains("节点")
-        || normalized.contains("工作流");
-    if (promptTargetsWorkflow) {
-      return AiPromptCategory.WORKFLOW;
-    }
-    boolean promptTargetsExecutionOperations = normalized.contains("worker")
-        || normalized.contains("trigger")
-        || normalized.contains("orchestrator")
-        || normalized.contains("job")
-        || normalized.contains("partition")
-        || normalized.contains("task")
-        || normalized.contains("调度")
-        || normalized.contains("实例")
-        || normalized.contains("分片");
-    if (promptTargetsExecutionOperations) {
-      return AiPromptCategory.PLATFORM;
-    }
-    return AiPromptCategory.OPERATIONS;
-  }
 }

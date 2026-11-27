@@ -35,77 +35,74 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "batch.datasource.business", name = "url")
 @EnableConfigurationProperties({
-  DataSourceProperties.class,
-  BusinessDataSourceProperties.class,
-  BusinessRoutingProperties.class
+    DataSourceProperties.class,
+    BusinessDataSourceProperties.class,
+    BusinessRoutingProperties.class
 })
 public class OrchestratorDataSourceConfiguration {
 
-  private final BatchPgSessionProperties pgSessionProperties;
-  private final Environment environment;
+    private final BatchPgSessionProperties pgSessionProperties;
+    private final Environment environment;
 
-  public OrchestratorDataSourceConfiguration(
-      BatchPgSessionProperties pgSessionProperties, Environment environment) {
-    this.pgSessionProperties = pgSessionProperties;
-    this.environment = environment;
-  }
-
-  @Bean(name = "orchestratorPlatformHikariConfig")
-  @ConfigurationProperties("spring.datasource.hikari")
-  public HikariConfig orchestratorPlatformHikariConfig() {
-    return new HikariConfig();
-  }
-
-  /** 将现有 Boot 平台数据源保留为主 {@code dataSource} Bean。 */
-  @Bean(name = "orchestratorPlatformDataSource", destroyMethod = "close")
-  @Primary
-  public HikariDataSource dataSource(
-      DataSourceProperties properties,
-      @Qualifier("orchestratorPlatformHikariConfig") HikariConfig hikariConfig) {
-    hikariConfig.setJdbcUrl(properties.determineUrl());
-    hikariConfig.setUsername(properties.determineUsername());
-    hikariConfig.setPassword(properties.determinePassword());
-    if (EmptyChecks.isNull(hikariConfig.getDriverClassName())
-        || EmptyChecks.isBlank(Objects.requireNonNull(hikariConfig.getDriverClassName()))) {
-      hikariConfig.setDriverClassName(properties.determineDriverClassName());
+    public OrchestratorDataSourceConfiguration(BatchPgSessionProperties pgSessionProperties, Environment environment) {
+        this.pgSessionProperties = pgSessionProperties;
+        this.environment = environment;
     }
-    String applicationName = ApplicationNameProvider.resolve(environment, "batch-orchestrator");
-    HikariPgSessionSupport.applyPlatform(
-        hikariConfig, pgSessionProperties, applicationName + "-platform");
-    return new HikariDataSource(hikariConfig);
-  }
 
-  @Bean(name = "workflowSensorBusinessHikariConfig")
-  @ConfigurationProperties("batch.datasource.business.hikari")
-  public HikariConfig workflowSensorBusinessHikariConfig() {
-    return new HikariConfig();
-  }
+    @Bean(name = "orchestratorPlatformHikariConfig")
+    @ConfigurationProperties("spring.datasource.hikari")
+    public HikariConfig orchestratorPlatformHikariConfig() {
+        return new HikariConfig();
+    }
 
-  @Bean(name = "orchestratorBusinessDataSource", destroyMethod = "close")
-  public DataSource orchestratorBusinessDataSource(
-      BusinessDataSourceProperties properties,
-      BusinessRoutingProperties routingProperties,
-      BusinessTenantPlacementMapper placementMapper,
-      @Qualifier("workflowSensorBusinessHikariConfig") HikariConfig hikariConfig) {
-    MyBatisTenantPlacementRepository tenantPlacementRepository =
-        new MyBatisTenantPlacementRepository(placementMapper);
-    String applicationName = ApplicationNameProvider.resolve(environment, "batch-orchestrator");
-    return BusinessDataSourceBuilder.build(
-        hikariConfig,
-        properties,
-        pgSessionProperties,
-        routingProperties,
-        tenantPlacementRepository,
-        applicationName);
-  }
+    /** 将现有 Boot 平台数据源保留为主 {@code dataSource} Bean。 */
+    @Bean(name = "orchestratorPlatformDataSource", destroyMethod = "close")
+    @Primary
+    public HikariDataSource dataSource(
+            DataSourceProperties properties, @Qualifier("orchestratorPlatformHikariConfig") HikariConfig hikariConfig) {
+        hikariConfig.setJdbcUrl(properties.determineUrl());
+        hikariConfig.setUsername(properties.determineUsername());
+        hikariConfig.setPassword(properties.determinePassword());
+        if (EmptyChecks.isNull(hikariConfig.getDriverClassName())
+                || EmptyChecks.isBlank(Objects.requireNonNull(hikariConfig.getDriverClassName()))) {
+            hikariConfig.setDriverClassName(properties.determineDriverClassName());
+        }
+        String applicationName = ApplicationNameProvider.resolve(environment, "batch-orchestrator");
+        HikariPgSessionSupport.applyPlatform(hikariConfig, pgSessionProperties, applicationName + "-platform");
+        return new HikariDataSource(hikariConfig);
+    }
 
-  @Bean(name = "workflowSensorBusinessTransactionTemplate")
-  public TransactionTemplate workflowSensorBusinessTransactionTemplate(
-      @Qualifier("orchestratorBusinessDataSource") DataSource dataSource) {
-    DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
-    TransactionTemplate template = new TransactionTemplate(transactionManager);
-    template.setReadOnly(true);
-    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    return template;
-  }
+    @Bean(name = "workflowSensorBusinessHikariConfig")
+    @ConfigurationProperties("batch.datasource.business.hikari")
+    public HikariConfig workflowSensorBusinessHikariConfig() {
+        return new HikariConfig();
+    }
+
+    @Bean(name = "orchestratorBusinessDataSource", destroyMethod = "close")
+    public DataSource orchestratorBusinessDataSource(
+            BusinessDataSourceProperties properties,
+            BusinessRoutingProperties routingProperties,
+            BusinessTenantPlacementMapper placementMapper,
+            @Qualifier("workflowSensorBusinessHikariConfig") HikariConfig hikariConfig) {
+        MyBatisTenantPlacementRepository tenantPlacementRepository =
+                new MyBatisTenantPlacementRepository(placementMapper);
+        String applicationName = ApplicationNameProvider.resolve(environment, "batch-orchestrator");
+        return BusinessDataSourceBuilder.build(
+                hikariConfig,
+                properties,
+                pgSessionProperties,
+                routingProperties,
+                tenantPlacementRepository,
+                applicationName);
+    }
+
+    @Bean(name = "workflowSensorBusinessTransactionTemplate")
+    public TransactionTemplate workflowSensorBusinessTransactionTemplate(
+            @Qualifier("orchestratorBusinessDataSource") DataSource dataSource) {
+        DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setReadOnly(true);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template;
+    }
 }

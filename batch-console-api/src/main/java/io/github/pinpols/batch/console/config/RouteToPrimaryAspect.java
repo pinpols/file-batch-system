@@ -25,15 +25,15 @@ import org.springframework.stereotype.Component;
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class RouteToPrimaryAspect {
 
-  // AspectJ pointcut 表达式是字符串，由 AspectJ 运行时解析，不走 Java import 体系；
-  // 此处 FQN 是 AspectJ 语法要求，不是 §Java 代码风格 §FQN 规则违例。
-  @Around("@annotation(io.github.pinpols.batch.console.config.RouteToPrimary)")
-  public Object wrap(ProceedingJoinPoint pjp) throws Throwable {
-    Boolean prev = RoutingHints.enterForcePrimary();
-    try {
-      return pjp.proceed();
-    } finally {
-      RoutingHints.restore(prev);
+    // AspectJ pointcut 表达式是字符串，由 AspectJ 运行时解析，不走 Java import 体系；
+    // 此处 FQN 是 AspectJ 语法要求，不是 §Java 代码风格 §FQN 规则违例。
+    @Around("@annotation(io.github.pinpols.batch.console.config.RouteToPrimary)")
+    public Object wrap(ProceedingJoinPoint pjp) throws Throwable {
+        Boolean prev = RoutingHints.enterForcePrimary();
+        try {
+            return pjp.proceed();
+        } finally {
+            RoutingHints.restore(prev);
+        }
     }
-  }
 }

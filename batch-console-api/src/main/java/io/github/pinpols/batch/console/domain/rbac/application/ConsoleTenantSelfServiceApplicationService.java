@@ -18,47 +18,40 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleTenantSelfServiceApplicationService {
 
-  /** 租户自助查看配额时一次取回的策略条数（只取第一页）。 */
-  private static final int QUOTA_POLICY_PAGE_SIZE = 100;
+    /** 租户自助查看配额时一次取回的策略条数（只取第一页）。 */
+    private static final int QUOTA_POLICY_PAGE_SIZE = 100;
 
-  private final ConsoleQuotaPolicyApplicationService quotaPolicyService;
-  private final ConsoleSystemParameterService parameterService;
-  private final ConsoleTenantGuard tenantGuard;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final ConsoleRequestMetadataResolver metadataResolver;
+    private final ConsoleQuotaPolicyApplicationService quotaPolicyService;
+    private final ConsoleSystemParameterService parameterService;
+    private final ConsoleTenantGuard tenantGuard;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final ConsoleRequestMetadataResolver metadataResolver;
 
-  public PageResponse<QuotaPolicyResponse> quota(String tenantId) {
-    return quotaPolicyService.listAll(tenantId, 1, QUOTA_POLICY_PAGE_SIZE);
-  }
+    public PageResponse<QuotaPolicyResponse> quota(String tenantId) {
+        return quotaPolicyService.listAll(tenantId, 1, QUOTA_POLICY_PAGE_SIZE);
+    }
 
-  public ConsoleTenantUsageSummaryResponse usage(String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    String runningJobs =
-        parameterService.getValue(resolved, "tenant.usage.running-jobs").orElse(null);
-    String dailyTriggers =
-        parameterService.getValue(resolved, "tenant.usage.daily-triggers").orElse(null);
-    String fileCount =
-        parameterService.getValue(resolved, "tenant.usage.file-count").orElse(null);
-    return new ConsoleTenantUsageSummaryResponse(runningJobs, dailyTriggers, fileCount);
-  }
+    public ConsoleTenantUsageSummaryResponse usage(String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        String runningJobs =
+                parameterService.getValue(resolved, "tenant.usage.running-jobs").orElse(null);
+        String dailyTriggers = parameterService
+                .getValue(resolved, "tenant.usage.daily-triggers")
+                .orElse(null);
+        String fileCount =
+                parameterService.getValue(resolved, "tenant.usage.file-count").orElse(null);
+        return new ConsoleTenantUsageSummaryResponse(runningJobs, dailyTriggers, fileCount);
+    }
 
-  public String requestQuotaChange(String tenantId, QuotaChangeRequest request) {
-    String operator = metadataResolver.current().operatorId();
-    String requestKey = "tenant.quota-request." + dateTimeSupport.currentEpochMillis();
-    QuotaRequestPayload payload = new QuotaRequestPayload(
-        request.field(),
-        request.requestedValue(),
-        String.valueOf(request.reason()),
-        String.valueOf(operator));
-    parameterService.upsert(
-        tenantId,
-        requestKey,
-        JsonUtils.toJson(payload),
-        "Quota change request from " + operator,
-        operator);
-    return requestKey;
-  }
+    public String requestQuotaChange(String tenantId, QuotaChangeRequest request) {
+        String operator = metadataResolver.current().operatorId();
+        String requestKey = "tenant.quota-request." + dateTimeSupport.currentEpochMillis();
+        QuotaRequestPayload payload = new QuotaRequestPayload(
+                request.field(), request.requestedValue(), String.valueOf(request.reason()), String.valueOf(operator));
+        parameterService.upsert(
+                tenantId, requestKey, JsonUtils.toJson(payload), "Quota change request from " + operator, operator);
+        return requestKey;
+    }
 
-  private record QuotaRequestPayload(
-      String field, int requestedValue, String reason, String operator) {}
+    private record QuotaRequestPayload(String field, int requestedValue, String reason, String operator) {}
 }

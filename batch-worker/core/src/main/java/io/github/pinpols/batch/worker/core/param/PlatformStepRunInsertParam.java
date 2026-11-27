@@ -8,15 +8,15 @@ import lombok.Setter;
 @Getter
 @Builder(toBuilder = true)
 public class PlatformStepRunInsertParam {
-  @Setter
-  private Long id;
+    @Setter
+    private Long id;
 
-  private final Long pipelineInstanceId;
-  private final String stepCode;
-  private final String stageCode;
-  private final String stepStatus;
-  private final String inputSummaryJson;
+    private final Long pipelineInstanceId;
+    private final String stepCode;
+    private final String stageCode;
+    private final String stepStatus;
+    private final String inputSummaryJson;
 
-  @Setter
-  private Integer runSeq;
+    @Setter
+    private Integer runSeq;
 }

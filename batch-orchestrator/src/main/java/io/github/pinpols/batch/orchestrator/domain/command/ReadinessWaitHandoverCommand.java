@@ -10,14 +10,14 @@ import java.util.List;
  * <p>由 HTTP 入口组装，{@code ReadinessWaitService} 入口校验并在用例内部构建持久化 Entity。
  */
 public record ReadinessWaitHandoverCommand(
-    String tenantId,
-    Long workflowDefinitionId,
-    String workflowCode,
-    String calendarCode,
-    Integer scheduleVersion,
-    List<String> dependsOnJobCodes,
-    LocalDate bizDate,
-    Instant scheduledFireTime,
-    Instant deferredSince,
-    Instant deadline,
-    String traceId) {}
+        String tenantId,
+        Long workflowDefinitionId,
+        String workflowCode,
+        String calendarCode,
+        Integer scheduleVersion,
+        List<String> dependsOnJobCodes,
+        LocalDate bizDate,
+        Instant scheduledFireTime,
+        Instant deferredSince,
+        Instant deadline,
+        String traceId) {}

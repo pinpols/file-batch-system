@@ -14,59 +14,55 @@ import org.springframework.stereotype.Component;
 @Component
 public class QuartzScheduledFireEnumerator {
 
-  public List<Instant> enumerate(
-      Trigger trigger, Instant afterExclusive, Instant throughInclusive, int occurrenceLimit) {
-    Objects.requireNonNull(trigger, "trigger");
-    return enumerateFromSource(
-        fireTimeSource(trigger), afterExclusive, throughInclusive, occurrenceLimit);
-  }
-
-  /** Quartz类型仅在适配器边界出现，应用规划器只消费项目时间源。 */
-  public static ScheduledFireTimeSource fireTimeSource(Trigger trigger) {
-    Objects.requireNonNull(trigger, "trigger");
-    return afterExclusive -> {
-      Date next = trigger.getFireTimeAfter(Date.from(afterExclusive));
-      return EmptyChecks.isNull(next) ? null : next.toInstant();
-    };
-  }
-
-  public List<Instant> enumerateFromSource(
-      ScheduledFireTimeSource source,
-      Instant afterExclusive,
-      Instant throughInclusive,
-      int occurrenceLimit) {
-    Objects.requireNonNull(source, "source");
-    Objects.requireNonNull(afterExclusive, "afterExclusive");
-    Objects.requireNonNull(throughInclusive, "throughInclusive");
-    if (occurrenceLimit <= 0) {
-      throw new IllegalArgumentException("occurrenceLimit must be positive");
-    }
-    if (!afterExclusive.isBefore(throughInclusive)) {
-      return List.of();
+    public List<Instant> enumerate(
+            Trigger trigger, Instant afterExclusive, Instant throughInclusive, int occurrenceLimit) {
+        Objects.requireNonNull(trigger, "trigger");
+        return enumerateFromSource(fireTimeSource(trigger), afterExclusive, throughInclusive, occurrenceLimit);
     }
 
-    List<Instant> fireTimes = new ArrayList<>();
-    Instant cursor = afterExclusive;
-    Instant nextFireTime = source.nextAfter(cursor);
-    while (EmptyChecks.isNotNull(nextFireTime) && !nextFireTime.isAfter(throughInclusive)) {
-      if (fireTimes.size() == occurrenceLimit) {
-        throw new OccurrenceLimitExceededException(occurrenceLimit);
-      }
-      Instant next = nextFireTime;
-      if (!next.isAfter(cursor)) {
-        throw new IllegalStateException("Quartz trigger returned a non-advancing fire time");
-      }
-      fireTimes.add(next);
-      cursor = nextFireTime;
-      nextFireTime = source.nextAfter(cursor);
+    /** Quartz类型仅在适配器边界出现，应用规划器只消费项目时间源。 */
+    public static ScheduledFireTimeSource fireTimeSource(Trigger trigger) {
+        Objects.requireNonNull(trigger, "trigger");
+        return afterExclusive -> {
+            Date next = trigger.getFireTimeAfter(Date.from(afterExclusive));
+            return EmptyChecks.isNull(next) ? null : next.toInstant();
+        };
     }
-    return List.copyOf(fireTimes);
-  }
 
-  public static final class OccurrenceLimitExceededException extends IllegalStateException {
+    public List<Instant> enumerateFromSource(
+            ScheduledFireTimeSource source, Instant afterExclusive, Instant throughInclusive, int occurrenceLimit) {
+        Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(afterExclusive, "afterExclusive");
+        Objects.requireNonNull(throughInclusive, "throughInclusive");
+        if (occurrenceLimit <= 0) {
+            throw new IllegalArgumentException("occurrenceLimit must be positive");
+        }
+        if (!afterExclusive.isBefore(throughInclusive)) {
+            return List.of();
+        }
 
-    public OccurrenceLimitExceededException(int occurrenceLimit) {
-      super("Quartz schedule exceeds occurrence limit " + occurrenceLimit);
+        List<Instant> fireTimes = new ArrayList<>();
+        Instant cursor = afterExclusive;
+        Instant nextFireTime = source.nextAfter(cursor);
+        while (EmptyChecks.isNotNull(nextFireTime) && !nextFireTime.isAfter(throughInclusive)) {
+            if (fireTimes.size() == occurrenceLimit) {
+                throw new OccurrenceLimitExceededException(occurrenceLimit);
+            }
+            Instant next = nextFireTime;
+            if (!next.isAfter(cursor)) {
+                throw new IllegalStateException("Quartz trigger returned a non-advancing fire time");
+            }
+            fireTimes.add(next);
+            cursor = nextFireTime;
+            nextFireTime = source.nextAfter(cursor);
+        }
+        return List.copyOf(fireTimes);
     }
-  }
+
+    public static final class OccurrenceLimitExceededException extends IllegalStateException {
+
+        public OccurrenceLimitExceededException(int occurrenceLimit) {
+            super("Quartz schedule exceeds occurrence limit " + occurrenceLimit);
+        }
+    }
 }

@@ -32,169 +32,161 @@ import org.springframework.stereotype.Component;
 @Component
 public class WorkerRegistryCache {
 
-  private final OrchestratorRedisSupport redis;
-  private final ObjectMapper objectMapper;
-  private final WorkerSelectorCacheProperties properties;
+    private final OrchestratorRedisSupport redis;
+    private final ObjectMapper objectMapper;
+    private final WorkerSelectorCacheProperties properties;
 
-  public WorkerRegistryCache(
-      OrchestratorRedisSupport redis,
-      ObjectMapper objectMapper,
-      WorkerSelectorCacheProperties properties) {
-    this.redis = redis;
-    this.objectMapper = objectMapper;
-    this.properties = properties;
-  }
-
-  public List<WorkerRegistryEntity> getOrLoad(
-      String tenantId, String workerGroup, Supplier<List<WorkerRegistryEntity>> loader) {
-    if (!properties.isEnabled()) {
-      return loader.get();
+    public WorkerRegistryCache(
+            OrchestratorRedisSupport redis, ObjectMapper objectMapper, WorkerSelectorCacheProperties properties) {
+        this.redis = redis;
+        this.objectMapper = objectMapper;
+        this.properties = properties;
     }
-    String key = key(tenantId, workerGroup);
-    try {
-      String cached = redis.getStringCache(key);
-      if (cached != null && !cached.isBlank()) {
-        List<Entry> entries = objectMapper.readValue(cached, new TypeReference<List<Entry>>() {});
-        // 绝不命中「空列表」快照：否则 PG 刚插入 ONLINE worker 仍会在 TTL 内被判无候选（派发永久 WAITING）。
-        if (!entries.isEmpty()) {
-          return toRecords(entries);
+
+    public List<WorkerRegistryEntity> getOrLoad(
+            String tenantId, String workerGroup, Supplier<List<WorkerRegistryEntity>> loader) {
+        if (!properties.isEnabled()) {
+            return loader.get();
         }
-      }
-    } catch (Exception ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "worker cache read failed; falling back to DB: tenant={}, group={}, cause={}",
-          tenantId,
-          workerGroup,
-          causeSummary);
+        String key = key(tenantId, workerGroup);
+        try {
+            String cached = redis.getStringCache(key);
+            if (cached != null && !cached.isBlank()) {
+                List<Entry> entries = objectMapper.readValue(cached, new TypeReference<List<Entry>>() {});
+                // 绝不命中「空列表」快照：否则 PG 刚插入 ONLINE worker 仍会在 TTL 内被判无候选（派发永久 WAITING）。
+                if (!entries.isEmpty()) {
+                    return toRecords(entries);
+                }
+            }
+        } catch (Exception ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn(
+                    "worker cache read failed; falling back to DB: tenant={}, group={}, cause={}",
+                    tenantId,
+                    workerGroup,
+                    causeSummary);
+        }
+        List<WorkerRegistryEntity> fresh = loader.get();
+        try {
+            if (!fresh.isEmpty()) {
+                List<Entry> entries = toEntries(fresh);
+                String json = objectMapper.writeValueAsString(entries);
+                redis.setStringCache(key, json, Duration.ofMillis(properties.getTtlMillis()));
+            } else {
+                redis.evictCache(key);
+            }
+        } catch (Exception ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.debug("worker cache write/delete failed: tenant={}, group={}: {}", tenantId, workerGroup, causeSummary);
+        }
+        return fresh;
     }
-    List<WorkerRegistryEntity> fresh = loader.get();
-    try {
-      if (!fresh.isEmpty()) {
-        List<Entry> entries = toEntries(fresh);
-        String json = objectMapper.writeValueAsString(entries);
-        redis.setStringCache(key, json, Duration.ofMillis(properties.getTtlMillis()));
-      } else {
-        redis.evictCache(key);
-      }
-    } catch (Exception ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.debug(
-          "worker cache write/delete failed: tenant={}, group={}: {}",
-          tenantId,
-          workerGroup,
-          causeSummary);
+
+    /**
+     * 驱逐单个 selector 缓存键（运维 / IT：插入或刷新 worker_registry 后避免命中陈旧 ONLINE 列表）。
+     *
+     * <p>{@code enabled=false} 时为 no-op。
+     */
+    public void evict(String tenantId, String workerGroup) {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        try {
+            redis.evictCache(key(tenantId, workerGroup));
+        } catch (Exception ex) {
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.debug("worker cache evict failed: tenant={}, group={}, cause={}", tenantId, workerGroup, causeSummary);
+        }
     }
-    return fresh;
-  }
 
-  /**
-   * 驱逐单个 selector 缓存键（运维 / IT：插入或刷新 worker_registry 后避免命中陈旧 ONLINE 列表）。
-   *
-   * <p>{@code enabled=false} 时为 no-op。
-   */
-  public void evict(String tenantId, String workerGroup) {
-    if (!properties.isEnabled()) {
-      return;
+    private static String key(String tenantId, String workerGroup) {
+        String safeTenantId = safe(tenantId);
+        String safeWorkerGroup = safe(workerGroup);
+        return "worker:reg:%s:%s".formatted(safeTenantId, safeWorkerGroup);
     }
-    try {
-      redis.evictCache(key(tenantId, workerGroup));
-    } catch (Exception ex) {
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.debug(
-          "worker cache evict failed: tenant={}, group={}, cause={}",
-          tenantId,
-          workerGroup,
-          causeSummary);
+
+    private static String safe(String value) {
+        return value == null || value.isBlank() ? "_" : value.replace(':', '_');
     }
-  }
 
-  private static String key(String tenantId, String workerGroup) {
-    String safeTenantId = safe(tenantId);
-    String safeWorkerGroup = safe(workerGroup);
-    return "worker:reg:%s:%s".formatted(safeTenantId, safeWorkerGroup);
-  }
-
-  private static String safe(String value) {
-    return value == null || value.isBlank() ? "_" : value.replace(':', '_');
-  }
-
-  private static List<Entry> toEntries(List<WorkerRegistryEntity> records) {
-    List<Entry> entries = new ArrayList<>(records.size());
-    for (WorkerRegistryEntity r : records) {
-      Entry entry = Entry.builder()
-          .id(r.id())
-          .tenantId(r.tenantId())
-          .workerCode(r.workerCode())
-          .workerPoolCode(r.workerPoolCode())
-          .workerGroup(r.workerGroup())
-          .capabilityTagsJson(
-              r.capabilityTags() == null ? null : r.capabilityTags().getValue())
-          .resourceTag(r.resourceTag())
-          .status(r.status())
-          .heartbeatMillis(r.heartbeatAt() == null ? null : r.heartbeatAt().toEpochMilli())
-          .currentLoad(r.currentLoad())
-          .maxConcurrent(r.maxConcurrent())
-          .drainStartedMillis(
-              r.drainStartedAt() == null ? null : r.drainStartedAt().toEpochMilli())
-          .drainDeadlineMillis(
-              r.drainDeadlineAt() == null ? null : r.drainDeadlineAt().toEpochMilli())
-          .build();
-      entries.add(entry);
+    private static List<Entry> toEntries(List<WorkerRegistryEntity> records) {
+        List<Entry> entries = new ArrayList<>(records.size());
+        for (WorkerRegistryEntity r : records) {
+            Entry entry = Entry.builder()
+                    .id(r.id())
+                    .tenantId(r.tenantId())
+                    .workerCode(r.workerCode())
+                    .workerPoolCode(r.workerPoolCode())
+                    .workerGroup(r.workerGroup())
+                    .capabilityTagsJson(
+                            r.capabilityTags() == null
+                                    ? null
+                                    : r.capabilityTags().getValue())
+                    .resourceTag(r.resourceTag())
+                    .status(r.status())
+                    .heartbeatMillis(
+                            r.heartbeatAt() == null ? null : r.heartbeatAt().toEpochMilli())
+                    .currentLoad(r.currentLoad())
+                    .maxConcurrent(r.maxConcurrent())
+                    .drainStartedMillis(
+                            r.drainStartedAt() == null
+                                    ? null
+                                    : r.drainStartedAt().toEpochMilli())
+                    .drainDeadlineMillis(
+                            r.drainDeadlineAt() == null
+                                    ? null
+                                    : r.drainDeadlineAt().toEpochMilli())
+                    .build();
+            entries.add(entry);
+        }
+        return entries;
     }
-    return entries;
-  }
 
-  private static List<WorkerRegistryEntity> toRecords(List<Entry> entries) {
-    List<WorkerRegistryEntity> records = new ArrayList<>(entries.size());
-    for (Entry e : entries) {
-      // 缓存快照不包含运行指纹及任务能力；未缓存字段保持 null，展示仍由数据库直读。
-      WorkerRegistryEntity record = WorkerRegistryEntity.builder()
-          .id(e.id)
-          .tenantId(e.tenantId)
-          .workerCode(e.workerCode)
-          .workerGroup(e.workerGroup)
-          .capabilityTags(
-              EmptyChecks.isNull(e.capabilityTagsJson)
-                  ? null
-                  : new JsonbString(e.capabilityTagsJson))
-          .resourceTag(e.resourceTag)
-          .status(e.status)
-          .heartbeatAt(
-              EmptyChecks.isNull(e.heartbeatMillis)
-                  ? null
-                  : Instant.ofEpochMilli(e.heartbeatMillis))
-          .currentLoad(e.currentLoad)
-          .maxConcurrent(e.maxConcurrent)
-          .drainStartedAt(
-              EmptyChecks.isNull(e.drainStartedMillis)
-                  ? null
-                  : Instant.ofEpochMilli(e.drainStartedMillis))
-          .drainDeadlineAt(
-              EmptyChecks.isNull(e.drainDeadlineMillis)
-                  ? null
-                  : Instant.ofEpochMilli(e.drainDeadlineMillis))
-          .workerPoolCode(e.workerPoolCode)
-          .build();
-      records.add(record);
+    private static List<WorkerRegistryEntity> toRecords(List<Entry> entries) {
+        List<WorkerRegistryEntity> records = new ArrayList<>(entries.size());
+        for (Entry e : entries) {
+            // 缓存快照不包含运行指纹及任务能力；未缓存字段保持 null，展示仍由数据库直读。
+            WorkerRegistryEntity record = WorkerRegistryEntity.builder()
+                    .id(e.id)
+                    .tenantId(e.tenantId)
+                    .workerCode(e.workerCode)
+                    .workerGroup(e.workerGroup)
+                    .capabilityTags(
+                            EmptyChecks.isNull(e.capabilityTagsJson) ? null : new JsonbString(e.capabilityTagsJson))
+                    .resourceTag(e.resourceTag)
+                    .status(e.status)
+                    .heartbeatAt(EmptyChecks.isNull(e.heartbeatMillis) ? null : Instant.ofEpochMilli(e.heartbeatMillis))
+                    .currentLoad(e.currentLoad)
+                    .maxConcurrent(e.maxConcurrent)
+                    .drainStartedAt(
+                            EmptyChecks.isNull(e.drainStartedMillis)
+                                    ? null
+                                    : Instant.ofEpochMilli(e.drainStartedMillis))
+                    .drainDeadlineAt(
+                            EmptyChecks.isNull(e.drainDeadlineMillis)
+                                    ? null
+                                    : Instant.ofEpochMilli(e.drainDeadlineMillis))
+                    .workerPoolCode(e.workerPoolCode)
+                    .build();
+            records.add(record);
+        }
+        return records;
     }
-    return records;
-  }
 
-  /** Slim DTO for cache serialization；故意用 fields，避免 JsonbString 反序列化问题。 */
-  @Builder
-  public record Entry(
-      Long id,
-      String tenantId,
-      String workerCode,
-      String workerPoolCode,
-      String workerGroup,
-      String capabilityTagsJson,
-      String resourceTag,
-      String status,
-      Long heartbeatMillis,
-      Integer currentLoad,
-      Integer maxConcurrent,
-      Long drainStartedMillis,
-      Long drainDeadlineMillis) {}
+    /** Slim DTO for cache serialization；故意用 fields，避免 JsonbString 反序列化问题。 */
+    @Builder
+    public record Entry(
+            Long id,
+            String tenantId,
+            String workerCode,
+            String workerPoolCode,
+            String workerGroup,
+            String capabilityTagsJson,
+            String resourceTag,
+            String status,
+            Long heartbeatMillis,
+            Integer currentLoad,
+            Integer maxConcurrent,
+            Long drainStartedMillis,
+            Long drainDeadlineMillis) {}
 }

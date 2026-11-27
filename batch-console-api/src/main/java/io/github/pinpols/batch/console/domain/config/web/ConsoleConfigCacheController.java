@@ -35,55 +35,47 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleConfigCacheController {
 
-  private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @PostMapping("/evict-job-definition")
-  public CommonResponse<CacheEvictionResponse> evictJobDefinition(
-      @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
-    cacheInvalidationService.evictManual(tenantId, "job-definition", jobCode);
-    return responseFactory.success(
-        new CacheEvictionResponse("job-definition:" + tenantId + ":" + jobCode));
-  }
+    @PostMapping("/evict-job-definition")
+    public CommonResponse<CacheEvictionResponse> evictJobDefinition(
+            @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
+        cacheInvalidationService.evictManual(tenantId, "job-definition", jobCode);
+        return responseFactory.success(new CacheEvictionResponse("job-definition:" + tenantId + ":" + jobCode));
+    }
 
-  @PostMapping("/evict-all-job-definitions")
-  public CommonResponse<CacheEvictionResponse> evictAllJobDefinitions(
-      @RequestParam("tenantId") String tenantId) {
-    cacheInvalidationService.evictManual(tenantId, "job-definition", "*");
-    return responseFactory.success(new CacheEvictionResponse("job-definition:" + tenantId + ":*"));
-  }
+    @PostMapping("/evict-all-job-definitions")
+    public CommonResponse<CacheEvictionResponse> evictAllJobDefinitions(@RequestParam("tenantId") String tenantId) {
+        cacheInvalidationService.evictManual(tenantId, "job-definition", "*");
+        return responseFactory.success(new CacheEvictionResponse("job-definition:" + tenantId + ":*"));
+    }
 
-  @PostMapping("/evict-workflow-definition")
-  public CommonResponse<CacheEvictionResponse> evictWorkflowDefinition(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("workflowCode") String workflowCode) {
-    cacheInvalidationService.evictManual(tenantId, "workflow-definition", workflowCode);
-    return responseFactory.success(
-        new CacheEvictionResponse("workflow-definition:" + tenantId + ":" + workflowCode));
-  }
+    @PostMapping("/evict-workflow-definition")
+    public CommonResponse<CacheEvictionResponse> evictWorkflowDefinition(
+            @RequestParam("tenantId") String tenantId, @RequestParam("workflowCode") String workflowCode) {
+        cacheInvalidationService.evictManual(tenantId, "workflow-definition", workflowCode);
+        return responseFactory.success(
+                new CacheEvictionResponse("workflow-definition:" + tenantId + ":" + workflowCode));
+    }
 
-  @PostMapping("/evict-business-calendar")
-  public CommonResponse<CacheEvictionResponse> evictBusinessCalendar(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("calendarCode") String calendarCode) {
-    cacheInvalidationService.evictManual(tenantId, "business-calendar", calendarCode);
-    return responseFactory.success(
-        new CacheEvictionResponse("business-calendar:" + tenantId + ":" + calendarCode));
-  }
+    @PostMapping("/evict-business-calendar")
+    public CommonResponse<CacheEvictionResponse> evictBusinessCalendar(
+            @RequestParam("tenantId") String tenantId, @RequestParam("calendarCode") String calendarCode) {
+        cacheInvalidationService.evictManual(tenantId, "business-calendar", calendarCode);
+        return responseFactory.success(new CacheEvictionResponse("business-calendar:" + tenantId + ":" + calendarCode));
+    }
 
-  @PostMapping("/evict-batch-window")
-  public CommonResponse<CacheEvictionResponse> evictBatchWindow(
-      @RequestParam("tenantId") String tenantId, @RequestParam("windowCode") String windowCode) {
-    cacheInvalidationService.evictManual(tenantId, "batch-window", windowCode);
-    return responseFactory.success(
-        new CacheEvictionResponse("batch-window:" + tenantId + ":" + windowCode));
-  }
+    @PostMapping("/evict-batch-window")
+    public CommonResponse<CacheEvictionResponse> evictBatchWindow(
+            @RequestParam("tenantId") String tenantId, @RequestParam("windowCode") String windowCode) {
+        cacheInvalidationService.evictManual(tenantId, "batch-window", windowCode);
+        return responseFactory.success(new CacheEvictionResponse("batch-window:" + tenantId + ":" + windowCode));
+    }
 
-  @PostMapping("/evict-quota-policies")
-  public CommonResponse<CacheEvictionResponse> evictQuotaPolicies(
-      @RequestParam("tenantId") String tenantId) {
-    cacheInvalidationService.evictManual(tenantId, "tenant-quota-policy", "enabled-first");
-    return responseFactory.success(
-        new CacheEvictionResponse("tenant-quota-policy:" + tenantId + ":enabled-first"));
-  }
+    @PostMapping("/evict-quota-policies")
+    public CommonResponse<CacheEvictionResponse> evictQuotaPolicies(@RequestParam("tenantId") String tenantId) {
+        cacheInvalidationService.evictManual(tenantId, "tenant-quota-policy", "enabled-first");
+        return responseFactory.success(new CacheEvictionResponse("tenant-quota-policy:" + tenantId + ":enabled-first"));
+    }
 }

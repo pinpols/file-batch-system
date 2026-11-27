@@ -8,16 +8,15 @@ import org.apache.ibatis.annotations.Param;
 /** 批量日补跑原始请求和对账状态的持久化边界。 */
 public interface BatchDayCatchUpOperationMapper {
 
-  String setTenantContext(@Param("tenantId") String tenantId);
+    String setTenantContext(@Param("tenantId") String tenantId);
 
-  int insertIfAbsent(BatchDayCatchUpOperationCreate operation);
+    int insertIfAbsent(BatchDayCatchUpOperationCreate operation);
 
-  int insertAbandonedIfAbsent(BatchDayCatchUpOperationCreate operation);
+    int insertAbandonedIfAbsent(BatchDayCatchUpOperationCreate operation);
 
-  BatchDayCatchUpOperation select(
-      @Param("tenantId") String tenantId, @Param("requestKeyHash") String requestKeyHash);
+    BatchDayCatchUpOperation select(@Param("tenantId") String tenantId, @Param("requestKeyHash") String requestKeyHash);
 
-  int transition(BatchDayCatchUpOperationTransition transition);
+    int transition(BatchDayCatchUpOperationTransition transition);
 
-  int resolveUnknown(BatchDayCatchUpOperationTransition transition);
+    int resolveUnknown(BatchDayCatchUpOperationTransition transition);
 }

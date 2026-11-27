@@ -8,17 +8,17 @@ import org.apache.ibatis.annotations.Param;
 /** BFS 最小资产分区读模型映射。 */
 public interface AssetPartitionMapper {
 
-  int upsertDataAsset(DataAssetUpsertParam param);
+    int upsertDataAsset(DataAssetUpsertParam param);
 
-  Long selectDataAssetId(
-      @Param("tenantId") String tenantId,
-      @Param("assetCode") String assetCode,
-      @Param("assetType") String assetType);
+    Long selectDataAssetId(
+            @Param("tenantId") String tenantId,
+            @Param("assetCode") String assetCode,
+            @Param("assetType") String assetType);
 
-  int upsertEffectiveJobPartition(AssetPartitionMaterializationCommand command);
+    int upsertEffectiveJobPartition(AssetPartitionMaterializationCommand command);
 
-  AssetPartitionSnapshot selectEffectiveJobPartition(
-      @Param("tenantId") String tenantId,
-      @Param("assetCode") String assetCode,
-      @Param("partitionKey") String partitionKey);
+    AssetPartitionSnapshot selectEffectiveJobPartition(
+            @Param("tenantId") String tenantId,
+            @Param("assetCode") String assetCode,
+            @Param("partitionKey") String partitionKey);
 }

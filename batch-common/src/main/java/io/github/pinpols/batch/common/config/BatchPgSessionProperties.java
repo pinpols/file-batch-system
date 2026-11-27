@@ -16,53 +16,53 @@ import org.springframework.util.unit.DataSize;
 @ConfigurationProperties(prefix = "batch.datasource.pg-session")
 public class BatchPgSessionProperties {
 
-  /** 关闭后跳过 ApplicationName / connectionInitSql（联调排查用）。 */
-  private boolean enabled = true;
+    /** 关闭后跳过 ApplicationName / connectionInitSql（联调排查用）。 */
+    private boolean enabled = true;
 
-  /**
-   * 为 true 时：在已有 {@code spring.datasource.hikari.connection-init-sql} 之前<b>前置</b>会话级 {@code SET}。
-   */
-  private boolean mergeConnectionInitSql = true;
-
-  /** 平台库池（spring.datasource / console primary&replica / worker platform pool）。 */
-  private PoolTimeouts platform = platformDefaults();
-
-  /**
-   * 业务库池（worker {@code batch.datasource.business}）。注意与 {@link
-   * io.github.pinpols.batch.common.config.BusinessDataSourceProperties} 的 JDBC URL 配置是不同节点。
-   */
-  private PoolTimeouts business = businessPoolDefaults();
-
-  private static PoolTimeouts platformDefaults() {
-    PoolTimeouts p = new PoolTimeouts();
-    p.setStatementTimeout(Duration.ofMinutes(15));
-    p.setIdleInTransactionTimeout(Duration.ofSeconds(60));
-    return p;
-  }
-
-  private static PoolTimeouts businessPoolDefaults() {
-    PoolTimeouts p = new PoolTimeouts();
-    p.setStatementTimeout(Duration.ofMinutes(30));
-    // 默认 10 分钟: PROCESS 5-stage WAP 中 COMMIT 步骤可能跑长事务 (compute → validate → commit), 5 分钟不够
-    // 用; EXPORT 单 task 多在分钟内, 10 分钟仍足够防 "BEGIN; ... 出去吃饭" 场景
-    p.setIdleInTransactionTimeout(Duration.ofMinutes(10));
-    return p;
-  }
-
-  @Data
-  public static class PoolTimeouts {
     /**
-     * 单语句上限。PostgreSQL 语义为毫秒；{@link Duration#ZERO} 映射为 {@code SET ... TO 0}（即关闭服务端 statement 超时）。
+     * 为 true 时：在已有 {@code spring.datasource.hikari.connection-init-sql} 之前<b>前置</b>会话级 {@code SET}。
      */
-    private Duration statementTimeout = Duration.ofMinutes(15);
+    private boolean mergeConnectionInitSql = true;
 
-    /** 事务开启后空闲上限；{@link Duration#ZERO} 映射为关闭该超时。 */
-    private Duration idleInTransactionTimeout = Duration.ofSeconds(60);
+    /** 平台库池（spring.datasource / console primary&replica / worker platform pool）。 */
+    private PoolTimeouts platform = platformDefaults();
 
-    /** PostgreSQL work_mem；null 表示不改会话默认。 */
-    private DataSize workMem;
+    /**
+     * 业务库池（worker {@code batch.datasource.business}）。注意与 {@link
+     * io.github.pinpols.batch.common.config.BusinessDataSourceProperties} 的 JDBC URL 配置是不同节点。
+     */
+    private PoolTimeouts business = businessPoolDefaults();
 
-    /** PostgreSQL maintenance_work_mem；null 表示不改会话默认。 */
-    private DataSize maintenanceWorkMem;
-  }
+    private static PoolTimeouts platformDefaults() {
+        PoolTimeouts p = new PoolTimeouts();
+        p.setStatementTimeout(Duration.ofMinutes(15));
+        p.setIdleInTransactionTimeout(Duration.ofSeconds(60));
+        return p;
+    }
+
+    private static PoolTimeouts businessPoolDefaults() {
+        PoolTimeouts p = new PoolTimeouts();
+        p.setStatementTimeout(Duration.ofMinutes(30));
+        // 默认 10 分钟: PROCESS 5-stage WAP 中 COMMIT 步骤可能跑长事务 (compute → validate → commit), 5 分钟不够
+        // 用; EXPORT 单 task 多在分钟内, 10 分钟仍足够防 "BEGIN; ... 出去吃饭" 场景
+        p.setIdleInTransactionTimeout(Duration.ofMinutes(10));
+        return p;
+    }
+
+    @Data
+    public static class PoolTimeouts {
+        /**
+         * 单语句上限。PostgreSQL 语义为毫秒；{@link Duration#ZERO} 映射为 {@code SET ... TO 0}（即关闭服务端 statement 超时）。
+         */
+        private Duration statementTimeout = Duration.ofMinutes(15);
+
+        /** 事务开启后空闲上限；{@link Duration#ZERO} 映射为关闭该超时。 */
+        private Duration idleInTransactionTimeout = Duration.ofSeconds(60);
+
+        /** PostgreSQL work_mem；null 表示不改会话默认。 */
+        private DataSize workMem;
+
+        /** PostgreSQL maintenance_work_mem；null 表示不改会话默认。 */
+        private DataSize maintenanceWorkMem;
+    }
 }

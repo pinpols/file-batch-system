@@ -17,66 +17,65 @@ import java.util.Map;
  */
 public final class CronExpressionFormatRule {
 
-  public static final String SHEET = ConfigPackageExcelValidator.JOB_SHEET;
-  public static final String SCHEDULE_TYPE_CRON = "CRON";
+    public static final String SHEET = ConfigPackageExcelValidator.JOB_SHEET;
+    public static final String SCHEDULE_TYPE_CRON = "CRON";
 
-  private CronExpressionFormatRule() {}
+    private CronExpressionFormatRule() {}
 
-  /**
-   * @param rows 已 normalize 的 job_definition 行
-   * @return 违反场景的 issue 列表
-   */
-  public static List<WorkbookIssue> validate(List<Map<String, Object>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    if (rows == null || rows.isEmpty()) {
-      return issues;
+    /**
+     * @param rows 已 normalize 的 job_definition 行
+     * @return 违反场景的 issue 列表
+     */
+    public static List<WorkbookIssue> validate(List<Map<String, Object>> rows) {
+        List<WorkbookIssue> issues = new ArrayList<>();
+        if (rows == null || rows.isEmpty()) {
+            return issues;
+        }
+        for (Map<String, Object> row : rows) {
+            String scheduleType = ConsoleExcelValueSupport.upper(
+                    ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_SCHEDULE_TYPE)));
+            String expr = ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_SCHEDULE_EXPR));
+            int rowNo = parseRowNo(row.get("__excel_row_no"));
+            if (!SCHEDULE_TYPE_CRON.equals(scheduleType)) {
+                continue;
+            }
+            if (ConsoleExcelValueSupport.isBlank(expr)) {
+                issues.add(new WorkbookIssue(
+                        SHEET,
+                        rowNo,
+                        ConfigPackageExcelValidator.COL_SCHEDULE_EXPR,
+                        "schedule_expr is required when schedule_type=CRON"));
+                continue;
+            }
+            String trimmedExpression = expr.trim();
+            String[] parts = trimmedExpression.split("\\s+");
+            if (parts.length != 6 && parts.length != 7) {
+                issues.add(new WorkbookIssue(
+                        SHEET,
+                        rowNo,
+                        ConfigPackageExcelValidator.COL_SCHEDULE_EXPR,
+                        "schedule_expr must be a Quartz 6 or 7-field cron (sec min hour dom mon dow"
+                                + " [year]); found "
+                                + parts.length
+                                + " fields: '"
+                                + expr
+                                + "'"));
+            }
+        }
+        return issues;
     }
-    for (Map<String, Object> row : rows) {
-      String scheduleType = ConsoleExcelValueSupport.upper(ConsoleExcelValueSupport.asString(
-          row.get(ConfigPackageExcelValidator.COL_SCHEDULE_TYPE)));
-      String expr =
-          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_SCHEDULE_EXPR));
-      int rowNo = parseRowNo(row.get("__excel_row_no"));
-      if (!SCHEDULE_TYPE_CRON.equals(scheduleType)) {
-        continue;
-      }
-      if (ConsoleExcelValueSupport.isBlank(expr)) {
-        issues.add(new WorkbookIssue(
-            SHEET,
-            rowNo,
-            ConfigPackageExcelValidator.COL_SCHEDULE_EXPR,
-            "schedule_expr is required when schedule_type=CRON"));
-        continue;
-      }
-      String trimmedExpression = expr.trim();
-      String[] parts = trimmedExpression.split("\\s+");
-      if (parts.length != 6 && parts.length != 7) {
-        issues.add(new WorkbookIssue(
-            SHEET,
-            rowNo,
-            ConfigPackageExcelValidator.COL_SCHEDULE_EXPR,
-            "schedule_expr must be a Quartz 6 or 7-field cron (sec min hour dom mon dow"
-                + " [year]); found "
-                + parts.length
-                + " fields: '"
-                + expr
-                + "'"));
-      }
-    }
-    return issues;
-  }
 
-  private static int parseRowNo(Object o) {
-    if (o == null) {
-      return 0;
+    private static int parseRowNo(Object o) {
+        if (o == null) {
+            return 0;
+        }
+        if (o instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(o.toString());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
-    if (o instanceof Number n) {
-      return n.intValue();
-    }
-    try {
-      return Integer.parseInt(o.toString());
-    } catch (NumberFormatException e) {
-      return 0;
-    }
-  }
 }

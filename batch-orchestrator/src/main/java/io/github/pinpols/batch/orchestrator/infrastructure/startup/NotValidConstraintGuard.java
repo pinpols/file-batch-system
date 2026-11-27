@@ -30,24 +30,24 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class NotValidConstraintGuard {
 
-  private final InformationSchemaMapper informationSchemaMapper;
+    private final InformationSchemaMapper informationSchemaMapper;
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void checkOnStartup() {
-    List<String> invalid = informationSchemaMapper.listInvalidConstraints();
-    if (EmptyChecks.isEmpty(invalid)) {
-      log.info("NOT VALID constraint guard passed: no convalidated=false constraints");
-      return;
+    @EventListener(ApplicationReadyEvent.class)
+    public void checkOnStartup() {
+        List<String> invalid = informationSchemaMapper.listInvalidConstraints();
+        if (EmptyChecks.isEmpty(invalid)) {
+            log.info("NOT VALID constraint guard passed: no convalidated=false constraints");
+            return;
+        }
+        log.error(
+                "NOT VALID constraint drift detected: {} constraint(s) still convalidated=false: {}",
+                invalid.size(),
+                invalid);
+        throw new IllegalStateException("NOT VALID constraint drift: "
+                + invalid.size()
+                + " constraint(s) not yet VALIDATEd: "
+                + invalid
+                + ". Add migration ALTER TABLE ... VALIDATE CONSTRAINT ... before next deploy. "
+                + "See V127 for template.");
     }
-    log.error(
-        "NOT VALID constraint drift detected: {} constraint(s) still convalidated=false: {}",
-        invalid.size(),
-        invalid);
-    throw new IllegalStateException("NOT VALID constraint drift: "
-        + invalid.size()
-        + " constraint(s) not yet VALIDATEd: "
-        + invalid
-        + ". Add migration ALTER TABLE ... VALIDATE CONSTRAINT ... before next deploy. "
-        + "See V127 for template.");
-  }
 }

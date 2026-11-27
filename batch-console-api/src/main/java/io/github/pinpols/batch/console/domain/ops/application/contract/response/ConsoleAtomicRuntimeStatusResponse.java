@@ -9,17 +9,16 @@ import java.util.Map;
  * 表示反向通道未配置或不可达,FE 应显示降级 banner 而非真实数据。
  */
 public record ConsoleAtomicRuntimeStatusResponse(
-    boolean available,
-    String unavailableReason,
-    String workerCode,
-    String workerType,
-    Map<String, Object> shell,
-    Map<String, Object> sql,
-    Map<String, Object> http,
-    Map<String, Object> storedProc) {
+        boolean available,
+        String unavailableReason,
+        String workerCode,
+        String workerType,
+        Map<String, Object> shell,
+        Map<String, Object> sql,
+        Map<String, Object> http,
+        Map<String, Object> storedProc) {
 
-  public static ConsoleAtomicRuntimeStatusResponse unavailable(String reason) {
-    return new ConsoleAtomicRuntimeStatusResponse(
-        false, reason, null, null, null, null, null, null);
-  }
+    public static ConsoleAtomicRuntimeStatusResponse unavailable(String reason) {
+        return new ConsoleAtomicRuntimeStatusResponse(false, reason, null, null, null, null, null, null);
+    }
 }

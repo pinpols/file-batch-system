@@ -75,425 +75,412 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class DefaultScheduleForwarder implements ScheduleForwarder {
 
-  /** 推进 outbox 时遇到锁冲突/瞬时数据库异常的最大尝试次数（含首次）。 */
-  private static final int ADVANCE_RETRY_MAX_ATTEMPTS = 3;
+    /** 推进 outbox 时遇到锁冲突/瞬时数据库异常的最大尝试次数（含首次）。 */
+    private static final int ADVANCE_RETRY_MAX_ATTEMPTS = 3;
 
-  /** 重试首次退避毫秒数，此后按 2 倍递增。 */
-  private static final int ADVANCE_RETRY_INITIAL_DELAY_MILLIS = 100;
+    /** 重试首次退避毫秒数，此后按 2 倍递增。 */
+    private static final int ADVANCE_RETRY_INITIAL_DELAY_MILLIS = 100;
 
-  /** 重试退避上限毫秒数。 */
-  private static final int ADVANCE_RETRY_MAX_DELAY_MILLIS = 1000;
+    /** 重试退避上限毫秒数。 */
+    private static final int ADVANCE_RETRY_MAX_DELAY_MILLIS = 1000;
 
-  private final OutboxEventMapper outboxEventMapper;
-  private final OutboxChildRecordService outboxChildRecordService;
-  private final OutboxPublisher outboxPublisher;
-  private final BatchOrchestratorGovernanceProperties governance;
-  private final MeterRegistry meterRegistry;
+    private final OutboxEventMapper outboxEventMapper;
+    private final OutboxChildRecordService outboxChildRecordService;
+    private final OutboxPublisher outboxPublisher;
+    private final BatchOrchestratorGovernanceProperties governance;
+    private final MeterRegistry meterRegistry;
 
-  /** GIVE_UP 终态告警计数器 — 转入 GIVE_UP 即 +1,运维侧通过 Prometheus alert 拉起。 */
-  private Counter giveUpCounter;
+    /** GIVE_UP 终态告警计数器 — 转入 GIVE_UP 即 +1,运维侧通过 Prometheus alert 拉起。 */
+    private Counter giveUpCounter;
 
-  /**
-   * F P1:DB select 耗时(只测 selectPending 的 DB 部分)。
-   *
-   * <p>与现有 {@code batch.outbox.publish.duration}(@Timed,poll+send 合体)区分:当告警显示 publish.duration P95
-   * 上升时,看 poll.duration 即可定位是 DB 慢(索引/连接池/锁)还是 Kafka 慢(broker/网络)。
-   */
-  private Timer pollTimer;
+    /**
+     * F P1:DB select 耗时(只测 selectPending 的 DB 部分)。
+     *
+     * <p>与现有 {@code batch.outbox.publish.duration}(@Timed,poll+send 合体)区分:当告警显示 publish.duration P95
+     * 上升时,看 poll.duration 即可定位是 DB 慢(索引/连接池/锁)还是 Kafka 慢(broker/网络)。
+     */
+    private Timer pollTimer;
 
-  /**
-   * A6:每轮 outbox 批填充规模。{@code attempted} 长期贴近 {@code batchSize} 上限=饱和信号(积压未消化, 应调大 batchSize
-   * 或加分片);{@code succeeded} 与 attempted 的差=Kafka 侧失败/重试压力。
-   */
-  private DistributionSummary batchAttemptedSummary;
+    /**
+     * A6:每轮 outbox 批填充规模。{@code attempted} 长期贴近 {@code batchSize} 上限=饱和信号(积压未消化, 应调大 batchSize
+     * 或加分片);{@code succeeded} 与 attempted 的差=Kafka 侧失败/重试压力。
+     */
+    private DistributionSummary batchAttemptedSummary;
 
-  private DistributionSummary batchSucceededSummary;
+    private DistributionSummary batchSucceededSummary;
 
-  @PostConstruct
-  void initMetrics() {
-    giveUpCounter =
-        // R7-A6-P1：与 trigger 端 batch.trigger.outbox.give_up.total + 领域字典 GIVE_UP 命名对齐。
-        Counter.builder(BatchMetricsNames.OUTBOX_GIVE_UP_TOTAL)
-            .description(
-                "Outbox events transitioned to GIVE_UP terminal state — should be 0 in steady"
-                    + " state; non-zero rate triggers ops alert.")
-            .register(meterRegistry);
-    pollTimer = Timer.builder("batch.outbox.poll.duration")
-        .description("Outbox DB selectPending latency — isolated from Kafka send to diagnose slow"
-            + " queries vs slow brokers when publish.duration spikes.")
-        .publishPercentileHistogram()
-        .register(meterRegistry);
-    batchAttemptedSummary = DistributionSummary.builder("batch.outbox.forward.attempted")
-        .description(
-            "Events attempted per outbox forward round — sustained values near outbox.batchSize"
-                + " indicate saturation (backlog not draining).")
-        .publishPercentileHistogram()
-        .register(meterRegistry);
-    batchSucceededSummary = DistributionSummary.builder("batch.outbox.forward.succeeded")
-        .description(
-            "Events successfully published per outbox forward round — gap vs attempted reflects"
-                + " Kafka-side failure/retry pressure.")
-        .publishPercentileHistogram()
-        .register(meterRegistry);
-  }
-
-  @Override
-  @Timed(
-      value = "batch.outbox.publish.duration",
-      description = "Outbox batch publish latency including Kafka acknowledgements",
-      histogram = true)
-  @Retryable(
-      // 注意:不重试 QueryTimeoutException。阶段一 markPublishing CAS 把状态推到 PUBLISHING,
-      // 该状态不在 markPublishing 的可重入集合(NEW/FAILED);若阶段三 markPublished 超时触发重试,
-      // 同事件已 PUBLISHING 会被跳过停留在中间态,等 resetStalePublishing 超时回收前消费方可能
-      // 已处理。Kafka at-least-once + 重新触发会造成重复消费。超时让 resetStalePublishing 负责
-      // 自愈即可,不在此处重试。
-      retryFor = {CannotAcquireLockException.class, TransientDataAccessException.class},
-      maxAttempts = ADVANCE_RETRY_MAX_ATTEMPTS,
-      backoff =
-          @Backoff(
-              delay = ADVANCE_RETRY_INITIAL_DELAY_MILLIS,
-              multiplier = 2,
-              maxDelay = ADVANCE_RETRY_MAX_DELAY_MILLIS))
-  public ScheduleForwarderResult advance(SchedulePlan plan) {
-    List<OutboxEventEntity> pendingEvents = pollPending(plan);
-    // ── 阶段一：set-based markPublishing + 并行触发 Kafka 发送 ──────────────────
-    List<InFlight> inFlight = claimAndPublish(pendingEvents);
-    // ── 阶段二：等待本批所有 Kafka ACK（并行等待，耗时 ≈ 单条最长 RTT）────────
-    awaitAcknowledgements(inFlight);
-    // ── 阶段三：根据发送结果 set-based 批量更新 DB 状态 ─────────────────────────
-    OutcomeGroups groups = classifyOutcomes(inFlight);
-    Map<FailedGroupKey, Instant> nextRetryAtByGroup = flushOutcomeGroups(groups);
-    recordPendingRetries(groups.pendingRetries(), nextRetryAtByGroup);
-    // A6:本轮批填充规模喂 DistributionSummary(饱和/失败压力可观测)。
-    batchAttemptedSummary.record(groups.attemptedEvents());
-    batchSucceededSummary.record(groups.publishSucceeded());
-    return ScheduleForwarderResult.of(
-        groups.attemptedEvents(), groups.publishSucceeded(), groups.publishFailed());
-  }
-
-  /** 抢占成功、Kafka send 已发起的在途事件；claimAttempt 是本轮回写必须匹配的凭据。 */
-  private record InFlight(
-      OutboxEventEntity event, int claimAttempt, CompletableFuture<Boolean> future) {}
-
-  /** 阶段三按领取凭据分组：同租户同 publish_attempt 的事件共用一条批量 UPDATE。 */
-  private record ClaimGroupKey(String tenantId, int publishAttempt) {}
-
-  /** 阶段三失败组键：同租户同 attemptNo 的失败事件共用一条批量 UPDATE 与一次退避抽样。 */
-  private record FailedGroupKey(String tenantId, int attemptNo) {}
-
-  /** 阶段三之后待落 {@code event_outbox_retry} 审计的失败/GIVE_UP 事件。 */
-  private record PendingRetry(OutboxEventEntity event, int attemptNo) {}
-
-  /** 阶段三分类聚合结果：计数 + 按租户/失败组聚合的 id 集 + 待审计列表。 */
-  private record OutcomeGroups(
-      int attemptedEvents,
-      int publishSucceeded,
-      int publishFailed,
-      Map<ClaimGroupKey, List<Long>> publishedByClaim,
-      Map<ClaimGroupKey, List<Long>> giveUpByClaim,
-      Map<FailedGroupKey, List<Long>> failedByGroup,
-      List<PendingRetry> pendingRetries) {}
-
-  private List<OutboxEventEntity> pollPending(SchedulePlan plan) {
-    OutboxEventQuery pendingQuery = OutboxEventQuery.builder()
-        .tenantId(EmptyChecks.isNull(plan) ? null : plan.getTenantId())
-        .pendingStatus1(OutboxPublishStatus.NEW.code())
-        .pendingStatus2(OutboxPublishStatus.FAILED.code())
-        .batchSize(governance.outbox().getBatchSize())
-        .shardTotal(EmptyChecks.isNull(plan) ? 1 : plan.getShardTotal())
-        .shardIndex(EmptyChecks.isNull(plan) ? 0 : plan.getShardIndex())
-        .build();
-    long pollStartNanos = System.nanoTime();
-    List<OutboxEventEntity> pendingEvents = outboxEventMapper.selectPending(pendingQuery);
-    long pollElapsedNanos = System.nanoTime() - pollStartNanos;
-    Duration pollDuration = Duration.ofNanos(pollElapsedNanos);
-    pollTimer.record(pollDuration);
-    return pendingEvents;
-  }
-
-  /**
-   * 阶段一：set-based 抢占 + 并行触发 Kafka 发送。
-   *
-   * <p>PERF(5.4): 抢占由逐条 CAS 改为按租户分组的批量 UPDATE ... RETURNING id(单条语句原子完成 NEW/FAILED→PUBLISHING
-   * 抢占并返回胜出集,publish_attempt 递增语义不变)。selectPending 无租户过滤 时同批可能跨租户(shard 扫描),tenant_id
-   * 是复合分布键,按租户分组保留分布键裁剪。
-   */
-  private List<InFlight> claimAndPublish(List<OutboxEventEntity> pendingEvents) {
-    Map<String, List<Long>> pendingIdsByTenant = new LinkedHashMap<>();
-    for (OutboxEventEntity event : pendingEvents) {
-      pendingIdsByTenant
-          .computeIfAbsent(event.getTenantId(), t -> new ArrayList<>())
-          .add(event.getId());
+    @PostConstruct
+    void initMetrics() {
+        giveUpCounter =
+                // R7-A6-P1：与 trigger 端 batch.trigger.outbox.give_up.total + 领域字典 GIVE_UP 命名对齐。
+                Counter.builder(BatchMetricsNames.OUTBOX_GIVE_UP_TOTAL)
+                        .description("Outbox events transitioned to GIVE_UP terminal state — should be 0 in steady"
+                                + " state; non-zero rate triggers ops alert.")
+                        .register(meterRegistry);
+        pollTimer = Timer.builder("batch.outbox.poll.duration")
+                .description("Outbox DB selectPending latency — isolated from Kafka send to diagnose slow"
+                        + " queries vs slow brokers when publish.duration spikes.")
+                .publishPercentileHistogram()
+                .register(meterRegistry);
+        batchAttemptedSummary = DistributionSummary.builder("batch.outbox.forward.attempted")
+                .description("Events attempted per outbox forward round — sustained values near outbox.batchSize"
+                        + " indicate saturation (backlog not draining).")
+                .publishPercentileHistogram()
+                .register(meterRegistry);
+        batchSucceededSummary = DistributionSummary.builder("batch.outbox.forward.succeeded")
+                .description("Events successfully published per outbox forward round — gap vs attempted reflects"
+                        + " Kafka-side failure/retry pressure.")
+                .publishPercentileHistogram()
+                .register(meterRegistry);
     }
-    Map<Long, Integer> claimAttemptById = new LinkedHashMap<>();
-    for (Map.Entry<String, List<Long>> entry : pendingIdsByTenant.entrySet()) {
-      OutboxEventMarkPublishingBatchParam outboxEventMarkPublishingBatchParam =
-          OutboxEventMarkPublishingBatchParam.builder()
-              .tenantId(entry.getKey())
-              .ids(entry.getValue())
-              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-              .pendingStatus1(OutboxPublishStatus.NEW.code())
-              .pendingStatus2(OutboxPublishStatus.FAILED.code())
-              .build();
-      for (OutboxPublishClaim claim :
-          outboxEventMapper.markPublishingBatch(outboxEventMarkPublishingBatchParam)) {
-        claimAttemptById.put(claim.id(), claim.publishAttempt());
-      }
-    }
-    List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
-    for (OutboxEventEntity event : pendingEvents) {
-      Integer claimAttempt = claimAttemptById.get(event.getId());
-      if (EmptyChecks.isNull(claimAttempt)) {
-        continue;
-      }
-      CompletableFuture<Boolean> future;
-      try {
-        future = outboxPublisher.publish(event);
-      } catch (RuntimeException exception) {
-        future = CompletableFuture.completedFuture(false);
-      }
-      CompletableFuture<Boolean> publishFuture =
-          EmptyChecks.isNotNull(future) ? future : CompletableFuture.completedFuture(false);
-      inFlight.add(new InFlight(event, claimAttempt, publishFuture));
-    }
-    return inFlight;
-  }
 
-  /**
-   * 阶段二：等齐本批所有 Kafka ACK。
-   *
-   * <p>R7-A2-P0：用 exceptionally 捕获并抑制单条 future 的异常，否则 allOf.join() 抛 CompletionException 会让整个 try
-   * 块上抛、阶段三完全跳过，整批事件原地停在 PUBLISHING 状态，要等 stale TTL (`resetStalePublishing`) 才能回收 — 实测会让 trigger
-   * 高峰积压瞬间放大。这里再用 publishingTimeoutSeconds 做业务层上限，避免具体 MQ 实现返回永不完成的 future；阶段三里的
-   * `future.getNow(false)` 已经对失败结果（false / 异常 / 仍未完成）做正确处理。
-   */
-  private void awaitAcknowledgements(List<InFlight> inFlight) {
-    if (EmptyChecks.isNotEmpty(inFlight)) {
-      CompletableFuture<?>[] acknowledgementFutures =
-          inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new);
-      CompletableFuture.allOf(acknowledgementFutures)
-          .orTimeout(governance.outbox().getPublishingTimeoutSeconds(), TimeUnit.SECONDS)
-          .exceptionally(ex -> null)
-          .join();
+    @Override
+    @Timed(
+            value = "batch.outbox.publish.duration",
+            description = "Outbox batch publish latency including Kafka acknowledgements",
+            histogram = true)
+    @Retryable(
+            // 注意:不重试 QueryTimeoutException。阶段一 markPublishing CAS 把状态推到 PUBLISHING,
+            // 该状态不在 markPublishing 的可重入集合(NEW/FAILED);若阶段三 markPublished 超时触发重试,
+            // 同事件已 PUBLISHING 会被跳过停留在中间态,等 resetStalePublishing 超时回收前消费方可能
+            // 已处理。Kafka at-least-once + 重新触发会造成重复消费。超时让 resetStalePublishing 负责
+            // 自愈即可,不在此处重试。
+            retryFor = {CannotAcquireLockException.class, TransientDataAccessException.class},
+            maxAttempts = ADVANCE_RETRY_MAX_ATTEMPTS,
+            backoff =
+                    @Backoff(
+                            delay = ADVANCE_RETRY_INITIAL_DELAY_MILLIS,
+                            multiplier = 2,
+                            maxDelay = ADVANCE_RETRY_MAX_DELAY_MILLIS))
+    public ScheduleForwarderResult advance(SchedulePlan plan) {
+        List<OutboxEventEntity> pendingEvents = pollPending(plan);
+        // ── 阶段一：set-based markPublishing + 并行触发 Kafka 发送 ──────────────────
+        List<InFlight> inFlight = claimAndPublish(pendingEvents);
+        // ── 阶段二：等待本批所有 Kafka ACK（并行等待，耗时 ≈ 单条最长 RTT）────────
+        awaitAcknowledgements(inFlight);
+        // ── 阶段三：根据发送结果 set-based 批量更新 DB 状态 ─────────────────────────
+        OutcomeGroups groups = classifyOutcomes(inFlight);
+        Map<FailedGroupKey, Instant> nextRetryAtByGroup = flushOutcomeGroups(groups);
+        recordPendingRetries(groups.pendingRetries(), nextRetryAtByGroup);
+        // A6:本轮批填充规模喂 DistributionSummary(饱和/失败压力可观测)。
+        batchAttemptedSummary.record(groups.attemptedEvents());
+        batchSucceededSummary.record(groups.publishSucceeded());
+        return ScheduleForwarderResult.of(groups.attemptedEvents(), groups.publishSucceeded(), groups.publishFailed());
     }
-  }
 
-  /**
-   * 阶段三(分类)：按发送结果把在途事件聚合为成功/失败/GIVE_UP 组。
-   *
-   * <p>PERF(5.4): 成功/失败/GIVE_UP 三组各按租户(失败组再按 attemptNo)聚合,组内一条 WHERE id IN (...) 批量 UPDATE;全部保留
-   * R3-P0-6 的 publish_status='PUBLISHING' 守卫。
-   */
-  private OutcomeGroups classifyOutcomes(List<InFlight> inFlight) {
-    int attemptedEvents = 0;
-    int publishSucceeded = 0;
-    int publishFailed = 0;
-    Map<ClaimGroupKey, List<Long>> publishedByClaim = new LinkedHashMap<>();
-    Map<ClaimGroupKey, List<Long>> giveUpByClaim = new LinkedHashMap<>();
-    Map<FailedGroupKey, List<Long>> failedByGroup = new LinkedHashMap<>();
-    List<PendingRetry> pendingRetries = new ArrayList<>();
-    for (InFlight item : inFlight) {
-      OutboxEventEntity event = item.event();
-      attemptedEvents++;
-      boolean published = isPublishedNow(item.future());
-      if (published) {
-        publishSucceeded++;
-        publishedByClaim
-            .computeIfAbsent(
-                new ClaimGroupKey(event.getTenantId(), item.claimAttempt()),
-                key -> new ArrayList<>())
-            .add(event.getId());
-        continue;
-      }
-      publishFailed++;
-      int publishAttemptNo = item.claimAttempt();
-      if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
-        giveUpByClaim
-            .computeIfAbsent(
-                new ClaimGroupKey(event.getTenantId(), publishAttemptNo), key -> new ArrayList<>())
-            .add(event.getId());
-        giveUpCounter.increment();
-      } else {
-        failedByGroup
-            .computeIfAbsent(
-                new FailedGroupKey(event.getTenantId(), publishAttemptNo), key -> new ArrayList<>())
-            .add(event.getId());
-      }
-      pendingRetries.add(new PendingRetry(event, publishAttemptNo));
-    }
-    return new OutcomeGroups(
-        attemptedEvents,
-        publishSucceeded,
-        publishFailed,
-        publishedByClaim,
-        giveUpByClaim,
-        failedByGroup,
-        pendingRetries);
-  }
+    /** 抢占成功、Kafka send 已发起的在途事件；claimAttempt 是本轮回写必须匹配的凭据。 */
+    private record InFlight(OutboxEventEntity event, int claimAttempt, CompletableFuture<Boolean> future) {}
 
-  /**
-   * 阶段三(回写)：成功/GIVE_UP 按租户、失败按 (租户, attemptNo) 各一条批量 UPDATE。 命中行数 != 入参集合大小时 log.warn(说明有行被并发方(如
-   * resetStalePublishing)推走,守卫已正确拒写)。 失败组组内共用一个 computeNextRetryAt —— nextPublishAt 本就带随机
-   * jitter,组内共享一个抽样与逐条各自抽样在语义上等价。
-   *
-   * @return 失败组 → 本轮抽样的 nextRetryAt(供审计记录复用)
-   */
-  private Map<FailedGroupKey, Instant> flushOutcomeGroups(OutcomeGroups groups) {
-    for (Map.Entry<ClaimGroupKey, List<Long>> entry : groups.publishedByClaim().entrySet()) {
-      ClaimGroupKey key = entry.getKey();
-      int updated =
-          outboxEventMapper.markPublishedBatch(OutboxEventMarkPublishedBatchParam.builder()
-              .tenantId(key.tenantId())
-              .ids(entry.getValue())
-              .status(OutboxPublishStatus.PUBLISHED.code())
-              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-              .publishAttempt(key.publishAttempt())
-              .build());
-      warnOnPartialUpdate(
-          "markPublished", key.tenantId(), entry.getValue().size(), updated, key.publishAttempt());
-    }
-    for (Map.Entry<ClaimGroupKey, List<Long>> entry : groups.giveUpByClaim().entrySet()) {
-      ClaimGroupKey key = entry.getKey();
-      int updated = outboxEventMapper.markGiveUpBatch(OutboxEventMarkGiveUpBatchParam.builder()
-          .tenantId(key.tenantId())
-          .ids(entry.getValue())
-          .status(OutboxPublishStatus.GIVE_UP.code())
-          .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-          .publishAttempt(key.publishAttempt())
-          .build());
-      warnOnPartialUpdate(
-          "markGiveUp", key.tenantId(), entry.getValue().size(), updated, key.publishAttempt());
-    }
-    Map<FailedGroupKey, Instant> nextRetryAtByGroup = new LinkedHashMap<>();
-    for (Map.Entry<FailedGroupKey, List<Long>> entry : groups.failedByGroup().entrySet()) {
-      Instant nextRetryAt = computeNextRetryAt(entry.getKey().attemptNo(), governance.outbox());
-      nextRetryAtByGroup.put(entry.getKey(), nextRetryAt);
-      OutboxEventMarkFailedBatchParam outboxEventMarkFailedBatchParam =
-          OutboxEventMarkFailedBatchParam.builder()
-              .tenantId(entry.getKey().tenantId())
-              .ids(entry.getValue())
-              .status(OutboxPublishStatus.FAILED.code())
-              .nextPublishAt(nextRetryAt)
-              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-              .publishAttempt(entry.getKey().attemptNo())
-              .build();
-      int updated = outboxEventMapper.markFailedBatch(outboxEventMarkFailedBatchParam);
-      warnOnPartialUpdate(
-          "markFailed",
-          entry.getKey().tenantId(),
-          entry.getValue().size(),
-          updated,
-          entry.getKey().attemptNo());
-    }
-    return nextRetryAtByGroup;
-  }
+    /** 阶段三按领取凭据分组：同租户同 publish_attempt 的事件共用一条批量 UPDATE。 */
+    private record ClaimGroupKey(String tenantId, int publishAttempt) {}
 
-  /** 阶段三(审计)：逐条落 {@code event_outbox_retry}(带 MDC;失败复用组抽样的 nextRetryAt,GIVE_UP 为 null)。 */
-  private void recordPendingRetries(
-      List<PendingRetry> pendingRetries, Map<FailedGroupKey, Instant> nextRetryAtByGroup) {
-    for (PendingRetry retry : pendingRetries) {
-      OutboxEventEntity event = retry.event();
-      BatchMdc.put(StructuredLogField.TENANT_ID, event.getTenantId());
-      BatchMdc.put(StructuredLogField.TRACE_ID, event.getTraceId());
-      try {
-        if (retry.attemptNo() >= governance.outbox().getMaxRetryAttempts()) {
-          recordRetry(event, retry.attemptNo(), null, "retry attempts exhausted");
-        } else {
-          FailedGroupKey groupKey = new FailedGroupKey(event.getTenantId(), retry.attemptNo());
-          Instant groupNextRetryAt = nextRetryAtByGroup.get(groupKey);
-          recordRetry(event, retry.attemptNo(), groupNextRetryAt, "publish failed");
+    /** 阶段三失败组键：同租户同 attemptNo 的失败事件共用一条批量 UPDATE 与一次退避抽样。 */
+    private record FailedGroupKey(String tenantId, int attemptNo) {}
+
+    /** 阶段三之后待落 {@code event_outbox_retry} 审计的失败/GIVE_UP 事件。 */
+    private record PendingRetry(OutboxEventEntity event, int attemptNo) {}
+
+    /** 阶段三分类聚合结果：计数 + 按租户/失败组聚合的 id 集 + 待审计列表。 */
+    private record OutcomeGroups(
+            int attemptedEvents,
+            int publishSucceeded,
+            int publishFailed,
+            Map<ClaimGroupKey, List<Long>> publishedByClaim,
+            Map<ClaimGroupKey, List<Long>> giveUpByClaim,
+            Map<FailedGroupKey, List<Long>> failedByGroup,
+            List<PendingRetry> pendingRetries) {}
+
+    private List<OutboxEventEntity> pollPending(SchedulePlan plan) {
+        OutboxEventQuery pendingQuery = OutboxEventQuery.builder()
+                .tenantId(EmptyChecks.isNull(plan) ? null : plan.getTenantId())
+                .pendingStatus1(OutboxPublishStatus.NEW.code())
+                .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                .batchSize(governance.outbox().getBatchSize())
+                .shardTotal(EmptyChecks.isNull(plan) ? 1 : plan.getShardTotal())
+                .shardIndex(EmptyChecks.isNull(plan) ? 0 : plan.getShardIndex())
+                .build();
+        long pollStartNanos = System.nanoTime();
+        List<OutboxEventEntity> pendingEvents = outboxEventMapper.selectPending(pendingQuery);
+        long pollElapsedNanos = System.nanoTime() - pollStartNanos;
+        Duration pollDuration = Duration.ofNanos(pollElapsedNanos);
+        pollTimer.record(pollDuration);
+        return pendingEvents;
+    }
+
+    /**
+     * 阶段一：set-based 抢占 + 并行触发 Kafka 发送。
+     *
+     * <p>PERF(5.4): 抢占由逐条 CAS 改为按租户分组的批量 UPDATE ... RETURNING id(单条语句原子完成 NEW/FAILED→PUBLISHING
+     * 抢占并返回胜出集,publish_attempt 递增语义不变)。selectPending 无租户过滤 时同批可能跨租户(shard 扫描),tenant_id
+     * 是复合分布键,按租户分组保留分布键裁剪。
+     */
+    private List<InFlight> claimAndPublish(List<OutboxEventEntity> pendingEvents) {
+        Map<String, List<Long>> pendingIdsByTenant = new LinkedHashMap<>();
+        for (OutboxEventEntity event : pendingEvents) {
+            pendingIdsByTenant
+                    .computeIfAbsent(event.getTenantId(), t -> new ArrayList<>())
+                    .add(event.getId());
         }
-      } finally {
-        BatchMdc.remove(StructuredLogField.TENANT_ID);
-        BatchMdc.remove(StructuredLogField.TRACE_ID);
-      }
+        Map<Long, Integer> claimAttemptById = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Long>> entry : pendingIdsByTenant.entrySet()) {
+            OutboxEventMarkPublishingBatchParam outboxEventMarkPublishingBatchParam =
+                    OutboxEventMarkPublishingBatchParam.builder()
+                            .tenantId(entry.getKey())
+                            .ids(entry.getValue())
+                            .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                            .pendingStatus1(OutboxPublishStatus.NEW.code())
+                            .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                            .build();
+            for (OutboxPublishClaim claim :
+                    outboxEventMapper.markPublishingBatch(outboxEventMarkPublishingBatchParam)) {
+                claimAttemptById.put(claim.id(), claim.publishAttempt());
+            }
+        }
+        List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
+        for (OutboxEventEntity event : pendingEvents) {
+            Integer claimAttempt = claimAttemptById.get(event.getId());
+            if (EmptyChecks.isNull(claimAttempt)) {
+                continue;
+            }
+            CompletableFuture<Boolean> future;
+            try {
+                future = outboxPublisher.publish(event);
+            } catch (RuntimeException exception) {
+                future = CompletableFuture.completedFuture(false);
+            }
+            CompletableFuture<Boolean> publishFuture =
+                    EmptyChecks.isNotNull(future) ? future : CompletableFuture.completedFuture(false);
+            inFlight.add(new InFlight(event, claimAttempt, publishFuture));
+        }
+        return inFlight;
     }
-  }
 
-  /**
-   * B2:安全判定单条 future 是否发布成功。{@code getNow(false)} 对 exceptionally-completed future 会 <b>抛</b>
-   * CompletionException——阶段二的 {@code allOf(...).exceptionally(...)} 只抑制了 <b>组合</b> future,单条 future
-   * 仍是异常态;若这里直接 getNow,一条 Kafka send 异步失败就会让整个 classifyOutcomes 上抛、阶段三完全跳过,整批事件原地 停在 PUBLISHING,要等
-   * resetStalePublishing 才回收(实测高峰积压放大)。故先用不抛的 {@code isCompletedExceptionally} /{@code isCancelled}
-   * 把异常态归为「未发布」(交阶段三按 FAILED 回写),只对正常完成的才取值。
-   */
-  private static boolean isPublishedNow(CompletableFuture<Boolean> future) {
-    boolean completedNormally =
-        future.isDone() && !future.isCancelled() && !future.isCompletedExceptionally();
-    if (!completedNormally) {
-      return false;
+    /**
+     * 阶段二：等齐本批所有 Kafka ACK。
+     *
+     * <p>R7-A2-P0：用 exceptionally 捕获并抑制单条 future 的异常，否则 allOf.join() 抛 CompletionException 会让整个 try
+     * 块上抛、阶段三完全跳过，整批事件原地停在 PUBLISHING 状态，要等 stale TTL (`resetStalePublishing`) 才能回收 — 实测会让 trigger
+     * 高峰积压瞬间放大。这里再用 publishingTimeoutSeconds 做业务层上限，避免具体 MQ 实现返回永不完成的 future；阶段三里的
+     * `future.getNow(false)` 已经对失败结果（false / 异常 / 仍未完成）做正确处理。
+     */
+    private void awaitAcknowledgements(List<InFlight> inFlight) {
+        if (EmptyChecks.isNotEmpty(inFlight)) {
+            CompletableFuture<?>[] acknowledgementFutures =
+                    inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new);
+            CompletableFuture.allOf(acknowledgementFutures)
+                    .orTimeout(governance.outbox().getPublishingTimeoutSeconds(), TimeUnit.SECONDS)
+                    .exceptionally(ex -> null)
+                    .join();
+        }
     }
-    return Boolean.TRUE.equals(future.getNow(false));
-  }
 
-  /** PERF(5.4): 批量 UPDATE 命中行数与入参集合大小不一致时告警（守卫拒写=并发方已推进该行）。 */
-  private void warnOnPartialUpdate(
-      String action, String tenantId, int expected, int updated, int publishAttempt) {
-    if (updated != expected) {
-      log.warn(
-          "outbox batch {} partial update: tenant={} attempt={} expected={} updated={} — rows"
-              + " guarded by publish_status='PUBLISHING' and publish_attempt were advanced"
-              + " concurrently",
-          action,
-          tenantId,
-          publishAttempt,
-          expected,
-          updated);
+    /**
+     * 阶段三(分类)：按发送结果把在途事件聚合为成功/失败/GIVE_UP 组。
+     *
+     * <p>PERF(5.4): 成功/失败/GIVE_UP 三组各按租户(失败组再按 attemptNo)聚合,组内一条 WHERE id IN (...) 批量 UPDATE;全部保留
+     * R3-P0-6 的 publish_status='PUBLISHING' 守卫。
+     */
+    private OutcomeGroups classifyOutcomes(List<InFlight> inFlight) {
+        int attemptedEvents = 0;
+        int publishSucceeded = 0;
+        int publishFailed = 0;
+        Map<ClaimGroupKey, List<Long>> publishedByClaim = new LinkedHashMap<>();
+        Map<ClaimGroupKey, List<Long>> giveUpByClaim = new LinkedHashMap<>();
+        Map<FailedGroupKey, List<Long>> failedByGroup = new LinkedHashMap<>();
+        List<PendingRetry> pendingRetries = new ArrayList<>();
+        for (InFlight item : inFlight) {
+            OutboxEventEntity event = item.event();
+            attemptedEvents++;
+            boolean published = isPublishedNow(item.future());
+            if (published) {
+                publishSucceeded++;
+                publishedByClaim
+                        .computeIfAbsent(
+                                new ClaimGroupKey(event.getTenantId(), item.claimAttempt()), key -> new ArrayList<>())
+                        .add(event.getId());
+                continue;
+            }
+            publishFailed++;
+            int publishAttemptNo = item.claimAttempt();
+            if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
+                giveUpByClaim
+                        .computeIfAbsent(
+                                new ClaimGroupKey(event.getTenantId(), publishAttemptNo), key -> new ArrayList<>())
+                        .add(event.getId());
+                giveUpCounter.increment();
+            } else {
+                failedByGroup
+                        .computeIfAbsent(
+                                new FailedGroupKey(event.getTenantId(), publishAttemptNo), key -> new ArrayList<>())
+                        .add(event.getId());
+            }
+            pendingRetries.add(new PendingRetry(event, publishAttemptNo));
+        }
+        return new OutcomeGroups(
+                attemptedEvents,
+                publishSucceeded,
+                publishFailed,
+                publishedByClaim,
+                giveUpByClaim,
+                failedByGroup,
+                pendingRetries);
     }
-  }
 
-  /**
-   * 计算下次重试时间(指数退避 + jitter,2026-05-01 加)。
-   *
-   * <p>公式:{@code delay = clamp(base × multiplier^(attempt-1), [base, max]) × (1 ± jitter)}
-   *
-   * <p>例(默认 base=60s, multiplier=2, max=600s, jitter=0.2):attempt 1 → 60s±12s; attempt 2 →
-   * 120s±24s; attempt 3 → 240s±48s; attempt 4 → 480s±96s; attempt 5(最后一次失败前) → 600s±120s。
-   *
-   * <p>visible-for-testing:暴露包私有给单测验证边界。
-   */
-  static Instant computeNextRetryAt(int attemptNo, OutboxProperties outbox) {
-    long base = Math.max(outbox.getRetryDelaySeconds(), 1L);
-    double multiplier = Math.max(outbox.getRetryBackoffMultiplier(), 1.0);
-    long max = Math.max(outbox.getRetryMaxDelaySeconds(), base);
-    int normalizedAttempt = Math.max(attemptNo, 1);
-    // attempt^(N-1) 用 double 防溢出,clamp 到 [base, max]
-    double raw = base * Math.pow(multiplier, normalizedAttempt - 1.0);
-    long atLeastBaseDelay = Math.max((long) raw, base);
-    long bounded = Math.min(atLeastBaseDelay, max);
-    double configuredJitterRatio = outbox.getRetryJitterRatio();
-    double jitterRatioAtMostOne = Math.min(configuredJitterRatio, 1.0);
-    double jitterRatio = Math.max(0.0, jitterRatioAtMostOne);
-    long jittered;
-    if (jitterRatio == 0.0) {
-      jittered = bounded;
-    } else {
-      double jitterFactor =
-          1.0 + (ThreadLocalRandom.current().nextDouble() * 2.0 - 1.0) * jitterRatio;
-      jittered = Math.max((long) (bounded * jitterFactor), 1L);
+    /**
+     * 阶段三(回写)：成功/GIVE_UP 按租户、失败按 (租户, attemptNo) 各一条批量 UPDATE。 命中行数 != 入参集合大小时 log.warn(说明有行被并发方(如
+     * resetStalePublishing)推走,守卫已正确拒写)。 失败组组内共用一个 computeNextRetryAt —— nextPublishAt 本就带随机
+     * jitter,组内共享一个抽样与逐条各自抽样在语义上等价。
+     *
+     * @return 失败组 → 本轮抽样的 nextRetryAt(供审计记录复用)
+     */
+    private Map<FailedGroupKey, Instant> flushOutcomeGroups(OutcomeGroups groups) {
+        for (Map.Entry<ClaimGroupKey, List<Long>> entry :
+                groups.publishedByClaim().entrySet()) {
+            ClaimGroupKey key = entry.getKey();
+            int updated = outboxEventMapper.markPublishedBatch(OutboxEventMarkPublishedBatchParam.builder()
+                    .tenantId(key.tenantId())
+                    .ids(entry.getValue())
+                    .status(OutboxPublishStatus.PUBLISHED.code())
+                    .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                    .publishAttempt(key.publishAttempt())
+                    .build());
+            warnOnPartialUpdate(
+                    "markPublished", key.tenantId(), entry.getValue().size(), updated, key.publishAttempt());
+        }
+        for (Map.Entry<ClaimGroupKey, List<Long>> entry : groups.giveUpByClaim().entrySet()) {
+            ClaimGroupKey key = entry.getKey();
+            int updated = outboxEventMapper.markGiveUpBatch(OutboxEventMarkGiveUpBatchParam.builder()
+                    .tenantId(key.tenantId())
+                    .ids(entry.getValue())
+                    .status(OutboxPublishStatus.GIVE_UP.code())
+                    .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                    .publishAttempt(key.publishAttempt())
+                    .build());
+            warnOnPartialUpdate("markGiveUp", key.tenantId(), entry.getValue().size(), updated, key.publishAttempt());
+        }
+        Map<FailedGroupKey, Instant> nextRetryAtByGroup = new LinkedHashMap<>();
+        for (Map.Entry<FailedGroupKey, List<Long>> entry :
+                groups.failedByGroup().entrySet()) {
+            Instant nextRetryAt = computeNextRetryAt(entry.getKey().attemptNo(), governance.outbox());
+            nextRetryAtByGroup.put(entry.getKey(), nextRetryAt);
+            OutboxEventMarkFailedBatchParam outboxEventMarkFailedBatchParam = OutboxEventMarkFailedBatchParam.builder()
+                    .tenantId(entry.getKey().tenantId())
+                    .ids(entry.getValue())
+                    .status(OutboxPublishStatus.FAILED.code())
+                    .nextPublishAt(nextRetryAt)
+                    .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                    .publishAttempt(entry.getKey().attemptNo())
+                    .build();
+            int updated = outboxEventMapper.markFailedBatch(outboxEventMarkFailedBatchParam);
+            warnOnPartialUpdate(
+                    "markFailed",
+                    entry.getKey().tenantId(),
+                    entry.getValue().size(),
+                    updated,
+                    entry.getKey().attemptNo());
+        }
+        return nextRetryAtByGroup;
     }
-    Instant retryBaseTime = BatchDateTimeSupport.utcNow();
-    return retryBaseTime.plusSeconds(jittered);
-  }
 
-  /** 单独持久化 Outbox 发布重试记录，与业务重试计数器分开管理。 */
-  private void recordRetry(
-      OutboxEventEntity event, int publishAttemptNo, Instant nextRetryAt, String reason) {
-    EventOutboxRetryEntity retry = new EventOutboxRetryEntity();
-    retry.setTenantId(event.getTenantId());
-    retry.setOutboxEventId(event.getId());
-    retry.setOutboxEventCreatedAt(event.getCreatedAt());
-    retry.setEventKey(event.getEventKey());
-    retry.setPublishAttempt(publishAttemptNo);
-    boolean retryIsExhausted = EmptyChecks.isNull(nextRetryAt);
-    retry.setRetryStatus(
-        retryIsExhausted
-            ? RetryScheduleStatus.EXHAUSTED.code()
-            : RetryScheduleStatus.FAILED.code());
-    retry.setRetryReason(reason);
-    retry.setNextRetryAt(nextRetryAt);
-    retry.setTraceId(event.getTraceId());
-    outboxChildRecordService.recordRetry(retry);
-  }
+    /** 阶段三(审计)：逐条落 {@code event_outbox_retry}(带 MDC;失败复用组抽样的 nextRetryAt,GIVE_UP 为 null)。 */
+    private void recordPendingRetries(
+            List<PendingRetry> pendingRetries, Map<FailedGroupKey, Instant> nextRetryAtByGroup) {
+        for (PendingRetry retry : pendingRetries) {
+            OutboxEventEntity event = retry.event();
+            BatchMdc.put(StructuredLogField.TENANT_ID, event.getTenantId());
+            BatchMdc.put(StructuredLogField.TRACE_ID, event.getTraceId());
+            try {
+                if (retry.attemptNo() >= governance.outbox().getMaxRetryAttempts()) {
+                    recordRetry(event, retry.attemptNo(), null, "retry attempts exhausted");
+                } else {
+                    FailedGroupKey groupKey = new FailedGroupKey(event.getTenantId(), retry.attemptNo());
+                    Instant groupNextRetryAt = nextRetryAtByGroup.get(groupKey);
+                    recordRetry(event, retry.attemptNo(), groupNextRetryAt, "publish failed");
+                }
+            } finally {
+                BatchMdc.remove(StructuredLogField.TENANT_ID);
+                BatchMdc.remove(StructuredLogField.TRACE_ID);
+            }
+        }
+    }
+
+    /**
+     * B2:安全判定单条 future 是否发布成功。{@code getNow(false)} 对 exceptionally-completed future 会 <b>抛</b>
+     * CompletionException——阶段二的 {@code allOf(...).exceptionally(...)} 只抑制了 <b>组合</b> future,单条 future
+     * 仍是异常态;若这里直接 getNow,一条 Kafka send 异步失败就会让整个 classifyOutcomes 上抛、阶段三完全跳过,整批事件原地 停在 PUBLISHING,要等
+     * resetStalePublishing 才回收(实测高峰积压放大)。故先用不抛的 {@code isCompletedExceptionally} /{@code isCancelled}
+     * 把异常态归为「未发布」(交阶段三按 FAILED 回写),只对正常完成的才取值。
+     */
+    private static boolean isPublishedNow(CompletableFuture<Boolean> future) {
+        boolean completedNormally = future.isDone() && !future.isCancelled() && !future.isCompletedExceptionally();
+        if (!completedNormally) {
+            return false;
+        }
+        return Boolean.TRUE.equals(future.getNow(false));
+    }
+
+    /** PERF(5.4): 批量 UPDATE 命中行数与入参集合大小不一致时告警（守卫拒写=并发方已推进该行）。 */
+    private void warnOnPartialUpdate(String action, String tenantId, int expected, int updated, int publishAttempt) {
+        if (updated != expected) {
+            log.warn(
+                    "outbox batch {} partial update: tenant={} attempt={} expected={} updated={} — rows"
+                            + " guarded by publish_status='PUBLISHING' and publish_attempt were advanced"
+                            + " concurrently",
+                    action,
+                    tenantId,
+                    publishAttempt,
+                    expected,
+                    updated);
+        }
+    }
+
+    /**
+     * 计算下次重试时间(指数退避 + jitter,2026-05-01 加)。
+     *
+     * <p>公式:{@code delay = clamp(base × multiplier^(attempt-1), [base, max]) × (1 ± jitter)}
+     *
+     * <p>例(默认 base=60s, multiplier=2, max=600s, jitter=0.2):attempt 1 → 60s±12s; attempt 2 →
+     * 120s±24s; attempt 3 → 240s±48s; attempt 4 → 480s±96s; attempt 5(最后一次失败前) → 600s±120s。
+     *
+     * <p>visible-for-testing:暴露包私有给单测验证边界。
+     */
+    static Instant computeNextRetryAt(int attemptNo, OutboxProperties outbox) {
+        long base = Math.max(outbox.getRetryDelaySeconds(), 1L);
+        double multiplier = Math.max(outbox.getRetryBackoffMultiplier(), 1.0);
+        long max = Math.max(outbox.getRetryMaxDelaySeconds(), base);
+        int normalizedAttempt = Math.max(attemptNo, 1);
+        // attempt^(N-1) 用 double 防溢出,clamp 到 [base, max]
+        double raw = base * Math.pow(multiplier, normalizedAttempt - 1.0);
+        long atLeastBaseDelay = Math.max((long) raw, base);
+        long bounded = Math.min(atLeastBaseDelay, max);
+        double configuredJitterRatio = outbox.getRetryJitterRatio();
+        double jitterRatioAtMostOne = Math.min(configuredJitterRatio, 1.0);
+        double jitterRatio = Math.max(0.0, jitterRatioAtMostOne);
+        long jittered;
+        if (jitterRatio == 0.0) {
+            jittered = bounded;
+        } else {
+            double jitterFactor = 1.0 + (ThreadLocalRandom.current().nextDouble() * 2.0 - 1.0) * jitterRatio;
+            jittered = Math.max((long) (bounded * jitterFactor), 1L);
+        }
+        Instant retryBaseTime = BatchDateTimeSupport.utcNow();
+        return retryBaseTime.plusSeconds(jittered);
+    }
+
+    /** 单独持久化 Outbox 发布重试记录，与业务重试计数器分开管理。 */
+    private void recordRetry(OutboxEventEntity event, int publishAttemptNo, Instant nextRetryAt, String reason) {
+        EventOutboxRetryEntity retry = new EventOutboxRetryEntity();
+        retry.setTenantId(event.getTenantId());
+        retry.setOutboxEventId(event.getId());
+        retry.setOutboxEventCreatedAt(event.getCreatedAt());
+        retry.setEventKey(event.getEventKey());
+        retry.setPublishAttempt(publishAttemptNo);
+        boolean retryIsExhausted = EmptyChecks.isNull(nextRetryAt);
+        retry.setRetryStatus(
+                retryIsExhausted ? RetryScheduleStatus.EXHAUSTED.code() : RetryScheduleStatus.FAILED.code());
+        retry.setRetryReason(reason);
+        retry.setNextRetryAt(nextRetryAt);
+        retry.setTraceId(event.getTraceId());
+        outboxChildRecordService.recordRetry(retry);
+    }
 }

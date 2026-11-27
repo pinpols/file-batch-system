@@ -27,75 +27,74 @@ import org.junit.jupiter.api.Test;
 @DisplayName("运维概览聚合:按租户分别统计审批, 告警, 作业, Worker 与投递积压计数")
 class DefaultConsoleOpsApplicationServiceTest {
 
-  @Test
-  @DisplayName("租户维度汇总:各来源计数原样进入概览响应, 待审批与告警等字段逐一对应")
-  void shouldAggregateOpsSummaryByTenant() {
-    ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
-    ApprovalCommandMapper approvalCommandMapper = mock(ApprovalCommandMapper.class);
-    JobInstanceMapper jobInstanceMapper = mock(JobInstanceMapper.class);
-    WorkerRegistryMapper workerRegistryMapper = mock(WorkerRegistryMapper.class);
-    OutboxRetryLogMapper outboxRetryLogMapper = mock(OutboxRetryLogMapper.class);
-    OutboxDeliveryLogMapper outboxDeliveryLogMapper = mock(OutboxDeliveryLogMapper.class);
-    AlertEventMapper alertEventMapper = mock(AlertEventMapper.class);
-    ConsoleQueryCacheService cacheService = mock(ConsoleQueryCacheService.class);
+    @Test
+    @DisplayName("租户维度汇总:各来源计数原样进入概览响应, 待审批与告警等字段逐一对应")
+    void shouldAggregateOpsSummaryByTenant() {
+        ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+        ApprovalCommandMapper approvalCommandMapper = mock(ApprovalCommandMapper.class);
+        JobInstanceMapper jobInstanceMapper = mock(JobInstanceMapper.class);
+        WorkerRegistryMapper workerRegistryMapper = mock(WorkerRegistryMapper.class);
+        OutboxRetryLogMapper outboxRetryLogMapper = mock(OutboxRetryLogMapper.class);
+        OutboxDeliveryLogMapper outboxDeliveryLogMapper = mock(OutboxDeliveryLogMapper.class);
+        AlertEventMapper alertEventMapper = mock(AlertEventMapper.class);
+        ConsoleQueryCacheService cacheService = mock(ConsoleQueryCacheService.class);
 
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(cacheService.getOrLoad(anyString(), any(), eq(ConsoleOpsSummaryResponse.class), any()))
-        .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
-    when(approvalCommandMapper.countByStatus("tenant-a", "PENDING")).thenReturn(4L);
-    when(alertEventMapper.countByStatus("tenant-a", "OPEN")).thenReturn(6L);
-    when(alertEventMapper.countBySeverityAndStatus("tenant-a", "CRITICAL", "OPEN"))
-        .thenReturn(2L);
-    when(jobInstanceMapper.countByStatuses("tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
-        .thenReturn(7L);
-    when(jobInstanceMapper.countByStatuses(
-            "tenant-a",
-            List.of(JobInstanceStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code())))
-        .thenReturn(3L);
-    when(jobInstanceMapper.countSlaBreaches(
-            "tenant-a",
-            List.of(
-                JobInstanceStatus.CREATED.code(),
-                JobInstanceStatus.WAITING.code(),
-                JobInstanceStatus.READY.code(),
-                JobInstanceStatus.RUNNING.code(),
-                JobInstanceStatus.PARTIAL_FAILED.code())))
-        .thenReturn(5L);
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
-        .thenReturn(9L);
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.DRAINING.code()))
-        .thenReturn(1L);
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.OFFLINE.code()))
-        .thenReturn(2L);
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.DECOMMISSIONED.code()))
-        .thenReturn(1L);
-    when(outboxRetryLogMapper.countByStatuses("tenant-a", List.of("WAITING", "RUNNING", "FAILED")))
-        .thenReturn(11L);
-    when(outboxDeliveryLogMapper.countByStatus("tenant-a", "FAILED")).thenReturn(13L);
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(cacheService.getOrLoad(anyString(), any(), eq(ConsoleOpsSummaryResponse.class), any()))
+                .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
+        when(approvalCommandMapper.countByStatus("tenant-a", "PENDING")).thenReturn(4L);
+        when(alertEventMapper.countByStatus("tenant-a", "OPEN")).thenReturn(6L);
+        when(alertEventMapper.countBySeverityAndStatus("tenant-a", "CRITICAL", "OPEN"))
+                .thenReturn(2L);
+        when(jobInstanceMapper.countByStatuses("tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
+                .thenReturn(7L);
+        when(jobInstanceMapper.countByStatuses(
+                        "tenant-a", List.of(JobInstanceStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code())))
+                .thenReturn(3L);
+        when(jobInstanceMapper.countSlaBreaches(
+                        "tenant-a",
+                        List.of(
+                                JobInstanceStatus.CREATED.code(),
+                                JobInstanceStatus.WAITING.code(),
+                                JobInstanceStatus.READY.code(),
+                                JobInstanceStatus.RUNNING.code(),
+                                JobInstanceStatus.PARTIAL_FAILED.code())))
+                .thenReturn(5L);
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
+                .thenReturn(9L);
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.DRAINING.code()))
+                .thenReturn(1L);
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.OFFLINE.code()))
+                .thenReturn(2L);
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.DECOMMISSIONED.code()))
+                .thenReturn(1L);
+        when(outboxRetryLogMapper.countByStatuses("tenant-a", List.of("WAITING", "RUNNING", "FAILED")))
+                .thenReturn(11L);
+        when(outboxDeliveryLogMapper.countByStatus("tenant-a", "FAILED")).thenReturn(13L);
 
-    DefaultConsoleOpsApplicationService service = new DefaultConsoleOpsApplicationService(
-        tenantGuard,
-        approvalCommandMapper,
-        jobInstanceMapper,
-        workerRegistryMapper,
-        outboxRetryLogMapper,
-        outboxDeliveryLogMapper,
-        alertEventMapper,
-        cacheService);
+        DefaultConsoleOpsApplicationService service = new DefaultConsoleOpsApplicationService(
+                tenantGuard,
+                approvalCommandMapper,
+                jobInstanceMapper,
+                workerRegistryMapper,
+                outboxRetryLogMapper,
+                outboxDeliveryLogMapper,
+                alertEventMapper,
+                cacheService);
 
-    ConsoleOpsSummaryResponse response = service.summary("tenant-a");
+        ConsoleOpsSummaryResponse response = service.summary("tenant-a");
 
-    assertThat(response.tenantId()).isEqualTo("tenant-a");
-    assertThat(response.pendingApprovals()).isEqualTo(4L);
-    assertThat(response.openAlerts()).isEqualTo(6L);
-    assertThat(response.criticalAlerts()).isEqualTo(2L);
-    assertThat(response.runningJobs()).isEqualTo(7L);
-    assertThat(response.failedJobs()).isEqualTo(3L);
-    assertThat(response.slaBreaches()).isEqualTo(5L);
-    assertThat(response.onlineWorkers()).isEqualTo(9L);
-    assertThat(response.drainingWorkers()).isEqualTo(1L);
-    assertThat(response.offlineWorkers()).isEqualTo(3L);
-    assertThat(response.outboxRetryBacklog()).isEqualTo(11L);
-    assertThat(response.outboxDeliveryFailures()).isEqualTo(13L);
-  }
+        assertThat(response.tenantId()).isEqualTo("tenant-a");
+        assertThat(response.pendingApprovals()).isEqualTo(4L);
+        assertThat(response.openAlerts()).isEqualTo(6L);
+        assertThat(response.criticalAlerts()).isEqualTo(2L);
+        assertThat(response.runningJobs()).isEqualTo(7L);
+        assertThat(response.failedJobs()).isEqualTo(3L);
+        assertThat(response.slaBreaches()).isEqualTo(5L);
+        assertThat(response.onlineWorkers()).isEqualTo(9L);
+        assertThat(response.drainingWorkers()).isEqualTo(1L);
+        assertThat(response.offlineWorkers()).isEqualTo(3L);
+        assertThat(response.outboxRetryBacklog()).isEqualTo(11L);
+        assertThat(response.outboxDeliveryFailures()).isEqualTo(13L);
+    }
 }

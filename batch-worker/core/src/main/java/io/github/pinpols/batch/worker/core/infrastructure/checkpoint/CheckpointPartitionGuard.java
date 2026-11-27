@@ -22,68 +22,68 @@ import java.math.BigInteger;
  */
 public final class CheckpointPartitionGuard {
 
-  private CheckpointPartitionGuard() {}
+    private CheckpointPartitionGuard() {}
 
-  /**
-   * 是否应因分区拓扑降级(不续跑 / 不跳过)。
-   *
-   * @param rawPartitionCount attributes 里的 {@code PARTITION_COUNT} 原值(可能为 null / Number / String)
-   * @return true = 降级(多分区或值非法);false = 放行(缺失或明确单分区)
-   */
-  public static boolean shouldDegrade(Object rawPartitionCount) {
-    if (rawPartitionCount == null) {
-      // 缺失 = 非分区任务 = 单分区,放行。
-      return false;
+    /**
+     * 是否应因分区拓扑降级(不续跑 / 不跳过)。
+     *
+     * @param rawPartitionCount attributes 里的 {@code PARTITION_COUNT} 原值(可能为 null / Number / String)
+     * @return true = 降级(多分区或值非法);false = 放行(缺失或明确单分区)
+     */
+    public static boolean shouldDegrade(Object rawPartitionCount) {
+        if (rawPartitionCount == null) {
+            // 缺失 = 非分区任务 = 单分区,放行。
+            return false;
+        }
+        Long parsed = parseLongOrNull(rawPartitionCount);
+        if (parsed == null || parsed < 1L) {
+            // present 但非法(非数字 / <=0):拓扑不可判定 → fail-closed 降级。
+            return true;
+        }
+        return parsed > 1L;
     }
-    Long parsed = parseLongOrNull(rawPartitionCount);
-    if (parsed == null || parsed < 1L) {
-      // present 但非法(非数字 / <=0):拓扑不可判定 → fail-closed 降级。
-      return true;
-    }
-    return parsed > 1L;
-  }
 
-  private static Long parseLongOrNull(Object value) {
-    if (value instanceof Byte || value instanceof Short || value instanceof Integer) {
-      return ((Number) value).longValue();
+    private static Long parseLongOrNull(Object value) {
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof Long number) {
+            return number;
+        }
+        if (value instanceof BigInteger number) {
+            try {
+                return number.longValueExact();
+            } catch (ArithmeticException ex) {
+                return null;
+            }
+        }
+        if (value instanceof BigDecimal number) {
+            try {
+                return number.longValueExact();
+            } catch (ArithmeticException ex) {
+                return null;
+            }
+        }
+        if (value instanceof Float || value instanceof Double) {
+            double number = ((Number) value).doubleValue();
+            if (!Double.isFinite(number)) {
+                return null;
+            }
+            try {
+                return BigDecimal.valueOf(number).longValueExact();
+            } catch (ArithmeticException ex) {
+                return null;
+            }
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(text);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
-    if (value instanceof Long number) {
-      return number;
-    }
-    if (value instanceof BigInteger number) {
-      try {
-        return number.longValueExact();
-      } catch (ArithmeticException ex) {
-        return null;
-      }
-    }
-    if (value instanceof BigDecimal number) {
-      try {
-        return number.longValueExact();
-      } catch (ArithmeticException ex) {
-        return null;
-      }
-    }
-    if (value instanceof Float || value instanceof Double) {
-      double number = ((Number) value).doubleValue();
-      if (!Double.isFinite(number)) {
-        return null;
-      }
-      try {
-        return BigDecimal.valueOf(number).longValueExact();
-      } catch (ArithmeticException ex) {
-        return null;
-      }
-    }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    if (text.isEmpty()) {
-      return null;
-    }
-    try {
-      return Long.parseLong(text);
-    } catch (NumberFormatException ex) {
-      return null;
-    }
-  }
 }

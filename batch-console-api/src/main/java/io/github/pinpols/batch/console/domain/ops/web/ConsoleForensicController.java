@@ -40,35 +40,34 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @Idempotent
 public class ConsoleForensicController {
 
-  private final ConsoleOrchestratorPort orchestratorProxyService;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleOrchestratorPort orchestratorProxyService;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @PostMapping("/export")
-  public CommonResponse<ConsoleForensicExportResponse> requestExport(
-      @Valid @RequestBody ForensicExportRequest request) {
-    ForensicExportCommand command = new ForensicExportCommand(
-        request.getTenantId(),
-        request.getBizDateFrom(),
-        request.getBizDateTo(),
-        request.getJobCodes(),
-        request.getExportFormat(),
-        requestMetadataResolver.current().operatorId());
-    ConsoleForensicExportResponse exportResponse =
-        orchestratorProxyService.requestForensicExport(command);
-    return responseFactory.success(exportResponse);
-  }
+    @PostMapping("/export")
+    public CommonResponse<ConsoleForensicExportResponse> requestExport(
+            @Valid @RequestBody ForensicExportRequest request) {
+        ForensicExportCommand command = new ForensicExportCommand(
+                request.getTenantId(),
+                request.getBizDateFrom(),
+                request.getBizDateTo(),
+                request.getJobCodes(),
+                request.getExportFormat(),
+                requestMetadataResolver.current().operatorId());
+        ConsoleForensicExportResponse exportResponse = orchestratorProxyService.requestForensicExport(command);
+        return responseFactory.success(exportResponse);
+    }
 
-  @GetMapping("/export/{exportId}/download")
-  public ResponseEntity<StreamingResponseBody> download(
-      @PathVariable String exportId, @RequestParam("tenantId") String tenantId) {
-    HttpHeaders headers = new HttpHeaders();
-    headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
-    StreamingResponseBody body = outputStream ->
-        orchestratorProxyService.downloadForensicExport(tenantId, exportId, outputStream);
-    return ResponseEntity.ok()
-        .headers(headers)
-        .contentType(MediaType.APPLICATION_OCTET_STREAM)
-        .body(body);
-  }
+    @GetMapping("/export/{exportId}/download")
+    public ResponseEntity<StreamingResponseBody> download(
+            @PathVariable String exportId, @RequestParam("tenantId") String tenantId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
+        StreamingResponseBody body =
+                outputStream -> orchestratorProxyService.downloadForensicExport(tenantId, exportId, outputStream);
+        return ResponseEntity.ok()
+                .headers(headers)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(body);
+    }
 }

@@ -26,57 +26,57 @@ import org.springframework.web.util.HtmlUtils;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Builder
 public record ConsoleNotificationDeliveryLogResponse(
-    Long id,
-    @JsonProperty("tenant_id") String tenantId,
-    @JsonProperty("rule_id") Long ruleId,
-    @JsonProperty("channel_code") String channelCode,
-    @JsonProperty("event_type") String eventType,
-    @JsonProperty("alert_event_id") Long alertEventId,
-    @JsonProperty("payload_json") Object payloadJson,
-    @JsonProperty("delivery_status") String deliveryStatus,
-    @JsonProperty("error_message") String errorMessage,
-    @JsonProperty("error_key") String errorKey,
-    @JsonProperty("error_args") Object errorArgs,
-    Integer attempt,
-    @JsonProperty("created_at") Instant createdAt) {
+        Long id,
+        @JsonProperty("tenant_id") String tenantId,
+        @JsonProperty("rule_id") Long ruleId,
+        @JsonProperty("channel_code") String channelCode,
+        @JsonProperty("event_type") String eventType,
+        @JsonProperty("alert_event_id") Long alertEventId,
+        @JsonProperty("payload_json") Object payloadJson,
+        @JsonProperty("delivery_status") String deliveryStatus,
+        @JsonProperty("error_message") String errorMessage,
+        @JsonProperty("error_key") String errorKey,
+        @JsonProperty("error_args") Object errorArgs,
+        Integer attempt,
+        @JsonProperty("created_at") Instant createdAt) {
 
-  /** 回显错误信息长度上限，与 notification_delivery_log.error_message VARCHAR(1024)（V49）一致。 */
-  private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
+    /** 回显错误信息长度上限，与 notification_delivery_log.error_message VARCHAR(1024)（V49）一致。 */
+    private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
 
-  public static ConsoleNotificationDeliveryLogResponse from(NotificationDeliveryLogRow row) {
-    if (EmptyChecks.isNull(row)) {
-      return null;
+    public static ConsoleNotificationDeliveryLogResponse from(NotificationDeliveryLogRow row) {
+        if (EmptyChecks.isNull(row)) {
+            return null;
+        }
+        return ConsoleNotificationDeliveryLogResponse.builder()
+                .id(row.id())
+                .tenantId(row.tenantId())
+                .ruleId(row.ruleId())
+                .channelCode(row.channelCode())
+                .eventType(row.eventType())
+                .alertEventId(row.alertEventId())
+                .payloadJson(maskJsonValue(row.payloadJson()))
+                .deliveryStatus(row.deliveryStatus())
+                .errorMessage(safeErrorMessage(row.errorMessage()))
+                .errorKey(row.errorKey())
+                .errorArgs(maskJsonValue(row.errorArgs()))
+                .attempt(row.attempt())
+                .createdAt(row.createdAt())
+                .build();
     }
-    return ConsoleNotificationDeliveryLogResponse.builder()
-        .id(row.id())
-        .tenantId(row.tenantId())
-        .ruleId(row.ruleId())
-        .channelCode(row.channelCode())
-        .eventType(row.eventType())
-        .alertEventId(row.alertEventId())
-        .payloadJson(maskJsonValue(row.payloadJson()))
-        .deliveryStatus(row.deliveryStatus())
-        .errorMessage(safeErrorMessage(row.errorMessage()))
-        .errorKey(row.errorKey())
-        .errorArgs(maskJsonValue(row.errorArgs()))
-        .attempt(row.attempt())
-        .createdAt(row.createdAt())
-        .build();
-  }
 
-  private static Object maskJsonValue(String json) {
-    return EmptyChecks.isNull(json)
-        ? null
-        : SecretMasking.maskSensitiveValue(JsonUtils.fromJson(json, Object.class), Set.of());
-  }
-
-  private static String safeErrorMessage(String storedErrorMessage) {
-    if (EmptyChecks.isNull(storedErrorMessage)) {
-      return null;
+    private static Object maskJsonValue(String json) {
+        return EmptyChecks.isNull(json)
+                ? null
+                : SecretMasking.maskSensitiveValue(JsonUtils.fromJson(json, Object.class), Set.of());
     }
-    String decoded = HtmlUtils.htmlUnescape(storedErrorMessage);
-    String normalized = ConsoleTextSanitizer.normalize(decoded);
-    String masked = SwallowedExceptionLogger.safeMessage(normalized, ERROR_MESSAGE_MAX_LENGTH);
-    return ConsoleTextSanitizer.safeDisplay(masked, ERROR_MESSAGE_MAX_LENGTH);
-  }
+
+    private static String safeErrorMessage(String storedErrorMessage) {
+        if (EmptyChecks.isNull(storedErrorMessage)) {
+            return null;
+        }
+        String decoded = HtmlUtils.htmlUnescape(storedErrorMessage);
+        String normalized = ConsoleTextSanitizer.normalize(decoded);
+        String masked = SwallowedExceptionLogger.safeMessage(normalized, ERROR_MESSAGE_MAX_LENGTH);
+        return ConsoleTextSanitizer.safeDisplay(masked, ERROR_MESSAGE_MAX_LENGTH);
+    }
 }

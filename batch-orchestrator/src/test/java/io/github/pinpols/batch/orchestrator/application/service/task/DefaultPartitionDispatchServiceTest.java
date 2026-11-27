@@ -48,377 +48,366 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("分区派发服务: 版本推进,分区创建,载荷补齐与派发事件写入")
 class DefaultPartitionDispatchServiceTest {
 
-  private SchedulePlanBuilder schedulePlanBuilder;
-  private ResourceScheduler resourceScheduler;
-  private PartitionLifecycleService partitionLifecycleService;
-  private TaskCreationService taskCreationService;
-  private TaskDispatchOutboxService taskDispatchOutboxService;
-  private GlobalJobAdmission globalJobAdmission;
-  private WorkflowNodeDispatchService workflowNodeDispatchService;
-  private JobInstanceMapper jobInstanceMapper;
-  private DefaultPartitionDispatchService service;
+    private SchedulePlanBuilder schedulePlanBuilder;
+    private ResourceScheduler resourceScheduler;
+    private PartitionLifecycleService partitionLifecycleService;
+    private TaskCreationService taskCreationService;
+    private TaskDispatchOutboxService taskDispatchOutboxService;
+    private GlobalJobAdmission globalJobAdmission;
+    private WorkflowNodeDispatchService workflowNodeDispatchService;
+    private JobInstanceMapper jobInstanceMapper;
+    private DefaultPartitionDispatchService service;
 
-  @BeforeEach
-  @SuppressWarnings("unchecked")
-  void setUp() {
-    schedulePlanBuilder = mock(SchedulePlanBuilder.class);
-    resourceScheduler = mock(ResourceScheduler.class);
-    partitionLifecycleService = mock(PartitionLifecycleService.class);
-    taskCreationService = mock(TaskCreationService.class);
-    taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
-    globalJobAdmission = mock(GlobalJobAdmission.class);
-    when(globalJobAdmission.hasCapacity()).thenReturn(true);
-    workflowNodeDispatchService = mock(WorkflowNodeDispatchService.class);
-    jobInstanceMapper = mock(JobInstanceMapper.class);
-    LifecycleEventMapper<Object> lifecycleEventMapper = mock(LifecycleEventMapper.class);
-    when(lifecycleEventMapper.map(any(), any()))
-        .thenReturn(new StateTransition(
-            JobInstanceStatus.CREATED.code(), "START", JobInstanceStatus.RUNNING.code()));
-    service = new DefaultPartitionDispatchService(
-        schedulePlanBuilder,
-        resourceScheduler,
-        partitionLifecycleService,
-        taskCreationService,
-        taskDispatchOutboxService,
-        lifecycleEventMapper,
-        globalJobAdmission,
-        workflowNodeDispatchService,
-        jobInstanceMapper,
-        mock(WorkflowRunMapper.class),
-        new LaunchPhaseMetrics(new SimpleMeterRegistry()));
-  }
-
-  @Test
-  @DisplayName("派发时携带已知版本号推进实例状态,不再回查实例以免覆盖并发更新")
-  void dispatch_marksInstanceWithKnownVersionWithoutPrecedingReload() {
-    JobInstanceEntity jobInstance = dispatchablePlan(1L);
-    when(jobInstanceMapper.markRunning(any())).thenReturn(1);
-
-    service.dispatch(dispatchContext(jobInstance));
-
-    ArgumentCaptor<MarkInstanceRunningParam> running =
-        ArgumentCaptor.forClass(MarkInstanceRunningParam.class);
-    verify(jobInstanceMapper).markRunning(running.capture());
-    verify(jobInstanceMapper, never()).selectById(any(), any());
-    assertThat(running.getValue().getExpectedVersion()).isEqualTo(1L);
-    assertThat(running.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.RUNNING.code());
-    assertThat(jobInstance.getVersion()).isEqualTo(2L);
-  }
-
-  @Test
-  @DisplayName("版本冲突导致状态推进未命中时抛出业务异常,且不覆盖并发已更新的状态")
-  void dispatch_rollsBackOnVersionConflictWithoutOverwritingConcurrentState() {
-    JobInstanceEntity jobInstance = dispatchablePlan(3L);
-    when(jobInstanceMapper.markRunning(any())).thenReturn(0);
-
-    assertThatThrownBy(() -> service.dispatch(dispatchContext(jobInstance)))
-        .isInstanceOf(BizException.class);
-
-    verify(jobInstanceMapper, never()).selectById(any(), any());
-    verify(jobInstanceMapper).markRunning(any());
-    assertThat(jobInstance.getVersion()).isEqualTo(3L);
-  }
-
-  @Test
-  @DisplayName("派发时直接按就绪状态创建分区,不做多余的提升更新,并写入派发事件")
-  void dispatch_insertsNewDispatchableRowsAsReadyWithoutRedundantPromotionUpdates() {
-    SchedulePlan plan = new SchedulePlan();
-    plan.setTenantId("ta");
-    plan.setDefaultWorkerType("ATOMIC");
-    SchedulePlan.PartitionPlan partitionPlan = new SchedulePlan.PartitionPlan();
-    partitionPlan.setPartitionNo(1);
-    plan.setPartitions(List.of(partitionPlan));
-    ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
-    decision.setDispatchable(true);
-    decision.setPartitionStatus(PartitionStatus.CREATED.code());
-    decision.setTaskStatus(TaskStatus.CREATED.code());
-    when(schedulePlanBuilder.build(any())).thenReturn(plan);
-    when(resourceScheduler.schedule(any())).thenReturn(decision);
-
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(20L);
-    partition.setTenantId("ta");
-    partition.setPartitionNo(1);
-    partition.setPartitionStatus(PartitionStatus.READY.code());
-    partition.setIdempotencyKey("10:1");
-    partition.setVersion(0L);
-    when(partitionLifecycleService.createPartitions(plan, 10L, PartitionStatus.READY.code()))
-        .thenReturn(List.of(partition));
-    when(jobInstanceMapper.markRunning(any())).thenReturn(1);
-    JobInstanceEntity jobInstance = new JobInstanceEntity();
-    jobInstance.setId(10L);
-    jobInstance.setTenantId("ta");
-    jobInstance.setBizDate(LocalDate.of(2026, 3, 22));
-    jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
-    jobInstance.setVersion(0L);
-
-    service.dispatch(dispatchContext(jobInstance));
-
+    @BeforeEach
     @SuppressWarnings("unchecked")
-    ArgumentCaptor<List<JobTaskEntity>> tasks = ArgumentCaptor.forClass(List.class);
-    verify(taskCreationService).createTasks(tasks.capture());
-    assertThat(tasks.getValue()).singleElement().satisfies(task -> {
-      assertThat(task.getTaskStatus()).isEqualTo(TaskStatus.READY.code());
-      assertThat(task.getJobInstanceBizDate()).isEqualTo(LocalDate.of(2026, 3, 22));
-    });
-    assertThat(partitionPlan.getPartitionStatus()).isEqualTo(PartitionStatus.READY.code());
-    assertThat(jobInstance.getExpectedPartitionCount()).isEqualTo(1);
-    verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
-    verify(taskDispatchOutboxService).writeDispatchEvent(any(), any(), any(), any(), any());
-  }
+    void setUp() {
+        schedulePlanBuilder = mock(SchedulePlanBuilder.class);
+        resourceScheduler = mock(ResourceScheduler.class);
+        partitionLifecycleService = mock(PartitionLifecycleService.class);
+        taskCreationService = mock(TaskCreationService.class);
+        taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+        globalJobAdmission = mock(GlobalJobAdmission.class);
+        when(globalJobAdmission.hasCapacity()).thenReturn(true);
+        workflowNodeDispatchService = mock(WorkflowNodeDispatchService.class);
+        jobInstanceMapper = mock(JobInstanceMapper.class);
+        LifecycleEventMapper<Object> lifecycleEventMapper = mock(LifecycleEventMapper.class);
+        when(lifecycleEventMapper.map(any(), any()))
+                .thenReturn(new StateTransition(
+                        JobInstanceStatus.CREATED.code(), "START", JobInstanceStatus.RUNNING.code()));
+        service = new DefaultPartitionDispatchService(
+                schedulePlanBuilder,
+                resourceScheduler,
+                partitionLifecycleService,
+                taskCreationService,
+                taskDispatchOutboxService,
+                lifecycleEventMapper,
+                globalJobAdmission,
+                workflowNodeDispatchService,
+                jobInstanceMapper,
+                mock(WorkflowRunMapper.class),
+                new LaunchPhaseMetrics(new SimpleMeterRegistry()));
+    }
 
-  @Test
-  @DisplayName("全局准入容量不足时初始流程保持等待,并记录期望分区数")
-  void shouldWait_whenGlobalCapacityFull() {
-    when(globalJobAdmission.hasCapacity()).thenReturn(false);
-    when(workflowNodeDispatchService.dispatchNode(any(), any(), any(), any(), any()))
-        .thenReturn(2);
-    when(jobInstanceMapper.markRunning(any())).thenReturn(1);
-    JobInstanceEntity jobInstance = new JobInstanceEntity();
-    jobInstance.setId(10L);
-    jobInstance.setTenantId("ta");
-    jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
-    jobInstance.setVersion(0L);
-    LaunchRequest request = new LaunchRequest(
-        "ta",
-        "WORKFLOW_A",
-        LocalDate.of(2026, Month.SEPTEMBER, 11),
-        TriggerType.MANUAL,
-        "request-dag",
-        "trace-dag",
-        Map.of());
-    PartitionDispatchService.DispatchContext context = PartitionDispatchService.DispatchContext.of(
-        new PartitionDispatchService.DispatchRequest(request, Map.of(), "trace-dag", null),
-        new PartitionDispatchService.DispatchRuntime(
-            jobInstance,
-            null,
-            List.of(new WorkflowDagService.DagNodeResolution("IMPORT", "TASK")),
-            Instant.parse("2026-09-11T00:00:00Z")));
+    @Test
+    @DisplayName("派发时携带已知版本号推进实例状态,不再回查实例以免覆盖并发更新")
+    void dispatch_marksInstanceWithKnownVersionWithoutPrecedingReload() {
+        JobInstanceEntity jobInstance = dispatchablePlan(1L);
+        when(jobInstanceMapper.markRunning(any())).thenReturn(1);
 
-    service.dispatch(context);
+        service.dispatch(dispatchContext(jobInstance));
 
-    ArgumentCaptor<MarkInstanceRunningParam> transition =
-        ArgumentCaptor.forClass(MarkInstanceRunningParam.class);
-    verify(jobInstanceMapper).markRunning(transition.capture());
-    assertThat(transition.getValue().getInstanceStatus())
-        .isEqualTo(JobInstanceStatus.WAITING.code());
-    assertThat(transition.getValue().getExpectedPartitionCount()).isEqualTo(2);
-    verify(globalJobAdmission).hasCapacity();
-  }
+        ArgumentCaptor<MarkInstanceRunningParam> running = ArgumentCaptor.forClass(MarkInstanceRunningParam.class);
+        verify(jobInstanceMapper).markRunning(running.capture());
+        verify(jobInstanceMapper, never()).selectById(any(), any());
+        assertThat(running.getValue().getExpectedVersion()).isEqualTo(1L);
+        assertThat(running.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.RUNNING.code());
+        assertThat(jobInstance.getVersion()).isEqualTo(2L);
+    }
 
-  private JobInstanceEntity dispatchablePlan(long version) {
-    SchedulePlan plan = new SchedulePlan();
-    plan.setPartitions(List.of());
-    ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
-    decision.setDispatchable(true);
-    decision.setPartitionStatus(PartitionStatus.CREATED.code());
-    when(schedulePlanBuilder.build(any())).thenReturn(plan);
-    when(resourceScheduler.schedule(any())).thenReturn(decision);
-    when(partitionLifecycleService.createPartitions(plan, 10L, PartitionStatus.CREATED.code()))
-        .thenReturn(List.of());
+    @Test
+    @DisplayName("版本冲突导致状态推进未命中时抛出业务异常,且不覆盖并发已更新的状态")
+    void dispatch_rollsBackOnVersionConflictWithoutOverwritingConcurrentState() {
+        JobInstanceEntity jobInstance = dispatchablePlan(3L);
+        when(jobInstanceMapper.markRunning(any())).thenReturn(0);
 
-    JobInstanceEntity jobInstance = new JobInstanceEntity();
-    jobInstance.setId(10L);
-    jobInstance.setTenantId("ta");
-    jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
-    jobInstance.setVersion(version);
-    return jobInstance;
-  }
+        assertThatThrownBy(() -> service.dispatch(dispatchContext(jobInstance))).isInstanceOf(BizException.class);
 
-  private PartitionDispatchService.DispatchContext dispatchContext(JobInstanceEntity jobInstance) {
-    LaunchRequest request = new LaunchRequest(
-        "ta",
-        "IMPORT_ORDERS",
-        LocalDate.of(2026, Month.SEPTEMBER, 11),
-        TriggerType.MANUAL,
-        "request-1",
-        "trace-1",
-        Map.of());
-    JobDefinitionView executionDefinition = JobDefinitionView.builder()
-        .id(11L)
-        .tenantId("ta")
-        .jobCode("IMPORT_ORDERS")
-        .version(1)
-        .build();
-    return PartitionDispatchService.DispatchContext.of(
-        new PartitionDispatchService.DispatchRequest(
-            request, Map.of(), "trace-1", executionDefinition),
-        new PartitionDispatchService.DispatchRuntime(
-            jobInstance, null, List.of(), Instant.parse("2026-09-11T00:00:00Z")));
-  }
+        verify(jobInstanceMapper, never()).selectById(any(), any());
+        verify(jobInstanceMapper).markRunning(any());
+        assertThat(jobInstance.getVersion()).isEqualTo(3L);
+    }
 
-  @Test
-  @DisplayName("分区计划接收已准入的作业定义,不在派发阶段重新选择当前版本")
-  void shouldPassAdmittedDefinition_whenBuildingPartitionPlan() {
-    JobInstanceEntity instance = dispatchablePlan(0L);
-    when(jobInstanceMapper.markRunning(any())).thenReturn(1);
-    PartitionDispatchService.DispatchContext context = dispatchContext(instance);
+    @Test
+    @DisplayName("派发时直接按就绪状态创建分区,不做多余的提升更新,并写入派发事件")
+    void dispatch_insertsNewDispatchableRowsAsReadyWithoutRedundantPromotionUpdates() {
+        SchedulePlan plan = new SchedulePlan();
+        plan.setTenantId("ta");
+        plan.setDefaultWorkerType("ATOMIC");
+        SchedulePlan.PartitionPlan partitionPlan = new SchedulePlan.PartitionPlan();
+        partitionPlan.setPartitionNo(1);
+        plan.setPartitions(List.of(partitionPlan));
+        ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+        decision.setDispatchable(true);
+        decision.setPartitionStatus(PartitionStatus.CREATED.code());
+        decision.setTaskStatus(TaskStatus.CREATED.code());
+        when(schedulePlanBuilder.build(any())).thenReturn(plan);
+        when(resourceScheduler.schedule(any())).thenReturn(decision);
 
-    service.dispatch(context);
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(20L);
+        partition.setTenantId("ta");
+        partition.setPartitionNo(1);
+        partition.setPartitionStatus(PartitionStatus.READY.code());
+        partition.setIdempotencyKey("10:1");
+        partition.setVersion(0L);
+        when(partitionLifecycleService.createPartitions(plan, 10L, PartitionStatus.READY.code()))
+                .thenReturn(List.of(partition));
+        when(jobInstanceMapper.markRunning(any())).thenReturn(1);
+        JobInstanceEntity jobInstance = new JobInstanceEntity();
+        jobInstance.setId(10L);
+        jobInstance.setTenantId("ta");
+        jobInstance.setBizDate(LocalDate.of(2026, 3, 22));
+        jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
+        jobInstance.setVersion(0L);
 
-    ArgumentCaptor<SchedulePlanCommand> command =
-        ArgumentCaptor.forClass(SchedulePlanCommand.class);
-    verify(schedulePlanBuilder).build(command.capture());
-    assertThat(command.getValue().executionDefinition()).isSameAs(context.executionDefinition());
-  }
+        service.dispatch(dispatchContext(jobInstance));
 
-  @Test
-  @DisplayName("请求载荷缺少派生字段时补齐批次号,营业日与任务编码")
-  void enrichPayload_addsDerivedFieldsWhenMissing() {
-    LaunchRequest request = new LaunchRequest(
-        "tc",
-        "TC_EXPORT_RISK_ALERT",
-        LocalDate.of(2026, Month.APRIL, 22),
-        TriggerType.SCHEDULED,
-        "req-1",
-        "trace-1",
-        Map.of());
-    JobInstanceEntity jobInstance = new JobInstanceEntity();
-    jobInstance.setBatchNo("2026-04-22");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<JobTaskEntity>> tasks = ArgumentCaptor.forClass(List.class);
+        verify(taskCreationService).createTasks(tasks.capture());
+        assertThat(tasks.getValue()).singleElement().satisfies(task -> {
+            assertThat(task.getTaskStatus()).isEqualTo(TaskStatus.READY.code());
+            assertThat(task.getJobInstanceBizDate()).isEqualTo(LocalDate.of(2026, 3, 22));
+        });
+        assertThat(partitionPlan.getPartitionStatus()).isEqualTo(PartitionStatus.READY.code());
+        assertThat(jobInstance.getExpectedPartitionCount()).isEqualTo(1);
+        verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
+        verify(taskDispatchOutboxService).writeDispatchEvent(any(), any(), any(), any(), any());
+    }
 
-    Map<String, Object> payload =
-        DefaultPartitionDispatchService.enrichPayload(request, jobInstance, Map.of());
+    @Test
+    @DisplayName("全局准入容量不足时初始流程保持等待,并记录期望分区数")
+    void shouldWait_whenGlobalCapacityFull() {
+        when(globalJobAdmission.hasCapacity()).thenReturn(false);
+        when(workflowNodeDispatchService.dispatchNode(any(), any(), any(), any(), any()))
+                .thenReturn(2);
+        when(jobInstanceMapper.markRunning(any())).thenReturn(1);
+        JobInstanceEntity jobInstance = new JobInstanceEntity();
+        jobInstance.setId(10L);
+        jobInstance.setTenantId("ta");
+        jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
+        jobInstance.setVersion(0L);
+        LaunchRequest request = new LaunchRequest(
+                "ta",
+                "WORKFLOW_A",
+                LocalDate.of(2026, Month.SEPTEMBER, 11),
+                TriggerType.MANUAL,
+                "request-dag",
+                "trace-dag",
+                Map.of());
+        PartitionDispatchService.DispatchContext context = PartitionDispatchService.DispatchContext.of(
+                new PartitionDispatchService.DispatchRequest(request, Map.of(), "trace-dag", null),
+                new PartitionDispatchService.DispatchRuntime(
+                        jobInstance,
+                        null,
+                        List.of(new WorkflowDagService.DagNodeResolution("IMPORT", "TASK")),
+                        Instant.parse("2026-09-11T00:00:00Z")));
 
-    assertThat(payload)
-        .containsEntry("batchNo", "2026-04-22")
-        .containsEntry("bizDate", "2026-04-22")
-        .containsEntry("jobCode", "TC_EXPORT_RISK_ALERT");
-  }
+        service.dispatch(context);
 
-  @Test
-  @DisplayName("任务载荷演练标记由作业实例决定，业务参数不得覆盖")
-  void enrichPayload_usesInstanceDryRunInsteadOfBusinessParameter() {
-    JobInstanceEntity formalInstance = new JobInstanceEntity();
-    formalInstance.setDryRun(false);
-    Map<String, Object> formalParams = Map.of("dryRun", true, "businessKey", "value");
-    Map<String, Object> formalPayload =
-        DefaultPartitionDispatchService.enrichPayload(null, formalInstance, formalParams);
-    assertThat(formalPayload).containsEntry("dryRun", false).containsEntry("businessKey", "value");
-    assertThat(formalParams).containsEntry("dryRun", true);
+        ArgumentCaptor<MarkInstanceRunningParam> transition = ArgumentCaptor.forClass(MarkInstanceRunningParam.class);
+        verify(jobInstanceMapper).markRunning(transition.capture());
+        assertThat(transition.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.WAITING.code());
+        assertThat(transition.getValue().getExpectedPartitionCount()).isEqualTo(2);
+        verify(globalJobAdmission).hasCapacity();
+    }
 
-    JobInstanceEntity dryRunInstance = new JobInstanceEntity();
-    dryRunInstance.setDryRun(true);
-    Map<String, Object> dryRunPayload = DefaultPartitionDispatchService.enrichPayload(
-        null, dryRunInstance, Map.of("dryRun", false));
-    assertThat(dryRunPayload).containsEntry("dryRun", true);
-  }
+    private JobInstanceEntity dispatchablePlan(long version) {
+        SchedulePlan plan = new SchedulePlan();
+        plan.setPartitions(List.of());
+        ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+        decision.setDispatchable(true);
+        decision.setPartitionStatus(PartitionStatus.CREATED.code());
+        when(schedulePlanBuilder.build(any())).thenReturn(plan);
+        when(resourceScheduler.schedule(any())).thenReturn(decision);
+        when(partitionLifecycleService.createPartitions(plan, 10L, PartitionStatus.CREATED.code()))
+                .thenReturn(List.of());
 
-  @Test
-  @DisplayName("请求载荷已显式给出字段时保持原值不被覆盖")
-  void enrichPayload_keepsExplicitFieldsUntouched() {
-    LaunchRequest request = new LaunchRequest(
-        "tc",
-        "TC_EXPORT_RISK_ALERT",
-        LocalDate.of(2026, Month.APRIL, 22),
-        TriggerType.SCHEDULED,
-        "req-2",
-        "trace-2",
-        Map.of("batchNo", "REQ-BATCH"));
-    JobInstanceEntity jobInstance = new JobInstanceEntity();
-    jobInstance.setBatchNo("INSTANCE-BATCH");
+        JobInstanceEntity jobInstance = new JobInstanceEntity();
+        jobInstance.setId(10L);
+        jobInstance.setTenantId("ta");
+        jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
+        jobInstance.setVersion(version);
+        return jobInstance;
+    }
 
-    Map<String, Object> payload = DefaultPartitionDispatchService.enrichPayload(
-        request,
-        jobInstance,
-        Map.of("batchNo", "REQ-BATCH", "bizDate", "2026-04-01", "jobCode", "CUSTOM_JOB"));
+    private PartitionDispatchService.DispatchContext dispatchContext(JobInstanceEntity jobInstance) {
+        LaunchRequest request = new LaunchRequest(
+                "ta",
+                "IMPORT_ORDERS",
+                LocalDate.of(2026, Month.SEPTEMBER, 11),
+                TriggerType.MANUAL,
+                "request-1",
+                "trace-1",
+                Map.of());
+        JobDefinitionView executionDefinition = JobDefinitionView.builder()
+                .id(11L)
+                .tenantId("ta")
+                .jobCode("IMPORT_ORDERS")
+                .version(1)
+                .build();
+        return PartitionDispatchService.DispatchContext.of(
+                new PartitionDispatchService.DispatchRequest(request, Map.of(), "trace-1", executionDefinition),
+                new PartitionDispatchService.DispatchRuntime(
+                        jobInstance, null, List.of(), Instant.parse("2026-09-11T00:00:00Z")));
+    }
 
-    assertThat(payload)
-        .containsEntry("batchNo", "REQ-BATCH")
-        .containsEntry("bizDate", "2026-04-01")
-        .containsEntry("jobCode", "CUSTOM_JOB");
-  }
+    @Test
+    @DisplayName("分区计划接收已准入的作业定义,不在派发阶段重新选择当前版本")
+    void shouldPassAdmittedDefinition_whenBuildingPartitionPlan() {
+        JobInstanceEntity instance = dispatchablePlan(0L);
+        when(jobInstanceMapper.markRunning(any())).thenReturn(1);
+        PartitionDispatchService.DispatchContext context = dispatchContext(instance);
 
-  @Test
-  @DisplayName("束分区派发时向载荷注入带前缀的绑定字段,避免与通用字段重名")
-  void enrichBundleBinding_injectsBindingForBundlePartition() {
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setSourceFileId(42L);
-    partition.setTemplateCode("RISK_IMPORT_V2");
-    partition.setTargetRef("biz.risk_alert");
-    Map<String, Object> payload = new HashMap<>();
+        service.dispatch(context);
 
-    DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+        ArgumentCaptor<SchedulePlanCommand> command = ArgumentCaptor.forClass(SchedulePlanCommand.class);
+        verify(schedulePlanBuilder).build(command.capture());
+        assertThat(command.getValue().executionDefinition()).isSameAs(context.executionDefinition());
+    }
 
-    // P1-1/P1-3 防御:source_file_id/target_ref 落带 bundle 前缀的键,不与泛化 sourceFileId/targetRef 撞;
-    // templateCode 是 payload 真字段保持原名。
-    assertThat(payload)
-        .containsEntry("bundleSourceFileId", 42L)
-        .containsEntry("templateCode", "RISK_IMPORT_V2")
-        .containsEntry("bundleTargetRef", "biz.risk_alert")
-        .doesNotContainKeys("sourceFileId", "targetRef");
-  }
+    @Test
+    @DisplayName("请求载荷缺少派生字段时补齐批次号,营业日与任务编码")
+    void enrichPayload_addsDerivedFieldsWhenMissing() {
+        LaunchRequest request = new LaunchRequest(
+                "tc",
+                "TC_EXPORT_RISK_ALERT",
+                LocalDate.of(2026, Month.APRIL, 22),
+                TriggerType.SCHEDULED,
+                "req-1",
+                "trace-1",
+                Map.of());
+        JobInstanceEntity jobInstance = new JobInstanceEntity();
+        jobInstance.setBatchNo("2026-04-22");
 
-  @Test
-  @DisplayName("束分区绑定覆盖载荷中的同名输入")
-  void enrichBundleBinding_usesAuthoritativePartitionValues() {
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setSourceFileId(42L);
-    partition.setTargetRef("partition-channel");
-    Map<String, Object> payload = new HashMap<>();
-    payload.put("bundleSourceFileId", 99L);
-    payload.put("bundleTargetRef", "other-channel");
+        Map<String, Object> payload = DefaultPartitionDispatchService.enrichPayload(request, jobInstance, Map.of());
 
-    DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+        assertThat(payload)
+                .containsEntry("batchNo", "2026-04-22")
+                .containsEntry("bizDate", "2026-04-22")
+                .containsEntry("jobCode", "TC_EXPORT_RISK_ALERT");
+    }
 
-    assertThat(payload)
-        .containsEntry("bundleSourceFileId", 42L)
-        .containsEntry("bundleTargetRef", "partition-channel");
-  }
+    @Test
+    @DisplayName("任务载荷演练标记由作业实例决定，业务参数不得覆盖")
+    void enrichPayload_usesInstanceDryRunInsteadOfBusinessParameter() {
+        JobInstanceEntity formalInstance = new JobInstanceEntity();
+        formalInstance.setDryRun(false);
+        Map<String, Object> formalParams = Map.of("dryRun", true, "businessKey", "value");
+        Map<String, Object> formalPayload =
+                DefaultPartitionDispatchService.enrichPayload(null, formalInstance, formalParams);
+        assertThat(formalPayload).containsEntry("dryRun", false).containsEntry("businessKey", "value");
+        assertThat(formalParams).containsEntry("dryRun", true);
 
-  @Test
-  @DisplayName("普通分区不接受调用方伪造文件束绑定覆盖真实文件和渠道")
-  void enrichBundleBinding_removesUnboundCallerValues() {
-    JobPartitionEntity partition = new JobPartitionEntity();
-    Map<String, Object> payload = new HashMap<>();
-    payload.put("fileId", 10L);
-    payload.put("channelCode", "EXPECTED");
-    payload.put("bundleSourceFileId", 99L);
-    payload.put("bundleTargetRef", "OTHER");
+        JobInstanceEntity dryRunInstance = new JobInstanceEntity();
+        dryRunInstance.setDryRun(true);
+        Map<String, Object> dryRunPayload =
+                DefaultPartitionDispatchService.enrichPayload(null, dryRunInstance, Map.of("dryRun", false));
+        assertThat(dryRunPayload).containsEntry("dryRun", true);
+    }
 
-    DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+    @Test
+    @DisplayName("请求载荷已显式给出字段时保持原值不被覆盖")
+    void enrichPayload_keepsExplicitFieldsUntouched() {
+        LaunchRequest request = new LaunchRequest(
+                "tc",
+                "TC_EXPORT_RISK_ALERT",
+                LocalDate.of(2026, Month.APRIL, 22),
+                TriggerType.SCHEDULED,
+                "req-2",
+                "trace-2",
+                Map.of("batchNo", "REQ-BATCH"));
+        JobInstanceEntity jobInstance = new JobInstanceEntity();
+        jobInstance.setBatchNo("INSTANCE-BATCH");
 
-    assertThat(payload)
-        .containsEntry("fileId", 10L)
-        .containsEntry("channelCode", "EXPECTED")
-        .doesNotContainKeys("bundleSourceFileId", "bundleTargetRef");
-  }
+        Map<String, Object> payload = DefaultPartitionDispatchService.enrichPayload(
+                request, jobInstance, Map.of("batchNo", "REQ-BATCH", "bizDate", "2026-04-01", "jobCode", "CUSTOM_JOB"));
 
-  @Test
-  @DisplayName("分区只绑定文件时不保留调用方伪造的目标渠道")
-  void enrichBundleBinding_removesUnboundTargetWhenFileIsBound() {
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setSourceFileId(42L);
-    Map<String, Object> payload = new HashMap<>();
-    payload.put("bundleSourceFileId", 99L);
-    payload.put("bundleTargetRef", "OTHER");
+        assertThat(payload)
+                .containsEntry("batchNo", "REQ-BATCH")
+                .containsEntry("bizDate", "2026-04-01")
+                .containsEntry("jobCode", "CUSTOM_JOB");
+    }
 
-    DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+    @Test
+    @DisplayName("束分区派发时向载荷注入带前缀的绑定字段,避免与通用字段重名")
+    void enrichBundleBinding_injectsBindingForBundlePartition() {
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setSourceFileId(42L);
+        partition.setTemplateCode("RISK_IMPORT_V2");
+        partition.setTargetRef("biz.risk_alert");
+        Map<String, Object> payload = new HashMap<>();
 
-    assertThat(payload)
-        .containsEntry("bundleSourceFileId", 42L)
-        .doesNotContainKey("bundleTargetRef");
-  }
+        DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
 
-  @Test
-  @DisplayName("普通分区的绑定列全为空时载荷不新增任何字段")
-  void enrichBundleBinding_leavesNormalPartitionPayloadUnchanged() {
-    // 普通(非束)partition 三根绑定列均为空，payload 不得新增任何字段——保证存量导入零影响。
-    JobPartitionEntity partition = new JobPartitionEntity();
-    Map<String, Object> payload = new HashMap<>();
+        // P1-1/P1-3 防御:source_file_id/target_ref 落带 bundle 前缀的键,不与泛化 sourceFileId/targetRef 撞;
+        // templateCode 是 payload 真字段保持原名。
+        assertThat(payload)
+                .containsEntry("bundleSourceFileId", 42L)
+                .containsEntry("templateCode", "RISK_IMPORT_V2")
+                .containsEntry("bundleTargetRef", "biz.risk_alert")
+                .doesNotContainKeys("sourceFileId", "targetRef");
+    }
 
-    DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+    @Test
+    @DisplayName("束分区绑定覆盖载荷中的同名输入")
+    void enrichBundleBinding_usesAuthoritativePartitionValues() {
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setSourceFileId(42L);
+        partition.setTargetRef("partition-channel");
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("bundleSourceFileId", 99L);
+        payload.put("bundleTargetRef", "other-channel");
 
-    assertThat(payload).doesNotContainKeys("bundleSourceFileId", "templateCode", "bundleTargetRef");
-  }
+        DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
 
-  @Test
-  @DisplayName("分区为空时载荷保持原样,不做任何注入")
-  void enrichBundleBinding_nullPartitionIsNoOp() {
-    Map<String, Object> payload = new HashMap<>();
-    payload.put("batchNo", "2026-04-22");
+        assertThat(payload)
+                .containsEntry("bundleSourceFileId", 42L)
+                .containsEntry("bundleTargetRef", "partition-channel");
+    }
 
-    DefaultPartitionDispatchService.enrichBundleBinding(payload, null);
+    @Test
+    @DisplayName("普通分区不接受调用方伪造文件束绑定覆盖真实文件和渠道")
+    void enrichBundleBinding_removesUnboundCallerValues() {
+        JobPartitionEntity partition = new JobPartitionEntity();
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("fileId", 10L);
+        payload.put("channelCode", "EXPECTED");
+        payload.put("bundleSourceFileId", 99L);
+        payload.put("bundleTargetRef", "OTHER");
 
-    assertThat(payload).hasSize(1).containsEntry("batchNo", "2026-04-22");
-  }
+        DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+
+        assertThat(payload)
+                .containsEntry("fileId", 10L)
+                .containsEntry("channelCode", "EXPECTED")
+                .doesNotContainKeys("bundleSourceFileId", "bundleTargetRef");
+    }
+
+    @Test
+    @DisplayName("分区只绑定文件时不保留调用方伪造的目标渠道")
+    void enrichBundleBinding_removesUnboundTargetWhenFileIsBound() {
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setSourceFileId(42L);
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("bundleSourceFileId", 99L);
+        payload.put("bundleTargetRef", "OTHER");
+
+        DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+
+        assertThat(payload).containsEntry("bundleSourceFileId", 42L).doesNotContainKey("bundleTargetRef");
+    }
+
+    @Test
+    @DisplayName("普通分区的绑定列全为空时载荷不新增任何字段")
+    void enrichBundleBinding_leavesNormalPartitionPayloadUnchanged() {
+        // 普通(非束)partition 三根绑定列均为空，payload 不得新增任何字段——保证存量导入零影响。
+        JobPartitionEntity partition = new JobPartitionEntity();
+        Map<String, Object> payload = new HashMap<>();
+
+        DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+
+        assertThat(payload).doesNotContainKeys("bundleSourceFileId", "templateCode", "bundleTargetRef");
+    }
+
+    @Test
+    @DisplayName("分区为空时载荷保持原样,不做任何注入")
+    void enrichBundleBinding_nullPartitionIsNoOp() {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("batchNo", "2026-04-22");
+
+        DefaultPartitionDispatchService.enrichBundleBinding(payload, null);
+
+        assertThat(payload).hasSize(1).containsEntry("batchNo", "2026-04-22");
+    }
 }

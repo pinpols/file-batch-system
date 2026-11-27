@@ -6,104 +6,103 @@ import lombok.Builder;
 
 /** 租户配置批量初始化响应。 */
 public record TenantConfigBatchInitResponse(
-    String batchOperationId,
-    int totalTenants,
-    int successTenants,
-    int failureTenants,
-    boolean dryRun,
-    List<TenantInitResult> results) {
+        String batchOperationId,
+        int totalTenants,
+        int successTenants,
+        int failureTenants,
+        boolean dryRun,
+        List<TenantInitResult> results) {
 
-  @Builder
-  public record TenantInitResult(
-      String tenantId,
-      boolean success,
-      String errorMessage,
-      ItemStats jobDefinitions,
-      ItemStats workflowDefinitions,
-      ItemStats fileChannels,
-      ItemStats fileTemplates,
-      ItemStats resourceQueues,
-      ItemStats batchWindows,
-      ItemStats businessCalendars,
-      ItemStats quotaPolicies,
-      ItemStats alertRoutings) {
-    public static TenantInitResult failed(String tenantId, String errorMessage) {
-      return TenantInitResult.builder()
-          .tenantId(tenantId)
-          .success(false)
-          .errorMessage(errorMessage)
-          .jobDefinitions(ItemStats.empty())
-          .workflowDefinitions(ItemStats.empty())
-          .fileChannels(ItemStats.empty())
-          .fileTemplates(ItemStats.empty())
-          .resourceQueues(ItemStats.empty())
-          .batchWindows(ItemStats.empty())
-          .businessCalendars(ItemStats.empty())
-          .quotaPolicies(ItemStats.empty())
-          .alertRoutings(ItemStats.empty())
-          .build();
-    }
-  }
-
-  public record ItemStats(
-      int created, int updated, int skipped, int failed, int migrated, List<ItemDetail> details) {
-    public static ItemStats empty() {
-      return new ItemStats(0, 0, 0, 0, 0, List.of());
-    }
-  }
-
-  public record ItemDetail(String code, String action, String errorMessage) {
-    /** action 常量。 */
-    public static final String CREATED = "CREATED";
-
-    public static final String UPDATED = "UPDATED";
-    public static final String SKIPPED = "SKIPPED";
-    public static final String FAILED = "FAILED";
-
-    public static final String MIGRATED = "MIGRATED";
-  }
-
-  /** 可变的 ItemStats 构建器，收集明细后一次性转换为不可变 record。 */
-  public static final class ItemStatsAccumulator {
-    private int created;
-    private int updated;
-    private int skipped;
-    private int failed;
-    private int migrated;
-    private final List<ItemDetail> details = new ArrayList<>();
-
-    public void recordCreated(String code) {
-      created++;
-      details.add(new ItemDetail(code, ItemDetail.CREATED, null));
+    @Builder
+    public record TenantInitResult(
+            String tenantId,
+            boolean success,
+            String errorMessage,
+            ItemStats jobDefinitions,
+            ItemStats workflowDefinitions,
+            ItemStats fileChannels,
+            ItemStats fileTemplates,
+            ItemStats resourceQueues,
+            ItemStats batchWindows,
+            ItemStats businessCalendars,
+            ItemStats quotaPolicies,
+            ItemStats alertRoutings) {
+        public static TenantInitResult failed(String tenantId, String errorMessage) {
+            return TenantInitResult.builder()
+                    .tenantId(tenantId)
+                    .success(false)
+                    .errorMessage(errorMessage)
+                    .jobDefinitions(ItemStats.empty())
+                    .workflowDefinitions(ItemStats.empty())
+                    .fileChannels(ItemStats.empty())
+                    .fileTemplates(ItemStats.empty())
+                    .resourceQueues(ItemStats.empty())
+                    .batchWindows(ItemStats.empty())
+                    .businessCalendars(ItemStats.empty())
+                    .quotaPolicies(ItemStats.empty())
+                    .alertRoutings(ItemStats.empty())
+                    .build();
+        }
     }
 
-    public void recordUpdated(String code) {
-      updated++;
-      details.add(new ItemDetail(code, ItemDetail.UPDATED, null));
+    public record ItemStats(int created, int updated, int skipped, int failed, int migrated, List<ItemDetail> details) {
+        public static ItemStats empty() {
+            return new ItemStats(0, 0, 0, 0, 0, List.of());
+        }
     }
 
-    public void recordSkipped(String code) {
-      skipped++;
-      details.add(new ItemDetail(code, ItemDetail.SKIPPED, null));
+    public record ItemDetail(String code, String action, String errorMessage) {
+        /** action 常量。 */
+        public static final String CREATED = "CREATED";
+
+        public static final String UPDATED = "UPDATED";
+        public static final String SKIPPED = "SKIPPED";
+        public static final String FAILED = "FAILED";
+
+        public static final String MIGRATED = "MIGRATED";
     }
 
-    public void recordSkipped(String code, String detail) {
-      skipped++;
-      details.add(new ItemDetail(code, ItemDetail.SKIPPED, detail));
-    }
+    /** 可变的 ItemStats 构建器，收集明细后一次性转换为不可变 record。 */
+    public static final class ItemStatsAccumulator {
+        private int created;
+        private int updated;
+        private int skipped;
+        private int failed;
+        private int migrated;
+        private final List<ItemDetail> details = new ArrayList<>();
 
-    public void recordFailed(String code, String errorMessage) {
-      failed++;
-      details.add(new ItemDetail(code, ItemDetail.FAILED, errorMessage));
-    }
+        public void recordCreated(String code) {
+            created++;
+            details.add(new ItemDetail(code, ItemDetail.CREATED, null));
+        }
 
-    public void recordMigrated(String code, String detail) {
-      migrated++;
-      details.add(new ItemDetail(code, ItemDetail.MIGRATED, detail));
-    }
+        public void recordUpdated(String code) {
+            updated++;
+            details.add(new ItemDetail(code, ItemDetail.UPDATED, null));
+        }
 
-    public ItemStats toItemStats() {
-      return new ItemStats(created, updated, skipped, failed, migrated, List.copyOf(details));
+        public void recordSkipped(String code) {
+            skipped++;
+            details.add(new ItemDetail(code, ItemDetail.SKIPPED, null));
+        }
+
+        public void recordSkipped(String code, String detail) {
+            skipped++;
+            details.add(new ItemDetail(code, ItemDetail.SKIPPED, detail));
+        }
+
+        public void recordFailed(String code, String errorMessage) {
+            failed++;
+            details.add(new ItemDetail(code, ItemDetail.FAILED, errorMessage));
+        }
+
+        public void recordMigrated(String code, String detail) {
+            migrated++;
+            details.add(new ItemDetail(code, ItemDetail.MIGRATED, detail));
+        }
+
+        public ItemStats toItemStats() {
+            return new ItemStats(created, updated, skipped, failed, migrated, List.copyOf(details));
+        }
     }
-  }
 }

@@ -24,53 +24,49 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ConsoleClusterDiagnosticMapper {
 
-  List<ShedLockView> shedlockAll();
+    List<ShedLockView> shedlockAll();
 
-  List<DeliveryStatusCountView> eventDeliveryStatusCounts(@Param("tenantId") String tenantId);
+    List<DeliveryStatusCountView> eventDeliveryStatusCounts(@Param("tenantId") String tenantId);
 
-  Long countPendingOutboxEvents(@Param("tenantId") String tenantId);
+    Long countPendingOutboxEvents(@Param("tenantId") String tenantId);
 
-  Long countOutboxEventsByStatuses(
-      @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
+    Long countOutboxEventsByStatuses(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 
-  Long countStalePublishingOutboxEvents(
-      @Param("tenantId") String tenantId,
-      @Param("publishingStatus") String publishingStatus,
-      @Param("timeoutSeconds") long timeoutSeconds);
+    Long countStalePublishingOutboxEvents(
+            @Param("tenantId") String tenantId,
+            @Param("publishingStatus") String publishingStatus,
+            @Param("timeoutSeconds") long timeoutSeconds);
 
-  Long countStaleOnlineWorkers(
-      @Param("tenantId") String tenantId, @Param("timeoutSeconds") long timeoutSeconds);
+    Long countStaleOnlineWorkers(@Param("tenantId") String tenantId, @Param("timeoutSeconds") long timeoutSeconds);
 
-  Long countDrainingPastDeadlineWorkers(@Param("tenantId") String tenantId);
+    Long countDrainingPastDeadlineWorkers(@Param("tenantId") String tenantId);
 
-  Long countDecommissionedWorkersWithActiveTasks(@Param("tenantId") String tenantId);
+    Long countDecommissionedWorkersWithActiveTasks(@Param("tenantId") String tenantId);
 
-  Long countInvalidCapabilityTags(@Param("tenantId") String tenantId);
+    Long countInvalidCapabilityTags(@Param("tenantId") String tenantId);
 
-  Long countJobInstancesByStatuses(
-      @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
+    Long countJobInstancesByStatuses(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 
-  JobInstanceDiagnosticView selectJobInstanceSummary(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    JobInstanceDiagnosticView selectJobInstanceSummary(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  Long countTerminalInstancesWithActiveChildren(@Param("tenantId") String tenantId);
+    Long countTerminalInstancesWithActiveChildren(@Param("tenantId") String tenantId);
 
-  List<WorkerGroupCapacityView> workerGroupCapacity(@Param("tenantId") String tenantId);
+    List<WorkerGroupCapacityView> workerGroupCapacity(@Param("tenantId") String tenantId);
 
-  List<ClusterStatusCountView> partitionStatusCounts(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    List<ClusterStatusCountView> partitionStatusCounts(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<ClusterStatusCountView> taskStatusCounts(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    List<ClusterStatusCountView> taskStatusCounts(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<ActiveTaskWorkerIssueView> activeTaskWorkerIssues(
-      @Param("tenantId") String tenantId,
-      @Param("jobInstanceId") Long jobInstanceId,
-      @Param("heartbeatTimeoutSeconds") long heartbeatTimeoutSeconds);
+    List<ActiveTaskWorkerIssueView> activeTaskWorkerIssues(
+            @Param("tenantId") String tenantId,
+            @Param("jobInstanceId") Long jobInstanceId,
+            @Param("heartbeatTimeoutSeconds") long heartbeatTimeoutSeconds);
 
-  Long countOnlineWorkersForGroup(
-      @Param("tenantId") String tenantId, @Param("workerGroup") String workerGroup);
+    Long countOnlineWorkersForGroup(@Param("tenantId") String tenantId, @Param("workerGroup") String workerGroup);
 
-  List<OutboxStatusCountView> outboxStatusCountsForInstance(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    List<OutboxStatusCountView> outboxStatusCountsForInstance(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 }

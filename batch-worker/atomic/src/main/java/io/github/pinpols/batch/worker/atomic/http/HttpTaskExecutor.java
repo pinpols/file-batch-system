@@ -89,691 +89,673 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-    prefix = "batch.worker.executors.http",
-    name = "enabled",
-    havingValue = "true")
+@ConditionalOnProperty(prefix = "batch.worker.executors.http", name = "enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class HttpTaskExecutor implements BatchTaskExecutor {
 
-  static final String PARAM_URL = "url";
-  static final String PARAM_METHOD = "method";
-  static final String PARAM_HEADERS = "headers";
-  static final String PARAM_BODY = "body";
-  static final String PARAM_TIMEOUT = "timeoutSeconds";
-  static final String PARAM_EXPECT_STATUS = "expectStatus";
-  static final String PARAM_AUTH = "auth";
-  private static final String AUTH_TYPE_NONE = "none";
-  private static final String AUTH_TYPE_BASIC = "basic";
-  private static final String AUTH_TYPE_BEARER = "bearer";
+    static final String PARAM_URL = "url";
+    static final String PARAM_METHOD = "method";
+    static final String PARAM_HEADERS = "headers";
+    static final String PARAM_BODY = "body";
+    static final String PARAM_TIMEOUT = "timeoutSeconds";
+    static final String PARAM_EXPECT_STATUS = "expectStatus";
+    static final String PARAM_AUTH = "auth";
+    private static final String AUTH_TYPE_NONE = "none";
+    private static final String AUTH_TYPE_BASIC = "basic";
+    private static final String AUTH_TYPE_BEARER = "bearer";
 
-  private static final Set<String> IDEMPOTENT_METHODS = Set.of("GET", "HEAD", "PUT", "DELETE");
+    private static final Set<String> IDEMPOTENT_METHODS = Set.of("GET", "HEAD", "PUT", "DELETE");
 
-  /** OkHttp 方法集中要求带 body 的方法(POST/PUT/PATCH/DELETE 可带);GET/HEAD 必须无 body。 */
-  private static final Set<String> METHODS_REQUIRE_BODY = Set.of("POST", "PUT", "PATCH");
+    /** OkHttp 方法集中要求带 body 的方法(POST/PUT/PATCH/DELETE 可带);GET/HEAD 必须无 body。 */
+    private static final Set<String> METHODS_REQUIRE_BODY = Set.of("POST", "PUT", "PATCH");
 
-  private final HttpExecutorProperties props;
+    private final HttpExecutorProperties props;
 
-  /**
-   * 共享 OkHttp 基础客户端(懒构造,因 dns 回调依赖注入的 props)。每次请求经 {@code newBuilder()} 派生 per-invocation
-   * 超时,复用连接池/dispatcher。dns 回调做 resolve-then-connect SSRF 校验。
-   */
-  private final AtomicReference<OkHttpClient> sharedClient = new AtomicReference<>();
+    /**
+     * 共享 OkHttp 基础客户端(懒构造,因 dns 回调依赖注入的 props)。每次请求经 {@code newBuilder()} 派生 per-invocation
+     * 超时,复用连接池/dispatcher。dns 回调做 resolve-then-connect SSRF 校验。
+     */
+    private final AtomicReference<OkHttpClient> sharedClient = new AtomicReference<>();
 
-  private final AtomicBoolean stopping = new AtomicBoolean();
+    private final AtomicBoolean stopping = new AtomicBoolean();
 
-  private OkHttpClient client() {
-    if (stopping.get()) {
-      throw new IllegalStateException("HTTP task executor is stopping");
-    }
-    OkHttpClient c = sharedClient.get();
-    if (c == null) {
-      synchronized (this) {
+    private OkHttpClient client() {
         if (stopping.get()) {
-          throw new IllegalStateException("HTTP task executor is stopping");
+            throw new IllegalStateException("HTTP task executor is stopping");
         }
-        c = sharedClient.get();
+        OkHttpClient c = sharedClient.get();
         if (c == null) {
-          c = new OkHttpClient.Builder()
-              .followRedirects(false) // 重定向 target 不会再过 validateHost/dns 校验,显式禁
-              .followSslRedirects(false)
-              .retryOnConnectionFailure(false) // 重试由本类 runWithRetry 控制,避免双重重试
-              .dns(guardedDns())
-              .build();
-          sharedClient.set(c);
+            synchronized (this) {
+                if (stopping.get()) {
+                    throw new IllegalStateException("HTTP task executor is stopping");
+                }
+                c = sharedClient.get();
+                if (c == null) {
+                    c = new OkHttpClient.Builder()
+                            .followRedirects(false) // 重定向 target 不会再过 validateHost/dns 校验,显式禁
+                            .followSslRedirects(false)
+                            .retryOnConnectionFailure(false) // 重试由本类 runWithRetry 控制,避免双重重试
+                            .dns(guardedDns())
+                            .build();
+                    sharedClient.set(c);
+                }
+            }
         }
-      }
+        return c;
     }
-    return c;
-  }
 
-  @PreDestroy
-  void shutdownHttpClient() {
-    stopping.set(true);
-    OkHttpClient client = sharedClient.getAndSet(null);
-    if (EmptyChecks.isNull(client)) {
-      return;
-    }
-    client.dispatcher().cancelAll();
-    client.dispatcher().executorService().shutdown();
-    client.connectionPool().evictAll();
-  }
-
-  /**
-   * resolve-then-connect SSRF 防护:在 OkHttp 真正建连前回调,解析主机名并对解析出的每个 IP 复用本类 {@link #isBlockedAddress}
-   * 黑名单校验(回环/私网/link-local/metadata),命中即抛 {@link UnknownHostException} 阻止建连。把"已校验的同一组
-   * IP"交给连接层,杜绝二次解析的 rebinding 窗口。 {@code blockPrivateIps=false}(dev/联调)时直接系统解析放行,与 {@link
-   * #validateResolvedIp} 同语义。
-   */
-  private Dns guardedDns() {
-    return hostname -> {
-      List<InetAddress> resolved = List.of(InetAddress.getAllByName(hostname));
-      if (!props.isBlockPrivateIps()) {
-        return resolved;
-      }
-      for (InetAddress addr : resolved) {
-        if (isBlockedAddress(addr)) {
-          throw new UnknownHostException(
-              "host resolves to blocked address: " + hostname + " -> " + addr.getHostAddress());
+    @PreDestroy
+    void shutdownHttpClient() {
+        stopping.set(true);
+        OkHttpClient client = sharedClient.getAndSet(null);
+        if (EmptyChecks.isNull(client)) {
+            return;
         }
-      }
-      return resolved;
-    };
-  }
-
-  @Override
-  public String taskType() {
-    return props.getTaskType();
-  }
-
-  @Override
-  public TaskCapability capability() {
-    return new TaskCapability(
-        Set.of(ResourceKind.NET),
-        false, // 业务可能非幂等(POST 创建资源等),保守
-        true,
-        props.getDefaultTimeout());
-  }
-
-  @Override
-  public boolean isSafeToReplay(TaskContext context) {
-    Map<String, Object> parameters = context.parameters();
-    String method = stringParam(parameters, PARAM_METHOD, "GET").toUpperCase(Locale.ROOT);
-    if (IDEMPOTENT_METHODS.contains(method)) {
-      return true;
-    }
-    Object rawHeaders = parameters.get(PARAM_HEADERS);
-    if (!(rawHeaders instanceof Map<?, ?> headers)) {
-      return false;
-    }
-    // JOB_RERUN 复用其来源 JobInstance 中持久化的跨日结果载荷。若再次解析
-    // EFFECTIVE/LATEST，会悄悄改变不同尝试之间的业务输入。
-    return headers.entrySet().stream()
-        .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
-            && entry.getValue() instanceof String value
-            && EmptyChecks.isNotBlank(value));
-  }
-
-  @Override
-  public TaskResult execute(TaskContext ctx) {
-    try {
-      // Lane C:扫 parameters,但排除 HTTP executor 协议显式的 `auth` 子树(其内
-      // username/password/token 是 protocol 一部分)。其他位置出现的 password / token / secret 仍拒。
-      // Console 表单层已负责提示 auth.password 优先使用 env reference；此处仍保留协议兼容白名单。
-      Map<String, Object> paramsForScan = ctx.parameters();
-      if (paramsForScan != null && paramsForScan.containsKey(PARAM_AUTH)) {
-        Map<String, Object> filtered = new LinkedHashMap<>(paramsForScan);
-        filtered.remove(PARAM_AUTH);
-        SensitiveDataValidator.rejectIfContainsSensitiveKeys(filtered, "atomic.http.parameters");
-      } else {
-        SensitiveDataValidator.rejectIfContainsSensitiveKeys(
-            paramsForScan, "atomic.http.parameters");
-      }
-      Invocation inv = parseInvocation(ctx);
-      if (ctx.isDryRun()) {
-        // ADR-026 §dry-run:不发出 HTTP 请求,只回传将要发的 method + url + header keys + body 长度。
-        // 不回传 header value(可能含 auth bearer / cookie),不回传 body 文本(可能含敏感载荷)。
-        String plannedEndpoint = SecretMasking.maskEndpoint(inv.uri.toString());
-        Map<String, Object> planned = new LinkedHashMap<>();
-        planned.put(PipelineRuntimeKeys.DRY_RUN, true);
-        planned.put("plannedAction", "http");
-        planned.put(PARAM_METHOD, inv.method);
-        planned.put(PARAM_URL, plannedEndpoint);
-        planned.put("headerKeys", List.copyOf(inv.headers.keySet()));
-        planned.put(
-            "bodyBytes", inv.body == null ? 0 : inv.body.getBytes(StandardCharsets.UTF_8).length);
-        planned.put(PARAM_TIMEOUT, inv.timeout.toSeconds());
-        planned.put(PARAM_EXPECT_STATUS, inv.expectedStatus);
-        log.info(
-            "http executor dry-run skipped real request: tenantId={}, jobCode={}, method={},"
-                + " url={}",
-            ctx.tenantId(),
-            ctx.jobCode(),
-            inv.method,
-            plannedEndpoint);
-        return TaskResult.ok(
-            "dry-run: " + inv.method + " " + plannedEndpoint + " (not sent)", planned);
-      }
-      return runWithRetry(inv);
-    } catch (HttpValidationException ex) {
-      // 域名/IP/SSRF/方法白名单 vs 入参格式问题:都分流到 SECURITY_REJECTED / CONFIG_INVALID
-      boolean security = ex.getMessage() != null
-          && (ex.getMessage().contains("blocked")
-              || ex.getMessage().contains("allowedHostPatterns")
-              || ex.getMessage().contains("allowlist")
-              || ex.getMessage().contains("resolves to blocked"));
-      AtomicErrorCode errorCode =
-          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID;
-      return AtomicErrorCode.fail(errorCode, ex.getMessage());
-    } catch (BizException ex) {
-      log.warn(
-          "http executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
-              ? "?"
-              : ex.getMessageArgs()[1]);
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
-    } catch (RuntimeException ex) {
-      log.error(
-          "http executor unexpected error: tenantId={}, jobCode={}, cause={}",
-          LogSanitizer.value(ctx.tenantId()),
-          LogSanitizer.value(ctx.jobCode()),
-          SwallowedExceptionLogger.summary(ex));
-      String exceptionMessage = ex.getMessage();
-      String failureMessage =
-          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
-      return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
-    }
-  }
-
-  // ─── parsing + validation ────────────────────────────────────────────────────
-
-  private Invocation parseInvocation(TaskContext ctx) {
-    Map<String, Object> params = ctx.parameters();
-
-    Object urlObj = params.get(PARAM_URL);
-    if (!(urlObj instanceof String urlString) || EmptyChecks.isBlank(urlString)) {
-      throw new HttpValidationException("parameters.url required");
-    }
-    URI uri;
-    try {
-      String trimmedUrl = urlString.trim();
-      uri = new URI(trimmedUrl);
-    } catch (URISyntaxException e) {
-      throw new HttpValidationException("parameters.url not a valid URI: " + e.getMessage());
-    }
-    if (uri.getHost() == null) {
-      throw new HttpValidationException("URL must have host: " + uri);
-    }
-    validateHost(uri.getHost());
-
-    String methodText = stringParam(params, PARAM_METHOD, "GET");
-    String method = methodText.toUpperCase(Locale.ROOT);
-    if (!props.getAllowedMethods().contains(method)) {
-      throw new HttpValidationException(
-          "method " + method + " not in allowedMethods=" + props.getAllowedMethods());
+        client.dispatcher().cancelAll();
+        client.dispatcher().executorService().shutdown();
+        client.connectionPool().evictAll();
     }
 
-    Map<String, String> headers =
-        params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m) : Map.of();
-
-    String body = params.get(PARAM_BODY) instanceof String s ? s : null;
-    validateRequestBodySize(body);
-
-    Duration timeout = props.getDefaultTimeout();
-    Object t = params.get(PARAM_TIMEOUT);
-    if (EmptyChecks.isNotNull(t)) {
-      Long sec = AtomicParameterNumbers.positiveLong(t);
-      if (EmptyChecks.isNull(sec)) {
-        throw new HttpValidationException("timeoutSeconds must be positive integer");
-      }
-      Duration requested = Duration.ofSeconds(sec);
-      boolean requestedTimeoutIsBelowDefault = requested.compareTo(props.getDefaultTimeout()) < 0;
-      if (requestedTimeoutIsBelowDefault) {
-        timeout = requested;
-      }
+    /**
+     * resolve-then-connect SSRF 防护:在 OkHttp 真正建连前回调,解析主机名并对解析出的每个 IP 复用本类 {@link #isBlockedAddress}
+     * 黑名单校验(回环/私网/link-local/metadata),命中即抛 {@link UnknownHostException} 阻止建连。把"已校验的同一组
+     * IP"交给连接层,杜绝二次解析的 rebinding 窗口。 {@code blockPrivateIps=false}(dev/联调)时直接系统解析放行,与 {@link
+     * #validateResolvedIp} 同语义。
+     */
+    private Dns guardedDns() {
+        return hostname -> {
+            List<InetAddress> resolved = List.of(InetAddress.getAllByName(hostname));
+            if (!props.isBlockPrivateIps()) {
+                return resolved;
+            }
+            for (InetAddress addr : resolved) {
+                if (isBlockedAddress(addr)) {
+                    throw new UnknownHostException(
+                            "host resolves to blocked address: " + hostname + " -> " + addr.getHostAddress());
+                }
+            }
+            return resolved;
+        };
     }
 
-    Set<Integer> expectedStatus = parseExpectStatus(params.get(PARAM_EXPECT_STATUS));
-
-    Map<String, String> finalHeaders = new LinkedHashMap<>(headers);
-    applyAuth(finalHeaders, params.get(PARAM_AUTH));
-
-    return new Invocation(uri, method, finalHeaders, body, timeout, expectedStatus);
-  }
-
-  private void validateHost(String host) {
-    String h = host.toLowerCase(Locale.ROOT);
-    for (String pattern : props.getBlockedHostPatterns()) {
-      if (matchesGlob(pattern.toLowerCase(Locale.ROOT), h)) {
-        throw new HttpValidationException("host blocked: " + host + " (matched " + pattern + ")");
-      }
+    @Override
+    public String taskType() {
+        return props.getTaskType();
     }
-    if (props.getAllowedHostPatterns().isEmpty()) {
-      // 空白名单:enforceAllowlist=false → 允许全部(仅 dev);=true → fail-closed 拒绝全部
-      if (props.isEnforceAllowlist()) {
+
+    @Override
+    public TaskCapability capability() {
+        return new TaskCapability(
+                Set.of(ResourceKind.NET),
+                false, // 业务可能非幂等(POST 创建资源等),保守
+                true,
+                props.getDefaultTimeout());
+    }
+
+    @Override
+    public boolean isSafeToReplay(TaskContext context) {
+        Map<String, Object> parameters = context.parameters();
+        String method = stringParam(parameters, PARAM_METHOD, "GET").toUpperCase(Locale.ROOT);
+        if (IDEMPOTENT_METHODS.contains(method)) {
+            return true;
+        }
+        Object rawHeaders = parameters.get(PARAM_HEADERS);
+        if (!(rawHeaders instanceof Map<?, ?> headers)) {
+            return false;
+        }
+        // JOB_RERUN 复用其来源 JobInstance 中持久化的跨日结果载荷。若再次解析
+        // EFFECTIVE/LATEST，会悄悄改变不同尝试之间的业务输入。
+        return headers.entrySet().stream()
+                .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
+                        && entry.getValue() instanceof String value
+                        && EmptyChecks.isNotBlank(value));
+    }
+
+    @Override
+    public TaskResult execute(TaskContext ctx) {
+        try {
+            // Lane C:扫 parameters,但排除 HTTP executor 协议显式的 `auth` 子树(其内
+            // username/password/token 是 protocol 一部分)。其他位置出现的 password / token / secret 仍拒。
+            // Console 表单层已负责提示 auth.password 优先使用 env reference；此处仍保留协议兼容白名单。
+            Map<String, Object> paramsForScan = ctx.parameters();
+            if (paramsForScan != null && paramsForScan.containsKey(PARAM_AUTH)) {
+                Map<String, Object> filtered = new LinkedHashMap<>(paramsForScan);
+                filtered.remove(PARAM_AUTH);
+                SensitiveDataValidator.rejectIfContainsSensitiveKeys(filtered, "atomic.http.parameters");
+            } else {
+                SensitiveDataValidator.rejectIfContainsSensitiveKeys(paramsForScan, "atomic.http.parameters");
+            }
+            Invocation inv = parseInvocation(ctx);
+            if (ctx.isDryRun()) {
+                // ADR-026 §dry-run:不发出 HTTP 请求,只回传将要发的 method + url + header keys + body 长度。
+                // 不回传 header value(可能含 auth bearer / cookie),不回传 body 文本(可能含敏感载荷)。
+                String plannedEndpoint = SecretMasking.maskEndpoint(inv.uri.toString());
+                Map<String, Object> planned = new LinkedHashMap<>();
+                planned.put(PipelineRuntimeKeys.DRY_RUN, true);
+                planned.put("plannedAction", "http");
+                planned.put(PARAM_METHOD, inv.method);
+                planned.put(PARAM_URL, plannedEndpoint);
+                planned.put("headerKeys", List.copyOf(inv.headers.keySet()));
+                planned.put("bodyBytes", inv.body == null ? 0 : inv.body.getBytes(StandardCharsets.UTF_8).length);
+                planned.put(PARAM_TIMEOUT, inv.timeout.toSeconds());
+                planned.put(PARAM_EXPECT_STATUS, inv.expectedStatus);
+                log.info(
+                        "http executor dry-run skipped real request: tenantId={}, jobCode={}, method={}," + " url={}",
+                        ctx.tenantId(),
+                        ctx.jobCode(),
+                        inv.method,
+                        plannedEndpoint);
+                return TaskResult.ok("dry-run: " + inv.method + " " + plannedEndpoint + " (not sent)", planned);
+            }
+            return runWithRetry(inv);
+        } catch (HttpValidationException ex) {
+            // 域名/IP/SSRF/方法白名单 vs 入参格式问题:都分流到 SECURITY_REJECTED / CONFIG_INVALID
+            boolean security = ex.getMessage() != null
+                    && (ex.getMessage().contains("blocked")
+                            || ex.getMessage().contains("allowedHostPatterns")
+                            || ex.getMessage().contains("allowlist")
+                            || ex.getMessage().contains("resolves to blocked"));
+            AtomicErrorCode errorCode = security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID;
+            return AtomicErrorCode.fail(errorCode, ex.getMessage());
+        } catch (BizException ex) {
+            log.warn(
+                    "http executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
+                    ctx.tenantId(),
+                    ctx.jobCode(),
+                    ex.getMessageArgs() == null || ex.getMessageArgs().length < 2 ? "?" : ex.getMessageArgs()[1]);
+            return AtomicErrorCode.fail(
+                    AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
+        } catch (RuntimeException ex) {
+            log.error(
+                    "http executor unexpected error: tenantId={}, jobCode={}, cause={}",
+                    LogSanitizer.value(ctx.tenantId()),
+                    LogSanitizer.value(ctx.jobCode()),
+                    SwallowedExceptionLogger.summary(ex));
+            String exceptionMessage = ex.getMessage();
+            String failureMessage =
+                    EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+            return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
+        }
+    }
+
+    // ─── parsing + validation ────────────────────────────────────────────────────
+
+    private Invocation parseInvocation(TaskContext ctx) {
+        Map<String, Object> params = ctx.parameters();
+
+        Object urlObj = params.get(PARAM_URL);
+        if (!(urlObj instanceof String urlString) || EmptyChecks.isBlank(urlString)) {
+            throw new HttpValidationException("parameters.url required");
+        }
+        URI uri;
+        try {
+            String trimmedUrl = urlString.trim();
+            uri = new URI(trimmedUrl);
+        } catch (URISyntaxException e) {
+            throw new HttpValidationException("parameters.url not a valid URI: " + e.getMessage());
+        }
+        if (uri.getHost() == null) {
+            throw new HttpValidationException("URL must have host: " + uri);
+        }
+        validateHost(uri.getHost());
+
+        String methodText = stringParam(params, PARAM_METHOD, "GET");
+        String method = methodText.toUpperCase(Locale.ROOT);
+        if (!props.getAllowedMethods().contains(method)) {
+            throw new HttpValidationException(
+                    "method " + method + " not in allowedMethods=" + props.getAllowedMethods());
+        }
+
+        Map<String, String> headers = params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m) : Map.of();
+
+        String body = params.get(PARAM_BODY) instanceof String s ? s : null;
+        validateRequestBodySize(body);
+
+        Duration timeout = props.getDefaultTimeout();
+        Object t = params.get(PARAM_TIMEOUT);
+        if (EmptyChecks.isNotNull(t)) {
+            Long sec = AtomicParameterNumbers.positiveLong(t);
+            if (EmptyChecks.isNull(sec)) {
+                throw new HttpValidationException("timeoutSeconds must be positive integer");
+            }
+            Duration requested = Duration.ofSeconds(sec);
+            boolean requestedTimeoutIsBelowDefault = requested.compareTo(props.getDefaultTimeout()) < 0;
+            if (requestedTimeoutIsBelowDefault) {
+                timeout = requested;
+            }
+        }
+
+        Set<Integer> expectedStatus = parseExpectStatus(params.get(PARAM_EXPECT_STATUS));
+
+        Map<String, String> finalHeaders = new LinkedHashMap<>(headers);
+        applyAuth(finalHeaders, params.get(PARAM_AUTH));
+
+        return new Invocation(uri, method, finalHeaders, body, timeout, expectedStatus);
+    }
+
+    private void validateHost(String host) {
+        String h = host.toLowerCase(Locale.ROOT);
+        for (String pattern : props.getBlockedHostPatterns()) {
+            if (matchesGlob(pattern.toLowerCase(Locale.ROOT), h)) {
+                throw new HttpValidationException("host blocked: " + host + " (matched " + pattern + ")");
+            }
+        }
+        if (props.getAllowedHostPatterns().isEmpty()) {
+            // 空白名单:enforceAllowlist=false → 允许全部(仅 dev);=true → fail-closed 拒绝全部
+            if (props.isEnforceAllowlist()) {
+                throw new HttpValidationException(
+                        "allowlist enforced but allowedHostPatterns empty (deny all): " + host);
+            }
+            validateResolvedIp(host);
+            return;
+        }
+        for (String pattern : props.getAllowedHostPatterns()) {
+            if (matchesGlob(pattern.toLowerCase(Locale.ROOT), h)) {
+                validateResolvedIp(host);
+                return;
+            }
+        }
         throw new HttpValidationException(
-            "allowlist enforced but allowedHostPatterns empty (deny all): " + host);
-      }
-      validateResolvedIp(host);
-      return;
+                "host not in allowedHostPatterns: " + host + ", allowed=" + props.getAllowedHostPatterns());
     }
-    for (String pattern : props.getAllowedHostPatterns()) {
-      if (matchesGlob(pattern.toLowerCase(Locale.ROOT), h)) {
-        validateResolvedIp(host);
-        return;
-      }
-    }
-    throw new HttpValidationException(
-        "host not in allowedHostPatterns: " + host + ", allowed=" + props.getAllowedHostPatterns());
-  }
 
-  /**
-   * SSRF 加固:把 host 解析为 IP,任意一个落入内网 / 回环 / link-local / metadata 网段就拒绝。 字面 IP / 主机名都解析(getAllByName
-   * 对 IP literal 不走网络)。由 {@link HttpExecutorProperties#isBlockPrivateIps()} 控制(默认 true)。
-   */
-  private void validateResolvedIp(String host) {
-    if (!props.isBlockPrivateIps()) {
-      return;
-    }
-    InetAddress[] resolved;
-    try {
-      resolved = InetAddress.getAllByName(host);
-    } catch (UnknownHostException e) {
-      throw new HttpValidationException(
-          "host cannot be resolved: " + host + " (" + e.getMessage() + ")");
-    }
-    for (InetAddress addr : resolved) {
-      if (isBlockedAddress(addr)) {
-        throw new HttpValidationException(
-            "host resolves to blocked address: " + host + " -> " + addr.getHostAddress());
-      }
-    }
-  }
-
-  /**
-   * 判定一个 {@link InetAddress} 是否属于必须拒绝的网段。收敛到 batch-common 的 canonical {@link
-   * DnsResolveGuard#isBlocked(InetAddress)}（覆盖回环、私网、link-local、IPv4-mapped-IPv6、<b>fc00::/7
-   * ULA</b>、any-local 与组播等；原本地私有副本漏了 ULA，导致 {@code fd00:ec2::254} 等 IPv6 metadata
-   * 被放行）。package-private 以便单测直接对 IP literal 校验，无需联网。
-   */
-  static boolean isBlockedAddress(InetAddress addr) {
-    return DnsResolveGuard.isBlocked(addr);
-  }
-
-  /** 简化 glob:{@code *} = 匹配 0+ 个非 {@code .} 字符;其他字符精确。 */
-  static boolean matchesGlob(String pattern, String value) {
-    StringBuilder regex = new StringBuilder("^");
-    for (char c : pattern.toCharArray()) {
-      switch (c) {
-        case '*' -> regex.append("[^.]*");
-        case '.' -> regex.append("\\.");
-        case '?' -> regex.append("[^.]");
-        default -> {
-          String character = String.valueOf(c);
-          String quotedCharacter = Pattern.quote(character);
-          regex.append(quotedCharacter);
+    /**
+     * SSRF 加固:把 host 解析为 IP,任意一个落入内网 / 回环 / link-local / metadata 网段就拒绝。 字面 IP / 主机名都解析(getAllByName
+     * 对 IP literal 不走网络)。由 {@link HttpExecutorProperties#isBlockPrivateIps()} 控制(默认 true)。
+     */
+    private void validateResolvedIp(String host) {
+        if (!props.isBlockPrivateIps()) {
+            return;
         }
-      }
-    }
-    regex.append("$");
-    String regexPattern = regex.toString();
-    return value.matches(regexPattern);
-  }
-
-  private Set<Integer> parseExpectStatus(Object raw) {
-    if (raw == null) {
-      return Set.of();
-    }
-    if (raw instanceof Number n) {
-      return Set.of(n.intValue());
-    }
-    if (raw instanceof List<?> list) {
-      HashSet<Integer> out = new HashSet<>();
-      for (Object o : list) {
-        if (o instanceof Number number) {
-          out.add(number.intValue());
-        } else {
-          throw new HttpValidationException("expectStatus list must contain integers");
+        InetAddress[] resolved;
+        try {
+            resolved = InetAddress.getAllByName(host);
+        } catch (UnknownHostException e) {
+            throw new HttpValidationException("host cannot be resolved: " + host + " (" + e.getMessage() + ")");
         }
-      }
-      return out;
-    }
-    throw new HttpValidationException("expectStatus must be Integer or List<Integer>");
-  }
-
-  private void applyAuth(Map<String, String> headers, Object rawAuth) {
-    if (rawAuth == null) {
-      return;
-    }
-    if (!(rawAuth instanceof Map<?, ?>)) {
-      throw new HttpValidationException("auth must be a map");
-    }
-    @SuppressWarnings("unchecked")
-    Map<String, Object> auth = (Map<String, Object>) rawAuth;
-    Object typeValue = auth.getOrDefault("type", AUTH_TYPE_NONE);
-    String typeText = String.valueOf(typeValue);
-    String type = typeText.toLowerCase(Locale.ROOT);
-    if (!props.getAllowedAuthTypes().contains(type)) {
-      throw new HttpValidationException(
-          "auth type " + type + " not in allowedAuthTypes=" + props.getAllowedAuthTypes());
-    }
-    switch (type) {
-      case AUTH_TYPE_NONE -> {
-        // 无操作
-      }
-      case AUTH_TYPE_BASIC -> {
-        String user = Objects.toString(auth.get("username"), "");
-        // ADR-039 P1:password 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
-        String configuredPassword = Objects.toString(auth.get("password"), "");
-        String pass = CredentialEnvResolver.resolve(configuredPassword);
-        String token = Base64.getEncoder()
-            .encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
-        headers.put("Authorization", "Basic " + token);
-      }
-      case AUTH_TYPE_BEARER -> {
-        // ADR-039 P1:token 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
-        String configuredToken = Objects.toString(auth.get("token"), "");
-        String token = CredentialEnvResolver.resolve(configuredToken);
-        if (token.isEmpty()) {
-          throw new HttpValidationException("auth.token required for bearer");
+        for (InetAddress addr : resolved) {
+            if (isBlockedAddress(addr)) {
+                throw new HttpValidationException(
+                        "host resolves to blocked address: " + host + " -> " + addr.getHostAddress());
+            }
         }
-        headers.put("Authorization", "Bearer " + token);
-      }
-      default -> throw new HttpValidationException("unsupported auth.type: " + type);
     }
-  }
 
-  private static Map<String, String> toStringMap(Map<?, ?> m) {
-    Map<String, String> out = new LinkedHashMap<>();
-    for (Map.Entry<?, ?> e : m.entrySet()) {
-      if (e.getValue() == null) continue;
-      out.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+    /**
+     * 判定一个 {@link InetAddress} 是否属于必须拒绝的网段。收敛到 batch-common 的 canonical {@link
+     * DnsResolveGuard#isBlocked(InetAddress)}（覆盖回环、私网、link-local、IPv4-mapped-IPv6、<b>fc00::/7
+     * ULA</b>、any-local 与组播等；原本地私有副本漏了 ULA，导致 {@code fd00:ec2::254} 等 IPv6 metadata
+     * 被放行）。package-private 以便单测直接对 IP literal 校验，无需联网。
+     */
+    static boolean isBlockedAddress(InetAddress addr) {
+        return DnsResolveGuard.isBlocked(addr);
     }
-    return out;
-  }
 
-  private static String stringParam(Map<String, Object> p, String key, String fallback) {
-    Object v = p.get(key);
-    return v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : fallback;
-  }
-
-  private void validateRequestBodySize(String body) {
-    if (body == null) {
-      return;
-    }
-    int max = props.getMaxRequestBodyBytes();
-    if (max < 0) {
-      throw new HttpValidationException("maxRequestBodyBytes must be >= 0");
-    }
-    int bytes = body.getBytes(StandardCharsets.UTF_8).length;
-    if (max > 0 && bytes > max) {
-      throw new HttpValidationException(
-          "request body exceeds maxRequestBodyBytes=" + max + ": " + bytes);
-    }
-  }
-
-  // ─── 带重试的执行 ──────────────────────────────────────────────────
-
-  private TaskResult runWithRetry(Invocation inv) {
-    boolean idempotent = IDEMPOTENT_METHODS.contains(inv.method);
-    int maxAttempts = idempotent ? props.getMaxRetries() + 1 : 1;
-
-    long start = System.currentTimeMillis();
-    Exception lastException = null;
-    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        TaskResult result = runOnce(inv);
-        // 显式接受的状态已满足调用方预期；未指定期望时服务端错误沿原策略重试。
-        Integer status = (Integer) result.output().get("statusCode");
-        boolean serverFailureCanBeRetried = EmptyChecks.isNotNull(status)
-            && status >= 500
-            && attempt < maxAttempts
-            && (EmptyChecks.isEmpty(inv.expectedStatus) || !result.success());
-        if (serverFailureCanBeRetried) {
-          log.warn("http 5xx, retrying: status={}, attempt={}/{}", status, attempt, maxAttempts);
-          sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
-          continue;
+    /** 简化 glob:{@code *} = 匹配 0+ 个非 {@code .} 字符;其他字符精确。 */
+    static boolean matchesGlob(String pattern, String value) {
+        StringBuilder regex = new StringBuilder("^");
+        for (char c : pattern.toCharArray()) {
+            switch (c) {
+                case '*' -> regex.append("[^.]*");
+                case '.' -> regex.append("\\.");
+                case '?' -> regex.append("[^.]");
+                default -> {
+                    String character = String.valueOf(c);
+                    String quotedCharacter = Pattern.quote(character);
+                    regex.append(quotedCharacter);
+                }
+            }
         }
-        // 注入 attempt 数到 output(record 不可变,只能新建 Map)
-        Map<String, Object> outWithAttempts = new HashMap<>(result.output());
-        outWithAttempts.put("attempts", attempt);
-        outWithAttempts.put("durationMillis", System.currentTimeMillis() - start);
-        if (result.success()) {
-          return TaskResult.ok(result.message(), outWithAttempts);
+        regex.append("$");
+        String regexPattern = regex.toString();
+        return value.matches(regexPattern);
+    }
+
+    private Set<Integer> parseExpectStatus(Object raw) {
+        if (raw == null) {
+            return Set.of();
         }
-        // 失败路径:只透传 error_code,不带成功 output(保持与原 TaskResult.fail 语义对齐)
-        String existingCode = (String) result.output().get(AtomicErrorCode.OUTPUT_KEY);
-        AtomicErrorCode code = existingCode == null
-            ? AtomicErrorCode.EXECUTION_FAILED
-            : AtomicErrorCode.valueOf(existingCode);
-        return AtomicErrorCode.fail(code, result.message());
-      } catch (IOException ex) {
-        // OkHttp 同步 execute 把超时/连接失败/被 dns 守护拦截(UnknownHostException)统一抛 IOException。
-        lastException = ex;
-        if (Thread.currentThread().isInterrupted()) {
-          Thread.currentThread().interrupt();
-          break;
+        if (raw instanceof Number n) {
+            return Set.of(n.intValue());
         }
-        if (!idempotent) {
-          return AtomicErrorCode.fail(
-              AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
-              "http request outcome is unknown; the remote side effect may have committed",
-              ex);
+        if (raw instanceof List<?> list) {
+            HashSet<Integer> out = new HashSet<>();
+            for (Object o : list) {
+                if (o instanceof Number number) {
+                    out.add(number.intValue());
+                } else {
+                    throw new HttpValidationException("expectStatus list must contain integers");
+                }
+            }
+            return out;
         }
-        if (attempt < maxAttempts) {
-          log.warn(
-              "http I/O error, retrying: attempt={}/{}, ex={}",
-              attempt,
-              maxAttempts,
-              SwallowedExceptionLogger.summary(ex));
-          sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
+        throw new HttpValidationException("expectStatus must be Integer or List<Integer>");
+    }
+
+    private void applyAuth(Map<String, String> headers, Object rawAuth) {
+        if (rawAuth == null) {
+            return;
         }
-      } catch (RuntimeException ex) {
-        if (!idempotent) {
-          return AtomicErrorCode.fail(
-              AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
-              "http request outcome is unknown; the remote side effect may have committed",
-              ex);
+        if (!(rawAuth instanceof Map<?, ?>)) {
+            throw new HttpValidationException("auth must be a map");
         }
-        throw ex;
-      }
-    }
-    if (!idempotent && EmptyChecks.isNotNull(lastException)) {
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
-          "http request outcome is unknown; the remote side effect may have committed",
-          lastException);
-    }
-    // 幂等 HTTP 请求的 I/O 异常重试耗尽归为 EXECUTION_FAILED;非幂等路径在上方保守归为结果不明。
-    return AtomicErrorCode.fail(
-        AtomicErrorCode.EXECUTION_FAILED,
-        "http failed after "
-            + maxAttempts
-            + " attempts: "
-            + (lastException == null ? "?" : lastException.getMessage()),
-        lastException);
-  }
-
-  private TaskResult runOnce(Invocation inv) throws IOException {
-    // 共享客户端的 dns 回调做 resolve-then-connect SSRF 校验(防 rebinding);followRedirects=false
-    // 已在 client() 构造期设定(重定向 target 不会再过 validateHost/dns 校验)。
-    OkHttpClient call = client()
-        .newBuilder()
-        .connectTimeout(inv.timeout)
-        .readTimeout(inv.timeout)
-        .writeTimeout(inv.timeout)
-        .callTimeout(inv.timeout)
-        .build();
-
-    Request.Builder req = new Request.Builder().url(inv.uri.toString());
-    Headers.Builder headers = new Headers.Builder();
-    inv.headers.forEach(headers::add);
-    req.headers(headers.build());
-
-    RequestBody body = toRequestBody(inv);
-    req.method(inv.method, body);
-
-    Map<String, Object> output = new HashMap<>();
-    int statusCode;
-    try (Response resp = call.newCall(req.build()).execute()) {
-      statusCode = resp.code();
-      int max = props.getMaxResponseBytes();
-      ResponseBody respBody = resp.body();
-      // 流式读:最多读 max+1 字节即停,不再消费剩余流 —— 绝不把巨量 / 失控下游响应全量读进堆内存
-      // (原先 resp.body().bytes() 在截断前就全量物化,maxResponseBytes 形同虚设可致 OOM)。
-      byte[] read = respBody == null ? new byte[0] : readBounded(respBody.byteStream(), max);
-      boolean truncated = read.length > max;
-      byte[] kept = truncated ? Arrays.copyOf(read, max) : read;
-      if (truncated) {
-        log.warn("http response truncated at {} bytes", max);
-      }
-      String responseBody = new String(kept, StandardCharsets.UTF_8);
-
-      output.put("statusCode", statusCode);
-      // P2-3(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md):
-      // 出口 HTTP response 会被 worker 上报到 task_result.output JSONB(后续可被
-      // console / forensic export 读到),Set-Cookie / Authorization 这类回声头若透传落
-      // 库就形成"出口请求 session 泄露"。SensitiveDataValidator 只扫入参,响应需在此前置脱敏。
-      Map<String, List<String>> rawResponseHeaders = resp.headers().toMultimap();
-      Map<String, List<String>> sanitizedResponseHeaders =
-          sanitizeResponseHeaders(rawResponseHeaders);
-      output.put("responseHeaders", sanitizedResponseHeaders);
-      output.put("responseBody", responseBody);
-      output.put("responseTruncated", truncated);
-    }
-
-    boolean serverError = statusCode >= 500 && statusCode < 600;
-    boolean expectMatch = EmptyChecks.isEmpty(inv.expectedStatus)
-        ? !serverError
-        : inv.expectedStatus.contains(statusCode);
-    if (!expectMatch) {
-      AtomicErrorCode code = IDEMPOTENT_METHODS.contains(inv.method)
-          ? AtomicErrorCode.EXECUTION_FAILED
-          : AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN;
-      String outcomeNote = code == AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN
-          ? "; remote side effect may have committed, manual reconciliation is required"
-          : "";
-      String statusReason = EmptyChecks.isEmpty(inv.expectedStatus)
-          ? "is a server error"
-          : "not in expected " + inv.expectedStatus;
-      return AtomicErrorCode.fail(
-          code,
-          "status " + statusCode + " " + statusReason + outcomeNote,
-          Map.of("statusCode", statusCode),
-          null);
-    }
-    return TaskResult.ok("status=" + statusCode, output);
-  }
-
-  /**
-   * 从响应流最多读取 {@code max + 1} 字节即停,不消费剩余流。多读的 1 字节仅用于判定"是否发生截断" (返回长度 &gt; max 即被截断)。这是 OOM
-   * 的硬内存上界:无论下游返回多大 / 谎报多大 Content-Length, 堆里最多驻留 max+1 字节。对 &lt;= max
-   * 的响应,读到的内容与全量读完全一致。try-with-resources 关闭 {@link Response} 会释放底层连接,未读完的剩余流不会阻塞。
-   */
-  static byte[] readBounded(InputStream in, int max) throws IOException {
-    long limit = max + 1L; // 用 long 防 max==Integer.MAX_VALUE 时 +1 溢出
-    try (in) {
-      long initialBufferCapacity = Math.min(limit, 8192L);
-      int initialBufferCapacityInt = (int) initialBufferCapacity;
-      ByteArrayOutputStream buf = new ByteArrayOutputStream(initialBufferCapacityInt);
-      byte[] chunk = new byte[8192];
-      long total = 0;
-      while (total < limit) {
-        long remainingReadAllowance = limit - total;
-        int toRead = (int) Math.min(chunk.length, remainingReadAllowance);
-        int n = in.read(chunk, 0, toRead);
-        if (n == -1) {
-          break;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> auth = (Map<String, Object>) rawAuth;
+        Object typeValue = auth.getOrDefault("type", AUTH_TYPE_NONE);
+        String typeText = String.valueOf(typeValue);
+        String type = typeText.toLowerCase(Locale.ROOT);
+        if (!props.getAllowedAuthTypes().contains(type)) {
+            throw new HttpValidationException(
+                    "auth type " + type + " not in allowedAuthTypes=" + props.getAllowedAuthTypes());
         }
-        buf.write(chunk, 0, n);
-        total += n;
-      }
-      return buf.toByteArray();
+        switch (type) {
+            case AUTH_TYPE_NONE -> {
+                // 无操作
+            }
+            case AUTH_TYPE_BASIC -> {
+                String user = Objects.toString(auth.get("username"), "");
+                // ADR-039 P1:password 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
+                String configuredPassword = Objects.toString(auth.get("password"), "");
+                String pass = CredentialEnvResolver.resolve(configuredPassword);
+                String token = Base64.getEncoder().encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
+                headers.put("Authorization", "Basic " + token);
+            }
+            case AUTH_TYPE_BEARER -> {
+                // ADR-039 P1:token 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
+                String configuredToken = Objects.toString(auth.get("token"), "");
+                String token = CredentialEnvResolver.resolve(configuredToken);
+                if (token.isEmpty()) {
+                    throw new HttpValidationException("auth.token required for bearer");
+                }
+                headers.put("Authorization", "Bearer " + token);
+            }
+            default -> throw new HttpValidationException("unsupported auth.type: " + type);
+        }
     }
-  }
 
-  /** GET/HEAD 必须无 body;其余方法 body 缺省给空体(OkHttp 要求 POST/PUT/PATCH 非 null)。 */
-  private RequestBody toRequestBody(Invocation inv) {
-    if ("GET".equals(inv.method) || "HEAD".equals(inv.method)) {
-      return null;
+    private static Map<String, String> toStringMap(Map<?, ?> m) {
+        Map<String, String> out = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> e : m.entrySet()) {
+            if (e.getValue() == null) continue;
+            out.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+        }
+        return out;
     }
-    String content = inv.body == null ? "" : inv.body;
-    if (inv.body == null && !METHODS_REQUIRE_BODY.contains(inv.method)) {
-      return null; // DELETE 等可无 body
+
+    private static String stringParam(Map<String, Object> p, String key, String fallback) {
+        Object v = p.get(key);
+        return v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : fallback;
     }
-    MediaType type = mediaTypeOf(inv.headers);
-    byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
-    return RequestBody.create(contentBytes, type);
-  }
 
-  /** 从请求头取 Content-Type 作为 body MediaType;缺省 null(OkHttp 不强制)。 */
-  private static MediaType mediaTypeOf(Map<String, String> headers) {
-    for (Map.Entry<String, String> e : headers.entrySet()) {
-      if ("content-type".equalsIgnoreCase(e.getKey()) && e.getValue() != null) {
-        return MediaType.parse(e.getValue());
-      }
+    private void validateRequestBodySize(String body) {
+        if (body == null) {
+            return;
+        }
+        int max = props.getMaxRequestBodyBytes();
+        if (max < 0) {
+            throw new HttpValidationException("maxRequestBodyBytes must be >= 0");
+        }
+        int bytes = body.getBytes(StandardCharsets.UTF_8).length;
+        if (max > 0 && bytes > max) {
+            throw new HttpValidationException("request body exceeds maxRequestBodyBytes=" + max + ": " + bytes);
+        }
     }
-    return null;
-  }
 
-  /**
-   * 出口 HTTP 响应头写入数据库前的固定脱敏黑名单(case-insensitive,RFC 7230 头名不区分大小写)。
-   *
-   * <p>对应 docs/archive/audit/deep-scan-be-security-2026-06-03.md P2-3。这些头若回声到 task_result.output 即等于把
-   * 下游会话凭据落 DB / Kafka,后续 forensic export 一并外泄。
-   */
-  private static final Set<String> SENSITIVE_RESPONSE_HEADERS =
-      Set.of("set-cookie", "set-cookie2", "authorization", "proxy-authorization", "cookie");
+    // ─── 带重试的执行 ──────────────────────────────────────────────────
 
-  static Map<String, List<String>> sanitizeResponseHeaders(Map<String, List<String>> headers) {
-    if (headers == null || headers.isEmpty()) {
-      return Map.of();
+    private TaskResult runWithRetry(Invocation inv) {
+        boolean idempotent = IDEMPOTENT_METHODS.contains(inv.method);
+        int maxAttempts = idempotent ? props.getMaxRetries() + 1 : 1;
+
+        long start = System.currentTimeMillis();
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                TaskResult result = runOnce(inv);
+                // 显式接受的状态已满足调用方预期；未指定期望时服务端错误沿原策略重试。
+                Integer status = (Integer) result.output().get("statusCode");
+                boolean serverFailureCanBeRetried = EmptyChecks.isNotNull(status)
+                        && status >= 500
+                        && attempt < maxAttempts
+                        && (EmptyChecks.isEmpty(inv.expectedStatus) || !result.success());
+                if (serverFailureCanBeRetried) {
+                    log.warn("http 5xx, retrying: status={}, attempt={}/{}", status, attempt, maxAttempts);
+                    sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
+                    continue;
+                }
+                // 注入 attempt 数到 output(record 不可变,只能新建 Map)
+                Map<String, Object> outWithAttempts = new HashMap<>(result.output());
+                outWithAttempts.put("attempts", attempt);
+                outWithAttempts.put("durationMillis", System.currentTimeMillis() - start);
+                if (result.success()) {
+                    return TaskResult.ok(result.message(), outWithAttempts);
+                }
+                // 失败路径:只透传 error_code,不带成功 output(保持与原 TaskResult.fail 语义对齐)
+                String existingCode = (String) result.output().get(AtomicErrorCode.OUTPUT_KEY);
+                AtomicErrorCode code =
+                        existingCode == null ? AtomicErrorCode.EXECUTION_FAILED : AtomicErrorCode.valueOf(existingCode);
+                return AtomicErrorCode.fail(code, result.message());
+            } catch (IOException ex) {
+                // OkHttp 同步 execute 把超时/连接失败/被 dns 守护拦截(UnknownHostException)统一抛 IOException。
+                lastException = ex;
+                if (Thread.currentThread().isInterrupted()) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                if (!idempotent) {
+                    return AtomicErrorCode.fail(
+                            AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
+                            "http request outcome is unknown; the remote side effect may have committed",
+                            ex);
+                }
+                if (attempt < maxAttempts) {
+                    log.warn(
+                            "http I/O error, retrying: attempt={}/{}, ex={}",
+                            attempt,
+                            maxAttempts,
+                            SwallowedExceptionLogger.summary(ex));
+                    sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
+                }
+            } catch (RuntimeException ex) {
+                if (!idempotent) {
+                    return AtomicErrorCode.fail(
+                            AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
+                            "http request outcome is unknown; the remote side effect may have committed",
+                            ex);
+                }
+                throw ex;
+            }
+        }
+        if (!idempotent && EmptyChecks.isNotNull(lastException)) {
+            return AtomicErrorCode.fail(
+                    AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
+                    "http request outcome is unknown; the remote side effect may have committed",
+                    lastException);
+        }
+        // 幂等 HTTP 请求的 I/O 异常重试耗尽归为 EXECUTION_FAILED;非幂等路径在上方保守归为结果不明。
+        return AtomicErrorCode.fail(
+                AtomicErrorCode.EXECUTION_FAILED,
+                "http failed after "
+                        + maxAttempts
+                        + " attempts: "
+                        + (lastException == null ? "?" : lastException.getMessage()),
+                lastException);
     }
-    Map<String, List<String>> filtered = new LinkedHashMap<>(headers.size());
-    for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
-      String name = entry.getKey();
-      if (name == null) {
-        continue;
-      }
-      if (SENSITIVE_RESPONSE_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
-        filtered.put(name, List.of("[REDACTED]"));
-        continue;
-      }
-      filtered.put(name, entry.getValue());
+
+    private TaskResult runOnce(Invocation inv) throws IOException {
+        // 共享客户端的 dns 回调做 resolve-then-connect SSRF 校验(防 rebinding);followRedirects=false
+        // 已在 client() 构造期设定(重定向 target 不会再过 validateHost/dns 校验)。
+        OkHttpClient call = client().newBuilder()
+                .connectTimeout(inv.timeout)
+                .readTimeout(inv.timeout)
+                .writeTimeout(inv.timeout)
+                .callTimeout(inv.timeout)
+                .build();
+
+        Request.Builder req = new Request.Builder().url(inv.uri.toString());
+        Headers.Builder headers = new Headers.Builder();
+        inv.headers.forEach(headers::add);
+        req.headers(headers.build());
+
+        RequestBody body = toRequestBody(inv);
+        req.method(inv.method, body);
+
+        Map<String, Object> output = new HashMap<>();
+        int statusCode;
+        try (Response resp = call.newCall(req.build()).execute()) {
+            statusCode = resp.code();
+            int max = props.getMaxResponseBytes();
+            ResponseBody respBody = resp.body();
+            // 流式读:最多读 max+1 字节即停,不再消费剩余流 —— 绝不把巨量 / 失控下游响应全量读进堆内存
+            // (原先 resp.body().bytes() 在截断前就全量物化,maxResponseBytes 形同虚设可致 OOM)。
+            byte[] read = respBody == null ? new byte[0] : readBounded(respBody.byteStream(), max);
+            boolean truncated = read.length > max;
+            byte[] kept = truncated ? Arrays.copyOf(read, max) : read;
+            if (truncated) {
+                log.warn("http response truncated at {} bytes", max);
+            }
+            String responseBody = new String(kept, StandardCharsets.UTF_8);
+
+            output.put("statusCode", statusCode);
+            // P2-3(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md):
+            // 出口 HTTP response 会被 worker 上报到 task_result.output JSONB(后续可被
+            // console / forensic export 读到),Set-Cookie / Authorization 这类回声头若透传落
+            // 库就形成"出口请求 session 泄露"。SensitiveDataValidator 只扫入参,响应需在此前置脱敏。
+            Map<String, List<String>> rawResponseHeaders = resp.headers().toMultimap();
+            Map<String, List<String>> sanitizedResponseHeaders = sanitizeResponseHeaders(rawResponseHeaders);
+            output.put("responseHeaders", sanitizedResponseHeaders);
+            output.put("responseBody", responseBody);
+            output.put("responseTruncated", truncated);
+        }
+
+        boolean serverError = statusCode >= 500 && statusCode < 600;
+        boolean expectMatch =
+                EmptyChecks.isEmpty(inv.expectedStatus) ? !serverError : inv.expectedStatus.contains(statusCode);
+        if (!expectMatch) {
+            AtomicErrorCode code = IDEMPOTENT_METHODS.contains(inv.method)
+                    ? AtomicErrorCode.EXECUTION_FAILED
+                    : AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN;
+            String outcomeNote = code == AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN
+                    ? "; remote side effect may have committed, manual reconciliation is required"
+                    : "";
+            String statusReason = EmptyChecks.isEmpty(inv.expectedStatus)
+                    ? "is a server error"
+                    : "not in expected " + inv.expectedStatus;
+            return AtomicErrorCode.fail(
+                    code,
+                    "status " + statusCode + " " + statusReason + outcomeNote,
+                    Map.of("statusCode", statusCode),
+                    null);
+        }
+        return TaskResult.ok("status=" + statusCode, output);
     }
-    return filtered;
-  }
 
-  private static void sleep(long millis) {
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
+    /**
+     * 从响应流最多读取 {@code max + 1} 字节即停,不消费剩余流。多读的 1 字节仅用于判定"是否发生截断" (返回长度 &gt; max 即被截断)。这是 OOM
+     * 的硬内存上界:无论下游返回多大 / 谎报多大 Content-Length, 堆里最多驻留 max+1 字节。对 &lt;= max
+     * 的响应,读到的内容与全量读完全一致。try-with-resources 关闭 {@link Response} 会释放底层连接,未读完的剩余流不会阻塞。
+     */
+    static byte[] readBounded(InputStream in, int max) throws IOException {
+        long limit = max + 1L; // 用 long 防 max==Integer.MAX_VALUE 时 +1 溢出
+        try (in) {
+            long initialBufferCapacity = Math.min(limit, 8192L);
+            int initialBufferCapacityInt = (int) initialBufferCapacity;
+            ByteArrayOutputStream buf = new ByteArrayOutputStream(initialBufferCapacityInt);
+            byte[] chunk = new byte[8192];
+            long total = 0;
+            while (total < limit) {
+                long remainingReadAllowance = limit - total;
+                int toRead = (int) Math.min(chunk.length, remainingReadAllowance);
+                int n = in.read(chunk, 0, toRead);
+                if (n == -1) {
+                    break;
+                }
+                buf.write(chunk, 0, n);
+                total += n;
+            }
+            return buf.toByteArray();
+        }
     }
-  }
 
-  // ─── helper records / exceptions ────────────────────────────────────────────
-
-  private record Invocation(
-      URI uri,
-      String method,
-      Map<String, String> headers,
-      String body,
-      Duration timeout,
-      Set<Integer> expectedStatus) {}
-
-  static final class HttpValidationException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-
-    HttpValidationException(String message) {
-      super(message);
+    /** GET/HEAD 必须无 body;其余方法 body 缺省给空体(OkHttp 要求 POST/PUT/PATCH 非 null)。 */
+    private RequestBody toRequestBody(Invocation inv) {
+        if ("GET".equals(inv.method) || "HEAD".equals(inv.method)) {
+            return null;
+        }
+        String content = inv.body == null ? "" : inv.body;
+        if (inv.body == null && !METHODS_REQUIRE_BODY.contains(inv.method)) {
+            return null; // DELETE 等可无 body
+        }
+        MediaType type = mediaTypeOf(inv.headers);
+        byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
+        return RequestBody.create(contentBytes, type);
     }
-  }
 
-  @Configuration(proxyBeanMethods = false)
-  @EnableConfigurationProperties(HttpExecutorProperties.class)
-  static class PropertiesConfig {}
+    /** 从请求头取 Content-Type 作为 body MediaType;缺省 null(OkHttp 不强制)。 */
+    private static MediaType mediaTypeOf(Map<String, String> headers) {
+        for (Map.Entry<String, String> e : headers.entrySet()) {
+            if ("content-type".equalsIgnoreCase(e.getKey()) && e.getValue() != null) {
+                return MediaType.parse(e.getValue());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 出口 HTTP 响应头写入数据库前的固定脱敏黑名单(case-insensitive,RFC 7230 头名不区分大小写)。
+     *
+     * <p>对应 docs/archive/audit/deep-scan-be-security-2026-06-03.md P2-3。这些头若回声到 task_result.output 即等于把
+     * 下游会话凭据落 DB / Kafka,后续 forensic export 一并外泄。
+     */
+    private static final Set<String> SENSITIVE_RESPONSE_HEADERS =
+            Set.of("set-cookie", "set-cookie2", "authorization", "proxy-authorization", "cookie");
+
+    static Map<String, List<String>> sanitizeResponseHeaders(Map<String, List<String>> headers) {
+        if (headers == null || headers.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, List<String>> filtered = new LinkedHashMap<>(headers.size());
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            String name = entry.getKey();
+            if (name == null) {
+                continue;
+            }
+            if (SENSITIVE_RESPONSE_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
+                filtered.put(name, List.of("[REDACTED]"));
+                continue;
+            }
+            filtered.put(name, entry.getValue());
+        }
+        return filtered;
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    // ─── helper records / exceptions ────────────────────────────────────────────
+
+    private record Invocation(
+            URI uri,
+            String method,
+            Map<String, String> headers,
+            String body,
+            Duration timeout,
+            Set<Integer> expectedStatus) {}
+
+    static final class HttpValidationException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        HttpValidationException(String message) {
+            super(message);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(HttpExecutorProperties.class)
+    static class PropertiesConfig {}
 }

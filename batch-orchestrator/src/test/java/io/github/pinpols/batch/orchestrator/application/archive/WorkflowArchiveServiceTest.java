@@ -25,123 +25,122 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("流程归档服务: 开关短路, 候选清理顺序与批量判断口径")
 class WorkflowArchiveServiceTest {
 
-  private WorkflowRunMapper mapper;
-  private WorkflowArchiveProperties props;
-  private WorkflowArchiveService service;
+    private WorkflowRunMapper mapper;
+    private WorkflowArchiveProperties props;
+    private WorkflowArchiveService service;
 
-  @BeforeEach
-  void setUp() {
-    mapper = mock(WorkflowRunMapper.class);
-    props = new WorkflowArchiveProperties();
-    service = new WorkflowArchiveService(mapper, props);
-  }
+    @BeforeEach
+    void setUp() {
+        mapper = mock(WorkflowRunMapper.class);
+        props = new WorkflowArchiveProperties();
+        service = new WorkflowArchiveService(mapper, props);
+    }
 
-  @Test
-  @DisplayName("归档开关关闭时直接返回未执行, 且不查询候选")
-  void shouldShortCircuit_whenArchiveDisabled() {
-    props.setEnabled(false);
+    @Test
+    @DisplayName("归档开关关闭时直接返回未执行, 且不查询候选")
+    void shouldShortCircuit_whenArchiveDisabled() {
+        props.setEnabled(false);
 
-    ArchiveBatchResult result = service.archiveOnce();
+        ArchiveBatchResult result = service.archiveOnce();
 
-    assertThat(result.executed()).isFalse();
-    assertThat(result.candidates()).isZero();
-    verify(mapper, never()).selectArchivableIds(any(Instant.class), anyInt());
-  }
+        assertThat(result.executed()).isFalse();
+        assertThat(result.candidates()).isZero();
+        verify(mapper, never()).selectArchivableIds(any(Instant.class), anyInt());
+    }
 
-  @Test
-  @DisplayName("没有候选流程时返回已执行但计数为零, 不产生任何删除")
-  void shouldReturnEmptyResult_whenNoCandidates() {
-    props.setEnabled(true);
-    when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of());
+    @Test
+    @DisplayName("没有候选流程时返回已执行但计数为零, 不产生任何删除")
+    void shouldReturnEmptyResult_whenNoCandidates() {
+        props.setEnabled(true);
+        when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of());
 
-    ArchiveBatchResult result = service.archiveOnce();
+        ArchiveBatchResult result = service.archiveOnce();
 
-    assertThat(result.executed()).isTrue();
-    assertThat(result.candidates()).isZero();
-    verify(mapper, never()).deleteByIds(any());
-    verify(mapper, never()).deleteNodeRunsByWorkflowRunIds(any());
-  }
+        assertThat(result.executed()).isTrue();
+        assertThat(result.candidates()).isZero();
+        verify(mapper, never()).deleteByIds(any());
+        verify(mapper, never()).deleteNodeRunsByWorkflowRunIds(any());
+    }
 
-  @Test
-  @DisplayName("有候选流程时先删节点运行再删流程运行, 并回填两类删除数")
-  void shouldDeleteNodeRunsFirst_whenCandidatesExist() {
-    props.setEnabled(true);
-    props.setBatchSize(100);
-    List<Long> ids = List.of(1L, 2L, 3L);
-    when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(ids);
-    when(mapper.deleteNodeRunsByWorkflowRunIds(ids)).thenReturn(7);
-    when(mapper.deleteByIds(ids)).thenReturn(3);
+    @Test
+    @DisplayName("有候选流程时先删节点运行再删流程运行, 并回填两类删除数")
+    void shouldDeleteNodeRunsFirst_whenCandidatesExist() {
+        props.setEnabled(true);
+        props.setBatchSize(100);
+        List<Long> ids = List.of(1L, 2L, 3L);
+        when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(ids);
+        when(mapper.deleteNodeRunsByWorkflowRunIds(ids)).thenReturn(7);
+        when(mapper.deleteByIds(ids)).thenReturn(3);
 
-    ArchiveBatchResult result = service.archiveOnce();
+        ArchiveBatchResult result = service.archiveOnce();
 
-    assertThat(result.executed()).isTrue();
-    assertThat(result.candidates()).isEqualTo(3);
-    assertThat(result.workflowRunsDeleted()).isEqualTo(3);
-    assertThat(result.workflowNodeRunsDeleted()).isEqualTo(7);
-    // 冷根及节点复制并核对一致后，才允许按父子顺序删除热数据。
-    var inOrder = inOrder(mapper);
-    inOrder.verify(mapper).archiveWorkflowNodeRunsByWorkflowRunIds(ids);
-    inOrder.verify(mapper).archiveWorkflowRunsByIds(ids);
-    inOrder.verify(mapper).countArchiveCopyMismatches(ids);
-    inOrder.verify(mapper).deleteNodeRunsByWorkflowRunIds(ids);
-    inOrder.verify(mapper).deleteByIds(ids);
-  }
+        assertThat(result.executed()).isTrue();
+        assertThat(result.candidates()).isEqualTo(3);
+        assertThat(result.workflowRunsDeleted()).isEqualTo(3);
+        assertThat(result.workflowNodeRunsDeleted()).isEqualTo(7);
+        // 冷根及节点复制并核对一致后，才允许按父子顺序删除热数据。
+        var inOrder = inOrder(mapper);
+        inOrder.verify(mapper).archiveWorkflowNodeRunsByWorkflowRunIds(ids);
+        inOrder.verify(mapper).archiveWorkflowRunsByIds(ids);
+        inOrder.verify(mapper).countArchiveCopyMismatches(ids);
+        inOrder.verify(mapper).deleteNodeRunsByWorkflowRunIds(ids);
+        inOrder.verify(mapper).deleteByIds(ids);
+    }
 
-  @Test
-  @DisplayName("冷副本不一致时抛出异常，禁止删除热根和热节点")
-  void shouldRetainHotTree_whenArchiveCopyMismatches() {
-    List<Long> ids = List.of(1L);
-    when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(ids);
-    when(mapper.countArchiveCopyMismatches(ids)).thenReturn(1L);
+    @Test
+    @DisplayName("冷副本不一致时抛出异常，禁止删除热根和热节点")
+    void shouldRetainHotTree_whenArchiveCopyMismatches() {
+        List<Long> ids = List.of(1L);
+        when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(ids);
+        when(mapper.countArchiveCopyMismatches(ids)).thenReturn(1L);
 
-    assertThatThrownBy(service::archiveOnce)
-        .hasMessageContaining("Workflow archive copy verification failed");
-    verify(mapper, never()).deleteNodeRunsByWorkflowRunIds(any());
-    verify(mapper, never()).deleteByIds(any());
-  }
+        assertThatThrownBy(service::archiveOnce).hasMessageContaining("Workflow archive copy verification failed");
+        verify(mapper, never()).deleteNodeRunsByWorkflowRunIds(any());
+        verify(mapper, never()).deleteByIds(any());
+    }
 
-  @Test
-  @DisplayName("候选数量等于批量大小时判定还有更多待归档")
-  void shouldReportMore_whenCandidatesEqualBatchSize() {
-    props.setEnabled(true);
-    props.setBatchSize(3);
-    when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of(1L, 2L, 3L));
-    when(mapper.deleteNodeRunsByWorkflowRunIds(any())).thenReturn(0);
-    when(mapper.deleteByIds(any())).thenReturn(3);
+    @Test
+    @DisplayName("候选数量等于批量大小时判定还有更多待归档")
+    void shouldReportMore_whenCandidatesEqualBatchSize() {
+        props.setEnabled(true);
+        props.setBatchSize(3);
+        when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of(1L, 2L, 3L));
+        when(mapper.deleteNodeRunsByWorkflowRunIds(any())).thenReturn(0);
+        when(mapper.deleteByIds(any())).thenReturn(3);
 
-    ArchiveBatchResult result = service.archiveOnce();
+        ArchiveBatchResult result = service.archiveOnce();
 
-    assertThat(result.hasMore(props.getBatchSize())).isTrue();
-  }
+        assertThat(result.hasMore(props.getBatchSize())).isTrue();
+    }
 
-  @Test
-  @DisplayName("候选数量小于批量大小时判定没有更多待归档")
-  void shouldReportNoMore_whenCandidatesUnderBatchSize() {
-    props.setEnabled(true);
-    props.setBatchSize(100);
-    when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of(1L, 2L));
-    when(mapper.deleteNodeRunsByWorkflowRunIds(any())).thenReturn(0);
-    when(mapper.deleteByIds(any())).thenReturn(2);
+    @Test
+    @DisplayName("候选数量小于批量大小时判定没有更多待归档")
+    void shouldReportNoMore_whenCandidatesUnderBatchSize() {
+        props.setEnabled(true);
+        props.setBatchSize(100);
+        when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of(1L, 2L));
+        when(mapper.deleteNodeRunsByWorkflowRunIds(any())).thenReturn(0);
+        when(mapper.deleteByIds(any())).thenReturn(2);
 
-    ArchiveBatchResult result = service.archiveOnce();
+        ArchiveBatchResult result = service.archiveOnce();
 
-    assertThat(result.hasMore(props.getBatchSize())).isFalse();
-  }
+        assertThat(result.hasMore(props.getBatchSize())).isFalse();
+    }
 
-  @Test
-  @DisplayName("保留天数非正时收敛为一天, 归档截止时间相应前移")
-  void shouldClampRetentionToMinimum_whenRetentionNotPositive() {
-    props.setEnabled(true);
-    props.setRetentionDays(0); // 0 / 负值 → clamp 到 1，避免删 RUNNING 兄弟事务
-    when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of());
+    @Test
+    @DisplayName("保留天数非正时收敛为一天, 归档截止时间相应前移")
+    void shouldClampRetentionToMinimum_whenRetentionNotPositive() {
+        props.setEnabled(true);
+        props.setRetentionDays(0); // 0 / 负值 → clamp 到 1，避免删 RUNNING 兄弟事务
+        when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of());
 
-    service.archiveOnce();
+        service.archiveOnce();
 
-    ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
-    verify(mapper, times(1)).selectArchivableIds(cutoffCaptor.capture(), anyInt());
-    Instant cutoff = cutoffCaptor.getValue();
-    Instant now = BatchDateTimeSupport.utcNow();
-    // cutoff 应大约在 1 天前，允许 5s 误差
-    assertThat(cutoff).isBefore(now.minusSeconds(86_400 - 5)).isAfter(now.minusSeconds(86_400 + 5));
-  }
+        ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(mapper, times(1)).selectArchivableIds(cutoffCaptor.capture(), anyInt());
+        Instant cutoff = cutoffCaptor.getValue();
+        Instant now = BatchDateTimeSupport.utcNow();
+        // cutoff 应大约在 1 天前，允许 5s 误差
+        assertThat(cutoff).isBefore(now.minusSeconds(86_400 - 5)).isAfter(now.minusSeconds(86_400 + 5));
+    }
 }

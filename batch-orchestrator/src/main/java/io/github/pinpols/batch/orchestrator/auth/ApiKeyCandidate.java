@@ -10,12 +10,12 @@ import java.time.Instant;
  * io.github.pinpols.batch.common.security.ApiKeyHasher} 常量时间比对。
  */
 public record ApiKeyCandidate(
-    Long id,
-    String tenantId,
-    String keyName,
-    String scopes,
-    Boolean enabled,
-    Instant expiresAt,
-    String keyHash,
-    String salt,
-    String keyHashAlgo) {}
+        Long id,
+        String tenantId,
+        String keyName,
+        String scopes,
+        Boolean enabled,
+        Instant expiresAt,
+        String keyHash,
+        String salt,
+        String keyHashAlgo) {}

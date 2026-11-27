@@ -14,6 +14,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.trigger.readiness-gate")
 public class ReadinessGateProperties {
 
-  /** 是否启用上游就绪门禁；false 时跳过查询、一律放行。 */
-  private boolean enabled = true;
+    /** 是否启用上游就绪门禁；false 时跳过查询、一律放行。 */
+    private boolean enabled = true;
 }

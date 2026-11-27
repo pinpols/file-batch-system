@@ -8,11 +8,11 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum AlertStatus implements DictEnum {
-  OPEN("OPEN", "待处理"),
-  ACKED("ACKED", "已确认"),
-  SUPPRESSED("SUPPRESSED", "已抑制"),
-  CLOSED("CLOSED", "已关闭");
+    OPEN("OPEN", "待处理"),
+    ACKED("ACKED", "已确认"),
+    SUPPRESSED("SUPPRESSED", "已抑制"),
+    CLOSED("CLOSED", "已关闭");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

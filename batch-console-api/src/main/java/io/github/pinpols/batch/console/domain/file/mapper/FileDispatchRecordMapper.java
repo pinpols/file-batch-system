@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Param;
 
 public interface FileDispatchRecordMapper {
 
-  List<FileDispatchRecordQueryView> selectByQuery(@Param("q") FileDispatchRecordQuery q);
+    List<FileDispatchRecordQueryView> selectByQuery(@Param("q") FileDispatchRecordQuery q);
 
-  long countByQuery(@Param("q") FileDispatchRecordQuery q);
+    long countByQuery(@Param("q") FileDispatchRecordQuery q);
 }

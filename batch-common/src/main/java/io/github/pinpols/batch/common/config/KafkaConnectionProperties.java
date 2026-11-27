@@ -8,5 +8,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "spring.kafka")
 public class KafkaConnectionProperties {
 
-  private String bootstrapServers;
+    private String bootstrapServers;
 }

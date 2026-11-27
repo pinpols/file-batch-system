@@ -13,97 +13,96 @@ import java.util.Map;
  */
 final class ExportPageGenerationCoordinator {
 
-  private static final int DEFAULT_MAX_PAGES = 100_000;
-  private static final int PROGRESS_PUBLISH_EVERY_N_ROWS = 1000;
+    private static final int DEFAULT_MAX_PAGES = 100_000;
+    private static final int PROGRESS_PUBLISH_EVERY_N_ROWS = 1000;
 
-  private ExportPageGenerationCoordinator() {}
+    private ExportPageGenerationCoordinator() {}
 
-  static long generatePaged(
-      ExportFormatContext ctx,
-      ExportDataPlugin.DetailPage preFetchedFirstPage,
-      FileSync fileSync,
-      PageRowWriter rowWriter)
-      throws Exception {
-    Long batchIdLong;
-    if (EmptyChecks.isNull(ctx.batchId())) {
-      batchIdLong = null;
-    } else {
-      Object rawBatchId = ctx.batchId();
-      String batchIdText = String.valueOf(rawBatchId);
-      batchIdLong = Long.valueOf(batchIdText);
-    }
-    GenerateCheckpoint checkpoint = ctx.checkpoint();
-    boolean resuming = EmptyChecks.isNotNull(checkpoint) && checkpoint.resuming();
-    long recordCount = resuming ? checkpoint.resumeRecordCount() : 0L;
-    if (ctx.maxRows() > 0 && recordCount > ctx.maxRows()) {
-      throw new ExportRowLimitExceededException(recordCount, ctx.maxRows());
-    }
-    ExportDataPlugin.DetailPage page;
-    if (resuming) {
-      page = ctx.dataPlugin()
-          .loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), checkpoint.resumeCursor());
-    } else {
-      page = EmptyChecks.isNotNull(preFetchedFirstPage)
-          ? preFetchedFirstPage
-          : ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
-    }
-    int pageNo = 0;
-    while (true) {
-      if (EmptyChecks.isNull(page)) {
-        break;
-      }
-      List<Map<String, Object>> details = page.rows();
-      if (EmptyChecks.isEmpty(details)) {
-        break;
-      }
-      for (Map<String, Object> detail : details) {
-        if (ctx.maxRows() > 0 && recordCount >= ctx.maxRows()) {
-          throw new ExportRowLimitExceededException(recordCount + 1, ctx.maxRows());
+    static long generatePaged(
+            ExportFormatContext ctx,
+            ExportDataPlugin.DetailPage preFetchedFirstPage,
+            FileSync fileSync,
+            PageRowWriter rowWriter)
+            throws Exception {
+        Long batchIdLong;
+        if (EmptyChecks.isNull(ctx.batchId())) {
+            batchIdLong = null;
+        } else {
+            Object rawBatchId = ctx.batchId();
+            String batchIdText = String.valueOf(rawBatchId);
+            batchIdLong = Long.valueOf(batchIdText);
         }
-        rowWriter.writeRow(ctx.batch(), detail, recordCount);
-        recordCount++;
-        if (recordCount % PROGRESS_PUBLISH_EVERY_N_ROWS == 0) {
-          publishProgress(ctx, recordCount);
+        GenerateCheckpoint checkpoint = ctx.checkpoint();
+        boolean resuming = EmptyChecks.isNotNull(checkpoint) && checkpoint.resuming();
+        long recordCount = resuming ? checkpoint.resumeRecordCount() : 0L;
+        if (ctx.maxRows() > 0 && recordCount > ctx.maxRows()) {
+            throw new ExportRowLimitExceededException(recordCount, ctx.maxRows());
         }
-      }
-      Object cursor = page.nextCursor();
-      // 终页不记 null cursor；下一次续跑必须从最后一个有效页边界开始，避免重复写整份文件。
-      boolean checkpointCanResumeWithFileCursor = EmptyChecks.isNotNull(checkpoint)
-          && EmptyChecks.isNotNull(fileSync)
-          && EmptyChecks.isNotNull(cursor);
-      if (checkpointCanResumeWithFileCursor) {
-        long byteOffset = fileSync.flushAndSync();
-        checkpoint.advance(byteOffset, cursor, recordCount);
-      }
-      if (EmptyChecks.isNull(cursor)) {
-        break;
-      }
-      if (++pageNo >= DEFAULT_MAX_PAGES) {
-        throw new IllegalStateException("export page iteration exceeded MAX_PAGES="
-            + DEFAULT_MAX_PAGES
-            + "; data plugin likely returning stale cursor");
-      }
-      page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
+        ExportDataPlugin.DetailPage page;
+        if (resuming) {
+            page = ctx.dataPlugin()
+                    .loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), checkpoint.resumeCursor());
+        } else {
+            page = EmptyChecks.isNotNull(preFetchedFirstPage)
+                    ? preFetchedFirstPage
+                    : ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
+        }
+        int pageNo = 0;
+        while (true) {
+            if (EmptyChecks.isNull(page)) {
+                break;
+            }
+            List<Map<String, Object>> details = page.rows();
+            if (EmptyChecks.isEmpty(details)) {
+                break;
+            }
+            for (Map<String, Object> detail : details) {
+                if (ctx.maxRows() > 0 && recordCount >= ctx.maxRows()) {
+                    throw new ExportRowLimitExceededException(recordCount + 1, ctx.maxRows());
+                }
+                rowWriter.writeRow(ctx.batch(), detail, recordCount);
+                recordCount++;
+                if (recordCount % PROGRESS_PUBLISH_EVERY_N_ROWS == 0) {
+                    publishProgress(ctx, recordCount);
+                }
+            }
+            Object cursor = page.nextCursor();
+            // 终页不记 null cursor；下一次续跑必须从最后一个有效页边界开始，避免重复写整份文件。
+            boolean checkpointCanResumeWithFileCursor = EmptyChecks.isNotNull(checkpoint)
+                    && EmptyChecks.isNotNull(fileSync)
+                    && EmptyChecks.isNotNull(cursor);
+            if (checkpointCanResumeWithFileCursor) {
+                long byteOffset = fileSync.flushAndSync();
+                checkpoint.advance(byteOffset, cursor, recordCount);
+            }
+            if (EmptyChecks.isNull(cursor)) {
+                break;
+            }
+            if (++pageNo >= DEFAULT_MAX_PAGES) {
+                throw new IllegalStateException("export page iteration exceeded MAX_PAGES="
+                        + DEFAULT_MAX_PAGES
+                        + "; data plugin likely returning stale cursor");
+            }
+            page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
+        }
+        // 最后一页可能不足节流阈值，终态仍需上报准确计数。
+        publishProgress(ctx, recordCount);
+        return recordCount;
     }
-    // 最后一页可能不足节流阈值，终态仍需上报准确计数。
-    publishProgress(ctx, recordCount);
-    return recordCount;
-  }
 
-  private static void publishProgress(ExportFormatContext ctx, long recordCount) {
-    if (EmptyChecks.isNotNull(ctx.progressRegistry())) {
-      ctx.progressRegistry().publish(ctx.jobContext(), "GENERATE", recordCount, null);
+    private static void publishProgress(ExportFormatContext ctx, long recordCount) {
+        if (EmptyChecks.isNotNull(ctx.progressRegistry())) {
+            ctx.progressRegistry().publish(ctx.jobContext(), "GENERATE", recordCount, null);
+        }
     }
-  }
 
-  @FunctionalInterface
-  interface FileSync {
-    long flushAndSync() throws Exception;
-  }
+    @FunctionalInterface
+    interface FileSync {
+        long flushAndSync() throws Exception;
+    }
 
-  @FunctionalInterface
-  interface PageRowWriter {
-    void writeRow(Map<String, Object> batch, Map<String, Object> detail, long rowIndex)
-        throws Exception;
-  }
+    @FunctionalInterface
+    interface PageRowWriter {
+        void writeRow(Map<String, Object> batch, Map<String, Object> detail, long rowIndex) throws Exception;
+    }
 }

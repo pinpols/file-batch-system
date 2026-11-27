@@ -18,9 +18,9 @@ import org.junit.jupiter.api.Tag;
 @Target({ElementType.TYPE, ElementType.METHOD})
 public @interface FlakyTest {
 
-  String issue();
+    String issue();
 
-  String owner();
+    String owner();
 
-  String expiresOn();
+    String expiresOn();
 }

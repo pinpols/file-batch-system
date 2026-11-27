@@ -32,172 +32,165 @@ import org.springframework.stereotype.Service;
 /** {@link ConsoleFileChannelApplicationService} 的默认实现。 */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleFileChannelApplicationService
-    implements ConsoleFileChannelApplicationService {
+public class DefaultConsoleFileChannelApplicationService implements ConsoleFileChannelApplicationService {
 
-  /** 请求未指定 timeoutSeconds 时的默认渠道超时秒数。 */
-  private static final int DEFAULT_TIMEOUT_SECONDS = 30;
+    /** 请求未指定 timeoutSeconds 时的默认渠道超时秒数。 */
+    private static final int DEFAULT_TIMEOUT_SECONDS = 30;
 
-  private final FileChannelConfigMapper mapper;
-  private final TenantIdResolver tenantGuard;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final FileChannelConfigMapper mapper;
+    private final TenantIdResolver tenantGuard;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @Override
-  public PageResponse<ConsoleFileChannelResponse> list(FileChannelQueryRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    long total = mapper.countByQuery(
-        tenantId, request.getChannelCode(), request.getChannelType(), request.getEnabled());
-    FileChannelConfigQuery fileChannelConfigQuery = FileChannelConfigQuery.builder()
-        .tenantId(tenantId)
-        .channelCode(request.getChannelCode())
-        .channelType(request.getChannelType())
-        .enabled(request.getEnabled())
-        .pageRequest(pageRequest)
-        .build();
-    List<FileChannelConfigQueryView> items = mapper.selectByQuery(fileChannelConfigQuery);
-    return new PageResponse<>(
-        total,
-        pageRequest.pageNo(),
-        pageRequest.pageSize(),
-        items.stream().map(ConsoleFileProjectionMapper::channelView).toList());
-  }
-
-  @Override
-  public ConsoleFileChannelResponse get(Long id, String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    FileChannelConfigQueryView row = mapper.selectById(resolved, id);
-    FileChannelConfigQueryView foundRow = Guard.requireFound(row, "file channel not found: " + id);
-    return ConsoleFileProjectionMapper.channelView(foundRow);
-  }
-
-  @Override
-  public ConsoleFileChannelResponse create(FileChannelCreateRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    FileChannelConfigQueryView existing =
-        mapper.selectByUniqueKey(tenantId, request.getChannelCode());
-    if (existing != null) {
-      throw BizException.of(
-          ResultCode.CONFLICT,
-          ResultCode.CONFLICT.detailKey(),
-          "channel code already exists: " + request.getChannelCode());
+    @Override
+    public PageResponse<ConsoleFileChannelResponse> list(FileChannelQueryRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+        long total =
+                mapper.countByQuery(tenantId, request.getChannelCode(), request.getChannelType(), request.getEnabled());
+        FileChannelConfigQuery fileChannelConfigQuery = FileChannelConfigQuery.builder()
+                .tenantId(tenantId)
+                .channelCode(request.getChannelCode())
+                .channelType(request.getChannelType())
+                .enabled(request.getEnabled())
+                .pageRequest(pageRequest)
+                .build();
+        List<FileChannelConfigQueryView> items = mapper.selectByQuery(fileChannelConfigQuery);
+        return new PageResponse<>(
+                total,
+                pageRequest.pageNo(),
+                pageRequest.pageSize(),
+                items.stream().map(ConsoleFileProjectionMapper::channelView).toList());
     }
-    String operator = requestMetadataResolver.current().operatorId();
-    FileChannelConfigUpsertParam param = new FileChannelConfigUpsertParam();
-    param.setTenantId(tenantId);
-    param.setChannelCode(request.getChannelCode());
-    param.setChannelName(request.getChannelName());
-    String requestedChannelType = request.getChannelType();
-    String normalizedChannelType = normalizeChannelType(requestedChannelType);
-    param.setChannelType(normalizedChannelType);
-    param.setTargetEndpoint(request.getTargetEndpoint());
-    param.setAuthType(request.getAuthType());
-    // DB 这两列 NOT NULL,FE 不传时给安全默认
-    String requestedConfigJson = request.getConfigJson();
-    String normalizedConfigJson = normalizeConfigJson(requestedConfigJson);
-    param.setConfigJson(normalizedConfigJson);
-    param.setReceiptPolicy(
-        request.getReceiptPolicy() != null ? request.getReceiptPolicy() : "NONE");
-    param.setTimeoutSeconds(
-        EmptyChecks.isNotNull(request.getTimeoutSeconds())
-            ? request.getTimeoutSeconds()
-            : DEFAULT_TIMEOUT_SECONDS);
-    param.setEnabled(request.getEnabled() == null || request.getEnabled());
-    param.setCreatedBy(operator);
-    param.setUpdatedBy(operator);
-    // 软删后重建:活跃同 code 已被上面 selectByUniqueKey 预检拒(CONFLICT);此处用 upsert,
-    // 命中软删残留行(is_deleted=true)时 on conflict do update 复活,避免纯 INSERT 撞 UNIQUE → 500。
-    // 与 notification/webhook/alert 三张兄弟表的软删复活约定一致。
-    mapper.upsertFileChannelConfig(param);
-    FileChannelConfigQueryView createdRow =
-        mapper.selectByUniqueKey(tenantId, request.getChannelCode());
-    return ConsoleFileProjectionMapper.channelView(createdRow);
-  }
 
-  @Override
-  public ConsoleFileChannelResponse update(Long id, FileChannelUpdateRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    FileChannelConfigQueryView existing =
-        Guard.requireFound(mapper.selectById(tenantId, id), "file channel not found: " + id);
-    String operator = requestMetadataResolver.current().operatorId();
-    FileChannelConfigUpdateParam param = new FileChannelConfigUpdateParam();
-    param.setTenantId(tenantId);
-    param.setId(id);
-    param.setChannelName(Nullables.coalesce(request.getChannelName(), existing.channelName()));
-    String updatedChannelType = EmptyChecks.isNotNull(request.getChannelType())
-        ? normalizeChannelType(request.getChannelType())
-        : existing.channelType();
-    param.setChannelType(updatedChannelType);
-    String requestedTargetEndpoint = request.getTargetEndpoint();
-    String targetEndpoint;
-    if (EmptyChecks.isNotNull(requestedTargetEndpoint)) {
-      targetEndpoint =
-          SecretMasking.preserveMaskedEndpoint(requestedTargetEndpoint, existing.targetEndpoint());
-    } else {
-      targetEndpoint = existing.targetEndpoint();
+    @Override
+    public ConsoleFileChannelResponse get(Long id, String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        FileChannelConfigQueryView row = mapper.selectById(resolved, id);
+        FileChannelConfigQueryView foundRow = Guard.requireFound(row, "file channel not found: " + id);
+        return ConsoleFileProjectionMapper.channelView(foundRow);
     }
-    param.setTargetEndpoint(targetEndpoint);
-    param.setAuthType(Nullables.coalesce(request.getAuthType(), existing.authType()));
-    String requestedConfigJson = request.getConfigJson();
-    String configJson;
-    if (EmptyChecks.isNotNull(requestedConfigJson)) {
-      configJson = preserveMaskedConfig(requestedConfigJson, existing.configJson());
-    } else {
-      configJson = EmptyChecks.isNull(existing.configJson())
-          ? null
-          : existing.configJson().toString();
-    }
-    param.setConfigJson(configJson);
-    param.setReceiptPolicy(
-        Nullables.coalesce(request.getReceiptPolicy(), existing.receiptPolicy()));
-    param.setTimeoutSeconds(
-        Nullables.coalesce(request.getTimeoutSeconds(), existing.timeoutSeconds()));
-    param.setEnabled(Nullables.coalesce(request.getEnabled(), existing.enabled()));
-    param.setUpdatedBy(operator);
-    mapper.updateFileChannelConfig(param);
-    FileChannelConfigQueryView updatedChannelRow = mapper.selectById(tenantId, id);
-    return ConsoleFileProjectionMapper.channelView(updatedChannelRow);
-  }
 
-  private static String normalizeChannelType(String channelType) {
-    FileChannelType matched = DictEnum.fromCode(FileChannelType.class, channelType);
-    if (matched == null) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          "error.file_channel.unsupported_channel_type",
-          channelType,
-          DictEnum.codeList(FileChannelType.class));
+    @Override
+    public ConsoleFileChannelResponse create(FileChannelCreateRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        FileChannelConfigQueryView existing = mapper.selectByUniqueKey(tenantId, request.getChannelCode());
+        if (existing != null) {
+            throw BizException.of(
+                    ResultCode.CONFLICT,
+                    ResultCode.CONFLICT.detailKey(),
+                    "channel code already exists: " + request.getChannelCode());
+        }
+        String operator = requestMetadataResolver.current().operatorId();
+        FileChannelConfigUpsertParam param = new FileChannelConfigUpsertParam();
+        param.setTenantId(tenantId);
+        param.setChannelCode(request.getChannelCode());
+        param.setChannelName(request.getChannelName());
+        String requestedChannelType = request.getChannelType();
+        String normalizedChannelType = normalizeChannelType(requestedChannelType);
+        param.setChannelType(normalizedChannelType);
+        param.setTargetEndpoint(request.getTargetEndpoint());
+        param.setAuthType(request.getAuthType());
+        // DB 这两列 NOT NULL,FE 不传时给安全默认
+        String requestedConfigJson = request.getConfigJson();
+        String normalizedConfigJson = normalizeConfigJson(requestedConfigJson);
+        param.setConfigJson(normalizedConfigJson);
+        param.setReceiptPolicy(request.getReceiptPolicy() != null ? request.getReceiptPolicy() : "NONE");
+        param.setTimeoutSeconds(
+                EmptyChecks.isNotNull(request.getTimeoutSeconds())
+                        ? request.getTimeoutSeconds()
+                        : DEFAULT_TIMEOUT_SECONDS);
+        param.setEnabled(request.getEnabled() == null || request.getEnabled());
+        param.setCreatedBy(operator);
+        param.setUpdatedBy(operator);
+        // 软删后重建:活跃同 code 已被上面 selectByUniqueKey 预检拒(CONFLICT);此处用 upsert,
+        // 命中软删残留行(is_deleted=true)时 on conflict do update 复活,避免纯 INSERT 撞 UNIQUE → 500。
+        // 与 notification/webhook/alert 三张兄弟表的软删复活约定一致。
+        mapper.upsertFileChannelConfig(param);
+        FileChannelConfigQueryView createdRow = mapper.selectByUniqueKey(tenantId, request.getChannelCode());
+        return ConsoleFileProjectionMapper.channelView(createdRow);
     }
-    return matched.code();
-  }
 
-  private static String preserveMaskedConfig(String submitted, Object storedValue) {
-    String normalized = normalizeConfigJson(submitted);
-    String stored = EmptyChecks.isNull(storedValue) ? null : storedValue.toString();
-    return SecretMasking.preserveMaskedJson(normalized, stored);
-  }
+    @Override
+    public ConsoleFileChannelResponse update(Long id, FileChannelUpdateRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        FileChannelConfigQueryView existing =
+                Guard.requireFound(mapper.selectById(tenantId, id), "file channel not found: " + id);
+        String operator = requestMetadataResolver.current().operatorId();
+        FileChannelConfigUpdateParam param = new FileChannelConfigUpdateParam();
+        param.setTenantId(tenantId);
+        param.setId(id);
+        param.setChannelName(Nullables.coalesce(request.getChannelName(), existing.channelName()));
+        String updatedChannelType = EmptyChecks.isNotNull(request.getChannelType())
+                ? normalizeChannelType(request.getChannelType())
+                : existing.channelType();
+        param.setChannelType(updatedChannelType);
+        String requestedTargetEndpoint = request.getTargetEndpoint();
+        String targetEndpoint;
+        if (EmptyChecks.isNotNull(requestedTargetEndpoint)) {
+            targetEndpoint = SecretMasking.preserveMaskedEndpoint(requestedTargetEndpoint, existing.targetEndpoint());
+        } else {
+            targetEndpoint = existing.targetEndpoint();
+        }
+        param.setTargetEndpoint(targetEndpoint);
+        param.setAuthType(Nullables.coalesce(request.getAuthType(), existing.authType()));
+        String requestedConfigJson = request.getConfigJson();
+        String configJson;
+        if (EmptyChecks.isNotNull(requestedConfigJson)) {
+            configJson = preserveMaskedConfig(requestedConfigJson, existing.configJson());
+        } else {
+            configJson = EmptyChecks.isNull(existing.configJson())
+                    ? null
+                    : existing.configJson().toString();
+        }
+        param.setConfigJson(configJson);
+        param.setReceiptPolicy(Nullables.coalesce(request.getReceiptPolicy(), existing.receiptPolicy()));
+        param.setTimeoutSeconds(Nullables.coalesce(request.getTimeoutSeconds(), existing.timeoutSeconds()));
+        param.setEnabled(Nullables.coalesce(request.getEnabled(), existing.enabled()));
+        param.setUpdatedBy(operator);
+        mapper.updateFileChannelConfig(param);
+        FileChannelConfigQueryView updatedChannelRow = mapper.selectById(tenantId, id);
+        return ConsoleFileProjectionMapper.channelView(updatedChannelRow);
+    }
 
-  private static String normalizeConfigJson(String configJson) {
-    if (EmptyChecks.isBlank(configJson)) {
-      return "{}";
+    private static String normalizeChannelType(String channelType) {
+        FileChannelType matched = DictEnum.fromCode(FileChannelType.class, channelType);
+        if (matched == null) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    "error.file_channel.unsupported_channel_type",
+                    channelType,
+                    DictEnum.codeList(FileChannelType.class));
+        }
+        return matched.code();
     }
-    try {
-      Object parsed = JsonUtils.fromJson(configJson, Object.class);
-      if (parsed instanceof Map<?, ?>) {
-        return configJson;
-      }
-    } catch (IllegalArgumentException ignored) {
-      // 避免在接口错误中暴露提交的 JSON 解析细节。
-    }
-    throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file_channel.invalid_config_json");
-  }
 
-  @Override
-  public void toggle(Long id, String tenantId, Boolean enabled) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    int rows = mapper.toggleEnabled(resolved, id, enabled);
-    if (rows == 0) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.file_channel.not_found", id);
+    private static String preserveMaskedConfig(String submitted, Object storedValue) {
+        String normalized = normalizeConfigJson(submitted);
+        String stored = EmptyChecks.isNull(storedValue) ? null : storedValue.toString();
+        return SecretMasking.preserveMaskedJson(normalized, stored);
     }
-  }
+
+    private static String normalizeConfigJson(String configJson) {
+        if (EmptyChecks.isBlank(configJson)) {
+            return "{}";
+        }
+        try {
+            Object parsed = JsonUtils.fromJson(configJson, Object.class);
+            if (parsed instanceof Map<?, ?>) {
+                return configJson;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // 避免在接口错误中暴露提交的 JSON 解析细节。
+        }
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file_channel.invalid_config_json");
+    }
+
+    @Override
+    public void toggle(Long id, String tenantId, Boolean enabled) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        int rows = mapper.toggleEnabled(resolved, id, enabled);
+        if (rows == 0) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.file_channel.not_found", id);
+        }
+    }
 }

@@ -5,9 +5,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 /** 控制台实时订阅端口，连接生命周期和传输实现由 observability 适配器负责。 */
 public interface ConsoleRealtimeSubscriptionPort {
 
-  SseEmitter subscribe(
-      String tenantId, String stream, String eventType, String cursor, Long heartbeatMillis);
+    SseEmitter subscribe(String tenantId, String stream, String eventType, String cursor, Long heartbeatMillis);
 
-  /** 订阅未交给 HTTP 容器时显式释放连接资源；重复调用安全。 */
-  void close(SseEmitter emitter);
+    /** 订阅未交给 HTTP 容器时显式释放连接资源；重复调用安全。 */
+    void close(SseEmitter emitter);
 }

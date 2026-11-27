@@ -47,291 +47,277 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNodeProgression {
 
-  private final OrchestratorJobMappers jobMappers;
-  private final OrchestratorWorkflowMappers workflowMappers;
-  private final LifecycleEventMapper<Object> lifecycleEventMapper;
-  private final FailureClassifier failureClassifier;
-  private final TaskOutcomeTerminalFinalizer terminalFinalizer;
-  private final TaskOutcomeDagProgressor dagProgressor;
-  private final TaskOutcomeWorkflowFinalizer workflowFinalizer;
+    private final OrchestratorJobMappers jobMappers;
+    private final OrchestratorWorkflowMappers workflowMappers;
+    private final LifecycleEventMapper<Object> lifecycleEventMapper;
+    private final FailureClassifier failureClassifier;
+    private final TaskOutcomeTerminalFinalizer terminalFinalizer;
+    private final TaskOutcomeDagProgressor dagProgressor;
+    private final TaskOutcomeWorkflowFinalizer workflowFinalizer;
 
-  void advance(
-      TaskOutcomeCommand command,
-      JobTaskEntity task,
-      JobInstanceEntity jobInstance,
-      Instant finishedAt) {
-    WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(
-        command.tenantId(), jobInstance.getId());
-    boolean dagInstance = EmptyChecks.isNotNull(workflowRun);
-    List<PartitionStatusRef> statusRefs = dagInstance
-        ? jobMappers.jobPartitionMapper.selectStatusRefsByInstance(
-            command.tenantId(), task.getJobInstanceId())
-        : List.of();
-    PartitionOutcomeCounts counts = dagInstance
-        ? PartitionOutcomeCounts.fromStatusRefs(statusRefs)
-        : PartitionOutcomeCounts.fromInstanceCounters(jobInstance);
-    boolean allPartitionsFinished = counts.allFinished();
-    PartitionStatusSummary terminalVerification = null;
-    if (!dagInstance && allPartitionsFinished) {
-      terminalVerification = jobMappers.jobPartitionMapper.selectStatusSummaryByInstance(
-          command.tenantId(), task.getJobInstanceId());
-      boolean terminalPartitionSummaryIsInconsistent = !counts.matches(terminalVerification);
-      if (terminalPartitionSummaryIsInconsistent) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
-      }
-    }
-    String currentNodeCode = resolveCurrentNodeCode(task, workflowRun);
-    List<NodePartitionAssignment> nodeAssignments = dagInstance
-        ? jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(
-            command.tenantId(), task.getJobInstanceId())
-        : List.of();
-    NodePartitionProgressCalculator.Result nodeProgress = NodePartitionProgressCalculator.calculate(
-        statusRefs, nodeAssignments, currentNodeCode, workflowRun);
-    Set<String> activeNodes = EmptyChecks.isNull(workflowRun)
-        ? new LinkedHashSet<>()
-        : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
+    void advance(TaskOutcomeCommand command, JobTaskEntity task, JobInstanceEntity jobInstance, Instant finishedAt) {
+        WorkflowRunEntity workflowRun =
+                workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(command.tenantId(), jobInstance.getId());
+        boolean dagInstance = EmptyChecks.isNotNull(workflowRun);
+        List<PartitionStatusRef> statusRefs = dagInstance
+                ? jobMappers.jobPartitionMapper.selectStatusRefsByInstance(command.tenantId(), task.getJobInstanceId())
+                : List.of();
+        PartitionOutcomeCounts counts = dagInstance
+                ? PartitionOutcomeCounts.fromStatusRefs(statusRefs)
+                : PartitionOutcomeCounts.fromInstanceCounters(jobInstance);
+        boolean allPartitionsFinished = counts.allFinished();
+        PartitionStatusSummary terminalVerification = null;
+        if (!dagInstance && allPartitionsFinished) {
+            terminalVerification = jobMappers.jobPartitionMapper.selectStatusSummaryByInstance(
+                    command.tenantId(), task.getJobInstanceId());
+            boolean terminalPartitionSummaryIsInconsistent = !counts.matches(terminalVerification);
+            if (terminalPartitionSummaryIsInconsistent) {
+                throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
+            }
+        }
+        String currentNodeCode = resolveCurrentNodeCode(task, workflowRun);
+        List<NodePartitionAssignment> nodeAssignments = dagInstance
+                ? jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(command.tenantId(), task.getJobInstanceId())
+                : List.of();
+        NodePartitionProgressCalculator.Result nodeProgress =
+                NodePartitionProgressCalculator.calculate(statusRefs, nodeAssignments, currentNodeCode, workflowRun);
+        Set<String> activeNodes = EmptyChecks.isNull(workflowRun)
+                ? new LinkedHashSet<>()
+                : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
 
-    if (nodeProgress.allFinished() && EmptyChecks.isNotNull(workflowRun)) {
-      List<JobPartitionEntity> nodeCompletionPartitions = loadPartitions(command, task);
-      List<JobPartitionEntity> successfulNodePartitions =
-          TaskOutcomeSummaryBuilder.filterPartitionsByIds(
-              nodeCompletionPartitions, nodeProgress.partitionIds());
-      Map<String, Object> nodeOutputs =
-          TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-              successfulNodePartitions, command);
-      TaskOutcomeDagProgressor.Context advanceContext = TaskOutcomeDagProgressor.Context.builder()
-          .command(command)
-          .task(task)
-          .jobInstance(jobInstance)
-          .workflowRun(workflowRun)
-          .currentNodeCode(currentNodeCode)
-          .nodeProgress(nodeProgress)
-          .nodeOutputs(nodeOutputs)
-          .activeNodes(activeNodes)
-          .finishedAt(finishedAt)
-          .build();
-      dagProgressor.advance(advanceContext);
-      // 派发期游标可能残留已完成的 FORK；以最新 node_run 重建活跃集合，避免 END 成功后实例永久 RUNNING。
-      activeNodes.clear();
-      List<WorkflowNodeRunEntity> nodeRuns =
-          workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId());
-      Set<String> resolvedActiveNodes = TaskOutcomeStatePolicy.resolveActiveNodeCodes(nodeRuns);
-      activeNodes.addAll(resolvedActiveNodes);
+        if (nodeProgress.allFinished() && EmptyChecks.isNotNull(workflowRun)) {
+            List<JobPartitionEntity> nodeCompletionPartitions = loadPartitions(command, task);
+            List<JobPartitionEntity> successfulNodePartitions = TaskOutcomeSummaryBuilder.filterPartitionsByIds(
+                    nodeCompletionPartitions, nodeProgress.partitionIds());
+            Map<String, Object> nodeOutputs =
+                    TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(successfulNodePartitions, command);
+            TaskOutcomeDagProgressor.Context advanceContext = TaskOutcomeDagProgressor.Context.builder()
+                    .command(command)
+                    .task(task)
+                    .jobInstance(jobInstance)
+                    .workflowRun(workflowRun)
+                    .currentNodeCode(currentNodeCode)
+                    .nodeProgress(nodeProgress)
+                    .nodeOutputs(nodeOutputs)
+                    .activeNodes(activeNodes)
+                    .finishedAt(finishedAt)
+                    .build();
+            dagProgressor.advance(advanceContext);
+            // 派发期游标可能残留已完成的 FORK；以最新 node_run 重建活跃集合，避免 END 成功后实例永久 RUNNING。
+            activeNodes.clear();
+            List<WorkflowNodeRunEntity> nodeRuns =
+                    workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId());
+            Set<String> resolvedActiveNodes = TaskOutcomeStatePolicy.resolveActiveNodeCodes(nodeRuns);
+            activeNodes.addAll(resolvedActiveNodes);
+        }
+
+        boolean dagContinues = EmptyChecks.isNotNull(workflowRun) && EmptyChecks.isNotEmpty(activeNodes);
+        // 节点 JobInstance 只拥有自己的分区。兄弟/后代 Workflow 节点会让
+        // WorkflowRun 保持活动，但不能让此已完成的 JobInstance 继续占用准入名额。
+        boolean jobFullyComplete = allPartitionsFinished;
+        String instanceEvent = TaskOutcomeStatePolicy.resolveInstanceEvent(
+                counts.success(),
+                counts.failed(),
+                counts.cancelled(),
+                counts.terminated(),
+                allPartitionsFinished,
+                TaskOutcomeStatePolicy.isDryRun(jobInstance));
+        String mappedStatus =
+                lifecycleEventMapper.map(jobInstance, instanceEvent).toState();
+        String instanceStatus =
+                TaskOutcomeStatePolicy.preserveManualPause(jobInstance.getInstanceStatus(), mappedStatus);
+        if (TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
+                jobInstance.getInstanceStatus(),
+                instanceEvent,
+                counts.success(),
+                counts.failed(),
+                allPartitionsFinished)) {
+            // 重试/补偿已完成全部分区时，旧失败终态只允许在实时统计证明全成功后收敛。
+            instanceStatus = instanceEvent;
+            String tenantIdForLog = LogSanitizer.value(command.tenantId());
+            Long jobInstanceIdForLog = jobInstance.getId();
+            String previousStatusForLog = LogSanitizer.value(jobInstance.getInstanceStatus());
+            log.info(
+                    "promoting stale failed job instance to success after all partitions completed:"
+                            + " tenantId={} jobInstanceId={} previousStatus={} successPartitions={}",
+                    tenantIdForLog,
+                    jobInstanceIdForLog,
+                    previousStatusForLog,
+                    counts.success());
+        }
+        String instanceFailureClass = TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)
+                        && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
+                                || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus))
+                ? failureClassifier.classify(command.failureClass(), null).code()
+                : null;
+        JobInstanceMapper progressMapper = jobMappers.jobInstanceMapper;
+        UpdateInstanceProgressParam.UpdateInstanceProgressParamBuilder progressBuilder =
+                UpdateInstanceProgressParam.builder()
+                        .tenantId(command.tenantId())
+                        .id(jobInstance.getId())
+                        .instanceStatus(instanceStatus)
+                        .successPartitionCount((int) counts.success())
+                        .failedPartitionCount((int) counts.failed())
+                        .cancelledPartitionCount((int) counts.cancelled())
+                        .terminatedPartitionCount((int) counts.terminated());
+        String resultSummary = TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
+                jobInstance, counts.success(), counts.broadFailed(), command);
+        UpdateInstanceProgressParam progress = progressBuilder
+                .resultSummary(resultSummary)
+                .finishedAt(jobFullyComplete ? finishedAt : null)
+                .failureClass(instanceFailureClass)
+                .expectedVersion(jobInstance.getVersion())
+                .build();
+        int progressUpdated = progressMapper.updateProgress(progress);
+        if (progressUpdated <= 0) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
+        }
+        Long currentVersion = Objects.requireNonNullElse(jobInstance.getVersion(), 0L);
+        Long nextVersion = currentVersion + 1;
+        jobInstance.setVersion(nextVersion);
+        jobInstance.setInstanceStatus(instanceStatus);
+        if (TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
+            terminalFinalizer.finalizeTerminal(
+                    jobInstance,
+                    command,
+                    instanceStatus,
+                    jobFullyComplete ? finishedAt : null,
+                    instanceFailureClass,
+                    loadPartitions(command, task));
+        }
+        if (EmptyChecks.isNotNull(workflowRun)) {
+            workflowFinalizer.finalizeWorkflow(TaskOutcomeWorkflowFinalizer.Context.builder()
+                    .command(command)
+                    .workflowRun(workflowRun)
+                    .failedPartitionCount(counts.broadFailed())
+                    .allPartitionsFinished(allPartitionsFinished)
+                    .dagContinues(dagContinues)
+                    .jobFullyComplete(jobFullyComplete)
+                    .activeNodes(activeNodes)
+                    .currentNodeCode(currentNodeCode)
+                    .finishedAt(finishedAt)
+                    .build());
+        }
     }
 
-    boolean dagContinues =
-        EmptyChecks.isNotNull(workflowRun) && EmptyChecks.isNotEmpty(activeNodes);
-    // 节点 JobInstance 只拥有自己的分区。兄弟/后代 Workflow 节点会让
-    // WorkflowRun 保持活动，但不能让此已完成的 JobInstance 继续占用准入名额。
-    boolean jobFullyComplete = allPartitionsFinished;
-    String instanceEvent = TaskOutcomeStatePolicy.resolveInstanceEvent(
-        counts.success(),
-        counts.failed(),
-        counts.cancelled(),
-        counts.terminated(),
-        allPartitionsFinished,
-        TaskOutcomeStatePolicy.isDryRun(jobInstance));
-    String mappedStatus = lifecycleEventMapper.map(jobInstance, instanceEvent).toState();
-    String instanceStatus =
-        TaskOutcomeStatePolicy.preserveManualPause(jobInstance.getInstanceStatus(), mappedStatus);
-    if (TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
-        jobInstance.getInstanceStatus(),
-        instanceEvent,
-        counts.success(),
-        counts.failed(),
-        allPartitionsFinished)) {
-      // 重试/补偿已完成全部分区时，旧失败终态只允许在实时统计证明全成功后收敛。
-      instanceStatus = instanceEvent;
-      String tenantIdForLog = LogSanitizer.value(command.tenantId());
-      Long jobInstanceIdForLog = jobInstance.getId();
-      String previousStatusForLog = LogSanitizer.value(jobInstance.getInstanceStatus());
-      log.info(
-          "promoting stale failed job instance to success after all partitions completed:"
-              + " tenantId={} jobInstanceId={} previousStatus={} successPartitions={}",
-          tenantIdForLog,
-          jobInstanceIdForLog,
-          previousStatusForLog,
-          counts.success());
+    /**
+     * 硬超时路径已将所有活动子任务和分区置为终态后，重新协调 Workflow 节点。
+     * 不同于 Worker REPORT，此处不得再次改写
+     * JobInstance；只复用标准 DAG 失败传播和 Workflow 收尾逻辑。
+     * 终态收敛规则。
+     */
+    @Override
+    public void advanceTimedOutWorkflowNode(String tenantId, Long jobInstanceId, Instant finishedAt) {
+        JobInstanceEntity jobInstance = jobMappers.jobInstanceMapper.selectById(tenantId, jobInstanceId);
+        if (EmptyChecks.isNull(jobInstance)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
+        }
+        WorkflowRunEntity workflowRun =
+                workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(tenantId, jobInstanceId);
+        if (EmptyChecks.isNull(workflowRun)) {
+            return;
+        }
+        WorkflowNodeRunEntity linkedNode =
+                workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId()).stream()
+                        .filter(node -> jobInstanceId.equals(node.getJobInstanceId()))
+                        .max(Comparator.comparing(node -> Objects.requireNonNullElse(node.getRunSeq(), 0)))
+                        .orElse(null);
+        boolean linkedNodeIsMissingOrTerminal = EmptyChecks.isNull(linkedNode)
+                || WorkflowNodeRunStatus.FAILED.code().equals(linkedNode.getNodeStatus())
+                || WorkflowNodeRunStatus.SUCCESS.code().equals(linkedNode.getNodeStatus())
+                || WorkflowNodeRunStatus.SKIPPED.code().equals(linkedNode.getNodeStatus());
+        if (linkedNodeIsMissingOrTerminal) {
+            return;
+        }
+        JobTaskQuery instanceTaskQuery = JobTaskQuery.ofJobInstance(tenantId, jobInstanceId);
+        List<JobTaskEntity> instanceTasks = jobMappers.jobTaskMapper.selectByQuery(instanceTaskQuery);
+        JobTaskEntity task = instanceTasks.stream()
+                .filter(candidate -> {
+                    String linkedNodeCode = linkedNode.getNodeCode();
+                    String candidateNodeCode = TaskOutcomePayloadSupport.payloadStringValue(
+                            candidate.getTaskPayload(), "workflowNodeCode");
+                    return linkedNodeCode.equals(candidateNodeCode);
+                })
+                .findFirst()
+                .orElseThrow(() -> BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict"));
+        TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId(tenantId)
+                .taskId(task.getId())
+                .success(false)
+                .errorCode("JOB_INSTANCE_TIMEOUT")
+                .errorMessage("Job instance exceeded its configured timeout")
+                .build();
+        List<PartitionStatusRef> statusRefs =
+                jobMappers.jobPartitionMapper.selectStatusRefsByInstance(tenantId, jobInstanceId);
+        List<NodePartitionAssignment> nodeAssignments =
+                jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(tenantId, jobInstanceId);
+        NodePartitionProgressCalculator.Result nodeProgress = NodePartitionProgressCalculator.calculate(
+                statusRefs, nodeAssignments, linkedNode.getNodeCode(), workflowRun);
+        if (!nodeProgress.allFinished()) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
+        }
+        Set<String> activeNodes = TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
+        JobPartitionQuery instancePartitionQuery = JobPartitionQuery.ofJobInstance(tenantId, jobInstanceId);
+        List<JobPartitionEntity> partitions = jobMappers.jobPartitionMapper.selectByQuery(instancePartitionQuery);
+        Set<Long> partitionIds = nodeProgress.partitionIds();
+        List<JobPartitionEntity> nodePartitions =
+                TaskOutcomeSummaryBuilder.filterPartitionsByIds(partitions, partitionIds);
+        Map<String, Object> nodeOutputs =
+                TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(nodePartitions, command);
+        dagProgressor.advance(TaskOutcomeDagProgressor.Context.builder()
+                .command(command)
+                .task(task)
+                .jobInstance(jobInstance)
+                .workflowRun(workflowRun)
+                .currentNodeCode(linkedNode.getNodeCode())
+                .nodeProgress(nodeProgress)
+                .nodeOutputs(nodeOutputs)
+                .activeNodes(activeNodes)
+                .finishedAt(finishedAt)
+                .build());
+        activeNodes.clear();
+        Long workflowRunId = workflowRun.getId();
+        List<WorkflowNodeRunEntity> activeNodeRuns =
+                workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRunId);
+        Set<String> activeNodeCodes = TaskOutcomeStatePolicy.resolveActiveNodeCodes(activeNodeRuns);
+        activeNodes.addAll(activeNodeCodes);
+        long unsuccessfulCount = nodeProgress.unsuccessfulCount();
+        workflowFinalizer.finalizeWorkflow(TaskOutcomeWorkflowFinalizer.Context.builder()
+                .command(command)
+                .workflowRun(workflowRun)
+                .failedPartitionCount(unsuccessfulCount)
+                .allPartitionsFinished(true)
+                .dagContinues(!EmptyChecks.isEmpty(Objects.requireNonNull(activeNodes)))
+                .jobFullyComplete(true)
+                .activeNodes(activeNodes)
+                .currentNodeCode(linkedNode.getNodeCode())
+                .finishedAt(finishedAt)
+                .build());
     }
-    String instanceFailureClass = TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)
-            && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
-                || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus))
-        ? failureClassifier.classify(command.failureClass(), null).code()
-        : null;
-    JobInstanceMapper progressMapper = jobMappers.jobInstanceMapper;
-    UpdateInstanceProgressParam.UpdateInstanceProgressParamBuilder progressBuilder =
-        UpdateInstanceProgressParam.builder()
-            .tenantId(command.tenantId())
-            .id(jobInstance.getId())
-            .instanceStatus(instanceStatus)
-            .successPartitionCount((int) counts.success())
-            .failedPartitionCount((int) counts.failed())
-            .cancelledPartitionCount((int) counts.cancelled())
-            .terminatedPartitionCount((int) counts.terminated());
-    String resultSummary = TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
-        jobInstance, counts.success(), counts.broadFailed(), command);
-    UpdateInstanceProgressParam progress = progressBuilder
-        .resultSummary(resultSummary)
-        .finishedAt(jobFullyComplete ? finishedAt : null)
-        .failureClass(instanceFailureClass)
-        .expectedVersion(jobInstance.getVersion())
-        .build();
-    int progressUpdated = progressMapper.updateProgress(progress);
-    if (progressUpdated <= 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
-    }
-    Long currentVersion = Objects.requireNonNullElse(jobInstance.getVersion(), 0L);
-    Long nextVersion = currentVersion + 1;
-    jobInstance.setVersion(nextVersion);
-    jobInstance.setInstanceStatus(instanceStatus);
-    if (TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
-      terminalFinalizer.finalizeTerminal(
-          jobInstance,
-          command,
-          instanceStatus,
-          jobFullyComplete ? finishedAt : null,
-          instanceFailureClass,
-          loadPartitions(command, task));
-    }
-    if (EmptyChecks.isNotNull(workflowRun)) {
-      workflowFinalizer.finalizeWorkflow(TaskOutcomeWorkflowFinalizer.Context.builder()
-          .command(command)
-          .workflowRun(workflowRun)
-          .failedPartitionCount(counts.broadFailed())
-          .allPartitionsFinished(allPartitionsFinished)
-          .dagContinues(dagContinues)
-          .jobFullyComplete(jobFullyComplete)
-          .activeNodes(activeNodes)
-          .currentNodeCode(currentNodeCode)
-          .finishedAt(finishedAt)
-          .build());
-    }
-  }
 
-  /**
-   * 硬超时路径已将所有活动子任务和分区置为终态后，重新协调 Workflow 节点。
-   * 不同于 Worker REPORT，此处不得再次改写
-   * JobInstance；只复用标准 DAG 失败传播和 Workflow 收尾逻辑。
-   * 终态收敛规则。
-   */
-  @Override
-  public void advanceTimedOutWorkflowNode(String tenantId, Long jobInstanceId, Instant finishedAt) {
-    JobInstanceEntity jobInstance =
-        jobMappers.jobInstanceMapper.selectById(tenantId, jobInstanceId);
-    if (EmptyChecks.isNull(jobInstance)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
+    private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
+        String nodeCode = TaskOutcomePayloadSupport.payloadStringValue(
+                EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeCode");
+        if (EmptyChecks.isNotBlank(nodeCode)) {
+            return nodeCode;
+        }
+        Set<String> activeNodes = EmptyChecks.isNull(workflowRun)
+                ? Set.of()
+                : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
+        if (EmptyChecks.isNotNull(workflowRun) && activeNodes.size() > 1) {
+            throw BizException.of(
+                    ResultCode.STATE_CONFLICT,
+                    "error.workflow.task_payload_missing_node_code",
+                    String.valueOf(EmptyChecks.isNull(task) ? null : task.getId()));
+        }
+        if (EmptyChecks.isNotEmpty(activeNodes)) {
+            return activeNodes.iterator().next();
+        }
+        return WorkflowNodeCode.START.code();
     }
-    WorkflowRunEntity workflowRun =
-        workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(tenantId, jobInstanceId);
-    if (EmptyChecks.isNull(workflowRun)) {
-      return;
-    }
-    WorkflowNodeRunEntity linkedNode =
-        workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId()).stream()
-            .filter(node -> jobInstanceId.equals(node.getJobInstanceId()))
-            .max(Comparator.comparing(node -> Objects.requireNonNullElse(node.getRunSeq(), 0)))
-            .orElse(null);
-    boolean linkedNodeIsMissingOrTerminal = EmptyChecks.isNull(linkedNode)
-        || WorkflowNodeRunStatus.FAILED.code().equals(linkedNode.getNodeStatus())
-        || WorkflowNodeRunStatus.SUCCESS.code().equals(linkedNode.getNodeStatus())
-        || WorkflowNodeRunStatus.SKIPPED.code().equals(linkedNode.getNodeStatus());
-    if (linkedNodeIsMissingOrTerminal) {
-      return;
-    }
-    JobTaskQuery instanceTaskQuery = JobTaskQuery.ofJobInstance(tenantId, jobInstanceId);
-    List<JobTaskEntity> instanceTasks = jobMappers.jobTaskMapper.selectByQuery(instanceTaskQuery);
-    JobTaskEntity task = instanceTasks.stream()
-        .filter(candidate -> {
-          String linkedNodeCode = linkedNode.getNodeCode();
-          String candidateNodeCode = TaskOutcomePayloadSupport.payloadStringValue(
-              candidate.getTaskPayload(), "workflowNodeCode");
-          return linkedNodeCode.equals(candidateNodeCode);
-        })
-        .findFirst()
-        .orElseThrow(() ->
-            BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict"));
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId(tenantId)
-        .taskId(task.getId())
-        .success(false)
-        .errorCode("JOB_INSTANCE_TIMEOUT")
-        .errorMessage("Job instance exceeded its configured timeout")
-        .build();
-    List<PartitionStatusRef> statusRefs =
-        jobMappers.jobPartitionMapper.selectStatusRefsByInstance(tenantId, jobInstanceId);
-    List<NodePartitionAssignment> nodeAssignments =
-        jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(tenantId, jobInstanceId);
-    NodePartitionProgressCalculator.Result nodeProgress = NodePartitionProgressCalculator.calculate(
-        statusRefs, nodeAssignments, linkedNode.getNodeCode(), workflowRun);
-    if (!nodeProgress.allFinished()) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
-    }
-    Set<String> activeNodes =
-        TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
-    JobPartitionQuery instancePartitionQuery =
-        JobPartitionQuery.ofJobInstance(tenantId, jobInstanceId);
-    List<JobPartitionEntity> partitions =
-        jobMappers.jobPartitionMapper.selectByQuery(instancePartitionQuery);
-    Set<Long> partitionIds = nodeProgress.partitionIds();
-    List<JobPartitionEntity> nodePartitions =
-        TaskOutcomeSummaryBuilder.filterPartitionsByIds(partitions, partitionIds);
-    Map<String, Object> nodeOutputs =
-        TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(nodePartitions, command);
-    dagProgressor.advance(TaskOutcomeDagProgressor.Context.builder()
-        .command(command)
-        .task(task)
-        .jobInstance(jobInstance)
-        .workflowRun(workflowRun)
-        .currentNodeCode(linkedNode.getNodeCode())
-        .nodeProgress(nodeProgress)
-        .nodeOutputs(nodeOutputs)
-        .activeNodes(activeNodes)
-        .finishedAt(finishedAt)
-        .build());
-    activeNodes.clear();
-    Long workflowRunId = workflowRun.getId();
-    List<WorkflowNodeRunEntity> activeNodeRuns =
-        workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRunId);
-    Set<String> activeNodeCodes = TaskOutcomeStatePolicy.resolveActiveNodeCodes(activeNodeRuns);
-    activeNodes.addAll(activeNodeCodes);
-    long unsuccessfulCount = nodeProgress.unsuccessfulCount();
-    workflowFinalizer.finalizeWorkflow(TaskOutcomeWorkflowFinalizer.Context.builder()
-        .command(command)
-        .workflowRun(workflowRun)
-        .failedPartitionCount(unsuccessfulCount)
-        .allPartitionsFinished(true)
-        .dagContinues(!EmptyChecks.isEmpty(Objects.requireNonNull(activeNodes)))
-        .jobFullyComplete(true)
-        .activeNodes(activeNodes)
-        .currentNodeCode(linkedNode.getNodeCode())
-        .finishedAt(finishedAt)
-        .build());
-  }
 
-  private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
-    String nodeCode = TaskOutcomePayloadSupport.payloadStringValue(
-        EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeCode");
-    if (EmptyChecks.isNotBlank(nodeCode)) {
-      return nodeCode;
+    private List<JobPartitionEntity> loadPartitions(TaskOutcomeCommand command, JobTaskEntity task) {
+        JobPartitionQuery query = JobPartitionQuery.ofJobInstance(command.tenantId(), task.getJobInstanceId());
+        return jobMappers.jobPartitionMapper.selectByQuery(query);
     }
-    Set<String> activeNodes = EmptyChecks.isNull(workflowRun)
-        ? Set.of()
-        : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
-    if (EmptyChecks.isNotNull(workflowRun) && activeNodes.size() > 1) {
-      throw BizException.of(
-          ResultCode.STATE_CONFLICT,
-          "error.workflow.task_payload_missing_node_code",
-          String.valueOf(EmptyChecks.isNull(task) ? null : task.getId()));
-    }
-    if (EmptyChecks.isNotEmpty(activeNodes)) {
-      return activeNodes.iterator().next();
-    }
-    return WorkflowNodeCode.START.code();
-  }
-
-  private List<JobPartitionEntity> loadPartitions(TaskOutcomeCommand command, JobTaskEntity task) {
-    JobPartitionQuery query =
-        JobPartitionQuery.ofJobInstance(command.tenantId(), task.getJobInstanceId());
-    return jobMappers.jobPartitionMapper.selectByQuery(query);
-  }
 }

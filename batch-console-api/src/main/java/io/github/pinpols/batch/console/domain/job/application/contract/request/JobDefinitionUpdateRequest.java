@@ -17,92 +17,91 @@ import lombok.Data;
 
 @Data
 public class JobDefinitionUpdateRequest {
-  private static final Set<String> SUPPORTED_TRIGGER_MODES = DictEnum.codes(TriggerMode.class);
+    private static final Set<String> SUPPORTED_TRIGGER_MODES = DictEnum.codes(TriggerMode.class);
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @Size(max = 64)
-  @Pattern(
-      regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-      message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
-          + " underscore or hyphen")
-  private String dependsOnJobCode;
+    @Size(max = 64)
+    @Pattern(
+            regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
+                    + " underscore or hyphen")
+    private String dependsOnJobCode;
 
-  /** 提供后将替换完整上游集合；传入空列表会清除所有上游。 */
-  @Size(max = 32)
-  private List<@Size(max = 64) @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$") String>
-      dependsOnJobCodes;
+    /** 提供后将替换完整上游集合；传入空列表会清除所有上游。 */
+    @Size(max = 32)
+    private List<@Size(max = 64) @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$") String> dependsOnJobCodes;
 
-  /** 提供后将替换依赖边集合，包括各边的业务日期对齐方式。 */
-  @Size(max = 32)
-  private List<@Valid JobDependencyRuleRequest> jobDependencyRules;
+    /** 提供后将替换依赖边集合，包括各边的业务日期对齐方式。 */
+    @Size(max = 32)
+    private List<@Valid JobDependencyRuleRequest> jobDependencyRules;
 
-  @Size(max = 256)
-  private String jobName;
+    @Size(max = 256)
+    private String jobName;
 
-  private String bizType;
-  private String scheduleType;
-  private String scheduleExpr;
-  private String timezone;
-  private String triggerMode;
-  private String workerGroup;
-  private String queueCode;
-  private String calendarCode;
-  private String windowCode;
-  private Boolean dagEnabled;
-  private String shardStrategy;
+    private String bizType;
+    private String scheduleType;
+    private String scheduleExpr;
+    private String timezone;
+    private String triggerMode;
+    private String workerGroup;
+    private String queueCode;
+    private String calendarCode;
+    private String windowCode;
+    private Boolean dagEnabled;
+    private String shardStrategy;
 
-  /** 执行模式 ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC。 */
-  @Size(max = 16)
-  private String executionMode;
+    /** 执行模式 ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC。 */
+    @Size(max = 16)
+    private String executionMode;
 
-  /** 增量模式下的水位字段名;FULL 模式下应为空。 */
-  @Size(max = 64)
-  private String watermarkField;
+    /** 增量模式下的水位字段名;FULL 模式下应为空。 */
+    @Size(max = 64)
+    private String watermarkField;
 
-  private String retryPolicy;
-  private Integer retryMaxCount;
-  private Integer timeoutSeconds;
+    private String retryPolicy;
+    private Integer retryMaxCount;
+    private Integer timeoutSeconds;
 
-  @Min(0)
-  private Integer softRuntimeSeconds;
+    @Min(0)
+    private Integer softRuntimeSeconds;
 
-  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-  private String softRuntimeSeverity;
+    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+    private String softRuntimeSeverity;
 
-  @Min(0)
-  private Integer startGraceSeconds;
+    @Min(0)
+    private Integer startGraceSeconds;
 
-  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-  private String startGraceSeverity;
+    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+    private String startGraceSeverity;
 
-  private Boolean completionDeadlineEnabled;
-  private LocalTime completionDeadlineLocalTime;
+    private Boolean completionDeadlineEnabled;
+    private LocalTime completionDeadlineLocalTime;
 
-  @Min(0)
-  @Max(1)
-  private Integer completionDeadlineDayOffset;
+    @Min(0)
+    @Max(1)
+    private Integer completionDeadlineDayOffset;
 
-  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
-  private String completionDeadlineSeverity;
+    @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+    private String completionDeadlineSeverity;
 
-  @Min(0)
-  private Integer dependencyCompletionWindowSeconds;
+    @Min(0)
+    private Integer dependencyCompletionWindowSeconds;
 
-  private String executionHandler;
-  private String paramSchema;
-  private String defaultParams;
+    private String executionHandler;
+    private String paramSchema;
+    private String defaultParams;
 
-  @Min(value = 1, message = "priority must be between 1 and 9")
-  @Max(value = 9, message = "priority must be between 1 and 9")
-  private Integer priority;
+    @Min(value = 1, message = "priority must be between 1 and 9")
+    @Max(value = 9, message = "priority must be between 1 and 9")
+    private Integer priority;
 
-  private Boolean enabled;
-  private String description;
+    private Boolean enabled;
+    private String description;
 
-  @AssertTrue(message = "triggerMode must be a supported TriggerMode")
-  public boolean isTriggerModeSupported() {
-    return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
-  }
+    @AssertTrue(message = "triggerMode must be a supported TriggerMode")
+    public boolean isTriggerModeSupported() {
+        return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
+    }
 }

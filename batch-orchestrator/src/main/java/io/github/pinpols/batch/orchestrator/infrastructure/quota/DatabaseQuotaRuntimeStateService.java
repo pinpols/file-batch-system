@@ -33,263 +33,258 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ConditionalOnProperty(name = "batch.quota.runtime-store", havingValue = "database")
 public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateService {
 
-  private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
-  private final BatchTimezoneProvider timezoneProvider;
-  private final TransactionTemplate reconciliationTransaction;
+    private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
+    private final BatchTimezoneProvider timezoneProvider;
+    private final TransactionTemplate reconciliationTransaction;
 
-  public DatabaseQuotaRuntimeStateService(
-      QuotaRuntimeStateMapper quotaRuntimeStateMapper,
-      BatchTimezoneProvider timezoneProvider,
-      PlatformTransactionManager transactionManager) {
-    this.quotaRuntimeStateMapper = quotaRuntimeStateMapper;
-    this.timezoneProvider = timezoneProvider;
-    reconciliationTransaction = new TransactionTemplate(transactionManager);
-    reconciliationTransaction.setPropagationBehavior(
-        TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-  }
-
-  /**
-   * MyBatis 替代原 Spring Data JDBC {@code repository.save}：id==null 走 insert（带 ON CONFLICT DO NOTHING
-   * 防 UV）；否则 CAS update，update affected==0 时抛 OLF 保留原乐观锁语义。
-   */
-  private void persist(QuotaRuntimeStateEntity state) {
-    if (state.id() == null) {
-      // 并发首次创建：unique constraint 保证只一行成功，第二个 insert affected=0；
-      // 调用方下次 loadOrCreate 会读到已有行，逻辑自然收敛。
-      quotaRuntimeStateMapper.insert(state);
-      return;
-    }
-    int rows = quotaRuntimeStateMapper.updateWithCas(state);
-    if (rows == 0) {
-      throw new OptimisticLockingFailureException("quota_runtime_state version mismatch: id="
-          + state.id()
-          + ", version="
-          + state.version());
-    }
-  }
-
-  @Override
-  @Transactional
-  public ResourceCheck evaluateAndReserve(QuotaReservationRequest request) {
-    QuotaReservationSupport.Precheck precheck = QuotaReservationSupport.precheck(request);
-    if (!precheck.applicable()) {
-      return ResourceCheck.allow();
-    }
-    Optional<ResourceCheck> staticCheck =
-        QuotaReservationSupport.resolveStaticReservation(request, precheck, this::waitForCapacity);
-    if (staticCheck.isPresent()) {
-      return staticCheck.get();
-    }
-    int normalizedBurst = precheck.normalizedBurst();
-    int normalizedRequested = precheck.normalizedRequested();
-    QuotaResetPolicy policy = precheck.policy();
-
-    Instant now = BatchDateTimeSupport.utcNow();
-    StateContext stateContext = new StateContext(
-        request.owner(), policy.name(), now, request.policy().slidingWindowHours());
-    QuotaRuntimeStateEntity state = loadOrCreate(stateContext);
-    // 刷新窗口与预约合并为一次 CAS，避免刷新写入后再次使用旧版本。
-    state = refreshState(state, policy, now, request.policy().slidingWindowHours(), false);
-    if (state == null) {
-      return ResourceCheck.allow();
+    public DatabaseQuotaRuntimeStateService(
+            QuotaRuntimeStateMapper quotaRuntimeStateMapper,
+            BatchTimezoneProvider timezoneProvider,
+            PlatformTransactionManager transactionManager) {
+        this.quotaRuntimeStateMapper = quotaRuntimeStateMapper;
+        this.timezoneProvider = timezoneProvider;
+        reconciliationTransaction = new TransactionTemplate(transactionManager);
+        reconciliationTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    int borrowedNeeded = Math.max(0, (int)
-        (request.currentActiveCount() + normalizedRequested - request.policy().baseCap()));
-    if (borrowedNeeded == 0) {
-      persist(state);
-      return ResourceCheck.allow();
+    /**
+     * MyBatis 替代原 Spring Data JDBC {@code repository.save}：id==null 走 insert（带 ON CONFLICT DO NOTHING
+     * 防 UV）；否则 CAS update，update affected==0 时抛 OLF 保留原乐观锁语义。
+     */
+    private void persist(QuotaRuntimeStateEntity state) {
+        if (state.id() == null) {
+            // 并发首次创建：unique constraint 保证只一行成功，第二个 insert affected=0；
+            // 调用方下次 loadOrCreate 会读到已有行，逻辑自然收敛。
+            quotaRuntimeStateMapper.insert(state);
+            return;
+        }
+        int rows = quotaRuntimeStateMapper.updateWithCas(state);
+        if (rows == 0) {
+            throw new OptimisticLockingFailureException(
+                    "quota_runtime_state version mismatch: id=" + state.id() + ", version=" + state.version());
+        }
     }
-    if (borrowedNeeded > normalizedBurst) {
-      return waitForCapacity(request);
-    }
-    int currentPeak =
-        state.peakBorrowedCount() == null ? 0 : Math.max(0, state.peakBorrowedCount());
-    if (borrowedNeeded > currentPeak) {
-      state = state.withPeakAndTimestamps(
-          borrowedNeeded, state.lastResetAt() == null ? now : state.lastResetAt(), now);
-    }
-    // M-4: 只要使用了突发容量就必须持久化状态，否则 lastUpdatedAt 漂移导致窗口过期误判
-    persist(state);
-    return ResourceCheck.allow();
-  }
 
-  @Override
-  @Transactional(readOnly = true)
-  public QuotaRuntimeSnapshot describe(QuotaDescribeRequest request) {
-    String tenantId = request.owner().tenantId();
-    String quotaScope = request.owner().quotaScope();
-    String ownerCode = request.owner().ownerCode();
-    String quotaResetPolicy = request.quotaResetPolicy();
-    int burstLimit = request.burstLimit();
-    int slidingWindowHours = request.slidingWindowHours();
-    if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
-      QuotaResetPolicy fallbackPolicy = QuotaResetPolicy.from(quotaResetPolicy);
-      return QuotaRuntimeSnapshot.withoutWindow(fallbackPolicy.name(), burstLimit);
-    }
-    QuotaResetPolicy policy = QuotaResetPolicy.from(quotaResetPolicy);
-    if (!policy.isRuntimeManaged() || burstLimit <= 0) {
-      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
-    }
-    QuotaRuntimeStateEntity state =
-        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, quotaScope, ownerCode);
-    if (state == null) {
-      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
-    }
-    state = refreshState(state, policy, BatchDateTimeSupport.utcNow(), slidingWindowHours, false);
-    if (state == null) {
-      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
-    }
-    int peakBorrowed =
-        state.peakBorrowedCount() == null ? 0 : Math.max(0, state.peakBorrowedCount());
-    int remaining = Math.max(0, burstLimit - peakBorrowed);
-    return new QuotaRuntimeSnapshot(
-        policy.name(),
-        burstLimit,
-        peakBorrowed,
-        remaining,
-        state.windowStartedAt(),
-        state.windowExpiresAt(),
-        state.lastResetAt());
-  }
+    @Override
+    @Transactional
+    public ResourceCheck evaluateAndReserve(QuotaReservationRequest request) {
+        QuotaReservationSupport.Precheck precheck = QuotaReservationSupport.precheck(request);
+        if (!precheck.applicable()) {
+            return ResourceCheck.allow();
+        }
+        Optional<ResourceCheck> staticCheck =
+                QuotaReservationSupport.resolveStaticReservation(request, precheck, this::waitForCapacity);
+        if (staticCheck.isPresent()) {
+            return staticCheck.get();
+        }
+        int normalizedBurst = precheck.normalizedBurst();
+        int normalizedRequested = precheck.normalizedRequested();
+        QuotaResetPolicy policy = precheck.policy();
 
-  /**
-   * C-2.8：外层方法不包事务，逐条过期状态通过显式 REQUIRES_NEW 子事务重置。单条 CAS 冲突只跳过该条，不让一次乐观锁失败扳倒整批 reconcile。
-   */
-  @Override
-  public void reconcileExpiredStates(int slidingWindowHours) {
-    Instant now = BatchDateTimeSupport.utcNow();
-    List<QuotaRuntimeStateEntity> expired = quotaRuntimeStateMapper.selectExpired(now);
-    for (QuotaRuntimeStateEntity state : expired) {
-      try {
-        reconciliationTransaction.executeWithoutResult(
-            transactionStatus -> reconcileOne(state, now, slidingWindowHours));
-      } catch (OptimisticLockingFailureException conflict) {
-        // 另一个节点刚抢先重置了该状态，下一 tick 扫不到即自愈，无需重试
-        log.debug(
-            "quota state optimistic lock conflict during reconcile; will retry next tick:"
-                + " tenantId={}, scope={}, owner={}, id={}",
-            state.tenantId(),
-            state.quotaScope(),
-            state.ownerCode(),
-            state.id());
-      } catch (RuntimeException ex) {
-        // 单条异常只影响自己；记录后继续扫其他条
-        log.warn(
-            "quota state reconcile failed: tenantId={}, scope={}, owner={}, id={}, cause={}",
-            state.tenantId(),
-            state.quotaScope(),
-            state.ownerCode(),
-            state.id(),
-            SwallowedExceptionLogger.summary(ex));
-      }
-    }
-  }
+        Instant now = BatchDateTimeSupport.utcNow();
+        StateContext stateContext = new StateContext(
+                request.owner(), policy.name(), now, request.policy().slidingWindowHours());
+        QuotaRuntimeStateEntity state = loadOrCreate(stateContext);
+        // 刷新窗口与预约合并为一次 CAS，避免刷新写入后再次使用旧版本。
+        state = refreshState(state, policy, now, request.policy().slidingWindowHours(), false);
+        if (state == null) {
+            return ResourceCheck.allow();
+        }
 
-  private void reconcileOne(QuotaRuntimeStateEntity state, Instant now, int slidingWindowHours) {
-    QuotaResetPolicy policy = QuotaResetPolicy.from(state.quotaResetPolicy());
-    refreshState(state, policy, now, slidingWindowHours, true);
-  }
-
-  private record StateContext(
-      QuotaReservationOwner owner, String quotaResetPolicy, Instant now, int slidingWindowHours) {}
-
-  private QuotaRuntimeStateEntity loadOrCreate(StateContext ctx) {
-    String tenantId = ctx.owner().tenantId();
-    String quotaScope = ctx.owner().quotaScope();
-    String ownerCode = ctx.owner().ownerCode();
-    QuotaRuntimeStateEntity state =
-        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, quotaScope, ownerCode);
-    if (state != null) {
-      return state;
-    }
-    QuotaRuntimeStateEntity created = QuotaRuntimeStateEntity.builder()
-        .tenantId(tenantId)
-        .quotaScope(quotaScope)
-        .ownerCode(ownerCode)
-        .quotaResetPolicy(ctx.quotaResetPolicy())
-        .peakBorrowedCount(0)
-        .createdAt(ctx.now())
-        .updatedAt(ctx.now())
-        .build();
-    QuotaResetPolicy resetPolicy = QuotaResetPolicy.from(ctx.quotaResetPolicy());
-    Instant createdAt = ctx.now();
-    int slidingWindowHours = ctx.slidingWindowHours();
-    created = refreshState(created, resetPolicy, createdAt, slidingWindowHours, false);
-    return created;
-  }
-
-  private QuotaRuntimeStateEntity refreshState(
-      QuotaRuntimeStateEntity state,
-      QuotaResetPolicy policy,
-      Instant now,
-      int slidingWindowHours,
-      boolean persist) {
-    if (state == null) {
-      return null;
-    }
-    QuotaResetPolicy effectivePolicy = policy == null ? QuotaResetPolicy.NONE : policy;
-    String normalizedPolicy = effectivePolicy.name();
-    boolean changed = false;
-    if (!normalizedPolicy.equalsIgnoreCase(state.quotaResetPolicy())) {
-      state = state.withRefresh(
-          normalizedPolicy,
-          state.windowStartedAt(),
-          state.windowExpiresAt(),
-          state.peakBorrowedCount() == null ? 0 : state.peakBorrowedCount(),
-          state.lastResetAt());
-      changed = true;
-    }
-    if (!effectivePolicy.isRuntimeManaged()) {
-      boolean quotaStateNeedsReset = EmptyChecks.isNull(state.peakBorrowedCount())
-          || state.peakBorrowedCount() != 0
-          || state.windowStartedAt() != null
-          || EmptyChecks.isNotNull(state.windowExpiresAt());
-      if (quotaStateNeedsReset) {
-        state = state.withoutRuntimeWindow(normalizedPolicy, state.lastResetAt());
-        changed = true;
-      }
-      if (changed && persist) {
+        int borrowedNeeded = Math.max(0, (int) (request.currentActiveCount()
+                + normalizedRequested
+                - request.policy().baseCap()));
+        if (borrowedNeeded == 0) {
+            persist(state);
+            return ResourceCheck.allow();
+        }
+        if (borrowedNeeded > normalizedBurst) {
+            return waitForCapacity(request);
+        }
+        int currentPeak = state.peakBorrowedCount() == null ? 0 : Math.max(0, state.peakBorrowedCount());
+        if (borrowedNeeded > currentPeak) {
+            state = state.withPeakAndTimestamps(
+                    borrowedNeeded, state.lastResetAt() == null ? now : state.lastResetAt(), now);
+        }
+        // M-4: 只要使用了突发容量就必须持久化状态，否则 lastUpdatedAt 漂移导致窗口过期误判
         persist(state);
-      }
-      return state;
+        return ResourceCheck.allow();
     }
 
-    if (effectivePolicy == QuotaResetPolicy.CALENDAR_DAY) {
-      // 自然日窗口使用平台默认时区（batch.timezone.default-zone），与调度日历时区语义一致；
-      // 避免 JVM default 在容器间漂移导致同一租户跨节点看到不同的"自然日"边界。
-      ZonedDateTime nowZdt = now.atZone(timezoneProvider.defaultZone());
-      Instant windowStart = QuotaResetPolicy.startOfCalendarDay(nowZdt).toInstant();
-      Instant windowEnd = windowStart.plus(Duration.ofDays(1));
-      boolean fixedQuotaWindowNeedsReset = !windowStart.equals(state.windowStartedAt())
-          || state.windowExpiresAt() == null
-          || !now.isBefore(state.windowExpiresAt());
-      if (fixedQuotaWindowNeedsReset) {
-        state = state.withRefresh(normalizedPolicy, windowStart, windowEnd, 0, now);
-        changed = true;
-      }
-    } else if (effectivePolicy == QuotaResetPolicy.SLIDING_WINDOW) {
-      int normalizedHours = Math.max(1, slidingWindowHours);
-      boolean quotaWindowHasExpiredOrIsMissing = EmptyChecks.isNull(state.windowStartedAt())
-          || state.windowExpiresAt() == null
-          || !now.isBefore(state.windowExpiresAt());
-      if (quotaWindowHasExpiredOrIsMissing) {
-        Duration slidingWindowDuration = Duration.ofHours(normalizedHours);
-        Instant windowExpiresAt = now.plus(slidingWindowDuration);
-        state = state.withRefresh(normalizedPolicy, now, windowExpiresAt, 0, now);
-        changed = true;
-      }
+    @Override
+    @Transactional(readOnly = true)
+    public QuotaRuntimeSnapshot describe(QuotaDescribeRequest request) {
+        String tenantId = request.owner().tenantId();
+        String quotaScope = request.owner().quotaScope();
+        String ownerCode = request.owner().ownerCode();
+        String quotaResetPolicy = request.quotaResetPolicy();
+        int burstLimit = request.burstLimit();
+        int slidingWindowHours = request.slidingWindowHours();
+        if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
+            QuotaResetPolicy fallbackPolicy = QuotaResetPolicy.from(quotaResetPolicy);
+            return QuotaRuntimeSnapshot.withoutWindow(fallbackPolicy.name(), burstLimit);
+        }
+        QuotaResetPolicy policy = QuotaResetPolicy.from(quotaResetPolicy);
+        if (!policy.isRuntimeManaged() || burstLimit <= 0) {
+            return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
+        }
+        QuotaRuntimeStateEntity state =
+                quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, quotaScope, ownerCode);
+        if (state == null) {
+            return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
+        }
+        state = refreshState(state, policy, BatchDateTimeSupport.utcNow(), slidingWindowHours, false);
+        if (state == null) {
+            return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
+        }
+        int peakBorrowed = state.peakBorrowedCount() == null ? 0 : Math.max(0, state.peakBorrowedCount());
+        int remaining = Math.max(0, burstLimit - peakBorrowed);
+        return new QuotaRuntimeSnapshot(
+                policy.name(),
+                burstLimit,
+                peakBorrowed,
+                remaining,
+                state.windowStartedAt(),
+                state.windowExpiresAt(),
+                state.lastResetAt());
     }
-    if (changed && persist) {
-      persist(state);
-    }
-    return state;
-  }
 
-  private ResourceCheck waitForCapacity(QuotaReservationRequest request) {
-    QuotaReservationReason reason = request.reason();
-    return ResourceCheck.waitForCapacity(
-        reason == null ? null : reason.reasonCode(),
-        reason == null ? null : reason.reasonMessage());
-  }
+    /**
+     * C-2.8：外层方法不包事务，逐条过期状态通过显式 REQUIRES_NEW 子事务重置。单条 CAS 冲突只跳过该条，不让一次乐观锁失败扳倒整批 reconcile。
+     */
+    @Override
+    public void reconcileExpiredStates(int slidingWindowHours) {
+        Instant now = BatchDateTimeSupport.utcNow();
+        List<QuotaRuntimeStateEntity> expired = quotaRuntimeStateMapper.selectExpired(now);
+        for (QuotaRuntimeStateEntity state : expired) {
+            try {
+                reconciliationTransaction.executeWithoutResult(
+                        transactionStatus -> reconcileOne(state, now, slidingWindowHours));
+            } catch (OptimisticLockingFailureException conflict) {
+                // 另一个节点刚抢先重置了该状态，下一 tick 扫不到即自愈，无需重试
+                log.debug(
+                        "quota state optimistic lock conflict during reconcile; will retry next tick:"
+                                + " tenantId={}, scope={}, owner={}, id={}",
+                        state.tenantId(),
+                        state.quotaScope(),
+                        state.ownerCode(),
+                        state.id());
+            } catch (RuntimeException ex) {
+                // 单条异常只影响自己；记录后继续扫其他条
+                log.warn(
+                        "quota state reconcile failed: tenantId={}, scope={}, owner={}, id={}, cause={}",
+                        state.tenantId(),
+                        state.quotaScope(),
+                        state.ownerCode(),
+                        state.id(),
+                        SwallowedExceptionLogger.summary(ex));
+            }
+        }
+    }
+
+    private void reconcileOne(QuotaRuntimeStateEntity state, Instant now, int slidingWindowHours) {
+        QuotaResetPolicy policy = QuotaResetPolicy.from(state.quotaResetPolicy());
+        refreshState(state, policy, now, slidingWindowHours, true);
+    }
+
+    private record StateContext(
+            QuotaReservationOwner owner, String quotaResetPolicy, Instant now, int slidingWindowHours) {}
+
+    private QuotaRuntimeStateEntity loadOrCreate(StateContext ctx) {
+        String tenantId = ctx.owner().tenantId();
+        String quotaScope = ctx.owner().quotaScope();
+        String ownerCode = ctx.owner().ownerCode();
+        QuotaRuntimeStateEntity state =
+                quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, quotaScope, ownerCode);
+        if (state != null) {
+            return state;
+        }
+        QuotaRuntimeStateEntity created = QuotaRuntimeStateEntity.builder()
+                .tenantId(tenantId)
+                .quotaScope(quotaScope)
+                .ownerCode(ownerCode)
+                .quotaResetPolicy(ctx.quotaResetPolicy())
+                .peakBorrowedCount(0)
+                .createdAt(ctx.now())
+                .updatedAt(ctx.now())
+                .build();
+        QuotaResetPolicy resetPolicy = QuotaResetPolicy.from(ctx.quotaResetPolicy());
+        Instant createdAt = ctx.now();
+        int slidingWindowHours = ctx.slidingWindowHours();
+        created = refreshState(created, resetPolicy, createdAt, slidingWindowHours, false);
+        return created;
+    }
+
+    private QuotaRuntimeStateEntity refreshState(
+            QuotaRuntimeStateEntity state,
+            QuotaResetPolicy policy,
+            Instant now,
+            int slidingWindowHours,
+            boolean persist) {
+        if (state == null) {
+            return null;
+        }
+        QuotaResetPolicy effectivePolicy = policy == null ? QuotaResetPolicy.NONE : policy;
+        String normalizedPolicy = effectivePolicy.name();
+        boolean changed = false;
+        if (!normalizedPolicy.equalsIgnoreCase(state.quotaResetPolicy())) {
+            state = state.withRefresh(
+                    normalizedPolicy,
+                    state.windowStartedAt(),
+                    state.windowExpiresAt(),
+                    state.peakBorrowedCount() == null ? 0 : state.peakBorrowedCount(),
+                    state.lastResetAt());
+            changed = true;
+        }
+        if (!effectivePolicy.isRuntimeManaged()) {
+            boolean quotaStateNeedsReset = EmptyChecks.isNull(state.peakBorrowedCount())
+                    || state.peakBorrowedCount() != 0
+                    || state.windowStartedAt() != null
+                    || EmptyChecks.isNotNull(state.windowExpiresAt());
+            if (quotaStateNeedsReset) {
+                state = state.withoutRuntimeWindow(normalizedPolicy, state.lastResetAt());
+                changed = true;
+            }
+            if (changed && persist) {
+                persist(state);
+            }
+            return state;
+        }
+
+        if (effectivePolicy == QuotaResetPolicy.CALENDAR_DAY) {
+            // 自然日窗口使用平台默认时区（batch.timezone.default-zone），与调度日历时区语义一致；
+            // 避免 JVM default 在容器间漂移导致同一租户跨节点看到不同的"自然日"边界。
+            ZonedDateTime nowZdt = now.atZone(timezoneProvider.defaultZone());
+            Instant windowStart = QuotaResetPolicy.startOfCalendarDay(nowZdt).toInstant();
+            Instant windowEnd = windowStart.plus(Duration.ofDays(1));
+            boolean fixedQuotaWindowNeedsReset = !windowStart.equals(state.windowStartedAt())
+                    || state.windowExpiresAt() == null
+                    || !now.isBefore(state.windowExpiresAt());
+            if (fixedQuotaWindowNeedsReset) {
+                state = state.withRefresh(normalizedPolicy, windowStart, windowEnd, 0, now);
+                changed = true;
+            }
+        } else if (effectivePolicy == QuotaResetPolicy.SLIDING_WINDOW) {
+            int normalizedHours = Math.max(1, slidingWindowHours);
+            boolean quotaWindowHasExpiredOrIsMissing = EmptyChecks.isNull(state.windowStartedAt())
+                    || state.windowExpiresAt() == null
+                    || !now.isBefore(state.windowExpiresAt());
+            if (quotaWindowHasExpiredOrIsMissing) {
+                Duration slidingWindowDuration = Duration.ofHours(normalizedHours);
+                Instant windowExpiresAt = now.plus(slidingWindowDuration);
+                state = state.withRefresh(normalizedPolicy, now, windowExpiresAt, 0, now);
+                changed = true;
+            }
+        }
+        if (changed && persist) {
+            persist(state);
+        }
+        return state;
+    }
+
+    private ResourceCheck waitForCapacity(QuotaReservationRequest request) {
+        QuotaReservationReason reason = request.reason();
+        return ResourceCheck.waitForCapacity(
+                reason == null ? null : reason.reasonCode(), reason == null ? null : reason.reasonMessage());
+    }
 }

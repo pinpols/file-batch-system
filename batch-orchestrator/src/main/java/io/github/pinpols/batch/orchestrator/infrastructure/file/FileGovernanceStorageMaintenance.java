@@ -23,304 +23,279 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class FileGovernanceStorageMaintenance {
 
-  private static final String SCHEDULER_NAME = "file-governance-scheduler";
-  private static final String ACTOR_SYSTEM = "SYSTEM";
+    private static final String SCHEDULER_NAME = "file-governance-scheduler";
+    private static final String ACTOR_SYSTEM = "SYSTEM";
 
-  private final FileGovernanceRepository repository;
-  private final S3GovernanceStorage storage;
-  private final FileGovernanceProperties properties;
+    private final FileGovernanceRepository repository;
+    private final S3GovernanceStorage storage;
+    private final FileGovernanceProperties properties;
 
-  void cleanupArchivedFiles() {
-    if (!properties.getArchive().isEnabled()) {
-      return;
+    void cleanupArchivedFiles() {
+        if (!properties.getArchive().isEnabled()) {
+            return;
+        }
+        Instant cutoff =
+                BatchDateTimeSupport.utcNow().minus(properties.getArchive().getRetentionDays(), ChronoUnit.DAYS);
+        List<FileGovernanceMaintenanceViews.ArchivedFileCleanupView> files = repository.selectArchivedFilesForCleanup(
+                cutoff, properties.getArchive().getCleanupBatchSize());
+        for (FileGovernanceMaintenanceViews.ArchivedFileCleanupView file : files) {
+            if (EmptyChecks.isNotNull(file)) {
+                RlsTenantContextHolder.runWithTenant(file.tenantId(), () -> cleanupArchivedFile(file));
+            }
+        }
     }
-    Instant cutoff = BatchDateTimeSupport.utcNow()
-        .minus(properties.getArchive().getRetentionDays(), ChronoUnit.DAYS);
-    List<FileGovernanceMaintenanceViews.ArchivedFileCleanupView> files =
-        repository.selectArchivedFilesForCleanup(
-            cutoff, properties.getArchive().getCleanupBatchSize());
-    for (FileGovernanceMaintenanceViews.ArchivedFileCleanupView file : files) {
-      if (EmptyChecks.isNotNull(file)) {
-        RlsTenantContextHolder.runWithTenant(file.tenantId(), () -> cleanupArchivedFile(file));
-      }
-    }
-  }
 
-  void cleanupOrphanUploadSessions() {
-    if (!properties.getUploadSession().isCleanupEnabled()) {
-      return;
-    }
-    List<FileGovernanceMaintenanceViews.OrphanUploadSessionView> sessions =
-        repository.selectOrphanUploadSessions(
-            properties.getUploadSession().getOrphanTtlSeconds(),
-            properties.getUploadSession().getCleanupBatchSize());
-    if (sessions.isEmpty()) {
-      return;
-    }
-    long cleaned = 0L;
-    long skipped = 0L;
-    for (FileGovernanceMaintenanceViews.OrphanUploadSessionView session : sessions) {
-      boolean didCleanup = EmptyChecks.isNotNull(session)
-          && RlsTenantContextHolder.runWithTenant(
-              session.tenantId(), () -> cleanupOrphanUploadSession(session));
-      if (didCleanup) {
-        cleaned++;
-      } else {
-        skipped++;
-      }
-    }
-    log.info(
-        "orphan upload session cleanup finished: candidates={}, cleaned={}, skipped={},"
-            + " ttlSeconds={}",
-        sessions.size(),
-        cleaned,
-        skipped,
-        properties.getUploadSession().getOrphanTtlSeconds());
-  }
-
-  void reconcileObjectStorage() {
-    if (!properties.getReconcile().isEnabled()) {
-      return;
-    }
-    int batchSize = properties.getReconcile().getBatchSize();
-    if (batchSize <= 0) {
-      return;
-    }
-    ReconcilePage page = storage.listReconcilePage(
-        properties.getReconcile().getPrefix(),
-        batchSize,
-        properties.getReconcile().isIncludeTemporaryObjects());
-    for (StorageObjectView object : page.objects()) {
-      RlsTenantContextHolder.runWithTenant(
-          properties.getReconcile().getDefaultTenantId(), () -> reconcileObject(object));
-    }
-    storage.completeReconcilePage(page);
-  }
-
-  private void cleanupArchivedFile(FileGovernanceMaintenanceViews.ArchivedFileCleanupView file) {
-    Long fileId = file.fileId();
-    String tenantId = file.tenantId();
-    String storagePath = file.storagePath();
-    String storageType = file.storageType();
-    try {
-      if (fileId == null || tenantId == null) {
-        return;
-      }
-      if (repository.countActivePipelineInstances(tenantId, fileId) > 0
-          || repository.countPendingDispatchRecords(tenantId, fileId) > 0) {
-        return;
-      }
-      if ("S3".equalsIgnoreCase(storageType) || "OSS".equalsIgnoreCase(storageType)) {
-        storage.removeObject(storagePath);
-      }
-      Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
-      cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
-      cleanupMetadata.put("cleanupReason", "ARCHIVE_RETENTION_EXPIRED");
-      String currentStatus = file.fileStatus();
-      FileStateMachine.assertTransition(currentStatus, FileStatus.DELETED.code());
-      repository.updateFileStatus(
-          tenantId, fileId, currentStatus, FileStatus.DELETED.code(), cleanupMetadata);
-      Map<String, Object> auditDetail = new LinkedHashMap<>();
-      auditDetail.put("storagePath", storagePath);
-      auditDetail.put("storageType", storageType);
-      FileGovernanceRepository.FileAuditCommand auditCommand =
-          new FileGovernanceRepository.FileAuditCommand(
-              tenantId,
-              fileId,
-              "CLEANUP",
-              "SUCCESS",
-              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-              "cleanup-" + fileId,
-              auditDetail);
-      repository.appendAudit(auditCommand);
-    } catch (Exception exception) {
-      Map<String, Object> auditDetail = new LinkedHashMap<>();
-      auditDetail.put("storagePath", storagePath);
-      auditDetail.put("errorMessage", exception.getMessage());
-      FileGovernanceRepository.FileAuditCommand auditCommand =
-          new FileGovernanceRepository.FileAuditCommand(
-              tenantId,
-              fileId,
-              "CLEANUP",
-              "FAILED",
-              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-              "cleanup-" + fileId,
-              auditDetail);
-      repository.appendAudit(auditCommand);
-      log.warn("archived file cleanup failed: fileId={}", fileId, exception);
-    }
-  }
-
-  private boolean cleanupOrphanUploadSession(
-      FileGovernanceMaintenanceViews.OrphanUploadSessionView session) {
-    Long fileId = session.fileId();
-    String tenantId = session.tenantId();
-    String storageBucket = session.storageBucket();
-    String storagePath = session.storagePath();
-    if (fileId == null || tenantId == null || storagePath == null) {
-      return false;
-    }
-    try {
-      try {
-        long sizeBytes = storage.objectSize(storageBucket, storagePath);
+    void cleanupOrphanUploadSessions() {
+        if (!properties.getUploadSession().isCleanupEnabled()) {
+            return;
+        }
+        List<FileGovernanceMaintenanceViews.OrphanUploadSessionView> sessions = repository.selectOrphanUploadSessions(
+                properties.getUploadSession().getOrphanTtlSeconds(),
+                properties.getUploadSession().getCleanupBatchSize());
+        if (sessions.isEmpty()) {
+            return;
+        }
+        long cleaned = 0L;
+        long skipped = 0L;
+        for (FileGovernanceMaintenanceViews.OrphanUploadSessionView session : sessions) {
+            boolean didCleanup = EmptyChecks.isNotNull(session)
+                    && RlsTenantContextHolder.runWithTenant(
+                            session.tenantId(), () -> cleanupOrphanUploadSession(session));
+            if (didCleanup) {
+                cleaned++;
+            } else {
+                skipped++;
+            }
+        }
         log.info(
-            "skip orphan upload session, object uploaded but never confirmed: tenantId={},"
-                + " fileId={}, storagePath={}, sizeBytes={}",
-            tenantId,
-            fileId,
-            storagePath,
-            sizeBytes);
-        return false;
-      } catch (ObjectNotFoundException notFound) {
-        // 对象确实不存在，继续清理孤儿占位行。
-      }
-      Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
-      cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
-      cleanupMetadata.put("cleanupReason", "UPLOAD_SESSION_ORPHAN_EXPIRED");
-      FileStateMachine.assertTransition(FileStatus.RECEIVED.code(), FileStatus.ARCHIVED.code());
-      int archived = repository.updateFileStatus(
-          tenantId,
-          fileId,
-          FileStatus.RECEIVED.code(),
-          FileStatus.ARCHIVED.code(),
-          cleanupMetadata);
-      if (archived <= 0) {
-        return false;
-      }
-      FileStateMachine.assertTransition(FileStatus.ARCHIVED.code(), FileStatus.DELETED.code());
-      repository.updateFileStatus(
-          tenantId, fileId, FileStatus.ARCHIVED.code(), FileStatus.DELETED.code(), null);
-      Map<String, Object> auditDetail = new LinkedHashMap<>();
-      auditDetail.put("storageBucket", storageBucket);
-      auditDetail.put("storagePath", storagePath);
-      auditDetail.put("cleanupReason", "UPLOAD_SESSION_ORPHAN_EXPIRED");
-      FileGovernanceRepository.FileAuditCommand auditCommand =
-          new FileGovernanceRepository.FileAuditCommand(
-              tenantId,
-              fileId,
-              "CLEANUP",
-              "SUCCESS",
-              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-              "orphan-upload-" + fileId,
-              auditDetail);
-      repository.appendAudit(auditCommand);
-      return true;
-    } catch (Exception exception) {
-      Map<String, Object> auditDetail = new LinkedHashMap<>();
-      auditDetail.put("storagePath", storagePath);
-      auditDetail.put("errorMessage", exception.getMessage());
-      FileGovernanceRepository.FileAuditCommand auditCommand =
-          new FileGovernanceRepository.FileAuditCommand(
-              tenantId,
-              fileId,
-              "CLEANUP",
-              "FAILED",
-              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-              "orphan-upload-" + fileId,
-              auditDetail);
-      repository.appendAudit(auditCommand);
-      log.warn(
-          "orphan upload session cleanup failed: tenantId={}, fileId={}",
-          tenantId,
-          fileId,
-          exception);
-      return false;
+                "orphan upload session cleanup finished: candidates={}, cleaned={}, skipped={}," + " ttlSeconds={}",
+                sessions.size(),
+                cleaned,
+                skipped,
+                properties.getUploadSession().getOrphanTtlSeconds());
     }
-  }
 
-  private void reconcileObject(StorageObjectView object) {
-    boolean objectIsMissingOrCompletionMarker = EmptyChecks.isNull(object)
-        || EmptyChecks.isNull(object.objectName())
-        || object.objectName().endsWith(".done");
-    if (objectIsMissingOrCompletionMarker) {
-      return;
+    void reconcileObjectStorage() {
+        if (!properties.getReconcile().isEnabled()) {
+            return;
+        }
+        int batchSize = properties.getReconcile().getBatchSize();
+        if (batchSize <= 0) {
+            return;
+        }
+        ReconcilePage page = storage.listReconcilePage(
+                properties.getReconcile().getPrefix(),
+                batchSize,
+                properties.getReconcile().isIncludeTemporaryObjects());
+        for (StorageObjectView object : page.objects()) {
+            RlsTenantContextHolder.runWithTenant(
+                    properties.getReconcile().getDefaultTenantId(), () -> reconcileObject(object));
+        }
+        storage.completeReconcilePage(page);
     }
-    // 平台托管上传由会话创建和到达确认登记，不能在默认租户重新补录或提前确认。
-    if (object.objectName().startsWith("uploads/")) {
-      return;
-    }
-    String tenantId = properties.getReconcile().getDefaultTenantId();
-    if (repository.existsFileRecordByStoragePath(tenantId, object.bucket(), object.objectName())) {
-      return;
-    }
-    String fileName = object.objectName().contains("/")
-        ? object.objectName().substring(object.objectName().lastIndexOf('/') + 1)
-        : object.objectName();
-    String fileCategory = resolveFileCategory(object.objectName());
-    String fileStatus = resolveFileStatus(fileCategory);
-    String traceId = "reconcile-" + sanitizeTrace(fileName);
-    String fileFormatType = resolveFileFormatType(fileName);
-    FileGovernanceRepository.FileIdentity fileIdentity =
-        new FileGovernanceRepository.FileIdentity(tenantId, fileCategory, fileName, fileFormatType);
-    FileGovernanceRepository.FileStorage fileStorage =
-        new FileGovernanceRepository.FileStorage("S3", object.objectName(), object.bucket());
-    Map<String, Object> reconcileMetadata = buildReconcileMetadata(object);
-    FileGovernanceRepository.ReconciledFileRecordCommand recordCommand =
-        new FileGovernanceRepository.ReconciledFileRecordCommand(
-            fileIdentity,
-            object.size(),
-            fileStorage,
-            ACTOR_SYSTEM,
-            fileStatus,
-            traceId,
-            reconcileMetadata);
-    Long fileId = repository.createReconciledFileRecord(recordCommand);
-    FileGovernanceRepository.FileAuditCommand auditCommand =
-        new FileGovernanceRepository.FileAuditCommand(
-            tenantId,
-            fileId,
-            "RECONCILE_REGISTER",
-            "SUCCESS",
-            new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-            traceId,
-            Map.of("bucket", object.bucket(), "storagePath", object.objectName()));
-    repository.appendAudit(auditCommand);
-  }
 
-  private Map<String, Object> buildReconcileMetadata(StorageObjectView object) {
-    Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("reconciled", true);
-    metadata.put("etag", object.etag());
-    metadata.put("lastModified", object.lastModified());
-    return metadata;
-  }
+    private void cleanupArchivedFile(FileGovernanceMaintenanceViews.ArchivedFileCleanupView file) {
+        Long fileId = file.fileId();
+        String tenantId = file.tenantId();
+        String storagePath = file.storagePath();
+        String storageType = file.storageType();
+        try {
+            if (fileId == null || tenantId == null) {
+                return;
+            }
+            if (repository.countActivePipelineInstances(tenantId, fileId) > 0
+                    || repository.countPendingDispatchRecords(tenantId, fileId) > 0) {
+                return;
+            }
+            if ("S3".equalsIgnoreCase(storageType) || "OSS".equalsIgnoreCase(storageType)) {
+                storage.removeObject(storagePath);
+            }
+            Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
+            cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
+            cleanupMetadata.put("cleanupReason", "ARCHIVE_RETENTION_EXPIRED");
+            String currentStatus = file.fileStatus();
+            FileStateMachine.assertTransition(currentStatus, FileStatus.DELETED.code());
+            repository.updateFileStatus(tenantId, fileId, currentStatus, FileStatus.DELETED.code(), cleanupMetadata);
+            Map<String, Object> auditDetail = new LinkedHashMap<>();
+            auditDetail.put("storagePath", storagePath);
+            auditDetail.put("storageType", storageType);
+            FileGovernanceRepository.FileAuditCommand auditCommand = new FileGovernanceRepository.FileAuditCommand(
+                    tenantId,
+                    fileId,
+                    "CLEANUP",
+                    "SUCCESS",
+                    new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+                    "cleanup-" + fileId,
+                    auditDetail);
+            repository.appendAudit(auditCommand);
+        } catch (Exception exception) {
+            Map<String, Object> auditDetail = new LinkedHashMap<>();
+            auditDetail.put("storagePath", storagePath);
+            auditDetail.put("errorMessage", exception.getMessage());
+            FileGovernanceRepository.FileAuditCommand auditCommand = new FileGovernanceRepository.FileAuditCommand(
+                    tenantId,
+                    fileId,
+                    "CLEANUP",
+                    "FAILED",
+                    new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+                    "cleanup-" + fileId,
+                    auditDetail);
+            repository.appendAudit(auditCommand);
+            log.warn("archived file cleanup failed: fileId={}", fileId, exception);
+        }
+    }
 
-  private String resolveFileCategory(String objectName) {
-    if (objectName.startsWith("archive/")) {
-      return "ARCHIVE";
+    private boolean cleanupOrphanUploadSession(FileGovernanceMaintenanceViews.OrphanUploadSessionView session) {
+        Long fileId = session.fileId();
+        String tenantId = session.tenantId();
+        String storageBucket = session.storageBucket();
+        String storagePath = session.storagePath();
+        if (fileId == null || tenantId == null || storagePath == null) {
+            return false;
+        }
+        try {
+            try {
+                long sizeBytes = storage.objectSize(storageBucket, storagePath);
+                log.info(
+                        "skip orphan upload session, object uploaded but never confirmed: tenantId={},"
+                                + " fileId={}, storagePath={}, sizeBytes={}",
+                        tenantId,
+                        fileId,
+                        storagePath,
+                        sizeBytes);
+                return false;
+            } catch (ObjectNotFoundException notFound) {
+                // 对象确实不存在，继续清理孤儿占位行。
+            }
+            Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
+            cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
+            cleanupMetadata.put("cleanupReason", "UPLOAD_SESSION_ORPHAN_EXPIRED");
+            FileStateMachine.assertTransition(FileStatus.RECEIVED.code(), FileStatus.ARCHIVED.code());
+            int archived = repository.updateFileStatus(
+                    tenantId, fileId, FileStatus.RECEIVED.code(), FileStatus.ARCHIVED.code(), cleanupMetadata);
+            if (archived <= 0) {
+                return false;
+            }
+            FileStateMachine.assertTransition(FileStatus.ARCHIVED.code(), FileStatus.DELETED.code());
+            repository.updateFileStatus(tenantId, fileId, FileStatus.ARCHIVED.code(), FileStatus.DELETED.code(), null);
+            Map<String, Object> auditDetail = new LinkedHashMap<>();
+            auditDetail.put("storageBucket", storageBucket);
+            auditDetail.put("storagePath", storagePath);
+            auditDetail.put("cleanupReason", "UPLOAD_SESSION_ORPHAN_EXPIRED");
+            FileGovernanceRepository.FileAuditCommand auditCommand = new FileGovernanceRepository.FileAuditCommand(
+                    tenantId,
+                    fileId,
+                    "CLEANUP",
+                    "SUCCESS",
+                    new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+                    "orphan-upload-" + fileId,
+                    auditDetail);
+            repository.appendAudit(auditCommand);
+            return true;
+        } catch (Exception exception) {
+            Map<String, Object> auditDetail = new LinkedHashMap<>();
+            auditDetail.put("storagePath", storagePath);
+            auditDetail.put("errorMessage", exception.getMessage());
+            FileGovernanceRepository.FileAuditCommand auditCommand = new FileGovernanceRepository.FileAuditCommand(
+                    tenantId,
+                    fileId,
+                    "CLEANUP",
+                    "FAILED",
+                    new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+                    "orphan-upload-" + fileId,
+                    auditDetail);
+            repository.appendAudit(auditCommand);
+            log.warn("orphan upload session cleanup failed: tenantId={}, fileId={}", tenantId, fileId, exception);
+            return false;
+        }
     }
-    if (objectName.startsWith("outbound/")) {
-      return "OUTPUT";
-    }
-    return "INPUT";
-  }
 
-  private String resolveFileStatus(String fileCategory) {
-    return switch (fileCategory) {
-      case "ARCHIVE" -> FileStatus.ARCHIVED.code();
-      case "OUTPUT" -> FileStatus.GENERATED.code();
-      default -> FileStatus.RECEIVED.code();
-    };
-  }
+    private void reconcileObject(StorageObjectView object) {
+        boolean objectIsMissingOrCompletionMarker = EmptyChecks.isNull(object)
+                || EmptyChecks.isNull(object.objectName())
+                || object.objectName().endsWith(".done");
+        if (objectIsMissingOrCompletionMarker) {
+            return;
+        }
+        // 平台托管上传由会话创建和到达确认登记，不能在默认租户重新补录或提前确认。
+        if (object.objectName().startsWith("uploads/")) {
+            return;
+        }
+        String tenantId = properties.getReconcile().getDefaultTenantId();
+        if (repository.existsFileRecordByStoragePath(tenantId, object.bucket(), object.objectName())) {
+            return;
+        }
+        String fileName = object.objectName().contains("/")
+                ? object.objectName().substring(object.objectName().lastIndexOf('/') + 1)
+                : object.objectName();
+        String fileCategory = resolveFileCategory(object.objectName());
+        String fileStatus = resolveFileStatus(fileCategory);
+        String traceId = "reconcile-" + sanitizeTrace(fileName);
+        String fileFormatType = resolveFileFormatType(fileName);
+        FileGovernanceRepository.FileIdentity fileIdentity =
+                new FileGovernanceRepository.FileIdentity(tenantId, fileCategory, fileName, fileFormatType);
+        FileGovernanceRepository.FileStorage fileStorage =
+                new FileGovernanceRepository.FileStorage("S3", object.objectName(), object.bucket());
+        Map<String, Object> reconcileMetadata = buildReconcileMetadata(object);
+        FileGovernanceRepository.ReconciledFileRecordCommand recordCommand =
+                new FileGovernanceRepository.ReconciledFileRecordCommand(
+                        fileIdentity, object.size(), fileStorage, ACTOR_SYSTEM, fileStatus, traceId, reconcileMetadata);
+        Long fileId = repository.createReconciledFileRecord(recordCommand);
+        FileGovernanceRepository.FileAuditCommand auditCommand = new FileGovernanceRepository.FileAuditCommand(
+                tenantId,
+                fileId,
+                "RECONCILE_REGISTER",
+                "SUCCESS",
+                new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+                traceId,
+                Map.of("bucket", object.bucket(), "storagePath", object.objectName()));
+        repository.appendAudit(auditCommand);
+    }
 
-  private String resolveFileFormatType(String fileName) {
-    String lowerName = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
-    if (lowerName.endsWith(".csv")) {
-      return "DELIMITED";
+    private Map<String, Object> buildReconcileMetadata(StorageObjectView object) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("reconciled", true);
+        metadata.put("etag", object.etag());
+        metadata.put("lastModified", object.lastModified());
+        return metadata;
     }
-    if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
-      return "EXCEL";
-    }
-    if (lowerName.endsWith(".xml")) {
-      return "XML";
-    }
-    if (lowerName.endsWith(".json")) {
-      return "JSON";
-    }
-    return "BINARY";
-  }
 
-  private String sanitizeTrace(String fileName) {
-    return fileName == null ? "object" : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
-  }
+    private String resolveFileCategory(String objectName) {
+        if (objectName.startsWith("archive/")) {
+            return "ARCHIVE";
+        }
+        if (objectName.startsWith("outbound/")) {
+            return "OUTPUT";
+        }
+        return "INPUT";
+    }
+
+    private String resolveFileStatus(String fileCategory) {
+        return switch (fileCategory) {
+            case "ARCHIVE" -> FileStatus.ARCHIVED.code();
+            case "OUTPUT" -> FileStatus.GENERATED.code();
+            default -> FileStatus.RECEIVED.code();
+        };
+    }
+
+    private String resolveFileFormatType(String fileName) {
+        String lowerName = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
+        if (lowerName.endsWith(".csv")) {
+            return "DELIMITED";
+        }
+        if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
+            return "EXCEL";
+        }
+        if (lowerName.endsWith(".xml")) {
+            return "XML";
+        }
+        if (lowerName.endsWith(".json")) {
+            return "JSON";
+        }
+        return "BINARY";
+    }
+
+    private String sanitizeTrace(String fileName) {
+        return fileName == null ? "object" : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
 }

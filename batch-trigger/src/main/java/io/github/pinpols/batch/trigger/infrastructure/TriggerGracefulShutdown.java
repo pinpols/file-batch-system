@@ -33,143 +33,137 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class TriggerGracefulShutdown
-    implements ApplicationListener<ContextClosedEvent>,
-        ApplicationEventPublisherAware,
-        SmartLifecycle {
+        implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware, SmartLifecycle {
 
-  private final Scheduler scheduler;
-  private final TriggerDrainState drainState;
-  private final AtomicBoolean lifecycleRunning = new AtomicBoolean(true);
-  private ApplicationEventPublisher eventPublisher;
+    private final Scheduler scheduler;
+    private final TriggerDrainState drainState;
+    private final AtomicBoolean lifecycleRunning = new AtomicBoolean(true);
+    private ApplicationEventPublisher eventPublisher;
 
-  /** 对外稳定的 Trigger 排水与调度器状态契约。 */
-  public record TriggerDrainStatus(
-      boolean draining, Instant drainingSince, String reason, String schedulerStatus) {}
+    /** 对外稳定的 Trigger 排水与调度器状态契约。 */
+    public record TriggerDrainStatus(boolean draining, Instant drainingSince, String reason, String schedulerStatus) {}
 
-  @Override
-  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
-    this.eventPublisher = applicationEventPublisher;
-  }
-
-  /**
-   * 正常启动完成后显式发布就绪状态。
-   *
-   * <p>Spring Boot 的 readiness 默认状态可能仍为 {@code REFUSING_TRAFFIC}；如果只在排水解除
-   * 时发布 {@code ACCEPTING_TRAFFIC}，新启动的 Trigger 会一直被健康探针判为未就绪。
-   */
-  @EventListener(ApplicationReadyEvent.class)
-  public void markReady() {
-    if (!drainState.isDraining()) {
-      publishReadiness(ReadinessState.ACCEPTING_TRAFFIC);
+    @Override
+    public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+        this.eventPublisher = applicationEventPublisher;
     }
-  }
 
-  @Override
-  public void onApplicationEvent(ContextClosedEvent event) {
-    stop();
-  }
-
-  /** Quartz 必须先于数据源停止，避免 misfire 线程在连接池关闭后继续取连接。 */
-  @Override
-  public void stop() {
-    if (!lifecycleRunning.compareAndSet(true, false)) {
-      return;
+    /**
+     * 正常启动完成后显式发布就绪状态。
+     *
+     * <p>Spring Boot 的 readiness 默认状态可能仍为 {@code REFUSING_TRAFFIC}；如果只在排水解除
+     * 时发布 {@code ACCEPTING_TRAFFIC}，新启动的 Trigger 会一直被健康探针判为未就绪。
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void markReady() {
+        if (!drainState.isDraining()) {
+            publishReadiness(ReadinessState.ACCEPTING_TRAFFIC);
+        }
     }
-    try {
-      if (scheduler.isShutdown()) {
-        return;
-      }
-      startDraining("context-closed");
-      log.info("Trigger scheduler standby complete");
-    } catch (SchedulerException e) {
-      log.warn("Error during trigger graceful shutdown", e);
+
+    @Override
+    public void onApplicationEvent(ContextClosedEvent event) {
+        stop();
     }
-  }
 
-  @Override
-  public void stop(Runnable callback) {
-    try {
-      stop();
-    } finally {
-      callback.run();
+    /** Quartz 必须先于数据源停止，避免 misfire 线程在连接池关闭后继续取连接。 */
+    @Override
+    public void stop() {
+        if (!lifecycleRunning.compareAndSet(true, false)) {
+            return;
+        }
+        try {
+            if (scheduler.isShutdown()) {
+                return;
+            }
+            startDraining("context-closed");
+            log.info("Trigger scheduler standby complete");
+        } catch (SchedulerException e) {
+            log.warn("Error during trigger graceful shutdown", e);
+        }
     }
-  }
 
-  @Override
-  public void start() {
-    lifecycleRunning.set(true);
-  }
-
-  @Override
-  public boolean isRunning() {
-    return lifecycleRunning.get();
-  }
-
-  @Override
-  public boolean isAutoStartup() {
-    return true;
-  }
-
-  @Override
-  public int getPhase() {
-    return BatchLifecyclePhases.FIRST_TO_STOP_RELAY;
-  }
-
-  public void startDraining(String source) throws SchedulerException {
-    if (drainState.startDraining(source)) {
-      publishReadiness(ReadinessState.REFUSING_TRAFFIC);
-      log.info("Trigger graceful shutdown — switching scheduler to standby, source={}", source);
-      scheduler.standby();
+    @Override
+    public void stop(Runnable callback) {
+        try {
+            stop();
+        } finally {
+            callback.run();
+        }
     }
-  }
 
-  public void stopDraining(String source) throws SchedulerException {
-    if (scheduler.isShutdown()) {
-      return;
+    @Override
+    public void start() {
+        lifecycleRunning.set(true);
     }
-    if (drainState.stopDraining(source)) {
-      log.info("Trigger drain cancelled — restarting scheduler, source={}", source);
-      scheduler.start();
-      publishReadiness(ReadinessState.ACCEPTING_TRAFFIC);
-    }
-  }
 
-  private void publishReadiness(ReadinessState state) {
-    if (EmptyChecks.isNull(eventPublisher)) {
-      return;
+    @Override
+    public boolean isRunning() {
+        return lifecycleRunning.get();
     }
-    try {
-      AvailabilityChangeEvent.publish(eventPublisher, this, state);
-    } catch (RuntimeException ex) {
-      ReadinessState failedState = state;
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("failed to publish trigger readiness state {}: {}", failedState, causeSummary);
-    }
-  }
 
-  public boolean isDraining() {
-    return drainState.isDraining();
-  }
+    @Override
+    public boolean isAutoStartup() {
+        return true;
+    }
 
-  public TriggerDrainStatus status() throws SchedulerException {
-    String schedulerStatus = schedulerStatus();
-    return new TriggerDrainStatus(
-        drainState.isDraining(),
-        drainState.getDrainingSince(),
-        drainState.getReason(),
-        schedulerStatus);
-  }
+    @Override
+    public int getPhase() {
+        return BatchLifecyclePhases.FIRST_TO_STOP_RELAY;
+    }
 
-  private String schedulerStatus() throws SchedulerException {
-    if (scheduler.isShutdown()) {
-      return "SHUTDOWN";
+    public void startDraining(String source) throws SchedulerException {
+        if (drainState.startDraining(source)) {
+            publishReadiness(ReadinessState.REFUSING_TRAFFIC);
+            log.info("Trigger graceful shutdown — switching scheduler to standby, source={}", source);
+            scheduler.standby();
+        }
     }
-    if (scheduler.isInStandbyMode()) {
-      return "STANDBY";
+
+    public void stopDraining(String source) throws SchedulerException {
+        if (scheduler.isShutdown()) {
+            return;
+        }
+        if (drainState.stopDraining(source)) {
+            log.info("Trigger drain cancelled — restarting scheduler, source={}", source);
+            scheduler.start();
+            publishReadiness(ReadinessState.ACCEPTING_TRAFFIC);
+        }
     }
-    if (scheduler.isStarted()) {
-      return "STARTED";
+
+    private void publishReadiness(ReadinessState state) {
+        if (EmptyChecks.isNull(eventPublisher)) {
+            return;
+        }
+        try {
+            AvailabilityChangeEvent.publish(eventPublisher, this, state);
+        } catch (RuntimeException ex) {
+            ReadinessState failedState = state;
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("failed to publish trigger readiness state {}: {}", failedState, causeSummary);
+        }
     }
-    return "STOPPED";
-  }
+
+    public boolean isDraining() {
+        return drainState.isDraining();
+    }
+
+    public TriggerDrainStatus status() throws SchedulerException {
+        String schedulerStatus = schedulerStatus();
+        return new TriggerDrainStatus(
+                drainState.isDraining(), drainState.getDrainingSince(), drainState.getReason(), schedulerStatus);
+    }
+
+    private String schedulerStatus() throws SchedulerException {
+        if (scheduler.isShutdown()) {
+            return "SHUTDOWN";
+        }
+        if (scheduler.isInStandbyMode()) {
+            return "STANDBY";
+        }
+        if (scheduler.isStarted()) {
+            return "STARTED";
+        }
+        return "STOPPED";
+    }
 }

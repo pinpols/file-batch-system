@@ -10,6 +10,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "spring.kafka.consumer")
 public class KafkaConsumerTimingProperties {
 
-  private int maxPollIntervalMs = 300_000;
-  private Map<String, String> properties = new LinkedHashMap<>();
+    private int maxPollIntervalMs = 300_000;
+    private Map<String, String> properties = new LinkedHashMap<>();
 }

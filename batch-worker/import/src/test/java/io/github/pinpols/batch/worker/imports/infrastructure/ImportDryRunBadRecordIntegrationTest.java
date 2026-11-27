@@ -35,20 +35,20 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @DisplayName("导入演练坏记录真实存储隔离")
 class ImportDryRunBadRecordIntegrationTest {
-  @TempDir
-  Path storageRoot;
+    @TempDir
+    Path storageRoot;
 
-  @Test
-  @DisplayName("演练保留计数但不写错误记录或对象，正式导入仍写入")
-  void shouldIsolateDryRunBadRecordsFromDatabaseAndObjectStore() throws Exception {
-    try (PostgreSQLContainer postgres = TestPostgresContainers.platform()) {
-      postgres.start();
-      PGSimpleDataSource dataSource = new PGSimpleDataSource();
-      dataSource.setURL(postgres.getJdbcUrl());
-      dataSource.setUser(postgres.getUsername());
-      dataSource.setPassword(postgres.getPassword());
-      JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-      String schemaSql = """
+    @Test
+    @DisplayName("演练保留计数但不写错误记录或对象，正式导入仍写入")
+    void shouldIsolateDryRunBadRecordsFromDatabaseAndObjectStore() throws Exception {
+        try (PostgreSQLContainer postgres = TestPostgresContainers.platform()) {
+            postgres.start();
+            PGSimpleDataSource dataSource = new PGSimpleDataSource();
+            dataSource.setURL(postgres.getJdbcUrl());
+            dataSource.setUser(postgres.getUsername());
+            dataSource.setPassword(postgres.getPassword());
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            String schemaSql = """
           CREATE SCHEMA batch;
           CREATE TABLE batch.file_record (id bigint primary key, tenant_id text,
               metadata_json jsonb not null default '{}', updated_at timestamptz default now());
@@ -68,111 +68,111 @@ class ImportDryRunBadRecordIntegrationTest {
                   AND detail_summary ->> 'channelCode' IS NOT NULL;
           INSERT INTO batch.file_record (id, tenant_id) VALUES (101, 'tenant-a'), (102, 'tenant-a');
           """;
-      jdbc.execute(schemaSql);
-      Configuration configuration = new Configuration(
-          new Environment("dry-run-bad-record", new JdbcTransactionFactory(), dataSource));
-      String resource = "mapper/PlatformFileRuntimeMapper.xml";
-      try (InputStream input =
-          Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
-        assertThat(input).isNotNull();
-        new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments())
-            .parse();
-      }
-      try (SqlSession session =
-          new SqlSessionFactoryBuilder().build(configuration).openSession(true)) {
-        PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
-        var store = new FilesystemObjectStore(storageRoot.toString(), "", "test-secret");
-        S3StorageProperties storageProperties = new S3StorageProperties();
-        storageProperties.setBucket("test-bucket");
-        var service = new ImportRecordGovernanceService(
-            new ImportSkipProperties(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH", 7),
-            new PlatformFileRecordRepository(mapper),
-            new PlatformFileAuditRepository(mapper),
-            new ImportErrorOutputStorage(storageProperties, store),
-            new BatchSecurityProperties());
-        String countErrorsSql = "SELECT count(*) FROM batch.file_error_record WHERE file_id = ?";
-        String countAuditSql = "SELECT count(*) FROM batch.file_audit_log WHERE file_id = ?";
-        String metadataSql = "SELECT metadata_json::text FROM batch.file_record WHERE id = ?";
-        ImportJobContext dryRun = context(101L, true);
-        recordAndFinalize(service, dryRun);
+            jdbc.execute(schemaSql);
+            Configuration configuration =
+                    new Configuration(new Environment("dry-run-bad-record", new JdbcTransactionFactory(), dataSource));
+            String resource = "mapper/PlatformFileRuntimeMapper.xml";
+            try (InputStream input =
+                    Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
+                assertThat(input).isNotNull();
+                new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+            }
+            try (SqlSession session =
+                    new SqlSessionFactoryBuilder().build(configuration).openSession(true)) {
+                PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
+                var store = new FilesystemObjectStore(storageRoot.toString(), "", "test-secret");
+                S3StorageProperties storageProperties = new S3StorageProperties();
+                storageProperties.setBucket("test-bucket");
+                var service = new ImportRecordGovernanceService(
+                        new ImportSkipProperties(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH", 7),
+                        new PlatformFileRecordRepository(mapper),
+                        new PlatformFileAuditRepository(mapper),
+                        new ImportErrorOutputStorage(storageProperties, store),
+                        new BatchSecurityProperties());
+                String countErrorsSql = "SELECT count(*) FROM batch.file_error_record WHERE file_id = ?";
+                String countAuditSql = "SELECT count(*) FROM batch.file_audit_log WHERE file_id = ?";
+                String metadataSql = "SELECT metadata_json::text FROM batch.file_record WHERE id = ?";
+                ImportJobContext dryRun = context(101L, true);
+                recordAndFinalize(service, dryRun);
 
-        assertThat(dryRun.getAttributes().get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT))
-            .isEqualTo(1L);
-        assertThat(jdbc.queryForObject(countErrorsSql, Integer.class, 101L)).isZero();
-        assertThat(jdbc.queryForObject(countAuditSql, Integer.class, 101L)).isZero();
-        assertThat(jdbc.queryForObject(metadataSql, String.class, 101L)).isEqualTo("{}");
-        assertThat(store.exists("test-bucket", "errors/tenant-a/101/101.error.jsonl"))
-            .isFalse();
+                assertThat(dryRun.getAttributes().get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT))
+                        .isEqualTo(1L);
+                assertThat(jdbc.queryForObject(countErrorsSql, Integer.class, 101L))
+                        .isZero();
+                assertThat(jdbc.queryForObject(countAuditSql, Integer.class, 101L))
+                        .isZero();
+                assertThat(jdbc.queryForObject(metadataSql, String.class, 101L)).isEqualTo("{}");
+                assertThat(store.exists("test-bucket", "errors/tenant-a/101/101.error.jsonl"))
+                        .isFalse();
 
-        ImportJobContext formal = context(102L, false);
-        recordAndFinalize(service, formal);
-        assertThat(jdbc.queryForObject(countErrorsSql, Integer.class, 102L)).isEqualTo(1);
-        assertThat(jdbc.queryForObject(countAuditSql, Integer.class, 102L)).isEqualTo(1);
-        assertThat(jdbc.queryForObject(metadataSql, String.class, 102L)).contains("badRecordCount");
-        assertThat(store.exists("test-bucket", "errors/tenant-a/102/102.error.jsonl"))
-            .isTrue();
-        try (InputStream content =
-            store.get("test-bucket", "errors/tenant-a/102/102.error.jsonl")) {
-          String output = new String(content.readAllBytes(), StandardCharsets.UTF_8);
-          assertThat(output).contains("invalid record", "bad");
-        }
+                ImportJobContext formal = context(102L, false);
+                recordAndFinalize(service, formal);
+                assertThat(jdbc.queryForObject(countErrorsSql, Integer.class, 102L))
+                        .isEqualTo(1);
+                assertThat(jdbc.queryForObject(countAuditSql, Integer.class, 102L))
+                        .isEqualTo(1);
+                assertThat(jdbc.queryForObject(metadataSql, String.class, 102L)).contains("badRecordCount");
+                assertThat(store.exists("test-bucket", "errors/tenant-a/102/102.error.jsonl"))
+                        .isTrue();
+                try (InputStream content = store.get("test-bucket", "errors/tenant-a/102/102.error.jsonl")) {
+                    String output = new String(content.readAllBytes(), StandardCharsets.UTF_8);
+                    assertThat(output).contains("invalid record", "bad");
+                }
 
-        formal
-            .getAttributes()
-            .put(
-                PipelineRuntimeKeys.TEMPLATE_CONFIG,
-                Map.of("error_line_masking_enabled", true, "masking_rule_set", "STRICT"));
-        service.recordFailedRecord(
-            formal,
-            BadRecordCommand.builder()
-                .stage(ImportStage.VALIDATE)
-                .recordNo(2L)
-                .errorCode("MASKED_ERROR")
-                .errorMessage("invalid name=Alice")
-                .rawRecord(Map.of("name", "Alice", "count", 12))
-                .build());
-        String selectMaskedRecordSql = """
+                formal.getAttributes()
+                        .put(
+                                PipelineRuntimeKeys.TEMPLATE_CONFIG,
+                                Map.of("error_line_masking_enabled", true, "masking_rule_set", "STRICT"));
+                service.recordFailedRecord(
+                        formal,
+                        BadRecordCommand.builder()
+                                .stage(ImportStage.VALIDATE)
+                                .recordNo(2L)
+                                .errorCode("MASKED_ERROR")
+                                .errorMessage("invalid name=Alice")
+                                .rawRecord(Map.of("name", "Alice", "count", 12))
+                                .build());
+                String selectMaskedRecordSql = """
             select jsonb_typeof(raw_record) as kind, raw_record::text as content
             from batch.file_error_record where tenant_id = ? and file_id = ? and record_no = ?
             """;
-        var masked = jdbc.queryForMap(selectMaskedRecordSql, "tenant-a", 102L, 2L);
-        service.finalizeErrorOutput(formal);
-        try (InputStream content =
-            store.get("test-bucket", "errors/tenant-a/102/102.error.jsonl")) {
-          String output = new String(content.readAllBytes(), StandardCharsets.UTF_8);
-          assertThat(output).doesNotContain("Alice").contains("MASKED_ERROR");
-          var outputRow = JsonUtils.fromJson(output.lines().toList().getLast(), JsonNode.class);
-          assertThat(outputRow.path("rawRecord").isObject()).isTrue();
-          assertThat(outputRow.path("rawRecord").path("name").asText()).isEqualTo("***");
+                var masked = jdbc.queryForMap(selectMaskedRecordSql, "tenant-a", 102L, 2L);
+                service.finalizeErrorOutput(formal);
+                try (InputStream content = store.get("test-bucket", "errors/tenant-a/102/102.error.jsonl")) {
+                    String output = new String(content.readAllBytes(), StandardCharsets.UTF_8);
+                    assertThat(output).doesNotContain("Alice").contains("MASKED_ERROR");
+                    var outputRow = JsonUtils.fromJson(output.lines().toList().getLast(), JsonNode.class);
+                    assertThat(outputRow.path("rawRecord").isObject()).isTrue();
+                    assertThat(outputRow.path("rawRecord").path("name").asText())
+                            .isEqualTo("***");
+                }
+                assertThat(masked.get("kind")).isEqualTo("object");
+                assertThat(String.valueOf(masked.get("content")))
+                        .doesNotContain("Alice")
+                        .contains("count");
+            }
         }
-        assertThat(masked.get("kind")).isEqualTo("object");
-        assertThat(String.valueOf(masked.get("content")))
-            .doesNotContain("Alice")
-            .contains("count");
-      }
     }
-  }
 
-  private static ImportJobContext context(long fileId, boolean dryRun) {
-    ImportJobContext context = new ImportJobContext();
-    context.setTenantId("tenant-a");
-    context.setWorkerId("worker-test");
-    context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
-    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, dryRun);
-    return context;
-  }
+    private static ImportJobContext context(long fileId, boolean dryRun) {
+        ImportJobContext context = new ImportJobContext();
+        context.setTenantId("tenant-a");
+        context.setWorkerId("worker-test");
+        context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
+        context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, dryRun);
+        return context;
+    }
 
-  private static void recordAndFinalize(
-      ImportRecordGovernanceService service, ImportJobContext context) {
-    service.recordSkippedRecord(
-        context,
-        BadRecordCommand.builder()
-            .stage(ImportStage.PARSE)
-            .recordNo(1L)
-            .errorCode("TEST_ERROR")
-            .errorMessage("invalid record")
-            .rawRecord("bad")
-            .build());
-    service.finalizeErrorOutput(context);
-  }
+    private static void recordAndFinalize(ImportRecordGovernanceService service, ImportJobContext context) {
+        service.recordSkippedRecord(
+                context,
+                BadRecordCommand.builder()
+                        .stage(ImportStage.PARSE)
+                        .recordNo(1L)
+                        .errorCode("TEST_ERROR")
+                        .errorMessage("invalid record")
+                        .rawRecord("bad")
+                        .build());
+        service.finalizeErrorOutput(context);
+    }
 }

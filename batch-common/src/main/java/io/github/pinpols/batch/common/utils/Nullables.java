@@ -13,9 +13,9 @@ package io.github.pinpols.batch.common.utils;
 @SuppressWarnings("java:S2583")
 public final class Nullables {
 
-  private Nullables() {}
+    private Nullables() {}
 
-  public static <T> T coalesce(T a, T b) {
-    return a != null ? a : b;
-  }
+    public static <T> T coalesce(T a, T b) {
+        return a != null ? a : b;
+    }
 }

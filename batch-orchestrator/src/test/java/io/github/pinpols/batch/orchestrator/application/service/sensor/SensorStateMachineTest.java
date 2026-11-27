@@ -53,239 +53,234 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("传感状态机: 探针结果到节点完结判定与下游派发的推进口径")
 class SensorStateMachineTest {
 
-  @Mock
-  private SensorPolicyRegistry registry;
+    @Mock
+    private SensorPolicyRegistry registry;
 
-  @Mock
-  private WorkflowNodeRunMapper nodeRunMapper;
+    @Mock
+    private WorkflowNodeRunMapper nodeRunMapper;
 
-  @Mock
-  private WorkflowNodeMapper nodeMapper;
+    @Mock
+    private WorkflowNodeMapper nodeMapper;
 
-  @Mock
-  private WorkflowRunMapper workflowRunMapper;
+    @Mock
+    private WorkflowRunMapper workflowRunMapper;
 
-  @Mock
-  private TaskOutcomeService taskOutcomeService;
+    @Mock
+    private TaskOutcomeService taskOutcomeService;
 
-  @Mock
-  private SecretPayloadProtector secretPayloadProtector;
+    @Mock
+    private SecretPayloadProtector secretPayloadProtector;
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-  @Mock
-  private SensorPolicy filePolicy;
+    @Mock
+    private SensorPolicy filePolicy;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private WorkflowDagService workflowDagService;
+    @Mock
+    private WorkflowDagService workflowDagService;
 
-  @Mock
-  private WorkflowNodeDispatchService dispatchService;
+    @Mock
+    private WorkflowNodeDispatchService dispatchService;
 
-  @Mock
-  private WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
+    @Mock
+    private WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
 
-  private SensorStateMachine sm;
-  private static final Instant NOW = Instant.parse("2026-05-13T12:00:00Z");
-  private static final Instant STARTED = Instant.parse("2026-05-13T11:59:00Z"); // 60s elapsed
+    private SensorStateMachine sm;
+    private static final Instant NOW = Instant.parse("2026-05-13T12:00:00Z");
+    private static final Instant STARTED = Instant.parse("2026-05-13T11:59:00Z"); // 60s elapsed
 
-  @BeforeEach
-  void setUp() {
-    OrchestratorJobMappers jobMappers =
-        new OrchestratorJobMappers(jobInstanceMapper, null, null, null, null);
-    @SuppressWarnings("unchecked")
-    ObjectProvider<WorkflowNodeDispatchService> dispatchProvider = mock(ObjectProvider.class);
-    when(dispatchProvider.getObject()).thenReturn(dispatchService);
-    sm = new SensorStateMachine(
-        registry,
-        nodeRunMapper,
-        nodeMapper,
-        workflowRunMapper,
-        taskOutcomeService,
-        objectMapper,
-        jobMappers,
-        workflowDagService,
-        dispatchProvider,
-        workflowNodeTerminalFinalizer,
-        secretPayloadProtector);
-    when(filePolicy.type()).thenReturn(SensorType.FILE_ARRIVAL);
-    when(registry.resolve(SensorType.FILE_ARRIVAL)).thenReturn(filePolicy);
-  }
+    @BeforeEach
+    void setUp() {
+        OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(jobInstanceMapper, null, null, null, null);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<WorkflowNodeDispatchService> dispatchProvider = mock(ObjectProvider.class);
+        when(dispatchProvider.getObject()).thenReturn(dispatchService);
+        sm = new SensorStateMachine(
+                registry,
+                nodeRunMapper,
+                nodeMapper,
+                workflowRunMapper,
+                taskOutcomeService,
+                objectMapper,
+                jobMappers,
+                workflowDagService,
+                dispatchProvider,
+                workflowNodeTerminalFinalizer,
+                secretPayloadProtector);
+        when(filePolicy.type()).thenReturn(SensorType.FILE_ARRIVAL);
+        when(registry.resolve(SensorType.FILE_ARRIVAL)).thenReturn(filePolicy);
+    }
 
-  @Test
-  @DisplayName("探测命中时记录节点完结并标记成功, 输出中带出探测结果")
-  void matched_callsRecordNodeRunFinishSuccess() {
-    seedHappyPath();
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 42L)));
+    @Test
+    @DisplayName("探测命中时记录节点完结并标记成功, 输出中带出探测结果")
+    void matched_callsRecordNodeRunFinishSuccess() {
+        seedHappyPath();
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 42L)));
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    ArgumentCaptor<NodeRunFinishCommand> cap = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(cap.capture());
-    assertThat(cap.getValue().success()).isTrue();
-    assertThat(cap.getValue().outputJson()).contains("\"fileId\":42");
-  }
+        ArgumentCaptor<NodeRunFinishCommand> cap = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(cap.capture());
+        assertThat(cap.getValue().success()).isTrue();
+        assertThat(cap.getValue().outputJson()).contains("\"fileId\":42");
+    }
 
-  @Test
-  @DisplayName("探测未就绪时只更新探针状态与下次探测时间, 不记录完结")
-  void notYet_updatesProbeStateOnly_noFinish() {
-    seedHappyPath();
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
+    @Test
+    @DisplayName("探测未就绪时只更新探针状态与下次探测时间, 不记录完结")
+    void notYet_updatesProbeStateOnly_noFinish() {
+        seedHappyPath();
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
 
-    sm.probeAndAdvance(nodeRun(5, 0), NOW);
+        sm.probeAndAdvance(nodeRun(5, 0), NOW);
 
-    verify(taskOutcomeService, never()).recordNodeRunFinish(any());
-    Instant expectedNext = NOW.plusSeconds(30); // pollInterval=30
-    verify(nodeRunMapper)
-        .updateSensorProbeState(WorkflowNodeRunUpdateSensorProbeStateParam.builder()
-            .id(99L)
-            .nextProbeAt(expectedNext)
-            .lastProbeAt(NOW)
-            .probeCount(6)
-            .errorCount(0)
-            .build());
-  }
+        verify(taskOutcomeService, never()).recordNodeRunFinish(any());
+        Instant expectedNext = NOW.plusSeconds(30); // pollInterval=30
+        verify(nodeRunMapper)
+                .updateSensorProbeState(WorkflowNodeRunUpdateSensorProbeStateParam.builder()
+                        .id(99L)
+                        .nextProbeAt(expectedNext)
+                        .lastProbeAt(NOW)
+                        .probeCount(6)
+                        .errorCount(0)
+                        .build());
+    }
 
-  @Test
-  @DisplayName("错误次数低于阈值时只累加错误并按退避延后探测, 不判定失败")
-  void error_belowThreshold_increments_no_finish() {
-    seedHappyPath();
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.error("error.x", List.of()));
+    @Test
+    @DisplayName("错误次数低于阈值时只累加错误并按退避延后探测, 不判定失败")
+    void error_belowThreshold_increments_no_finish() {
+        seedHappyPath();
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.error("error.x", List.of()));
 
-    sm.probeAndAdvance(nodeRun(2, 1), NOW); // already 1 error
+        sm.probeAndAdvance(nodeRun(2, 1), NOW); // already 1 error
 
-    verify(taskOutcomeService, never()).recordNodeRunFinish(any());
-    // exponential backoff: errors=2 → 2x poll
-    verify(nodeRunMapper)
-        .updateSensorProbeState(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.id(), 99L)
-            && Objects.equals(parameters.lastProbeAt(), NOW)
-            && Objects.equals(parameters.probeCount(), 3)
-            && Objects.equals(parameters.errorCount(), 2)));
-  }
+        verify(taskOutcomeService, never()).recordNodeRunFinish(any());
+        // exponential backoff: errors=2 → 2x poll
+        verify(nodeRunMapper)
+                .updateSensorProbeState(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.id(), 99L)
+                        && Objects.equals(parameters.lastProbeAt(), NOW)
+                        && Objects.equals(parameters.probeCount(), 3)
+                        && Objects.equals(parameters.errorCount(), 2)));
+    }
 
-  @Test
-  @DisplayName("探针抛出无消息异常时不发生空指针, 按一次错误计数处理")
-  void probeThrowsExceptionWithNullMessage_doesNotNpe() {
-    // 回归:policy.probe 抛出无 message 的异常(getMessage()==null,如 new RuntimeException())时,
-    // catch 内构造 List.of(cfg.sensorType.code(), e.getMessage()) 曾 NPE,把探针错误掩盖成崩溃。
-    // 见 SensorStateMachine#probeAndAdvance catch 分支。
-    seedHappyPath();
-    when(filePolicy.probe(any())).thenThrow(new RuntimeException()); // getMessage() == null
+    @Test
+    @DisplayName("探针抛出无消息异常时不发生空指针, 按一次错误计数处理")
+    void probeThrowsExceptionWithNullMessage_doesNotNpe() {
+        // 回归:policy.probe 抛出无 message 的异常(getMessage()==null,如 new RuntimeException())时,
+        // catch 内构造 List.of(cfg.sensorType.code(), e.getMessage()) 曾 NPE,把探针错误掩盖成崩溃。
+        // 见 SensorStateMachine#probeAndAdvance catch 分支。
+        seedHappyPath();
+        when(filePolicy.probe(any())).thenThrow(new RuntimeException()); // getMessage() == null
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW); // 1st error, below threshold → 仅记探针状态,不 finish
+        sm.probeAndAdvance(nodeRun(0, 0), NOW); // 1st error, below threshold → 仅记探针状态,不 finish
 
-    verify(taskOutcomeService, never()).recordNodeRunFinish(any());
-    verify(nodeRunMapper)
-        .updateSensorProbeState(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.id(), 99L)
-            && Objects.equals(parameters.lastProbeAt(), NOW)
-            && Objects.equals(parameters.probeCount(), 1)
-            && Objects.equals(parameters.errorCount(), 1)));
-  }
+        verify(taskOutcomeService, never()).recordNodeRunFinish(any());
+        verify(nodeRunMapper)
+                .updateSensorProbeState(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.id(), 99L)
+                        && Objects.equals(parameters.lastProbeAt(), NOW)
+                        && Objects.equals(parameters.probeCount(), 1)
+                        && Objects.equals(parameters.errorCount(), 1)));
+    }
 
-  @Test
-  @DisplayName("错误次数达到阈值时判定节点失败并给出探针失败原因")
-  void error_atThreshold_triggersFailure() {
-    seedHappyPath();
-    when(filePolicy.probe(any()))
-        .thenReturn(SensorProbeResult.error(
-            "error.workflow.sensor_probe_failed", List.of("FILE_ARRIVAL", "boom")));
+    @Test
+    @DisplayName("错误次数达到阈值时判定节点失败并给出探针失败原因")
+    void error_atThreshold_triggersFailure() {
+        seedHappyPath();
+        when(filePolicy.probe(any()))
+                .thenReturn(
+                        SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("FILE_ARRIVAL", "boom")));
 
-    // 已有连续 2 次错误；本次将是第 3 次，因此应判定失败。
-    sm.probeAndAdvance(nodeRun(2, 2), NOW);
+        // 已有连续 2 次错误；本次将是第 3 次，因此应判定失败。
+        sm.probeAndAdvance(nodeRun(2, 2), NOW);
 
-    ArgumentCaptor<NodeRunFinishCommand> cap = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(cap.capture());
-    assertThat(cap.getValue().success()).isFalse();
-    assertThat(cap.getValue().errorKey()).isEqualTo("error.workflow.sensor_probe_failed");
-  }
+        ArgumentCaptor<NodeRunFinishCommand> cap = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(cap.capture());
+        assertThat(cap.getValue().success()).isFalse();
+        assertThat(cap.getValue().errorKey()).isEqualTo("error.workflow.sensor_probe_failed");
+    }
 
-  @Test
-  @DisplayName("探针抛出异常后写入节点失败参数前屏蔽凭据")
-  void shouldNotPersistCredentialsWhenProbeThrows() {
-    seedHappyPath();
-    when(filePolicy.probe(any()))
-        .thenThrow(new RuntimeException("db failed password=sample-secret token=sample-token"));
-    sm.probeAndAdvance(nodeRun(2, 2), NOW);
-    ArgumentCaptor<NodeRunFinishCommand> captor =
-        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(captor.capture());
-    assertThat(captor.getValue().errorArgs())
-        .contains("db failed")
-        .doesNotContain("sample-secret", "sample-token");
-  }
+    @Test
+    @DisplayName("探针抛出异常后写入节点失败参数前屏蔽凭据")
+    void shouldNotPersistCredentialsWhenProbeThrows() {
+        seedHappyPath();
+        when(filePolicy.probe(any()))
+                .thenThrow(new RuntimeException("db failed password=sample-secret token=sample-token"));
+        sm.probeAndAdvance(nodeRun(2, 2), NOW);
+        ArgumentCaptor<NodeRunFinishCommand> captor = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(captor.capture());
+        assertThat(captor.getValue().errorArgs()).contains("db failed").doesNotContain("sample-secret", "sample-token");
+    }
 
-  @Test
-  @DisplayName("自定义探针直接构造错误结果时写入前屏蔽凭据")
-  void shouldNotPersistCredentialsWhenProbeReturnsError() {
-    seedHappyPath();
-    when(filePolicy.probe(any()))
-        .thenReturn(new SensorProbeResult(
-            SensorProbeStatus.ERROR,
-            Map.of(),
-            "error.workflow.sensor_probe_failed",
-            List.of("FILE_ARRIVAL", "db failed password=sample-secret")));
-    sm.probeAndAdvance(nodeRun(2, 2), NOW);
-    ArgumentCaptor<NodeRunFinishCommand> captor =
-        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(captor.capture());
-    assertThat(captor.getValue().errorArgs()).contains("db failed").doesNotContain("sample-secret");
-  }
+    @Test
+    @DisplayName("自定义探针直接构造错误结果时写入前屏蔽凭据")
+    void shouldNotPersistCredentialsWhenProbeReturnsError() {
+        seedHappyPath();
+        when(filePolicy.probe(any()))
+                .thenReturn(new SensorProbeResult(
+                        SensorProbeStatus.ERROR,
+                        Map.of(),
+                        "error.workflow.sensor_probe_failed",
+                        List.of("FILE_ARRIVAL", "db failed password=sample-secret")));
+        sm.probeAndAdvance(nodeRun(2, 2), NOW);
+        ArgumentCaptor<NodeRunFinishCommand> captor = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(captor.capture());
+        assertThat(captor.getValue().errorArgs()).contains("db failed").doesNotContain("sample-secret");
+    }
 
-  @Test
-  @DisplayName("等待超过超时上限时直接判定超时失败, 不再执行探测")
-  void elapsedExceedsTimeout_triggersTimeoutFailure_doesNotProbe() {
-    seedHappyPath();
-    WorkflowNodeRunEntity stale = nodeRun(10, 0);
-    // started 1 hour ago, timeout=120 → timeout
-    stale.setStartedAt(NOW.minusSeconds(3600));
+    @Test
+    @DisplayName("等待超过超时上限时直接判定超时失败, 不再执行探测")
+    void elapsedExceedsTimeout_triggersTimeoutFailure_doesNotProbe() {
+        seedHappyPath();
+        WorkflowNodeRunEntity stale = nodeRun(10, 0);
+        // started 1 hour ago, timeout=120 → timeout
+        stale.setStartedAt(NOW.minusSeconds(3600));
 
-    sm.probeAndAdvance(stale, NOW);
+        sm.probeAndAdvance(stale, NOW);
 
-    verify(filePolicy, never()).probe(any());
-    ArgumentCaptor<NodeRunFinishCommand> cap = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(cap.capture());
-    assertThat(cap.getValue().success()).isFalse();
-    assertThat(cap.getValue().errorKey()).isEqualTo("error.workflow.sensor_timeout");
-  }
+        verify(filePolicy, never()).probe(any());
+        ArgumentCaptor<NodeRunFinishCommand> cap = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(cap.capture());
+        assertThat(cap.getValue().success()).isFalse();
+        assertThat(cap.getValue().errorKey()).isEqualTo("error.workflow.sensor_timeout");
+    }
 
-  @Test
-  @DisplayName("等待节点参数不完整时快速失败, 不执行探测")
-  void invalidNodeParams_failsFast() {
-    WorkflowRunEntity wfRun = new WorkflowRunEntity();
-    wfRun.setRunStatus("RUNNING");
-    wfRun.setId(1L);
-    wfRun.setTenantId("ta");
-    wfRun.setWorkflowDefinitionId(7L);
-    when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
-    WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
-    wfNode.setNodeType("WAIT");
-    wfNode.setNodeParams("{\"sensor_type\":\"FILE_ARRIVAL\"}"); // missing spec/timeout/etc
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
+    @Test
+    @DisplayName("等待节点参数不完整时快速失败, 不执行探测")
+    void invalidNodeParams_failsFast() {
+        WorkflowRunEntity wfRun = new WorkflowRunEntity();
+        wfRun.setRunStatus("RUNNING");
+        wfRun.setId(1L);
+        wfRun.setTenantId("ta");
+        wfRun.setWorkflowDefinitionId(7L);
+        when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
+        WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
+        wfNode.setNodeType("WAIT");
+        wfNode.setNodeParams("{\"sensor_type\":\"FILE_ARRIVAL\"}"); // missing spec/timeout/etc
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    verify(filePolicy, never()).probe(any());
-    ArgumentCaptor<NodeRunFinishCommand> cap = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(cap.capture());
-    assertThat(cap.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
-  }
+        verify(filePolicy, never()).probe(any());
+        ArgumentCaptor<NodeRunFinishCommand> cap = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(cap.capture());
+        assertThat(cap.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+    }
 
-  @Test
-  @DisplayName("传感类型无法识别时记录节点完结, 不执行探测")
-  void unknownSensorType_failsFast() {
-    WorkflowRunEntity wfRun = new WorkflowRunEntity();
-    wfRun.setRunStatus("RUNNING");
-    wfRun.setId(1L);
-    wfRun.setWorkflowDefinitionId(7L);
-    when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
-    WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
-    wfNode.setNodeType("WAIT");
-    wfNode.setNodeParams("""
+    @Test
+    @DisplayName("传感类型无法识别时记录节点完结, 不执行探测")
+    void unknownSensorType_failsFast() {
+        WorkflowRunEntity wfRun = new WorkflowRunEntity();
+        wfRun.setRunStatus("RUNNING");
+        wfRun.setId(1L);
+        wfRun.setWorkflowDefinitionId(7L);
+        when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
+        WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
+        wfNode.setNodeType("WAIT");
+        wfNode.setNodeParams("""
         {
           "sensor_type": "BOGUS",
           "sensor_spec": {},
@@ -294,334 +289,325 @@ class SensorStateMachineTest {
           "on_timeout": "FAIL"
         }
         """.stripTrailing());
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    verify(taskOutcomeService).recordNodeRunFinish(any());
-  }
+        verify(taskOutcomeService).recordNodeRunFinish(any());
+    }
 
-  // ── S3.1 downstream advancement ────────────────────────────────────────────
+    // ── S3.1 downstream advancement ────────────────────────────────────────────
 
-  @Test
-  @DisplayName("探测命中后解析下一节点并派发下游作业节点")
-  void matched_dispatchesDownstreamJobNode() {
-    seedHappyPathWithJobInstance();
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
-    WorkflowNodeRunEntity persistedWaitRun = nodeRun(0, 0);
-    persistedWaitRun.setSourcePayloadProtected("protected-root-payload");
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(1L, "wait-1"))
-        .thenReturn(persistedWaitRun);
-    when(secretPayloadProtector.reveal("protected-root-payload"))
-        .thenReturn("{\"batchNo\":\"root-batch\"}");
-    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
-        .thenReturn(List.of(new DagNodeResolution("job-a", "JOB")));
+    @Test
+    @DisplayName("探测命中后解析下一节点并派发下游作业节点")
+    void matched_dispatchesDownstreamJobNode() {
+        seedHappyPathWithJobInstance();
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
+        WorkflowNodeRunEntity persistedWaitRun = nodeRun(0, 0);
+        persistedWaitRun.setSourcePayloadProtected("protected-root-payload");
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(1L, "wait-1")).thenReturn(persistedWaitRun);
+        when(secretPayloadProtector.reveal("protected-root-payload")).thenReturn("{\"batchNo\":\"root-batch\"}");
+        when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
+                .thenReturn(List.of(new DagNodeResolution("job-a", "JOB")));
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    verify(dispatchService)
-        .dispatchNode(
-            any(JobInstanceEntity.class),
-            any(),
-            eq(new DagNodeResolution("job-a", "JOB")),
-            eq("{\"batchNo\":\"root-batch\"}"),
-            any());
-  }
+        verify(dispatchService)
+                .dispatchNode(
+                        any(JobInstanceEntity.class),
+                        any(),
+                        eq(new DagNodeResolution("job-a", "JOB")),
+                        eq("{\"batchNo\":\"root-batch\"}"),
+                        any());
+    }
 
-  @Test
-  @DisplayName("下游派发失败时向上传播异常以回滚 WAIT 完结并由后续扫描重试")
-  void matched_dispatchFailure_propagatesForTransactionalRetry() {
-    seedHappyPathWithJobInstance();
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
-    DagNodeResolution downstream = new DagNodeResolution("job-a", "JOB");
-    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
-        .thenReturn(List.of(downstream));
-    when(dispatchService.dispatchNode(any(), any(), eq(downstream), any(), any()))
-        .thenThrow(new IllegalStateException("outbox unavailable"));
+    @Test
+    @DisplayName("下游派发失败时向上传播异常以回滚 WAIT 完结并由后续扫描重试")
+    void matched_dispatchFailure_propagatesForTransactionalRetry() {
+        seedHappyPathWithJobInstance();
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
+        DagNodeResolution downstream = new DagNodeResolution("job-a", "JOB");
+        when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
+                .thenReturn(List.of(downstream));
+        when(dispatchService.dispatchNode(any(), any(), eq(downstream), any(), any()))
+                .thenThrow(new IllegalStateException("outbox unavailable"));
 
-    assertThatThrownBy(() -> sm.probeAndAdvance(nodeRun(0, 0), NOW))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("outbox unavailable");
+        assertThatThrownBy(() -> sm.probeAndAdvance(nodeRun(0, 0), NOW))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("outbox unavailable");
 
-    verify(taskOutcomeService).recordNodeRunFinish(any());
-  }
+        verify(taskOutcomeService).recordNodeRunFinish(any());
+    }
 
-  @Test
-  @DisplayName("探测命中后下一节点为终点时只记录完结, 不派发下游")
-  void matched_endNode_recordsFinishWithoutDispatch() {
-    seedHappyPathWithJobInstance();
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
-    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
-        .thenReturn(List.of(new DagNodeResolution("END", "END")));
-    when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("END"), any())).thenReturn(true);
+    @Test
+    @DisplayName("探测命中后下一节点为终点时只记录完结, 不派发下游")
+    void matched_endNode_recordsFinishWithoutDispatch() {
+        seedHappyPathWithJobInstance();
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
+        when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
+                .thenReturn(List.of(new DagNodeResolution("END", "END")));
+        when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("END"), any()))
+                .thenReturn(true);
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
-    // WAIT finish + END finish = 2 calls
-    verify(taskOutcomeService, times(2)).recordNodeRunFinish(any());
-  }
+        verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
+        // WAIT finish + END finish = 2 calls
+        verify(taskOutcomeService, times(2)).recordNodeRunFinish(any());
+    }
 
-  @Test
-  @DisplayName("无根作业实例的组合 Workflow 仍推进等待节点的下游 Job")
-  void matched_rootlessWorkflow_dispatchesDownstreamJob() {
-    seedHappyPath();
-    WorkflowRunEntity rootlessSingleJobWorkflow = new WorkflowRunEntity();
-    rootlessSingleJobWorkflow.setRunStatus("RUNNING");
-    rootlessSingleJobWorkflow.setId(1L);
-    rootlessSingleJobWorkflow.setTenantId("ta");
-    rootlessSingleJobWorkflow.setWorkflowDefinitionId(7L);
-    rootlessSingleJobWorkflow.setSingleJobDefinitionId(501L);
-    when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(rootlessSingleJobWorkflow);
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
-    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
-        .thenReturn(List.of(new DagNodeResolution("job-a", "JOB")));
+    @Test
+    @DisplayName("无根作业实例的组合 Workflow 仍推进等待节点的下游 Job")
+    void matched_rootlessWorkflow_dispatchesDownstreamJob() {
+        seedHappyPath();
+        WorkflowRunEntity rootlessSingleJobWorkflow = new WorkflowRunEntity();
+        rootlessSingleJobWorkflow.setRunStatus("RUNNING");
+        rootlessSingleJobWorkflow.setId(1L);
+        rootlessSingleJobWorkflow.setTenantId("ta");
+        rootlessSingleJobWorkflow.setWorkflowDefinitionId(7L);
+        rootlessSingleJobWorkflow.setSingleJobDefinitionId(501L);
+        when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(rootlessSingleJobWorkflow);
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
+        when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
+                .thenReturn(List.of(new DagNodeResolution("job-a", "JOB")));
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    verify(taskOutcomeService).recordNodeRunFinish(any());
-    verify(dispatchService)
-        .dispatchNode(eq(null), any(), eq(new DagNodeResolution("job-a", "JOB")), eq(null), any());
-  }
+        verify(taskOutcomeService).recordNodeRunFinish(any());
+        verify(dispatchService)
+                .dispatchNode(eq(null), any(), eq(new DagNodeResolution("job-a", "JOB")), eq(null), any());
+    }
 
-  @Test
-  @DisplayName("新快照中的 WAIT 参数和边界图用于 rootless Workflow 推进")
-  void matched_rootlessWorkflow_usesFrozenSensorDefinitionAndGraph() {
-    WorkflowRunEntity wfRun = new WorkflowRunEntity();
-    wfRun.setRunStatus("RUNNING");
-    wfRun.setId(1L);
-    wfRun.setTenantId("ta");
-    wfRun.setWorkflowDefinitionId(7L);
-    wfRun.setWorkflowVersionSnapshot(2);
-    wfRun.setExecutionSnapshot(JsonUtils.toJson(Map.of(
-        "schemaVersion",
-        2,
-        "workflowDefinitionId",
-        7,
-        "workflowVersion",
-        2,
-        "nodes",
-        List.of(Map.of(
-            "nodeCode", "wait-1",
-            "nodeType", "WAIT",
-            "tenantId", "ta",
-            "workflowDefinitionId", 7,
-            "nodeParams", """
+    @Test
+    @DisplayName("新快照中的 WAIT 参数和边界图用于 rootless Workflow 推进")
+    void matched_rootlessWorkflow_usesFrozenSensorDefinitionAndGraph() {
+        WorkflowRunEntity wfRun = new WorkflowRunEntity();
+        wfRun.setRunStatus("RUNNING");
+        wfRun.setId(1L);
+        wfRun.setTenantId("ta");
+        wfRun.setWorkflowDefinitionId(7L);
+        wfRun.setWorkflowVersionSnapshot(2);
+        wfRun.setExecutionSnapshot(JsonUtils.toJson(Map.of(
+                "schemaVersion",
+                2,
+                "workflowDefinitionId",
+                7,
+                "workflowVersion",
+                2,
+                "nodes",
+                List.of(Map.of(
+                        "nodeCode", "wait-1",
+                        "nodeType", "WAIT",
+                        "tenantId", "ta",
+                        "workflowDefinitionId", 7,
+                        "nodeParams", """
                 {"sensor_type":"FILE_ARRIVAL","sensor_spec":{},"timeout_seconds":120,
                  "poll_interval_seconds":30,"on_timeout":"FAIL"}
                 """)),
-        "edges",
-        List.of(Map.of(
-            "tenantId", "ta",
-            "workflowDefinitionId", 7,
-            "fromNodeCode", "wait-1",
-            "toNodeCode", "END",
-            "edgeType", "SUCCESS",
-            "enabled", true)),
-        "jobDefinitions",
-        Map.of())));
-    when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("frozen", true)));
-    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
-        .thenReturn(List.of(new DagNodeResolution("END", "END")));
-    when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("END"), any())).thenReturn(true);
+                "edges",
+                List.of(Map.of(
+                        "tenantId", "ta",
+                        "workflowDefinitionId", 7,
+                        "fromNodeCode", "wait-1",
+                        "toNodeCode", "END",
+                        "edgeType", "SUCCESS",
+                        "enabled", true)),
+                "jobDefinitions",
+                Map.of())));
+        when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("frozen", true)));
+        when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
+                .thenReturn(List.of(new DagNodeResolution("END", "END")));
+        when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("END"), any()))
+                .thenReturn(true);
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1");
-    verify(taskOutcomeService, times(2)).recordNodeRunFinish(any());
-    verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
-  }
-
-  @Test
-  @DisplayName("等待超时后走失败分支派发对应的下游节点")
-  void timeout_dispatchesFailureBranch() {
-    seedHappyPathWithJobInstance();
-    WorkflowNodeRunEntity stale = nodeRun(10, 0);
-    stale.setStartedAt(NOW.minusSeconds(3600));
-    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(false), any()))
-        .thenReturn(List.of(new DagNodeResolution("on-fail-node", "TASK")));
-
-    sm.probeAndAdvance(stale, NOW);
-
-    verify(filePolicy, never()).probe(any());
-    verify(dispatchService)
-        .dispatchNode(
-            any(), any(), eq(new DagNodeResolution("on-fail-node", "TASK")), eq(null), any());
-  }
-
-  // ── fixture helpers ────────────────────────────────────────────────────────
-
-  private void seedHappyPathWithJobInstance() {
-    seedHappyPath();
-    JobInstanceEntity ji = new JobInstanceEntity();
-    ji.setId(500L);
-    ji.setTenantId("ta");
-    when(jobInstanceMapper.selectById("ta", 500L)).thenReturn(ji);
-    // 让 workflowRun 有 relatedJobInstanceId
-    WorkflowRunEntity wfRun = new WorkflowRunEntity();
-    wfRun.setRunStatus("RUNNING");
-    wfRun.setId(1L);
-    wfRun.setTenantId("ta");
-    wfRun.setWorkflowDefinitionId(7L);
-    wfRun.setRelatedJobInstanceId(500L);
-    when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
-  }
-
-  @Test
-  @DisplayName("运行时传感器配置拒绝小数秒与超出 long 范围的秒数")
-  void shouldRejectNonIntegralAndOverflowSensorDurations() throws Exception {
-    for (String durations : List.of(
-        "\"timeout_seconds\":120.5,\"poll_interval_seconds\":30",
-        "\"timeout_seconds\":120,\"poll_interval_seconds\":30.5",
-        "\"timeout_seconds\":18446744073709551736,\"poll_interval_seconds\":30")) {
-      String params = "{\"sensor_type\":\"FILE_ARRIVAL\",\"sensor_spec\":{}," + durations
-          + ",\"on_timeout\":\"FAIL\"}";
-      @SuppressWarnings("unchecked")
-      Map<String, Object> parsed = objectMapper.readValue(params, Map.class);
-      assertThat(SensorStateMachine.SensorConfig.from(parsed)).as(durations).isNull();
+        verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1");
+        verify(taskOutcomeService, times(2)).recordNodeRunFinish(any());
+        verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
     }
-  }
 
-  @Test
-  @DisplayName("探针已匹配时不计算无用的下次探测时间")
-  void shouldFinishMatchedProbe_whenUnusedIntervalCannotBeAdded() {
-    seedHappyPath();
-    seedExtremeInterval();
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
+    @Test
+    @DisplayName("等待超时后走失败分支派发对应的下游节点")
+    void timeout_dispatchesFailureBranch() {
+        seedHappyPathWithJobInstance();
+        WorkflowNodeRunEntity stale = nodeRun(10, 0);
+        stale.setStartedAt(NOW.minusSeconds(3600));
+        when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(false), any()))
+                .thenReturn(List.of(new DagNodeResolution("on-fail-node", "TASK")));
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(stale, NOW);
 
-    ArgumentCaptor<NodeRunFinishCommand> command =
-        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
-    assertThat(command.getValue().success()).isTrue();
-    verify(nodeRunMapper)
-        .updateSensorProbeState(ArgumentMatchers.argThat(value -> value.nextProbeAt() == null));
-  }
+        verify(filePolicy, never()).probe(any());
+        verify(dispatchService)
+                .dispatchNode(any(), any(), eq(new DagNodeResolution("on-fail-node", "TASK")), eq(null), any());
+    }
 
-  @Test
-  @DisplayName("探针达到失败阈值时不计算无用的下次探测时间")
-  void shouldFinishFailedProbe_whenUnusedIntervalCannotBeAdded() {
-    seedHappyPath();
-    seedExtremeInterval();
-    when(filePolicy.probe(any()))
-        .thenReturn(
-            SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("failed")));
+    // ── fixture helpers ────────────────────────────────────────────────────────
 
-    sm.probeAndAdvance(nodeRun(0, 2), NOW);
+    private void seedHappyPathWithJobInstance() {
+        seedHappyPath();
+        JobInstanceEntity ji = new JobInstanceEntity();
+        ji.setId(500L);
+        ji.setTenantId("ta");
+        when(jobInstanceMapper.selectById("ta", 500L)).thenReturn(ji);
+        // 让 workflowRun 有 relatedJobInstanceId
+        WorkflowRunEntity wfRun = new WorkflowRunEntity();
+        wfRun.setRunStatus("RUNNING");
+        wfRun.setId(1L);
+        wfRun.setTenantId("ta");
+        wfRun.setWorkflowDefinitionId(7L);
+        wfRun.setRelatedJobInstanceId(500L);
+        when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
+    }
 
-    ArgumentCaptor<NodeRunFinishCommand> command =
-        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
-    assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_probe_failed");
-    verify(nodeRunMapper)
-        .updateSensorProbeState(ArgumentMatchers.argThat(value -> value.nextProbeAt() == null));
-  }
+    @Test
+    @DisplayName("运行时传感器配置拒绝小数秒与超出 long 范围的秒数")
+    void shouldRejectNonIntegralAndOverflowSensorDurations() throws Exception {
+        for (String durations : List.of(
+                "\"timeout_seconds\":120.5,\"poll_interval_seconds\":30",
+                "\"timeout_seconds\":120,\"poll_interval_seconds\":30.5",
+                "\"timeout_seconds\":18446744073709551736,\"poll_interval_seconds\":30")) {
+            String params =
+                    "{\"sensor_type\":\"FILE_ARRIVAL\",\"sensor_spec\":{}," + durations + ",\"on_timeout\":\"FAIL\"}";
+            @SuppressWarnings("unchecked")
+            Map<String, Object> parsed = objectMapper.readValue(params, Map.class);
+            assertThat(SensorStateMachine.SensorConfig.from(parsed))
+                    .as(durations)
+                    .isNull();
+        }
+    }
 
-  @Test
-  @DisplayName("未就绪时不可表示的下次探测时间应明确失败")
-  void shouldFailInvalidSpec_whenNextProbeTimeOverflows() {
-    seedHappyPath();
-    seedExtremeInterval();
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
+    @Test
+    @DisplayName("探针已匹配时不计算无用的下次探测时间")
+    void shouldFinishMatchedProbe_whenUnusedIntervalCannotBeAdded() {
+        seedHappyPath();
+        seedExtremeInterval();
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    ArgumentCaptor<NodeRunFinishCommand> command =
-        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
-    assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
-  }
+        ArgumentCaptor<NodeRunFinishCommand> command = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+        assertThat(command.getValue().success()).isTrue();
+        verify(nodeRunMapper).updateSensorProbeState(ArgumentMatchers.argThat(value -> value.nextProbeAt() == null));
+    }
 
-  @Test
-  @DisplayName("探针出错时超大退避不得回绕为过去时间")
-  void shouldFailInvalidSpec_whenRetryBackoffOverflows() {
-    seedHappyPath();
-    seedExtremeInterval();
-    when(filePolicy.probe(any()))
-        .thenReturn(
-            SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("failed")));
+    @Test
+    @DisplayName("探针达到失败阈值时不计算无用的下次探测时间")
+    void shouldFinishFailedProbe_whenUnusedIntervalCannotBeAdded() {
+        seedHappyPath();
+        seedExtremeInterval();
+        when(filePolicy.probe(any()))
+                .thenReturn(SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("failed")));
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 2), NOW);
 
-    ArgumentCaptor<NodeRunFinishCommand> command =
-        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
-    assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
-  }
+        ArgumentCaptor<NodeRunFinishCommand> command = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+        assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_probe_failed");
+        verify(nodeRunMapper).updateSensorProbeState(ArgumentMatchers.argThat(value -> value.nextProbeAt() == null));
+    }
 
-  @Test
-  @DisplayName("下次探测时间超出 PostgreSQL 时间范围时应明确失败")
-  void shouldFailInvalidSpec_whenNextProbeExceedsPostgresRange() {
-    seedHappyPath();
-    seedInterval(10_000_000_000_000L, 10_000_000_000_001L);
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
+    @Test
+    @DisplayName("未就绪时不可表示的下次探测时间应明确失败")
+    void shouldFailInvalidSpec_whenNextProbeTimeOverflows() {
+        seedHappyPath();
+        seedExtremeInterval();
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
 
-    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    ArgumentCaptor<NodeRunFinishCommand> command =
-        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
-    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
-    assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
-  }
+        ArgumentCaptor<NodeRunFinishCommand> command = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+        assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+    }
 
-  @Test
-  @DisplayName("未就绪的下次探测不得晚于 WAIT 超时")
-  void shouldScheduleAtDeadline_whenNextProbeWouldBeAfterTimeout() {
-    seedHappyPath();
-    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
-    WorkflowNodeRunEntity run = nodeRun(0, 0);
-    run.setStartedAt(NOW.minusSeconds(115));
+    @Test
+    @DisplayName("探针出错时超大退避不得回绕为过去时间")
+    void shouldFailInvalidSpec_whenRetryBackoffOverflows() {
+        seedHappyPath();
+        seedExtremeInterval();
+        when(filePolicy.probe(any()))
+                .thenReturn(SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("failed")));
 
-    sm.probeAndAdvance(run, NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    verify(nodeRunMapper)
-        .updateSensorProbeState(
-            ArgumentMatchers.argThat(value -> NOW.plusSeconds(5).equals(value.nextProbeAt())));
-  }
+        ArgumentCaptor<NodeRunFinishCommand> command = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+        assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+    }
 
-  @Test
-  @DisplayName("错误退避不得推迟 WAIT 超时处理")
-  void shouldScheduleAtDeadline_whenErrorBackoffWouldBeAfterTimeout() {
-    seedHappyPath();
-    when(filePolicy.probe(any()))
-        .thenReturn(
-            SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("failed")));
-    WorkflowNodeRunEntity run = nodeRun(0, 0);
-    run.setStartedAt(NOW.minusSeconds(115));
+    @Test
+    @DisplayName("下次探测时间超出 PostgreSQL 时间范围时应明确失败")
+    void shouldFailInvalidSpec_whenNextProbeExceedsPostgresRange() {
+        seedHappyPath();
+        seedInterval(10_000_000_000_000L, 10_000_000_000_001L);
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
 
-    sm.probeAndAdvance(run, NOW);
+        sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    verify(nodeRunMapper)
-        .updateSensorProbeState(
-            ArgumentMatchers.argThat(value -> NOW.plusSeconds(5).equals(value.nextProbeAt())));
-  }
+        ArgumentCaptor<NodeRunFinishCommand> command = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+        verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+        assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+    }
 
-  private void seedExtremeInterval() {
-    seedInterval(Long.MAX_VALUE - 1, Long.MAX_VALUE);
-  }
+    @Test
+    @DisplayName("未就绪的下次探测不得晚于 WAIT 超时")
+    void shouldScheduleAtDeadline_whenNextProbeWouldBeAfterTimeout() {
+        seedHappyPath();
+        when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
+        WorkflowNodeRunEntity run = nodeRun(0, 0);
+        run.setStartedAt(NOW.minusSeconds(115));
 
-  private void seedInterval(long interval, long timeout) {
-    WorkflowNodeEntity node = new WorkflowNodeEntity();
-    node.setNodeType("WAIT");
-    node.setNodeParams("""
+        sm.probeAndAdvance(run, NOW);
+
+        verify(nodeRunMapper)
+                .updateSensorProbeState(
+                        ArgumentMatchers.argThat(value -> NOW.plusSeconds(5).equals(value.nextProbeAt())));
+    }
+
+    @Test
+    @DisplayName("错误退避不得推迟 WAIT 超时处理")
+    void shouldScheduleAtDeadline_whenErrorBackoffWouldBeAfterTimeout() {
+        seedHappyPath();
+        when(filePolicy.probe(any()))
+                .thenReturn(SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("failed")));
+        WorkflowNodeRunEntity run = nodeRun(0, 0);
+        run.setStartedAt(NOW.minusSeconds(115));
+
+        sm.probeAndAdvance(run, NOW);
+
+        verify(nodeRunMapper)
+                .updateSensorProbeState(
+                        ArgumentMatchers.argThat(value -> NOW.plusSeconds(5).equals(value.nextProbeAt())));
+    }
+
+    private void seedExtremeInterval() {
+        seedInterval(Long.MAX_VALUE - 1, Long.MAX_VALUE);
+    }
+
+    private void seedInterval(long interval, long timeout) {
+        WorkflowNodeEntity node = new WorkflowNodeEntity();
+        node.setNodeType("WAIT");
+        node.setNodeParams("""
         {"sensor_type":"FILE_ARRIVAL","sensor_spec":{},
          "timeout_seconds":%d,"poll_interval_seconds":%d,"on_timeout":"FAIL"}
         """.formatted(timeout, interval));
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(node);
-  }
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(node);
+    }
 
-  private void seedHappyPath() {
-    WorkflowRunEntity wfRun = new WorkflowRunEntity();
-    wfRun.setRunStatus("RUNNING");
-    wfRun.setId(1L);
-    wfRun.setTenantId("ta");
-    wfRun.setWorkflowDefinitionId(7L);
-    when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
-    WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
-    wfNode.setNodeType("WAIT");
-    wfNode.setNodeParams("""
+    private void seedHappyPath() {
+        WorkflowRunEntity wfRun = new WorkflowRunEntity();
+        wfRun.setRunStatus("RUNNING");
+        wfRun.setId(1L);
+        wfRun.setTenantId("ta");
+        wfRun.setWorkflowDefinitionId(7L);
+        when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
+        WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
+        wfNode.setNodeType("WAIT");
+        wfNode.setNodeParams("""
         {
           "sensor_type": "FILE_ARRIVAL",
           "sensor_spec": {"pattern": "x-*", "maxAgeSeconds": 3600},
@@ -630,19 +616,19 @@ class SensorStateMachineTest {
           "on_timeout": "FAIL"
         }
         """.stripTrailing());
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
-  }
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
+    }
 
-  private WorkflowNodeRunEntity nodeRun(int probeCount, int errorCount) {
-    WorkflowNodeRunEntity n = new WorkflowNodeRunEntity();
-    n.setId(99L);
-    n.setWorkflowRunId(1L);
-    n.setNodeCode("wait-1");
-    n.setNodeType("WAIT");
-    n.setNodeStatus("RUNNING");
-    n.setStartedAt(STARTED);
-    n.setSensorProbeCount(probeCount);
-    n.setSensorErrorCount(errorCount);
-    return n;
-  }
+    private WorkflowNodeRunEntity nodeRun(int probeCount, int errorCount) {
+        WorkflowNodeRunEntity n = new WorkflowNodeRunEntity();
+        n.setId(99L);
+        n.setWorkflowRunId(1L);
+        n.setNodeCode("wait-1");
+        n.setNodeType("WAIT");
+        n.setNodeStatus("RUNNING");
+        n.setStartedAt(STARTED);
+        n.setSensorProbeCount(probeCount);
+        n.setSensorErrorCount(errorCount);
+        return n;
+    }
 }

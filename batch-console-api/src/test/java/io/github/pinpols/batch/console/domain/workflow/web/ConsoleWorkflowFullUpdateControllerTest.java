@@ -48,116 +48,106 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @DisplayName("Workflow 全量更新接口的节点与边契约")
 class ConsoleWorkflowFullUpdateControllerTest {
 
-  @Mock
-  private WorkflowDefinitionService service;
+    @Mock
+    private WorkflowDefinitionService service;
 
-  @Mock
-  private WorkflowDesignLockService lockService;
+    @Mock
+    private WorkflowDesignLockService lockService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  private static final String USER_ALICE = "alice";
+    private static final String USER_ALICE = "alice";
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWorkflowDefinitionController(
-            service, responseFactory, lockService, mock(ConsoleWorkflowTriggerService.class)))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWorkflowDefinitionController(
+                        service, responseFactory, lockService, mock(ConsoleWorkflowTriggerService.class)))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
 
-    // SecurityContext 注入 ConsolePrincipal,controller currentUsername() 读取
-    ConsolePrincipal principal =
-        new ConsolePrincipal(USER_ALICE, "ta", Set.of("ROLE_TENANT_ADMIN"));
-    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        principal, null, List.of(new SimpleGrantedAuthority("ROLE_TENANT_ADMIN")));
-    SecurityContextHolder.getContext().setAuthentication(auth);
-  }
+        // SecurityContext 注入 ConsolePrincipal,controller currentUsername() 读取
+        ConsolePrincipal principal = new ConsolePrincipal(USER_ALICE, "ta", Set.of("ROLE_TENANT_ADMIN"));
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                principal, null, List.of(new SimpleGrantedAuthority("ROLE_TENANT_ADMIN")));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
 
-  @AfterEach
-  void tearDown() {
-    SecurityContextHolder.clearContext();
-  }
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
 
-  @Test
-  @DisplayName("成功:有效 body + 持锁人 → 200 SUCCESS")
-  void shouldSucceed_whenValidAndLockHeld() throws Exception {
-    when(service.fullUpdate(
-            eq(42L), any(WorkflowDefinitionFullUpdateRequest.class), eq(USER_ALICE)))
-        .thenReturn(null);
+    @Test
+    @DisplayName("成功:有效 body + 持锁人 → 200 SUCCESS")
+    void shouldSucceed_whenValidAndLockHeld() throws Exception {
+        when(service.fullUpdate(eq(42L), any(WorkflowDefinitionFullUpdateRequest.class), eq(USER_ALICE)))
+                .thenReturn(null);
 
-    String body = validBody();
-    mockMvc
-        .perform(put("/api/console/workflow-definitions/42/full")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-    verify(service).fullUpdate(eq(42L), any(), eq(USER_ALICE));
-  }
+        String body = validBody();
+        mockMvc.perform(put("/api/console/workflow-definitions/42/full")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+        verify(service).fullUpdate(eq(42L), any(), eq(USER_ALICE));
+    }
 
-  @Test
-  @DisplayName("锁不归属当前 user:service 抛 CONFLICT → 409 带 lockedBy")
-  void shouldReturnConflict_whenLockHeldByOther() throws Exception {
-    when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
-        .thenThrow(BizException.of(
-            ResultCode.CONFLICT, "error.workflow_design_lock.held_by_other", "bob"));
+    @Test
+    @DisplayName("锁不归属当前 user:service 抛 CONFLICT → 409 带 lockedBy")
+    void shouldReturnConflict_whenLockHeldByOther() throws Exception {
+        when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
+                .thenThrow(BizException.of(ResultCode.CONFLICT, "error.workflow_design_lock.held_by_other", "bob"));
 
-    mockMvc
-        .perform(put("/api/console/workflow-definitions/42/full")
-            .contentType(APPLICATION_JSON)
-            .content(validBody()))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code").value("CONFLICT"));
-  }
+        mockMvc.perform(put("/api/console/workflow-definitions/42/full")
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
+    }
 
-  @Test
-  @DisplayName("DAG 含环:service 抛 VALIDATION_ERROR → 400 cycle_detected")
-  void shouldReturnBadRequest_whenDagHasCycle() throws Exception {
-    when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
-        .thenThrow(
-            BizException.of(ResultCode.VALIDATION_ERROR, "error.workflow.dag.cycle_detected", "a"));
+    @Test
+    @DisplayName("DAG 含环:service 抛 VALIDATION_ERROR → 400 cycle_detected")
+    void shouldReturnBadRequest_whenDagHasCycle() throws Exception {
+        when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
+                .thenThrow(BizException.of(ResultCode.VALIDATION_ERROR, "error.workflow.dag.cycle_detected", "a"));
 
-    mockMvc
-        .perform(put("/api/console/workflow-definitions/42/full")
-            .contentType(APPLICATION_JSON)
-            .content(validBody()))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+        mockMvc.perform(put("/api/console/workflow-definitions/42/full")
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("FILE_STEP 新写入已退役:service 抛 VALIDATION_ERROR → 400 file_step_retired")
-  void shouldReturnBadRequest_whenFileStepIsRetired() throws Exception {
-    when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
-        .thenThrow(BizException.of(
-            ResultCode.VALIDATION_ERROR, "error.workflow.dag.file_step_retired", "fs"));
+    @Test
+    @DisplayName("FILE_STEP 新写入已退役:service 抛 VALIDATION_ERROR → 400 file_step_retired")
+    void shouldReturnBadRequest_whenFileStepIsRetired() throws Exception {
+        when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
+                .thenThrow(BizException.of(ResultCode.VALIDATION_ERROR, "error.workflow.dag.file_step_retired", "fs"));
 
-    mockMvc
-        .perform(put("/api/console/workflow-definitions/42/full")
-            .contentType(APPLICATION_JSON)
-            .content(validBody()))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+        mockMvc.perform(put("/api/console/workflow-definitions/42/full")
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("嵌套 @Valid 失败:nodeCode 含空格 → 400 VALIDATION_ERROR,不调 service")
-  void shouldRejectValidation_whenNestedNodeCodeInvalid() throws Exception {
-    String body = """
+    @Test
+    @DisplayName("嵌套 @Valid 失败:nodeCode 含空格 → 400 VALIDATION_ERROR,不调 service")
+    void shouldRejectValidation_whenNestedNodeCodeInvalid() throws Exception {
+        String body = """
         {
           "definition": {
             "tenantId": "ta",
@@ -170,34 +160,32 @@ class ConsoleWorkflowFullUpdateControllerTest {
           "expectedVersion": 1
         }
         """.stripTrailing();
-    mockMvc
-        .perform(put("/api/console/workflow-definitions/42/full")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never()).fullUpdate(any(Long.class), any(), any());
-  }
+        mockMvc.perform(put("/api/console/workflow-definitions/42/full")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).fullUpdate(any(Long.class), any(), any());
+    }
 
-  @Test
-  @DisplayName("全量保存缺少节点名称时拒绝且不调用服务")
-  void shouldRejectMissingNodeName_whenUpdatingWorkflow() throws Exception {
-    String body = """
+    @Test
+    @DisplayName("全量保存缺少节点名称时拒绝且不调用服务")
+    void shouldRejectMissingNodeName_whenUpdatingWorkflow() throws Exception {
+        String body = """
         {"definition":{"tenantId":"ta","workflowCode":"wf_ok","workflowName":"wf",
          "workflowType":"DAG","nodes":[{"nodeCode":"start","nodeType":"START"}]},
          "expectedVersion":1}
         """;
-    mockMvc
-        .perform(put("/api/console/workflow-definitions/42/full")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never()).fullUpdate(any(Long.class), any(), any());
-  }
+        mockMvc.perform(put("/api/console/workflow-definitions/42/full")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).fullUpdate(any(Long.class), any(), any());
+    }
 
-  private static String validBody() {
-    return """
+    private static String validBody() {
+        return """
         {
           "definition": {
             "tenantId": "ta",
@@ -213,5 +201,5 @@ class ConsoleWorkflowFullUpdateControllerTest {
           "expectedVersion": 1
         }
         """.stripTrailing();
-  }
+    }
 }

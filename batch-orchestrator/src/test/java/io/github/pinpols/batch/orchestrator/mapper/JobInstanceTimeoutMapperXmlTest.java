@@ -13,32 +13,31 @@ import org.junit.jupiter.api.Test;
 @DisplayName("作业实例超时候选查询: 仅在存在运行中任务时才判定业务硬超时")
 class JobInstanceTimeoutMapperXmlTest {
 
-  private static final String RESOURCE = "mapper/JobInstanceMapper.xml";
+    private static final String RESOURCE = "mapper/JobInstanceMapper.xml";
 
-  @Test
-  @DisplayName("超时终止候选必须关联运行中的任务,避免已派发未认领的实例被误终止")
-  void shouldOnlySelectTimedOutCandidates_whenTaskIsRunning() throws Exception {
-    byte[] xml;
-    try (InputStream inputStream = resource()) {
-      assertThat(inputStream).as(RESOURCE).isNotNull();
-      xml = inputStream.readAllBytes();
+    @Test
+    @DisplayName("超时终止候选必须关联运行中的任务,避免已派发未认领的实例被误终止")
+    void shouldOnlySelectTimedOutCandidates_whenTaskIsRunning() throws Exception {
+        byte[] xml;
+        try (InputStream inputStream = resource()) {
+            assertThat(inputStream).as(RESOURCE).isNotNull();
+            xml = inputStream.readAllBytes();
+        }
+
+        Configuration configuration = new Configuration();
+        try (InputStream inputStream = resource()) {
+            new XMLMapperBuilder(inputStream, configuration, RESOURCE, configuration.getSqlFragments()).parse();
+        }
+
+        String select = new String(xml, StandardCharsets.UTF_8)
+                .replaceAll("(?s).*?<select id=\"selectTimedOutCandidates\".*?>(.*?)</select>.*", "$1");
+        assertThat(select)
+                .contains("from batch.job_task jt")
+                .contains("jt.job_instance_id = ji.id")
+                .contains("jt.task_status = 'RUNNING'");
     }
 
-    Configuration configuration = new Configuration();
-    try (InputStream inputStream = resource()) {
-      new XMLMapperBuilder(inputStream, configuration, RESOURCE, configuration.getSqlFragments())
-          .parse();
+    private static InputStream resource() {
+        return Thread.currentThread().getContextClassLoader().getResourceAsStream(RESOURCE);
     }
-
-    String select = new String(xml, StandardCharsets.UTF_8)
-        .replaceAll("(?s).*?<select id=\"selectTimedOutCandidates\".*?>(.*?)</select>.*", "$1");
-    assertThat(select)
-        .contains("from batch.job_task jt")
-        .contains("jt.job_instance_id = ji.id")
-        .contains("jt.task_status = 'RUNNING'");
-  }
-
-  private static InputStream resource() {
-    return Thread.currentThread().getContextClassLoader().getResourceAsStream(RESOURCE);
-  }
 }

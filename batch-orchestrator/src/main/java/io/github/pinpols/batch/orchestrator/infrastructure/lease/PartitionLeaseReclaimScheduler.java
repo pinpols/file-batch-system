@@ -43,175 +43,165 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(
-    prefix = "batch.partition-lease",
-    name = "reclaim-scheduler-enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+        prefix = "batch.partition-lease",
+        name = "reclaim-scheduler-enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class PartitionLeaseReclaimScheduler {
 
-  private final JobPartitionMapper jobPartitionMapper;
-  private final PartitionReclaimUnit reclaimUnit;
-  private final BatchOrchestratorGovernanceProperties governance;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final JobTaskMapper jobTaskMapper;
-  private final UnclaimedReadyDispatchUnit unclaimedReadyDispatchUnit;
-  private final AtomicBoolean reclaimRunning = new AtomicBoolean(false);
-  private final AtomicBoolean sweepRunning = new AtomicBoolean(false);
-  private final AtomicBoolean unclaimedRunning = new AtomicBoolean(false);
+    private final JobPartitionMapper jobPartitionMapper;
+    private final PartitionReclaimUnit reclaimUnit;
+    private final BatchOrchestratorGovernanceProperties governance;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final JobTaskMapper jobTaskMapper;
+    private final UnclaimedReadyDispatchUnit unclaimedReadyDispatchUnit;
+    private final AtomicBoolean reclaimRunning = new AtomicBoolean(false);
+    private final AtomicBoolean sweepRunning = new AtomicBoolean(false);
+    private final AtomicBoolean unclaimedRunning = new AtomicBoolean(false);
 
-  // P1-5：lockAtMostFor 是 ShedLock 持锁上限。超过这个时间，二号实例可拿同名锁同时跑循环 →
-  // partition 已被 reclaim 后 version 已 +1 → 二号实例算出的 eventKey 不同（含 version） →
-  // 同 partition 真双 dispatch（unique 索引救不了）。lockAtMostFor 暂留 PT2M（与 publishing-timeout 对齐），
-  // 但循环内主动设置时间预算 budgetMillis = lockAtMostFor × 75%，超时即 break 并由下个 tick 接力。
-  private static final long LOCK_AT_MOST_MILLIS = 120_000L;
-  private static final long LOOP_BUDGET_MILLIS = (long) (LOCK_AT_MOST_MILLIS * 0.75);
+    // P1-5：lockAtMostFor 是 ShedLock 持锁上限。超过这个时间，二号实例可拿同名锁同时跑循环 →
+    // partition 已被 reclaim 后 version 已 +1 → 二号实例算出的 eventKey 不同（含 version） →
+    // 同 partition 真双 dispatch（unique 索引救不了）。lockAtMostFor 暂留 PT2M（与 publishing-timeout 对齐），
+    // 但循环内主动设置时间预算 budgetMillis = lockAtMostFor × 75%，超时即 break 并由下个 tick 接力。
+    private static final long LOCK_AT_MOST_MILLIS = 120_000L;
+    private static final long LOOP_BUDGET_MILLIS = (long) (LOCK_AT_MOST_MILLIS * 0.75);
 
-  @Scheduled(fixedDelayString = "${batch.partition-lease.reclaim-interval-millis:15000}")
-  @SchedulerLock(name = "partition_lease_reclaim", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
-  public void reclaimExpiredPartitions() {
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    if (!reclaimRunning.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      int batchSize = governance.partitionLease().getReclaimBatchSize();
-      List<JobPartitionEntity> expiredPartitions = jobPartitionMapper.selectExpiredLeasesGlobal(
-          PartitionStatus.READY.code(),
-          PartitionStatus.RUNNING.code(),
-          batchSize > 0 ? batchSize : null);
-      if (batchSize > 0 && expiredPartitions.size() >= batchSize) {
-        log.warn(
-            "partition reclaim hit batch ceiling: scanned={}, batchSize={}; either lease window"
-                + " too short, worker capacity insufficient, or scheduler lagging — investigate",
-            expiredPartitions.size(),
-            batchSize);
-      }
-      long deadlineNanos = System.nanoTime() + LOOP_BUDGET_MILLIS * 1_000_000L;
-      int processed = 0;
-      for (JobPartitionEntity partition : expiredPartitions) {
-        // P1-5：占用持锁时间预算前主动让出，避免 lock 过期 → 第二实例并发 reclaim 双 dispatch
-        if (System.nanoTime() > deadlineNanos) {
-          log.warn(
-              "partition reclaim yielded after {}/{}: lock budget {}ms exhausted, deferring"
-                  + " {} partitions to next tick",
-              processed,
-              expiredPartitions.size(),
-              LOOP_BUDGET_MILLIS,
-              expiredPartitions.size() - processed);
-          break;
+    @Scheduled(fixedDelayString = "${batch.partition-lease.reclaim-interval-millis:15000}")
+    @SchedulerLock(name = "partition_lease_reclaim", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
+    public void reclaimExpiredPartitions() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!reclaimRunning.compareAndSet(false, true)) {
+            return;
         }
         try {
-          RlsTenantContextHolder.runWithTenant(
-              partition.getTenantId(), () -> reclaimUnit.reclaim(partition));
-        } catch (ReclaimRetryableException retryable) {
-          log.warn(
-              "partition reclaim rolled back, will retry next cycle: {}",
-              SwallowedExceptionLogger.summary(retryable));
-        } catch (RuntimeException unexpected) {
-          // 单条 partition 异常不影响后续行处理：下一行继续。
-          log.error(
-              "partition reclaim unexpected error: tenantId={}, partitionId={}",
-              partition.getTenantId(),
-              partition.getId(),
-              unexpected);
+            int batchSize = governance.partitionLease().getReclaimBatchSize();
+            List<JobPartitionEntity> expiredPartitions = jobPartitionMapper.selectExpiredLeasesGlobal(
+                    PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), batchSize > 0 ? batchSize : null);
+            if (batchSize > 0 && expiredPartitions.size() >= batchSize) {
+                log.warn(
+                        "partition reclaim hit batch ceiling: scanned={}, batchSize={}; either lease window"
+                                + " too short, worker capacity insufficient, or scheduler lagging — investigate",
+                        expiredPartitions.size(),
+                        batchSize);
+            }
+            long deadlineNanos = System.nanoTime() + LOOP_BUDGET_MILLIS * 1_000_000L;
+            int processed = 0;
+            for (JobPartitionEntity partition : expiredPartitions) {
+                // P1-5：占用持锁时间预算前主动让出，避免 lock 过期 → 第二实例并发 reclaim 双 dispatch
+                if (System.nanoTime() > deadlineNanos) {
+                    log.warn(
+                            "partition reclaim yielded after {}/{}: lock budget {}ms exhausted, deferring"
+                                    + " {} partitions to next tick",
+                            processed,
+                            expiredPartitions.size(),
+                            LOOP_BUDGET_MILLIS,
+                            expiredPartitions.size() - processed);
+                    break;
+                }
+                try {
+                    RlsTenantContextHolder.runWithTenant(partition.getTenantId(), () -> reclaimUnit.reclaim(partition));
+                } catch (ReclaimRetryableException retryable) {
+                    log.warn(
+                            "partition reclaim rolled back, will retry next cycle: {}",
+                            SwallowedExceptionLogger.summary(retryable));
+                } catch (RuntimeException unexpected) {
+                    // 单条 partition 异常不影响后续行处理：下一行继续。
+                    log.error(
+                            "partition reclaim unexpected error: tenantId={}, partitionId={}",
+                            partition.getTenantId(),
+                            partition.getId(),
+                            unexpected);
+                }
+                processed++;
+            }
+        } finally {
+            reclaimRunning.set(false);
         }
-        processed++;
-      }
-    } finally {
-      reclaimRunning.set(false);
     }
-  }
 
-  /**
-   * 补充 sweeper：扫描 "partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task" 的死态。
-   *
-   * <p>新代码已通过 REQUIRES_NEW + 抛异常回滚消除产生路径；本 sweeper 仅清理升级前残留的历史死态， 通过对仍在 RUNNING 的 task 调 {@code
-   * resetForRetry}（不再触碰 partition）让其回到 READY，下一轮派发回退走正常路径。
-   */
-  @Scheduled(fixedDelayString = "${batch.partition-lease.orphan-sweep-interval-millis:300000}")
-  @SchedulerLock(name = "partition_orphan_sweep", lockAtMostFor = "PT2M", lockAtLeastFor = "PT30S")
-  public void sweepOrphanRunningTasks() {
-    if (!governance.partitionLease().isOrphanSweepEnabled()) {
-      return;
-    }
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    if (!sweepRunning.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      Instant olderThan = BatchDateTimeSupport.utcNow()
-          .minusSeconds(governance.partitionLease().getOrphanSweepGraceSeconds());
-      int batchSize = governance.partitionLease().getOrphanSweepBatchSize();
-      List<JobPartitionEntity> orphans =
-          jobPartitionMapper.selectOrphanReadyPartitionsWithRunningTask(
-              PartitionStatus.READY.code(), TaskStatus.RUNNING.code(), olderThan, batchSize);
-      if (orphans.isEmpty()) {
-        return;
-      }
-      log.warn(
-          "orphan-sweep found {} dead-state partitions (READY + RUNNING task)", orphans.size());
-      for (JobPartitionEntity partition : orphans) {
-        try {
-          RlsTenantContextHolder.runWithTenant(
-              partition.getTenantId(), () -> reclaimUnit.reclaim(partition));
-        } catch (ReclaimRetryableException retryable) {
-          log.warn("orphan-sweep retryable: {}", SwallowedExceptionLogger.summary(retryable));
-        } catch (RuntimeException unexpected) {
-          log.error(
-              "orphan-sweep unexpected error: tenantId={}, partitionId={}",
-              partition.getTenantId(),
-              partition.getId(),
-              unexpected);
+    /**
+     * 补充 sweeper：扫描 "partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task" 的死态。
+     *
+     * <p>新代码已通过 REQUIRES_NEW + 抛异常回滚消除产生路径；本 sweeper 仅清理升级前残留的历史死态， 通过对仍在 RUNNING 的 task 调 {@code
+     * resetForRetry}（不再触碰 partition）让其回到 READY，下一轮派发回退走正常路径。
+     */
+    @Scheduled(fixedDelayString = "${batch.partition-lease.orphan-sweep-interval-millis:300000}")
+    @SchedulerLock(name = "partition_orphan_sweep", lockAtMostFor = "PT2M", lockAtLeastFor = "PT30S")
+    public void sweepOrphanRunningTasks() {
+        if (!governance.partitionLease().isOrphanSweepEnabled()) {
+            return;
         }
-      }
-    } finally {
-      sweepRunning.set(false);
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!sweepRunning.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            Instant olderThan = BatchDateTimeSupport.utcNow()
+                    .minusSeconds(governance.partitionLease().getOrphanSweepGraceSeconds());
+            int batchSize = governance.partitionLease().getOrphanSweepBatchSize();
+            List<JobPartitionEntity> orphans = jobPartitionMapper.selectOrphanReadyPartitionsWithRunningTask(
+                    PartitionStatus.READY.code(), TaskStatus.RUNNING.code(), olderThan, batchSize);
+            if (orphans.isEmpty()) {
+                return;
+            }
+            log.warn("orphan-sweep found {} dead-state partitions (READY + RUNNING task)", orphans.size());
+            for (JobPartitionEntity partition : orphans) {
+                try {
+                    RlsTenantContextHolder.runWithTenant(partition.getTenantId(), () -> reclaimUnit.reclaim(partition));
+                } catch (ReclaimRetryableException retryable) {
+                    log.warn("orphan-sweep retryable: {}", SwallowedExceptionLogger.summary(retryable));
+                } catch (RuntimeException unexpected) {
+                    log.error(
+                            "orphan-sweep unexpected error: tenantId={}, partitionId={}",
+                            partition.getTenantId(),
+                            partition.getId(),
+                            unexpected);
+                }
+            }
+        } finally {
+            sweepRunning.set(false);
+        }
     }
-  }
 
-  /**
-   * 重发已发布但超过宽限仍未被认领的 READY 任务。不调用 {@link PartitionReclaimUnit#reclaim}，
-   * 那条路径在没有 RUNNING 任务时不会写 outbox。
-   */
-  @Scheduled(fixedDelayString = "${batch.partition-lease.unclaimed-dispatch-interval-millis:15000}")
-  @SchedulerLock(
-      name = "partition_unclaimed_dispatch",
-      lockAtMostFor = "PT2M",
-      lockAtLeastFor = "PT10S")
-  public void redispatchUnclaimedReadyTasks() {
-    if (!governance.partitionLease().isUnclaimedDispatchEnabled()) {
-      return;
-    }
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    if (!unclaimedRunning.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      Instant olderThan = BatchDateTimeSupport.utcNow()
-          .minusSeconds(governance.partitionLease().getUnclaimedDispatchGraceSeconds());
-      int batchSize = governance.partitionLease().getUnclaimedDispatchBatchSize();
-      List<JobTaskEntity> unclaimed =
-          jobTaskMapper.selectUnclaimedPublishedReady(olderThan, batchSize);
-      for (JobTaskEntity task : unclaimed) {
-        try {
-          RlsTenantContextHolder.runWithTenant(
-              task.getTenantId(), () -> unclaimedReadyDispatchUnit.redispatch(task));
-        } catch (RuntimeException unexpected) {
-          log.error(
-              "unclaimed READY redispatch failed: tenantId={}, taskId={}",
-              task.getTenantId(),
-              task.getId(),
-              unexpected);
+    /**
+     * 重发已发布但超过宽限仍未被认领的 READY 任务。不调用 {@link PartitionReclaimUnit#reclaim}，
+     * 那条路径在没有 RUNNING 任务时不会写 outbox。
+     */
+    @Scheduled(fixedDelayString = "${batch.partition-lease.unclaimed-dispatch-interval-millis:15000}")
+    @SchedulerLock(name = "partition_unclaimed_dispatch", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
+    public void redispatchUnclaimedReadyTasks() {
+        if (!governance.partitionLease().isUnclaimedDispatchEnabled()) {
+            return;
         }
-      }
-    } finally {
-      unclaimedRunning.set(false);
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!unclaimedRunning.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            Instant olderThan = BatchDateTimeSupport.utcNow()
+                    .minusSeconds(governance.partitionLease().getUnclaimedDispatchGraceSeconds());
+            int batchSize = governance.partitionLease().getUnclaimedDispatchBatchSize();
+            List<JobTaskEntity> unclaimed = jobTaskMapper.selectUnclaimedPublishedReady(olderThan, batchSize);
+            for (JobTaskEntity task : unclaimed) {
+                try {
+                    RlsTenantContextHolder.runWithTenant(
+                            task.getTenantId(), () -> unclaimedReadyDispatchUnit.redispatch(task));
+                } catch (RuntimeException unexpected) {
+                    log.error(
+                            "unclaimed READY redispatch failed: tenantId={}, taskId={}",
+                            task.getTenantId(),
+                            task.getId(),
+                            unexpected);
+                }
+            }
+        } finally {
+            unclaimedRunning.set(false);
+        }
     }
-  }
 }

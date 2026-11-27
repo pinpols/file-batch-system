@@ -8,112 +8,105 @@ import java.util.Objects;
 
 /** 与具体 HTTP 客户端无关的出站请求描述。 */
 public record OutboundHttpRequest(
-    URI uri,
-    OutboundHttpMethod method,
-    Map<String, String> headers,
-    String body,
-    String mediaType,
-    Duration connectTimeout,
-    Duration requestTimeout,
-    OutboundAddressPolicy addressPolicy) {
+        URI uri,
+        OutboundHttpMethod method,
+        Map<String, String> headers,
+        String body,
+        String mediaType,
+        Duration connectTimeout,
+        Duration requestTimeout,
+        OutboundAddressPolicy addressPolicy) {
 
-  public OutboundHttpRequest {
-    Objects.requireNonNull(uri, "uri");
-    Objects.requireNonNull(method, "method");
-    Objects.requireNonNull(connectTimeout, "connectTimeout");
-    Objects.requireNonNull(requestTimeout, "requestTimeout");
-    Objects.requireNonNull(addressPolicy, "addressPolicy");
-    boolean timeoutIsNotPositive = connectTimeout.isNegative()
-        || connectTimeout.isZero()
-        || requestTimeout.isNegative()
-        || requestTimeout.isZero();
-    if (timeoutIsNotPositive) {
-      throw new IllegalArgumentException("outbound HTTP timeouts must be positive");
+    public OutboundHttpRequest {
+        Objects.requireNonNull(uri, "uri");
+        Objects.requireNonNull(method, "method");
+        Objects.requireNonNull(connectTimeout, "connectTimeout");
+        Objects.requireNonNull(requestTimeout, "requestTimeout");
+        Objects.requireNonNull(addressPolicy, "addressPolicy");
+        boolean timeoutIsNotPositive = connectTimeout.isNegative()
+                || connectTimeout.isZero()
+                || requestTimeout.isNegative()
+                || requestTimeout.isZero();
+        if (timeoutIsNotPositive) {
+            throw new IllegalArgumentException("outbound HTTP timeouts must be positive");
+        }
+        if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
+            throw new IllegalArgumentException("outbound HTTP URI must use http or https");
+        }
+        if (EmptyChecks.isBlank(uri.getHost())) {
+            throw new IllegalArgumentException("outbound HTTP URI must contain a host");
+        }
+        if (method == OutboundHttpMethod.POST && EmptyChecks.isBlank(mediaType)) {
+            throw new IllegalArgumentException("outbound HTTP POST requires mediaType");
+        }
+        headers = EmptyChecks.isNull(headers) ? Map.of() : Map.copyOf(headers);
     }
-    if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
-      throw new IllegalArgumentException("outbound HTTP URI must use http or https");
+
+    public static OutboundHttpRequest get(
+            String url,
+            Map<String, String> headers,
+            Duration connectTimeout,
+            Duration requestTimeout,
+            OutboundAddressPolicy addressPolicy) {
+        URI requestUri = URI.create(url);
+        return new OutboundHttpRequest(
+                requestUri, OutboundHttpMethod.GET, headers, null, null, connectTimeout, requestTimeout, addressPolicy);
     }
-    if (EmptyChecks.isBlank(uri.getHost())) {
-      throw new IllegalArgumentException("outbound HTTP URI must contain a host");
+
+    public static OutboundHttpRequest head(
+            String url,
+            Map<String, String> headers,
+            Duration connectTimeout,
+            Duration requestTimeout,
+            OutboundAddressPolicy addressPolicy) {
+        URI requestUri = URI.create(url);
+        return new OutboundHttpRequest(
+                requestUri,
+                OutboundHttpMethod.HEAD,
+                headers,
+                null,
+                null,
+                connectTimeout,
+                requestTimeout,
+                addressPolicy);
     }
-    if (method == OutboundHttpMethod.POST && EmptyChecks.isBlank(mediaType)) {
-      throw new IllegalArgumentException("outbound HTTP POST requires mediaType");
+
+    public static OutboundHttpRequest post(
+            String url,
+            Map<String, String> headers,
+            OutboundHttpContent content,
+            Duration connectTimeout,
+            Duration requestTimeout,
+            OutboundAddressPolicy addressPolicy) {
+        URI requestUri = URI.create(url);
+        return new OutboundHttpRequest(
+                requestUri,
+                OutboundHttpMethod.POST,
+                headers,
+                content.body(),
+                content.mediaType(),
+                connectTimeout,
+                requestTimeout,
+                addressPolicy);
     }
-    headers = EmptyChecks.isNull(headers) ? Map.of() : Map.copyOf(headers);
-  }
 
-  public static OutboundHttpRequest get(
-      String url,
-      Map<String, String> headers,
-      Duration connectTimeout,
-      Duration requestTimeout,
-      OutboundAddressPolicy addressPolicy) {
-    URI requestUri = URI.create(url);
-    return new OutboundHttpRequest(
-        requestUri,
-        OutboundHttpMethod.GET,
-        headers,
-        null,
-        null,
-        connectTimeout,
-        requestTimeout,
-        addressPolicy);
-  }
-
-  public static OutboundHttpRequest head(
-      String url,
-      Map<String, String> headers,
-      Duration connectTimeout,
-      Duration requestTimeout,
-      OutboundAddressPolicy addressPolicy) {
-    URI requestUri = URI.create(url);
-    return new OutboundHttpRequest(
-        requestUri,
-        OutboundHttpMethod.HEAD,
-        headers,
-        null,
-        null,
-        connectTimeout,
-        requestTimeout,
-        addressPolicy);
-  }
-
-  public static OutboundHttpRequest post(
-      String url,
-      Map<String, String> headers,
-      OutboundHttpContent content,
-      Duration connectTimeout,
-      Duration requestTimeout,
-      OutboundAddressPolicy addressPolicy) {
-    URI requestUri = URI.create(url);
-    return new OutboundHttpRequest(
-        requestUri,
-        OutboundHttpMethod.POST,
-        headers,
-        content.body(),
-        content.mediaType(),
-        connectTimeout,
-        requestTimeout,
-        addressPolicy);
-  }
-
-  @Override
-  public String toString() {
-    String authority = uri.getHost();
-    String path = EmptyChecks.isBlank(uri.getPath()) ? "/" : uri.getPath();
-    return "OutboundHttpRequest[method="
-        + method
-        + ", uri="
-        + uri.getScheme()
-        + "://"
-        + authority
-        + path
-        + ", headerNames="
-        + headers.keySet()
-        + ", bodyLength="
-        + (EmptyChecks.isNull(body) ? 0 : body.length())
-        + ", addressPolicy="
-        + addressPolicy
-        + ']';
-  }
+    @Override
+    public String toString() {
+        String authority = uri.getHost();
+        String path = EmptyChecks.isBlank(uri.getPath()) ? "/" : uri.getPath();
+        return "OutboundHttpRequest[method="
+                + method
+                + ", uri="
+                + uri.getScheme()
+                + "://"
+                + authority
+                + path
+                + ", headerNames="
+                + headers.keySet()
+                + ", bodyLength="
+                + (EmptyChecks.isNull(body) ? 0 : body.length())
+                + ", addressPolicy="
+                + addressPolicy
+                + ']';
+    }
 }

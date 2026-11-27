@@ -48,388 +48,375 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("Workflow 节点 Job 启动")
 class ChildJobLaunchSupportTest {
 
-  private static final String TENANT = "t1";
+    private static final String TENANT = "t1";
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private JobTaskMapper jobTaskMapper;
+    @Mock
+    private JobTaskMapper jobTaskMapper;
 
-  @Mock
-  private JobStepInstanceMapper jobStepInstanceMapper;
+    @Mock
+    private JobStepInstanceMapper jobStepInstanceMapper;
 
-  @Mock
-  private TriggerRequestMapper triggerRequestMapper;
+    @Mock
+    private TriggerRequestMapper triggerRequestMapper;
 
-  @Mock
-  private WorkflowNodeMapper workflowNodeMapper;
+    @Mock
+    private WorkflowNodeMapper workflowNodeMapper;
 
-  @Mock
-  private WorkflowRunMapper workflowRunMapper;
+    @Mock
+    private WorkflowRunMapper workflowRunMapper;
 
-  @Mock
-  private WorkflowNodeRunMapper workflowNodeRunMapper;
+    @Mock
+    private WorkflowNodeRunMapper workflowNodeRunMapper;
 
-  @Mock
-  private SecretPayloadProtector secretPayloadProtector;
+    @Mock
+    private SecretPayloadProtector secretPayloadProtector;
 
-  @Mock
-  private ObjectProvider<LaunchService> launchServiceProvider;
+    @Mock
+    private ObjectProvider<LaunchService> launchServiceProvider;
 
-  @Mock
-  private WorkflowNodePayloadBuilder payloadBuilder;
+    @Mock
+    private WorkflowNodePayloadBuilder payloadBuilder;
 
-  private ChildJobLaunchSupport newSupport() {
-    return new ChildJobLaunchSupport(
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobStepInstanceMapper,
-            triggerRequestMapper),
-        new OrchestratorWorkflowMappers(
-            workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper),
-        launchServiceProvider,
-        payloadBuilder,
-        secretPayloadProtector);
-  }
+    private ChildJobLaunchSupport newSupport() {
+        return new ChildJobLaunchSupport(
+                new OrchestratorJobMappers(
+                        jobInstanceMapper,
+                        jobPartitionMapper,
+                        jobTaskMapper,
+                        jobStepInstanceMapper,
+                        triggerRequestMapper),
+                new OrchestratorWorkflowMappers(workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper),
+                launchServiceProvider,
+                payloadBuilder,
+                secretPayloadProtector);
+    }
 
-  private WorkflowRunEntity run() {
-    WorkflowRunEntity run = new WorkflowRunEntity();
-    run.setId(900L);
-    run.setTenantId(TENANT);
-    run.setBizDate(LocalDate.of(2026, 10, 14));
-    run.setDryRun(true);
-    return run;
-  }
+    private WorkflowRunEntity run() {
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.setId(900L);
+        run.setTenantId(TENANT);
+        run.setBizDate(LocalDate.of(2026, 10, 14));
+        run.setDryRun(true);
+        return run;
+    }
 
-  private WorkflowRunEntity replayRun() {
-    WorkflowRunEntity run = run();
-    run.setWorkflowDefinitionId(80L);
-    run.setWorkflowVersionSnapshot(3);
-    Map<String, Object> replayDeclaration = Map.of(
-        "pluginId",
-        "jdbc_mapped",
-        "pluginVersion",
-        "1",
-        "externalEffectCategories",
-        List.of("BUSINESS_DATABASE"),
-        "idempotencyCapability",
-        "IDEMPOTENT_BY_PLUGIN_LOGIC",
-        "idempotencyKeyScope",
-        "tenant+business-key",
-        "recoveryProtocolId",
-        "IMPORT_SQL_V1",
-        "contractVersion",
-        1);
-    Map<String, Object> replayGuard =
-        Map.of("replayOperationId", 701L, "declaration", replayDeclaration);
-    Map<String, Object> executionDefinition =
-        Map.of("id", 1, "tenantId", TENANT, "jobCode", "JOB_B", "jobType", "IMPORT", "version", 1);
-    Map<String, Object> jobDefinitionSnapshot = Map.of(
-        "jobDefinitionId",
-        1,
-        "jobCode",
-        "JOB_B",
-        "jobType",
-        "IMPORT",
-        "jobDefinitionVersion",
-        1,
-        "systemPipelineCode",
-        "IMPORT",
-        "systemPipelineVersion",
-        1,
-        "executionDefinition",
-        executionDefinition,
-        "replayExecutionGuard",
-        replayGuard,
-        "frozenFileTemplateSnapshots",
-        Map.of("TPL_A", "sealed-template-a"));
-    Map<String, Object> nodeSnapshot = Map.of(
-        "nodeCode", "N1",
-        "nodeType", "JOB",
-        "tenantId", TENANT,
-        "workflowDefinitionId", 80,
-        "relatedJobCode", "JOB_B");
-    Map<String, Object> executionSnapshot = Map.of(
-        "schemaVersion",
-        2,
-        "workflowDefinitionId",
-        80,
-        "workflowVersion",
-        3,
-        "workflowCalendarCode",
-        "CALENDAR_A",
-        "replayOperationId",
-        701L,
-        "nodes",
-        List.of(nodeSnapshot),
-        "edges",
-        List.of(),
-        "jobDefinitions",
-        Map.of("N1", jobDefinitionSnapshot));
-    String serializedExecutionSnapshot = JsonUtils.toJson(executionSnapshot);
-    run.setExecutionSnapshot(serializedExecutionSnapshot);
-    return run;
-  }
+    private WorkflowRunEntity replayRun() {
+        WorkflowRunEntity run = run();
+        run.setWorkflowDefinitionId(80L);
+        run.setWorkflowVersionSnapshot(3);
+        Map<String, Object> replayDeclaration = Map.of(
+                "pluginId",
+                "jdbc_mapped",
+                "pluginVersion",
+                "1",
+                "externalEffectCategories",
+                List.of("BUSINESS_DATABASE"),
+                "idempotencyCapability",
+                "IDEMPOTENT_BY_PLUGIN_LOGIC",
+                "idempotencyKeyScope",
+                "tenant+business-key",
+                "recoveryProtocolId",
+                "IMPORT_SQL_V1",
+                "contractVersion",
+                1);
+        Map<String, Object> replayGuard = Map.of("replayOperationId", 701L, "declaration", replayDeclaration);
+        Map<String, Object> executionDefinition =
+                Map.of("id", 1, "tenantId", TENANT, "jobCode", "JOB_B", "jobType", "IMPORT", "version", 1);
+        Map<String, Object> jobDefinitionSnapshot = Map.of(
+                "jobDefinitionId",
+                1,
+                "jobCode",
+                "JOB_B",
+                "jobType",
+                "IMPORT",
+                "jobDefinitionVersion",
+                1,
+                "systemPipelineCode",
+                "IMPORT",
+                "systemPipelineVersion",
+                1,
+                "executionDefinition",
+                executionDefinition,
+                "replayExecutionGuard",
+                replayGuard,
+                "frozenFileTemplateSnapshots",
+                Map.of("TPL_A", "sealed-template-a"));
+        Map<String, Object> nodeSnapshot = Map.of(
+                "nodeCode", "N1",
+                "nodeType", "JOB",
+                "tenantId", TENANT,
+                "workflowDefinitionId", 80,
+                "relatedJobCode", "JOB_B");
+        Map<String, Object> executionSnapshot = Map.of(
+                "schemaVersion",
+                2,
+                "workflowDefinitionId",
+                80,
+                "workflowVersion",
+                3,
+                "workflowCalendarCode",
+                "CALENDAR_A",
+                "replayOperationId",
+                701L,
+                "nodes",
+                List.of(nodeSnapshot),
+                "edges",
+                List.of(),
+                "jobDefinitions",
+                Map.of("N1", jobDefinitionSnapshot));
+        String serializedExecutionSnapshot = JsonUtils.toJson(executionSnapshot);
+        run.setExecutionSnapshot(serializedExecutionSnapshot);
+        return run;
+    }
 
-  private WorkflowDagService.DagNodeResolution resolution() {
-    return new WorkflowDagService.DagNodeResolution("N1", "JOB");
-  }
+    private WorkflowDagService.DagNodeResolution resolution() {
+        return new WorkflowDagService.DagNodeResolution("N1", "JOB");
+    }
 
-  private WorkflowNodeEntity jobNode() {
-    WorkflowNodeEntity node = new WorkflowNodeEntity();
-    node.setNodeCode("N1");
-    node.setNodeType("JOB");
-    node.setRelatedJobCode("JOB_B");
-    return node;
-  }
+    private WorkflowNodeEntity jobNode() {
+        WorkflowNodeEntity node = new WorkflowNodeEntity();
+        node.setNodeCode("N1");
+        node.setNodeType("JOB");
+        node.setRelatedJobCode("JOB_B");
+        return node;
+    }
 
-  private WorkflowNodeRunEntity boundNodeRun(Long jobInstanceId) {
-    WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
-    nodeRun.setId(901L);
-    nodeRun.setNodeCode("N1");
-    nodeRun.setNodeType("JOB");
-    nodeRun.setJobInstanceId(jobInstanceId);
-    return nodeRun;
-  }
+    private WorkflowNodeRunEntity boundNodeRun(Long jobInstanceId) {
+        WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
+        nodeRun.setId(901L);
+        nodeRun.setNodeCode("N1");
+        nodeRun.setNodeType("JOB");
+        nodeRun.setJobInstanceId(jobInstanceId);
+        return nodeRun;
+    }
 
-  @Test
-  @DisplayName("节点启动子 Job 并只建立节点到 Job 实例的归属关系")
-  void shouldLaunchesChildJobOwnedByWorkflowNode() {
-    when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
-        .thenReturn(null);
-    when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
-        .thenAnswer(invocation -> {
-          WorkflowNodeRunEntity nodeRun = invocation.getArgument(0);
-          nodeRun.setId(901L);
-          return 1;
-        });
-    LaunchService launchService = mock(LaunchService.class);
-    when(launchServiceProvider.getObject()).thenReturn(launchService);
-    when(launchService.launch(any(LaunchRequest.class)))
-        .thenReturn(new LaunchResponse("child-1", "trace-1"));
-    JobInstanceEntity child = new JobInstanceEntity();
-    child.setId(7L);
-    child.setTenantId(TENANT);
-    when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-1")).thenReturn(child);
-    when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(7L));
-    when(secretPayloadProtector.protect("{\"source\":\"test\"}"))
-        .thenReturn("protected-source-payload");
+    @Test
+    @DisplayName("节点启动子 Job 并只建立节点到 Job 实例的归属关系")
+    void shouldLaunchesChildJobOwnedByWorkflowNode() {
+        when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
+        when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
+                .thenReturn(null);
+        when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
+                .thenAnswer(invocation -> {
+                    WorkflowNodeRunEntity nodeRun = invocation.getArgument(0);
+                    nodeRun.setId(901L);
+                    return 1;
+                });
+        LaunchService launchService = mock(LaunchService.class);
+        when(launchServiceProvider.getObject()).thenReturn(launchService);
+        when(launchService.launch(any(LaunchRequest.class))).thenReturn(new LaunchResponse("child-1", "trace-1"));
+        JobInstanceEntity child = new JobInstanceEntity();
+        child.setId(7L);
+        child.setTenantId(TENANT);
+        when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-1")).thenReturn(child);
+        when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(7L));
+        when(secretPayloadProtector.protect("{\"source\":\"test\"}")).thenReturn("protected-source-payload");
 
-    int dispatched = newSupport()
-        .dispatchJobNode(run(), resolution(), jobNode(), "{\"source\":\"test\"}", "trace-1");
+        int dispatched =
+                newSupport().dispatchJobNode(run(), resolution(), jobNode(), "{\"source\":\"test\"}", "trace-1");
 
-    assertThat(dispatched).isEqualTo(1);
-    ArgumentCaptor<WorkflowNodeRunEntity> nodeRunCaptor =
-        ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
-    verify(workflowNodeRunMapper).insertIfAbsent(nodeRunCaptor.capture());
-    assertThat(nodeRunCaptor.getValue().getSourcePayloadProtected())
-        .isEqualTo("protected-source-payload");
-    ArgumentCaptor<TriggerRequestEntity> triggerCaptor =
-        ArgumentCaptor.forClass(TriggerRequestEntity.class);
-    verify(triggerRequestMapper).insert(triggerCaptor.capture());
-    assertThat(triggerCaptor.getValue().getParentWorkflowRunId()).isEqualTo(900L);
-    assertThat(triggerCaptor.getValue().getParentNodeCode()).isEqualTo("N1");
-    assertThat(triggerCaptor.getValue().getDryRun()).isTrue();
-    ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
-    verify(launchService).launch(launchCaptor.capture());
-    Map<String, Object> params = launchCaptor.getValue().params();
-    assertThat(params)
-        .containsEntry("_parentWorkflowRunId", 900L)
-        .containsEntry("_parentNodeCode", "N1")
-        .doesNotContainKey("_parentVirtualTaskId")
-        .doesNotContainKey("parentInstanceId");
-    assertThat(launchCaptor.getValue().dryRun()).isTrue();
-    verify(workflowNodeRunMapper).selectByTenantAndId(TENANT, 901L);
-    verify(workflowNodeRunMapper, never()).attachJobInstance(anyString(), any(), any());
-    verify(jobPartitionMapper, never()).insert(any());
-    verify(jobTaskMapper, never()).insert(any());
-  }
+        assertThat(dispatched).isEqualTo(1);
+        ArgumentCaptor<WorkflowNodeRunEntity> nodeRunCaptor = ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
+        verify(workflowNodeRunMapper).insertIfAbsent(nodeRunCaptor.capture());
+        assertThat(nodeRunCaptor.getValue().getSourcePayloadProtected()).isEqualTo("protected-source-payload");
+        ArgumentCaptor<TriggerRequestEntity> triggerCaptor = ArgumentCaptor.forClass(TriggerRequestEntity.class);
+        verify(triggerRequestMapper).insert(triggerCaptor.capture());
+        assertThat(triggerCaptor.getValue().getParentWorkflowRunId()).isEqualTo(900L);
+        assertThat(triggerCaptor.getValue().getParentNodeCode()).isEqualTo("N1");
+        assertThat(triggerCaptor.getValue().getDryRun()).isTrue();
+        ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
+        verify(launchService).launch(launchCaptor.capture());
+        Map<String, Object> params = launchCaptor.getValue().params();
+        assertThat(params)
+                .containsEntry("_parentWorkflowRunId", 900L)
+                .containsEntry("_parentNodeCode", "N1")
+                .doesNotContainKey("_parentVirtualTaskId")
+                .doesNotContainKey("parentInstanceId");
+        assertThat(launchCaptor.getValue().dryRun()).isTrue();
+        verify(workflowNodeRunMapper).selectByTenantAndId(TENANT, 901L);
+        verify(workflowNodeRunMapper, never()).attachJobInstance(anyString(), any(), any());
+        verify(jobPartitionMapper, never()).insert(any());
+        verify(jobTaskMapper, never()).insert(any());
+    }
 
-  @Test
-  @DisplayName("整 Workflow Replay 子 Job 显式携带执行类型以禁用模板 latest 回退")
-  void shouldMarkChildLaunchAsWorkflowReplay() {
-    when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
-        .thenReturn(null);
-    when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
-        .thenAnswer(invocation -> {
-          ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
-          return 1;
-        });
-    LaunchService launchService = mock(LaunchService.class);
-    when(launchServiceProvider.getObject()).thenReturn(launchService);
-    when(launchService.launch(any(LaunchRequest.class)))
-        .thenReturn(new LaunchResponse("child-replay", "trace-replay"));
-    JobInstanceEntity child = new JobInstanceEntity();
-    child.setId(9L);
-    child.setTenantId(TENANT);
-    when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-replay")).thenReturn(child);
-    when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(9L));
+    @Test
+    @DisplayName("整 Workflow Replay 子 Job 显式携带执行类型以禁用模板 latest 回退")
+    void shouldMarkChildLaunchAsWorkflowReplay() {
+        when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
+        when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
+                .thenReturn(null);
+        when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
+                .thenAnswer(invocation -> {
+                    ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
+                    return 1;
+                });
+        LaunchService launchService = mock(LaunchService.class);
+        when(launchServiceProvider.getObject()).thenReturn(launchService);
+        when(launchService.launch(any(LaunchRequest.class)))
+                .thenReturn(new LaunchResponse("child-replay", "trace-replay"));
+        JobInstanceEntity child = new JobInstanceEntity();
+        child.setId(9L);
+        child.setTenantId(TENANT);
+        when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-replay")).thenReturn(child);
+        when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(9L));
 
-    newSupport()
-        .dispatchJobNode(
-            replayRun(), resolution(), jobNode(), "{\"templateCode\":\"TPL_A\"}", "trace-replay");
+        newSupport()
+                .dispatchJobNode(replayRun(), resolution(), jobNode(), "{\"templateCode\":\"TPL_A\"}", "trace-replay");
 
-    ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
-    verify(launchService).launch(launchCaptor.capture());
-    assertThat(launchCaptor.getValue().params())
-        .containsEntry("operationType", "WORKFLOW_RUN")
-        .containsEntry("templateCode", "TPL_A")
-        .containsEntry("systemPipelineCode", "IMPORT");
-  }
+        ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
+        verify(launchService).launch(launchCaptor.capture());
+        assertThat(launchCaptor.getValue().params())
+                .containsEntry("operationType", "WORKFLOW_RUN")
+                .containsEntry("templateCode", "TPL_A")
+                .containsEntry("systemPipelineCode", "IMPORT");
+    }
 
-  @Test
-  @DisplayName("跨日结果版本随节点参数冻结传入子 Job")
-  void shouldPreservesPinnedCrossDayResultInChildJobParameters() {
-    when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
-        .thenReturn(null);
-    when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
-        .thenAnswer(invocation -> {
-          WorkflowNodeRunEntity nodeRun = invocation.getArgument(0);
-          nodeRun.setId(901L);
-          return 1;
-        });
-    LaunchService launchService = mock(LaunchService.class);
-    when(launchServiceProvider.getObject()).thenReturn(launchService);
-    when(launchService.launch(any(LaunchRequest.class)))
-        .thenReturn(new LaunchResponse("child-pinned", "trace-pinned"));
-    JobInstanceEntity child = new JobInstanceEntity();
-    child.setId(8L);
-    child.setTenantId(TENANT);
-    when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-pinned")).thenReturn(child);
-    when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(8L));
+    @Test
+    @DisplayName("跨日结果版本随节点参数冻结传入子 Job")
+    void shouldPreservesPinnedCrossDayResultInChildJobParameters() {
+        when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
+        when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
+                .thenReturn(null);
+        when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
+                .thenAnswer(invocation -> {
+                    WorkflowNodeRunEntity nodeRun = invocation.getArgument(0);
+                    nodeRun.setId(901L);
+                    return 1;
+                });
+        LaunchService launchService = mock(LaunchService.class);
+        when(launchServiceProvider.getObject()).thenReturn(launchService);
+        when(launchService.launch(any(LaunchRequest.class)))
+                .thenReturn(new LaunchResponse("child-pinned", "trace-pinned"));
+        JobInstanceEntity child = new JobInstanceEntity();
+        child.setId(8L);
+        child.setTenantId(TENANT);
+        when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-pinned")).thenReturn(child);
+        when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(8L));
 
-    String sourcePayload = """
+        String sourcePayload = """
         {"crossDay":{"prior_day":{"resultVersionId":9876,"versionNo":3,
         "businessKey":"job:JOB_A:2026-10-13","payloadStorage":"INLINE_JSON",
         "output":{"total":42}}}}
         """;
-    newSupport().dispatchJobNode(run(), resolution(), jobNode(), sourcePayload, "trace-pinned");
+        newSupport().dispatchJobNode(run(), resolution(), jobNode(), sourcePayload, "trace-pinned");
 
-    ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
-    verify(launchService).launch(launchCaptor.capture());
-    Map<?, ?> crossDay = (Map<?, ?>) launchCaptor.getValue().params().get("crossDay");
-    Map<?, ?> pinned = (Map<?, ?>) crossDay.get("prior_day");
-    assertThat(pinned.get("resultVersionId")).isEqualTo(9876);
-    assertThat(pinned.get("versionNo")).isEqualTo(3);
-    assertThat(pinned.get("businessKey")).isEqualTo("job:JOB_A:2026-10-13");
-    assertThat(pinned.get("payloadStorage")).isEqualTo("INLINE_JSON");
-    assertThat(pinned.get("output")).isEqualTo(Map.of("total", 42));
-  }
+        ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
+        verify(launchService).launch(launchCaptor.capture());
+        Map<?, ?> crossDay = (Map<?, ?>) launchCaptor.getValue().params().get("crossDay");
+        Map<?, ?> pinned = (Map<?, ?>) crossDay.get("prior_day");
+        assertThat(pinned.get("resultVersionId")).isEqualTo(9876);
+        assertThat(pinned.get("versionNo")).isEqualTo(3);
+        assertThat(pinned.get("businessKey")).isEqualTo("job:JOB_A:2026-10-13");
+        assertThat(pinned.get("payloadStorage")).isEqualTo("INLINE_JSON");
+        assertThat(pinned.get("output")).isEqualTo(Map.of("total", 42));
+    }
 
-  @Test
-  @DisplayName("原请求插入零行时拒绝启动，不向无持久身份的子Job派发")
-  void shouldRejectChildWhenOriginalRequestInsertReturnsZero() {
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
-        .thenReturn(null);
-    when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
-        .thenAnswer(invocation -> {
-          ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
-          return 1;
-        });
-    ChildJobLaunchSupport support = newSupport();
-    when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(0);
+    @Test
+    @DisplayName("原请求插入零行时拒绝启动，不向无持久身份的子Job派发")
+    void shouldRejectChildWhenOriginalRequestInsertReturnsZero() {
+        when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
+                .thenReturn(null);
+        when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
+                .thenAnswer(invocation -> {
+                    ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
+                    return 1;
+                });
+        ChildJobLaunchSupport support = newSupport();
+        when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(0);
 
-    assertThatThrownBy(
-            () -> support.dispatchJobNode(run(), resolution(), jobNode(), "{}", "trace-zero"))
-        .isInstanceOf(BizException.class)
-        .extracting("messageKey")
-        .isEqualTo("error.workflow.child_job_launch_rejected");
-    verify(launchServiceProvider, never()).getObject();
-  }
+        assertThatThrownBy(() -> support.dispatchJobNode(run(), resolution(), jobNode(), "{}", "trace-zero"))
+                .isInstanceOf(BizException.class)
+                .extracting("messageKey")
+                .isEqualTo("error.workflow.child_job_launch_rejected");
+        verify(launchServiceProvider, never()).getObject();
+    }
 
-  @Test
-  @DisplayName("批量日闸门等待时保留 READY 节点，不要求同步创建 Job Instance")
-  void shouldKeepsNodeReadyWhenBatchDayGateDefersChildLaunch() {
-    when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
-        .thenReturn(null);
-    when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
-        .thenAnswer(invocation -> {
-          ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
-          return 1;
-        });
-    LaunchService launchService = mock(LaunchService.class);
-    when(launchServiceProvider.getObject()).thenReturn(launchService);
-    when(launchService.launch(any(LaunchRequest.class)))
-        .thenReturn(LaunchResponse.skipped("trace-wait"));
-    TriggerRequestEntity waiting = new TriggerRequestEntity();
-    waiting.setRequestStatus(TriggerRequestStatus.WAITING.code());
-    when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
-        .thenReturn(waiting);
+    @Test
+    @DisplayName("批量日闸门等待时保留 READY 节点，不要求同步创建 Job Instance")
+    void shouldKeepsNodeReadyWhenBatchDayGateDefersChildLaunch() {
+        when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
+        when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
+                .thenReturn(null);
+        when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
+                .thenAnswer(invocation -> {
+                    ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
+                    return 1;
+                });
+        LaunchService launchService = mock(LaunchService.class);
+        when(launchServiceProvider.getObject()).thenReturn(launchService);
+        when(launchService.launch(any(LaunchRequest.class))).thenReturn(LaunchResponse.skipped("trace-wait"));
+        TriggerRequestEntity waiting = new TriggerRequestEntity();
+        waiting.setRequestStatus(TriggerRequestStatus.WAITING.code());
+        when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
+                .thenReturn(waiting);
 
-    int dispatched =
-        newSupport().dispatchJobNode(run(), resolution(), jobNode(), "{}", "trace-wait");
+        int dispatched = newSupport().dispatchJobNode(run(), resolution(), jobNode(), "{}", "trace-wait");
 
-    assertThat(dispatched).isZero();
-    verify(workflowNodeRunMapper, never()).attachJobInstance(anyString(), any(), any());
-    verify(jobPartitionMapper, never()).insert(any());
-    verify(jobTaskMapper, never()).insert(any());
-  }
+        assertThat(dispatched).isZero();
+        verify(workflowNodeRunMapper, never()).attachJobInstance(anyString(), any(), any());
+        verify(jobPartitionMapper, never()).insert(any());
+        verify(jobTaskMapper, never()).insert(any());
+    }
 
-  @Test
-  @DisplayName("准备事务未写入节点绑定时补绑一次")
-  void shouldRebindWhenLaunchPreparedInstanceWithoutNodeLink() {
-    when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
-        .thenReturn(null);
-    when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
-        .thenAnswer(invocation -> {
-          ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
-          return 1;
-        });
-    LaunchService launchService = mock(LaunchService.class);
-    when(launchServiceProvider.getObject()).thenReturn(launchService);
-    when(launchService.launch(any(LaunchRequest.class)))
-        .thenReturn(new LaunchResponse("child-rebind", "trace-rebind"));
-    JobInstanceEntity child = new JobInstanceEntity();
-    child.setId(11L);
-    child.setTenantId(TENANT);
-    when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-rebind")).thenReturn(child);
-    when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(null));
-    when(workflowNodeRunMapper.attachJobInstance(TENANT, 901L, 11L)).thenReturn(1);
+    @Test
+    @DisplayName("准备事务未写入节点绑定时补绑一次")
+    void shouldRebindWhenLaunchPreparedInstanceWithoutNodeLink() {
+        when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
+        when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
+                .thenReturn(null);
+        when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
+                .thenAnswer(invocation -> {
+                    ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
+                    return 1;
+                });
+        LaunchService launchService = mock(LaunchService.class);
+        when(launchServiceProvider.getObject()).thenReturn(launchService);
+        when(launchService.launch(any(LaunchRequest.class)))
+                .thenReturn(new LaunchResponse("child-rebind", "trace-rebind"));
+        JobInstanceEntity child = new JobInstanceEntity();
+        child.setId(11L);
+        child.setTenantId(TENANT);
+        when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-rebind")).thenReturn(child);
+        when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(null));
+        when(workflowNodeRunMapper.attachJobInstance(TENANT, 901L, 11L)).thenReturn(1);
 
-    int dispatched =
-        newSupport().dispatchJobNode(run(), resolution(), jobNode(), "{}", "trace-rebind");
+        int dispatched = newSupport().dispatchJobNode(run(), resolution(), jobNode(), "{}", "trace-rebind");
 
-    assertThat(dispatched).isEqualTo(1);
-    verify(workflowNodeRunMapper).attachJobInstance(TENANT, 901L, 11L);
-  }
+        assertThat(dispatched).isEqualTo(1);
+        verify(workflowNodeRunMapper).attachJobInstance(TENANT, 901L, 11L);
+    }
 
-  @Test
-  @DisplayName("节点已绑定其他实例时拒绝覆盖")
-  void shouldRejectNodeRunBoundToAnotherInstance() {
-    when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
-        .thenReturn(null);
-    when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
-        .thenAnswer(invocation -> {
-          ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
-          return 1;
-        });
-    LaunchService launchService = mock(LaunchService.class);
-    when(launchServiceProvider.getObject()).thenReturn(launchService);
-    when(launchService.launch(any(LaunchRequest.class)))
-        .thenReturn(new LaunchResponse("child-conflict", "trace-conflict"));
-    JobInstanceEntity child = new JobInstanceEntity();
-    child.setId(12L);
-    child.setTenantId(TENANT);
-    when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-conflict")).thenReturn(child);
-    when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(99L));
+    @Test
+    @DisplayName("节点已绑定其他实例时拒绝覆盖")
+    void shouldRejectNodeRunBoundToAnotherInstance() {
+        when(triggerRequestMapper.insert(any(TriggerRequestEntity.class))).thenReturn(1);
+        when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
+                .thenReturn(null);
+        when(workflowNodeRunMapper.insertIfAbsent(any(WorkflowNodeRunEntity.class)))
+                .thenAnswer(invocation -> {
+                    ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(901L);
+                    return 1;
+                });
+        LaunchService launchService = mock(LaunchService.class);
+        when(launchServiceProvider.getObject()).thenReturn(launchService);
+        when(launchService.launch(any(LaunchRequest.class)))
+                .thenReturn(new LaunchResponse("child-conflict", "trace-conflict"));
+        JobInstanceEntity child = new JobInstanceEntity();
+        child.setId(12L);
+        child.setTenantId(TENANT);
+        when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-conflict")).thenReturn(child);
+        when(workflowNodeRunMapper.selectByTenantAndId(TENANT, 901L)).thenReturn(boundNodeRun(99L));
 
-    assertThatThrownBy(() ->
-            newSupport().dispatchJobNode(run(), resolution(), jobNode(), "{}", "trace-conflict"))
-        .isInstanceOf(BizException.class)
-        .extracting("messageKey")
-        .isEqualTo(ResultCode.STATE_CONFLICT.detailKey());
-    verify(workflowNodeRunMapper, never()).attachJobInstance(anyString(), any(), any());
-  }
+        assertThatThrownBy(() -> newSupport().dispatchJobNode(run(), resolution(), jobNode(), "{}", "trace-conflict"))
+                .isInstanceOf(BizException.class)
+                .extracting("messageKey")
+                .isEqualTo(ResultCode.STATE_CONFLICT.detailKey());
+        verify(workflowNodeRunMapper, never()).attachJobInstance(anyString(), any(), any());
+    }
 }

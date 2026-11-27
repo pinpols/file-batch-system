@@ -24,96 +24,93 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsolePushSubscriptionService {
 
-  private final ConsolePushSubscriptionMapper repository;
-  private final TenantIdResolver tenantGuard;
-  private final ConsolePushProperties properties;
+    private final ConsolePushSubscriptionMapper repository;
+    private final TenantIdResolver tenantGuard;
+    private final ConsolePushProperties properties;
 
-  /** 当 push 模块被关闭时,controller 应该尽早 404,这里给个判断。 */
-  public boolean isEnabled() {
-    return properties.isEnabled()
-        && properties.getPublicKey() != null
-        && properties.getPrivateKey() != null;
-  }
-
-  /** VAPID 公钥(给前端用 base64-url) */
-  public String vapidPublicKey() {
-    requireEnabled();
-    return properties.getPublicKey();
-  }
-
-  /** 列出当前用户在当前租户下的全部订阅(用于"已绑定哪些设备"展示)。 */
-  public List<ConsolePushSubscriptionEntity> listForUser(String tenantId, String username) {
-    requireEnabled();
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    return repository.findByTenantAndUser(resolvedTenantId, username);
-  }
-
-  /**
-   * 订阅 upsert:同 (tenant, username, endpoint) 已存在则刷新 keys + last_seen_at。
-   *
-   * <p>前端每次安装 / 重新授权 / 切设备都可能重发,upsert 保证不重复主键冲突也不留下无效记录。
-   */
-  @Transactional
-  public void subscribe(
-      String tenantId, String username, ConsolePushSubscribeRequest request, String userAgent) {
-    requireEnabled();
-    requireValidSubscription(request);
-    persistSubscription(tenantId, username, request, userAgent);
-  }
-
-  /**
-   * 校验订阅载荷,不合法直接抛错。
-   *
-   * <p>这里只拒绝非法载荷,不承担认证判断。认证由 Controller 方法安全执行,写入前仍经租户守卫解析。
-   */
-  private static void requireValidSubscription(ConsolePushSubscribeRequest request) {
-    boolean subscriptionIsInvalid = EmptyChecks.isNull(request)
-        || request.endpoint() == null
-        || request.endpoint().isBlank()
-        || request.keys() == null
-        || request.keys().p256dh() == null
-        || EmptyChecks.isNull(request.keys().auth());
-    if (subscriptionIsInvalid) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.invalid_subscription");
+    /** 当 push 模块被关闭时,controller 应该尽早 404,这里给个判断。 */
+    public boolean isEnabled() {
+        return properties.isEnabled() && properties.getPublicKey() != null && properties.getPrivateKey() != null;
     }
-  }
 
-  /** 写入订阅:入参校验后仍执行租户守卫,不能由请求字段绕过。 */
-  private void persistSubscription(
-      String tenantId, String username, ConsolePushSubscribeRequest request, String userAgent) {
-    ConsolePushSubscriptionEntity entity = new ConsolePushSubscriptionEntity();
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    entity.setTenantId(resolvedTenantId);
-    entity.setUsername(username);
-    entity.setEndpoint(request.endpoint());
-    entity.setP256dhKey(request.keys().p256dh());
-    entity.setAuthSecret(request.keys().auth());
-    entity.setUserAgent(userAgent);
-    repository.upsert(entity);
-  }
-
-  /** 单条订阅取消(按 endpoint 精确删,不影响同用户其它设备)。 */
-  @Transactional
-  public void unsubscribe(String tenantId, String username, String endpoint) {
-    requireEnabled();
-    if (endpoint == null || endpoint.isBlank()) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.endpoint_required");
+    /** VAPID 公钥(给前端用 base64-url) */
+    public String vapidPublicKey() {
+        requireEnabled();
+        return properties.getPublicKey();
     }
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    repository.deleteByEndpoint(resolvedTenantId, username, endpoint);
-  }
 
-  /** 定时任务用:清理 N 天未刷新的订阅。 */
-  @Transactional
-  public int purgeStale(Duration staleAfter) {
-    Instant currentTime = Instant.now();
-    Instant staleBefore = currentTime.minus(staleAfter);
-    return repository.deleteIfStaleSince(staleBefore);
-  }
-
-  private void requireEnabled() {
-    if (!isEnabled()) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.push.disabled");
+    /** 列出当前用户在当前租户下的全部订阅(用于"已绑定哪些设备"展示)。 */
+    public List<ConsolePushSubscriptionEntity> listForUser(String tenantId, String username) {
+        requireEnabled();
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        return repository.findByTenantAndUser(resolvedTenantId, username);
     }
-  }
+
+    /**
+     * 订阅 upsert:同 (tenant, username, endpoint) 已存在则刷新 keys + last_seen_at。
+     *
+     * <p>前端每次安装 / 重新授权 / 切设备都可能重发,upsert 保证不重复主键冲突也不留下无效记录。
+     */
+    @Transactional
+    public void subscribe(String tenantId, String username, ConsolePushSubscribeRequest request, String userAgent) {
+        requireEnabled();
+        requireValidSubscription(request);
+        persistSubscription(tenantId, username, request, userAgent);
+    }
+
+    /**
+     * 校验订阅载荷,不合法直接抛错。
+     *
+     * <p>这里只拒绝非法载荷,不承担认证判断。认证由 Controller 方法安全执行,写入前仍经租户守卫解析。
+     */
+    private static void requireValidSubscription(ConsolePushSubscribeRequest request) {
+        boolean subscriptionIsInvalid = EmptyChecks.isNull(request)
+                || request.endpoint() == null
+                || request.endpoint().isBlank()
+                || request.keys() == null
+                || request.keys().p256dh() == null
+                || EmptyChecks.isNull(request.keys().auth());
+        if (subscriptionIsInvalid) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.invalid_subscription");
+        }
+    }
+
+    /** 写入订阅:入参校验后仍执行租户守卫,不能由请求字段绕过。 */
+    private void persistSubscription(
+            String tenantId, String username, ConsolePushSubscribeRequest request, String userAgent) {
+        ConsolePushSubscriptionEntity entity = new ConsolePushSubscriptionEntity();
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        entity.setTenantId(resolvedTenantId);
+        entity.setUsername(username);
+        entity.setEndpoint(request.endpoint());
+        entity.setP256dhKey(request.keys().p256dh());
+        entity.setAuthSecret(request.keys().auth());
+        entity.setUserAgent(userAgent);
+        repository.upsert(entity);
+    }
+
+    /** 单条订阅取消(按 endpoint 精确删,不影响同用户其它设备)。 */
+    @Transactional
+    public void unsubscribe(String tenantId, String username, String endpoint) {
+        requireEnabled();
+        if (endpoint == null || endpoint.isBlank()) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.endpoint_required");
+        }
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        repository.deleteByEndpoint(resolvedTenantId, username, endpoint);
+    }
+
+    /** 定时任务用:清理 N 天未刷新的订阅。 */
+    @Transactional
+    public int purgeStale(Duration staleAfter) {
+        Instant currentTime = Instant.now();
+        Instant staleBefore = currentTime.minus(staleAfter);
+        return repository.deleteIfStaleSince(staleBefore);
+    }
+
+    private void requireEnabled() {
+        if (!isEnabled()) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.push.disabled");
+        }
+    }
 }

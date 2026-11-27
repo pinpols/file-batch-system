@@ -12,35 +12,35 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class ConsoleUserBatchProvisioningStore {
 
-  private static final DefaultRedisScript<Long> CAS = new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> CAS = new DefaultRedisScript<>("""
       if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
       redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
       return 1
       """, Long.class);
-  private static final DefaultRedisScript<Long> DELETE = new DefaultRedisScript<>("""
+    private static final DefaultRedisScript<Long> DELETE = new DefaultRedisScript<>("""
       if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
       return 0
       """, Long.class);
 
-  private final StringRedisTemplate redis;
+    private final StringRedisTemplate redis;
 
-  public void savePreview(String key, String json, Duration ttl) {
-    redis.opsForValue().set(key, json, ttl);
-  }
+    public void savePreview(String key, String json, Duration ttl) {
+        redis.opsForValue().set(key, json, ttl);
+    }
 
-  public String loadPreview(String key) {
-    return redis.opsForValue().get(key);
-  }
+    public String loadPreview(String key) {
+        return redis.opsForValue().get(key);
+    }
 
-  /** 对读取到的完整快照做 CAS，版本与操作者校验不能与写入分离。 */
-  public boolean replacePreview(String key, String expected, String replacement, Duration ttl) {
-    List<String> keys = List.of(key);
-    String ttlMillis = Long.toString(ttl.toMillis());
-    Long compareAndSetResult = redis.execute(CAS, keys, expected, replacement, ttlMillis);
-    return Long.valueOf(1).equals(compareAndSetResult);
-  }
+    /** 对读取到的完整快照做 CAS，版本与操作者校验不能与写入分离。 */
+    public boolean replacePreview(String key, String expected, String replacement, Duration ttl) {
+        List<String> keys = List.of(key);
+        String ttlMillis = Long.toString(ttl.toMillis());
+        Long compareAndSetResult = redis.execute(CAS, keys, expected, replacement, ttlMillis);
+        return Long.valueOf(1).equals(compareAndSetResult);
+    }
 
-  public void deletePreview(String key, String expected) {
-    redis.execute(DELETE, List.of(key), expected);
-  }
+    public void deletePreview(String key, String expected) {
+        redis.execute(DELETE, List.of(key), expected);
+    }
 }

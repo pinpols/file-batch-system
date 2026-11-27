@@ -15,84 +15,80 @@ import org.junit.jupiter.api.Test;
 @DisplayName("出箱事件键生成器: 场景前缀编码, 幂等与超长截断口径")
 class OutboxEventKeyGeneratorTest {
 
-  // ── 同输入 → 同 key(幂等)──────────────────────────────────────────────
+    // ── 同输入 → 同 key(幂等)──────────────────────────────────────────────
 
-  @Test
-  @DisplayName("相同输入生成的事件键保持一致")
-  void shouldProduceSameKeyForSameInput() {
-    String k1 = OutboxEventKeyGenerator.forDispatch("t1", 100L);
-    String k2 = OutboxEventKeyGenerator.forDispatch("t1", 100L);
-    assertThat(k1).isEqualTo(k2);
-  }
-
-  @Test
-  @DisplayName("各业务场景的事件键按租户与场景前缀编码")
-  void shouldEncodeTenantIdAndScopePrefix() {
-    assertThat(OutboxEventKeyGenerator.forDispatch("t1", 100L)).isEqualTo("t1:dispatch:100");
-    assertThat(OutboxEventKeyGenerator.forFileRedispatch("t1", 100L, 2L))
-        .isEqualTo("t1:file-redispatch:100:2");
-    assertThat(OutboxEventKeyGenerator.forRetry("t1", 100L, 3)).isEqualTo("t1:retry:100:3");
-    assertThat(OutboxEventKeyGenerator.forReclaim("t1", 100L, "worker-x"))
-        .isEqualTo("t1:reclaim:100:worker-x");
-    assertThat(OutboxEventKeyGenerator.forUnclaimedRedispatch("t1", 100L, 4L))
-        .isEqualTo("t1:unclaimed-redispatch:100:v4");
-    assertThat(OutboxEventKeyGenerator.forUnclaimedRedispatch("t1", 100L, 4L))
-        .isNotEqualTo(OutboxEventKeyGenerator.forDispatch("t1", 100L));
-    assertThat(OutboxEventKeyGenerator.forCompensation("t1", "cmp-001", 100L))
-        .isEqualTo("t1:cmp:cmp-001:100");
-    assertThat(OutboxEventKeyGenerator.forWorkflowNodeDispatch("t1", 50L, "JOB_A", 100L))
-        .isEqualTo("t1:wf:50:JOB_A:100");
-    assertThat(OutboxEventKeyGenerator.forWorkflowTerminal("t1", 50L))
-        .isEqualTo("t1:workflow:50:terminal");
-    assertThat(OutboxEventKeyGenerator.forManualReplay("t1", "task", 100L))
-        .isEqualTo("t1:replay-task:100");
-  }
-
-  // ── 不同 scope → 不同 key(零撞) ──────────────────────────────────────
-
-  @Test
-  @DisplayName("同一租户与标识下不同场景生成的事件键互不冲突")
-  void shouldNeverCollideAcrossScopesForSameTenantAndId() {
-    long taskId = 100L;
-    String tenant = "t1";
-    Set<String> keys = new HashSet<>();
-    keys.add(OutboxEventKeyGenerator.forDispatch(tenant, taskId));
-    keys.add(OutboxEventKeyGenerator.forFileRedispatch(tenant, taskId, 1L));
-    keys.add(OutboxEventKeyGenerator.forRetry(tenant, taskId, 1));
-    keys.add(OutboxEventKeyGenerator.forReclaim(tenant, taskId, "worker-x"));
-    keys.add(OutboxEventKeyGenerator.forCompensation(tenant, "cmp-001", taskId));
-    keys.add(OutboxEventKeyGenerator.forManualReplay(tenant, "task", taskId));
-    keys.add(OutboxEventKeyGenerator.forManualReplay(tenant, "partition", taskId));
-    // 7 scope 同 taskId 同 tenant 应产生 7 个不同 key
-    assertThat(keys).hasSize(7);
-  }
-
-  @Test
-  @DisplayName("同一任务的不同重试次数生成不同事件键")
-  void shouldRetryAttemptsBeDistinctKeys() {
-    // 同 task 多次 retry 必须产出不同 key,否则 dedup 丢失重试
-    Set<String> keys = new HashSet<>();
-    for (int attempt = 1; attempt <= 5; attempt++) {
-      keys.add(OutboxEventKeyGenerator.forRetry("t1", 100L, attempt));
+    @Test
+    @DisplayName("相同输入生成的事件键保持一致")
+    void shouldProduceSameKeyForSameInput() {
+        String k1 = OutboxEventKeyGenerator.forDispatch("t1", 100L);
+        String k2 = OutboxEventKeyGenerator.forDispatch("t1", 100L);
+        assertThat(k1).isEqualTo(k2);
     }
-    assertThat(keys).hasSize(5);
-  }
 
-  // ── 长度上限 ─────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("各业务场景的事件键按租户与场景前缀编码")
+    void shouldEncodeTenantIdAndScopePrefix() {
+        assertThat(OutboxEventKeyGenerator.forDispatch("t1", 100L)).isEqualTo("t1:dispatch:100");
+        assertThat(OutboxEventKeyGenerator.forFileRedispatch("t1", 100L, 2L)).isEqualTo("t1:file-redispatch:100:2");
+        assertThat(OutboxEventKeyGenerator.forRetry("t1", 100L, 3)).isEqualTo("t1:retry:100:3");
+        assertThat(OutboxEventKeyGenerator.forReclaim("t1", 100L, "worker-x")).isEqualTo("t1:reclaim:100:worker-x");
+        assertThat(OutboxEventKeyGenerator.forUnclaimedRedispatch("t1", 100L, 4L))
+                .isEqualTo("t1:unclaimed-redispatch:100:v4");
+        assertThat(OutboxEventKeyGenerator.forUnclaimedRedispatch("t1", 100L, 4L))
+                .isNotEqualTo(OutboxEventKeyGenerator.forDispatch("t1", 100L));
+        assertThat(OutboxEventKeyGenerator.forCompensation("t1", "cmp-001", 100L))
+                .isEqualTo("t1:cmp:cmp-001:100");
+        assertThat(OutboxEventKeyGenerator.forWorkflowNodeDispatch("t1", 50L, "JOB_A", 100L))
+                .isEqualTo("t1:wf:50:JOB_A:100");
+        assertThat(OutboxEventKeyGenerator.forWorkflowTerminal("t1", 50L)).isEqualTo("t1:workflow:50:terminal");
+        assertThat(OutboxEventKeyGenerator.forManualReplay("t1", "task", 100L)).isEqualTo("t1:replay-task:100");
+    }
 
-  @Test
-  @DisplayName("拼接结果超长时截断到长度上限")
-  void shouldTruncateOversizedKey() {
-    // 拼一个超长 nodeCode 让 key > 256
-    String longNodeCode = "X".repeat(300);
-    String key = OutboxEventKeyGenerator.forWorkflowNodeDispatch("tenant", 1L, longNodeCode, 100L);
-    assertThat(key).hasSize(256);
-  }
+    // ── 不同 scope → 不同 key(零撞) ──────────────────────────────────────
 
-  @Test
-  @DisplayName("正常长度的事件键不被截断")
-  void shouldNotTruncateNormalKey() {
-    String key = OutboxEventKeyGenerator.forWorkflowNodeDispatch("tenant", 1L, "NORMAL_NODE", 100L);
-    assertThat(key.length()).isLessThan(256);
-  }
+    @Test
+    @DisplayName("同一租户与标识下不同场景生成的事件键互不冲突")
+    void shouldNeverCollideAcrossScopesForSameTenantAndId() {
+        long taskId = 100L;
+        String tenant = "t1";
+        Set<String> keys = new HashSet<>();
+        keys.add(OutboxEventKeyGenerator.forDispatch(tenant, taskId));
+        keys.add(OutboxEventKeyGenerator.forFileRedispatch(tenant, taskId, 1L));
+        keys.add(OutboxEventKeyGenerator.forRetry(tenant, taskId, 1));
+        keys.add(OutboxEventKeyGenerator.forReclaim(tenant, taskId, "worker-x"));
+        keys.add(OutboxEventKeyGenerator.forCompensation(tenant, "cmp-001", taskId));
+        keys.add(OutboxEventKeyGenerator.forManualReplay(tenant, "task", taskId));
+        keys.add(OutboxEventKeyGenerator.forManualReplay(tenant, "partition", taskId));
+        // 7 scope 同 taskId 同 tenant 应产生 7 个不同 key
+        assertThat(keys).hasSize(7);
+    }
+
+    @Test
+    @DisplayName("同一任务的不同重试次数生成不同事件键")
+    void shouldRetryAttemptsBeDistinctKeys() {
+        // 同 task 多次 retry 必须产出不同 key,否则 dedup 丢失重试
+        Set<String> keys = new HashSet<>();
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            keys.add(OutboxEventKeyGenerator.forRetry("t1", 100L, attempt));
+        }
+        assertThat(keys).hasSize(5);
+    }
+
+    // ── 长度上限 ─────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("拼接结果超长时截断到长度上限")
+    void shouldTruncateOversizedKey() {
+        // 拼一个超长 nodeCode 让 key > 256
+        String longNodeCode = "X".repeat(300);
+        String key = OutboxEventKeyGenerator.forWorkflowNodeDispatch("tenant", 1L, longNodeCode, 100L);
+        assertThat(key).hasSize(256);
+    }
+
+    @Test
+    @DisplayName("正常长度的事件键不被截断")
+    void shouldNotTruncateNormalKey() {
+        String key = OutboxEventKeyGenerator.forWorkflowNodeDispatch("tenant", 1L, "NORMAL_NODE", 100L);
+        assertThat(key.length()).isLessThan(256);
+    }
 }

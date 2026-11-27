@@ -12,10 +12,10 @@ import lombok.Getter;
 @Getter
 @Builder
 public class CustomTaskTypeUpsertParam {
-  private final String tenantId;
-  private final String taskTypeCode;
-  private final String displayName;
-  private final String descriptor;
-  private final String descriptorVersion;
-  private final String declaredByWorkerCode;
+    private final String tenantId;
+    private final String taskTypeCode;
+    private final String displayName;
+    private final String descriptor;
+    private final String descriptorVersion;
+    private final String declaredByWorkerCode;
 }

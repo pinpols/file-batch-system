@@ -26,42 +26,32 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class BatchDayOpsController {
 
-  private final BatchDayOperationService batchDayOperationService;
+    private final BatchDayOperationService batchDayOperationService;
 
-  @PostMapping("/operate")
-  public BatchDayOperateResponse operate(@RequestBody BatchDayOperateRequest request) {
-    BatchDayOperateCommand.BatchDayOperateCommandBuilder commandBuilder =
-        BatchDayOperateCommand.builder()
-            .tenantId(request.tenantId())
-            .calendarCode(request.calendarCode())
-            .bizDate(request.bizDate());
-    String actionText = request.action();
-    BatchDayOperation action = BatchDayOperation.valueOf(actionText);
-    BatchDayOperateCommand command = commandBuilder
-        .action(action)
-        .operatorId(request.operatorId())
-        .reason(request.reason())
-        .build();
-    BatchDayOperationResult result = batchDayOperationService.operate(command);
-    BatchDayInstanceEntity entity = result.batchDay();
-    return new BatchDayOperateResponse(
-        entity.id(),
-        entity.dayStatus(),
-        Boolean.TRUE.equals(entity.frozen()),
-        result.releasedLaunchCount());
-  }
+    @PostMapping("/operate")
+    public BatchDayOperateResponse operate(@RequestBody BatchDayOperateRequest request) {
+        BatchDayOperateCommand.BatchDayOperateCommandBuilder commandBuilder = BatchDayOperateCommand.builder()
+                .tenantId(request.tenantId())
+                .calendarCode(request.calendarCode())
+                .bizDate(request.bizDate());
+        String actionText = request.action();
+        BatchDayOperation action = BatchDayOperation.valueOf(actionText);
+        BatchDayOperateCommand command = commandBuilder
+                .action(action)
+                .operatorId(request.operatorId())
+                .reason(request.reason())
+                .build();
+        BatchDayOperationResult result = batchDayOperationService.operate(command);
+        BatchDayInstanceEntity entity = result.batchDay();
+        return new BatchDayOperateResponse(
+                entity.id(), entity.dayStatus(), Boolean.TRUE.equals(entity.frozen()), result.releasedLaunchCount());
+    }
 
-  /**
-   * @param action 操作类型：FREEZE / RELEASE / SKIP / REOPEN / CLOSE / SETTLE_EMPTY
-   */
-  public record BatchDayOperateRequest(
-      String tenantId,
-      String calendarCode,
-      LocalDate bizDate,
-      String action,
-      String operatorId,
-      String reason) {}
+    /**
+     * @param action 操作类型：FREEZE / RELEASE / SKIP / REOPEN / CLOSE / SETTLE_EMPTY
+     */
+    public record BatchDayOperateRequest(
+            String tenantId, String calendarCode, LocalDate bizDate, String action, String operatorId, String reason) {}
 
-  public record BatchDayOperateResponse(
-      Long batchDayId, String dayStatus, boolean frozen, int releasedLaunchCount) {}
+    public record BatchDayOperateResponse(Long batchDayId, String dayStatus, boolean frozen, int releasedLaunchCount) {}
 }

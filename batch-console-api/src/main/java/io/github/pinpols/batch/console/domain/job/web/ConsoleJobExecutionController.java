@@ -25,41 +25,39 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequestMapping("/api/console/job-instances")
 @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 public class ConsoleJobExecutionController {
-  private final JobExecutionQueryService queries;
-  private final ConsoleProgressSnapshotPublisher push;
-  private final ConsoleResponseFactory responses;
+    private final JobExecutionQueryService queries;
+    private final ConsoleProgressSnapshotPublisher push;
+    private final ConsoleResponseFactory responses;
 
-  @GetMapping("/{id}/execution-progress")
-  public CommonResponse<JobExecutionProgressResponse> query(
-      @PathVariable @Positive Long id, @RequestParam String tenantId) {
-    return responses.success(queries.query(tenantId, id));
-  }
+    @GetMapping("/{id}/execution-progress")
+    public CommonResponse<JobExecutionProgressResponse> query(
+            @PathVariable @Positive Long id, @RequestParam String tenantId) {
+        return responses.success(queries.query(tenantId, id));
+    }
 
-  @GetMapping(
-      value = "/{id}/execution-progress/events",
-      produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter events(@PathVariable @Positive Long id, @RequestParam String tenantId) {
-    JobExecutionProgressResponse initial = queries.query(tenantId, id);
-    return push.subscribe(
-        initial.tenantId(),
-        "job-execution-" + id,
-        "job-execution-progress",
-        initial,
-        () -> queries.queryAuthorized(initial.tenantId(), id),
-        snapshot -> Arrays.asList(
-            snapshot.instanceStatus(),
-            snapshot.startedAt(),
-            snapshot.finishedAt(),
-            snapshot.expectedPartitions(),
-            snapshot.workflowRunId(),
-            snapshot.nodeCode(),
-            snapshot.pipelineInstanceId(),
-            snapshot.pipelineStatus(),
-            snapshot.currentStage(),
-            snapshot.systemPipelineCode(),
-            snapshot.systemPipelineVersion(),
-            snapshot.stageGraphAvailable(),
-            snapshot.counts(),
-            snapshot.stages()));
-  }
+    @GetMapping(value = "/{id}/execution-progress/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter events(@PathVariable @Positive Long id, @RequestParam String tenantId) {
+        JobExecutionProgressResponse initial = queries.query(tenantId, id);
+        return push.subscribe(
+                initial.tenantId(),
+                "job-execution-" + id,
+                "job-execution-progress",
+                initial,
+                () -> queries.queryAuthorized(initial.tenantId(), id),
+                snapshot -> Arrays.asList(
+                        snapshot.instanceStatus(),
+                        snapshot.startedAt(),
+                        snapshot.finishedAt(),
+                        snapshot.expectedPartitions(),
+                        snapshot.workflowRunId(),
+                        snapshot.nodeCode(),
+                        snapshot.pipelineInstanceId(),
+                        snapshot.pipelineStatus(),
+                        snapshot.currentStage(),
+                        snapshot.systemPipelineCode(),
+                        snapshot.systemPipelineVersion(),
+                        snapshot.stageGraphAvailable(),
+                        snapshot.counts(),
+                        snapshot.stages()));
+    }
 }

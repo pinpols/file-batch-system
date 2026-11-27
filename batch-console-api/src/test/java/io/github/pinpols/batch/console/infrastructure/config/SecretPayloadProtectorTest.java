@@ -14,18 +14,18 @@ import org.junit.jupiter.api.Test;
 @DisplayName("密钥载荷保护: 加密信封格式与明文不外泄")
 class SecretPayloadProtectorTest {
 
-  @Test
-  @DisplayName("保护后的载荷包在加密信封里,原始明文片段不再出现")
-  void shouldReturnEncryptedEnvelope_whenPayloadIsProtected() {
-    BatchObjectCryptoService cryptoService = mock(BatchObjectCryptoService.class);
-    when(cryptoService.encrypt(any(byte[].class), isNull())).thenReturn(new byte[] {1, 2, 3, 4});
-    SecretPayloadProtector protector = new SecretPayloadProtector(cryptoService);
+    @Test
+    @DisplayName("保护后的载荷包在加密信封里,原始明文片段不再出现")
+    void shouldReturnEncryptedEnvelope_whenPayloadIsProtected() {
+        BatchObjectCryptoService cryptoService = mock(BatchObjectCryptoService.class);
+        when(cryptoService.encrypt(any(byte[].class), isNull())).thenReturn(new byte[] {1, 2, 3, 4});
+        SecretPayloadProtector protector = new SecretPayloadProtector(cryptoService);
 
-    String protectedPayload = protector.protect("{\"password\":\"plain-secret\"}");
+        String protectedPayload = protector.protect("{\"password\":\"plain-secret\"}");
 
-    assertThat(protectedPayload)
-        .contains("BATCHENC_BASE64_V1")
-        .contains("AQIDBA==")
-        .doesNotContain("plain-secret");
-  }
+        assertThat(protectedPayload)
+                .contains("BATCHENC_BASE64_V1")
+                .contains("AQIDBA==")
+                .doesNotContain("plain-secret");
+    }
 }

@@ -17,76 +17,66 @@ import lombok.Getter;
 @Getter
 public class BizException extends RuntimeException {
 
-  private final ResultCode code;
+    private final ResultCode code;
 
-  /** i18n message key;null 表示走历史 literal 路径(message 已是字面量)。 */
-  private final String messageKey;
+    /** i18n message key;null 表示走历史 literal 路径(message 已是字面量)。 */
+    private final String messageKey;
 
-  /** i18n 占位符参数;message key 为 null 时也为 null。 */
-  private final transient Object[] messageArgs;
+    /** i18n 占位符参数;message key 为 null 时也为 null。 */
+    private final transient Object[] messageArgs;
 
-  /** ADR-012 失败分类。null 时由 orchestrator 端 FailureClassifier 回退；显式声明优先级最高。 */
-  private final FailureClass failureClass;
+    /** ADR-012 失败分类。null 时由 orchestrator 端 FailureClassifier 回退；显式声明优先级最高。 */
+    private final FailureClass failureClass;
 
-  /** 历史 literal 构造器:message 是字面量,ExceptionHandler 直接透出。 */
-  public BizException(ResultCode code, String message) {
-    super(message);
-    this.code = code;
-    this.messageKey = null;
-    this.messageArgs = null;
-    this.failureClass = null;
-  }
+    /** 历史 literal 构造器:message 是字面量,ExceptionHandler 直接透出。 */
+    public BizException(ResultCode code, String message) {
+        super(message);
+        this.code = code;
+        this.messageKey = null;
+        this.messageArgs = null;
+        this.failureClass = null;
+    }
 
-  public BizException(ResultCode code, String message, Throwable cause) {
-    super(message, cause);
-    this.code = code;
-    this.messageKey = null;
-    this.messageArgs = null;
-    this.failureClass = null;
-  }
+    public BizException(ResultCode code, String message, Throwable cause) {
+        super(message, cause);
+        this.code = code;
+        this.messageKey = null;
+        this.messageArgs = null;
+        this.failureClass = null;
+    }
 
-  private BizException(ResultCode code, String messageKey, Object[] messageArgs, Throwable cause) {
-    this(code, messageKey, messageArgs, cause, null);
-  }
+    private BizException(ResultCode code, String messageKey, Object[] messageArgs, Throwable cause) {
+        this(code, messageKey, messageArgs, cause, null);
+    }
 
-  private BizException(
-      ResultCode code,
-      String messageKey,
-      Object[] messageArgs,
-      Throwable cause,
-      FailureClass failureClass) {
-    // super.message 用 messageKey 占位(便于 log / 异常链溯源),最终前端展示由 ExceptionHandler 翻译。
-    super(messageKey, cause);
-    this.code = code;
-    this.messageKey = messageKey;
-    this.messageArgs = messageArgs;
-    this.failureClass = failureClass;
-  }
+    private BizException(
+            ResultCode code, String messageKey, Object[] messageArgs, Throwable cause, FailureClass failureClass) {
+        // super.message 用 messageKey 占位(便于 log / 异常链溯源),最终前端展示由 ExceptionHandler 翻译。
+        super(messageKey, cause);
+        this.code = code;
+        this.messageKey = messageKey;
+        this.messageArgs = messageArgs;
+        this.failureClass = failureClass;
+    }
 
-  /** 新规范:i18n key + args。messageKey 形如 {@code error.tenant.already_exists},占位符用 {0}/{1}/...。 */
-  public static BizException of(ResultCode code, String messageKey, Object... args) {
-    return new BizException(code, messageKey, args, null);
-  }
+    /** 新规范:i18n key + args。messageKey 形如 {@code error.tenant.already_exists},占位符用 {0}/{1}/...。 */
+    public static BizException of(ResultCode code, String messageKey, Object... args) {
+        return new BizException(code, messageKey, args, null);
+    }
 
-  /** 新规范带 cause 版本。 */
-  public static BizException of(
-      ResultCode code, String messageKey, Throwable cause, Object... args) {
-    return new BizException(code, messageKey, args, cause);
-  }
+    /** 新规范带 cause 版本。 */
+    public static BizException of(ResultCode code, String messageKey, Throwable cause, Object... args) {
+        return new BizException(code, messageKey, args, cause);
+    }
 
-  /** 新规范 + ADR-012 显式失败分类（业务方明确根因时用）。 */
-  public static BizException of(
-      ResultCode code, FailureClass failureClass, String messageKey, Object... args) {
-    return new BizException(code, messageKey, args, null, failureClass);
-  }
+    /** 新规范 + ADR-012 显式失败分类（业务方明确根因时用）。 */
+    public static BizException of(ResultCode code, FailureClass failureClass, String messageKey, Object... args) {
+        return new BizException(code, messageKey, args, null, failureClass);
+    }
 
-  /** 新规范 + ADR-012 显式失败分类 + cause。 */
-  public static BizException of(
-      ResultCode code,
-      FailureClass failureClass,
-      String messageKey,
-      Throwable cause,
-      Object... args) {
-    return new BizException(code, messageKey, args, cause, failureClass);
-  }
+    /** 新规范 + ADR-012 显式失败分类 + cause。 */
+    public static BizException of(
+            ResultCode code, FailureClass failureClass, String messageKey, Throwable cause, Object... args) {
+        return new BizException(code, messageKey, args, cause, failureClass);
+    }
 }

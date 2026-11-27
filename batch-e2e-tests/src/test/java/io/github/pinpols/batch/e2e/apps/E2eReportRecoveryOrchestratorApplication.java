@@ -43,77 +43,67 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 /** 不得修改任一租约，也不得注入第二条 Kafka 消息来强制恢复。 */
 @Configuration
 @EnableAutoConfiguration(
-    exclude = {
-      HttpRequestMdcAutoConfiguration.class,
-      AnthropicChatAutoConfiguration.class,
-      OpenAiChatAutoConfiguration.class,
-      OpenAiDecisionAutoConfiguration.class,
-      OpenAiAudioSpeechAutoConfiguration.class,
-      OpenAiAudioTranscriptionAutoConfiguration.class,
-      OpenAiEmbeddingAutoConfiguration.class,
-      OpenAiImageAutoConfiguration.class,
-      OpenAiModerationAutoConfiguration.class,
-      SecurityAutoConfiguration.class,
-      UserDetailsServiceAutoConfiguration.class,
-      SecurityFilterAutoConfiguration.class,
-      ServletWebSecurityAutoConfiguration.class,
-      ManagementWebSecurityAutoConfiguration.class,
-    })
+        exclude = {
+            HttpRequestMdcAutoConfiguration.class,
+            AnthropicChatAutoConfiguration.class,
+            OpenAiChatAutoConfiguration.class,
+            OpenAiDecisionAutoConfiguration.class,
+            OpenAiAudioSpeechAutoConfiguration.class,
+            OpenAiAudioTranscriptionAutoConfiguration.class,
+            OpenAiEmbeddingAutoConfiguration.class,
+            OpenAiImageAutoConfiguration.class,
+            OpenAiModerationAutoConfiguration.class,
+            SecurityAutoConfiguration.class,
+            UserDetailsServiceAutoConfiguration.class,
+            SecurityFilterAutoConfiguration.class,
+            ServletWebSecurityAutoConfiguration.class,
+            ManagementWebSecurityAutoConfiguration.class,
+        })
 @EnableKafka
 @Import({
-  BatchClockConfig.class,
-  E2ePlatformDataSourceConfiguration.class,
-  E2ePlatformMybatisConfiguration.class,
-  E2eShedLockConfiguration.class,
-  E2eKafkaProducerConfiguration.class
+    BatchClockConfig.class,
+    E2ePlatformDataSourceConfiguration.class,
+    E2ePlatformMybatisConfiguration.class,
+    E2eShedLockConfiguration.class,
+    E2eKafkaProducerConfiguration.class
 })
 @ComponentScan(
-    basePackages = {
-      "io.github.pinpols.batch.e2e.support",
-      "io.github.pinpols.batch.common.spi.task",
-      "io.github.pinpols.batch.common.storage.ingress",
-      "io.github.pinpols.batch.orchestrator"
-    },
-    excludeFilters = {
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = BatchOrchestratorApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = E2eOrchestratorApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = OrchestratorDataSourceConfiguration.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = DbRowExistsSensorPolicy.class)
-    })
+        basePackages = {
+            "io.github.pinpols.batch.e2e.support",
+            "io.github.pinpols.batch.common.spi.task",
+            "io.github.pinpols.batch.common.storage.ingress",
+            "io.github.pinpols.batch.orchestrator"
+        },
+        excludeFilters = {
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchOrchestratorApplication.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eOrchestratorApplication.class),
+            @ComponentScan.Filter(
+                    type = FilterType.ASSIGNABLE_TYPE,
+                    classes = OrchestratorDataSourceConfiguration.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = DbRowExistsSensorPolicy.class)
+        })
 @ImportAutoConfiguration({
-  BatchJsonAutoConfiguration.class,
-  BatchObjectCryptoAutoConfiguration.class,
-  RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "io.github.pinpols.batch")
-@MapperScan(
-    basePackages = "io.github.pinpols.batch.common.mapper",
-    sqlSessionFactoryRef = "sqlSessionFactory")
-@MapperScan(
-    basePackages = "io.github.pinpols.batch.orchestrator.mapper",
-    sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "io.github.pinpols.batch.common.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "io.github.pinpols.batch.orchestrator.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
 public class E2eReportRecoveryOrchestratorApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(E2eReportRecoveryOrchestratorApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(E2eReportRecoveryOrchestratorApplication.class, args);
+    }
 
-  @Bean(name = "applicationTaskExecutor")
-  public Executor applicationTaskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(2);
-    executor.setMaxPoolSize(4);
-    executor.setThreadNamePrefix("e2e-app-task-");
-    executor.initialize();
-    return executor;
-  }
+    @Bean(name = "applicationTaskExecutor")
+    public Executor applicationTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setThreadNamePrefix("e2e-app-task-");
+        executor.initialize();
+        return executor;
+    }
 }

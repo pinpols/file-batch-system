@@ -23,57 +23,56 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TriggerCalendarDefinitionProvider {
 
-  private final BusinessCalendarMapper businessCalendarMapper;
+    private final BusinessCalendarMapper businessCalendarMapper;
 
-  public CalendarBizDateDefinition load(String tenantId, String rawCalendarCode) {
-    String calendarCode = CodeNormalizer.toConfigFormOrNull(rawCalendarCode);
-    if (!Texts.hasText(calendarCode)) {
-      return null;
+    public CalendarBizDateDefinition load(String tenantId, String rawCalendarCode) {
+        String calendarCode = CodeNormalizer.toConfigFormOrNull(rawCalendarCode);
+        if (!Texts.hasText(calendarCode)) {
+            return null;
+        }
+        TriggerCalendarConfig calendar =
+                businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
+        if (EmptyChecks.isNull(calendar) || EmptyChecks.isNull(calendar.getId())) {
+            throw BizException.of(
+                    ResultCode.NOT_FOUND,
+                    "error.trigger.business_calendar_not_found",
+                    LogSanitizer.value(tenantId),
+                    LogSanitizer.value(calendarCode));
+        }
+        List<CalendarHolidayRule> rules = businessCalendarMapper.selectHolidayRulesByCalendarId(calendar.getId());
+        Set<LocalDate> holidays = rules.stream()
+                .filter(rule -> isDayType(rule, "HOLIDAY"))
+                .map(CalendarHolidayRule::getBizDate)
+                .collect(Collectors.toUnmodifiableSet());
+        Set<LocalDate> workdayOverrides = rules.stream()
+                .filter(rule -> isDayType(rule, "WORKDAY_OVERRIDE"))
+                .map(CalendarHolidayRule::getBizDate)
+                .collect(Collectors.toUnmodifiableSet());
+        CalendarBizDateDefinition definition = new CalendarBizDateDefinition(
+                calendar.getTimezone(),
+                calendar.getCutoffTime(),
+                calendar.getHolidayRollRule(),
+                holidays,
+                workdayOverrides);
+        return definition;
     }
-    TriggerCalendarConfig calendar =
-        businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
-    if (EmptyChecks.isNull(calendar) || EmptyChecks.isNull(calendar.getId())) {
-      throw BizException.of(
-          ResultCode.NOT_FOUND,
-          "error.trigger.business_calendar_not_found",
-          LogSanitizer.value(tenantId),
-          LogSanitizer.value(calendarCode));
-    }
-    List<CalendarHolidayRule> rules =
-        businessCalendarMapper.selectHolidayRulesByCalendarId(calendar.getId());
-    Set<LocalDate> holidays = rules.stream()
-        .filter(rule -> isDayType(rule, "HOLIDAY"))
-        .map(CalendarHolidayRule::getBizDate)
-        .collect(Collectors.toUnmodifiableSet());
-    Set<LocalDate> workdayOverrides = rules.stream()
-        .filter(rule -> isDayType(rule, "WORKDAY_OVERRIDE"))
-        .map(CalendarHolidayRule::getBizDate)
-        .collect(Collectors.toUnmodifiableSet());
-    CalendarBizDateDefinition definition = new CalendarBizDateDefinition(
-        calendar.getTimezone(),
-        calendar.getCutoffTime(),
-        calendar.getHolidayRollRule(),
-        holidays,
-        workdayOverrides);
-    return definition;
-  }
 
-  private boolean isDayType(CalendarHolidayRule rule, String expectedType) {
-    boolean ruleExists = EmptyChecks.isNotNull(rule);
-    if (!ruleExists) {
-      return false;
+    private boolean isDayType(CalendarHolidayRule rule, String expectedType) {
+        boolean ruleExists = EmptyChecks.isNotNull(rule);
+        if (!ruleExists) {
+            return false;
+        }
+        boolean hasBusinessDate = EmptyChecks.isNotNull(rule.getBizDate());
+        String normalizedDayType = normalize(rule.getDayType());
+        boolean matchesExpectedType = expectedType.equalsIgnoreCase(normalizedDayType);
+        return hasBusinessDate && matchesExpectedType;
     }
-    boolean hasBusinessDate = EmptyChecks.isNotNull(rule.getBizDate());
-    String normalizedDayType = normalize(rule.getDayType());
-    boolean matchesExpectedType = expectedType.equalsIgnoreCase(normalizedDayType);
-    return hasBusinessDate && matchesExpectedType;
-  }
 
-  private String normalize(String value) {
-    if (EmptyChecks.isNull(value)) {
-      return "";
+    private String normalize(String value) {
+        if (EmptyChecks.isNull(value)) {
+            return "";
+        }
+        String trimmedValue = value.trim();
+        return trimmedValue.toUpperCase(Locale.ROOT);
     }
-    String trimmedValue = value.trim();
-    return trimmedValue.toUpperCase(Locale.ROOT);
-  }
 }

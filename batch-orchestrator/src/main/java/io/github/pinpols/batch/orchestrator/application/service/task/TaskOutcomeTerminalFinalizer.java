@@ -27,61 +27,61 @@ import org.springframework.stereotype.Component;
 @Component
 final class TaskOutcomeTerminalFinalizer {
 
-  private final JobTerminalOutboxService terminalOutbox;
-  private final JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder;
-  private final MeterRegistry meterRegistry;
-  private final JobInstanceTerminalChildStateReconciler childStateReconciler;
-  private final ResultVersionWriter resultVersionWriter;
-  private final BatchDayReplayTerminalReconciler replayTerminalReconciler;
+    private final JobTerminalOutboxService terminalOutbox;
+    private final JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder;
+    private final MeterRegistry meterRegistry;
+    private final JobInstanceTerminalChildStateReconciler childStateReconciler;
+    private final ResultVersionWriter resultVersionWriter;
+    private final BatchDayReplayTerminalReconciler replayTerminalReconciler;
 
-  TaskOutcomeTerminalFinalizer(
-      JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
-      MeterRegistry meterRegistry,
-      JobInstanceTerminalChildStateReconciler childStateReconciler,
-      ResultVersionWriter resultVersionWriter,
-      BatchDayReplayTerminalReconciler replayTerminalReconciler,
-      JobTerminalOutboxService terminalOutbox) {
-    this.terminalOutbox = terminalOutbox;
-    this.jobLifecycleMetricsRecorder = jobLifecycleMetricsRecorder;
-    this.meterRegistry = meterRegistry;
-    this.childStateReconciler = childStateReconciler;
-    this.resultVersionWriter = resultVersionWriter;
-    this.replayTerminalReconciler = replayTerminalReconciler;
-  }
+    TaskOutcomeTerminalFinalizer(
+            JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
+            MeterRegistry meterRegistry,
+            JobInstanceTerminalChildStateReconciler childStateReconciler,
+            ResultVersionWriter resultVersionWriter,
+            BatchDayReplayTerminalReconciler replayTerminalReconciler,
+            JobTerminalOutboxService terminalOutbox) {
+        this.terminalOutbox = terminalOutbox;
+        this.jobLifecycleMetricsRecorder = jobLifecycleMetricsRecorder;
+        this.meterRegistry = meterRegistry;
+        this.childStateReconciler = childStateReconciler;
+        this.resultVersionWriter = resultVersionWriter;
+        this.replayTerminalReconciler = replayTerminalReconciler;
+    }
 
-  void finalizeTerminal(
-      JobInstanceEntity jobInstance,
-      TaskOutcomeCommand command,
-      String instanceStatus,
-      Instant finishedAt,
-      String instanceFailureClass,
-      List<JobPartitionEntity> partitions) {
-    jobLifecycleMetricsRecorder.recordCompletionAfterCommit(
-        command.tenantId(), jobInstance, instanceStatus, finishedAt, instanceFailureClass);
-    if (EmptyChecks.isNotNull(instanceFailureClass)) {
-      meterRegistry
-          .counter(
-              "batch.job.failure",
-              "tenant",
-              Objects.requireNonNullElse(command.tenantId(), "unknown"),
-              "jobCode",
-              Objects.requireNonNullElse(jobInstance.getJobCode(), "unknown"),
-              "class",
-              instanceFailureClass)
-          .increment();
+    void finalizeTerminal(
+            JobInstanceEntity jobInstance,
+            TaskOutcomeCommand command,
+            String instanceStatus,
+            Instant finishedAt,
+            String instanceFailureClass,
+            List<JobPartitionEntity> partitions) {
+        jobLifecycleMetricsRecorder.recordCompletionAfterCommit(
+                command.tenantId(), jobInstance, instanceStatus, finishedAt, instanceFailureClass);
+        if (EmptyChecks.isNotNull(instanceFailureClass)) {
+            meterRegistry
+                    .counter(
+                            "batch.job.failure",
+                            "tenant",
+                            Objects.requireNonNullElse(command.tenantId(), "unknown"),
+                            "jobCode",
+                            Objects.requireNonNullElse(jobInstance.getJobCode(), "unknown"),
+                            "class",
+                            instanceFailureClass)
+                    .increment();
+        }
+        childStateReconciler.reconcile(command.tenantId(), jobInstance.getId(), instanceStatus);
+        terminalOutbox.writeTerminalEvent(command.tenantId(), jobInstance.getId());
+        Map<String, Object> successfulOutputs =
+                TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(partitions, command);
+        resultVersionWriter.writeOnTerminal(jobInstance, successfulOutputs);
+        if (EmptyChecks.isNotNull(jobInstance.getReplaySessionId())) {
+            replayTerminalReconciler.reconcileOnTerminal(
+                    jobInstance.getTenantId(),
+                    jobInstance.getReplaySessionId(),
+                    jobInstance.getJobCode(),
+                    jobInstance.getId(),
+                    instanceStatus);
+        }
     }
-    childStateReconciler.reconcile(command.tenantId(), jobInstance.getId(), instanceStatus);
-    terminalOutbox.writeTerminalEvent(command.tenantId(), jobInstance.getId());
-    Map<String, Object> successfulOutputs =
-        TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(partitions, command);
-    resultVersionWriter.writeOnTerminal(jobInstance, successfulOutputs);
-    if (EmptyChecks.isNotNull(jobInstance.getReplaySessionId())) {
-      replayTerminalReconciler.reconcileOnTerminal(
-          jobInstance.getTenantId(),
-          jobInstance.getReplaySessionId(),
-          jobInstance.getJobCode(),
-          jobInstance.getId(),
-          instanceStatus);
-    }
-  }
 }

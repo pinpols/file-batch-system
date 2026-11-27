@@ -16,27 +16,26 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class ConsoleRealtimeInstanceIdProvider {
 
-  private final String instanceId;
+    private final String instanceId;
 
-  public ConsoleRealtimeInstanceIdProvider(ConsoleInstanceIdProperties properties) {
-    this.instanceId = resolveInstanceId(properties);
-  }
-
-  public String instanceId() {
-    return instanceId;
-  }
-
-  private String resolveInstanceId(ConsoleInstanceIdProperties properties) {
-    String configured = properties.getInstanceId();
-    if (EmptyChecks.isNotBlank(configured)) {
-      return configured.trim();
+    public ConsoleRealtimeInstanceIdProvider(ConsoleInstanceIdProperties properties) {
+        this.instanceId = resolveInstanceId(properties);
     }
-    UUID generatedId = UUID.randomUUID();
-    String generated = generatedId.toString();
-    log.warn(
-        "BATCH_CONSOLE_INSTANCE_ID is not configured; generated random console realtime"
-            + " instance id={}",
-        generated);
-    return generated;
-  }
+
+    public String instanceId() {
+        return instanceId;
+    }
+
+    private String resolveInstanceId(ConsoleInstanceIdProperties properties) {
+        String configured = properties.getInstanceId();
+        if (EmptyChecks.isNotBlank(configured)) {
+            return configured.trim();
+        }
+        UUID generatedId = UUID.randomUUID();
+        String generated = generatedId.toString();
+        log.warn(
+                "BATCH_CONSOLE_INSTANCE_ID is not configured; generated random console realtime" + " instance id={}",
+                generated);
+        return generated;
+    }
 }

@@ -37,87 +37,85 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleTenantConfigInitController {
 
-  private final ConsoleTenantConfigInitApplicationService applicationService;
-  private final ConsoleTenantConfigCopyService copyService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleTenantConfigInitApplicationService applicationService;
+    private final ConsoleTenantConfigCopyService copyService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /**
-   * 批量初始化或更新多个租户的配置。
-   *
-   * <p>mode=SKIP_EXISTING（默认）：已存在的配置不覆盖，仅创建缺失项。 mode=UPSERT：存在则更新，不存在则创建。
-   * dryRun=true：只做查询和校验，不执行写入。
-   */
-  @PostMapping("/tenant-init")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @Idempotent
-  public CommonResponse<TenantConfigBatchInitResponse> batchInit(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody TenantConfigBatchInitRequest request,
-      Authentication authentication) {
-    String operator = resolveOperator(authentication);
-    UUID operationId = UUID.randomUUID();
-    String batchOperationId = operationId.toString();
-    return responseFactory.success(
-        applicationService.batchInit(request, operator, batchOperationId));
-  }
-
-  /**
-   * 跨租户配置复制。
-   *
-   * <p>从源租户读取配置，转换为 Spec 后推送到目标租户列表。
-   */
-  @PostMapping("/tenant-copy")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  @Idempotent
-  public CommonResponse<TenantConfigBatchInitResponse> tenantCopy(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody TenantConfigCopyRequest request,
-      Authentication authentication,
-      HttpServletRequest servletRequest) {
-    String operator = resolveOperator(authentication);
-    UUID operationId = UUID.randomUUID();
-    String batchOperationId = operationId.toString();
-    if (!Texts.hasText(idempotencyKey) || request.isDryRun()) {
-      return responseFactory.success(copyService.copy(request, operator, batchOperationId));
+    /**
+     * 批量初始化或更新多个租户的配置。
+     *
+     * <p>mode=SKIP_EXISTING（默认）：已存在的配置不覆盖，仅创建缺失项。 mode=UPSERT：存在则更新，不存在则创建。
+     * dryRun=true：只做查询和校验，不执行写入。
+     */
+    @PostMapping("/tenant-init")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @Idempotent
+    public CommonResponse<TenantConfigBatchInitResponse> batchInit(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody TenantConfigBatchInitRequest request,
+            Authentication authentication) {
+        String operator = resolveOperator(authentication);
+        UUID operationId = UUID.randomUUID();
+        String batchOperationId = operationId.toString();
+        return responseFactory.success(applicationService.batchInit(request, operator, batchOperationId));
     }
-    String tenantHeader = servletRequest.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
-    String requestHash = ConsoleIdempotencyRequestIdentity.requestHash(
-        tenantHeader, servletRequest.getMethod(), servletRequest.getRequestURI(), idempotencyKey);
-    return responseFactory.success(
-        copyService.copy(request, operator, batchOperationId, requestHash));
-  }
 
-  /** 跨租户复制前预览 add/update/delete-candidate 和影响面，不执行写库。 */
-  @PostMapping("/tenant-copy/preview")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  public CommonResponse<TenantConfigDiffPreviewResponse> tenantCopyPreview(
-      @Valid @RequestBody TenantConfigPreviewRequest request) {
-    return responseFactory.success(copyService.preview(request));
-  }
-
-  /** base package + tenant overlay 预览：返回每个目标租户相对基础租户的差异包。 */
-  @PostMapping("/tenant-overlay/preview")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  public CommonResponse<TenantConfigDiffPreviewResponse> tenantOverlayPreview(
-      @Valid @RequestBody TenantConfigPreviewRequest request) {
-    return responseFactory.success(copyService.previewOverlay(request));
-  }
-
-  /** 同一 job 跨租户矩阵：用于发现 schedule/queue/template/channel 等漂移。 */
-  @PostMapping("/tenant-config-matrix")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
-  public CommonResponse<TenantConfigMatrixResponse> tenantConfigMatrix(
-      @Valid @RequestBody TenantConfigMatrixRequest request) {
-    return responseFactory.success(copyService.matrix(request));
-  }
-
-  private String resolveOperator(Authentication authentication) {
-    if (authentication == null) {
-      return "system";
+    /**
+     * 跨租户配置复制。
+     *
+     * <p>从源租户读取配置，转换为 Spec 后推送到目标租户列表。
+     */
+    @PostMapping("/tenant-copy")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    @Idempotent
+    public CommonResponse<TenantConfigBatchInitResponse> tenantCopy(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody TenantConfigCopyRequest request,
+            Authentication authentication,
+            HttpServletRequest servletRequest) {
+        String operator = resolveOperator(authentication);
+        UUID operationId = UUID.randomUUID();
+        String batchOperationId = operationId.toString();
+        if (!Texts.hasText(idempotencyKey) || request.isDryRun()) {
+            return responseFactory.success(copyService.copy(request, operator, batchOperationId));
+        }
+        String tenantHeader = servletRequest.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
+        String requestHash = ConsoleIdempotencyRequestIdentity.requestHash(
+                tenantHeader, servletRequest.getMethod(), servletRequest.getRequestURI(), idempotencyKey);
+        return responseFactory.success(copyService.copy(request, operator, batchOperationId, requestHash));
     }
-    if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal.username();
+
+    /** 跨租户复制前预览 add/update/delete-candidate 和影响面，不执行写库。 */
+    @PostMapping("/tenant-copy/preview")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    public CommonResponse<TenantConfigDiffPreviewResponse> tenantCopyPreview(
+            @Valid @RequestBody TenantConfigPreviewRequest request) {
+        return responseFactory.success(copyService.preview(request));
     }
-    return authentication.getName();
-  }
+
+    /** base package + tenant overlay 预览：返回每个目标租户相对基础租户的差异包。 */
+    @PostMapping("/tenant-overlay/preview")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    public CommonResponse<TenantConfigDiffPreviewResponse> tenantOverlayPreview(
+            @Valid @RequestBody TenantConfigPreviewRequest request) {
+        return responseFactory.success(copyService.previewOverlay(request));
+    }
+
+    /** 同一 job 跨租户矩阵：用于发现 schedule/queue/template/channel 等漂移。 */
+    @PostMapping("/tenant-config-matrix")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+    public CommonResponse<TenantConfigMatrixResponse> tenantConfigMatrix(
+            @Valid @RequestBody TenantConfigMatrixRequest request) {
+        return responseFactory.success(copyService.matrix(request));
+    }
+
+    private String resolveOperator(Authentication authentication) {
+        if (authentication == null) {
+            return "system";
+        }
+        if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal.username();
+        }
+        return authentication.getName();
+    }
 }

@@ -25,75 +25,75 @@ import org.junit.jupiter.api.Test;
 @DisplayName("多语言资源文件一致性:中英文键集合对齐, 无重复键且取值非空")
 class MessagesPropertiesParityTest {
 
-  private static final String EN = "/messages.properties";
-  private static final String ZH = "/messages_zh_CN.properties";
+    private static final String EN = "/messages.properties";
+    private static final String ZH = "/messages_zh_CN.properties";
 
-  @Test
-  @DisplayName("中英文资源键集合:两侧一一对应, 不存在单边缺失")
-  void shouldKeepEnAndZhKeysAligned() throws IOException {
-    Set<String> enKeys = loadKeys(EN);
-    Set<String> zhKeys = loadKeys(ZH);
+    @Test
+    @DisplayName("中英文资源键集合:两侧一一对应, 不存在单边缺失")
+    void shouldKeepEnAndZhKeysAligned() throws IOException {
+        Set<String> enKeys = loadKeys(EN);
+        Set<String> zhKeys = loadKeys(ZH);
 
-    Set<String> onlyInEn = new TreeSet<>(enKeys);
-    onlyInEn.removeAll(zhKeys);
-    Set<String> onlyInZh = new TreeSet<>(zhKeys);
-    onlyInZh.removeAll(enKeys);
+        Set<String> onlyInEn = new TreeSet<>(enKeys);
+        onlyInEn.removeAll(zhKeys);
+        Set<String> onlyInZh = new TreeSet<>(zhKeys);
+        onlyInZh.removeAll(enKeys);
 
-    assertThat(onlyInEn)
-        .as("messages.properties(en) 有、messages_zh_CN.properties(zh) 缺的 key —— 请补 zh 翻译")
-        .isEmpty();
-    assertThat(onlyInZh)
-        .as("messages_zh_CN.properties(zh) 有、messages.properties(en) 缺的 key —— 请补 en 翻译")
-        .isEmpty();
-  }
-
-  @Test
-  @DisplayName("资源文件内容:无重复键, 且除模板空行外无空取值")
-  void shouldRejectDuplicateKeysAndBlankValues() throws IOException {
-    assertNoDuplicateKeysAndNoBlankValues(EN);
-    assertNoDuplicateKeysAndNoBlankValues(ZH);
-  }
-
-  private static Set<String> loadKeys(String resource) throws IOException {
-    Properties props = new Properties();
-    try (InputStream in = MessagesPropertiesParityTest.class.getResourceAsStream(resource)) {
-      assertThat(in).as("缺少资源文件: %s", resource).isNotNull();
-      props.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+        assertThat(onlyInEn)
+                .as("messages.properties(en) 有、messages_zh_CN.properties(zh) 缺的 key —— 请补 zh 翻译")
+                .isEmpty();
+        assertThat(onlyInZh)
+                .as("messages_zh_CN.properties(zh) 有、messages.properties(en) 缺的 key —— 请补 en 翻译")
+                .isEmpty();
     }
-    return new TreeSet<>(props.stringPropertyNames());
-  }
 
-  /** Properties.load 对重复 key 静默用后者覆盖前者 —— 手工逐行解析才能发现重复。 */
-  private static void assertNoDuplicateKeysAndNoBlankValues(String resource) throws IOException {
-    Set<String> seen = new LinkedHashSet<>();
-    Set<String> duplicates = new TreeSet<>();
-    Set<String> blankValues = new TreeSet<>();
-    try (InputStream in = MessagesPropertiesParityTest.class.getResourceAsStream(resource);
-        var reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-      String line;
-      while ((line = reader.readLine()) != null) {
-        String trimmed = line.strip();
-        boolean isPropertyCommentOrEmptyLine =
-            trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!");
-        if (isPropertyCommentOrEmptyLine) {
-          continue;
-        }
-        int eq = trimmed.indexOf('=');
-        if (eq < 0) {
-          continue;
-        }
-        String key = trimmed.substring(0, eq).strip();
-        String value = trimmed.substring(eq + 1).strip();
-        if (!seen.add(key)) {
-          duplicates.add(key);
-        }
-        // {@code *.readme.line*} 是 Excel 包 README 模板的逐行 key,空 value 表示模板里的空行,合法豁免。
-        if (value.isEmpty() && !key.contains(".readme.line")) {
-          blankValues.add(key);
-        }
-      }
+    @Test
+    @DisplayName("资源文件内容:无重复键, 且除模板空行外无空取值")
+    void shouldRejectDuplicateKeysAndBlankValues() throws IOException {
+        assertNoDuplicateKeysAndNoBlankValues(EN);
+        assertNoDuplicateKeysAndNoBlankValues(ZH);
     }
-    assertThat(duplicates).as("%s 存在重复 key(Properties 会静默覆盖)", resource).isEmpty();
-    assertThat(blankValues).as("%s 存在空 value(空翻译等于漏译)", resource).isEmpty();
-  }
+
+    private static Set<String> loadKeys(String resource) throws IOException {
+        Properties props = new Properties();
+        try (InputStream in = MessagesPropertiesParityTest.class.getResourceAsStream(resource)) {
+            assertThat(in).as("缺少资源文件: %s", resource).isNotNull();
+            props.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+        }
+        return new TreeSet<>(props.stringPropertyNames());
+    }
+
+    /** Properties.load 对重复 key 静默用后者覆盖前者 —— 手工逐行解析才能发现重复。 */
+    private static void assertNoDuplicateKeysAndNoBlankValues(String resource) throws IOException {
+        Set<String> seen = new LinkedHashSet<>();
+        Set<String> duplicates = new TreeSet<>();
+        Set<String> blankValues = new TreeSet<>();
+        try (InputStream in = MessagesPropertiesParityTest.class.getResourceAsStream(resource);
+                var reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.strip();
+                boolean isPropertyCommentOrEmptyLine =
+                        trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!");
+                if (isPropertyCommentOrEmptyLine) {
+                    continue;
+                }
+                int eq = trimmed.indexOf('=');
+                if (eq < 0) {
+                    continue;
+                }
+                String key = trimmed.substring(0, eq).strip();
+                String value = trimmed.substring(eq + 1).strip();
+                if (!seen.add(key)) {
+                    duplicates.add(key);
+                }
+                // {@code *.readme.line*} 是 Excel 包 README 模板的逐行 key,空 value 表示模板里的空行,合法豁免。
+                if (value.isEmpty() && !key.contains(".readme.line")) {
+                    blankValues.add(key);
+                }
+            }
+        }
+        assertThat(duplicates).as("%s 存在重复 key(Properties 会静默覆盖)", resource).isEmpty();
+        assertThat(blankValues).as("%s 存在空 value(空翻译等于漏译)", resource).isEmpty();
+    }
 }

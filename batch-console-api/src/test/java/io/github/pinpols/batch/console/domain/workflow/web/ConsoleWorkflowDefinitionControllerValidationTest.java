@@ -41,94 +41,90 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleWorkflowDefinitionControllerValidationTest {
 
-  @Mock
-  private WorkflowDefinitionService service;
+    @Mock
+    private WorkflowDefinitionService service;
 
-  @Mock
-  private WorkflowDesignLockService lockService;
+    @Mock
+    private WorkflowDesignLockService lockService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWorkflowDefinitionController(
-            service, responseFactory, lockService, mock(ConsoleWorkflowTriggerService.class)))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWorkflowDefinitionController(
+                        service, responseFactory, lockService, mock(ConsoleWorkflowTriggerService.class)))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("触发结果核对缺少原幂等键时拒绝，不创建新的触发")
-  void shouldRejectReceiptLookup_whenIdempotencyKeyIsMissing() throws Exception {
-    mockMvc
-        .perform(get("/api/console/workflow-definitions/23/trigger-status").param("tenantId", "ta"))
-        .andExpect(status().isBadRequest());
-  }
+    @Test
+    @DisplayName("触发结果核对缺少原幂等键时拒绝，不创建新的触发")
+    void shouldRejectReceiptLookup_whenIdempotencyKeyIsMissing() throws Exception {
+        mockMvc.perform(get("/api/console/workflow-definitions/23/trigger-status")
+                        .param("tenantId", "ta"))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  @DisplayName("工作流编码含空格时, 请求被校验拦截并返回参数错误, 不落库")
-  void rejects_invalid_workflowCode() throws Exception {
-    String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"q q q\",\"workflowName\":\"wf\","
-        + "\"workflowType\":\"DAG\"}";
-    mockMvc
-        .perform(post("/api/console/workflow-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never()).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("工作流编码含空格时, 请求被校验拦截并返回参数错误, 不落库")
+    void rejects_invalid_workflowCode() throws Exception {
+        String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"q q q\",\"workflowName\":\"wf\","
+                + "\"workflowType\":\"DAG\"}";
+        mockMvc.perform(post("/api/console/workflow-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).create(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("顶层编码合法但节点编码含空格时, 校验下钻并拒绝请求, 不落库")
-  void rejects_nested_invalid_nodeCode() throws Exception {
-    // 顶层 workflowCode 合法,但 nodes[0].nodeCode 含空格 → @Valid 应下钻 → 400
-    String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
-        + "\"workflowType\":\"DAG\",\"nodes\":["
-        + "{\"nodeCode\":\"bad node\",\"nodeName\":\"name\",\"nodeType\":\"TASK\"}],\"edges\":[]}";
-    mockMvc
-        .perform(post("/api/console/workflow-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never()).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("顶层编码合法但节点编码含空格时, 校验下钻并拒绝请求, 不落库")
+    void rejects_nested_invalid_nodeCode() throws Exception {
+        // 顶层 workflowCode 合法,但 nodes[0].nodeCode 含空格 → @Valid 应下钻 → 400
+        String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
+                + "\"workflowType\":\"DAG\",\"nodes\":["
+                + "{\"nodeCode\":\"bad node\",\"nodeName\":\"name\",\"nodeType\":\"TASK\"}],\"edges\":[]}";
+        mockMvc.perform(post("/api/console/workflow-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).create(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("节点名称缺失时在写入之前返回参数错误")
-  void shouldRejectMissingNodeName_whenCreatingWorkflow() throws Exception {
-    String body = """
+    @Test
+    @DisplayName("节点名称缺失时在写入之前返回参数错误")
+    void shouldRejectMissingNodeName_whenCreatingWorkflow() throws Exception {
+        String body = """
         {"tenantId":"ta","workflowCode":"wf_ok","workflowName":"wf",
          "workflowType":"DAG","nodes":[{"nodeCode":"start","nodeType":"START"}]}
         """;
-    mockMvc
-        .perform(post("/api/console/workflow-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never()).create(ArgumentMatchers.any());
-  }
+        mockMvc.perform(post("/api/console/workflow-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).create(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("连线起点编码含中文时, 校验下钻到连线元素并拒绝请求")
-  void rejects_nested_invalid_edge_fromNodeCode() throws Exception {
-    String body = """
+    @Test
+    @DisplayName("连线起点编码含中文时, 校验下钻到连线元素并拒绝请求")
+    void rejects_nested_invalid_edge_fromNodeCode() throws Exception {
+        String body = """
         {
           "tenantId": "ta",
           "workflowCode": "wf_ok",
@@ -138,19 +134,18 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
           "edges": [{"fromNodeCode": "中文", "toNodeCode": "end"}]
         }
         """.stripTrailing();
-    mockMvc
-        .perform(post("/api/console/workflow-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+        mockMvc.perform(post("/api/console/workflow-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("编码与嵌套节点、连线全部合法时, 请求通过校验并创建成功")
-  void shouldAcceptAllCodes_whenWorkflowFullyValid() throws Exception {
-    when(service.create(ArgumentMatchers.any())).thenReturn(null);
-    String body = """
+    @Test
+    @DisplayName("编码与嵌套节点、连线全部合法时, 请求通过校验并创建成功")
+    void shouldAcceptAllCodes_whenWorkflowFullyValid() throws Exception {
+        when(service.create(ArgumentMatchers.any())).thenReturn(null);
+        String body = """
         {
           "tenantId": "ta",
           "workflowCode": "wf_ok",
@@ -163,43 +158,39 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
           "edges": [{"fromNodeCode": "start", "toNodeCode": "end"}]
         }
         """.stripTrailing();
-    mockMvc
-        .perform(post("/api/console/workflow-definitions")
-            .contentType(APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-    verify(service).create(ArgumentMatchers.any());
-  }
+        mockMvc.perform(post("/api/console/workflow-definitions")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+        verify(service).create(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("定时暂停只更新 Workflow schedule 开关，不调用定义启停")
-  void patches_schedule_enabled_independently() throws Exception {
-    mockMvc
-        .perform(patch("/api/console/workflow-definitions/17/schedule-enabled")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"ta\",\"enabled\":false}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-    verify(service).toggleScheduleEnabled(17L, "ta", false);
-    verify(service, never()).toggleEnabled(17L, "ta", false);
-  }
+    @Test
+    @DisplayName("定时暂停只更新 Workflow schedule 开关，不调用定义启停")
+    void patches_schedule_enabled_independently() throws Exception {
+        mockMvc.perform(patch("/api/console/workflow-definitions/17/schedule-enabled")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"ta\",\"enabled\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+        verify(service).toggleScheduleEnabled(17L, "ta", false);
+        verify(service, never()).toggleEnabled(17L, "ta", false);
+    }
 
-  @Test
-  @DisplayName("无效 Cron 调度表达式在保存前拒绝，不触碰 Workflow 定义")
-  void rejects_invalid_schedule_expression() throws Exception {
-    mockMvc
-        .perform(put("/api/console/workflow-definitions/17/schedule")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("无效 Cron 调度表达式在保存前拒绝，不触碰 Workflow 定义")
+    void rejects_invalid_schedule_expression() throws Exception {
+        mockMvc.perform(put("/api/console/workflow-definitions/17/schedule")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {"tenantId":"ta","expectedVersion":2,"scheduleType":"CRON",
                  "scheduleExpr":"not a cron","timezone":"Asia/Shanghai",
                  "triggerMode":"SCHEDULED"}
                 """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never())
-        .updateSchedule(
-            ArgumentMatchers.eq(17L), ArgumentMatchers.any(), ArgumentMatchers.anyString());
-  }
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never())
+                .updateSchedule(ArgumentMatchers.eq(17L), ArgumentMatchers.any(), ArgumentMatchers.anyString());
+    }
 }

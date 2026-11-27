@@ -29,134 +29,130 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 共享资产标识绝不能暴露其他事务无法引用的记录。 */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("资产 ID 缓存的 PostgreSQL 提交可见性与回滚隔离")
 class AssetPartitionCacheTransactionIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String TENANT = "ta";
-  private static final LocalDate FIRST_DATE = LocalDate.of(2026, Month.OCTOBER, 16);
+    private static final String TENANT = "ta";
+    private static final LocalDate FIRST_DATE = LocalDate.of(2026, Month.OCTOBER, 16);
 
-  private final AssetPartitionMapper mapper;
+    private final AssetPartitionMapper mapper;
 
-  private final ResultVersionQueryService resultVersionQueryService;
+    private final ResultVersionQueryService resultVersionQueryService;
 
-  private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
-  private final PlatformTransactionManager transactionManager;
+    private final PlatformTransactionManager transactionManager;
 
-  private AssetPartitionService service;
-  private TransactionTemplate transactions;
+    private AssetPartitionService service;
+    private TransactionTemplate transactions;
 
-  @Autowired
-  AssetPartitionCacheTransactionIntegrationTest(
-      AssetPartitionMapper mapper,
-      ResultVersionQueryService resultVersionQueryService,
-      JdbcTemplate jdbcTemplate,
-      PlatformTransactionManager transactionManager) {
-    this.mapper = mapper;
-    this.resultVersionQueryService = resultVersionQueryService;
-    this.jdbcTemplate = jdbcTemplate;
-    this.transactionManager = transactionManager;
-  }
-
-  @BeforeEach
-  void setUp() {
-    service = new AssetPartitionService(mapper, resultVersionQueryService);
-    transactions = new TransactionTemplate(transactionManager);
-  }
-
-  @Test
-  @DisplayName("首个物化事务提交前并发调用等待数据库身份,不能使用尚未提交的缓存 ID")
-  void shouldWaitForCommittedAssetIdentity_whenMaterializingConcurrently() throws Exception {
-    String jobCode = uniqueJobCode();
-    Materialization first = materialization(jobCode, FIRST_DATE, 701L);
-    Materialization second = materialization(jobCode, FIRST_DATE.plusDays(1), 702L);
-    CountDownLatch firstMaterialized = new CountDownLatch(1);
-    CountDownLatch releaseFirst = new CountDownLatch(1);
-    CountDownLatch secondStarted = new CountDownLatch(1);
-    AtomicInteger firstBackend = new AtomicInteger();
-    AtomicInteger secondBackend = new AtomicInteger();
-
-    try (var executor = Executors.newFixedThreadPool(2)) {
-      var firstWrite = executor.submit(() -> transactions.executeWithoutResult(status -> {
-        firstBackend.set(backendPid());
-        service.materializeEffectiveJobPartition(first.instance(), first.version());
-        firstMaterialized.countDown();
-        awaitLatch(releaseFirst);
-      }));
-      try {
-        assertThat(firstMaterialized.await(15, TimeUnit.SECONDS)).isTrue();
-        var secondWrite = executor.submit(() -> transactions.executeWithoutResult(status -> {
-          secondBackend.set(backendPid());
-          secondStarted.countDown();
-          service.materializeEffectiveJobPartition(second.instance(), second.version());
-        }));
-        assertThat(secondStarted.await(15, TimeUnit.SECONDS)).isTrue();
-        await()
-            .atMost(Duration.ofSeconds(15))
-            .until(
-                () -> secondWrite.isDone() || isBlockedBy(secondBackend.get(), firstBackend.get()));
-        if (secondWrite.isDone()) {
-          // 让初始实现实际触发的外键错误向外呈现。
-          secondWrite.get(1, TimeUnit.SECONDS);
-        }
-        assertThat(secondWrite.isDone()).isFalse();
-        releaseFirst.countDown();
-        firstWrite.get(15, TimeUnit.SECONDS);
-        secondWrite.get(15, TimeUnit.SECONDS);
-        assertThat(partitionCount(jobCode)).isEqualTo(2);
-        assertThat(assetCount(jobCode)).isOne();
-      } finally {
-        releaseFirst.countDown();
-        firstWrite.get(15, TimeUnit.SECONDS);
-      }
+    @Autowired
+    AssetPartitionCacheTransactionIntegrationTest(
+            AssetPartitionMapper mapper,
+            ResultVersionQueryService resultVersionQueryService,
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager) {
+        this.mapper = mapper;
+        this.resultVersionQueryService = resultVersionQueryService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.transactionManager = transactionManager;
     }
-  }
 
-  @Test
-  @DisplayName("首次物化回滚后重新解析身份,不能复用已回滚的主键")
-  void shouldReloadAssetIdentity_whenFirstMaterializationRollsBack() {
-    String jobCode = uniqueJobCode();
-    Materialization first = materialization(jobCode, FIRST_DATE, 703L);
-    Materialization second = materialization(jobCode, FIRST_DATE.plusDays(1), 704L);
-    transactions.executeWithoutResult(status -> {
-      service.materializeEffectiveJobPartition(first.instance(), first.version());
-      status.setRollbackOnly();
-    });
-    assertThat(assetCount(jobCode)).isZero();
-    assertThat(partitionCount(jobCode)).isZero();
+    @BeforeEach
+    void setUp() {
+        service = new AssetPartitionService(mapper, resultVersionQueryService);
+        transactions = new TransactionTemplate(transactionManager);
+    }
 
-    transactions.executeWithoutResult(
-        status -> service.materializeEffectiveJobPartition(second.instance(), second.version()));
+    @Test
+    @DisplayName("首个物化事务提交前并发调用等待数据库身份,不能使用尚未提交的缓存 ID")
+    void shouldWaitForCommittedAssetIdentity_whenMaterializingConcurrently() throws Exception {
+        String jobCode = uniqueJobCode();
+        Materialization first = materialization(jobCode, FIRST_DATE, 701L);
+        Materialization second = materialization(jobCode, FIRST_DATE.plusDays(1), 702L);
+        CountDownLatch firstMaterialized = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        AtomicInteger firstBackend = new AtomicInteger();
+        AtomicInteger secondBackend = new AtomicInteger();
 
-    assertThat(assetCount(jobCode)).isOne();
-    assertThat(partitionCount(jobCode)).isOne();
-    assertThat(mapper.selectEffectiveJobPartition(
-            TENANT, jobCode, second.instance().getBizDate().toString()))
-        .isNotNull();
-  }
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var firstWrite = executor.submit(() -> transactions.executeWithoutResult(status -> {
+                firstBackend.set(backendPid());
+                service.materializeEffectiveJobPartition(first.instance(), first.version());
+                firstMaterialized.countDown();
+                awaitLatch(releaseFirst);
+            }));
+            try {
+                assertThat(firstMaterialized.await(15, TimeUnit.SECONDS)).isTrue();
+                var secondWrite = executor.submit(() -> transactions.executeWithoutResult(status -> {
+                    secondBackend.set(backendPid());
+                    secondStarted.countDown();
+                    service.materializeEffectiveJobPartition(second.instance(), second.version());
+                }));
+                assertThat(secondStarted.await(15, TimeUnit.SECONDS)).isTrue();
+                await().atMost(Duration.ofSeconds(15))
+                        .until(() -> secondWrite.isDone() || isBlockedBy(secondBackend.get(), firstBackend.get()));
+                if (secondWrite.isDone()) {
+                    // 让初始实现实际触发的外键错误向外呈现。
+                    secondWrite.get(1, TimeUnit.SECONDS);
+                }
+                assertThat(secondWrite.isDone()).isFalse();
+                releaseFirst.countDown();
+                firstWrite.get(15, TimeUnit.SECONDS);
+                secondWrite.get(15, TimeUnit.SECONDS);
+                assertThat(partitionCount(jobCode)).isEqualTo(2);
+                assertThat(assetCount(jobCode)).isOne();
+            } finally {
+                releaseFirst.countDown();
+                firstWrite.get(15, TimeUnit.SECONDS);
+            }
+        }
+    }
 
-  @Test
-  @DisplayName("提交后的资产 ID 仍可复用缓存,后续物化不反复更新资产主数据")
-  void shouldReuseCommittedAssetIdentity_whenMaterializingAgain() {
-    String jobCode = uniqueJobCode();
-    Materialization first = materialization(jobCode, FIRST_DATE, 705L);
-    transactions.executeWithoutResult(
-        status -> service.materializeEffectiveJobPartition(first.instance(), first.version()));
-    String committedVersion = assetRowVersion(jobCode);
+    @Test
+    @DisplayName("首次物化回滚后重新解析身份,不能复用已回滚的主键")
+    void shouldReloadAssetIdentity_whenFirstMaterializationRollsBack() {
+        String jobCode = uniqueJobCode();
+        Materialization first = materialization(jobCode, FIRST_DATE, 703L);
+        Materialization second = materialization(jobCode, FIRST_DATE.plusDays(1), 704L);
+        transactions.executeWithoutResult(status -> {
+            service.materializeEffectiveJobPartition(first.instance(), first.version());
+            status.setRollbackOnly();
+        });
+        assertThat(assetCount(jobCode)).isZero();
+        assertThat(partitionCount(jobCode)).isZero();
 
-    transactions.executeWithoutResult(
-        status -> service.materializeEffectiveJobPartition(first.instance(), first.version()));
+        transactions.executeWithoutResult(
+                status -> service.materializeEffectiveJobPartition(second.instance(), second.version()));
 
-    assertThat(assetRowVersion(jobCode)).isEqualTo(committedVersion);
-    assertThat(partitionCount(jobCode)).isOne();
-  }
+        assertThat(assetCount(jobCode)).isOne();
+        assertThat(partitionCount(jobCode)).isOne();
+        assertThat(mapper.selectEffectiveJobPartition(
+                        TENANT, jobCode, second.instance().getBizDate().toString()))
+                .isNotNull();
+    }
 
-  private Materialization materialization(String jobCode, LocalDate bizDate, long instanceId) {
-    String businessKey = "job:" + jobCode + ":" + bizDate;
-    String insertResultVersionSql = """
+    @Test
+    @DisplayName("提交后的资产 ID 仍可复用缓存,后续物化不反复更新资产主数据")
+    void shouldReuseCommittedAssetIdentity_whenMaterializingAgain() {
+        String jobCode = uniqueJobCode();
+        Materialization first = materialization(jobCode, FIRST_DATE, 705L);
+        transactions.executeWithoutResult(
+                status -> service.materializeEffectiveJobPartition(first.instance(), first.version()));
+        String committedVersion = assetRowVersion(jobCode);
+
+        transactions.executeWithoutResult(
+                status -> service.materializeEffectiveJobPartition(first.instance(), first.version()));
+
+        assertThat(assetRowVersion(jobCode)).isEqualTo(committedVersion);
+        assertThat(partitionCount(jobCode)).isOne();
+    }
+
+    private Materialization materialization(String jobCode, LocalDate bizDate, long instanceId) {
+        String businessKey = "job:" + jobCode + ":" + bizDate;
+        String insertResultVersionSql = """
         insert into batch.result_version (
           tenant_id, business_key, version_no, job_instance_id, status, effective_at,
           payload_storage, payload_json, generated_at, generated_by, promotion_policy
@@ -164,78 +160,78 @@ class AssetPartitionCacheTransactionIntegrationTest extends AbstractIntegrationT
           'INLINE_JSON', '{}'::jsonb, current_timestamp, 'it', 'AUTO_LATEST')
         returning id
         """;
-    Long versionId = jdbcTemplate.queryForObject(
-        insertResultVersionSql, Long.class, TENANT, businessKey, instanceId);
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setTenantId(TENANT);
-    instance.setJobCode(jobCode);
-    instance.setBizDate(bizDate);
-    instance.setId(instanceId);
-    ResultVersionEntity version = ResultVersionEntity.builder()
-        .id(versionId)
-        .tenantId(TENANT)
-        .businessKey(businessKey)
-        .versionNo(1)
-        .jobInstanceId(instanceId)
-        .status("EFFECTIVE")
-        .effectiveAt(Instant.parse("2026-10-16T00:00:00Z"))
-        .payloadStorage("INLINE_JSON")
-        .payloadJson("{}")
-        .build();
-    return new Materialization(instance, version);
-  }
+        Long versionId =
+                jdbcTemplate.queryForObject(insertResultVersionSql, Long.class, TENANT, businessKey, instanceId);
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setTenantId(TENANT);
+        instance.setJobCode(jobCode);
+        instance.setBizDate(bizDate);
+        instance.setId(instanceId);
+        ResultVersionEntity version = ResultVersionEntity.builder()
+                .id(versionId)
+                .tenantId(TENANT)
+                .businessKey(businessKey)
+                .versionNo(1)
+                .jobInstanceId(instanceId)
+                .status("EFFECTIVE")
+                .effectiveAt(Instant.parse("2026-10-16T00:00:00Z"))
+                .payloadStorage("INLINE_JSON")
+                .payloadJson("{}")
+                .build();
+        return new Materialization(instance, version);
+    }
 
-  private String uniqueJobCode() {
-    UUID uniqueId = UUID.randomUUID();
-    String compactUniqueId = uniqueId.toString().replace("-", "");
-    return "CACHE_TX_" + compactUniqueId;
-  }
+    private String uniqueJobCode() {
+        UUID uniqueId = UUID.randomUUID();
+        String compactUniqueId = uniqueId.toString().replace("-", "");
+        return "CACHE_TX_" + compactUniqueId;
+    }
 
-  private int backendPid() {
-    String backendPidSql = """
+    private int backendPid() {
+        String backendPidSql = """
         select pg_backend_pid()
     """;
-    return jdbcTemplate.queryForObject(backendPidSql, Integer.class);
-  }
+        return jdbcTemplate.queryForObject(backendPidSql, Integer.class);
+    }
 
-  private boolean isBlockedBy(int waitingBackend, int blockingBackend) {
-    String backendBlockedBySql = """
+    private boolean isBlockedBy(int waitingBackend, int blockingBackend) {
+        String backendBlockedBySql = """
         select ? = any(pg_blocking_pids(?))
     """;
-    Boolean blocked = jdbcTemplate.queryForObject(
-        backendBlockedBySql, Boolean.class, blockingBackend, waitingBackend);
-    return Boolean.TRUE.equals(blocked);
-  }
+        Boolean blocked =
+                jdbcTemplate.queryForObject(backendBlockedBySql, Boolean.class, blockingBackend, waitingBackend);
+        return Boolean.TRUE.equals(blocked);
+    }
 
-  private long assetCount(String jobCode) {
-    String assetCountSql = """
+    private long assetCount(String jobCode) {
+        String assetCountSql = """
         select count(*) from batch.data_asset where tenant_id = ? and asset_code = ?
         """;
-    return jdbcTemplate.queryForObject(assetCountSql, Long.class, TENANT, jobCode);
-  }
+        return jdbcTemplate.queryForObject(assetCountSql, Long.class, TENANT, jobCode);
+    }
 
-  private long partitionCount(String jobCode) {
-    String partitionCountSql = """
+    private long partitionCount(String jobCode) {
+        String partitionCountSql = """
         select count(*) from batch.asset_partition where tenant_id = ? and asset_code = ?
         """;
-    return jdbcTemplate.queryForObject(partitionCountSql, Long.class, TENANT, jobCode);
-  }
+        return jdbcTemplate.queryForObject(partitionCountSql, Long.class, TENANT, jobCode);
+    }
 
-  private String assetRowVersion(String jobCode) {
-    String assetRowVersionSql = """
+    private String assetRowVersion(String jobCode) {
+        String assetRowVersionSql = """
         select xmin::text from batch.data_asset where tenant_id = ? and asset_code = ?
     """;
-    return jdbcTemplate.queryForObject(assetRowVersionSql, String.class, TENANT, jobCode);
-  }
-
-  private static void awaitLatch(CountDownLatch latch) {
-    try {
-      assertThat(latch.await(20, TimeUnit.SECONDS)).isTrue();
-    } catch (InterruptedException exception) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException("Interrupted while controlling transaction order", exception);
+        return jdbcTemplate.queryForObject(assetRowVersionSql, String.class, TENANT, jobCode);
     }
-  }
 
-  private record Materialization(JobInstanceEntity instance, ResultVersionEntity version) {}
+    private static void awaitLatch(CountDownLatch latch) {
+        try {
+            assertThat(latch.await(20, TimeUnit.SECONDS)).isTrue();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while controlling transaction order", exception);
+        }
+    }
+
+    private record Materialization(JobInstanceEntity instance, ResultVersionEntity version) {}
 }

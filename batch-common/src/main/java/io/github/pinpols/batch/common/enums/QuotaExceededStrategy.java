@@ -21,21 +21,21 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum QuotaExceededStrategy implements DictEnum {
-  REJECT("REJECT", "立即拒绝"),
-  QUEUE_DEFER("QUEUE_DEFER", "排队等待"),
-  DEGRADE_PRIORITY("DEGRADE_PRIORITY", "降级低优排队");
+    REJECT("REJECT", "立即拒绝"),
+    QUEUE_DEFER("QUEUE_DEFER", "排队等待"),
+    DEGRADE_PRIORITY("DEGRADE_PRIORITY", "降级低优排队");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 
-  public static QuotaExceededStrategy from(String value) {
-    if (value == null || value.isBlank()) {
-      throw new IllegalArgumentException("quota exceeded strategy must not be blank");
+    public static QuotaExceededStrategy from(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("quota exceeded strategy must not be blank");
+        }
+        QuotaExceededStrategy hit = DictEnum.fromCode(QuotaExceededStrategy.class, value.trim());
+        if (hit == null) {
+            throw new IllegalArgumentException("unknown quota exceeded strategy: " + value);
+        }
+        return hit;
     }
-    QuotaExceededStrategy hit = DictEnum.fromCode(QuotaExceededStrategy.class, value.trim());
-    if (hit == null) {
-      throw new IllegalArgumentException("unknown quota exceeded strategy: " + value);
-    }
-    return hit;
-  }
 }

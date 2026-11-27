@@ -26,134 +26,134 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class SdkRetryableHandler implements SdkTaskHandler {
 
-  private final SdkTaskHandler delegate;
-  private final RetryOn annotation;
-  private final SdkRetryPolicy policy;
+    private final SdkTaskHandler delegate;
+    private final RetryOn annotation;
+    private final SdkRetryPolicy policy;
 
-  private SdkRetryableHandler(SdkTaskHandler delegate, RetryOn annotation) {
-    this.delegate = delegate;
-    this.annotation = annotation;
-    this.policy = buildPolicy(annotation);
-  }
-
-  /**
-   * 若 {@code delegate} 标了 {@link RetryOn} 则包装,否则原样返回。等价 {@link #wrapAround}(delegate, delegate)。
-   */
-  public static SdkTaskHandler wrap(SdkTaskHandler delegate) {
-    return wrapAround(delegate, delegate);
-  }
-
-  /**
-   * 组合友好工厂:从 {@code source} 的运行时类读 {@link RetryOn},命中则把 {@code delegate} 包一层重试,否则原样返回 {@code
-   * delegate}。
-   *
-   * <p>与 {@link #wrap} 的区别:注解从 {@code source}(原始 handler)读,而非从可能已被其他装饰器包过的 {@code delegate} 读。这样多层
-   * 装饰器嵌套时,内层 wrapper 的 class 没有注解也不影响判定 —— 上层只需把原始 handler 作为 {@code source} 传入。
-   *
-   * @param source 提供 {@link RetryOn} 注解的原始 handler
-   * @param delegate 实际被包装执行的 handler(可能已被内层装饰器包过)
-   */
-  public static SdkTaskHandler wrapAround(SdkTaskHandler source, SdkTaskHandler delegate) {
-    RetryOn ann = source.getClass().getAnnotation(RetryOn.class);
-    if (ann == null) {
-      return delegate;
+    private SdkRetryableHandler(SdkTaskHandler delegate, RetryOn annotation) {
+        this.delegate = delegate;
+        this.annotation = annotation;
+        this.policy = buildPolicy(annotation);
     }
-    return new SdkRetryableHandler(delegate, ann);
-  }
 
-  private static SdkRetryPolicy buildPolicy(RetryOn ann) {
-    Duration initial = Duration.ofMillis(ann.initialDelayMillis());
-    return switch (ann.backoff()) {
-      case FIXED -> SdkRetryPolicy.fixed(ann.maxAttempts(), initial);
-      case EXPONENTIAL -> {
-        Duration maxDelay = Duration.ofMillis(ann.maxDelayMillis());
-        yield SdkRetryPolicy.exponential(ann.maxAttempts(), initial, maxDelay);
-      }
-    };
-  }
+    /**
+     * 若 {@code delegate} 标了 {@link RetryOn} 则包装,否则原样返回。等价 {@link #wrapAround}(delegate, delegate)。
+     */
+    public static SdkTaskHandler wrap(SdkTaskHandler delegate) {
+        return wrapAround(delegate, delegate);
+    }
 
-  @Override
-  public String taskType() {
-    return delegate.taskType();
-  }
-
-  @Override
-  public boolean isSafeToReplay(SdkTaskContext ctx) {
-    return delegate.isSafeToReplay(ctx);
-  }
-
-  @Override
-  public SdkTaskResult execute(SdkTaskContext ctx) {
-    // 未知结果的非幂等动作不能在 SDK 内再次发起；只有当前调用已证明安全才沿用注解重试。
-    int maxAttempts = delegate.isSafeToReplay(ctx) ? policy.maxAttempts() : 1;
-    Duration delay = policy.initialDelay();
-    SdkTaskResult lastResult = null;
-    RuntimeException lastThrown = null;
-
-    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-      Throwable failure;
-      try {
-        SdkTaskResult result = delegate.execute(ctx);
-        if (result.success()) {
-          return result;
+    /**
+     * 组合友好工厂:从 {@code source} 的运行时类读 {@link RetryOn},命中则把 {@code delegate} 包一层重试,否则原样返回 {@code
+     * delegate}。
+     *
+     * <p>与 {@link #wrap} 的区别:注解从 {@code source}(原始 handler)读,而非从可能已被其他装饰器包过的 {@code delegate} 读。这样多层
+     * 装饰器嵌套时,内层 wrapper 的 class 没有注解也不影响判定 —— 上层只需把原始 handler 作为 {@code source} 传入。
+     *
+     * @param source 提供 {@link RetryOn} 注解的原始 handler
+     * @param delegate 实际被包装执行的 handler(可能已被内层装饰器包过)
+     */
+    public static SdkTaskHandler wrapAround(SdkTaskHandler source, SdkTaskHandler delegate) {
+        RetryOn ann = source.getClass().getAnnotation(RetryOn.class);
+        if (ann == null) {
+            return delegate;
         }
-        lastResult = result;
-        failure = result.error();
-      } catch (RuntimeException ex) {
-        lastThrown = ex;
-        lastResult = null;
-        failure = ex;
-      }
+        return new SdkRetryableHandler(delegate, ann);
+    }
 
-      if (!isRetryable(failure)) {
+    private static SdkRetryPolicy buildPolicy(RetryOn ann) {
+        Duration initial = Duration.ofMillis(ann.initialDelayMillis());
+        return switch (ann.backoff()) {
+            case FIXED -> SdkRetryPolicy.fixed(ann.maxAttempts(), initial);
+            case EXPONENTIAL -> {
+                Duration maxDelay = Duration.ofMillis(ann.maxDelayMillis());
+                yield SdkRetryPolicy.exponential(ann.maxAttempts(), initial, maxDelay);
+            }
+        };
+    }
+
+    @Override
+    public String taskType() {
+        return delegate.taskType();
+    }
+
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+        return delegate.isSafeToReplay(ctx);
+    }
+
+    @Override
+    public SdkTaskResult execute(SdkTaskContext ctx) {
+        // 未知结果的非幂等动作不能在 SDK 内再次发起；只有当前调用已证明安全才沿用注解重试。
+        int maxAttempts = delegate.isSafeToReplay(ctx) ? policy.maxAttempts() : 1;
+        Duration delay = policy.initialDelay();
+        SdkTaskResult lastResult = null;
+        RuntimeException lastThrown = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            Throwable failure;
+            try {
+                SdkTaskResult result = delegate.execute(ctx);
+                if (result.success()) {
+                    return result;
+                }
+                lastResult = result;
+                failure = result.error();
+            } catch (RuntimeException ex) {
+                lastThrown = ex;
+                lastResult = null;
+                failure = ex;
+            }
+
+            if (!isRetryable(failure)) {
+                return resolveFinal(lastResult, lastThrown);
+            }
+            if (attempt < maxAttempts) {
+                log.warn(
+                        "retryable handler {} attempt {}/{} failed ({}), retrying in {}",
+                        taskType(),
+                        attempt,
+                        maxAttempts,
+                        failure == null ? "no-error" : failure.getClass().getSimpleName(),
+                        delay);
+                SdkRetryPolicy.sleepFor(delay);
+                delay = policy.nextDelay(delay);
+            }
+        }
         return resolveFinal(lastResult, lastThrown);
-      }
-      if (attempt < maxAttempts) {
-        log.warn(
-            "retryable handler {} attempt {}/{} failed ({}), retrying in {}",
-            taskType(),
-            attempt,
-            maxAttempts,
-            failure == null ? "no-error" : failure.getClass().getSimpleName(),
-            delay);
-        SdkRetryPolicy.sleepFor(delay);
-        delay = policy.nextDelay(delay);
-      }
     }
-    return resolveFinal(lastResult, lastThrown);
-  }
 
-  /** failure 非 null 且 isInstanceOf 任一声明类型才重试。 */
-  private boolean isRetryable(Throwable failure) {
-    if (failure == null) {
-      return false;
+    /** failure 非 null 且 isInstanceOf 任一声明类型才重试。 */
+    private boolean isRetryable(Throwable failure) {
+        if (failure == null) {
+            return false;
+        }
+        for (Class<? extends Throwable> type : annotation.value()) {
+            if (type.isInstance(failure)) {
+                return true;
+            }
+        }
+        return false;
     }
-    for (Class<? extends Throwable> type : annotation.value()) {
-      if (type.isInstance(failure)) {
-        return true;
-      }
-    }
-    return false;
-  }
 
-  /** 收敛最终返回:有 result 用 result(保留 output/message),否则把最后异常转 fail;再否则透传抛出。 */
-  private SdkTaskResult resolveFinal(SdkTaskResult lastResult, RuntimeException lastThrown) {
-    if (lastResult != null) {
-      return lastResult;
+    /** 收敛最终返回:有 result 用 result(保留 output/message),否则把最后异常转 fail;再否则透传抛出。 */
+    private SdkTaskResult resolveFinal(SdkTaskResult lastResult, RuntimeException lastThrown) {
+        if (lastResult != null) {
+            return lastResult;
+        }
+        if (lastThrown != null) {
+            throw lastThrown;
+        }
+        return SdkTaskResult.fail("retryable handler " + taskType() + " produced no result");
     }
-    if (lastThrown != null) {
-      throw lastThrown;
+
+    @Override
+    public void cancel(String taskInstanceId) {
+        delegate.cancel(taskInstanceId);
     }
-    return SdkTaskResult.fail("retryable handler " + taskType() + " produced no result");
-  }
 
-  @Override
-  public void cancel(String taskInstanceId) {
-    delegate.cancel(taskInstanceId);
-  }
-
-  @Override
-  public SdkTaskTypeDescriptor descriptor() {
-    return delegate.descriptor();
-  }
+    @Override
+    public SdkTaskTypeDescriptor descriptor() {
+        return delegate.descriptor();
+    }
 }

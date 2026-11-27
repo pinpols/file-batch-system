@@ -53,185 +53,174 @@ import org.springframework.stereotype.Component;
 @Component
 public class AlertmanagerSilenceBridge {
 
-  /** 待同步静默请求队列容量，队列满后按拒绝策略处理。 */
-  private static final int SILENCE_QUEUE_CAPACITY = 256;
+    /** 待同步静默请求队列容量，队列满后按拒绝策略处理。 */
+    private static final int SILENCE_QUEUE_CAPACITY = 256;
 
-  private static final String METRIC = "batch.alert.am_silence";
-  private static final String SILENCES_PATH = "/api/v2/silences";
-  private static final String ALERTS_PATH = "/api/v2/alerts";
-  private static final String CREATED_BY = "batch-console";
+    private static final String METRIC = "batch.alert.am_silence";
+    private static final String SILENCES_PATH = "/api/v2/silences";
+    private static final String ALERTS_PATH = "/api/v2/alerts";
+    private static final String CREATED_BY = "batch-console";
 
-  private final AlertmanagerNotifyProperties.Silence props;
-  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private final OutboundHttpTransport httpTransport;
-  private final ExecutorService executor;
+    private final AlertmanagerNotifyProperties.Silence props;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    private final OutboundHttpTransport httpTransport;
+    private final ExecutorService executor;
 
-  public AlertmanagerSilenceBridge(
-      AlertmanagerNotifyProperties properties,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
-    this.props = properties.getSilence();
-    this.meterRegistryProvider = meterRegistryProvider;
-    this.httpTransport = httpTransport;
-    if (props.isEnabled() && Texts.hasText(props.getApiBaseUrl())) {
-      ThreadPoolExecutor pool = new ThreadPoolExecutor(
-          1,
-          1,
-          30L,
-          TimeUnit.SECONDS,
-          new LinkedBlockingQueue<>(SILENCE_QUEUE_CAPACITY),
-          r -> {
-            Thread t = new Thread(r, "am-silence-bridge");
-            t.setDaemon(true);
-            return t;
-          },
-          new ThreadPoolExecutor.AbortPolicy());
-      this.executor = pool;
-      log.info(
-          "AlertmanagerSilenceBridge enabled: apiBaseUrl={}",
-          SecretMasking.maskEndpoint(props.getApiBaseUrl()));
-    } else {
-      this.executor = null;
-      log.info("AlertmanagerSilenceBridge disabled (silence.enabled=false or apiBaseUrl blank)");
+    public AlertmanagerSilenceBridge(
+            AlertmanagerNotifyProperties properties,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
+        this.props = properties.getSilence();
+        this.meterRegistryProvider = meterRegistryProvider;
+        this.httpTransport = httpTransport;
+        if (props.isEnabled() && Texts.hasText(props.getApiBaseUrl())) {
+            ThreadPoolExecutor pool = new ThreadPoolExecutor(
+                    1,
+                    1,
+                    30L,
+                    TimeUnit.SECONDS,
+                    new LinkedBlockingQueue<>(SILENCE_QUEUE_CAPACITY),
+                    r -> {
+                        Thread t = new Thread(r, "am-silence-bridge");
+                        t.setDaemon(true);
+                        return t;
+                    },
+                    new ThreadPoolExecutor.AbortPolicy());
+            this.executor = pool;
+            log.info(
+                    "AlertmanagerSilenceBridge enabled: apiBaseUrl={}",
+                    SecretMasking.maskEndpoint(props.getApiBaseUrl()));
+        } else {
+            this.executor = null;
+            log.info("AlertmanagerSilenceBridge disabled (silence.enabled=false or apiBaseUrl blank)");
+        }
     }
-  }
 
-  /** console silence → AM silence(disabled / null → no-op)。durationMinutes null 用默认。 */
-  public void silence(AlertEventEntity alert, Integer durationMinutes) {
-    if (executor == null || alert == null || !Texts.hasText(alert.getAlertType())) {
-      return;
+    /** console silence → AM silence(disabled / null → no-op)。durationMinutes null 用默认。 */
+    public void silence(AlertEventEntity alert, Integer durationMinutes) {
+        if (executor == null || alert == null || !Texts.hasText(alert.getAlertType())) {
+            return;
+        }
+        submit(() -> sendSilence(alert, durationMinutes), "silence");
     }
-    submit(() -> sendSilence(alert, durationMinutes), "silence");
-  }
 
-  /** console close → AM resolved(disabled / null → no-op)。 */
-  public void resolve(AlertEventEntity alert) {
-    if (executor == null || alert == null || !Texts.hasText(alert.getAlertType())) {
-      return;
+    /** console close → AM resolved(disabled / null → no-op)。 */
+    public void resolve(AlertEventEntity alert) {
+        if (executor == null || alert == null || !Texts.hasText(alert.getAlertType())) {
+            return;
+        }
+        submit(() -> sendResolved(alert), "resolve");
     }
-    submit(() -> sendResolved(alert), "resolve");
-  }
 
-  /** 停机时优雅关闭线程池:停收新任务 + 有限等待 drain 已入队的 silence/resolved POST,超时才强制中断。 */
-  @PreDestroy
-  public void shutdown() {
-    if (executor == null) {
-      return;
+    /** 停机时优雅关闭线程池:停收新任务 + 有限等待 drain 已入队的 silence/resolved POST,超时才强制中断。 */
+    @PreDestroy
+    public void shutdown() {
+        if (executor == null) {
+            return;
+        }
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("AlertmanagerSilenceBridge executor did not drain within 5s; forcing interruption");
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            SwallowedExceptionLogger.info(AlertmanagerSilenceBridge.class, "catch:InterruptedException", e);
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
-    executor.shutdown();
-    try {
-      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        log.warn(
-            "AlertmanagerSilenceBridge executor did not drain within 5s; forcing interruption");
-        executor.shutdownNow();
-      }
-    } catch (InterruptedException e) {
-      SwallowedExceptionLogger.info(
-          AlertmanagerSilenceBridge.class, "catch:InterruptedException", e);
-      executor.shutdownNow();
-      Thread.currentThread().interrupt();
+
+    private void submit(Runnable task, String action) {
+        try {
+            executor.execute(task);
+        } catch (RejectedExecutionException ex) {
+            recordSilenceMetric("rejected", action);
+            SwallowedExceptionLogger.info(AlertmanagerSilenceBridge.class, "catch:RejectedExecutionException", ex);
+        }
     }
-  }
 
-  private void submit(Runnable task, String action) {
-    try {
-      executor.execute(task);
-    } catch (RejectedExecutionException ex) {
-      recordSilenceMetric("rejected", action);
-      SwallowedExceptionLogger.info(
-          AlertmanagerSilenceBridge.class, "catch:RejectedExecutionException", ex);
+    private void sendSilence(AlertEventEntity alert, Integer durationMinutes) {
+        int minutes =
+                durationMinutes != null && durationMinutes > 0 ? durationMinutes : props.getDefaultDurationMinutes();
+        Instant now = Instant.now();
+        List<Map<String, Object>> matchers = new ArrayList<>();
+        matchers.add(matcher("alertname", alert.getAlertType()));
+        if (Texts.hasText(alert.getTenantId())) {
+            matchers.add(matcher("tenant", alert.getTenantId()));
+        }
+        if (Texts.hasText(alert.getDedupFingerprint())) {
+            matchers.add(matcher("fingerprint", alert.getDedupFingerprint()));
+        }
+        Map<String, Object> silence = new LinkedHashMap<>();
+        silence.put("matchers", matchers);
+        silence.put("startsAt", now.toString());
+        long durationSeconds = (long) minutes * 60;
+        Instant endsAt = now.plusSeconds(durationSeconds);
+        String endsAtText = endsAt.toString();
+        silence.put("endsAt", endsAtText);
+        silence.put("createdBy", CREATED_BY);
+        silence.put("comment", "console silence for alert_event id=" + alert.getId() + " type=" + alert.getAlertType());
+        String silenceUri = stripTrailingSlash(props.getApiBaseUrl()) + SILENCES_PATH;
+        post(silenceUri, silence, "silence");
     }
-  }
 
-  private void sendSilence(AlertEventEntity alert, Integer durationMinutes) {
-    int minutes = durationMinutes != null && durationMinutes > 0
-        ? durationMinutes
-        : props.getDefaultDurationMinutes();
-    Instant now = Instant.now();
-    List<Map<String, Object>> matchers = new ArrayList<>();
-    matchers.add(matcher("alertname", alert.getAlertType()));
-    if (Texts.hasText(alert.getTenantId())) {
-      matchers.add(matcher("tenant", alert.getTenantId()));
+    private void sendResolved(AlertEventEntity alert) {
+        Instant now = Instant.now();
+        // I-1:必须与 emit publisher 的 firing label 集严格一致(含 service),否则 AM 匹配不到原 firing,只新建
+        // 幽灵 resolved,原告警仍等 resolve_timeout。共用 AlertLabels.canonicalLabels 保证一致。
+        Map<String, String> labels = AlertLabels.canonicalLabels(alert);
+        Map<String, Object> resolved = new LinkedHashMap<>();
+        resolved.put("labels", labels);
+        // endsAt=now → AM 立即判定 resolved,不必等 resolve_timeout。
+        resolved.put("endsAt", now.toString());
+        String resolvedUri = stripTrailingSlash(props.getApiBaseUrl()) + ALERTS_PATH;
+        post(resolvedUri, List.of(resolved), "resolve");
     }
-    if (Texts.hasText(alert.getDedupFingerprint())) {
-      matchers.add(matcher("fingerprint", alert.getDedupFingerprint()));
+
+    private Map<String, Object> matcher(String name, String value) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("name", name);
+        m.put("value", value);
+        m.put("isRegex", false);
+        m.put("isEqual", true);
+        return m;
     }
-    Map<String, Object> silence = new LinkedHashMap<>();
-    silence.put("matchers", matchers);
-    silence.put("startsAt", now.toString());
-    long durationSeconds = (long) minutes * 60;
-    Instant endsAt = now.plusSeconds(durationSeconds);
-    String endsAtText = endsAt.toString();
-    silence.put("endsAt", endsAtText);
-    silence.put("createdBy", CREATED_BY);
-    silence.put(
-        "comment",
-        "console silence for alert_event id=" + alert.getId() + " type=" + alert.getAlertType());
-    String silenceUri = stripTrailingSlash(props.getApiBaseUrl()) + SILENCES_PATH;
-    post(silenceUri, silence, "silence");
-  }
 
-  private void sendResolved(AlertEventEntity alert) {
-    Instant now = Instant.now();
-    // I-1:必须与 emit publisher 的 firing label 集严格一致(含 service),否则 AM 匹配不到原 firing,只新建
-    // 幽灵 resolved,原告警仍等 resolve_timeout。共用 AlertLabels.canonicalLabels 保证一致。
-    Map<String, String> labels = AlertLabels.canonicalLabels(alert);
-    Map<String, Object> resolved = new LinkedHashMap<>();
-    resolved.put("labels", labels);
-    // endsAt=now → AM 立即判定 resolved,不必等 resolve_timeout。
-    resolved.put("endsAt", now.toString());
-    String resolvedUri = stripTrailingSlash(props.getApiBaseUrl()) + ALERTS_PATH;
-    post(resolvedUri, List.of(resolved), "resolve");
-  }
-
-  private Map<String, Object> matcher(String name, String value) {
-    Map<String, Object> m = new LinkedHashMap<>();
-    m.put("name", name);
-    m.put("value", value);
-    m.put("isRegex", false);
-    m.put("isEqual", true);
-    return m;
-  }
-
-  private void post(String uri, Object body, String action) {
-    try {
-      String serializedBody = JsonUtils.toJson(body);
-      Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMillis());
-      Duration responseTimeout = Duration.ofMillis(props.getTimeoutMillis());
-      OutboundHttpContent httpContent =
-          new OutboundHttpContent(serializedBody, "application/json; charset=utf-8");
-      OutboundHttpRequest request = OutboundHttpRequest.post(
-          uri,
-          Map.of(),
-          httpContent,
-          connectTimeout,
-          responseTimeout,
-          OutboundAddressPolicy.TRUSTED);
-      OutboundHttpResponse response = httpTransport.execute(request);
-      if (response.isSuccessful()) {
-        recordSilenceMetric("success", action);
-      } else {
-        recordSilenceMetric("http_error", action);
-        log.warn("am_silence bridge non-2xx: action={} status={}", action, response.statusCode());
-      }
-    } catch (RuntimeException | IOException ex) {
-      recordSilenceMetric("failed", action);
-      SwallowedExceptionLogger.warn(AlertmanagerSilenceBridge.class, "catch:am_silence", ex);
+    private void post(String uri, Object body, String action) {
+        try {
+            String serializedBody = JsonUtils.toJson(body);
+            Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMillis());
+            Duration responseTimeout = Duration.ofMillis(props.getTimeoutMillis());
+            OutboundHttpContent httpContent =
+                    new OutboundHttpContent(serializedBody, "application/json; charset=utf-8");
+            OutboundHttpRequest request = OutboundHttpRequest.post(
+                    uri, Map.of(), httpContent, connectTimeout, responseTimeout, OutboundAddressPolicy.TRUSTED);
+            OutboundHttpResponse response = httpTransport.execute(request);
+            if (response.isSuccessful()) {
+                recordSilenceMetric("success", action);
+            } else {
+                recordSilenceMetric("http_error", action);
+                log.warn("am_silence bridge non-2xx: action={} status={}", action, response.statusCode());
+            }
+        } catch (RuntimeException | IOException ex) {
+            recordSilenceMetric("failed", action);
+            SwallowedExceptionLogger.warn(AlertmanagerSilenceBridge.class, "catch:am_silence", ex);
+        }
     }
-  }
 
-  private static String stripTrailingSlash(String url) {
-    return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
-  }
-
-  private void recordSilenceMetric(String outcome, String action) {
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry == null) {
-      return;
+    private static String stripTrailingSlash(String url) {
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
-    Counter.builder(METRIC)
-        .tags(Tags.of("outcome", outcome, "action", action))
-        .register(registry)
-        .increment();
-  }
+
+    private void recordSilenceMetric(String outcome, String action) {
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry == null) {
+            return;
+        }
+        Counter.builder(METRIC)
+                .tags(Tags.of("outcome", outcome, "action", action))
+                .register(registry)
+                .increment();
+    }
 }

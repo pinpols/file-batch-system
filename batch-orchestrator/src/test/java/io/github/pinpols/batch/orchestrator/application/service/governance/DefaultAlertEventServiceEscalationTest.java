@@ -21,86 +21,85 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("告警升级 sweep")
 class DefaultAlertEventServiceEscalationTest {
 
-  @Mock
-  private AlertEventMapper alertEventMapper;
+    @Mock
+    private AlertEventMapper alertEventMapper;
 
-  private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
-  @Mock
-  private AlertmanagerEmitPublisher alertmanagerEmitPublisher;
+    @Mock
+    private AlertmanagerEmitPublisher alertmanagerEmitPublisher;
 
-  private DefaultAlertEventService service() {
-    return new DefaultAlertEventService(alertEventMapper, meterRegistry, alertmanagerEmitPublisher);
-  }
+    private DefaultAlertEventService service() {
+        return new DefaultAlertEventService(alertEventMapper, meterRegistry, alertmanagerEmitPublisher);
+    }
 
-  private static AlertEventEntity overdueAlert(long id, Integer tier) {
-    AlertEventEntity entity = new AlertEventEntity();
-    entity.setId(id);
-    entity.setTenantId("t1");
-    entity.setAlertType("SLA_BREACH");
-    entity.setSeverity("WARN");
-    entity.setStatus("OPEN");
-    entity.setEscalationTier(tier);
-    return entity;
-  }
+    private static AlertEventEntity overdueAlert(long id, Integer tier) {
+        AlertEventEntity entity = new AlertEventEntity();
+        entity.setId(id);
+        entity.setTenantId("t1");
+        entity.setAlertType("SLA_BREACH");
+        entity.setSeverity("WARN");
+        entity.setStatus("OPEN");
+        entity.setEscalationTier(tier);
+        return entity;
+    }
 
-  @Test
-  @DisplayName("逐条升级并按受影响行数计数")
-  void shouldEscalateEachOverdueAlert_whenCasSucceeds() {
-    // arrange
-    when(alertEventMapper.selectOverdueForEscalation(30, 3, 200))
-        .thenReturn(List.of(overdueAlert(1L, 0), overdueAlert(2L, 1)));
-    when(alertEventMapper.markEscalated(1L, "t1", 0)).thenReturn(1);
-    when(alertEventMapper.markEscalated(2L, "t1", 1)).thenReturn(1);
+    @Test
+    @DisplayName("逐条升级并按受影响行数计数")
+    void shouldEscalateEachOverdueAlert_whenCasSucceeds() {
+        // arrange
+        when(alertEventMapper.selectOverdueForEscalation(30, 3, 200))
+                .thenReturn(List.of(overdueAlert(1L, 0), overdueAlert(2L, 1)));
+        when(alertEventMapper.markEscalated(1L, "t1", 0)).thenReturn(1);
+        when(alertEventMapper.markEscalated(2L, "t1", 1)).thenReturn(1);
 
-    // act
-    int escalated = service().escalateOverdue(30, 3, 200);
+        // act
+        int escalated = service().escalateOverdue(30, 3, 200);
 
-    // assert
-    assertThat(escalated).isEqualTo(2);
-    assertThat(meterRegistry.find("batch.alert.escalations").counters()).isNotEmpty();
-  }
+        // assert
+        assertThat(escalated).isEqualTo(2);
+        assertThat(meterRegistry.find("batch.alert.escalations").counters()).isNotEmpty();
+    }
 
-  @Test
-  @DisplayName("CAS 落空(被并发 ack/抢先升级)不计入")
-  void shouldSkipAlert_whenCasReturnsZero() {
-    // arrange
-    when(alertEventMapper.selectOverdueForEscalation(30, 3, 200))
-        .thenReturn(List.of(overdueAlert(1L, 0), overdueAlert(2L, 0)));
-    when(alertEventMapper.markEscalated(1L, "t1", 0)).thenReturn(0);
-    when(alertEventMapper.markEscalated(2L, "t1", 0)).thenReturn(1);
+    @Test
+    @DisplayName("CAS 落空(被并发 ack/抢先升级)不计入")
+    void shouldSkipAlert_whenCasReturnsZero() {
+        // arrange
+        when(alertEventMapper.selectOverdueForEscalation(30, 3, 200))
+                .thenReturn(List.of(overdueAlert(1L, 0), overdueAlert(2L, 0)));
+        when(alertEventMapper.markEscalated(1L, "t1", 0)).thenReturn(0);
+        when(alertEventMapper.markEscalated(2L, "t1", 0)).thenReturn(1);
 
-    // act
-    int escalated = service().escalateOverdue(30, 3, 200);
+        // act
+        int escalated = service().escalateOverdue(30, 3, 200);
 
-    // assert
-    assertThat(escalated).isEqualTo(1);
-  }
+        // assert
+        assertThat(escalated).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("null tier 视为 0,expectedTier 守护传 0")
-  void shouldTreatNullTierAsZero() {
-    // arrange
-    when(alertEventMapper.selectOverdueForEscalation(30, 3, 200))
-        .thenReturn(List.of(overdueAlert(1L, null)));
-    when(alertEventMapper.markEscalated(1L, "t1", 0)).thenReturn(1);
+    @Test
+    @DisplayName("null tier 视为 0,expectedTier 守护传 0")
+    void shouldTreatNullTierAsZero() {
+        // arrange
+        when(alertEventMapper.selectOverdueForEscalation(30, 3, 200)).thenReturn(List.of(overdueAlert(1L, null)));
+        when(alertEventMapper.markEscalated(1L, "t1", 0)).thenReturn(1);
 
-    // act
-    int escalated = service().escalateOverdue(30, 3, 200);
+        // act
+        int escalated = service().escalateOverdue(30, 3, 200);
 
-    // assert
-    assertThat(escalated).isEqualTo(1);
-    verify(alertEventMapper).markEscalated(1L, "t1", 0);
-  }
+        // assert
+        assertThat(escalated).isEqualTo(1);
+        verify(alertEventMapper).markEscalated(1L, "t1", 0);
+    }
 
-  @Test
-  @DisplayName("非法参数直接短路,不查库")
-  void shouldShortCircuit_whenParamsInvalid() {
-    // act
-    int escalated = service().escalateOverdue(0, 3, 200);
+    @Test
+    @DisplayName("非法参数直接短路,不查库")
+    void shouldShortCircuit_whenParamsInvalid() {
+        // act
+        int escalated = service().escalateOverdue(0, 3, 200);
 
-    // assert
-    assertThat(escalated).isZero();
-    verify(alertEventMapper, never()).selectOverdueForEscalation(anyInt(), anyInt(), anyInt());
-  }
+        // assert
+        assertThat(escalated).isZero();
+        verify(alertEventMapper, never()).selectOverdueForEscalation(anyInt(), anyInt(), anyInt());
+    }
 }

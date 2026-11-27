@@ -15,6 +15,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @SuppressWarnings("ConfigurationProperties") // 与 WorkerConcurrencyProperties 共享前缀，子键互不重叠。
 public class WorkerTempFileProperties {
 
-  /** 临时目录中超过该小时数未更新的文件视为陈旧、可清理。 */
-  private long staleTempFileHours = 6;
+    /** 临时目录中超过该小时数未更新的文件视为陈旧、可清理。 */
+    private long staleTempFileHours = 6;
 }

@@ -53,347 +53,347 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultResourceSchedulerTest {
 
-  @Mock
-  private ResourceQueueManager queueManager;
+    @Mock
+    private ResourceQueueManager queueManager;
 
-  @Mock
-  private ConcurrencyLimiter concurrencyLimiter;
+    @Mock
+    private ConcurrencyLimiter concurrencyLimiter;
 
-  @Mock
-  private PartitionThrottle partitionThrottle;
+    @Mock
+    private PartitionThrottle partitionThrottle;
 
-  @Mock
-  private DispatchAdmissionLimiter dispatchAdmissionLimiter;
+    @Mock
+    private DispatchAdmissionLimiter dispatchAdmissionLimiter;
 
-  @Mock
-  private DownstreamAdmissionGuard downstreamAdmissionGuard;
+    @Mock
+    private DownstreamAdmissionGuard downstreamAdmissionGuard;
 
-  @Mock
-  private WorkerSelector workerSelector;
+    @Mock
+    private WorkerSelector workerSelector;
 
-  @Mock
-  private PriorityScheduler priorityScheduler;
+    @Mock
+    private PriorityScheduler priorityScheduler;
 
-  @Mock
-  private OrchestratorConfigCacheService configCacheService;
+    @Mock
+    private OrchestratorConfigCacheService configCacheService;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private BatchTimezoneProvider timezoneProvider;
+    @Mock
+    private BatchTimezoneProvider timezoneProvider;
 
-  @Mock
-  private BatchDateTimeSupport dateTimeSupport;
+    @Mock
+    private BatchDateTimeSupport dateTimeSupport;
 
-  private ResourceSchedulerProperties resourceSchedulerProperties;
+    private ResourceSchedulerProperties resourceSchedulerProperties;
 
-  private DefaultResourceScheduler scheduler;
+    private DefaultResourceScheduler scheduler;
 
-  @BeforeEach
-  void setUp() {
-    resourceSchedulerProperties = new ResourceSchedulerProperties();
-    scheduler = new DefaultResourceScheduler(
-        queueManager,
-        concurrencyLimiter,
-        partitionThrottle,
-        dispatchAdmissionLimiter,
-        downstreamAdmissionGuard,
-        workerSelector,
-        priorityScheduler,
-        configCacheService,
-        jobInstanceMapper,
-        jobPartitionMapper,
-        timezoneProvider,
-        dateTimeSupport,
-        resourceSchedulerProperties);
+    @BeforeEach
+    void setUp() {
+        resourceSchedulerProperties = new ResourceSchedulerProperties();
+        scheduler = new DefaultResourceScheduler(
+                queueManager,
+                concurrencyLimiter,
+                partitionThrottle,
+                dispatchAdmissionLimiter,
+                downstreamAdmissionGuard,
+                workerSelector,
+                priorityScheduler,
+                configCacheService,
+                jobInstanceMapper,
+                jobPartitionMapper,
+                timezoneProvider,
+                dateTimeSupport,
+                resourceSchedulerProperties);
 
-    when(queueManager.resolveQueue(any())).thenReturn(null);
-    when(priorityScheduler.resolvePriority(any(), any())).thenReturn(5);
-    when(priorityScheduler.resolvePriorityBand(any())).thenReturn("MEDIUM");
-  }
+        when(queueManager.resolveQueue(any())).thenReturn(null);
+        when(priorityScheduler.resolvePriority(any(), any())).thenReturn(5);
+        when(priorityScheduler.resolvePriorityBand(any())).thenReturn("MEDIUM");
+    }
 
-  private void preparePassingAdmission() {
-    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
-  }
+    private void preparePassingAdmission() {
+        when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
+    }
 
-  private static WorkerRouteModel availableRoute() {
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setAvailable(true);
-    route.setWorkerCode("w-1");
-    return route;
-  }
+    private static WorkerRouteModel availableRoute() {
+        WorkerRouteModel route = new WorkerRouteModel();
+        route.setAvailable(true);
+        route.setWorkerCode("w-1");
+        return route;
+    }
 
-  private ResourceSchedulingRequest req() {
-    ResourceSchedulingRequest r = new ResourceSchedulingRequest();
-    r.setTenantId("ta");
-    r.setJobCode("j1");
-    r.setQueueCode("default");
-    r.setWorkerGroup("default");
-    return r;
-  }
+    private ResourceSchedulingRequest req() {
+        ResourceSchedulingRequest r = new ResourceSchedulingRequest();
+        r.setTenantId("ta");
+        r.setJobCode("j1");
+        r.setQueueCode("default");
+        r.setWorkerGroup("default");
+        return r;
+    }
 
-  @Test
-  @DisplayName("选路和下游检查完成前不调用会取得租户准入锁的并发检查")
-  void shouldSelectWorkerBeforeTakingTenantAdmissionLock() {
-    preparePassingAdmission();
-    WorkerRouteModel route = availableRoute();
-    when(workerSelector.select(any(), any(), any())).thenReturn(route);
+    @Test
+    @DisplayName("选路和下游检查完成前不调用会取得租户准入锁的并发检查")
+    void shouldSelectWorkerBeforeTakingTenantAdmissionLock() {
+        preparePassingAdmission();
+        WorkerRouteModel route = availableRoute();
+        when(workerSelector.select(any(), any(), any())).thenReturn(route);
 
-    assertThat(scheduler.schedule(req()).isDispatchable()).isTrue();
+        assertThat(scheduler.schedule(req()).isDispatchable()).isTrue();
 
-    InOrder order = inOrder(
-        workerSelector,
-        downstreamAdmissionGuard,
-        dispatchAdmissionLimiter,
-        concurrencyLimiter,
-        partitionThrottle);
-    order.verify(workerSelector).select(any(), any(), any());
-    order.verify(downstreamAdmissionGuard).check(any());
-    order.verify(dispatchAdmissionLimiter).check(any(), any());
-    order.verify(concurrencyLimiter).check(any(), any());
-    order.verify(partitionThrottle).check(any(), any());
-  }
+        InOrder order = inOrder(
+                workerSelector,
+                downstreamAdmissionGuard,
+                dispatchAdmissionLimiter,
+                concurrencyLimiter,
+                partitionThrottle);
+        order.verify(workerSelector).select(any(), any(), any());
+        order.verify(downstreamAdmissionGuard).check(any());
+        order.verify(dispatchAdmissionLimiter).check(any(), any());
+        order.verify(concurrencyLimiter).check(any(), any());
+        order.verify(partitionThrottle).check(any(), any());
+    }
 
-  @Test
-  @DisplayName("concurrency block → dispatchable=false, 不再做 partition check")
-  void shouldDeferAndSkipLaterChecks_whenConcurrencyLimited() {
-    when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
-    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(concurrencyLimiter.check(any(), any()))
-        .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT", "max running reached"));
+    @Test
+    @DisplayName("concurrency block → dispatchable=false, 不再做 partition check")
+    void shouldDeferAndSkipLaterChecks_whenConcurrencyLimited() {
+        when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
+        when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(concurrencyLimiter.check(any(), any()))
+                .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT", "max running reached"));
 
-    ResourceSchedulingDecision d = scheduler.schedule(req());
-    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
-    assertThat(d.isDispatchable()).isFalse();
-    assertThat(d.getReasonCode()).isEqualTo("CONCURRENCY_LIMIT");
-    verify(partitionThrottle, never()).check(any(), any());
-  }
+        ResourceSchedulingDecision d = scheduler.schedule(req());
+        assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
+        assertThat(d.isDispatchable()).isFalse();
+        assertThat(d.getReasonCode()).isEqualTo("CONCURRENCY_LIMIT");
+        verify(partitionThrottle, never()).check(any(), any());
+    }
 
-  @Test
-  @DisplayName("partition block → dispatchable=false；选路已在取锁前完成")
-  void shouldDeferAfterWorkerSelection_whenPartitionThrottled() {
-    when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
-    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(partitionThrottle.check(any(), any()))
-        .thenReturn(ResourceCheck.waitForCapacity("PARTITION_THROTTLE", "throttled"));
+    @Test
+    @DisplayName("partition block → dispatchable=false；选路已在取锁前完成")
+    void shouldDeferAfterWorkerSelection_whenPartitionThrottled() {
+        when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
+        when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(partitionThrottle.check(any(), any()))
+                .thenReturn(ResourceCheck.waitForCapacity("PARTITION_THROTTLE", "throttled"));
 
-    ResourceSchedulingDecision d = scheduler.schedule(req());
-    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
-    assertThat(d.isDispatchable()).isFalse();
-    assertThat(d.getReasonCode()).isEqualTo("PARTITION_THROTTLE");
-    verify(workerSelector).select(any(), any(), any());
-  }
+        ResourceSchedulingDecision d = scheduler.schedule(req());
+        assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
+        assertThat(d.isDispatchable()).isFalse();
+        assertThat(d.getReasonCode()).isEqualTo("PARTITION_THROTTLE");
+        verify(workerSelector).select(any(), any(), any());
+    }
 
-  @Test
-  @DisplayName("worker 不可用 → blocked + reasonCode=NO_AVAILABLE_WORKER，且不取租户准入锁")
-  void shouldDefer_whenNoWorkerRouteAvailable() {
-    when(workerSelector.select(any(), any(), any())).thenReturn(null);
+    @Test
+    @DisplayName("worker 不可用 → blocked + reasonCode=NO_AVAILABLE_WORKER，且不取租户准入锁")
+    void shouldDefer_whenNoWorkerRouteAvailable() {
+        when(workerSelector.select(any(), any(), any())).thenReturn(null);
 
-    ResourceSchedulingDecision d = scheduler.schedule(req());
-    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
-    assertThat(d.isDispatchable()).isFalse();
-    assertThat(d.getReasonCode()).isEqualTo("NO_AVAILABLE_WORKER");
-    verify(concurrencyLimiter, never()).check(any(), any());
-  }
+        ResourceSchedulingDecision d = scheduler.schedule(req());
+        assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
+        assertThat(d.isDispatchable()).isFalse();
+        assertThat(d.getReasonCode()).isEqualTo("NO_AVAILABLE_WORKER");
+        verify(concurrencyLimiter, never()).check(any(), any());
+    }
 
-  @Test
-  @DisplayName("worker.available=false → 同样 blocked")
-  void shouldDefer_whenWorkerRouteMarkedUnavailable() {
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setAvailable(false);
-    when(workerSelector.select(any(), any(), any())).thenReturn(route);
+    @Test
+    @DisplayName("worker.available=false → 同样 blocked")
+    void shouldDefer_whenWorkerRouteMarkedUnavailable() {
+        WorkerRouteModel route = new WorkerRouteModel();
+        route.setAvailable(false);
+        when(workerSelector.select(any(), any(), any())).thenReturn(route);
 
-    ResourceSchedulingDecision d = scheduler.schedule(req());
-    assertThat(d.isDispatchable()).isFalse();
-    assertThat(d.getReasonCode()).isEqualTo("NO_AVAILABLE_WORKER");
-    verify(concurrencyLimiter, never()).check(any(), any());
-  }
+        ResourceSchedulingDecision d = scheduler.schedule(req());
+        assertThat(d.isDispatchable()).isFalse();
+        assertThat(d.getReasonCode()).isEqualTo("NO_AVAILABLE_WORKER");
+        verify(concurrencyLimiter, never()).check(any(), any());
+    }
 
-  @Test
-  @DisplayName("全通过 → dispatchable=true + 决策字段齐全")
-  void shouldAcceptWithFullDecision_whenAllChecksPass() {
-    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setAvailable(true);
-    route.setWorkerCode("w-1");
-    when(workerSelector.select(any(), any(), any())).thenReturn(route);
+    @Test
+    @DisplayName("全通过 → dispatchable=true + 决策字段齐全")
+    void shouldAcceptWithFullDecision_whenAllChecksPass() {
+        when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
+        WorkerRouteModel route = new WorkerRouteModel();
+        route.setAvailable(true);
+        route.setWorkerCode("w-1");
+        when(workerSelector.select(any(), any(), any())).thenReturn(route);
 
-    ResourceSchedulingDecision d = scheduler.schedule(req());
-    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.ACCEPT);
-    assertThat(d.isDispatchable()).isTrue();
-    assertThat(d.getPriority()).isEqualTo(5);
-    assertThat(d.getPriorityBand()).isEqualTo("MEDIUM");
-    assertThat(d.getRoute()).isSameAs(route);
-    assertThat(d.getPartitionStatus()).isEqualTo("CREATED");
-    assertThat(d.getTaskStatus()).isEqualTo("CREATED");
-    assertThat(d.getFairnessScore()).isNull();
-    verify(jobInstanceMapper, never()).countActiveByTenant(anyString());
-    verify(jobPartitionMapper, never())
-        .countActiveByTenant(ArgumentMatchers.argThat(parameters -> parameters != null
-            && parameters.tenantId() != null
-            && parameters.waitingStatus() != null
-            && parameters.readyStatus() != null
-            && parameters.runningStatus() != null
-            && parameters.retryingStatus() != null));
-  }
+        ResourceSchedulingDecision d = scheduler.schedule(req());
+        assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.ACCEPT);
+        assertThat(d.isDispatchable()).isTrue();
+        assertThat(d.getPriority()).isEqualTo(5);
+        assertThat(d.getPriorityBand()).isEqualTo("MEDIUM");
+        assertThat(d.getRoute()).isSameAs(route);
+        assertThat(d.getPartitionStatus()).isEqualTo("CREATED");
+        assertThat(d.getTaskStatus()).isEqualTo("CREATED");
+        assertThat(d.getFairnessScore()).isNull();
+        verify(jobInstanceMapper, never()).countActiveByTenant(anyString());
+        verify(jobPartitionMapper, never())
+                .countActiveByTenant(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && parameters.tenantId() != null
+                        && parameters.waitingStatus() != null
+                        && parameters.readyStatus() != null
+                        && parameters.runningStatus() != null
+                        && parameters.retryingStatus() != null));
+    }
 
-  @Test
-  @DisplayName("blocker reasonCode 含 _DEGRADED 后缀 → 决策 priority 降到 1 / band=LOW (fairness 沉到队尾)")
-  void shouldLowerPriorityToMinimum_whenBlockerDegraded() {
-    when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
-    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(concurrencyLimiter.check(any(), any()))
-        .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT_DEGRADED", "degraded"));
+    @Test
+    @DisplayName("blocker reasonCode 含 _DEGRADED 后缀 → 决策 priority 降到 1 / band=LOW (fairness 沉到队尾)")
+    void shouldLowerPriorityToMinimum_whenBlockerDegraded() {
+        when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
+        when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(concurrencyLimiter.check(any(), any()))
+                .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT_DEGRADED", "degraded"));
 
-    ResourceSchedulingDecision d = scheduler.schedule(req());
-    assertThat(d.isDispatchable()).isFalse();
-    assertThat(d.getPriority()).isEqualTo(1);
-    assertThat(d.getPriorityBand()).isEqualTo("LOW");
-  }
+        ResourceSchedulingDecision d = scheduler.schedule(req());
+        assertThat(d.isDispatchable()).isFalse();
+        assertThat(d.getPriority()).isEqualTo(1);
+        assertThat(d.getPriorityBand()).isEqualTo("LOW");
+    }
 
-  @Test
-  @DisplayName("WAITING 分片等待越久 → fairnessScore 获得 aging bonus")
-  void shouldAddFairnessBonus_whenWaitingLonger() {
-    when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-06-30T03:00:00Z"));
-    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setAvailable(true);
-    when(workerSelector.select(any(), any(), any())).thenReturn(route);
-    resourceSchedulerProperties.setPriorityAgingStepSeconds(60);
-    resourceSchedulerProperties.setPriorityAgingBonusPerStep(100);
+    @Test
+    @DisplayName("WAITING 分片等待越久 → fairnessScore 获得 aging bonus")
+    void shouldAddFairnessBonus_whenWaitingLonger() {
+        when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-06-30T03:00:00Z"));
+        when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
+        WorkerRouteModel route = new WorkerRouteModel();
+        route.setAvailable(true);
+        when(workerSelector.select(any(), any(), any())).thenReturn(route);
+        resourceSchedulerProperties.setPriorityAgingStepSeconds(60);
+        resourceSchedulerProperties.setPriorityAgingBonusPerStep(100);
 
-    ResourceSchedulingRequest fresh = req();
-    fresh.setWaitingSince(Instant.parse("2026-06-30T02:59:30Z"));
-    ResourceSchedulingRequest aged = req();
-    aged.setWaitingSince(Instant.parse("2026-06-30T02:50:00Z"));
+        ResourceSchedulingRequest fresh = req();
+        fresh.setWaitingSince(Instant.parse("2026-06-30T02:59:30Z"));
+        ResourceSchedulingRequest aged = req();
+        aged.setWaitingSince(Instant.parse("2026-06-30T02:50:00Z"));
 
-    long freshScore = scheduler.schedule(fresh).getFairnessScore();
-    long agedScore = scheduler.schedule(aged).getFairnessScore();
+        long freshScore = scheduler.schedule(fresh).getFairnessScore();
+        long agedScore = scheduler.schedule(aged).getFairnessScore();
 
-    assertThat(agedScore).isGreaterThan(freshScore);
-  }
+        assertThat(agedScore).isGreaterThan(freshScore);
+    }
 
-  @Test
-  @DisplayName("等待加分乘法超出 long 范围时按配置上限封顶，不得变成负分")
-  void shouldCapAgingBonusBeforeMultiplicationOverflows() {
-    prepareAgingDecision();
-    resourceSchedulerProperties.setPriorityAgingStepSeconds(1);
-    resourceSchedulerProperties.setPriorityAgingBonusPerStep(Long.MAX_VALUE);
-    resourceSchedulerProperties.setPriorityAgingMaxBonus(20_000);
-    ResourceSchedulingRequest aged = req();
-    aged.setWaitingSince(Instant.parse("2026-06-30T02:59:58Z"));
-    ResourceSchedulingRequest fresh = req();
-    fresh.setWaitingSince(Instant.parse("2026-06-30T03:00:00Z"));
-    long base = scheduler.schedule(fresh).getFairnessScore();
-    long score = scheduler.schedule(aged).getFairnessScore();
-    assertThat(score).isEqualTo(base + 20_000);
-  }
+    @Test
+    @DisplayName("等待加分乘法超出 long 范围时按配置上限封顶，不得变成负分")
+    void shouldCapAgingBonusBeforeMultiplicationOverflows() {
+        prepareAgingDecision();
+        resourceSchedulerProperties.setPriorityAgingStepSeconds(1);
+        resourceSchedulerProperties.setPriorityAgingBonusPerStep(Long.MAX_VALUE);
+        resourceSchedulerProperties.setPriorityAgingMaxBonus(20_000);
+        ResourceSchedulingRequest aged = req();
+        aged.setWaitingSince(Instant.parse("2026-06-30T02:59:58Z"));
+        ResourceSchedulingRequest fresh = req();
+        fresh.setWaitingSince(Instant.parse("2026-06-30T03:00:00Z"));
+        long base = scheduler.schedule(fresh).getFairnessScore();
+        long score = scheduler.schedule(aged).getFairnessScore();
+        assertThat(score).isEqualTo(base + 20_000);
+    }
 
-  @Test
-  @DisplayName("等待加分与基础分之和超出 long 范围时保持最大分")
-  void shouldSaturateFairnessScoreWhenAdditionOverflows() {
-    prepareAgingDecision();
-    resourceSchedulerProperties.setPriorityAgingStepSeconds(1);
-    resourceSchedulerProperties.setPriorityAgingBonusPerStep(Long.MAX_VALUE);
-    resourceSchedulerProperties.setPriorityAgingMaxBonus(Long.MAX_VALUE);
-    ResourceSchedulingRequest aged = req();
-    aged.setWaitingSince(Instant.parse("2026-06-30T02:59:59Z"));
-    assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(Long.MAX_VALUE);
-  }
+    @Test
+    @DisplayName("等待加分与基础分之和超出 long 范围时保持最大分")
+    void shouldSaturateFairnessScoreWhenAdditionOverflows() {
+        prepareAgingDecision();
+        resourceSchedulerProperties.setPriorityAgingStepSeconds(1);
+        resourceSchedulerProperties.setPriorityAgingBonusPerStep(Long.MAX_VALUE);
+        resourceSchedulerProperties.setPriorityAgingMaxBonus(Long.MAX_VALUE);
+        ResourceSchedulingRequest aged = req();
+        aged.setWaitingSince(Instant.parse("2026-06-30T02:59:59Z"));
+        assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(Long.MAX_VALUE);
+    }
 
-  @Test
-  @DisplayName("非正的老化步长按配置约定回退 60 秒")
-  void shouldUseDefaultAgingStepWhenConfiguredStepIsNotPositive() {
-    prepareAgingDecision();
-    resourceSchedulerProperties.setPriorityAgingStepSeconds(0);
-    resourceSchedulerProperties.setPriorityAgingBonusPerStep(100);
-    ResourceSchedulingRequest aged = req();
-    aged.setWaitingSince(Instant.parse("2026-06-30T02:59:30Z"));
-    ResourceSchedulingRequest fresh = req();
-    fresh.setWaitingSince(Instant.parse("2026-06-30T03:00:00Z"));
-    long base = scheduler.schedule(fresh).getFairnessScore();
-    assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(base);
-  }
+    @Test
+    @DisplayName("非正的老化步长按配置约定回退 60 秒")
+    void shouldUseDefaultAgingStepWhenConfiguredStepIsNotPositive() {
+        prepareAgingDecision();
+        resourceSchedulerProperties.setPriorityAgingStepSeconds(0);
+        resourceSchedulerProperties.setPriorityAgingBonusPerStep(100);
+        ResourceSchedulingRequest aged = req();
+        aged.setWaitingSince(Instant.parse("2026-06-30T02:59:30Z"));
+        ResourceSchedulingRequest fresh = req();
+        fresh.setWaitingSince(Instant.parse("2026-06-30T03:00:00Z"));
+        long base = scheduler.schedule(fresh).getFairnessScore();
+        assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(base);
+    }
 
-  @Test
-  @DisplayName("非法步长使用 60 秒，零或负加分上限不会降低基础分")
-  void shouldKeepAgingBonusNonnegativeAndHonorDefaultStep() {
-    prepareAgingDecision();
-    resourceSchedulerProperties.setPriorityAgingStepSeconds(-5);
-    resourceSchedulerProperties.setPriorityAgingBonusPerStep(100);
-    ResourceSchedulingRequest fresh = req();
-    fresh.setWaitingSince(Instant.parse("2026-06-30T03:00:00Z"));
-    ResourceSchedulingRequest aged = req();
-    aged.setWaitingSince(Instant.parse("2026-06-30T02:59:00Z"));
-    long base = scheduler.schedule(fresh).getFairnessScore();
-    assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(base + 100);
-    resourceSchedulerProperties.setPriorityAgingMaxBonus(0);
-    assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(base);
-    resourceSchedulerProperties.setPriorityAgingMaxBonus(200);
-    resourceSchedulerProperties.setPriorityAgingBonusPerStep(-1);
-    assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(base);
-  }
+    @Test
+    @DisplayName("非法步长使用 60 秒，零或负加分上限不会降低基础分")
+    void shouldKeepAgingBonusNonnegativeAndHonorDefaultStep() {
+        prepareAgingDecision();
+        resourceSchedulerProperties.setPriorityAgingStepSeconds(-5);
+        resourceSchedulerProperties.setPriorityAgingBonusPerStep(100);
+        ResourceSchedulingRequest fresh = req();
+        fresh.setWaitingSince(Instant.parse("2026-06-30T03:00:00Z"));
+        ResourceSchedulingRequest aged = req();
+        aged.setWaitingSince(Instant.parse("2026-06-30T02:59:00Z"));
+        long base = scheduler.schedule(fresh).getFairnessScore();
+        assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(base + 100);
+        resourceSchedulerProperties.setPriorityAgingMaxBonus(0);
+        assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(base);
+        resourceSchedulerProperties.setPriorityAgingMaxBonus(200);
+        resourceSchedulerProperties.setPriorityAgingBonusPerStep(-1);
+        assertThat(scheduler.schedule(aged).getFairnessScore()).isEqualTo(base);
+    }
 
-  private void prepareAgingDecision() {
-    when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-06-30T03:00:00Z"));
-    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setAvailable(true);
-    when(workerSelector.select(any(), any(), any())).thenReturn(route);
-  }
+    private void prepareAgingDecision() {
+        when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-06-30T03:00:00Z"));
+        when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
+        WorkerRouteModel route = new WorkerRouteModel();
+        route.setAvailable(true);
+        when(workerSelector.select(any(), any(), any())).thenReturn(route);
+    }
 
-  @Test
-  @DisplayName("阻塞项属于快速失败类型时候准入动作直接拒绝,且不再进入后续资源检查")
-  void shouldRejectAdmission_whenBlockerIsFailFast() {
-    when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
-    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(concurrencyLimiter.check(any(), any()))
-        .thenReturn(ResourceCheck.reject("TENANT_JOB_LIMIT", "tenant quota exceeded"));
+    @Test
+    @DisplayName("阻塞项属于快速失败类型时候准入动作直接拒绝,且不再进入后续资源检查")
+    void shouldRejectAdmission_whenBlockerIsFailFast() {
+        when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
+        when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(concurrencyLimiter.check(any(), any()))
+                .thenReturn(ResourceCheck.reject("TENANT_JOB_LIMIT", "tenant quota exceeded"));
 
-    ResourceSchedulingDecision d = scheduler.schedule(req());
+        ResourceSchedulingDecision d = scheduler.schedule(req());
 
-    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.REJECT);
-    assertThat(d.isFailFast()).isTrue();
-    assertThat(d.getReasonCode()).isEqualTo("TENANT_JOB_LIMIT");
-  }
+        assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.REJECT);
+        assertThat(d.isFailFast()).isTrue();
+        assertThat(d.getReasonCode()).isEqualTo("TENANT_JOB_LIMIT");
+    }
 
-  @Test
-  @DisplayName("队列字段 windowCode 为空 → 跳过 batch window 检查,允许后续 pipeline")
-  void shouldSkipWindowLookup_whenQueueWindowCodeBlank() {
-    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
-    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setAvailable(true);
-    when(workerSelector.select(any(), any(), any())).thenReturn(route);
+    @Test
+    @DisplayName("队列字段 windowCode 为空 → 跳过 batch window 检查,允许后续 pipeline")
+    void shouldSkipWindowLookup_whenQueueWindowCodeBlank() {
+        when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+        when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+        when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
+        WorkerRouteModel route = new WorkerRouteModel();
+        route.setAvailable(true);
+        when(workerSelector.select(any(), any(), any())).thenReturn(route);
 
-    ResourceSchedulingRequest r = req();
-    r.setWindowCode(""); // 空 window
-    ResourceSchedulingDecision d = scheduler.schedule(r);
-    assertThat(d.isDispatchable()).isTrue();
-    // 不调 configCacheService 查 window
-    verify(configCacheService, never()).findEnabledBatchWindow(anyString(), anyString());
-  }
+        ResourceSchedulingRequest r = req();
+        r.setWindowCode(""); // 空 window
+        ResourceSchedulingDecision d = scheduler.schedule(r);
+        assertThat(d.isDispatchable()).isTrue();
+        // 不调 configCacheService 查 window
+        verify(configCacheService, never()).findEnabledBatchWindow(anyString(), anyString());
+    }
 }

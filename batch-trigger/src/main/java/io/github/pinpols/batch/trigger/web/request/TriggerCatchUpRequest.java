@@ -6,10 +6,10 @@ import lombok.Data;
 @Data
 public class TriggerCatchUpRequest {
 
-  @NotBlank
-  private String tenantId;
+    @NotBlank
+    private String tenantId;
 
-  private String requestId;
-  private Long pendingId;
-  private String reason;
+    private String requestId;
+    private Long pendingId;
+    private String reason;
 }

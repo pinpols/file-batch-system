@@ -7,11 +7,10 @@ import org.apache.ibatis.annotations.Param;
 /** console-api 只读访问 {@code batch.job_task}：心跳进度子集(SDK Phase 4 / ORCH-P4-1)与执行审计子集。 */
 public interface JobTaskMapper {
 
-  /** 按租户 + taskId 读心跳进度;租户维度强制,跨租户读不到(返回 null)。 */
-  JobTaskHeartbeatView selectHeartbeatByTenantAndId(
-      @Param("tenantId") String tenantId, @Param("taskId") Long taskId);
+    /** 按租户 + taskId 读心跳进度;租户维度强制,跨租户读不到(返回 null)。 */
+    JobTaskHeartbeatView selectHeartbeatByTenantAndId(@Param("tenantId") String tenantId, @Param("taskId") Long taskId);
 
-  /** 按租户 + taskId 读执行审计子集；租户维度强制，跨租户读不到(返回 null)。 */
-  JobTaskExecutionAuditView selectExecutionAuditByTenantAndId(
-      @Param("tenantId") String tenantId, @Param("taskId") Long taskId);
+    /** 按租户 + taskId 读执行审计子集；租户维度强制，跨租户读不到(返回 null)。 */
+    JobTaskExecutionAuditView selectExecutionAuditByTenantAndId(
+            @Param("tenantId") String tenantId, @Param("taskId") Long taskId);
 }

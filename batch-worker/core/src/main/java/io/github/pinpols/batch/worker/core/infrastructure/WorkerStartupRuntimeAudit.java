@@ -31,211 +31,206 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkerStartupRuntimeAudit {
 
-  private final ObjectProvider<WorkerConfiguration> workerConfigurationProvider;
-  private final WorkerRuntimeState workerRuntimeState;
-  private final WorkerExecutionTimeoutProperties executionProperties;
-  private final WorkerReportOutboxProperties reportOutboxProperties;
-  private final ObjectProvider<WorkerReportOutboxRepository> reportOutboxRepositoryProvider;
-  private final ObjectProvider<WorkerStartupAuditContributor> contributorProvider;
-  private final WorkerConcurrencyProperties concurrencyProperties;
+    private final ObjectProvider<WorkerConfiguration> workerConfigurationProvider;
+    private final WorkerRuntimeState workerRuntimeState;
+    private final WorkerExecutionTimeoutProperties executionProperties;
+    private final WorkerReportOutboxProperties reportOutboxProperties;
+    private final ObjectProvider<WorkerReportOutboxRepository> reportOutboxRepositoryProvider;
+    private final ObjectProvider<WorkerStartupAuditContributor> contributorProvider;
+    private final WorkerConcurrencyProperties concurrencyProperties;
 
-  @Order(Ordered.LOWEST_PRECEDENCE)
-  @EventListener(ApplicationReadyEvent.class)
-  public void auditOnReady() {
-    Map<String, Object> core = auditCore();
-    List<String> unhealthy = new ArrayList<>();
-    if (Boolean.FALSE.equals(core.get("healthy"))) {
-      unhealthy.add("worker-core");
+    @Order(Ordered.LOWEST_PRECEDENCE)
+    @EventListener(ApplicationReadyEvent.class)
+    public void auditOnReady() {
+        Map<String, Object> core = auditCore();
+        List<String> unhealthy = new ArrayList<>();
+        if (Boolean.FALSE.equals(core.get("healthy"))) {
+            unhealthy.add("worker-core");
+        }
+        Map<String, Object> contributors = auditContributors(unhealthy);
+        boolean healthy = unhealthy.isEmpty();
+        if (healthy) {
+            log.info(
+                    "worker startup runtime audit OK: configurations={}, registeredWorkers={}, contributors={}",
+                    core.get("configurationCount"),
+                    core.get("registeredWorkers"),
+                    contributors.keySet());
+        } else {
+            log.warn(
+                    "worker startup runtime audit WARN: unhealthy={}, issues={}, configurations={}, registeredWorkers={}",
+                    unhealthy,
+                    core.get("issues"),
+                    core.get("configurationCount"),
+                    core.get("registeredWorkers"));
+        }
     }
-    Map<String, Object> contributors = auditContributors(unhealthy);
-    boolean healthy = unhealthy.isEmpty();
-    if (healthy) {
-      log.info(
-          "worker startup runtime audit OK: configurations={}, registeredWorkers={}, contributors={}",
-          core.get("configurationCount"),
-          core.get("registeredWorkers"),
-          contributors.keySet());
-    } else {
-      log.warn(
-          "worker startup runtime audit WARN: unhealthy={}, issues={}, configurations={}, registeredWorkers={}",
-          unhealthy,
-          core.get("issues"),
-          core.get("configurationCount"),
-          core.get("registeredWorkers"));
-    }
-  }
 
-  Map<String, Object> auditCore() {
-    Map<String, Object> details = new LinkedHashMap<>();
-    List<String> issues = new ArrayList<>();
-    List<WorkerConfiguration> configurations =
-        workerConfigurationProvider.stream().toList();
-    put(details, "configurationCount", configurations.size());
-    put(details, "configurations", auditConfigurations(configurations, issues));
-    if (configurations.isEmpty()) {
-      issues.add("workerConfiguration missing");
+    Map<String, Object> auditCore() {
+        Map<String, Object> details = new LinkedHashMap<>();
+        List<String> issues = new ArrayList<>();
+        List<WorkerConfiguration> configurations =
+                workerConfigurationProvider.stream().toList();
+        put(details, "configurationCount", configurations.size());
+        put(details, "configurations", auditConfigurations(configurations, issues));
+        if (configurations.isEmpty()) {
+            issues.add("workerConfiguration missing");
+        }
+        Collection<WorkerRegistration> registrations = workerRuntimeState.snapshot();
+        put(details, "registeredWorkers", registrations.size());
+        put(
+                details,
+                "registeredWorkerIds",
+                registrations.stream().map(WorkerRegistration::getWorkerId).toList());
+        if (registrations.isEmpty()) {
+            issues.add("no registered worker in runtime state");
+        }
+        long decommissioned = registrations.stream()
+                .filter(r -> WorkerRegistryStatus.DECOMMISSIONED.code().equalsIgnoreCase(nullToEmpty(r.getStatus())))
+                .count();
+        put(details, "decommissionedRegistrations", decommissioned);
+        if (decommissioned > 0) {
+            issues.add("registered worker status is DECOMMISSIONED");
+        }
+        int maxConcurrentTasks = concurrencyProperties.getMaxConcurrentTasks();
+        put(details, "maxConcurrentTasks", maxConcurrentTasks);
+        put(details, "executionPoolSize", executionProperties.getPoolSize());
+        if (maxConcurrentTasks <= 0) {
+            issues.add("maxConcurrentTasks<=0");
+        }
+        if (executionProperties.getPoolSize() < maxConcurrentTasks) {
+            issues.add("execution poolSize < maxConcurrentTasks");
+        }
+        put(details, "reportOutbox", auditReportOutbox(issues));
+        put(details, "issues", issues);
+        put(details, "healthy", issues.isEmpty());
+        return details;
     }
-    Collection<WorkerRegistration> registrations = workerRuntimeState.snapshot();
-    put(details, "registeredWorkers", registrations.size());
-    put(
-        details,
-        "registeredWorkerIds",
-        registrations.stream().map(WorkerRegistration::getWorkerId).toList());
-    if (registrations.isEmpty()) {
-      issues.add("no registered worker in runtime state");
-    }
-    long decommissioned = registrations.stream()
-        .filter(r ->
-            WorkerRegistryStatus.DECOMMISSIONED.code().equalsIgnoreCase(nullToEmpty(r.getStatus())))
-        .count();
-    put(details, "decommissionedRegistrations", decommissioned);
-    if (decommissioned > 0) {
-      issues.add("registered worker status is DECOMMISSIONED");
-    }
-    int maxConcurrentTasks = concurrencyProperties.getMaxConcurrentTasks();
-    put(details, "maxConcurrentTasks", maxConcurrentTasks);
-    put(details, "executionPoolSize", executionProperties.getPoolSize());
-    if (maxConcurrentTasks <= 0) {
-      issues.add("maxConcurrentTasks<=0");
-    }
-    if (executionProperties.getPoolSize() < maxConcurrentTasks) {
-      issues.add("execution poolSize < maxConcurrentTasks");
-    }
-    put(details, "reportOutbox", auditReportOutbox(issues));
-    put(details, "issues", issues);
-    put(details, "healthy", issues.isEmpty());
-    return details;
-  }
 
-  private List<Map<String, Object>> auditConfigurations(
-      List<WorkerConfiguration> configurations, List<String> issues) {
-    List<Map<String, Object>> results = new ArrayList<>();
-    for (WorkerConfiguration cfg : configurations) {
-      Map<String, Object> item = new LinkedHashMap<>();
-      put(item, "tenantId", cfg.tenantId());
-      put(item, "workerType", cfg.workerType());
-      put(item, "topic", cfg.topic());
-      put(item, "consumerGroupId", cfg.consumerGroupId());
-      put(item, "heartbeatIntervalMillis", cfg.heartbeatIntervalMillis());
-      put(item, "capabilityTags", cfg.capabilityTags());
-      requireText(issues, cfg.workerType(), "tenantId", cfg.tenantId());
-      requireText(issues, cfg.workerType(), "workerType", cfg.workerType());
-      requireText(issues, cfg.workerType(), "topic", cfg.topic());
-      requireText(issues, cfg.workerType(), "consumerGroupId", cfg.consumerGroupId());
-      if (cfg.heartbeatIntervalMillis() != null && cfg.heartbeatIntervalMillis() <= 0) {
-        issues.add(issuePrefix(cfg.workerType()) + "heartbeatIntervalMillis<=0");
-      }
-      if (cfg.capabilityTags().stream().anyMatch(tag -> !Texts.hasText(tag))) {
-        issues.add(issuePrefix(cfg.workerType()) + "capabilityTags contains blank tag");
-      }
-      results.add(item);
+    private List<Map<String, Object>> auditConfigurations(
+            List<WorkerConfiguration> configurations, List<String> issues) {
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (WorkerConfiguration cfg : configurations) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            put(item, "tenantId", cfg.tenantId());
+            put(item, "workerType", cfg.workerType());
+            put(item, "topic", cfg.topic());
+            put(item, "consumerGroupId", cfg.consumerGroupId());
+            put(item, "heartbeatIntervalMillis", cfg.heartbeatIntervalMillis());
+            put(item, "capabilityTags", cfg.capabilityTags());
+            requireText(issues, cfg.workerType(), "tenantId", cfg.tenantId());
+            requireText(issues, cfg.workerType(), "workerType", cfg.workerType());
+            requireText(issues, cfg.workerType(), "topic", cfg.topic());
+            requireText(issues, cfg.workerType(), "consumerGroupId", cfg.consumerGroupId());
+            if (cfg.heartbeatIntervalMillis() != null && cfg.heartbeatIntervalMillis() <= 0) {
+                issues.add(issuePrefix(cfg.workerType()) + "heartbeatIntervalMillis<=0");
+            }
+            if (cfg.capabilityTags().stream().anyMatch(tag -> !Texts.hasText(tag))) {
+                issues.add(issuePrefix(cfg.workerType()) + "capabilityTags contains blank tag");
+            }
+            results.add(item);
+        }
+        return results;
     }
-    return results;
-  }
 
-  private Map<String, Object> auditReportOutbox(List<String> issues) {
-    Map<String, Object> details = new LinkedHashMap<>();
-    put(details, "enabled", reportOutboxProperties.isEnabled());
-    put(details, "storage", reportOutboxProperties.getStorage());
-    put(details, "maxPublishAttempts", reportOutboxProperties.getMaxPublishAttempts());
-    put(
-        details,
-        "publishingStaleRecoverAfterMillis",
-        reportOutboxProperties.getPublishingStaleRecoverAfterMillis());
-    if (!reportOutboxProperties.isEnabled()) {
-      return details;
+    private Map<String, Object> auditReportOutbox(List<String> issues) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        put(details, "enabled", reportOutboxProperties.isEnabled());
+        put(details, "storage", reportOutboxProperties.getStorage());
+        put(details, "maxPublishAttempts", reportOutboxProperties.getMaxPublishAttempts());
+        put(
+                details,
+                "publishingStaleRecoverAfterMillis",
+                reportOutboxProperties.getPublishingStaleRecoverAfterMillis());
+        if (!reportOutboxProperties.isEnabled()) {
+            return details;
+        }
+        WorkerReportOutboxRepository repository = reportOutboxRepositoryProvider.getIfAvailable();
+        put(details, "repositoryPresent", repository != null);
+        if (repository == null) {
+            issues.add("report outbox enabled but repository missing");
+            return details;
+        }
+        try {
+            long cutoff = BatchDateTimeSupport.utcEpochMillis()
+                    - reportOutboxProperties.getPublishingStaleRecoverAfterMillis();
+            WorkerReportOutboxStats stats = repository.stats(cutoff);
+            put(details, "newCount", stats.newCount());
+            put(details, "publishingCount", stats.publishingCount());
+            put(details, "giveUpCount", stats.giveUpCount());
+            put(details, "stalePublishingCount", stats.stalePublishingCount());
+            if (stats.stalePublishingCount() > 0) {
+                issues.add("report outbox has stale PUBLISHING rows");
+            }
+            if (stats.giveUpCount() > 0) {
+                issues.add("report outbox has GIVE_UP rows");
+            }
+        } catch (RuntimeException ex) {
+            SwallowedExceptionLogger.warn(WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
+
+            put(details, "statsError", ex.getClass().getSimpleName());
+            issues.add("report outbox stats query failed");
+        }
+        return details;
     }
-    WorkerReportOutboxRepository repository = reportOutboxRepositoryProvider.getIfAvailable();
-    put(details, "repositoryPresent", repository != null);
-    if (repository == null) {
-      issues.add("report outbox enabled but repository missing");
-      return details;
+
+    private Map<String, Object> auditContributors(List<String> unhealthy) {
+        Map<String, Object> results = new LinkedHashMap<>();
+        List<WorkerStartupAuditContributor> contributors =
+                contributorProvider.orderedStream().toList();
+        for (WorkerStartupAuditContributor contributor : contributors) {
+            auditContributor(contributor, results, unhealthy);
+        }
+        return results;
     }
-    try {
-      long cutoff = BatchDateTimeSupport.utcEpochMillis()
-          - reportOutboxProperties.getPublishingStaleRecoverAfterMillis();
-      WorkerReportOutboxStats stats = repository.stats(cutoff);
-      put(details, "newCount", stats.newCount());
-      put(details, "publishingCount", stats.publishingCount());
-      put(details, "giveUpCount", stats.giveUpCount());
-      put(details, "stalePublishingCount", stats.stalePublishingCount());
-      if (stats.stalePublishingCount() > 0) {
-        issues.add("report outbox has stale PUBLISHING rows");
-      }
-      if (stats.giveUpCount() > 0) {
-        issues.add("report outbox has GIVE_UP rows");
-      }
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.warn(WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
 
-      put(details, "statsError", ex.getClass().getSimpleName());
-      issues.add("report outbox stats query failed");
+    private void auditContributor(
+            WorkerStartupAuditContributor contributor, Map<String, Object> results, List<String> unhealthy) {
+        String name = contributor.name();
+        try {
+            WorkerStartupAuditContributor.WorkerStartupAuditResult result = contributor.audit();
+            boolean healthyForDetails = result.healthy();
+            Map<String, Object> contributorDetails = result.details();
+            Map<String, Object> auditDetails = auditContributorDetails(healthyForDetails, contributorDetails, null);
+            put(results, name, auditDetails);
+            if (!result.healthy()) {
+                unhealthy.add(name);
+            }
+        } catch (RuntimeException ex) {
+            SwallowedExceptionLogger.warn(WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
+
+            Map<String, Object> emptyDetails = Map.of();
+            String failureType = ex.getClass().getSimpleName();
+            Map<String, Object> auditDetails = auditContributorDetails(false, emptyDetails, failureType);
+            put(results, name, auditDetails);
+            unhealthy.add(name);
+        }
     }
-    return details;
-  }
 
-  private Map<String, Object> auditContributors(List<String> unhealthy) {
-    Map<String, Object> results = new LinkedHashMap<>();
-    List<WorkerStartupAuditContributor> contributors =
-        contributorProvider.orderedStream().toList();
-    for (WorkerStartupAuditContributor contributor : contributors) {
-      auditContributor(contributor, results, unhealthy);
+    private void requireText(List<String> issues, String workerType, String field, String value) {
+        if (!Texts.hasText(value)) {
+            issues.add(issuePrefix(workerType) + field + " blank");
+        }
     }
-    return results;
-  }
 
-  private void auditContributor(
-      WorkerStartupAuditContributor contributor,
-      Map<String, Object> results,
-      List<String> unhealthy) {
-    String name = contributor.name();
-    try {
-      WorkerStartupAuditContributor.WorkerStartupAuditResult result = contributor.audit();
-      boolean healthyForDetails = result.healthy();
-      Map<String, Object> contributorDetails = result.details();
-      Map<String, Object> auditDetails =
-          auditContributorDetails(healthyForDetails, contributorDetails, null);
-      put(results, name, auditDetails);
-      if (!result.healthy()) {
-        unhealthy.add(name);
-      }
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.warn(WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
-
-      Map<String, Object> emptyDetails = Map.of();
-      String failureType = ex.getClass().getSimpleName();
-      Map<String, Object> auditDetails = auditContributorDetails(false, emptyDetails, failureType);
-      put(results, name, auditDetails);
-      unhealthy.add(name);
+    private String issuePrefix(String workerType) {
+        return Texts.hasText(workerType) ? workerType + ": " : "";
     }
-  }
 
-  private void requireText(List<String> issues, String workerType, String field, String value) {
-    if (!Texts.hasText(value)) {
-      issues.add(issuePrefix(workerType) + field + " blank");
+    private void put(Map<String, Object> map, String key, Object value) {
+        map.put(key, value == null ? "" : value);
     }
-  }
 
-  private String issuePrefix(String workerType) {
-    return Texts.hasText(workerType) ? workerType + ": " : "";
-  }
-
-  private void put(Map<String, Object> map, String key, Object value) {
-    map.put(key, value == null ? "" : value);
-  }
-
-  private String nullToEmpty(String value) {
-    return value == null ? "" : value;
-  }
-
-  private Map<String, Object> auditContributorDetails(
-      boolean healthy, Map<String, Object> details, String error) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    put(result, "healthy", healthy);
-    put(result, "details", details == null ? Map.of() : details);
-    if (error != null) {
-      put(result, "error", error);
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
-    return result;
-  }
+
+    private Map<String, Object> auditContributorDetails(boolean healthy, Map<String, Object> details, String error) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        put(result, "healthy", healthy);
+        put(result, "details", details == null ? Map.of() : details);
+        if (error != null) {
+            put(result, "error", error);
+        }
+        return result;
+    }
 }

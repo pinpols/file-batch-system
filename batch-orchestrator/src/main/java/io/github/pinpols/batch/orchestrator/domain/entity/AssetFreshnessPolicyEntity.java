@@ -4,13 +4,13 @@ import java.time.LocalTime;
 
 /** JOB asset freshness SLA 策略。 */
 public record AssetFreshnessPolicyEntity(
-    Long id,
-    String tenantId,
-    String assetCode,
-    String assetType,
-    LocalTime expectedByLocalTime,
-    String timezone,
-    Integer staleAfterSeconds,
-    Integer lookbackDays,
-    String severity,
-    Boolean enabled) {}
+        Long id,
+        String tenantId,
+        String assetCode,
+        String assetType,
+        LocalTime expectedByLocalTime,
+        String timezone,
+        Integer staleAfterSeconds,
+        Integer lookbackDays,
+        String severity,
+        Boolean enabled) {}

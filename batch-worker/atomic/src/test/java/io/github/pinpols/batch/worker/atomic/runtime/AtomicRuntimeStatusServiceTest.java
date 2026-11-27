@@ -37,163 +37,157 @@ import org.springframework.mock.env.MockEnvironment;
 @DisplayName("原子运行时状态服务: 执行器快照与生效来源分类")
 class AtomicRuntimeStatusServiceTest {
 
-  @Mock
-  private ObjectProvider<ShellExecutorProperties> shellProvider;
+    @Mock
+    private ObjectProvider<ShellExecutorProperties> shellProvider;
 
-  @Mock
-  private ObjectProvider<SqlExecutorProperties> sqlProvider;
+    @Mock
+    private ObjectProvider<SqlExecutorProperties> sqlProvider;
 
-  @Mock
-  private ObjectProvider<HttpExecutorProperties> httpProvider;
+    @Mock
+    private ObjectProvider<HttpExecutorProperties> httpProvider;
 
-  @Mock
-  private ObjectProvider<StoredProcExecutorProperties> storedProcProvider;
+    @Mock
+    private ObjectProvider<StoredProcExecutorProperties> storedProcProvider;
 
-  @Mock
-  private ObjectProvider<DataSource> dataSourceProvider;
+    @Mock
+    private ObjectProvider<DataSource> dataSourceProvider;
 
-  private MockEnvironment env;
-  private AtomicWorkerConfiguration workerCfg;
+    private MockEnvironment env;
+    private AtomicWorkerConfiguration workerCfg;
 
-  @BeforeEach
-  void setUp() {
-    env = new MockEnvironment();
-    workerCfg = new AtomicWorkerConfiguration(
-        "atomic-node-1", "ATOMIC", "tenant-x", 15000L, "topic.x", "group.x", List.of());
-  }
-
-  private AtomicRuntimeStatusService newService() {
-    return new AtomicRuntimeStatusService(
-        workerCfg,
-        env,
-        shellProvider,
-        sqlProvider,
-        httpProvider,
-        storedProcProvider,
-        dataSourceProvider);
-  }
-
-  @Test
-  @DisplayName("生产档位常规配置下应采集四类执行器的启用状态, 白名单规模与数据库方言")
-  void shouldCaptureAllFourExecutorStatuses_underNormalProdConfiguration() throws Exception {
-    // 准备:prod profile,http 未显式配置 → enforceAllowlistSource = prod-default
-    env.setActiveProfiles("prod");
-
-    ShellExecutorProperties shell = new ShellExecutorProperties();
-    shell.setEnabled(true);
-    shell.setCommandWhitelist(Set.of("/usr/bin/curl", "/usr/bin/wget"));
-    when(shellProvider.getIfAvailable()).thenReturn(shell);
-
-    SqlExecutorProperties sql = new SqlExecutorProperties();
-    sql.setEnabled(true);
-    when(sqlProvider.getIfAvailable()).thenReturn(sql);
-
-    HttpExecutorProperties http = new HttpExecutorProperties();
-    http.setEnabled(true);
-    http.setEnforceAllowlist(true); // 已被 HttpExecutorProdDefaults 翻过
-    http.setAllowedHostPatterns(Set.of("api.internal.*", "*.example.com"));
-    when(httpProvider.getIfAvailable()).thenReturn(http);
-
-    StoredProcExecutorProperties sp = new StoredProcExecutorProperties();
-    sp.setEnabled(true);
-    sp.setAllowedSchemas(Set.of("batch", "app"));
-    when(storedProcProvider.getIfAvailable()).thenReturn(sp);
-
-    DataSource ds = mock(DataSource.class);
-    Connection conn = mock(Connection.class);
-    DatabaseMetaData md = mock(DatabaseMetaData.class);
-    when(ds.getConnection()).thenReturn(conn);
-    when(conn.getMetaData()).thenReturn(md);
-    when(md.getDatabaseProductName()).thenReturn("PostgreSQL");
-    when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
-
-    // 执行
-    AtomicRuntimeStatus status = newService().snapshot();
-
-    // 断言
-    assertThat(status.workerCode()).isEqualTo("atomic-node-1");
-    assertThat(status.shell().enabled()).isTrue();
-    assertThat(status.shell().commandWhitelistSize()).isEqualTo(2);
-    assertThat(status.sql().enabled()).isTrue();
-    assertThat(status.sql().dialect()).isEqualTo("PostgreSQL");
-    assertThat(status.http().enabled()).isTrue();
-    assertThat(status.http().enforceAllowlist()).isTrue();
-    assertThat(status.http().enforceAllowlistSource()).isEqualTo("prod-default");
-    assertThat(status.http().allowlistHostsSize()).isEqualTo(2);
-    assertThat(status.storedProc().enabled()).isTrue();
-    assertThat(status.storedProc().allowedSchemasSize()).isEqualTo(2);
-  }
-
-  @Test
-  @DisplayName("环境变量显式配置过接口强制开关时, 来源应标记为显式配置")
-  void shouldReportExplicitSource_whenHttpEnforceAllowlistConfiguredInEnvironment() {
-    env.setActiveProfiles("prod");
-    env.setProperty(HttpExecutorProdDefaults.PROP_ENFORCE_ALLOWLIST, "false");
-    HttpExecutorProperties http = new HttpExecutorProperties();
-    http.setEnforceAllowlist(false);
-    when(httpProvider.getIfAvailable()).thenReturn(http);
-
-    assertThat(newService().snapshot().http().enforceAllowlistSource()).isEqualTo("explicit");
-  }
-
-  @Test
-  @DisplayName("非生产档位下接口强制开关的来源应标记为开发默认值")
-  void shouldReportDevDefaultSource_whenNotProdProfile() {
-    env.setActiveProfiles("dev");
-    HttpExecutorProperties http = new HttpExecutorProperties();
-    when(httpProvider.getIfAvailable()).thenReturn(http);
-
-    assertThat(newService().snapshot().http().enforceAllowlistSource()).isEqualTo("dev-default");
-  }
-
-  @Test
-  @DisplayName("数据源连接失败时数据库方言应回退为未知, 不影响其余状态采集")
-  void shouldFallbackUnknownDialect_whenDataSourceConnectionFails() throws Exception {
-    SqlExecutorProperties sql = new SqlExecutorProperties();
-    sql.setEnabled(true);
-    when(sqlProvider.getIfAvailable()).thenReturn(sql);
-    DataSource ds = mock(DataSource.class);
-    when(ds.getConnection()).thenThrow(new SQLException("boom"));
-    when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
-
-    assertThat(newService().snapshot().sql().dialect()).isEqualTo("unknown");
-  }
-
-  @Test
-  @DisplayName("方言探测失败时调试日志不得输出原始凭据")
-  void shouldMaskDialectProbeFailureInDebugLog(CapturedOutput output) throws Exception {
-    SqlExecutorProperties sql = new SqlExecutorProperties();
-    sql.setEnabled(true);
-    when(sqlProvider.getIfAvailable()).thenReturn(sql);
-    DataSource ds = mock(DataSource.class);
-    when(ds.getConnection()).thenThrow(new SQLException("connect password=probe-secret"));
-    when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
-
-    Logger logger = (Logger) LoggerFactory.getLogger(AtomicRuntimeStatusService.class);
-    Level originalLevel = logger.getLevel();
-    try {
-      logger.setLevel(Level.DEBUG);
-      assertThat(newService().snapshot().sql().dialect()).isEqualTo("unknown");
-      assertThat(output.getOut()).doesNotContain("probe-secret");
-    } finally {
-      logger.setLevel(originalLevel);
+    @BeforeEach
+    void setUp() {
+        env = new MockEnvironment();
+        workerCfg = new AtomicWorkerConfiguration(
+                "atomic-node-1", "ATOMIC", "tenant-x", 15000L, "topic.x", "group.x", List.of());
     }
-  }
 
-  @Test
-  @DisplayName("执行器配置 bean 缺失时应返回全部禁用状态, 方言与来源给出占位值")
-  void shouldReturnDisabledStatus_whenPropertiesBeansAbsent() {
-    when(shellProvider.getIfAvailable()).thenReturn(null);
-    when(sqlProvider.getIfAvailable()).thenReturn(null);
-    when(httpProvider.getIfAvailable()).thenReturn(null);
-    when(storedProcProvider.getIfAvailable()).thenReturn(null);
+    private AtomicRuntimeStatusService newService() {
+        return new AtomicRuntimeStatusService(
+                workerCfg, env, shellProvider, sqlProvider, httpProvider, storedProcProvider, dataSourceProvider);
+    }
 
-    AtomicRuntimeStatus status = newService().snapshot();
-    assertThat(status.shell().enabled()).isFalse();
-    assertThat(status.sql().enabled()).isFalse();
-    assertThat(status.sql().dialect()).isEqualTo("n/a");
-    assertThat(status.http().enabled()).isFalse();
-    assertThat(status.http().enforceAllowlistSource()).isEqualTo("absent");
-    assertThat(status.storedProc().enabled()).isFalse();
-  }
+    @Test
+    @DisplayName("生产档位常规配置下应采集四类执行器的启用状态, 白名单规模与数据库方言")
+    void shouldCaptureAllFourExecutorStatuses_underNormalProdConfiguration() throws Exception {
+        // 准备:prod profile,http 未显式配置 → enforceAllowlistSource = prod-default
+        env.setActiveProfiles("prod");
+
+        ShellExecutorProperties shell = new ShellExecutorProperties();
+        shell.setEnabled(true);
+        shell.setCommandWhitelist(Set.of("/usr/bin/curl", "/usr/bin/wget"));
+        when(shellProvider.getIfAvailable()).thenReturn(shell);
+
+        SqlExecutorProperties sql = new SqlExecutorProperties();
+        sql.setEnabled(true);
+        when(sqlProvider.getIfAvailable()).thenReturn(sql);
+
+        HttpExecutorProperties http = new HttpExecutorProperties();
+        http.setEnabled(true);
+        http.setEnforceAllowlist(true); // 已被 HttpExecutorProdDefaults 翻过
+        http.setAllowedHostPatterns(Set.of("api.internal.*", "*.example.com"));
+        when(httpProvider.getIfAvailable()).thenReturn(http);
+
+        StoredProcExecutorProperties sp = new StoredProcExecutorProperties();
+        sp.setEnabled(true);
+        sp.setAllowedSchemas(Set.of("batch", "app"));
+        when(storedProcProvider.getIfAvailable()).thenReturn(sp);
+
+        DataSource ds = mock(DataSource.class);
+        Connection conn = mock(Connection.class);
+        DatabaseMetaData md = mock(DatabaseMetaData.class);
+        when(ds.getConnection()).thenReturn(conn);
+        when(conn.getMetaData()).thenReturn(md);
+        when(md.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
+
+        // 执行
+        AtomicRuntimeStatus status = newService().snapshot();
+
+        // 断言
+        assertThat(status.workerCode()).isEqualTo("atomic-node-1");
+        assertThat(status.shell().enabled()).isTrue();
+        assertThat(status.shell().commandWhitelistSize()).isEqualTo(2);
+        assertThat(status.sql().enabled()).isTrue();
+        assertThat(status.sql().dialect()).isEqualTo("PostgreSQL");
+        assertThat(status.http().enabled()).isTrue();
+        assertThat(status.http().enforceAllowlist()).isTrue();
+        assertThat(status.http().enforceAllowlistSource()).isEqualTo("prod-default");
+        assertThat(status.http().allowlistHostsSize()).isEqualTo(2);
+        assertThat(status.storedProc().enabled()).isTrue();
+        assertThat(status.storedProc().allowedSchemasSize()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("环境变量显式配置过接口强制开关时, 来源应标记为显式配置")
+    void shouldReportExplicitSource_whenHttpEnforceAllowlistConfiguredInEnvironment() {
+        env.setActiveProfiles("prod");
+        env.setProperty(HttpExecutorProdDefaults.PROP_ENFORCE_ALLOWLIST, "false");
+        HttpExecutorProperties http = new HttpExecutorProperties();
+        http.setEnforceAllowlist(false);
+        when(httpProvider.getIfAvailable()).thenReturn(http);
+
+        assertThat(newService().snapshot().http().enforceAllowlistSource()).isEqualTo("explicit");
+    }
+
+    @Test
+    @DisplayName("非生产档位下接口强制开关的来源应标记为开发默认值")
+    void shouldReportDevDefaultSource_whenNotProdProfile() {
+        env.setActiveProfiles("dev");
+        HttpExecutorProperties http = new HttpExecutorProperties();
+        when(httpProvider.getIfAvailable()).thenReturn(http);
+
+        assertThat(newService().snapshot().http().enforceAllowlistSource()).isEqualTo("dev-default");
+    }
+
+    @Test
+    @DisplayName("数据源连接失败时数据库方言应回退为未知, 不影响其余状态采集")
+    void shouldFallbackUnknownDialect_whenDataSourceConnectionFails() throws Exception {
+        SqlExecutorProperties sql = new SqlExecutorProperties();
+        sql.setEnabled(true);
+        when(sqlProvider.getIfAvailable()).thenReturn(sql);
+        DataSource ds = mock(DataSource.class);
+        when(ds.getConnection()).thenThrow(new SQLException("boom"));
+        when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
+
+        assertThat(newService().snapshot().sql().dialect()).isEqualTo("unknown");
+    }
+
+    @Test
+    @DisplayName("方言探测失败时调试日志不得输出原始凭据")
+    void shouldMaskDialectProbeFailureInDebugLog(CapturedOutput output) throws Exception {
+        SqlExecutorProperties sql = new SqlExecutorProperties();
+        sql.setEnabled(true);
+        when(sqlProvider.getIfAvailable()).thenReturn(sql);
+        DataSource ds = mock(DataSource.class);
+        when(ds.getConnection()).thenThrow(new SQLException("connect password=probe-secret"));
+        when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
+
+        Logger logger = (Logger) LoggerFactory.getLogger(AtomicRuntimeStatusService.class);
+        Level originalLevel = logger.getLevel();
+        try {
+            logger.setLevel(Level.DEBUG);
+            assertThat(newService().snapshot().sql().dialect()).isEqualTo("unknown");
+            assertThat(output.getOut()).doesNotContain("probe-secret");
+        } finally {
+            logger.setLevel(originalLevel);
+        }
+    }
+
+    @Test
+    @DisplayName("执行器配置 bean 缺失时应返回全部禁用状态, 方言与来源给出占位值")
+    void shouldReturnDisabledStatus_whenPropertiesBeansAbsent() {
+        when(shellProvider.getIfAvailable()).thenReturn(null);
+        when(sqlProvider.getIfAvailable()).thenReturn(null);
+        when(httpProvider.getIfAvailable()).thenReturn(null);
+        when(storedProcProvider.getIfAvailable()).thenReturn(null);
+
+        AtomicRuntimeStatus status = newService().snapshot();
+        assertThat(status.shell().enabled()).isFalse();
+        assertThat(status.sql().enabled()).isFalse();
+        assertThat(status.sql().dialect()).isEqualTo("n/a");
+        assertThat(status.http().enabled()).isFalse();
+        assertThat(status.http().enforceAllowlistSource()).isEqualTo("absent");
+        assertThat(status.storedProc().enabled()).isFalse();
+    }
 }

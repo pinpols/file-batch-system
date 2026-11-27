@@ -15,80 +15,77 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("告警升级全局扫描的租户边界")
 class AlertEscalationTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
-  private final AlertEventMapper alertEventMapper;
+    private final AlertEventMapper alertEventMapper;
 
-  private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  AlertEscalationTenantIsolationIntegrationTest(
-      AlertEventMapper alertEventMapper, JdbcTemplate jdbcTemplate) {
-    this.alertEventMapper = alertEventMapper;
-    this.jdbcTemplate = jdbcTemplate;
-  }
+    @Autowired
+    AlertEscalationTenantIsolationIntegrationTest(AlertEventMapper alertEventMapper, JdbcTemplate jdbcTemplate) {
+        this.alertEventMapper = alertEventMapper;
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
-  @Test
-  @DisplayName("全局扫描读取多个租户告警,逐行升级仍必须匹配所属租户")
-  void shouldScanAcrossTenantsAndFenceEscalationByTenant() {
-    String suffix = UUID.randomUUID().toString().replace("-", "");
-    String tenantA = "alert-escalation-a-" + suffix;
-    String tenantB = "alert-escalation-b-" + suffix;
-    long alertA = insertOverdueOpenAlert(tenantA, suffix + "-a");
-    long alertB = insertOverdueOpenAlert(tenantB, suffix + "-b");
+    @Test
+    @DisplayName("全局扫描读取多个租户告警,逐行升级仍必须匹配所属租户")
+    void shouldScanAcrossTenantsAndFenceEscalationByTenant() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String tenantA = "alert-escalation-a-" + suffix;
+        String tenantB = "alert-escalation-b-" + suffix;
+        long alertA = insertOverdueOpenAlert(tenantA, suffix + "-a");
+        long alertB = insertOverdueOpenAlert(tenantB, suffix + "-b");
 
-    try {
-      List<AlertEventEntity> candidates = alertEventMapper.selectOverdueForEscalation(1, 3, 1_000);
+        try {
+            List<AlertEventEntity> candidates = alertEventMapper.selectOverdueForEscalation(1, 3, 1_000);
 
-      assertThat(candidates).anySatisfy(alert -> assertThat(alert.getId()).isEqualTo(alertA));
-      assertThat(candidates).anySatisfy(alert -> assertThat(alert.getId()).isEqualTo(alertB));
-      assertThat(candidates.stream()
-              .filter(alert -> alert.getId().equals(alertA))
-              .map(AlertEventEntity::getTenantId))
-          .containsExactly(tenantA);
-      assertThat(candidates.stream()
-              .filter(alert -> alert.getId().equals(alertB))
-              .map(AlertEventEntity::getTenantId))
-          .containsExactly(tenantB);
-      assertThat(alertEventMapper.selectByQuery(AlertEventQueryParam.builder()
-              .tenantId(tenantA)
-              .severity(null)
-              .status(null)
-              .alertType(null)
-              .limit(20)
-              .build()))
-          .extracting(AlertEventEntity::getTenantId)
-          .contains(tenantA)
-          .doesNotContain(tenantB);
-      List<AlertEventEntity> openAlerts = alertEventMapper.selectOpenForReemit(1_000);
-      assertThat(openAlerts.stream()
-              .filter(alert -> alert.getId().equals(alertA))
-              .map(AlertEventEntity::getTenantId))
-          .containsExactly(tenantA);
-      assertThat(openAlerts.stream()
-              .filter(alert -> alert.getId().equals(alertB))
-              .map(AlertEventEntity::getTenantId))
-          .containsExactly(tenantB);
+            assertThat(candidates).anySatisfy(alert -> assertThat(alert.getId()).isEqualTo(alertA));
+            assertThat(candidates).anySatisfy(alert -> assertThat(alert.getId()).isEqualTo(alertB));
+            assertThat(candidates.stream()
+                            .filter(alert -> alert.getId().equals(alertA))
+                            .map(AlertEventEntity::getTenantId))
+                    .containsExactly(tenantA);
+            assertThat(candidates.stream()
+                            .filter(alert -> alert.getId().equals(alertB))
+                            .map(AlertEventEntity::getTenantId))
+                    .containsExactly(tenantB);
+            assertThat(alertEventMapper.selectByQuery(AlertEventQueryParam.builder()
+                            .tenantId(tenantA)
+                            .severity(null)
+                            .status(null)
+                            .alertType(null)
+                            .limit(20)
+                            .build()))
+                    .extracting(AlertEventEntity::getTenantId)
+                    .contains(tenantA)
+                    .doesNotContain(tenantB);
+            List<AlertEventEntity> openAlerts = alertEventMapper.selectOpenForReemit(1_000);
+            assertThat(openAlerts.stream()
+                            .filter(alert -> alert.getId().equals(alertA))
+                            .map(AlertEventEntity::getTenantId))
+                    .containsExactly(tenantA);
+            assertThat(openAlerts.stream()
+                            .filter(alert -> alert.getId().equals(alertB))
+                            .map(AlertEventEntity::getTenantId))
+                    .containsExactly(tenantB);
 
-      assertThat(alertEventMapper.markEscalated(alertA, tenantB, 0)).isZero();
-      assertThat(escalationTier(alertA, tenantA)).isZero();
-      assertThat(alertEventMapper.markEscalated(alertA, tenantA, 0)).isOne();
-      assertThat(escalationTier(alertA, tenantA)).isEqualTo(1);
-      assertThat(escalationTier(alertB, tenantB)).isZero();
-    } finally {
-      String deleteTenantAlertsSql = """
+            assertThat(alertEventMapper.markEscalated(alertA, tenantB, 0)).isZero();
+            assertThat(escalationTier(alertA, tenantA)).isZero();
+            assertThat(alertEventMapper.markEscalated(alertA, tenantA, 0)).isOne();
+            assertThat(escalationTier(alertA, tenantA)).isEqualTo(1);
+            assertThat(escalationTier(alertB, tenantB)).isZero();
+        } finally {
+            String deleteTenantAlertsSql = """
           delete from batch.alert_event where tenant_id in (?, ?)
           """;
-      jdbcTemplate.update(deleteTenantAlertsSql, tenantA, tenantB);
+            jdbcTemplate.update(deleteTenantAlertsSql, tenantA, tenantB);
+        }
     }
-  }
 
-  private long insertOverdueOpenAlert(String tenantId, String fingerprint) {
-    String insertOverdueOpenAlertSql = """
+    private long insertOverdueOpenAlert(String tenantId, String fingerprint) {
+        String insertOverdueOpenAlertSql = """
         insert into batch.alert_event (
           tenant_id, service_name, alert_type, severity, title, dedup_fingerprint,
           status, last_seen_at
@@ -96,14 +93,13 @@ class AlertEscalationTenantIsolationIntegrationTest extends AbstractIntegrationT
                   current_timestamp - interval '1 day')
         returning id
         """;
-    return jdbcTemplate.queryForObject(
-        insertOverdueOpenAlertSql, Long.class, tenantId, fingerprint);
-  }
+        return jdbcTemplate.queryForObject(insertOverdueOpenAlertSql, Long.class, tenantId, fingerprint);
+    }
 
-  private int escalationTier(long alertId, String tenantId) {
-    String escalationTierSql = """
+    private int escalationTier(long alertId, String tenantId) {
+        String escalationTierSql = """
         select escalation_tier from batch.alert_event where id = ? and tenant_id = ?
         """;
-    return jdbcTemplate.queryForObject(escalationTierSql, Integer.class, alertId, tenantId);
-  }
+        return jdbcTemplate.queryForObject(escalationTierSql, Integer.class, alertId, tenantId);
+    }
 }

@@ -24,42 +24,41 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExportTaskExecutor implements BatchTaskExecutor {
 
-  private final ExportStepExecutionAdapter delegate;
-  private final WorkerExecutionTimeoutProperties timeoutProperties;
+    private final ExportStepExecutionAdapter delegate;
+    private final WorkerExecutionTimeoutProperties timeoutProperties;
 
-  /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
-  public ExportTaskExecutor(ExportStepExecutionAdapter delegate) {
-    this(delegate, new WorkerExecutionTimeoutProperties());
-  }
-
-  @Autowired
-  public ExportTaskExecutor(
-      ExportStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
-    this.delegate = delegate;
-    this.timeoutProperties = timeoutProperties;
-  }
-
-  @Override
-  public String taskType() {
-    return JobType.EXPORT.code();
-  }
-
-  @Override
-  public TaskCapability capability() {
-    Set<ResourceKind> resourceKinds = Set.of(ResourceKind.DB, ResourceKind.DISK, ResourceKind.NET);
-    long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
-    Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
-    return new TaskCapability(resourceKinds, false, true, capabilityTimeout);
-  }
-
-  @Override
-  public TaskResult execute(TaskContext ctx) {
-    StepExecutionRequest req = new StepExecutionRequest(
-        ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
-    StepExecutionResponse resp = delegate.execute(req);
-    if (resp.success()) {
-      return TaskResult.ok(resp.message() == null ? "ok" : resp.message());
+    /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
+    public ExportTaskExecutor(ExportStepExecutionAdapter delegate) {
+        this(delegate, new WorkerExecutionTimeoutProperties());
     }
-    return TaskResult.fail(resp.message() == null ? resp.code() : resp.message());
-  }
+
+    @Autowired
+    public ExportTaskExecutor(ExportStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
+        this.delegate = delegate;
+        this.timeoutProperties = timeoutProperties;
+    }
+
+    @Override
+    public String taskType() {
+        return JobType.EXPORT.code();
+    }
+
+    @Override
+    public TaskCapability capability() {
+        Set<ResourceKind> resourceKinds = Set.of(ResourceKind.DB, ResourceKind.DISK, ResourceKind.NET);
+        long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
+        Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
+        return new TaskCapability(resourceKinds, false, true, capabilityTimeout);
+    }
+
+    @Override
+    public TaskResult execute(TaskContext ctx) {
+        StepExecutionRequest req = new StepExecutionRequest(
+                ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
+        StepExecutionResponse resp = delegate.execute(req);
+        if (resp.success()) {
+            return TaskResult.ok(resp.message() == null ? "ok" : resp.message());
+        }
+        return TaskResult.fail(resp.message() == null ? resp.code() : resp.message());
+    }
 }

@@ -24,85 +24,84 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CompensationController {
 
-  private final CompensationService compensationService;
-  private final WorkflowNodeReplayOperationService workflowNodeReplayOperationService;
+    private final CompensationService compensationService;
+    private final WorkflowNodeReplayOperationService workflowNodeReplayOperationService;
 
-  @PostMapping
-  public CompensationResponse submit(@RequestBody CompensationRequest request) {
-    CompensationSubmitCommand command = CompensationSubmitCommand.builder()
-        .tenantId(request.tenantId())
-        .compensationType(request.compensationType())
-        .targetId(request.targetId())
-        .targetInstanceNo(request.targetInstanceNo())
-        .jobCode(request.jobCode())
-        .bizDate(request.bizDate())
-        .batchNo(request.batchNo())
-        .relatedFileId(request.relatedFileId())
-        .channelCode(request.channelCode())
-        .reason(request.reason())
-        .operatorId(request.operatorId())
-        .approvalId(request.approvalId())
-        .strategy(request.strategy())
-        .traceId(request.traceId())
-        .resultPolicy(request.resultPolicy())
-        .configVersionPolicy(request.configVersionPolicy())
-        .configVersion(request.configVersion())
-        .sourceWorkflowRunId(request.sourceWorkflowRunId())
-        .sourceWorkflowNodeRunId(request.sourceWorkflowNodeRunId())
-        .externalActionVerifiedNotExecuted(request.externalActionVerifiedNotExecuted())
-        .externalOutcomeEvidenceReference(request.externalOutcomeEvidenceReference())
-        .replayOperationId(request.replayOperationId())
-        .build();
-    String compensationNo = compensationService.submit(command);
-    return new CompensationResponse(compensationNo);
-  }
+    @PostMapping
+    public CompensationResponse submit(@RequestBody CompensationRequest request) {
+        CompensationSubmitCommand command = CompensationSubmitCommand.builder()
+                .tenantId(request.tenantId())
+                .compensationType(request.compensationType())
+                .targetId(request.targetId())
+                .targetInstanceNo(request.targetInstanceNo())
+                .jobCode(request.jobCode())
+                .bizDate(request.bizDate())
+                .batchNo(request.batchNo())
+                .relatedFileId(request.relatedFileId())
+                .channelCode(request.channelCode())
+                .reason(request.reason())
+                .operatorId(request.operatorId())
+                .approvalId(request.approvalId())
+                .strategy(request.strategy())
+                .traceId(request.traceId())
+                .resultPolicy(request.resultPolicy())
+                .configVersionPolicy(request.configVersionPolicy())
+                .configVersion(request.configVersion())
+                .sourceWorkflowRunId(request.sourceWorkflowRunId())
+                .sourceWorkflowNodeRunId(request.sourceWorkflowNodeRunId())
+                .externalActionVerifiedNotExecuted(request.externalActionVerifiedNotExecuted())
+                .externalOutcomeEvidenceReference(request.externalOutcomeEvidenceReference())
+                .replayOperationId(request.replayOperationId())
+                .build();
+        String compensationNo = compensationService.submit(command);
+        return new CompensationResponse(compensationNo);
+    }
 
-  @PostMapping("/workflow-node/replay-operations/{operationId}/reject")
-  public void rejectWorkflowNodeReplayApproval(
-      @PathVariable Long operationId, @RequestBody ReplayOperationApprovalRequest request) {
-    compensationService.rejectWorkflowNodeReplayApproval(request.tenantId(), operationId);
-  }
+    @PostMapping("/workflow-node/replay-operations/{operationId}/reject")
+    public void rejectWorkflowNodeReplayApproval(
+            @PathVariable Long operationId, @RequestBody ReplayOperationApprovalRequest request) {
+        compensationService.rejectWorkflowNodeReplayApproval(request.tenantId(), operationId);
+    }
 
-  @PostMapping("/workflow-node/replay-preview")
-  public WorkflowNodeReplayPreviewResponse previewWorkflowNodeReplay(
-      @RequestBody WorkflowNodeReplayCommand request) {
-    return workflowNodeReplayOperationService.preview(request);
-  }
+    @PostMapping("/workflow-node/replay-preview")
+    public WorkflowNodeReplayPreviewResponse previewWorkflowNodeReplay(@RequestBody WorkflowNodeReplayCommand request) {
+        return workflowNodeReplayOperationService.preview(request);
+    }
 
-  @PostMapping("/workflow-node/replay-operations")
-  public WorkflowNodeReplayAdmissionResponse submitWorkflowNodeReplayForApproval(
-      @RequestBody WorkflowNodeReplayCommand request) {
-    ReplayOperationEntity operation = workflowNodeReplayOperationService.submitForApproval(request);
-    return new WorkflowNodeReplayAdmissionResponse(operation.id());
-  }
+    @PostMapping("/workflow-node/replay-operations")
+    public WorkflowNodeReplayAdmissionResponse submitWorkflowNodeReplayForApproval(
+            @RequestBody WorkflowNodeReplayCommand request) {
+        ReplayOperationEntity operation = workflowNodeReplayOperationService.submitForApproval(request);
+        return new WorkflowNodeReplayAdmissionResponse(operation.id());
+    }
 
-  public record WorkflowNodeReplayAdmissionResponse(Long replayOperationId) {}
+    public record WorkflowNodeReplayAdmissionResponse(Long replayOperationId) {}
 
-  public record ReplayOperationApprovalRequest(String tenantId) {}
+    public record ReplayOperationApprovalRequest(String tenantId) {}
 
-  public record CompensationRequest(
-      String tenantId,
-      String compensationType,
-      Long targetId,
-      String targetInstanceNo,
-      String jobCode,
-      LocalDate bizDate,
-      String batchNo,
-      Long relatedFileId,
-      String channelCode,
-      String reason,
-      String operatorId,
-      String approvalId,
-      String strategy,
-      String traceId,
-      String resultPolicy,
-      String configVersionPolicy,
-      Integer configVersion,
-      Long sourceWorkflowRunId,
-      Long sourceWorkflowNodeRunId,
-      Long replayOperationId,
-      Boolean externalActionVerifiedNotExecuted,
-      String externalOutcomeEvidenceReference) {}
+    public record CompensationRequest(
+            String tenantId,
+            String compensationType,
+            Long targetId,
+            String targetInstanceNo,
+            String jobCode,
+            LocalDate bizDate,
+            String batchNo,
+            Long relatedFileId,
+            String channelCode,
+            String reason,
+            String operatorId,
+            String approvalId,
+            String strategy,
+            String traceId,
+            String resultPolicy,
+            String configVersionPolicy,
+            Integer configVersion,
+            Long sourceWorkflowRunId,
+            Long sourceWorkflowNodeRunId,
+            Long replayOperationId,
+            Boolean externalActionVerifiedNotExecuted,
+            String externalOutcomeEvidenceReference) {}
 
-  public record CompensationResponse(String commandNo) {}
+    public record CompensationResponse(String commandNo) {}
 }

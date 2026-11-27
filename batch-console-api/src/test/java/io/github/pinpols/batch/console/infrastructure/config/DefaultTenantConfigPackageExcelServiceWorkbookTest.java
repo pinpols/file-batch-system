@@ -38,102 +38,99 @@ import org.springframework.mock.web.MockMultipartFile;
 @DisplayName("租户配置包工作簿临时文件处理")
 class DefaultTenantConfigPackageExcelServiceWorkbookTest {
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @Mock
-  private TenantConfigPackageExcelImportStore importStore;
+    @Mock
+    private TenantConfigPackageExcelImportStore importStore;
 
-  @Mock
-  private BatchDateTimeSupport dateTimeSupport;
+    @Mock
+    private BatchDateTimeSupport dateTimeSupport;
 
-  @Mock
-  private MessageSource messageSource;
+    @Mock
+    private MessageSource messageSource;
 
-  @InjectMocks
-  private DefaultTenantConfigPackageExcelService service;
+    @InjectMocks
+    private DefaultTenantConfigPackageExcelService service;
 
-  private void stubUploadContext() {
-    when(tenantGuard.resolveTenant(anyString())).thenReturn("ta");
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req", "trace", "ta", "operator", "idem", null));
-  }
-
-  @Test
-  @DisplayName("上传成功后从临时文件解析并删除文件")
-  void shouldDeleteTemporaryFile_whenUploadSucceeds() throws Exception {
-    stubUploadContext();
-    MockMultipartFile file = spy(new MockMultipartFile(
-        "file",
-        "package.xlsx",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        minimalWorkbook()));
-    when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-10-11T00:00:00Z"));
-    when(importStore.save(any())).thenReturn("upload-token");
-    ArgumentCaptor<Path> temporaryFile = ArgumentCaptor.forClass(Path.class);
-
-    service.upload(file, "ta");
-
-    verify(file).transferTo(temporaryFile.capture());
-    verify(file, never()).getBytes();
-    assertThat(temporaryFile.getValue().getParent().getFileName())
-        .hasToString("file-batch-private");
-    assertThat(temporaryFile.getValue()).doesNotExist();
-  }
-
-  @Test
-  @DisplayName("工作簿解析失败后仍删除临时文件")
-  void shouldDeleteTemporaryFile_whenWorkbookParsingFails() throws Exception {
-    stubUploadContext();
-    byte[] invalidWorkbook = {'P', 'K', 3, 4, 0, 0, 0, 0};
-    MockMultipartFile file = spy(new MockMultipartFile(
-        "file",
-        "invalid.xlsx",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        invalidWorkbook));
-    ArgumentCaptor<Path> temporaryFile = ArgumentCaptor.forClass(Path.class);
-
-    assertThatThrownBy(() -> service.upload(file, "ta")).isInstanceOf(BizException.class);
-
-    verify(file).transferTo(temporaryFile.capture());
-    assertThat(temporaryFile.getValue().getParent().getFileName())
-        .hasToString("file-batch-private");
-    assertThat(temporaryFile.getValue()).doesNotExist();
-  }
-
-  @Test
-  @DisplayName("配置字段指南不公开已退役的租户 Pipeline 工作表")
-  void shouldExcludeRetiredPipelineSheetsFromGuide() {
-    var sheetNames = service.guide().sheets().stream()
-        .map(TenantConfigPackageExcelGuideResponse.SheetGuide::sheetName)
-        .toList();
-
-    assertThat(sheetNames)
-        .doesNotContain(PIPELINE_SHEET, STEP_SHEET)
-        .contains("workflow_monitoring_policy")
-        .hasSize(11);
-  }
-
-  @Test
-  @DisplayName("下载完整模板返回固定文件名")
-  void shouldDownloadTemplate() {
-    assertThat(service.downloadTemplate().fileName())
-        .isEqualTo("tenant-config-package-template.xlsx");
-  }
-
-  private static byte[] minimalWorkbook() throws Exception {
-    try (XSSFWorkbook workbook = new XSSFWorkbook();
-        ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-      var sheet = workbook.createSheet(JOB_MONITORING_POLICY_SHEET);
-      var header = sheet.createRow(0);
-      for (int i = 0; i < JOB_MONITORING_POLICY_COLUMNS.size(); i++) {
-        header.createCell(i).setCellValue(JOB_MONITORING_POLICY_COLUMNS.get(i));
-      }
-      workbook.write(output);
-      return output.toByteArray();
+    private void stubUploadContext() {
+        when(tenantGuard.resolveTenant(anyString())).thenReturn("ta");
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req", "trace", "ta", "operator", "idem", null));
     }
-  }
+
+    @Test
+    @DisplayName("上传成功后从临时文件解析并删除文件")
+    void shouldDeleteTemporaryFile_whenUploadSucceeds() throws Exception {
+        stubUploadContext();
+        MockMultipartFile file = spy(new MockMultipartFile(
+                "file",
+                "package.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                minimalWorkbook()));
+        when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-10-11T00:00:00Z"));
+        when(importStore.save(any())).thenReturn("upload-token");
+        ArgumentCaptor<Path> temporaryFile = ArgumentCaptor.forClass(Path.class);
+
+        service.upload(file, "ta");
+
+        verify(file).transferTo(temporaryFile.capture());
+        verify(file, never()).getBytes();
+        assertThat(temporaryFile.getValue().getParent().getFileName()).hasToString("file-batch-private");
+        assertThat(temporaryFile.getValue()).doesNotExist();
+    }
+
+    @Test
+    @DisplayName("工作簿解析失败后仍删除临时文件")
+    void shouldDeleteTemporaryFile_whenWorkbookParsingFails() throws Exception {
+        stubUploadContext();
+        byte[] invalidWorkbook = {'P', 'K', 3, 4, 0, 0, 0, 0};
+        MockMultipartFile file = spy(new MockMultipartFile(
+                "file",
+                "invalid.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                invalidWorkbook));
+        ArgumentCaptor<Path> temporaryFile = ArgumentCaptor.forClass(Path.class);
+
+        assertThatThrownBy(() -> service.upload(file, "ta")).isInstanceOf(BizException.class);
+
+        verify(file).transferTo(temporaryFile.capture());
+        assertThat(temporaryFile.getValue().getParent().getFileName()).hasToString("file-batch-private");
+        assertThat(temporaryFile.getValue()).doesNotExist();
+    }
+
+    @Test
+    @DisplayName("配置字段指南不公开已退役的租户 Pipeline 工作表")
+    void shouldExcludeRetiredPipelineSheetsFromGuide() {
+        var sheetNames = service.guide().sheets().stream()
+                .map(TenantConfigPackageExcelGuideResponse.SheetGuide::sheetName)
+                .toList();
+
+        assertThat(sheetNames)
+                .doesNotContain(PIPELINE_SHEET, STEP_SHEET)
+                .contains("workflow_monitoring_policy")
+                .hasSize(11);
+    }
+
+    @Test
+    @DisplayName("下载完整模板返回固定文件名")
+    void shouldDownloadTemplate() {
+        assertThat(service.downloadTemplate().fileName()).isEqualTo("tenant-config-package-template.xlsx");
+    }
+
+    private static byte[] minimalWorkbook() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+                ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet(JOB_MONITORING_POLICY_SHEET);
+            var header = sheet.createRow(0);
+            for (int i = 0; i < JOB_MONITORING_POLICY_COLUMNS.size(); i++) {
+                header.createCell(i).setCellValue(JOB_MONITORING_POLICY_COLUMNS.get(i));
+            }
+            workbook.write(output);
+            return output.toByteArray();
+        }
+    }
 }

@@ -33,102 +33,100 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 /** 根据存储配置装配 S3 客户端与对象存储实现。 */
 public class S3AutoConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean
-  public S3Client s3Client(S3StorageProperties p, Environment environment) {
-    validateCredentialsInProduction(p, environment);
-    Apache5HttpClient.Builder http = Apache5HttpClient.builder()
-        .connectionTimeout(Duration.ofMillis(p.getConnectTimeoutMs()))
-        .socketTimeout(Duration.ofMillis(p.getReadTimeoutMs()));
-    S3ClientBuilder b = S3Client.builder();
-    URI endpoint = URI.create(p.getEndpoint());
-    AwsBasicCredentials basicCredentials =
-        AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey());
-    StaticCredentialsProvider credentialsProvider =
-        StaticCredentialsProvider.create(basicCredentials);
-    b.endpointOverride(endpoint)
-        .credentialsProvider(credentialsProvider)
-        .forcePathStyle(p.isPathStyleEnabled())
-        // 默认关掉 AWS SDK v2 >=2.30 的 WHEN_SUPPORTED 请求校验和(CRC32 + aws-chunked trailer):
-        // 多数 S3 兼容后端不识别该 trailer,会回 501/签名错误；确需 AWS 原生行为时通过配置打开。
-        .requestChecksumCalculation(p.getRequestChecksumCalculation())
-        .responseChecksumValidation(p.getResponseChecksumValidation())
-        .httpClientBuilder(http)
-        .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
-    RetryStrategy retryStrategy = buildRetryStrategy(p);
-    if (retryStrategy != null) {
-      b.overrideConfiguration(
-          ClientOverrideConfiguration.builder().retryStrategy(retryStrategy).build());
+    @Bean
+    @ConditionalOnMissingBean
+    public S3Client s3Client(S3StorageProperties p, Environment environment) {
+        validateCredentialsInProduction(p, environment);
+        Apache5HttpClient.Builder http = Apache5HttpClient.builder()
+                .connectionTimeout(Duration.ofMillis(p.getConnectTimeoutMs()))
+                .socketTimeout(Duration.ofMillis(p.getReadTimeoutMs()));
+        S3ClientBuilder b = S3Client.builder();
+        URI endpoint = URI.create(p.getEndpoint());
+        AwsBasicCredentials basicCredentials = AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey());
+        StaticCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(basicCredentials);
+        b.endpointOverride(endpoint)
+                .credentialsProvider(credentialsProvider)
+                .forcePathStyle(p.isPathStyleEnabled())
+                // 默认关掉 AWS SDK v2 >=2.30 的 WHEN_SUPPORTED 请求校验和(CRC32 + aws-chunked trailer):
+                // 多数 S3 兼容后端不识别该 trailer,会回 501/签名错误；确需 AWS 原生行为时通过配置打开。
+                .requestChecksumCalculation(p.getRequestChecksumCalculation())
+                .responseChecksumValidation(p.getResponseChecksumValidation())
+                .httpClientBuilder(http)
+                .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
+        RetryStrategy retryStrategy = buildRetryStrategy(p);
+        if (retryStrategy != null) {
+            b.overrideConfiguration(ClientOverrideConfiguration.builder()
+                    .retryStrategy(retryStrategy)
+                    .build());
+        }
+        return b.build();
     }
-    return b.build();
-  }
 
-  /**
-   * 按配置构造重试策略;{@code maxAttempts<=0 且非 adaptive} 时返回 null(走 SDK 默认,不覆盖)。adaptive=自适应限流退避,
-   * 否则标准指数退避;{@code maxAttempts>0} 时覆盖最大尝试次数。
-   */
-  private static RetryStrategy buildRetryStrategy(S3StorageProperties p) {
-    if (p.getMaxAttempts() <= 0 && !p.isAdaptiveRetry()) {
-      return null;
+    /**
+     * 按配置构造重试策略;{@code maxAttempts<=0 且非 adaptive} 时返回 null(走 SDK 默认,不覆盖)。adaptive=自适应限流退避,
+     * 否则标准指数退避;{@code maxAttempts>0} 时覆盖最大尝试次数。
+     */
+    private static RetryStrategy buildRetryStrategy(S3StorageProperties p) {
+        if (p.getMaxAttempts() <= 0 && !p.isAdaptiveRetry()) {
+            return null;
+        }
+        RetryStrategy base = p.isAdaptiveRetry()
+                ? AwsRetryStrategy.adaptiveRetryStrategy()
+                : AwsRetryStrategy.standardRetryStrategy();
+        if (p.getMaxAttempts() > 0) {
+            return base.toBuilder().maxAttempts(p.getMaxAttempts()).build();
+        }
+        return base;
     }
-    RetryStrategy base = p.isAdaptiveRetry()
-        ? AwsRetryStrategy.adaptiveRetryStrategy()
-        : AwsRetryStrategy.standardRetryStrategy();
-    if (p.getMaxAttempts() > 0) {
-      return base.toBuilder().maxAttempts(p.getMaxAttempts()).build();
-    }
-    return base;
-  }
 
-  @Bean
-  @ConditionalOnMissingBean
-  public S3Presigner s3Presigner(S3StorageProperties p) {
-    URI endpoint = URI.create(p.getEndpoint());
-    AwsBasicCredentials basicCredentials =
-        AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey());
-    StaticCredentialsProvider credentialsProvider =
-        StaticCredentialsProvider.create(basicCredentials);
-    S3Presigner.Builder presignerBuilder =
-        S3Presigner.builder().endpointOverride(endpoint).credentialsProvider(credentialsProvider);
-    S3Configuration serviceConfiguration =
-        S3Configuration.builder().pathStyleAccessEnabled(p.isPathStyleEnabled()).build();
-    return presignerBuilder
-        .serviceConfiguration(serviceConfiguration)
-        .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
-        .build();
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public S3Presigner s3Presigner(S3StorageProperties p) {
+        URI endpoint = URI.create(p.getEndpoint());
+        AwsBasicCredentials basicCredentials = AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey());
+        StaticCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(basicCredentials);
+        S3Presigner.Builder presignerBuilder =
+                S3Presigner.builder().endpointOverride(endpoint).credentialsProvider(credentialsProvider);
+        S3Configuration serviceConfiguration = S3Configuration.builder()
+                .pathStyleAccessEnabled(p.isPathStyleEnabled())
+                .build();
+        return presignerBuilder
+                .serviceConfiguration(serviceConfiguration)
+                .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
+                .build();
+    }
 
-  static void validateCredentialsInProduction(
-      S3StorageProperties properties, Environment environment) {
-    if (!BatchProfileSupport.isProductionProfile(environment)) {
-      return;
+    static void validateCredentialsInProduction(S3StorageProperties properties, Environment environment) {
+        if (!BatchProfileSupport.isProductionProfile(environment)) {
+            return;
+        }
+        String accessKey = properties.getAccessKey() == null
+                ? ""
+                : properties.getAccessKey().trim();
+        String secretKey = properties.getSecretKey() == null
+                ? ""
+                : properties.getSecretKey().trim();
+        if (accessKey.isEmpty() || secretKey.isEmpty()) {
+            throw new IllegalStateException(
+                    "FATAL: production object-storage credentials are not configured; inject them through BATCH_S3_ACCESS_KEY / BATCH_S3_SECRET_KEY");
+        }
+        boolean usesDefaultStorageCredentials =
+                "minioadmin".equals(accessKey) || "minioadmin".equals(secretKey) || "minioadmin123".equals(secretKey);
+        if (usesDefaultStorageCredentials) {
+            throw new IllegalStateException(
+                    "FATAL: production object storage still uses known MinIO default credentials; inject real credentials");
+        }
     }
-    String accessKey =
-        properties.getAccessKey() == null ? "" : properties.getAccessKey().trim();
-    String secretKey =
-        properties.getSecretKey() == null ? "" : properties.getSecretKey().trim();
-    if (accessKey.isEmpty() || secretKey.isEmpty()) {
-      throw new IllegalStateException(
-          "FATAL: production object-storage credentials are not configured; inject them through BATCH_S3_ACCESS_KEY / BATCH_S3_SECRET_KEY");
-    }
-    boolean usesDefaultStorageCredentials = "minioadmin".equals(accessKey)
-        || "minioadmin".equals(secretKey)
-        || "minioadmin123".equals(secretKey);
-    if (usesDefaultStorageCredentials) {
-      throw new IllegalStateException(
-          "FATAL: production object storage still uses known MinIO default credentials; inject real credentials");
-    }
-  }
 
-  @Bean("s3HealthIndicator")
-  @ConditionalOnClass(HealthIndicator.class)
-  @ConditionalOnProperty(
-      prefix = "management.health.s3",
-      name = "enabled",
-      havingValue = "true",
-      matchIfMissing = true)
-  @ConditionalOnMissingBean(name = "s3HealthIndicator")
-  public HealthIndicator s3HealthIndicator(S3Client s3Client, S3StorageProperties p) {
-    return new S3HealthIndicator(s3Client, p);
-  }
+    @Bean("s3HealthIndicator")
+    @ConditionalOnClass(HealthIndicator.class)
+    @ConditionalOnProperty(
+            prefix = "management.health.s3",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean(name = "s3HealthIndicator")
+    public HealthIndicator s3HealthIndicator(S3Client s3Client, S3StorageProperties p) {
+        return new S3HealthIndicator(s3Client, p);
+    }
 }

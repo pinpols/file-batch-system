@@ -45,245 +45,234 @@ import org.springframework.web.multipart.MultipartFile;
 @ExtendWith(MockitoExtension.class)
 class DefaultConsoleFileApplicationServiceTest {
 
-  @Mock
-  private OrchestratorInternalRestClient orchestratorClient;
+    @Mock
+    private OrchestratorInternalRestClient orchestratorClient;
 
-  @Mock
-  private OrchestratorApprovalClient approvalClient;
+    @Mock
+    private OrchestratorApprovalClient approvalClient;
 
-  @Mock
-  private ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver metadataResolver;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private FileRecordMapper fileRecordMapper;
+    @Mock
+    private FileRecordMapper fileRecordMapper;
 
-  @Mock
-  private FileTemplateConfigMapper fileTemplateConfigMapper;
+    @Mock
+    private FileTemplateConfigMapper fileTemplateConfigMapper;
 
-  @Mock
-  private BatchObjectStore objectStore;
+    @Mock
+    private BatchObjectStore objectStore;
 
-  private S3StorageProperties s3Properties;
-  private DefaultConsoleFileApplicationService service;
+    private S3StorageProperties s3Properties;
+    private DefaultConsoleFileApplicationService service;
 
-  @BeforeEach
-  void setUp() {
-    s3Properties = new S3StorageProperties();
-    s3Properties.setBucket("default-bucket");
-    service = new DefaultConsoleFileApplicationService(
-        orchestratorClient,
-        approvalClient,
-        metadataResolver,
-        tenantGuard,
-        fileRecordMapper,
-        fileTemplateConfigMapper,
-        objectStore,
-        s3Properties);
-  }
-
-  @Test
-  @DisplayName("带审批单预签名下载时审批目标必须绑定本次文件")
-  void shouldRequireApprovalBoundToDownloadedFile_whenPresignDownloadWithApprovalId() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    // 回归守护本次安全修复:presignDownload 带 approvalId 时,审批二次校验必须绑定
-    // targetType=FILE + targetId=本次 fileId(而非 none()),否则同租任一 APPROVED 单可越权解锁。
-    when(metadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
-    stubPresignRestChain();
-    PresignDownloadFileRequest request = new PresignDownloadFileRequest();
-    request.setTenantId("t1");
-    request.setFileId(100L);
-    request.setApprovalId("AP-100");
-    request.setReason("audit");
-
-    service.presignDownload(request, "idem-1");
-
-    ArgumentCaptor<ApprovalTargetBinding> captor =
-        ArgumentCaptor.forClass(ApprovalTargetBinding.class);
-    verify(approvalClient).requireApprovedApproval(eq("t1"), eq("AP-100"), captor.capture());
-    assertThat(captor.getValue()).isEqualTo(ApprovalTargetBinding.file(100L));
-    assertThat(captor.getValue().targetId()).isEqualTo("100");
-  }
-
-  @Test
-  @DisplayName("审批单为空时提交的审批目标同样绑定本次文件与租户")
-  void shouldNotSkipApprovalBinding_whenApprovalIdBlank() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    // approvalId 空白走"发起审批"分支,提交目标同样是 FILE/fileId(与校验侧对称)。
-    when(approvalClient.submitApproval(any())).thenReturn("APR-NEW");
-    PresignDownloadFileRequest request = new PresignDownloadFileRequest();
-    request.setTenantId("t1");
-    request.setFileId(100L);
-    request.setReason("audit");
-
-    var response = service.presignDownload(request, "idem-1");
-
-    assertThat(response.approvalNo()).isEqualTo("APR-NEW");
-    ArgumentCaptor<OrchestratorApprovalClient.ApprovalSubmitCommand> captor =
-        ArgumentCaptor.forClass(OrchestratorApprovalClient.ApprovalSubmitCommand.class);
-    verify(approvalClient).submitApproval(captor.capture());
-    assertThat(captor.getValue().targetType()).isEqualTo("FILE");
-    assertThat(captor.getValue().targetId()).isEqualTo("100");
-    // P0 回归:提交审批的 tenantId 必须来自 tenantGuard.resolveTenant(会话身份),而非裸取 body。
-    assertThat(captor.getValue().tenantId()).isEqualTo("t1");
-    verify(tenantGuard).resolveTenant("t1");
-  }
-
-  @Test
-  @DisplayName("请求体租户与会话租户不一致时拒绝提交审批")
-  void shouldRejectCrossTenantApprovalSubmission_whenBodyTenantMismatchesSession() {
-    // P0 (adv-review 2026-07-13):租户 A 会话带 body tenantId=victimB 且无 approvalId → 走
-    // submitApproval;必须经 tenantGuard.resolveTenant 拦截(不匹配抛 FORBIDDEN),
-    // 不得把攻击者可控审批单写入租户 B 的审批队列。
-    when(tenantGuard.resolveTenant("victimB"))
-        .thenThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"));
-    PresignDownloadFileRequest request = new PresignDownloadFileRequest();
-    request.setTenantId("victimB");
-    request.setFileId(100L);
-    request.setReason("audit");
-
-    assertThatThrownBy(() -> service.presignDownload(request, "idem-1"))
-        .isInstanceOf(BizException.class)
-        .extracting(e -> ((BizException) e).getCode())
-        .isEqualTo(ResultCode.FORBIDDEN);
-    verify(approvalClient, never()).submitApproval(any());
-  }
-
-  /** stub 校验通过后紧接的 /internal/files/{fileId}/presign REST 链(返回 null body 即可)。 */
-  private void stubPresignRestChain() {
-    RestClient restClient = mock(RestClient.class);
-    RestClient.RequestBodyUriSpec uriSpec = mock(RestClient.RequestBodyUriSpec.class);
-    RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
-    RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
-    when(orchestratorClient.client()).thenReturn(restClient);
-    when(restClient.post()).thenReturn(uriSpec);
-    when(uriSpec.uri(anyString(), any(Object[].class))).thenReturn(bodySpec);
-    doReturn(bodySpec).when(bodySpec).header(anyString(), (String[]) any());
-    when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
-    when(bodySpec.retrieve()).thenReturn(responseSpec);
-  }
-
-  @Test
-  @DisplayName("上传内容按文件记录写入对象存储对应桶与路径")
-  void shouldWriteUploadedContentToObjectStore() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(fileRecordMapper.selectFileRecordById("t1", 1L))
-        .thenReturn(new FileRecordStorageView(
-            1L, "t1", "a.csv", "text/csv", "S3", "uploads/t1/a.csv", "bucket-a", null));
-    MockMultipartFile file =
-        new MockMultipartFile("file", "a.csv", "text/csv", "id,name\n1,A\n".getBytes());
-
-    ConsoleFileOperationResponse response = service.uploadContent("t1", 1L, file, "idem-1");
-
-    assertThat(response.status()).isEqualTo("UPLOADED");
-    verify(objectStore)
-        .put(
-            eq("bucket-a"),
-            eq("uploads/t1/a.csv"),
-            any(InputStream.class),
-            eq(12L),
-            eq("text/csv"));
-  }
-
-  @Test
-  @DisplayName("内容写入对象存储后关闭上传输入流")
-  void shouldCloseUploadInputStreamAfterStorePut() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(fileRecordMapper.selectFileRecordById("t1", 1L))
-        .thenReturn(new FileRecordStorageView(
-            1L, "t1", "a.csv", null, "S3", "uploads/t1/a.csv", "bucket-a", null));
-    CloseTrackingInputStream inputStream =
-        new CloseTrackingInputStream("id,name\n1,A\n".getBytes());
-    MultipartFile file = new CloseTrackingMultipartFile(inputStream, 12L, "text/csv");
-
-    service.uploadContent("t1", 1L, file, "idem-1");
-
-    assertThat(inputStream.closed).isTrue();
-  }
-
-  @Test
-  @DisplayName("本地路径文件记录不允许上传内容")
-  void shouldRejectLocalPathFileRecordForUploadContent() {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(fileRecordMapper.selectFileRecordById("t1", 1L))
-        .thenReturn(
-            new FileRecordStorageView(1L, "t1", "a.csv", null, "LOCAL", "/tmp/a.csv", null, null));
-    MockMultipartFile file =
-        new MockMultipartFile("file", "a.csv", "text/csv", "id,name\n1,A\n".getBytes());
-
-    assertThatThrownBy(() -> service.uploadContent("t1", 1L, file, "idem-1"))
-        .isInstanceOf(BizException.class)
-        .extracting(e -> ((BizException) e).getCode())
-        .isEqualTo(ResultCode.STATE_CONFLICT);
-  }
-
-  private static final class CloseTrackingMultipartFile implements MultipartFile {
-    private final CloseTrackingInputStream inputStream;
-    private final long size;
-    private final String contentType;
-
-    private CloseTrackingMultipartFile(
-        CloseTrackingInputStream inputStream, long size, String contentType) {
-      this.inputStream = inputStream;
-      this.size = size;
-      this.contentType = contentType;
+    @BeforeEach
+    void setUp() {
+        s3Properties = new S3StorageProperties();
+        s3Properties.setBucket("default-bucket");
+        service = new DefaultConsoleFileApplicationService(
+                orchestratorClient,
+                approvalClient,
+                metadataResolver,
+                tenantGuard,
+                fileRecordMapper,
+                fileTemplateConfigMapper,
+                objectStore,
+                s3Properties);
     }
 
-    @Override
-    public String getName() {
-      return "file";
+    @Test
+    @DisplayName("带审批单预签名下载时审批目标必须绑定本次文件")
+    void shouldRequireApprovalBoundToDownloadedFile_whenPresignDownloadWithApprovalId() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        // 回归守护本次安全修复:presignDownload 带 approvalId 时,审批二次校验必须绑定
+        // targetType=FILE + targetId=本次 fileId(而非 none()),否则同租任一 APPROVED 单可越权解锁。
+        when(metadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
+        stubPresignRestChain();
+        PresignDownloadFileRequest request = new PresignDownloadFileRequest();
+        request.setTenantId("t1");
+        request.setFileId(100L);
+        request.setApprovalId("AP-100");
+        request.setReason("audit");
+
+        service.presignDownload(request, "idem-1");
+
+        ArgumentCaptor<ApprovalTargetBinding> captor = ArgumentCaptor.forClass(ApprovalTargetBinding.class);
+        verify(approvalClient).requireApprovedApproval(eq("t1"), eq("AP-100"), captor.capture());
+        assertThat(captor.getValue()).isEqualTo(ApprovalTargetBinding.file(100L));
+        assertThat(captor.getValue().targetId()).isEqualTo("100");
     }
 
-    @Override
-    public String getOriginalFilename() {
-      return "a.csv";
+    @Test
+    @DisplayName("审批单为空时提交的审批目标同样绑定本次文件与租户")
+    void shouldNotSkipApprovalBinding_whenApprovalIdBlank() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        // approvalId 空白走"发起审批"分支,提交目标同样是 FILE/fileId(与校验侧对称)。
+        when(approvalClient.submitApproval(any())).thenReturn("APR-NEW");
+        PresignDownloadFileRequest request = new PresignDownloadFileRequest();
+        request.setTenantId("t1");
+        request.setFileId(100L);
+        request.setReason("audit");
+
+        var response = service.presignDownload(request, "idem-1");
+
+        assertThat(response.approvalNo()).isEqualTo("APR-NEW");
+        ArgumentCaptor<OrchestratorApprovalClient.ApprovalSubmitCommand> captor =
+                ArgumentCaptor.forClass(OrchestratorApprovalClient.ApprovalSubmitCommand.class);
+        verify(approvalClient).submitApproval(captor.capture());
+        assertThat(captor.getValue().targetType()).isEqualTo("FILE");
+        assertThat(captor.getValue().targetId()).isEqualTo("100");
+        // P0 回归:提交审批的 tenantId 必须来自 tenantGuard.resolveTenant(会话身份),而非裸取 body。
+        assertThat(captor.getValue().tenantId()).isEqualTo("t1");
+        verify(tenantGuard).resolveTenant("t1");
     }
 
-    @Override
-    public String getContentType() {
-      return contentType;
+    @Test
+    @DisplayName("请求体租户与会话租户不一致时拒绝提交审批")
+    void shouldRejectCrossTenantApprovalSubmission_whenBodyTenantMismatchesSession() {
+        // P0 (adv-review 2026-07-13):租户 A 会话带 body tenantId=victimB 且无 approvalId → 走
+        // submitApproval;必须经 tenantGuard.resolveTenant 拦截(不匹配抛 FORBIDDEN),
+        // 不得把攻击者可控审批单写入租户 B 的审批队列。
+        when(tenantGuard.resolveTenant("victimB"))
+                .thenThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"));
+        PresignDownloadFileRequest request = new PresignDownloadFileRequest();
+        request.setTenantId("victimB");
+        request.setFileId(100L);
+        request.setReason("audit");
+
+        assertThatThrownBy(() -> service.presignDownload(request, "idem-1"))
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getCode())
+                .isEqualTo(ResultCode.FORBIDDEN);
+        verify(approvalClient, never()).submitApproval(any());
     }
 
-    @Override
-    public boolean isEmpty() {
-      return size <= 0;
+    /** stub 校验通过后紧接的 /internal/files/{fileId}/presign REST 链(返回 null body 即可)。 */
+    private void stubPresignRestChain() {
+        RestClient restClient = mock(RestClient.class);
+        RestClient.RequestBodyUriSpec uriSpec = mock(RestClient.RequestBodyUriSpec.class);
+        RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
+        RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
+        when(orchestratorClient.client()).thenReturn(restClient);
+        when(restClient.post()).thenReturn(uriSpec);
+        when(uriSpec.uri(anyString(), any(Object[].class))).thenReturn(bodySpec);
+        doReturn(bodySpec).when(bodySpec).header(anyString(), (String[]) any());
+        when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
+        when(bodySpec.retrieve()).thenReturn(responseSpec);
     }
 
-    @Override
-    public long getSize() {
-      return size;
+    @Test
+    @DisplayName("上传内容按文件记录写入对象存储对应桶与路径")
+    void shouldWriteUploadedContentToObjectStore() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        when(fileRecordMapper.selectFileRecordById("t1", 1L))
+                .thenReturn(new FileRecordStorageView(
+                        1L, "t1", "a.csv", "text/csv", "S3", "uploads/t1/a.csv", "bucket-a", null));
+        MockMultipartFile file = new MockMultipartFile("file", "a.csv", "text/csv", "id,name\n1,A\n".getBytes());
+
+        ConsoleFileOperationResponse response = service.uploadContent("t1", 1L, file, "idem-1");
+
+        assertThat(response.status()).isEqualTo("UPLOADED");
+        verify(objectStore)
+                .put(eq("bucket-a"), eq("uploads/t1/a.csv"), any(InputStream.class), eq(12L), eq("text/csv"));
     }
 
-    @Override
-    public byte[] getBytes() {
-      throw new UnsupportedOperationException();
+    @Test
+    @DisplayName("内容写入对象存储后关闭上传输入流")
+    void shouldCloseUploadInputStreamAfterStorePut() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        when(fileRecordMapper.selectFileRecordById("t1", 1L))
+                .thenReturn(
+                        new FileRecordStorageView(1L, "t1", "a.csv", null, "S3", "uploads/t1/a.csv", "bucket-a", null));
+        CloseTrackingInputStream inputStream = new CloseTrackingInputStream("id,name\n1,A\n".getBytes());
+        MultipartFile file = new CloseTrackingMultipartFile(inputStream, 12L, "text/csv");
+
+        service.uploadContent("t1", 1L, file, "idem-1");
+
+        assertThat(inputStream.closed).isTrue();
     }
 
-    @Override
-    public InputStream getInputStream() {
-      return inputStream;
+    @Test
+    @DisplayName("本地路径文件记录不允许上传内容")
+    void shouldRejectLocalPathFileRecordForUploadContent() {
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+        when(fileRecordMapper.selectFileRecordById("t1", 1L))
+                .thenReturn(new FileRecordStorageView(1L, "t1", "a.csv", null, "LOCAL", "/tmp/a.csv", null, null));
+        MockMultipartFile file = new MockMultipartFile("file", "a.csv", "text/csv", "id,name\n1,A\n".getBytes());
+
+        assertThatThrownBy(() -> service.uploadContent("t1", 1L, file, "idem-1"))
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getCode())
+                .isEqualTo(ResultCode.STATE_CONFLICT);
     }
 
-    @Override
-    public void transferTo(File dest) {
-      throw new UnsupportedOperationException();
-    }
-  }
+    private static final class CloseTrackingMultipartFile implements MultipartFile {
+        private final CloseTrackingInputStream inputStream;
+        private final long size;
+        private final String contentType;
 
-  private static final class CloseTrackingInputStream extends ByteArrayInputStream {
-    private boolean closed;
+        private CloseTrackingMultipartFile(CloseTrackingInputStream inputStream, long size, String contentType) {
+            this.inputStream = inputStream;
+            this.size = size;
+            this.contentType = contentType;
+        }
 
-    private CloseTrackingInputStream(byte[] buf) {
-      super(buf);
+        @Override
+        public String getName() {
+            return "file";
+        }
+
+        @Override
+        public String getOriginalFilename() {
+            return "a.csv";
+        }
+
+        @Override
+        public String getContentType() {
+            return contentType;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return size <= 0;
+        }
+
+        @Override
+        public long getSize() {
+            return size;
+        }
+
+        @Override
+        public byte[] getBytes() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public InputStream getInputStream() {
+            return inputStream;
+        }
+
+        @Override
+        public void transferTo(File dest) {
+            throw new UnsupportedOperationException();
+        }
     }
 
-    @Override
-    public void close() throws IOException {
-      closed = true;
-      super.close();
+    private static final class CloseTrackingInputStream extends ByteArrayInputStream {
+        private boolean closed;
+
+        private CloseTrackingInputStream(byte[] buf) {
+            super(buf);
+        }
+
+        @Override
+        public void close() throws IOException {
+            closed = true;
+            super.close();
+        }
     }
-  }
 }

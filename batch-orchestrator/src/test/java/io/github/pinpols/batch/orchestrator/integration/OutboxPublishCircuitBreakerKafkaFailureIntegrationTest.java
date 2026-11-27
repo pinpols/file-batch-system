@@ -54,19 +54,18 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.test.annotation.DirtiesContext;
 
 @SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = {
-      "batch.outbox.circuit-breaker-enabled=true",
-      "batch.outbox.circuit-breaker-failure-threshold-consecutive-polls=2",
-      "batch.outbox.circuit-breaker-cooldown-millis=60000",
-      "batch.outbox.retry-delay-seconds=0",
-      "batch.outbox.retry-jitter-ratio=0",
-      "batch.outbox.max-retry-attempts=10",
-      "batch.outbox.batch-size=10",
-    })
-@Import(
-    OutboxPublishCircuitBreakerKafkaFailureIntegrationTest.FastFailKafkaProducerConfiguration.class)
+        classes = BatchOrchestratorApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+            "batch.outbox.circuit-breaker-enabled=true",
+            "batch.outbox.circuit-breaker-failure-threshold-consecutive-polls=2",
+            "batch.outbox.circuit-breaker-cooldown-millis=60000",
+            "batch.outbox.retry-delay-seconds=0",
+            "batch.outbox.retry-jitter-ratio=0",
+            "batch.outbox.max-retry-attempts=10",
+            "batch.outbox.batch-size=10",
+        })
+@Import(OutboxPublishCircuitBreakerKafkaFailureIntegrationTest.FastFailKafkaProducerConfiguration.class)
 // 该 IT 通过 stop/start Kafka 容器注入故障，重启后端口变化，Spring 缓存的 KafkaTemplate 仍指向旧端口；
 // 标 DirtiesContext 避免污染后续 IT（如 OutboxPublishIntegrationTest）。
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -74,253 +73,251 @@ import org.springframework.test.annotation.DirtiesContext;
 @DisplayName("消息队列故障下的待发布事件熔断:连续失败达到阈值后开启熔断,恢复后失败事件重新发布并累加尝试次数")
 class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String TENANT = "it-cb";
-  private static final String FIELD_FAILED_POLLS = "failedPolls";
-  private static final String FIELD_OPEN_UNTIL_MS = "openUntilMs";
+    private static final String TENANT = "it-cb";
+    private static final String FIELD_FAILED_POLLS = "failedPolls";
+    private static final String FIELD_OPEN_UNTIL_MS = "openUntilMs";
 
-  @Autowired
-  private DefaultScheduleForwarder scheduleForwarder;
+    @Autowired
+    private DefaultScheduleForwarder scheduleForwarder;
 
-  @Autowired
-  private OutboxPublishCircuitBreaker circuitBreaker;
+    @Autowired
+    private OutboxPublishCircuitBreaker circuitBreaker;
 
-  @Autowired
-  private OutboxEventMapper outboxEventMapper;
+    @Autowired
+    private OutboxEventMapper outboxEventMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  private final BatchOrchestratorGovernanceProperties governance;
+    private final BatchOrchestratorGovernanceProperties governance;
 
-  @Autowired
-  OutboxPublishCircuitBreakerKafkaFailureIntegrationTest(
-      BatchOrchestratorGovernanceProperties governance) {
-    this.governance = governance;
-  }
-
-  @Test
-  @Order(2)
-  @DisplayName("消息队列不可用时事件发布失败并记为失败状态,连续失败达到阈值后熔断开启,不再放行发布")
-  void shouldOpenOutboxCircuitBreaker_whenKafkaFailuresReachThreshold() {
-    assertThat(circuitBreaker.allowNow()).isTrue();
-
-    stopKafkaForFaultInjection();
-    try {
-      OutboxEventEntity first = seedOutboxEvent("cb-fail-1-" + System.nanoTime());
-      ScheduleForwarderResult firstResult = scheduleForwarder.advance(plan());
-      circuitBreaker.onAdvanceResult(firstResult.totalFailures());
-      assertThat(firstResult.totalFailures()).isGreaterThanOrEqualTo(1);
-      assertStatus(first.getId(), OutboxPublishStatus.FAILED.code());
-      assertThat(circuitBreaker.allowNow()).isTrue();
-
-      OutboxEventEntity second = seedOutboxEvent("cb-fail-2-" + System.nanoTime());
-      ScheduleForwarderResult secondResult = scheduleForwarder.advance(plan());
-      circuitBreaker.onAdvanceResult(secondResult.totalFailures());
-      assertThat(secondResult.totalFailures()).isGreaterThanOrEqualTo(1);
-      assertStatus(second.getId(), OutboxPublishStatus.FAILED.code());
-
-      assertThat(circuitBreaker.allowNow()).isFalse();
-    } finally {
-      startKafkaAfterFaultInjection();
-      circuitBreaker.onAdvanceResult(0);
+    @Autowired
+    OutboxPublishCircuitBreakerKafkaFailureIntegrationTest(BatchOrchestratorGovernanceProperties governance) {
+        this.governance = governance;
     }
-  }
 
-  @Test
-  @Order(1)
-  @DisplayName("真实消息队列暂停再恢复后同一事件发布成功,保留失败审计及消息身份,后续扫描不再发布")
-  void shouldPublishFailedEvent_whenKafkaRecovers() throws Exception {
-    String topic = governance.outbox().getDefaultTopic();
-    try (AdminClient admin = AdminClient.create(
-        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers()))) {
-      if (!admin.listTopics().names().get(15, TimeUnit.SECONDS).contains(topic)) {
-        admin
-            .createTopics(List.of(new NewTopic(topic, 1, (short) 1)))
-            .all()
-            .get(15, TimeUnit.SECONDS);
-      }
+    @Test
+    @Order(2)
+    @DisplayName("消息队列不可用时事件发布失败并记为失败状态,连续失败达到阈值后熔断开启,不再放行发布")
+    void shouldOpenOutboxCircuitBreaker_whenKafkaFailuresReachThreshold() {
+        assertThat(circuitBreaker.allowNow()).isTrue();
+
+        stopKafkaForFaultInjection();
+        try {
+            OutboxEventEntity first = seedOutboxEvent("cb-fail-1-" + System.nanoTime());
+            ScheduleForwarderResult firstResult = scheduleForwarder.advance(plan());
+            circuitBreaker.onAdvanceResult(firstResult.totalFailures());
+            assertThat(firstResult.totalFailures()).isGreaterThanOrEqualTo(1);
+            assertStatus(first.getId(), OutboxPublishStatus.FAILED.code());
+            assertThat(circuitBreaker.allowNow()).isTrue();
+
+            OutboxEventEntity second = seedOutboxEvent("cb-fail-2-" + System.nanoTime());
+            ScheduleForwarderResult secondResult = scheduleForwarder.advance(plan());
+            circuitBreaker.onAdvanceResult(secondResult.totalFailures());
+            assertThat(secondResult.totalFailures()).isGreaterThanOrEqualTo(1);
+            assertStatus(second.getId(), OutboxPublishStatus.FAILED.code());
+
+            assertThat(circuitBreaker.allowNow()).isFalse();
+        } finally {
+            startKafkaAfterFaultInjection();
+            circuitBreaker.onAdvanceResult(0);
+        }
     }
-    OutboxEventEntity event = seedOutboxEvent("cb-recover-" + System.nanoTime());
-    // 将遗漏的 Quartz cron 触发转换为持久化且分别标识的恢复执行。
-    String failedOutboxRetryCountSql = """
+
+    @Test
+    @Order(1)
+    @DisplayName("真实消息队列暂停再恢复后同一事件发布成功,保留失败审计及消息身份,后续扫描不再发布")
+    void shouldPublishFailedEvent_whenKafkaRecovers() throws Exception {
+        String topic = governance.outbox().getDefaultTopic();
+        try (AdminClient admin =
+                AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers()))) {
+            if (!admin.listTopics().names().get(15, TimeUnit.SECONDS).contains(topic)) {
+                admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1)))
+                        .all()
+                        .get(15, TimeUnit.SECONDS);
+            }
+        }
+        OutboxEventEntity event = seedOutboxEvent("cb-recover-" + System.nanoTime());
+        // 将遗漏的 Quartz cron 触发转换为持久化且分别标识的恢复执行。
+        String failedOutboxRetryCountSql = """
         select count(*) from batch.event_outbox_retry
         where outbox_event_id = ? and retry_status = 'FAILED'
         """;
-    KAFKA.getDockerClient().pauseContainerCmd(KAFKA.getContainerId()).exec();
-    try {
-      ScheduleForwarderResult failed = scheduleForwarder.advance(plan());
-      assertThat(failed.totalFailures()).isGreaterThanOrEqualTo(1);
-      assertStatus(event.getId(), OutboxPublishStatus.FAILED.code());
-      Integer failedRetryCount =
-          jdbcTemplate.queryForObject(failedOutboxRetryCountSql, Integer.class, event.getId());
-      assertThat(failedRetryCount).isEqualTo(1);
-    } finally {
-      KAFKA.getDockerClient().unpauseContainerCmd(KAFKA.getContainerId()).exec();
-    }
+        KAFKA.getDockerClient().pauseContainerCmd(KAFKA.getContainerId()).exec();
+        try {
+            ScheduleForwarderResult failed = scheduleForwarder.advance(plan());
+            assertThat(failed.totalFailures()).isGreaterThanOrEqualTo(1);
+            assertStatus(event.getId(), OutboxPublishStatus.FAILED.code());
+            Integer failedRetryCount =
+                    jdbcTemplate.queryForObject(failedOutboxRetryCountSql, Integer.class, event.getId());
+            assertThat(failedRetryCount).isEqualTo(1);
+        } finally {
+            KAFKA.getDockerClient().unpauseContainerCmd(KAFKA.getContainerId()).exec();
+        }
 
-    await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-      ScheduleForwarderResult result = scheduleForwarder.advance(plan());
-      assertThat(result.totalFailures()).isZero();
-      assertStatus(event.getId(), OutboxPublishStatus.PUBLISHED.code());
-    });
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            ScheduleForwarderResult result = scheduleForwarder.advance(plan());
+            assertThat(result.totalFailures()).isZero();
+            assertStatus(event.getId(), OutboxPublishStatus.PUBLISHED.code());
+        });
 
-    String outboxPublishAttemptSql = """
+        String outboxPublishAttemptSql = """
         select publish_attempt from batch.outbox_event where id = ?
     """;
-    Integer attempt =
-        jdbcTemplate.queryForObject(outboxPublishAttemptSql, Integer.class, event.getId());
-    assertThat(attempt).isGreaterThanOrEqualTo(2);
-    try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
-        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-        kafkaBootstrapServers(),
-        ConsumerConfig.GROUP_ID_CONFIG,
-        event.getEventKey(),
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-        "earliest",
-        ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
-        false,
-        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-        StringDeserializer.class,
-        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-        StringDeserializer.class))) {
-      consumer.subscribe(List.of(topic));
-      await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-        var matching = StreamSupport.stream(
-                consumer.poll(Duration.ofMillis(500)).records(topic).spliterator(), false)
-            .filter(record -> event.getEventKey().equals(record.key()))
-            .toList();
-        assertThat(matching).isNotEmpty();
-        for (var record : matching) {
-          BatchEventMessage message = JsonUtils.fromJson(record.value(), BatchEventMessage.class);
-          assertThat(message.tenantId()).isEqualTo(TENANT);
-          assertThat(message.idempotencyKey()).isEqualTo(event.getEventKey());
-          assertThat(message.traceId()).isEqualTo(event.getTraceId());
-          assertThat(message.eventName()).isEqualTo(event.getEventType());
+        Integer attempt = jdbcTemplate.queryForObject(outboxPublishAttemptSql, Integer.class, event.getId());
+        assertThat(attempt).isGreaterThanOrEqualTo(2);
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                kafkaBootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG,
+                event.getEventKey(),
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                "earliest",
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+                false,
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class))) {
+            consumer.subscribe(List.of(topic));
+            await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+                var matching = StreamSupport.stream(
+                                consumer.poll(Duration.ofMillis(500))
+                                        .records(topic)
+                                        .spliterator(),
+                                false)
+                        .filter(record -> event.getEventKey().equals(record.key()))
+                        .toList();
+                assertThat(matching).isNotEmpty();
+                for (var record : matching) {
+                    BatchEventMessage message = JsonUtils.fromJson(record.value(), BatchEventMessage.class);
+                    assertThat(message.tenantId()).isEqualTo(TENANT);
+                    assertThat(message.idempotencyKey()).isEqualTo(event.getEventKey());
+                    assertThat(message.traceId()).isEqualTo(event.getTraceId());
+                    assertThat(message.eventName()).isEqualTo(event.getEventType());
+                }
+            });
         }
-      });
-    }
-    scheduleForwarder.advance(plan());
-    Integer publishAttemptAfterRetry =
-        jdbcTemplate.queryForObject(outboxPublishAttemptSql, Integer.class, event.getId());
-    assertThat(publishAttemptAfterRetry).isEqualTo(attempt);
-    String matchingOutboxEventCountSql = """
+        scheduleForwarder.advance(plan());
+        Integer publishAttemptAfterRetry =
+                jdbcTemplate.queryForObject(outboxPublishAttemptSql, Integer.class, event.getId());
+        assertThat(publishAttemptAfterRetry).isEqualTo(attempt);
+        String matchingOutboxEventCountSql = """
         select count(*) from batch.outbox_event where tenant_id = ? and event_key = ?
         """;
-    Integer matchingOutboxEventCount = jdbcTemplate.queryForObject(
-        matchingOutboxEventCountSql, Integer.class, TENANT, event.getEventKey());
-    assertThat(matchingOutboxEventCount).isEqualTo(1);
-  }
+        Integer matchingOutboxEventCount =
+                jdbcTemplate.queryForObject(matchingOutboxEventCountSql, Integer.class, TENANT, event.getEventKey());
+        assertThat(matchingOutboxEventCount).isEqualTo(1);
+    }
 
-  private OutboxEventEntity seedOutboxEvent(String key) {
-    OutboxEventEntity event = new OutboxEventEntity();
-    event.setTenantId(TENANT);
-    event.setAggregateType("CIRCUIT_BREAKER_IT");
-    event.setAggregateId(System.nanoTime());
-    event.setEventType("CIRCUIT_BREAKER_IT_EVENT");
-    event.setEventKey(key);
-    event.setPayloadJson("{\"kind\":\"circuit-breaker-it\"}");
-    event.setPublishStatus(OutboxPublishStatus.NEW.code());
-    event.setPublishAttempt(0);
-    event.setPriority(10);
-    // 用 NULL 表示立即可投递，避免 JVM 与 PostgreSQL 容器时钟的微小偏差把新事件判为未到期。
-    event.setNextPublishAt(null);
-    event.setTraceId("trace-" + key);
-    outboxEventMapper.insert(event);
-    return event;
-  }
+    private OutboxEventEntity seedOutboxEvent(String key) {
+        OutboxEventEntity event = new OutboxEventEntity();
+        event.setTenantId(TENANT);
+        event.setAggregateType("CIRCUIT_BREAKER_IT");
+        event.setAggregateId(System.nanoTime());
+        event.setEventType("CIRCUIT_BREAKER_IT_EVENT");
+        event.setEventKey(key);
+        event.setPayloadJson("{\"kind\":\"circuit-breaker-it\"}");
+        event.setPublishStatus(OutboxPublishStatus.NEW.code());
+        event.setPublishAttempt(0);
+        event.setPriority(10);
+        // 用 NULL 表示立即可投递，避免 JVM 与 PostgreSQL 容器时钟的微小偏差把新事件判为未到期。
+        event.setNextPublishAt(null);
+        event.setTraceId("trace-" + key);
+        outboxEventMapper.insert(event);
+        return event;
+    }
 
-  private static SchedulePlan plan() {
-    SchedulePlan plan = new SchedulePlan();
-    plan.setTenantId(TENANT);
-    plan.setShardTotal(1);
-    plan.setShardIndex(0);
-    return plan;
-  }
+    private static SchedulePlan plan() {
+        SchedulePlan plan = new SchedulePlan();
+        plan.setTenantId(TENANT);
+        plan.setShardTotal(1);
+        plan.setShardIndex(0);
+        return plan;
+    }
 
-  private void assertStatus(Long eventId, String expected) {
-    String outboxPublishStatusSql = """
+    private void assertStatus(Long eventId, String expected) {
+        String outboxPublishStatusSql = """
         select publish_status from batch.outbox_event where id = ?
     """;
-    String status = jdbcTemplate.queryForObject(outboxPublishStatusSql, String.class, eventId);
-    assertThat(status).isEqualTo(expected);
-  }
-
-  @TestConfiguration
-  static class FastFailKafkaProducerConfiguration {
-
-    @Bean
-    @Primary
-    OutboxPublishCircuitBreaker testCircuitBreaker(
-        BatchOrchestratorGovernanceProperties governance) {
-      return new OutboxPublishCircuitBreaker(
-          governance, new InMemoryCircuitRedisSupport(), new SimpleMeterRegistry());
+        String status = jdbcTemplate.queryForObject(outboxPublishStatusSql, String.class, eventId);
+        assertThat(status).isEqualTo(expected);
     }
 
-    @Bean
-    @Primary
-    ProducerFactory<String, String> fastFailProducerFactory() {
-      Map<String, Object> properties = new HashMap<>();
-      properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-      properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-      properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-      properties.put(ProducerConfig.ACKS_CONFIG, "all");
-      properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
-      properties.put(ProducerConfig.RETRIES_CONFIG, 0);
-      properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
-      properties.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1000);
-      properties.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 3000);
-      properties.put(ProducerConfig.LINGER_MS_CONFIG, 0);
-      return new DefaultKafkaProducerFactory<>(properties);
-    }
+    @TestConfiguration
+    static class FastFailKafkaProducerConfiguration {
 
-    @Bean
-    @Primary
-    KafkaTemplate<String, String> fastFailKafkaTemplate(
-        ProducerFactory<String, String> producerFactory, ObservationRegistry observationRegistry) {
-      KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
-      template.setObservationEnabled(true);
-      template.setObservationRegistry(observationRegistry);
-      return template;
-    }
-  }
-
-  private static final class InMemoryCircuitRedisSupport extends OrchestratorRedisSupport {
-
-    private final ConcurrentMap<String, Long> values = new ConcurrentHashMap<>();
-
-    private InMemoryCircuitRedisSupport() {
-      super(new StringRedisTemplate(), new ObjectMapper());
-    }
-
-    @Override
-    public Long evalLong(String script, String key, String... args) {
-      if (args.length == 1 && FIELD_OPEN_UNTIL_MS.equals(args[0])) {
-        return values.getOrDefault(FIELD_OPEN_UNTIL_MS, 0L);
-      }
-      boolean scriptArgumentsMatchCircuitSnapshot = args.length == 7
-          && FIELD_FAILED_POLLS.equals(args[0])
-          && FIELD_OPEN_UNTIL_MS.equals(args[1]);
-      if (scriptArgumentsMatchCircuitSnapshot) {
-        long failed = Long.parseLong(args[2]);
-        long threshold = Long.parseLong(args[3]);
-        long cooldownMillis = Long.parseLong(args[4]);
-        long now = Long.parseLong(args[5]);
-        long openUntil = values.getOrDefault(FIELD_OPEN_UNTIL_MS, 0L);
-        if (failed > 0) {
-          long failedPolls = values.getOrDefault(FIELD_FAILED_POLLS, 0L) + 1;
-          if (failedPolls >= threshold) {
-            openUntil = now + cooldownMillis;
-            failedPolls = 0L;
-          }
-          values.put(FIELD_FAILED_POLLS, failedPolls);
-          values.put(FIELD_OPEN_UNTIL_MS, openUntil);
-          return openUntil;
+        @Bean
+        @Primary
+        OutboxPublishCircuitBreaker testCircuitBreaker(BatchOrchestratorGovernanceProperties governance) {
+            return new OutboxPublishCircuitBreaker(
+                    governance, new InMemoryCircuitRedisSupport(), new SimpleMeterRegistry());
         }
-        values.put(FIELD_FAILED_POLLS, 0L);
-        values.put(FIELD_OPEN_UNTIL_MS, 0L);
-        return 0L;
-      }
-      throw new IllegalArgumentException("Unexpected circuit breaker script invocation");
+
+        @Bean
+        @Primary
+        ProducerFactory<String, String> fastFailProducerFactory() {
+            Map<String, Object> properties = new HashMap<>();
+            properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
+            properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+            properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+            properties.put(ProducerConfig.ACKS_CONFIG, "all");
+            properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+            properties.put(ProducerConfig.RETRIES_CONFIG, 0);
+            properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
+            properties.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1000);
+            properties.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 3000);
+            properties.put(ProducerConfig.LINGER_MS_CONFIG, 0);
+            return new DefaultKafkaProducerFactory<>(properties);
+        }
+
+        @Bean
+        @Primary
+        KafkaTemplate<String, String> fastFailKafkaTemplate(
+                ProducerFactory<String, String> producerFactory, ObservationRegistry observationRegistry) {
+            KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
+            template.setObservationEnabled(true);
+            template.setObservationRegistry(observationRegistry);
+            return template;
+        }
     }
-  }
+
+    private static final class InMemoryCircuitRedisSupport extends OrchestratorRedisSupport {
+
+        private final ConcurrentMap<String, Long> values = new ConcurrentHashMap<>();
+
+        private InMemoryCircuitRedisSupport() {
+            super(new StringRedisTemplate(), new ObjectMapper());
+        }
+
+        @Override
+        public Long evalLong(String script, String key, String... args) {
+            if (args.length == 1 && FIELD_OPEN_UNTIL_MS.equals(args[0])) {
+                return values.getOrDefault(FIELD_OPEN_UNTIL_MS, 0L);
+            }
+            boolean scriptArgumentsMatchCircuitSnapshot =
+                    args.length == 7 && FIELD_FAILED_POLLS.equals(args[0]) && FIELD_OPEN_UNTIL_MS.equals(args[1]);
+            if (scriptArgumentsMatchCircuitSnapshot) {
+                long failed = Long.parseLong(args[2]);
+                long threshold = Long.parseLong(args[3]);
+                long cooldownMillis = Long.parseLong(args[4]);
+                long now = Long.parseLong(args[5]);
+                long openUntil = values.getOrDefault(FIELD_OPEN_UNTIL_MS, 0L);
+                if (failed > 0) {
+                    long failedPolls = values.getOrDefault(FIELD_FAILED_POLLS, 0L) + 1;
+                    if (failedPolls >= threshold) {
+                        openUntil = now + cooldownMillis;
+                        failedPolls = 0L;
+                    }
+                    values.put(FIELD_FAILED_POLLS, failedPolls);
+                    values.put(FIELD_OPEN_UNTIL_MS, openUntil);
+                    return openUntil;
+                }
+                values.put(FIELD_FAILED_POLLS, 0L);
+                values.put(FIELD_OPEN_UNTIL_MS, 0L);
+                return 0L;
+            }
+            throw new IllegalArgumentException("Unexpected circuit breaker script invocation");
+        }
+    }
 }

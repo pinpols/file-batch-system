@@ -5,7 +5,7 @@ import org.apache.ibatis.annotations.Param;
 
 /** 最终通知成功后的租户隔离回执写入。 */
 public interface AlertNotificationReceiptMapper {
-  String bindTenant(@Param("tenantId") String tenantId);
+    String bindTenant(@Param("tenantId") String tenantId);
 
-  int recordDelivered(AlertNotificationReceiptCommand command);
+    int recordDelivered(AlertNotificationReceiptCommand command);
 }

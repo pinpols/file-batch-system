@@ -18,35 +18,35 @@ import org.springframework.kafka.listener.ContainerProperties;
 /** 配置 Console 侧 Kafka 消费与序列化约定。 */
 class ConsoleKafkaConfiguration {
 
-  /** 终端通知消费者单次 poll 最多取回的记录数。 */
-  private static final int TERMINAL_NOTIFICATION_MAX_POLL_RECORDS = 50;
+    /** 终端通知消费者单次 poll 最多取回的记录数。 */
+    private static final int TERMINAL_NOTIFICATION_MAX_POLL_RECORDS = 50;
 
-  @Bean
-  ConcurrentKafkaListenerContainerFactory<String, String> terminalNotificationKafkaFactory(
-      @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
-      @Value("${spring.kafka.listener.auto-startup:true}") boolean autoStartup) {
-    ConcurrentKafkaListenerContainerFactory<String, String> factory =
-        new ConcurrentKafkaListenerContainerFactory<String, String>();
-    factory.setConsumerFactory(new DefaultKafkaConsumerFactory<>(Map.of(
-        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-        bootstrapServers,
-        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-        StringDeserializer.class,
-        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-        StringDeserializer.class,
-        ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
-        false,
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-        "earliest",
-        ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
-        TERMINAL_NOTIFICATION_MAX_POLL_RECORDS)));
-    factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
-    factory.setAutoStartup(autoStartup);
-    return factory;
-  }
+    @Bean
+    ConcurrentKafkaListenerContainerFactory<String, String> terminalNotificationKafkaFactory(
+            @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
+            @Value("${spring.kafka.listener.auto-startup:true}") boolean autoStartup) {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory =
+                new ConcurrentKafkaListenerContainerFactory<String, String>();
+        factory.setConsumerFactory(new DefaultKafkaConsumerFactory<>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                bootstrapServers,
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class,
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+                false,
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                "earliest",
+                ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
+                TERMINAL_NOTIFICATION_MAX_POLL_RECORDS)));
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        factory.setAutoStartup(autoStartup);
+        return factory;
+    }
 
-  @Bean
-  KafkaAdmin kafkaAdmin(@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
-    return new KafkaAdmin(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
-  }
+    @Bean
+    KafkaAdmin kafkaAdmin(@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
+        return new KafkaAdmin(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
+    }
 }

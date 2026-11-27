@@ -23,72 +23,74 @@ import org.slf4j.LoggerFactory;
 @DisplayName("日志回传桥接:根日志器上追加器的装配与卸载,以及日志正文与上下文属性的导出")
 class OpenTelemetryLogbackBridgeTest {
 
-  @Test
-  @DisplayName("桥接对象创建时挂载追加器,关闭后从根日志器卸载")
-  void shouldAttachThenDetachAppender_whenBridgeClosed() {
-    LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
-    Logger root = context.getLogger(ROOT_LOGGER_NAME);
+    @Test
+    @DisplayName("桥接对象创建时挂载追加器,关闭后从根日志器卸载")
+    void shouldAttachThenDetachAppender_whenBridgeClosed() {
+        LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+        Logger root = context.getLogger(ROOT_LOGGER_NAME);
 
-    try (OpenTelemetryLogbackBridge bridge = new OpenTelemetryLogbackBridge(OpenTelemetry.noop())) {
-      assertThat(root.getAppender(OpenTelemetryLogbackBridge.APPENDER_NAME)).isNotNull();
+        try (OpenTelemetryLogbackBridge bridge = new OpenTelemetryLogbackBridge(OpenTelemetry.noop())) {
+            assertThat(root.getAppender(OpenTelemetryLogbackBridge.APPENDER_NAME))
+                    .isNotNull();
+        }
+
+        assertThat(root.getAppender(OpenTelemetryLogbackBridge.APPENDER_NAME)).isNull();
     }
 
-    assertThat(root.getAppender(OpenTelemetryLogbackBridge.APPENDER_NAME)).isNull();
-  }
+    @Test
+    @DisplayName("桥接启用期间输出日志:正文与上下文属性一并导出到远端")
+    void shouldExportLogBodyAndContextAttributes() {
+        CapturingExporter exporter = new CapturingExporter();
+        try (SdkLoggerProvider provider = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            OpenTelemetry telemetry =
+                    OpenTelemetrySdk.builder().setLoggerProvider(provider).build();
+            BatchMdc.put(StructuredLogField.TENANT_ID, "tenant-a");
+            BatchMdc.put(StructuredLogField.XFF_HEADER_VALUE, "198.51.100.1, 203.0.113.2");
+            BatchMdc.put(StructuredLogField.FRONTEND_PAGE, "/ops?token=not-for-export");
 
-  @Test
-  @DisplayName("桥接启用期间输出日志:正文与上下文属性一并导出到远端")
-  void shouldExportLogBodyAndContextAttributes() {
-    CapturingExporter exporter = new CapturingExporter();
-    try (SdkLoggerProvider provider = SdkLoggerProvider.builder()
-        .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
-        .build()) {
-      OpenTelemetry telemetry =
-          OpenTelemetrySdk.builder().setLoggerProvider(provider).build();
-      BatchMdc.put(StructuredLogField.TENANT_ID, "tenant-a");
-      BatchMdc.put(StructuredLogField.XFF_HEADER_VALUE, "198.51.100.1, 203.0.113.2");
-      BatchMdc.put(StructuredLogField.FRONTEND_PAGE, "/ops?token=not-for-export");
+            try (OpenTelemetryLogbackBridge ignored = new OpenTelemetryLogbackBridge(telemetry)) {
+                LoggerFactory.getLogger("otel-bridge-test")
+                        .atInfo()
+                        .addKeyValue("apiToken", "not-for-export")
+                        .log("otel-bridge-probe");
+            } finally {
+                BatchMdc.clear();
+            }
+        }
 
-      try (OpenTelemetryLogbackBridge ignored = new OpenTelemetryLogbackBridge(telemetry)) {
-        LoggerFactory.getLogger("otel-bridge-test")
-            .atInfo()
-            .addKeyValue("apiToken", "not-for-export")
-            .log("otel-bridge-probe");
-      } finally {
-        BatchMdc.clear();
-      }
+        assertThat(exporter.records).anySatisfy(record -> {
+            assertThat(record.getBodyValue().asString()).isEqualTo("otel-bridge-probe");
+            assertThat(record.getAttributes().get(AttributeKey.stringKey("tenantId")))
+                    .isEqualTo("tenant-a");
+            assertThat(record.getAttributes().get(AttributeKey.stringKey("xffHeaderValue")))
+                    .isNull();
+            assertThat(record.getAttributes().get(AttributeKey.stringKey("frontendPage")))
+                    .isNull();
+            assertThat(record.getAttributes().get(AttributeKey.stringKey("apiToken")))
+                    .isNull();
+        });
     }
 
-    assertThat(exporter.records).anySatisfy(record -> {
-      assertThat(record.getBodyValue().asString()).isEqualTo("otel-bridge-probe");
-      assertThat(record.getAttributes().get(AttributeKey.stringKey("tenantId")))
-          .isEqualTo("tenant-a");
-      assertThat(record.getAttributes().get(AttributeKey.stringKey("xffHeaderValue")))
-          .isNull();
-      assertThat(record.getAttributes().get(AttributeKey.stringKey("frontendPage")))
-          .isNull();
-      assertThat(record.getAttributes().get(AttributeKey.stringKey("apiToken"))).isNull();
-    });
-  }
+    private static final class CapturingExporter implements LogRecordExporter {
 
-  private static final class CapturingExporter implements LogRecordExporter {
+        private final List<LogRecordData> records = new CopyOnWriteArrayList<>();
 
-    private final List<LogRecordData> records = new CopyOnWriteArrayList<>();
+        @Override
+        public CompletableResultCode export(Collection<LogRecordData> logs) {
+            records.addAll(logs);
+            return CompletableResultCode.ofSuccess();
+        }
 
-    @Override
-    public CompletableResultCode export(Collection<LogRecordData> logs) {
-      records.addAll(logs);
-      return CompletableResultCode.ofSuccess();
+        @Override
+        public CompletableResultCode flush() {
+            return CompletableResultCode.ofSuccess();
+        }
+
+        @Override
+        public CompletableResultCode shutdown() {
+            return CompletableResultCode.ofSuccess();
+        }
     }
-
-    @Override
-    public CompletableResultCode flush() {
-      return CompletableResultCode.ofSuccess();
-    }
-
-    @Override
-    public CompletableResultCode shutdown() {
-      return CompletableResultCode.ofSuccess();
-    }
-  }
 }

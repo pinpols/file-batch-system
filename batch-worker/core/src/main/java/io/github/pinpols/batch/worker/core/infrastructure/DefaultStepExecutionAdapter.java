@@ -48,164 +48,159 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
 
-  private final BatchTaskExecutorRegistry registry;
-  private final TaskExecutionClient taskExecutionClient;
+    private final BatchTaskExecutorRegistry registry;
+    private final TaskExecutionClient taskExecutionClient;
 
-  @Autowired
-  public DefaultStepExecutionAdapter(
-      BatchTaskExecutorRegistry registry, TaskExecutionClient taskExecutionClient) {
-    this.registry = registry;
-    this.taskExecutionClient = taskExecutionClient;
-  }
-
-  DefaultStepExecutionAdapter(BatchTaskExecutorRegistry registry) {
-    this(registry, null);
-  }
-
-  /** payload 里携带执行器子类型的字段名(SPI 协议)。 */
-  private static final String PARAM_TASK_TYPE = "taskType";
-
-  private static final String OUTPUT_ERROR_CODE = "error_code";
-
-  @Override
-  public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-    Map<String, Object> parameters = extractParameters(request);
-    String taskType = resolveExecutorType(request, parameters);
-    return registry.replayCapability(taskType, parameters);
-  }
-
-  @Override
-  public StepExecutionResponse execute(StepExecutionRequest request) {
-    Map<String, Object> parameters = extractParameters(request);
-    String taskType = resolveExecutorType(request, parameters);
-    BatchTaskExecutor executor = registry.find(taskType);
-    if (executor == null) {
-      String safeTaskType = SwallowedExceptionLogger.safeMessage(taskType);
-      log.warn(
-          "no BatchTaskExecutor registered for taskType={}, registered={}",
-          safeTaskType,
-          registry.registeredTypes());
-      return new StepExecutionResponse(
-          false, "NO_EXECUTOR", "no BatchTaskExecutor registered for taskType=" + safeTaskType);
+    @Autowired
+    public DefaultStepExecutionAdapter(BatchTaskExecutorRegistry registry, TaskExecutionClient taskExecutionClient) {
+        this.registry = registry;
+        this.taskExecutionClient = taskExecutionClient;
     }
-    TaskContext ctx = new TaskContext(
-        request.tenantId(),
-        request.jobCode(),
-        // taskInstanceId 暂不在 StepExecutionRequest 里;需要时从 context 抽
-        null,
-        request.workerId(),
-        parameters,
-        request.context());
-    boolean executorIsSafeToReplay = executor.isSafeToReplay(ctx);
-    if (!executorIsSafeToReplay && !markNonIdempotentStart(request)) {
-      return new StepExecutionResponse(
-          false,
-          TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
-          "non-idempotent execution fence was not confirmed; executor was not run");
-    }
-    try {
-      TaskResult result = executor.execute(ctx);
-      if (result.success() && !EmptyChecks.isEmpty(result.output())) {
-        request.context().put(PipelineRuntimeKeys.NODE_OUTPUTS, result.output());
-      }
-      return toResponse(result);
-    } catch (RuntimeException ex) {
-      String failureSummary = SwallowedExceptionLogger.summary(ex);
-      log.error(
-          "BatchTaskExecutor uncaught exception, taskType={}, cause={}",
-          LogSanitizer.value(taskType),
-          failureSummary);
-      return new StepExecutionResponse(false, "EXECUTOR_FAILURE", failureSummary);
-    }
-  }
 
-  private boolean markNonIdempotentStart(StepExecutionRequest request) {
-    if (EmptyChecks.isNull(taskExecutionClient)) {
-      return false;
+    DefaultStepExecutionAdapter(BatchTaskExecutorRegistry registry) {
+        this(registry, null);
     }
-    Map<String, Object> context = request.context();
-    Long taskId =
-        asLong(EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.TASK_ID));
-    Object invocationValue = EmptyChecks.isNull(context)
-        ? null
-        : context.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
-    if (EmptyChecks.isNull(taskId)
-        || !(invocationValue instanceof String invocationId)
-        || EmptyChecks.isBlank(invocationId)) {
-      log.error(
-          "non-idempotent task execution rejected because its persisted lease identity is absent");
-      return false;
-    }
-    try {
-      return taskExecutionClient.markNonIdempotentExecutionStarted(
-          request.tenantId(), taskId, request.workerId(), invocationId);
-    } catch (RuntimeException ex) {
-      log.warn(
-          "non-idempotent execution fence could not be confirmed; refusing executor call: {}",
-          SwallowedExceptionLogger.summary(ex));
-      return false;
-    }
-  }
 
-  private static Long asLong(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
+    /** payload 里携带执行器子类型的字段名(SPI 协议)。 */
+    private static final String PARAM_TASK_TYPE = "taskType";
+
+    private static final String OUTPUT_ERROR_CODE = "error_code";
+
+    @Override
+    public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
+        Map<String, Object> parameters = extractParameters(request);
+        String taskType = resolveExecutorType(request, parameters);
+        return registry.replayCapability(taskType, parameters);
     }
-    if (value instanceof String text) {
-      try {
-        return Long.valueOf(text);
-      } catch (NumberFormatException ignored) {
+
+    @Override
+    public StepExecutionResponse execute(StepExecutionRequest request) {
+        Map<String, Object> parameters = extractParameters(request);
+        String taskType = resolveExecutorType(request, parameters);
+        BatchTaskExecutor executor = registry.find(taskType);
+        if (executor == null) {
+            String safeTaskType = SwallowedExceptionLogger.safeMessage(taskType);
+            log.warn(
+                    "no BatchTaskExecutor registered for taskType={}, registered={}",
+                    safeTaskType,
+                    registry.registeredTypes());
+            return new StepExecutionResponse(
+                    false, "NO_EXECUTOR", "no BatchTaskExecutor registered for taskType=" + safeTaskType);
+        }
+        TaskContext ctx = new TaskContext(
+                request.tenantId(),
+                request.jobCode(),
+                // taskInstanceId 暂不在 StepExecutionRequest 里;需要时从 context 抽
+                null,
+                request.workerId(),
+                parameters,
+                request.context());
+        boolean executorIsSafeToReplay = executor.isSafeToReplay(ctx);
+        if (!executorIsSafeToReplay && !markNonIdempotentStart(request)) {
+            return new StepExecutionResponse(
+                    false,
+                    TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+                    "non-idempotent execution fence was not confirmed; executor was not run");
+        }
+        try {
+            TaskResult result = executor.execute(ctx);
+            if (result.success() && !EmptyChecks.isEmpty(result.output())) {
+                request.context().put(PipelineRuntimeKeys.NODE_OUTPUTS, result.output());
+            }
+            return toResponse(result);
+        } catch (RuntimeException ex) {
+            String failureSummary = SwallowedExceptionLogger.summary(ex);
+            log.error(
+                    "BatchTaskExecutor uncaught exception, taskType={}, cause={}",
+                    LogSanitizer.value(taskType),
+                    failureSummary);
+            return new StepExecutionResponse(false, "EXECUTOR_FAILURE", failureSummary);
+        }
+    }
+
+    private boolean markNonIdempotentStart(StepExecutionRequest request) {
+        if (EmptyChecks.isNull(taskExecutionClient)) {
+            return false;
+        }
+        Map<String, Object> context = request.context();
+        Long taskId = asLong(EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.TASK_ID));
+        Object invocationValue =
+                EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
+        if (EmptyChecks.isNull(taskId)
+                || !(invocationValue instanceof String invocationId)
+                || EmptyChecks.isBlank(invocationId)) {
+            log.error("non-idempotent task execution rejected because its persisted lease identity is absent");
+            return false;
+        }
+        try {
+            return taskExecutionClient.markNonIdempotentExecutionStarted(
+                    request.tenantId(), taskId, request.workerId(), invocationId);
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "non-idempotent execution fence could not be confirmed; refusing executor call: {}",
+                    SwallowedExceptionLogger.summary(ex));
+            return false;
+        }
+    }
+
+    private static Long asLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return Long.valueOf(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
         return null;
-      }
     }
-    return null;
-  }
 
-  /** 解析 payload(default_params / launch 参数 JSON)为参数 Map;缺失或非法 JSON 对象时返回空 Map。 */
-  private static Map<String, Object> extractParameters(StepExecutionRequest request) {
-    Map<String, Object> context = request.context();
-    Object payload = EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.PAYLOAD);
-    if (!(payload instanceof String payloadJson) || payloadJson.isBlank()) {
-      return Map.of();
+    /** 解析 payload(default_params / launch 参数 JSON)为参数 Map;缺失或非法 JSON 对象时返回空 Map。 */
+    private static Map<String, Object> extractParameters(StepExecutionRequest request) {
+        Map<String, Object> context = request.context();
+        Object payload = EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.PAYLOAD);
+        if (!(payload instanceof String payloadJson) || payloadJson.isBlank()) {
+            return Map.of();
+        }
+        try {
+            Object parsed = JsonUtils.fromJson(payloadJson, Object.class);
+            if (parsed instanceof Map<?, ?> map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> typed = (Map<String, Object>) map;
+                return typed;
+            }
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "Task payload is not a valid JSON object; executing with empty parameters: {}",
+                    SwallowedExceptionLogger.summary(ex));
+        }
+        return Map.of();
     }
-    try {
-      Object parsed = JsonUtils.fromJson(payloadJson, Object.class);
-      if (parsed instanceof Map<?, ?> map) {
-        @SuppressWarnings("unchecked")
-        Map<String, Object> typed = (Map<String, Object>) map;
-        return typed;
-      }
-    } catch (RuntimeException ex) {
-      log.warn(
-          "Task payload is not a valid JSON object; executing with empty parameters: {}",
-          SwallowedExceptionLogger.summary(ex));
-    }
-    return Map.of();
-  }
 
-  /** 路由用的执行器子类型:优先 payload.taskType,回退 stepCode(= job_task.task_type)。 */
-  private static String resolveExecutorType(
-      StepExecutionRequest request, Map<String, Object> parameters) {
-    Object subType = parameters.get(PARAM_TASK_TYPE);
-    if (subType instanceof String s && !s.isBlank()) {
-      return s.trim();
+    /** 路由用的执行器子类型:优先 payload.taskType,回退 stepCode(= job_task.task_type)。 */
+    private static String resolveExecutorType(StepExecutionRequest request, Map<String, Object> parameters) {
+        Object subType = parameters.get(PARAM_TASK_TYPE);
+        if (subType instanceof String s && !s.isBlank()) {
+            return s.trim();
+        }
+        return request.stepCode();
     }
-    return request.stepCode();
-  }
 
-  private static StepExecutionResponse toResponse(TaskResult result) {
-    if (result.success()) {
-      return StepExecutionResponse.successResponse();
+    private static StepExecutionResponse toResponse(TaskResult result) {
+        if (result.success()) {
+            return StepExecutionResponse.successResponse();
+        }
+        String code = "TASK_FAILED";
+        Map<String, Object> output = result.output();
+        Object reportedCode = output == null ? null : output.get(OUTPUT_ERROR_CODE);
+        if (reportedCode instanceof String text && !text.isBlank()) {
+            code = text.trim();
+        }
+        String message = EmptyChecks.isNull(result.error())
+                ? SwallowedExceptionLogger.safeMessage(result.message())
+                : SwallowedExceptionLogger.summary(result.error());
+        return new StepExecutionResponse(false, code, message);
     }
-    String code = "TASK_FAILED";
-    Map<String, Object> output = result.output();
-    Object reportedCode = output == null ? null : output.get(OUTPUT_ERROR_CODE);
-    if (reportedCode instanceof String text && !text.isBlank()) {
-      code = text.trim();
-    }
-    String message = EmptyChecks.isNull(result.error())
-        ? SwallowedExceptionLogger.safeMessage(result.message())
-        : SwallowedExceptionLogger.summary(result.error());
-    return new StepExecutionResponse(false, code, message);
-  }
 }

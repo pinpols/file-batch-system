@@ -14,39 +14,37 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface WorkerReportOutboxSqliteMapper {
 
-  int upsert(@Param("p") WorkerReportOutboxUpsertParam p);
+    int upsert(@Param("p") WorkerReportOutboxUpsertParam p);
 
-  Long pickNextNewId(
-      @Param("nowEpochMillis") long nowEpochMillis, @Param("statusNew") String statusNew);
+    Long pickNextNewId(@Param("nowEpochMillis") long nowEpochMillis, @Param("statusNew") String statusNew);
 
-  WorkerReportOutboxRow updateClaimReturning(WorkerReportOutboxSqliteClaimParam parameters);
+    WorkerReportOutboxRow updateClaimReturning(WorkerReportOutboxSqliteClaimParam parameters);
 
-  Integer selectAttemptCount(
-      @Param("id") long id,
-      @Param("claimToken") String claimToken,
-      @Param("statusPublishing") String statusPublishing);
+    Integer selectAttemptCount(
+            @Param("id") long id,
+            @Param("claimToken") String claimToken,
+            @Param("statusPublishing") String statusPublishing);
 
-  int updateGiveUp(WorkerReportOutboxSqliteGiveUpParam parameters);
+    int updateGiveUp(WorkerReportOutboxSqliteGiveUpParam parameters);
 
-  int updateRetry(WorkerReportOutboxSqliteUpdateRetryParam parameters);
+    int updateRetry(WorkerReportOutboxSqliteUpdateRetryParam parameters);
 
-  // CPD-OFF: PostgreSQL 与 SQLite 的回报 Outbox Mapper 有意保持相同契约。
-  int resetStalePublishing(
-      @Param("statusNew") String statusNew,
-      @Param("now") long now,
-      @Param("statusPublishing") String statusPublishing,
-      @Param("cutoff") long cutoff);
+    // CPD-OFF: PostgreSQL 与 SQLite 的回报 Outbox Mapper 有意保持相同契约。
+    int resetStalePublishing(
+            @Param("statusNew") String statusNew,
+            @Param("now") long now,
+            @Param("statusPublishing") String statusPublishing,
+            @Param("cutoff") long cutoff);
 
-  long countByStatus(@Param("publishStatus") String publishStatus);
+    long countByStatus(@Param("publishStatus") String publishStatus);
 
-  long countStalePublishing(
-      @Param("statusPublishing") String statusPublishing, @Param("cutoff") long cutoff);
+    long countStalePublishing(@Param("statusPublishing") String statusPublishing, @Param("cutoff") long cutoff);
 
-  int deleteById(
-      @Param("id") long id,
-      @Param("claimToken") String claimToken,
-      @Param("statusPublishing") String statusPublishing);
+    int deleteById(
+            @Param("id") long id,
+            @Param("claimToken") String claimToken,
+            @Param("statusPublishing") String statusPublishing);
 
-  int giveUpRow(WorkerReportOutboxSqliteGiveUpRowParam parameters);
-  // CPD-ON
+    int giveUpRow(WorkerReportOutboxSqliteGiveUpRowParam parameters);
+    // CPD-ON
 }

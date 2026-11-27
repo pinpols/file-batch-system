@@ -21,43 +21,42 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExportFileNonEmptyVerifier implements ContentVerifier {
 
-  @Override
-  public String code() {
-    return "EXPORT_FILE_NON_EMPTY";
-  }
-
-  @Override
-  public Set<JobType> appliesTo() {
-    return Set.of(JobType.EXPORT);
-  }
-
-  @Override
-  public VerifyResult verify(VerifyContext context) {
-    long recordCount = longValue(context.property(PipelineRuntimeKeys.RECORD_COUNT));
-    long fileSize = longValue(context.property(PipelineRuntimeKeys.FILE_SIZE_BYTES));
-    if (recordCount > 0 || fileSize > 0) {
-      return VerifyResult.pass();
+    @Override
+    public String code() {
+        return "EXPORT_FILE_NON_EMPTY";
     }
-    Map<String, Object> evidence = new LinkedHashMap<>();
-    evidence.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
-    evidence.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, fileSize);
-    evidence.put(PipelineRuntimeKeys.FILE_ID, context.property(PipelineRuntimeKeys.FILE_ID));
-    return VerifyResult.fail(
-        "EXPORT_FILE_EMPTY", "Export task reported success but produced empty file", evidence);
-  }
 
-  private static long longValue(Object value) {
-    if (value instanceof Number n) {
-      return n.longValue();
+    @Override
+    public Set<JobType> appliesTo() {
+        return Set.of(JobType.EXPORT);
     }
-    if (value instanceof String s) {
-      try {
-        String trimmedValue = s.trim();
-        return Long.parseLong(trimmedValue);
-      } catch (NumberFormatException ignored) {
-        // 继续尝试下一种解析方式
-      }
+
+    @Override
+    public VerifyResult verify(VerifyContext context) {
+        long recordCount = longValue(context.property(PipelineRuntimeKeys.RECORD_COUNT));
+        long fileSize = longValue(context.property(PipelineRuntimeKeys.FILE_SIZE_BYTES));
+        if (recordCount > 0 || fileSize > 0) {
+            return VerifyResult.pass();
+        }
+        Map<String, Object> evidence = new LinkedHashMap<>();
+        evidence.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
+        evidence.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, fileSize);
+        evidence.put(PipelineRuntimeKeys.FILE_ID, context.property(PipelineRuntimeKeys.FILE_ID));
+        return VerifyResult.fail("EXPORT_FILE_EMPTY", "Export task reported success but produced empty file", evidence);
     }
-    return 0L;
-  }
+
+    private static long longValue(Object value) {
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        if (value instanceof String s) {
+            try {
+                String trimmedValue = s.trim();
+                return Long.parseLong(trimmedValue);
+            } catch (NumberFormatException ignored) {
+                // 继续尝试下一种解析方式
+            }
+        }
+        return 0L;
+    }
 }

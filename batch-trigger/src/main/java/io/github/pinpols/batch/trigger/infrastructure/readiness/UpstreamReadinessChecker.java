@@ -27,54 +27,53 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties(ReadinessGateProperties.class)
 public class UpstreamReadinessChecker implements UpstreamReadinessPort {
 
-  private final RestClient orchestratorRestClient;
-  private final boolean enabled;
+    private final RestClient orchestratorRestClient;
+    private final boolean enabled;
 
-  public UpstreamReadinessChecker(
-      RestClient orchestratorRestClient, ReadinessGateProperties readinessGateProperties) {
-    this.orchestratorRestClient = orchestratorRestClient;
-    this.enabled = readinessGateProperties.isEnabled();
-  }
+    public UpstreamReadinessChecker(
+            RestClient orchestratorRestClient, ReadinessGateProperties readinessGateProperties) {
+        this.orchestratorRestClient = orchestratorRestClient;
+        this.enabled = readinessGateProperties.isEnabled();
+    }
 
-  /**
-   * 上游 job 在指定 bizDate 是否就绪(已 SUCCESS)。
-   *
-   * @return true=就绪可 fire;false=未就绪 / 查询失败(fail-closed)
-   */
-  @Override
-  public Optional<Instant> readyAt(String tenantId, String upstreamJobCode, LocalDate bizDate) {
-    if (!enabled) {
-      return Optional.of(Instant.now());
+    /**
+     * 上游 job 在指定 bizDate 是否就绪(已 SUCCESS)。
+     *
+     * @return true=就绪可 fire;false=未就绪 / 查询失败(fail-closed)
+     */
+    @Override
+    public Optional<Instant> readyAt(String tenantId, String upstreamJobCode, LocalDate bizDate) {
+        if (!enabled) {
+            return Optional.of(Instant.now());
+        }
+        try {
+            ReadinessResponse response = orchestratorRestClient
+                    .get()
+                    .uri(builder -> builder.path("/internal/readiness/job")
+                            .queryParam("tenantId", tenantId)
+                            .queryParam("jobCode", upstreamJobCode)
+                            .queryParam("bizDate", bizDate)
+                            .build())
+                    .retrieve()
+                    .body(ReadinessResponse.class);
+            if (EmptyChecks.isNull(response) || !response.ready()) {
+                return Optional.empty();
+            }
+            // 与旧 Orchestrator 混合部署时响应可能没有 readyAt；以本次通过门禁的时刻作为兼容基准。
+            Instant responseReadyAt = response.readyAt();
+            if (EmptyChecks.isNull(responseReadyAt)) {
+                return Optional.of(Instant.now());
+            }
+            return Optional.of(responseReadyAt);
+        } catch (RuntimeException e) {
+            log.error(
+                    "upstream readiness check failed, fail-closed (skip fire): tenantId={} upstream={} "
+                            + "bizDate={} cause={}",
+                    tenantId,
+                    upstreamJobCode,
+                    bizDate,
+                    SwallowedExceptionLogger.summary(e));
+            return Optional.empty();
+        }
     }
-    try {
-      ReadinessResponse response = orchestratorRestClient
-          .get()
-          .uri(builder -> builder
-              .path("/internal/readiness/job")
-              .queryParam("tenantId", tenantId)
-              .queryParam("jobCode", upstreamJobCode)
-              .queryParam("bizDate", bizDate)
-              .build())
-          .retrieve()
-          .body(ReadinessResponse.class);
-      if (EmptyChecks.isNull(response) || !response.ready()) {
-        return Optional.empty();
-      }
-      // 与旧 Orchestrator 混合部署时响应可能没有 readyAt；以本次通过门禁的时刻作为兼容基准。
-      Instant responseReadyAt = response.readyAt();
-      if (EmptyChecks.isNull(responseReadyAt)) {
-        return Optional.of(Instant.now());
-      }
-      return Optional.of(responseReadyAt);
-    } catch (RuntimeException e) {
-      log.error(
-          "upstream readiness check failed, fail-closed (skip fire): tenantId={} upstream={} "
-              + "bizDate={} cause={}",
-          tenantId,
-          upstreamJobCode,
-          bizDate,
-          SwallowedExceptionLogger.summary(e));
-      return Optional.empty();
-    }
-  }
 }

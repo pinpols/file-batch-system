@@ -27,97 +27,94 @@ import org.springframework.stereotype.Component;
 @Component
 final class NasCopyExecutor {
 
-  static final int MAX_THREADS = 8;
+    static final int MAX_THREADS = 8;
 
-  /** NAS 复制空闲线程的回收秒数。 */
-  private static final long KEEP_ALIVE_SECONDS = 60L;
+    /** NAS 复制空闲线程的回收秒数。 */
+    private static final long KEEP_ALIVE_SECONDS = 60L;
 
-  private static final AtomicLong THREAD_INDEX = new AtomicLong();
+    private static final AtomicLong THREAD_INDEX = new AtomicLong();
 
-  private final AtomicBoolean stopping = new AtomicBoolean();
-  private final ThreadPoolExecutor executor = new ThreadPoolExecutor(
-      0,
-      MAX_THREADS,
-      KEEP_ALIVE_SECONDS,
-      TimeUnit.SECONDS,
-      new SynchronousQueue<>(),
-      runnable -> {
-        long threadNumber = THREAD_INDEX.incrementAndGet();
-        String threadName = "nas-copy-" + threadNumber;
-        Thread thread = new Thread(runnable, threadName);
-        thread.setDaemon(true);
-        return thread;
-      },
-      new ThreadPoolExecutor.AbortPolicy());
+    private final AtomicBoolean stopping = new AtomicBoolean();
+    private final ThreadPoolExecutor executor = new ThreadPoolExecutor(
+            0,
+            MAX_THREADS,
+            KEEP_ALIVE_SECONDS,
+            TimeUnit.SECONDS,
+            new SynchronousQueue<>(),
+            runnable -> {
+                long threadNumber = THREAD_INDEX.incrementAndGet();
+                String threadName = "nas-copy-" + threadNumber;
+                Thread thread = new Thread(runnable, threadName);
+                thread.setDaemon(true);
+                return thread;
+            },
+            new ThreadPoolExecutor.AbortPolicy());
 
-  void copy(InputStream input, Path target, DispatchRuntimeProperties properties)
-      throws IOException {
-    if (stopping.get()) {
-      throw new IOException("NAS copy executor is stopping");
-    }
-    Future<?> future;
-    try {
-      future = executor.submit(() -> {
-        try {
-          Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException exception) {
-          throw new UncheckedIOException(exception);
+    void copy(InputStream input, Path target, DispatchRuntimeProperties properties) throws IOException {
+        if (stopping.get()) {
+            throw new IOException("NAS copy executor is stopping");
         }
-      });
-    } catch (RejectedExecutionException exception) {
-      log.warn("NAS copy thread pool exhausted (max={}), rejecting dispatch fast", MAX_THREADS);
-      throw new IOException(
-          "NAS copy thread pool exhausted (max=" + MAX_THREADS + "); retry later", exception);
+        Future<?> future;
+        try {
+            future = executor.submit(() -> {
+                try {
+                    Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            });
+        } catch (RejectedExecutionException exception) {
+            log.warn("NAS copy thread pool exhausted (max={}), rejecting dispatch fast", MAX_THREADS);
+            throw new IOException("NAS copy thread pool exhausted (max=" + MAX_THREADS + "); retry later", exception);
+        }
+        awaitCopy(future, properties);
     }
-    awaitCopy(future, properties);
-  }
 
-  private static void awaitCopy(Future<?> future, DispatchRuntimeProperties properties)
-      throws IOException {
-    try {
-      future.get(properties.getNasCopyTimeoutSeconds(), TimeUnit.SECONDS);
-    } catch (TimeoutException exception) {
-      future.cancel(true);
-      throw new IOException(
-          "NAS Files.copy timed out after "
-              + properties.getNasCopyTimeoutSeconds()
-              + "s - likely stale NFS mount or hung remote",
-          exception);
-    } catch (InterruptedException exception) {
-      future.cancel(true);
-      Thread.currentThread().interrupt();
-      throw new IOException("NAS Files.copy interrupted", exception);
-    } catch (ExecutionException exception) {
-      Throwable cause = exception.getCause();
-      if (cause instanceof Error error) {
-        throw error;
-      }
-      if (cause instanceof IOException ioException) {
-        throw ioException;
-      }
-      if (cause instanceof UncheckedIOException uncheckedIOException) {
-        throw uncheckedIOException.getCause();
-      }
-      Throwable failureCause = EmptyChecks.isNull(cause) ? exception : cause;
-      throw new IOException("NAS Files.copy failed", failureCause);
+    private static void awaitCopy(Future<?> future, DispatchRuntimeProperties properties) throws IOException {
+        try {
+            future.get(properties.getNasCopyTimeoutSeconds(), TimeUnit.SECONDS);
+        } catch (TimeoutException exception) {
+            future.cancel(true);
+            throw new IOException(
+                    "NAS Files.copy timed out after "
+                            + properties.getNasCopyTimeoutSeconds()
+                            + "s - likely stale NFS mount or hung remote",
+                    exception);
+        } catch (InterruptedException exception) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new IOException("NAS Files.copy interrupted", exception);
+        } catch (ExecutionException exception) {
+            Throwable cause = exception.getCause();
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            if (cause instanceof IOException ioException) {
+                throw ioException;
+            }
+            if (cause instanceof UncheckedIOException uncheckedIOException) {
+                throw uncheckedIOException.getCause();
+            }
+            Throwable failureCause = EmptyChecks.isNull(cause) ? exception : cause;
+            throw new IOException("NAS Files.copy failed", failureCause);
+        }
     }
-  }
 
-  @PreDestroy
-  void shutdown() {
-    if (!stopping.compareAndSet(false, true)) {
-      return;
+    @PreDestroy
+    void shutdown() {
+        if (!stopping.compareAndSet(false, true)) {
+            return;
+        }
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("NAS copy executor did not drain within 5s; forcing interruption");
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException exception) {
+            SwallowedExceptionLogger.info(NasCopyExecutor.class, "catch:InterruptedException", exception);
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
-    executor.shutdown();
-    try {
-      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        log.warn("NAS copy executor did not drain within 5s; forcing interruption");
-        executor.shutdownNow();
-      }
-    } catch (InterruptedException exception) {
-      SwallowedExceptionLogger.info(NasCopyExecutor.class, "catch:InterruptedException", exception);
-      executor.shutdownNow();
-      Thread.currentThread().interrupt();
-    }
-  }
 }

@@ -7,8 +7,4 @@ import java.util.Map;
  * 接口的统一入参，避免方法参数扩散。
  */
 public record StepExecutionRequest(
-    String tenantId,
-    String jobCode,
-    String stepCode,
-    String workerId,
-    Map<String, Object> context) {}
+        String tenantId, String jobCode, String stepCode, String workerId, Map<String, Object> context) {}

@@ -37,33 +37,31 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleQuotaPolicyControllerBehaviorTest {
 
-  @Mock
-  private ConsoleQuotaPolicyApplicationService service;
+    @Mock
+    private ConsoleQuotaPolicyApplicationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleQuotaPolicyController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleQuotaPolicyController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  private String saveBody(String policyCode) {
-    return """
+    private String saveBody(String policyCode) {
+        return """
         {
           "tenantId": "ta",
           "policyCode": "%s",
@@ -71,58 +69,53 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
           "maxQpsPerTenant": 100
         }
         """.formatted(policyCode).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("按租户与策略编码查询配额策略时, 筛选条件原样传给服务")
-  void shouldPassFilters_whenListingQuotaPolicies() throws Exception {
-    when(service.list("ta", "QP_A", true, 1, 20))
-        .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
-    mockMvc
-        .perform(get("/api/console/quota-policies")
-            .param("tenantId", "ta")
-            .param("policyCode", "QP_A")
-            .param("enabled", "true"))
-        .andExpect(status().isOk());
-    verify(service).list("ta", "QP_A", true, 1, 20);
-  }
+    @Test
+    @DisplayName("按租户与策略编码查询配额策略时, 筛选条件原样传给服务")
+    void shouldPassFilters_whenListingQuotaPolicies() throws Exception {
+        when(service.list("ta", "QP_A", true, 1, 20)).thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
+        mockMvc.perform(get("/api/console/quota-policies")
+                        .param("tenantId", "ta")
+                        .param("policyCode", "QP_A")
+                        .param("enabled", "true"))
+                .andExpect(status().isOk());
+        verify(service).list("ta", "QP_A", true, 1, 20);
+    }
 
-  @Test
-  @DisplayName("新建配额策略时, 响应返回新建的策略编码")
-  void shouldReturnCreatedRow_whenCreatingQuotaPolicy() throws Exception {
-    when(service.create(any(QuotaPolicySaveRequest.class))).thenReturn(policy(1L, "QP_NEW"));
-    mockMvc
-        .perform(post("/api/console/quota-policies")
-            .contentType(APPLICATION_JSON)
-            .content(saveBody("QP_NEW")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.policyCode").value("QP_NEW"));
-  }
+    @Test
+    @DisplayName("新建配额策略时, 响应返回新建的策略编码")
+    void shouldReturnCreatedRow_whenCreatingQuotaPolicy() throws Exception {
+        when(service.create(any(QuotaPolicySaveRequest.class))).thenReturn(policy(1L, "QP_NEW"));
+        mockMvc.perform(post("/api/console/quota-policies")
+                        .contentType(APPLICATION_JSON)
+                        .content(saveBody("QP_NEW")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.policyCode").value("QP_NEW"));
+    }
 
-  @Test
-  @DisplayName("更新配额策略时, 路径标识作为入参传给服务")
-  void shouldPassPathId_whenUpdatingQuotaPolicy() throws Exception {
-    when(service.update(eq(7L), any(QuotaPolicySaveRequest.class))).thenReturn(policy(7L, "QP_U"));
-    mockMvc
-        .perform(put("/api/console/quota-policies/7")
-            .contentType(APPLICATION_JSON)
-            .content(saveBody("QP_U")))
-        .andExpect(status().isOk());
-    verify(service).update(eq(7L), any(QuotaPolicySaveRequest.class));
-  }
+    @Test
+    @DisplayName("更新配额策略时, 路径标识作为入参传给服务")
+    void shouldPassPathId_whenUpdatingQuotaPolicy() throws Exception {
+        when(service.update(eq(7L), any(QuotaPolicySaveRequest.class))).thenReturn(policy(7L, "QP_U"));
+        mockMvc.perform(put("/api/console/quota-policies/7")
+                        .contentType(APPLICATION_JSON)
+                        .content(saveBody("QP_U")))
+                .andExpect(status().isOk());
+        verify(service).update(eq(7L), any(QuotaPolicySaveRequest.class));
+    }
 
-  @Test
-  @DisplayName("启停配额策略时, 策略标识、租户与目标状态传给服务")
-  void shouldDelegateToggle_whenSettingQuotaPolicyEnabled() throws Exception {
-    mockMvc
-        .perform(patch("/api/console/quota-policies/9/enabled")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"ta\",\"enabled\":true}"))
-        .andExpect(status().isOk());
-    verify(service).toggle(9L, "ta", true);
-  }
+    @Test
+    @DisplayName("启停配额策略时, 策略标识、租户与目标状态传给服务")
+    void shouldDelegateToggle_whenSettingQuotaPolicyEnabled() throws Exception {
+        mockMvc.perform(patch("/api/console/quota-policies/9/enabled")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"ta\",\"enabled\":true}"))
+                .andExpect(status().isOk());
+        verify(service).toggle(9L, "ta", true);
+    }
 
-  private static QuotaPolicyResponse policy(Long id, String policyCode) {
-    return new QuotaPolicyResponse(id, "ta", policyCode, 10, 0, 100, 1, true, null, null, null);
-  }
+    private static QuotaPolicyResponse policy(Long id, String policyCode) {
+        return new QuotaPolicyResponse(id, "ta", policyCode, 10, 0, 100, 1, true, null, null, null);
+    }
 }

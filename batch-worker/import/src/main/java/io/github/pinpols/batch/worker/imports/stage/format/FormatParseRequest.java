@@ -25,92 +25,84 @@ import java.util.Objects;
  */
 @SuppressWarnings("java:S6218")
 public record FormatParseRequest(
-    String payloadText,
-    byte[] binaryPayload,
-    ImportPayload importPayload,
-    Object templateConfig,
-    boolean preserveLogicalRow,
-    Path spoolPath,
-    Charset spoolCharset) {
+        String payloadText,
+        byte[] binaryPayload,
+        ImportPayload importPayload,
+        Object templateConfig,
+        boolean preserveLogicalRow,
+        Path spoolPath,
+        Charset spoolCharset) {
 
-  /** 5-参数便捷构造：仍走 {@code payloadText}（小文件路径），spool 相关字段为空。 */
-  public FormatParseRequest(
-      String payloadText,
-      byte[] binaryPayload,
-      ImportPayload importPayload,
-      Object templateConfig,
-      boolean preserveLogicalRow) {
-    this(payloadText, binaryPayload, importPayload, templateConfig, preserveLogicalRow, null, null);
-  }
-
-  /** 创建普通文本输入请求。 */
-  public static FormatParseRequest fromText(
-      String payloadText,
-      ImportPayload importPayload,
-      Object templateConfig,
-      boolean preserveLogicalRow) {
-    return new FormatParseRequest(
-        payloadText, null, importPayload, templateConfig, preserveLogicalRow, null, null);
-  }
-
-  /** 创建二进制文件输入请求，例如 Excel。 */
-  public static FormatParseRequest fromBinary(
-      byte[] binaryPayload,
-      ImportPayload importPayload,
-      Object templateConfig,
-      boolean preserveLogicalRow) {
-    return new FormatParseRequest(
-        null, binaryPayload, importPayload, templateConfig, preserveLogicalRow, null, null);
-  }
-
-  /** 创建从 spool 文件流式读取的文本请求。 */
-  public static FormatParseRequest fromSpool(
-      ImportPayload importPayload,
-      Object templateConfig,
-      boolean preserveLogicalRow,
-      Path spoolPath,
-      Charset spoolCharset) {
-    return new FormatParseRequest(
-        null,
-        null,
-        importPayload,
-        templateConfig,
-        preserveLogicalRow,
-        Objects.requireNonNull(spoolPath, "spoolPath"),
-        spoolCharset);
-  }
-
-  /**
-   * 打开文本 Reader。优先走 {@code spoolPath}（大文件流式）；否则回落 {@code payloadText}（小文件 整块）。
-   *
-   * <p>spool 路径下 {@link CharsetDecoder} 显式设 {@link CodingErrorAction#REPORT}——和 PreprocessStep 的 A
-   * 严格解码等价，非法字节 → {@code MalformedInputException} 沿 {@code reader.readLine()} 抛出， 避免 JDK 默认 {@code
-   * REPLACE} 行为把 U+FFFD 静默写进下游解析结果。调用方 try-with-resources 关闭。
-   */
-  public BufferedReader openTextReader() throws IOException {
-    if (spoolPath != null) {
-      Charset cs = spoolCharset != null ? spoolCharset : StandardCharsets.UTF_8;
-      CharsetDecoder decoder = cs.newDecoder()
-          .onMalformedInput(CodingErrorAction.REPORT)
-          .onUnmappableCharacter(CodingErrorAction.REPORT);
-      // Reader 返回后由调用方的 try-with-resources 负责关闭 reader 和底层文件流。
-      // 只在构造 reader 失败时关闭已打开的 stream，避免返回一个底层已关闭的 reader。
-      InputStream in = Files.newInputStream(spoolPath);
-      try {
-        InputStreamReader decodedReader = new InputStreamReader(in, decoder);
-        return new BufferedReader(decodedReader);
-      } catch (RuntimeException | Error failure) {
-        in.close();
-        throw failure;
-      }
+    /** 5-参数便捷构造：仍走 {@code payloadText}（小文件路径），spool 相关字段为空。 */
+    public FormatParseRequest(
+            String payloadText,
+            byte[] binaryPayload,
+            ImportPayload importPayload,
+            Object templateConfig,
+            boolean preserveLogicalRow) {
+        this(payloadText, binaryPayload, importPayload, templateConfig, preserveLogicalRow, null, null);
     }
-    StringReader payloadReader =
-        new StringReader(EmptyChecks.isNull(payloadText) ? "" : payloadText);
-    return new BufferedReader(payloadReader);
-  }
 
-  /** 是否有可消费的文本内容（spool 文件或非空 payloadText）。 */
-  public boolean hasText() {
-    return spoolPath != null || (payloadText != null && !payloadText.isEmpty());
-  }
+    /** 创建普通文本输入请求。 */
+    public static FormatParseRequest fromText(
+            String payloadText, ImportPayload importPayload, Object templateConfig, boolean preserveLogicalRow) {
+        return new FormatParseRequest(payloadText, null, importPayload, templateConfig, preserveLogicalRow, null, null);
+    }
+
+    /** 创建二进制文件输入请求，例如 Excel。 */
+    public static FormatParseRequest fromBinary(
+            byte[] binaryPayload, ImportPayload importPayload, Object templateConfig, boolean preserveLogicalRow) {
+        return new FormatParseRequest(
+                null, binaryPayload, importPayload, templateConfig, preserveLogicalRow, null, null);
+    }
+
+    /** 创建从 spool 文件流式读取的文本请求。 */
+    public static FormatParseRequest fromSpool(
+            ImportPayload importPayload,
+            Object templateConfig,
+            boolean preserveLogicalRow,
+            Path spoolPath,
+            Charset spoolCharset) {
+        return new FormatParseRequest(
+                null,
+                null,
+                importPayload,
+                templateConfig,
+                preserveLogicalRow,
+                Objects.requireNonNull(spoolPath, "spoolPath"),
+                spoolCharset);
+    }
+
+    /**
+     * 打开文本 Reader。优先走 {@code spoolPath}（大文件流式）；否则回落 {@code payloadText}（小文件 整块）。
+     *
+     * <p>spool 路径下 {@link CharsetDecoder} 显式设 {@link CodingErrorAction#REPORT}——和 PreprocessStep 的 A
+     * 严格解码等价，非法字节 → {@code MalformedInputException} 沿 {@code reader.readLine()} 抛出， 避免 JDK 默认 {@code
+     * REPLACE} 行为把 U+FFFD 静默写进下游解析结果。调用方 try-with-resources 关闭。
+     */
+    public BufferedReader openTextReader() throws IOException {
+        if (spoolPath != null) {
+            Charset cs = spoolCharset != null ? spoolCharset : StandardCharsets.UTF_8;
+            CharsetDecoder decoder = cs.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT);
+            // Reader 返回后由调用方的 try-with-resources 负责关闭 reader 和底层文件流。
+            // 只在构造 reader 失败时关闭已打开的 stream，避免返回一个底层已关闭的 reader。
+            InputStream in = Files.newInputStream(spoolPath);
+            try {
+                InputStreamReader decodedReader = new InputStreamReader(in, decoder);
+                return new BufferedReader(decodedReader);
+            } catch (RuntimeException | Error failure) {
+                in.close();
+                throw failure;
+            }
+        }
+        StringReader payloadReader = new StringReader(EmptyChecks.isNull(payloadText) ? "" : payloadText);
+        return new BufferedReader(payloadReader);
+    }
+
+    /** 是否有可消费的文本内容（spool 文件或非空 payloadText）。 */
+    public boolean hasText() {
+        return spoolPath != null || (payloadText != null && !payloadText.isEmpty());
+    }
 }

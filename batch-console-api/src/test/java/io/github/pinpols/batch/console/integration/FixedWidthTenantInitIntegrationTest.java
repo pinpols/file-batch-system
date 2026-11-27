@@ -15,45 +15,41 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("租户初始化定长映射验证")
 class FixedWidthTenantInitIntegrationTest extends AbstractIntegrationTest {
-  private final ConsoleTenantConfigInitApplicationService init;
+    private final ConsoleTenantConfigInitApplicationService init;
 
-  private final JdbcTemplate jdbc;
+    private final JdbcTemplate jdbc;
 
-  @Autowired
-  FixedWidthTenantInitIntegrationTest(
-      ConsoleTenantConfigInitApplicationService init, JdbcTemplate jdbc) {
-    this.init = init;
-    this.jdbc = jdbc;
-  }
+    @Autowired
+    FixedWidthTenantInitIntegrationTest(ConsoleTenantConfigInitApplicationService init, JdbcTemplate jdbc) {
+        this.init = init;
+        this.jdbc = jdbc;
+    }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  @DisplayName("执行及演练均将无效定长映射计入失败且不落库")
-  void shouldReportInvalidMapping_withoutPersistingIt(boolean dryRun) {
-    String tenant = "fixed-init-" + Long.toUnsignedString(System.nanoTime());
-    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
-    request.setTargetTenantIds(List.of(tenant));
-    request.setDryRun(dryRun);
-    FileTemplateSpec spec = new FileTemplateSpec();
-    spec.setTemplateCode("tpl_invalid");
-    spec.setTemplateType("IMPORT");
-    spec.setFileFormatType("FIXED_WIDTH");
-    spec.setEnabled(true);
-    spec.setFieldMappingsJson("[{\"target\":\"name\",\"start\":1.5,\"length\":2}]");
-    request.setFileTemplates(List.of(spec));
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    @DisplayName("执行及演练均将无效定长映射计入失败且不落库")
+    void shouldReportInvalidMapping_withoutPersistingIt(boolean dryRun) {
+        String tenant = "fixed-init-" + Long.toUnsignedString(System.nanoTime());
+        TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+        request.setTargetTenantIds(List.of(tenant));
+        request.setDryRun(dryRun);
+        FileTemplateSpec spec = new FileTemplateSpec();
+        spec.setTemplateCode("tpl_invalid");
+        spec.setTemplateType("IMPORT");
+        spec.setFileFormatType("FIXED_WIDTH");
+        spec.setEnabled(true);
+        spec.setFieldMappingsJson("[{\"target\":\"name\",\"start\":1.5,\"length\":2}]");
+        request.setFileTemplates(List.of(spec));
 
-    var result = init.batchInit(request, "test", "fixed-init-" + tenant);
+        var result = init.batchInit(request, "test", "fixed-init-" + tenant);
 
-    assertThat(result.results().getFirst().fileTemplates().failed()).isOne();
-    assertThat(result.results().getFirst().fileTemplates().created()).isZero();
-    String countSql =
-        "select count(*) from batch.file_template_config where tenant_id = ? and template_code = ?";
-    Long count = jdbc.queryForObject(countSql, Long.class, tenant, "tpl_invalid");
-    assertThat(count).isZero();
-  }
+        assertThat(result.results().getFirst().fileTemplates().failed()).isOne();
+        assertThat(result.results().getFirst().fileTemplates().created()).isZero();
+        String countSql = "select count(*) from batch.file_template_config where tenant_id = ? and template_code = ?";
+        Long count = jdbc.queryForObject(countSql, Long.class, tenant, "tpl_invalid");
+        assertThat(count).isZero();
+    }
 }

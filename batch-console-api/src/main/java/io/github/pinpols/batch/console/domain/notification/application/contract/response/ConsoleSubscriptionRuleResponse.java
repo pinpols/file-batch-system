@@ -18,36 +18,36 @@ import lombok.Builder;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Builder
 public record ConsoleSubscriptionRuleResponse(
-    Long id,
-    @JsonProperty("tenant_id") String tenantId,
-    @JsonProperty("rule_name") String ruleName,
-    @JsonProperty("channel_code") String channelCode,
-    @JsonProperty("event_types") String eventTypes,
-    @JsonProperty("severity_filter") String severityFilter,
-    @JsonProperty("job_code_filter") String jobCodeFilter,
-    Boolean enabled,
-    @JsonProperty("created_by") String createdBy,
-    @JsonProperty("updated_by") String updatedBy,
-    @JsonProperty("created_at") Instant createdAt,
-    @JsonProperty("updated_at") Instant updatedAt) {
+        Long id,
+        @JsonProperty("tenant_id") String tenantId,
+        @JsonProperty("rule_name") String ruleName,
+        @JsonProperty("channel_code") String channelCode,
+        @JsonProperty("event_types") String eventTypes,
+        @JsonProperty("severity_filter") String severityFilter,
+        @JsonProperty("job_code_filter") String jobCodeFilter,
+        Boolean enabled,
+        @JsonProperty("created_by") String createdBy,
+        @JsonProperty("updated_by") String updatedBy,
+        @JsonProperty("created_at") Instant createdAt,
+        @JsonProperty("updated_at") Instant updatedAt) {
 
-  public static ConsoleSubscriptionRuleResponse from(SubscriptionRuleRow row) {
-    if (row == null) {
-      return null;
+    public static ConsoleSubscriptionRuleResponse from(SubscriptionRuleRow row) {
+        if (row == null) {
+            return null;
+        }
+        return ConsoleSubscriptionRuleResponse.builder()
+                .id(row.id())
+                .tenantId(row.tenantId())
+                .ruleName(row.ruleName())
+                .channelCode(row.channelCode())
+                .eventTypes(row.eventTypes())
+                .severityFilter(row.severityFilter())
+                .jobCodeFilter(row.jobCodeFilter())
+                .enabled(row.enabled())
+                .createdBy(row.createdBy())
+                .updatedBy(row.updatedBy())
+                .createdAt(row.createdAt())
+                .updatedAt(row.updatedAt())
+                .build();
     }
-    return ConsoleSubscriptionRuleResponse.builder()
-        .id(row.id())
-        .tenantId(row.tenantId())
-        .ruleName(row.ruleName())
-        .channelCode(row.channelCode())
-        .eventTypes(row.eventTypes())
-        .severityFilter(row.severityFilter())
-        .jobCodeFilter(row.jobCodeFilter())
-        .enabled(row.enabled())
-        .createdBy(row.createdBy())
-        .updatedBy(row.updatedBy())
-        .createdAt(row.createdAt())
-        .updatedAt(row.updatedAt())
-        .build();
-  }
 }

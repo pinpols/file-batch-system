@@ -7,6 +7,6 @@ package io.github.pinpols.batch.common.persistence;
  */
 public interface Stateful {
 
-  /** 返回当前实体的状态字符串。 */
-  String getStatus();
+    /** 返回当前实体的状态字符串。 */
+    String getStatus();
 }

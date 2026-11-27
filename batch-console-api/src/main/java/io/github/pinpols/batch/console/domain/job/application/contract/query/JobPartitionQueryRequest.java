@@ -8,7 +8,7 @@ import lombok.EqualsAndHashCode;
 @Data
 public class JobPartitionQueryRequest extends PageQueryRequest {
 
-  private String tenantId;
-  private Long jobInstanceId;
-  private String partitionStatus;
+    private String tenantId;
+    private Long jobInstanceId;
+    private String partitionStatus;
 }

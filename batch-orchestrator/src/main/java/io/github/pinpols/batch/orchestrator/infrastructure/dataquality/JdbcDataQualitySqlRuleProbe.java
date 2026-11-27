@@ -19,43 +19,39 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JdbcDataQualitySqlRuleProbe implements DataQualitySqlRuleProbe {
 
-  private static final List<String> ALLOWED_DQ_SCHEMAS = List.of("batch", "archive");
+    private static final List<String> ALLOWED_DQ_SCHEMAS = List.of("batch", "archive");
 
-  private final ObjectProvider<NamedParameterJdbcTemplate> jdbcTemplateProvider;
+    private final ObjectProvider<NamedParameterJdbcTemplate> jdbcTemplateProvider;
 
-  // S2259 无法识别 EmptyChecks 对 ObjectProvider 和查询结果的空值保护。
-  @SuppressWarnings("java:S2259")
-  @Override
-  public long evaluateScalar(JobInstanceEntity instance, DataQualityRuleEntity rule) {
-    NamedParameterJdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-    if (EmptyChecks.isNull(jdbcTemplate)) {
-      throw new IllegalStateException("JdbcTemplate unavailable for DQ rule " + rule.getRuleCode());
+    // S2259 无法识别 EmptyChecks 对 ObjectProvider 和查询结果的空值保护。
+    @SuppressWarnings("java:S2259")
+    @Override
+    public long evaluateScalar(JobInstanceEntity instance, DataQualityRuleEntity rule) {
+        NamedParameterJdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+        if (EmptyChecks.isNull(jdbcTemplate)) {
+            throw new IllegalStateException("JdbcTemplate unavailable for DQ rule " + rule.getRuleCode());
+        }
+        String sql = rule.getExpression();
+        if (!Texts.hasText(sql)) {
+            throw new IllegalArgumentException("rule expression empty: " + rule.getRuleCode());
+        }
+        String validated;
+        try {
+            validated = SensorSqlValidator.validate(sql.trim(), ALLOWED_DQ_SCHEMAS);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException(
+                    "rule expression rejected by SQL validator: " + rule.getRuleCode() + " — " + ex.getMessage(), ex);
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("tenantId", instance.getTenantId())
+                .addValue("bizDate", instance.getBizDate())
+                .addValue("jobInstanceId", instance.getId());
+        Number result;
+        try {
+            result = jdbcTemplate.queryForObject(validated, params, Number.class);
+        } catch (DataAccessException dae) {
+            throw new IllegalStateException("DQ SQL execution failed: " + dae.getMessage(), dae);
+        }
+        return EmptyChecks.isNull(result) ? 0L : result.longValue();
     }
-    String sql = rule.getExpression();
-    if (!Texts.hasText(sql)) {
-      throw new IllegalArgumentException("rule expression empty: " + rule.getRuleCode());
-    }
-    String validated;
-    try {
-      validated = SensorSqlValidator.validate(sql.trim(), ALLOWED_DQ_SCHEMAS);
-    } catch (IllegalArgumentException ex) {
-      throw new IllegalArgumentException(
-          "rule expression rejected by SQL validator: "
-              + rule.getRuleCode()
-              + " — "
-              + ex.getMessage(),
-          ex);
-    }
-    MapSqlParameterSource params = new MapSqlParameterSource()
-        .addValue("tenantId", instance.getTenantId())
-        .addValue("bizDate", instance.getBizDate())
-        .addValue("jobInstanceId", instance.getId());
-    Number result;
-    try {
-      result = jdbcTemplate.queryForObject(validated, params, Number.class);
-    } catch (DataAccessException dae) {
-      throw new IllegalStateException("DQ SQL execution failed: " + dae.getMessage(), dae);
-    }
-    return EmptyChecks.isNull(result) ? 0L : result.longValue();
-  }
 }

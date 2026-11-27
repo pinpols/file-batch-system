@@ -27,226 +27,218 @@ import org.junit.jupiter.api.Test;
 @DisplayName("作业监控旁路扫描隔离")
 class JobMonitoringSchedulerTest {
 
-  private JobMonitoringMapper mapper;
-  private JobMonitoringAlertEmissionService emissionService;
-  private OrchestratorGracefulShutdown gracefulShutdown;
-  private SimpleMeterRegistry meterRegistry;
-  private SlaGovernanceProperties properties;
-  private JobMonitoringScheduler scheduler;
+    private JobMonitoringMapper mapper;
+    private JobMonitoringAlertEmissionService emissionService;
+    private OrchestratorGracefulShutdown gracefulShutdown;
+    private SimpleMeterRegistry meterRegistry;
+    private SlaGovernanceProperties properties;
+    private JobMonitoringScheduler scheduler;
 
-  @BeforeEach
-  void setUp() {
-    mapper = mock(JobMonitoringMapper.class);
-    emissionService = mock(JobMonitoringAlertEmissionService.class);
-    gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
-    meterRegistry = new SimpleMeterRegistry();
-    properties = new SlaGovernanceProperties();
-    properties.getJobMonitoring().setBatchSize(20);
-    scheduler = new JobMonitoringScheduler(
-        mapper, emissionService, gracefulShutdown, meterRegistry, properties);
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-  }
+    @BeforeEach
+    void setUp() {
+        mapper = mock(JobMonitoringMapper.class);
+        emissionService = mock(JobMonitoringAlertEmissionService.class);
+        gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
+        meterRegistry = new SimpleMeterRegistry();
+        properties = new SlaGovernanceProperties();
+        properties.getJobMonitoring().setBatchSize(20);
+        scheduler = new JobMonitoringScheduler(mapper, emissionService, gracefulShutdown, meterRegistry, properties);
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+    }
 
-  @Test
-  @DisplayName("禁用或 drain 时不查询实例也不声明告警")
-  void shouldSkipDatabaseWorkWhenDisabledOrDraining() {
-    properties.getJobMonitoring().setEnabled(false);
+    @Test
+    @DisplayName("禁用或 drain 时不查询实例也不声明告警")
+    void shouldSkipDatabaseWorkWhenDisabledOrDraining() {
+        properties.getJobMonitoring().setEnabled(false);
 
-    scheduler.scan();
+        scheduler.scan();
 
-    assertThat(meterRegistry.get("batch.job.monitoring.enabled").gauge().value())
-        .isZero();
-    assertThat(meterRegistry
-            .get("batch.job.monitoring.poll.interval.seconds")
-            .gauge()
-            .value())
-        .isEqualTo(30.0d);
-    verify(mapper, never()).selectRunningTooLong(anyInt());
-    verify(emissionService, never()).emitOnce(any(), any());
-  }
+        assertThat(meterRegistry.get("batch.job.monitoring.enabled").gauge().value())
+                .isZero();
+        assertThat(meterRegistry
+                        .get("batch.job.monitoring.poll.interval.seconds")
+                        .gauge()
+                        .value())
+                .isEqualTo(30.0d);
+        verify(mapper, never()).selectRunningTooLong(anyInt());
+        verify(emissionService, never()).emitOnce(any(), any());
+    }
 
-  @Test
-  @DisplayName("启动时登记启用状态与扫描周期")
-  void shouldExposeMonitoringConfiguration() {
-    scheduler.registerHealthGauges();
+    @Test
+    @DisplayName("启动时登记启用状态与扫描周期")
+    void shouldExposeMonitoringConfiguration() {
+        scheduler.registerHealthGauges();
 
-    assertThat(meterRegistry.get("batch.job.monitoring.enabled").gauge().value())
-        .isEqualTo(1.0d);
-    assertThat(meterRegistry
-            .get("batch.job.monitoring.poll.interval.seconds")
-            .gauge()
-            .value())
-        .isEqualTo(30.0d);
-  }
+        assertThat(meterRegistry.get("batch.job.monitoring.enabled").gauge().value())
+                .isEqualTo(1.0d);
+        assertThat(meterRegistry
+                        .get("batch.job.monitoring.poll.interval.seconds")
+                        .gauge()
+                        .value())
+                .isEqualTo(30.0d);
+    }
 
-  @Test
-  @DisplayName("一个候选类别查询失败不阻止其他类别扫描")
-  void shouldContinueOtherCategoriesWhenOneQueryFails() {
-    when(mapper.selectRunningTooLong(anyInt()))
-        .thenThrow(new IllegalStateException("query failed"));
-    when(mapper.selectNotStarted(anyInt())).thenReturn(List.of());
-    when(mapper.selectNotCompletedByDeadline(anyInt())).thenReturn(List.of());
-    when(mapper.selectFinalPartitionFailures(anyInt(), anyInt())).thenReturn(List.of());
+    @Test
+    @DisplayName("一个候选类别查询失败不阻止其他类别扫描")
+    void shouldContinueOtherCategoriesWhenOneQueryFails() {
+        when(mapper.selectRunningTooLong(anyInt())).thenThrow(new IllegalStateException("query failed"));
+        when(mapper.selectNotStarted(anyInt())).thenReturn(List.of());
+        when(mapper.selectNotCompletedByDeadline(anyInt())).thenReturn(List.of());
+        when(mapper.selectFinalPartitionFailures(anyInt(), anyInt())).thenReturn(List.of());
 
-    scheduler.scan();
+        scheduler.scan();
 
-    verify(mapper).selectNotStarted(20);
-    verify(mapper).selectNotCompletedByDeadline(20);
-    verify(mapper).selectFinalPartitionFailures(20, 3600);
-    assertThat(meterRegistry
-            .get("batch.job.monitoring.scan.failures.total")
-            .tag("violation_type", Violation.RUNNING_TOO_LONG.name())
-            .counter()
-            .count())
-        .isEqualTo(1.0d);
-    assertThat(meterRegistry
-            .get("batch.job.monitoring.query.duration")
-            .tag("violation_type", Violation.RUNNING_TOO_LONG.name())
-            .tag("outcome", "failure")
-            .timer()
-            .count())
-        .isEqualTo(1L);
-    double failureTimestamp = scanTimestamp(
-        "batch.job.monitoring.last.failure.timestamp.seconds", Violation.RUNNING_TOO_LONG, "scan");
-    assertThat(failureTimestamp).isGreaterThan(0.0d);
-    assertThat(scanTimestamp(
-            "batch.job.monitoring.last.success.timestamp.seconds",
-            Violation.RUNNING_TOO_LONG,
-            "scan"))
-        .isZero();
+        verify(mapper).selectNotStarted(20);
+        verify(mapper).selectNotCompletedByDeadline(20);
+        verify(mapper).selectFinalPartitionFailures(20, 3600);
+        assertThat(meterRegistry
+                        .get("batch.job.monitoring.scan.failures.total")
+                        .tag("violation_type", Violation.RUNNING_TOO_LONG.name())
+                        .counter()
+                        .count())
+                .isEqualTo(1.0d);
+        assertThat(meterRegistry
+                        .get("batch.job.monitoring.query.duration")
+                        .tag("violation_type", Violation.RUNNING_TOO_LONG.name())
+                        .tag("outcome", "failure")
+                        .timer()
+                        .count())
+                .isEqualTo(1L);
+        double failureTimestamp = scanTimestamp(
+                "batch.job.monitoring.last.failure.timestamp.seconds", Violation.RUNNING_TOO_LONG, "scan");
+        assertThat(failureTimestamp).isGreaterThan(0.0d);
+        assertThat(scanTimestamp(
+                        "batch.job.monitoring.last.success.timestamp.seconds", Violation.RUNNING_TOO_LONG, "scan"))
+                .isZero();
 
-    doReturn(List.of()).when(mapper).selectRunningTooLong(anyInt());
-    scheduler.scan();
+        doReturn(List.of()).when(mapper).selectRunningTooLong(anyInt());
+        scheduler.scan();
 
-    assertThat(scanTimestamp(
-            "batch.job.monitoring.last.success.timestamp.seconds",
-            Violation.RUNNING_TOO_LONG,
-            "scan"))
-        .isGreaterThan(failureTimestamp);
-  }
+        assertThat(scanTimestamp(
+                        "batch.job.monitoring.last.success.timestamp.seconds", Violation.RUNNING_TOO_LONG, "scan"))
+                .isGreaterThan(failureTimestamp);
+    }
 
-  @Test
-  @DisplayName("单条告警失败不阻止同批后续告警")
-  void shouldContinueCandidatesWhenEmissionFails() {
-    JobMonitoringAlertCandidate first = candidate(1L);
-    JobMonitoringAlertCandidate second = candidate(2L);
-    when(mapper.selectRunningTooLong(anyInt())).thenReturn(List.of(first, second));
-    when(mapper.selectNotStarted(anyInt())).thenReturn(List.of());
-    when(mapper.selectNotCompletedByDeadline(anyInt())).thenReturn(List.of());
-    when(emissionService.emitOnce(first, Violation.RUNNING_TOO_LONG))
-        .thenThrow(new IllegalStateException("alert persistence failed"))
-        .thenReturn(true);
+    @Test
+    @DisplayName("单条告警失败不阻止同批后续告警")
+    void shouldContinueCandidatesWhenEmissionFails() {
+        JobMonitoringAlertCandidate first = candidate(1L);
+        JobMonitoringAlertCandidate second = candidate(2L);
+        when(mapper.selectRunningTooLong(anyInt())).thenReturn(List.of(first, second));
+        when(mapper.selectNotStarted(anyInt())).thenReturn(List.of());
+        when(mapper.selectNotCompletedByDeadline(anyInt())).thenReturn(List.of());
+        when(emissionService.emitOnce(first, Violation.RUNNING_TOO_LONG))
+                .thenThrow(new IllegalStateException("alert persistence failed"))
+                .thenReturn(true);
 
-    scheduler.scan();
+        scheduler.scan();
 
-    verify(emissionService).emitOnce(first, Violation.RUNNING_TOO_LONG);
-    verify(emissionService).emitOnce(second, Violation.RUNNING_TOO_LONG);
-    assertThat(meterRegistry
-            .get("batch.job.monitoring.alert.failures.total")
-            .tag("violation_type", Violation.RUNNING_TOO_LONG.name())
-            .counter()
-            .count())
-        .isEqualTo(1.0d);
-    double failureTimestamp = scanTimestamp(
-        "batch.job.monitoring.last.failure.timestamp.seconds",
-        Violation.RUNNING_TOO_LONG,
-        "alert_persistence");
-    assertThat(failureTimestamp).isGreaterThan(0.0d);
-    assertThat(scanTimestamp(
-            "batch.job.monitoring.last.success.timestamp.seconds",
-            Violation.RUNNING_TOO_LONG,
-            "alert_persistence"))
-        .isZero();
+        verify(emissionService).emitOnce(first, Violation.RUNNING_TOO_LONG);
+        verify(emissionService).emitOnce(second, Violation.RUNNING_TOO_LONG);
+        assertThat(meterRegistry
+                        .get("batch.job.monitoring.alert.failures.total")
+                        .tag("violation_type", Violation.RUNNING_TOO_LONG.name())
+                        .counter()
+                        .count())
+                .isEqualTo(1.0d);
+        double failureTimestamp = scanTimestamp(
+                "batch.job.monitoring.last.failure.timestamp.seconds", Violation.RUNNING_TOO_LONG, "alert_persistence");
+        assertThat(failureTimestamp).isGreaterThan(0.0d);
+        assertThat(scanTimestamp(
+                        "batch.job.monitoring.last.success.timestamp.seconds",
+                        Violation.RUNNING_TOO_LONG,
+                        "alert_persistence"))
+                .isZero();
 
-    scheduler.scan();
+        scheduler.scan();
 
-    assertThat(scanTimestamp(
-            "batch.job.monitoring.last.success.timestamp.seconds",
-            Violation.RUNNING_TOO_LONG,
-            "alert_persistence"))
-        .isGreaterThan(failureTimestamp);
-  }
+        assertThat(scanTimestamp(
+                        "batch.job.monitoring.last.success.timestamp.seconds",
+                        Violation.RUNNING_TOO_LONG,
+                        "alert_persistence"))
+                .isGreaterThan(failureTimestamp);
+    }
 
-  @Test
-  @DisplayName("三类时限违规都扫描并交给告警发射器")
-  void shouldScanAndEmitEveryViolationCategory() {
-    JobMonitoringAlertCandidate running = candidate(11L);
-    JobMonitoringAlertCandidate notStarted = workflowChildRequestCandidate(101L);
-    JobMonitoringAlertCandidate notCompleted = candidate(13L);
-    when(mapper.selectRunningTooLong(20)).thenReturn(List.of(running));
-    when(mapper.selectNotStarted(20)).thenReturn(List.of(notStarted));
-    when(mapper.selectNotCompletedByDeadline(20)).thenReturn(List.of(notCompleted));
-    JobMonitoringAlertCandidate failedPartition = candidate(14L);
-    when(mapper.selectFinalPartitionFailures(20, 3600)).thenReturn(List.of(failedPartition));
+    @Test
+    @DisplayName("三类时限违规都扫描并交给告警发射器")
+    void shouldScanAndEmitEveryViolationCategory() {
+        JobMonitoringAlertCandidate running = candidate(11L);
+        JobMonitoringAlertCandidate notStarted = workflowChildRequestCandidate(101L);
+        JobMonitoringAlertCandidate notCompleted = candidate(13L);
+        when(mapper.selectRunningTooLong(20)).thenReturn(List.of(running));
+        when(mapper.selectNotStarted(20)).thenReturn(List.of(notStarted));
+        when(mapper.selectNotCompletedByDeadline(20)).thenReturn(List.of(notCompleted));
+        JobMonitoringAlertCandidate failedPartition = candidate(14L);
+        when(mapper.selectFinalPartitionFailures(20, 3600)).thenReturn(List.of(failedPartition));
 
-    scheduler.scan();
+        scheduler.scan();
 
-    verify(emissionService).emitOnce(running, Violation.RUNNING_TOO_LONG);
-    verify(emissionService).emitOnce(notStarted, Violation.NOT_STARTED);
-    verify(emissionService).emitOnce(notCompleted, Violation.NOT_COMPLETED_BY_DEADLINE);
-    verify(emissionService).emitOnce(failedPartition, Violation.FAILED_PARTITION);
-  }
+        verify(emissionService).emitOnce(running, Violation.RUNNING_TOO_LONG);
+        verify(emissionService).emitOnce(notStarted, Violation.NOT_STARTED);
+        verify(emissionService).emitOnce(notCompleted, Violation.NOT_COMPLETED_BY_DEADLINE);
+        verify(emissionService).emitOnce(failedPartition, Violation.FAILED_PARTITION);
+    }
 
-  @Test
-  @DisplayName("跨租户监控候选在各自租户上下文中声明告警并清理上下文")
-  void shouldEmitEachCandidateUnderItsTenantContext() {
-    JobMonitoringAlertCandidate t1 = candidate(21L, "tenant-a");
-    JobMonitoringAlertCandidate t2 = candidate(22L, "tenant-b");
-    when(mapper.selectRunningTooLong(anyInt())).thenReturn(List.of(t1, t2));
-    when(mapper.selectNotStarted(anyInt())).thenReturn(List.of());
-    when(mapper.selectNotCompletedByDeadline(anyInt())).thenReturn(List.of());
-    when(mapper.selectFinalPartitionFailures(anyInt(), anyInt())).thenReturn(List.of());
-    doAnswer(invocation -> {
-          JobMonitoringAlertCandidate candidate = invocation.getArgument(0);
-          assertThat(RlsTenantContextHolder.get()).isEqualTo(candidate.tenantId());
-          return true;
-        })
-        .when(emissionService)
-        .emitOnce(any(), any());
+    @Test
+    @DisplayName("跨租户监控候选在各自租户上下文中声明告警并清理上下文")
+    void shouldEmitEachCandidateUnderItsTenantContext() {
+        JobMonitoringAlertCandidate t1 = candidate(21L, "tenant-a");
+        JobMonitoringAlertCandidate t2 = candidate(22L, "tenant-b");
+        when(mapper.selectRunningTooLong(anyInt())).thenReturn(List.of(t1, t2));
+        when(mapper.selectNotStarted(anyInt())).thenReturn(List.of());
+        when(mapper.selectNotCompletedByDeadline(anyInt())).thenReturn(List.of());
+        when(mapper.selectFinalPartitionFailures(anyInt(), anyInt())).thenReturn(List.of());
+        doAnswer(invocation -> {
+                    JobMonitoringAlertCandidate candidate = invocation.getArgument(0);
+                    assertThat(RlsTenantContextHolder.get()).isEqualTo(candidate.tenantId());
+                    return true;
+                })
+                .when(emissionService)
+                .emitOnce(any(), any());
 
-    scheduler.scan();
+        scheduler.scan();
 
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 
-  private static JobMonitoringAlertCandidate candidate(long id) {
-    return candidate(id, "tenant-a");
-  }
+    private static JobMonitoringAlertCandidate candidate(long id) {
+        return candidate(id, "tenant-a");
+    }
 
-  private static JobMonitoringAlertCandidate candidate(long id, String tenantId) {
-    Instant now = Instant.now();
-    return new JobMonitoringAlertCandidate(
-        tenantId,
-        id,
-        "JOB_A",
-        "instance-" + id,
-        "RUNNING",
-        "SCHEDULED",
-        "trace-" + id,
-        now.minusSeconds(120),
-        now.minusSeconds(60),
-        null,
-        now.minusSeconds(10),
-        50,
-        2);
-  }
+    private static JobMonitoringAlertCandidate candidate(long id, String tenantId) {
+        Instant now = Instant.now();
+        return new JobMonitoringAlertCandidate(
+                tenantId,
+                id,
+                "JOB_A",
+                "instance-" + id,
+                "RUNNING",
+                "SCHEDULED",
+                "trace-" + id,
+                now.minusSeconds(120),
+                now.minusSeconds(60),
+                null,
+                now.minusSeconds(10),
+                50,
+                2);
+    }
 
-  private static JobMonitoringAlertCandidate workflowChildRequestCandidate(long requestId) {
-    return JobMonitoringAlertCandidate.builder()
-        .tenantId("tenant-a")
-        .jobCode("CHILD_JOB")
-        .instanceStatus("ACCEPTED")
-        .workflowRunId(84L)
-        .triggerRequestId(requestId)
-        .build();
-  }
+    private static JobMonitoringAlertCandidate workflowChildRequestCandidate(long requestId) {
+        return JobMonitoringAlertCandidate.builder()
+                .tenantId("tenant-a")
+                .jobCode("CHILD_JOB")
+                .instanceStatus("ACCEPTED")
+                .workflowRunId(84L)
+                .triggerRequestId(requestId)
+                .build();
+    }
 
-  private double scanTimestamp(String metricName, Violation violation, String failureStage) {
-    return meterRegistry
-        .get(metricName)
-        .tag("violation_type", violation.name())
-        .tag("failure_stage", failureStage)
-        .gauge()
-        .value();
-  }
+    private double scanTimestamp(String metricName, Violation violation, String failureStage) {
+        return meterRegistry
+                .get(metricName)
+                .tag("violation_type", violation.name())
+                .tag("failure_stage", failureStage)
+                .gauge()
+                .value();
+    }
 }

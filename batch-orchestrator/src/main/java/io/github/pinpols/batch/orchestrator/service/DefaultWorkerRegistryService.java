@@ -53,400 +53,387 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultWorkerRegistryService implements WorkerRegistryServerService {
 
-  /** 租户级最低 SDK 主版本门禁的 system_parameter 键。console 在该键写最低版本字符串(如 {@code "1.0.0"} / {@code "2"})。 */
-  private static final String MIN_SDK_VERSION_PARAM_KEY = "worker.min_sdk_version";
+    /** 租户级最低 SDK 主版本门禁的 system_parameter 键。console 在该键写最低版本字符串(如 {@code "1.0.0"} / {@code "2"})。 */
+    private static final String MIN_SDK_VERSION_PARAM_KEY = "worker.min_sdk_version";
 
-  private final WorkerRegistryMapper workerRegistryMapper;
-  private final CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
-  private final PipelineStageProgressCache pipelineStageProgressCache;
-  private final SystemParameterMapper systemParameterMapper;
-  private final WorkerRegistryProperties workerRegistryProperties;
-  private final TenantActionRateLimiter tenantActionRateLimiter;
+    private final WorkerRegistryMapper workerRegistryMapper;
+    private final CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+    private final PipelineStageProgressCache pipelineStageProgressCache;
+    private final SystemParameterMapper systemParameterMapper;
+    private final WorkerRegistryProperties workerRegistryProperties;
+    private final TenantActionRateLimiter tenantActionRateLimiter;
 
-  @Override
-  @Transactional
-  public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
-    if (!tenantActionRateLimiter.tryConsume(
-        EmptyChecks.isNull(request) ? null : request.tenantId(), RateLimitAction.WORKER_REGISTER)) {
-      throw new OperationFailure(Kind.RATE_LIMITED, "worker register rate limit exceeded");
-    }
-    rejectMissingWorkerGroup(request);
-    rejectUnsupportedProtocolVersion(request);
-    rejectOutdatedSdkVersion(request);
-    WorkerRegistryEntity registry =
-        workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), request.workerCode());
-    String expectedStatus = registry == null ? null : registry.status();
-    String newStatus = resolveRegisterStatus(request, registry);
-    // 首次注册用本机时钟，忽略 worker 上报的 heartbeatAt，避免 NTP 漂移写入 heartbeat_at。
-    Instant heartbeatAt = BatchDateTimeSupport.utcNow();
-    Integer newLoad = request.currentLoad() != null
-        ? request.currentLoad()
-        : (registry == null ? 0 : registry.currentLoad());
-    Integer newMaxConcurrent = request.maxConcurrent() != null
-        ? request.maxConcurrent()
-        : (registry == null
-            ? WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT
-            : registry.maxConcurrent());
-    JsonbString newTags;
-    if (EmptyChecks.isNotNull(request.capabilityTags())) {
-      String capabilityTagsJson = JsonUtils.toJson(request.capabilityTags());
-      newTags = JsonbString.of(capabilityTagsJson);
-    } else {
-      newTags = EmptyChecks.isNull(registry) ? null : registry.capabilityTags();
-    }
-    JsonbString newTaskCapabilities;
-    if (EmptyChecks.isNotNull(request.taskCapabilities())) {
-      String taskCapabilitiesJson = JsonUtils.toJson(request.taskCapabilities());
-      newTaskCapabilities = JsonbString.of(taskCapabilitiesJson);
-    } else {
-      newTaskCapabilities = EmptyChecks.isNull(registry) ? null : registry.taskCapabilities();
+    @Override
+    @Transactional
+    public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
+        if (!tenantActionRateLimiter.tryConsume(
+                EmptyChecks.isNull(request) ? null : request.tenantId(), RateLimitAction.WORKER_REGISTER)) {
+            throw new OperationFailure(Kind.RATE_LIMITED, "worker register rate limit exceeded");
+        }
+        rejectMissingWorkerGroup(request);
+        rejectUnsupportedProtocolVersion(request);
+        rejectOutdatedSdkVersion(request);
+        WorkerRegistryEntity registry =
+                workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), request.workerCode());
+        String expectedStatus = registry == null ? null : registry.status();
+        String newStatus = resolveRegisterStatus(request, registry);
+        // 首次注册用本机时钟，忽略 worker 上报的 heartbeatAt，避免 NTP 漂移写入 heartbeat_at。
+        Instant heartbeatAt = BatchDateTimeSupport.utcNow();
+        Integer newLoad =
+                request.currentLoad() != null ? request.currentLoad() : (registry == null ? 0 : registry.currentLoad());
+        Integer newMaxConcurrent = request.maxConcurrent() != null
+                ? request.maxConcurrent()
+                : (registry == null ? WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT : registry.maxConcurrent());
+        JsonbString newTags;
+        if (EmptyChecks.isNotNull(request.capabilityTags())) {
+            String capabilityTagsJson = JsonUtils.toJson(request.capabilityTags());
+            newTags = JsonbString.of(capabilityTagsJson);
+        } else {
+            newTags = EmptyChecks.isNull(registry) ? null : registry.capabilityTags();
+        }
+        JsonbString newTaskCapabilities;
+        if (EmptyChecks.isNotNull(request.taskCapabilities())) {
+            String taskCapabilitiesJson = JsonUtils.toJson(request.taskCapabilities());
+            newTaskCapabilities = JsonbString.of(taskCapabilitiesJson);
+        } else {
+            newTaskCapabilities = EmptyChecks.isNull(registry) ? null : registry.taskCapabilities();
+        }
+
+        if (registry == null) {
+            // 缺口②:仅对新 worker_code 做 per-tenant 数量配额校验(opt-in,默认 max<=0 不限);
+            // 幂等重注册已存在的 worker_code 走 else 分支,永不被配额拦截。
+            rejectIfTenantWorkerQuotaExceeded(request.tenantId());
+            registry = WorkerRegistryEntity.builder()
+                    .tenantId(request.tenantId())
+                    .workerCode(request.workerCode())
+                    .workerGroup(request.workerGroup())
+                    .capabilityTags(newTags)
+                    .status(newStatus)
+                    .heartbeatAt(heartbeatAt)
+                    .currentLoad(newLoad)
+                    .maxConcurrent(newMaxConcurrent)
+                    .hostName(request.hostName())
+                    .hostIp(request.hostIp())
+                    .processId(request.processId())
+                    .port(request.port())
+                    .buildId(request.buildId())
+                    .sdkVersion(request.sdkVersion())
+                    .workerPoolCode(resolveWorkerPoolCode(request))
+                    .taskCapabilities(newTaskCapabilities)
+                    .build();
+        } else {
+            // SDK-P5-3:register 刷新运行指纹(worker 重启可能换 host / 升 SDK 版本);request 未带的字段 mapper 端 coalesce
+            // 保留旧值。
+            registry = registry.withHeartbeat(newStatus, heartbeatAt, newLoad, newTags, newMaxConcurrent)
+                    .withFingerprint(
+                            request.hostName(),
+                            request.hostIp(),
+                            request.processId(),
+                            request.port(),
+                            request.buildId(),
+                            request.sdkVersion())
+                    .withWorkerPoolCode(resolveWorkerPoolCode(request))
+                    .withTaskCapabilities(newTaskCapabilities);
+        }
+        WorkerRegistryEntity saved = persistRegistration(registry, expectedStatus);
+        if (EmptyChecks.isNotNull(request.replayCapabilities())) {
+            String replayCapabilitiesJson = JsonUtils.toJson(request.replayCapabilities());
+            int updatedRows = workerRegistryMapper.updateReplayCapabilities(
+                    request.tenantId(), request.workerCode(), replayCapabilitiesJson);
+            if (updatedRows != 1) {
+                throw new IllegalStateException(
+                        "Worker replay capability catalogue was not persisted for the registered worker");
+            }
+        }
+        // ADR-035 §2:SDK 自托管 worker 通过 workerGroup="sdk-self-hosted" 识别,标到列上让
+        // console "我的 Worker" 页过滤。幂等。
+        if ("sdk-self-hosted".equals(request.workerGroup())) {
+            workerRegistryMapper.markSelfHosted(request.tenantId(), request.workerCode());
+        }
+        upsertDeclaredTaskTypes(request);
+        return saved;
     }
 
-    if (registry == null) {
-      // 缺口②:仅对新 worker_code 做 per-tenant 数量配额校验(opt-in,默认 max<=0 不限);
-      // 幂等重注册已存在的 worker_code 走 else 分支,永不被配额拦截。
-      rejectIfTenantWorkerQuotaExceeded(request.tenantId());
-      registry = WorkerRegistryEntity.builder()
-          .tenantId(request.tenantId())
-          .workerCode(request.workerCode())
-          .workerGroup(request.workerGroup())
-          .capabilityTags(newTags)
-          .status(newStatus)
-          .heartbeatAt(heartbeatAt)
-          .currentLoad(newLoad)
-          .maxConcurrent(newMaxConcurrent)
-          .hostName(request.hostName())
-          .hostIp(request.hostIp())
-          .processId(request.processId())
-          .port(request.port())
-          .buildId(request.buildId())
-          .sdkVersion(request.sdkVersion())
-          .workerPoolCode(resolveWorkerPoolCode(request))
-          .taskCapabilities(newTaskCapabilities)
-          .build();
-    } else {
-      // SDK-P5-3:register 刷新运行指纹(worker 重启可能换 host / 升 SDK 版本);request 未带的字段 mapper 端 coalesce
-      // 保留旧值。
-      registry = registry
-          .withHeartbeat(newStatus, heartbeatAt, newLoad, newTags, newMaxConcurrent)
-          .withFingerprint(
-              request.hostName(),
-              request.hostIp(),
-              request.processId(),
-              request.port(),
-              request.buildId(),
-              request.sdkVersion())
-          .withWorkerPoolCode(resolveWorkerPoolCode(request))
-          .withTaskCapabilities(newTaskCapabilities);
+    /**
+     * 缺口②:per-tenant worker 数量配额。仅在注册<b>新</b> worker_code 时调用。{@code maxPerTenant <= 0} 视为不限(opt-in,
+     * 默认不生效);当前活跃数(非 DECOMMISSIONED)已达上限时拒绝注册,防注册风暴撑满 worker_registry。
+     */
+    private void rejectIfTenantWorkerQuotaExceeded(String tenantId) {
+        int max = workerRegistryProperties.getMaxPerTenant();
+        if (max <= 0) {
+            return;
+        }
+        int current = workerRegistryMapper.countByTenant(tenantId);
+        if (current >= max) {
+            throw BizException.of(ResultCode.VALIDATION_ERROR, "error.worker.too_many_workers", current, max);
+        }
     }
-    WorkerRegistryEntity saved = persistRegistration(registry, expectedStatus);
-    if (EmptyChecks.isNotNull(request.replayCapabilities())) {
-      String replayCapabilitiesJson = JsonUtils.toJson(request.replayCapabilities());
-      int updatedRows = workerRegistryMapper.updateReplayCapabilities(
-          request.tenantId(), request.workerCode(), replayCapabilitiesJson);
-      if (updatedRows != 1) {
-        throw new IllegalStateException(
-            "Worker replay capability catalogue was not persisted for the registered worker");
-      }
-    }
-    // ADR-035 §2:SDK 自托管 worker 通过 workerGroup="sdk-self-hosted" 识别,标到列上让
-    // console "我的 Worker" 页过滤。幂等。
-    if ("sdk-self-hosted".equals(request.workerGroup())) {
-      workerRegistryMapper.markSelfHosted(request.tenantId(), request.workerCode());
-    }
-    upsertDeclaredTaskTypes(request);
-    return saved;
-  }
 
-  /**
-   * 缺口②:per-tenant worker 数量配额。仅在注册<b>新</b> worker_code 时调用。{@code maxPerTenant <= 0} 视为不限(opt-in,
-   * 默认不生效);当前活跃数(非 DECOMMISSIONED)已达上限时拒绝注册,防注册风暴撑满 worker_registry。
-   */
-  private void rejectIfTenantWorkerQuotaExceeded(String tenantId) {
-    int max = workerRegistryProperties.getMaxPerTenant();
-    if (max <= 0) {
-      return;
+    /**
+     * worker_group 是 {@code worker_registry} 的 NOT NULL 列、且是 SDK 自托管 worker 的选取键(ADR-035 §2)。
+     * 缺失时**入口早拒为 400**,而不是让 null 落库撞 NOT NULL 约束抛 500 —— 后者会让漏发该字段的客户端拿到 500 后无限重试、把 orchestrator
+     * 日志量失控(契约:客户端入参缺失应 4xx 非 5xx)。heartbeat 对未注册 worker 会降级走 register,故本校验同时覆盖两条路径。
+     */
+    private void rejectMissingWorkerGroup(WorkerHeartbeatDto request) {
+        String workerGroup = request == null ? null : request.workerGroup();
+        if (workerGroup == null || workerGroup.isBlank()) {
+            throw BizException.of(ResultCode.VALIDATION_ERROR, "error.worker.missing_worker_group");
+        }
     }
-    int current = workerRegistryMapper.countByTenant(tenantId);
-    if (current >= max) {
-      throw BizException.of(
-          ResultCode.VALIDATION_ERROR, "error.worker.too_many_workers", current, max);
-    }
-  }
 
-  /**
-   * worker_group 是 {@code worker_registry} 的 NOT NULL 列、且是 SDK 自托管 worker 的选取键(ADR-035 §2)。
-   * 缺失时**入口早拒为 400**,而不是让 null 落库撞 NOT NULL 约束抛 500 —— 后者会让漏发该字段的客户端拿到 500 后无限重试、把 orchestrator
-   * 日志量失控(契约:客户端入参缺失应 4xx 非 5xx)。heartbeat 对未注册 worker 会降级走 register,故本校验同时覆盖两条路径。
-   */
-  private void rejectMissingWorkerGroup(WorkerHeartbeatDto request) {
-    String workerGroup = request == null ? null : request.workerGroup();
-    if (workerGroup == null || workerGroup.isBlank()) {
-      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.worker.missing_worker_group");
+    /**
+     * SDK 协议门禁:worker register 携带的 {@code protocolVersion} 主版本若不在平台支持集合内,直接拒绝注册(400)。
+     *
+     * <p>向后兼容:{@code protocolVersion} 为空(老 SDK / 非 SDK 平台 worker)按 legacy
+     * 放行;present-but-unsupported(如 {@code "v3"})才拒。支持集合权威源 {@link
+     * SdkProtocolVersions#SUPPORTED_MAJOR_VERSIONS}(镜像 sdk-shared-constants.yaml),与 console-api
+     * 兼容告警({@code WorkerCompatibilityEvaluator})同源,互补:此处是注册准入硬门禁, 后者是运行期只读可见性提示。
+     */
+    private void rejectUnsupportedProtocolVersion(WorkerHeartbeatDto request) {
+        String protocolVersion = request.protocolVersion();
+        if (protocolVersion == null || protocolVersion.isBlank()) {
+            return;
+        }
+        if (!SdkProtocolVersions.isSupportedMajor(protocolVersion)) {
+            throw BizException.of(
+                    ResultCode.VALIDATION_ERROR,
+                    "error.worker.unsupported_protocol_version",
+                    protocolVersion,
+                    SdkProtocolVersions.SUPPORTED_MAJOR_VERSIONS);
+        }
     }
-  }
 
-  /**
-   * SDK 协议门禁:worker register 携带的 {@code protocolVersion} 主版本若不在平台支持集合内,直接拒绝注册(400)。
-   *
-   * <p>向后兼容:{@code protocolVersion} 为空(老 SDK / 非 SDK 平台 worker)按 legacy
-   * 放行;present-but-unsupported(如 {@code "v3"})才拒。支持集合权威源 {@link
-   * SdkProtocolVersions#SUPPORTED_MAJOR_VERSIONS}(镜像 sdk-shared-constants.yaml),与 console-api
-   * 兼容告警({@code WorkerCompatibilityEvaluator})同源,互补:此处是注册准入硬门禁, 后者是运行期只读可见性提示。
-   */
-  private void rejectUnsupportedProtocolVersion(WorkerHeartbeatDto request) {
-    String protocolVersion = request.protocolVersion();
-    if (protocolVersion == null || protocolVersion.isBlank()) {
-      return;
+    /**
+     * 租户级最低 SDK 版本门禁(opt-in):worker register 自报的 {@code sdkVersion} 主版本若 <b>低于</b> 该租户在 {@code
+     * batch.system_parameter}(key={@value #MIN_SDK_VERSION_PARAM_KEY})配置的最低主版本,拒绝注册(400 + i18n 引导升级)。
+     *
+     * <p>默认放行(向后兼容):
+     *
+     * <ul>
+     *   <li>该租户未配该 key → 不门禁(opt-in,不破坏现有 worker)。
+     *   <li>{@code sdkVersion} 空 / 空白 → 放行(legacy / 非 SDK worker,对齐协议门禁的 legacy 放行)。
+     *   <li>配置值或上报值解析不出主版本(脏值)→ 放行 + log warn(不因脏配置 / 脏上报误杀注册)。
+     * </ul>
+     *
+     * <p>只比主版本(对齐协议门禁与 console {@code WorkerCompatibilityEvaluator},均为主版本),解析复用 {@link
+     * SdkVersions#parseMajor}。
+     */
+    private void rejectOutdatedSdkVersion(WorkerHeartbeatDto request) {
+        String reportedSdkVersion = request.sdkVersion();
+        if (reportedSdkVersion == null || reportedSdkVersion.isBlank()) {
+            return;
+        }
+        String requiredMinVersion =
+                systemParameterMapper.selectParamValue(request.tenantId(), MIN_SDK_VERSION_PARAM_KEY);
+        if (requiredMinVersion == null || requiredMinVersion.isBlank()) {
+            return;
+        }
+        Integer requiredMajor = SdkVersions.parseMajor(requiredMinVersion);
+        if (requiredMajor == null) {
+            log.warn(
+                    "Could not parse the major version from tenant {} setting {}=\"{}\"; skipping the minimum SDK version gate",
+                    request.tenantId(),
+                    MIN_SDK_VERSION_PARAM_KEY,
+                    requiredMinVersion);
+            return;
+        }
+        Integer reportedMajor = SdkVersions.parseMajor(reportedSdkVersion);
+        if (reportedMajor == null) {
+            String workerCodeForLog = LogSanitizer.value(request.workerCode());
+            String reportedSdkVersionForLog = LogSanitizer.value(reportedSdkVersion);
+            log.warn(
+                    "Could not parse the major version from worker {} sdkVersion=\"{}\"; skipping the minimum SDK version gate",
+                    workerCodeForLog,
+                    reportedSdkVersionForLog);
+            return;
+        }
+        if (reportedMajor < requiredMajor) {
+            throw BizException.of(
+                    ResultCode.VALIDATION_ERROR,
+                    "error.worker.sdk_version_too_old",
+                    reportedSdkVersion,
+                    requiredMinVersion);
+        }
     }
-    if (!SdkProtocolVersions.isSupportedMajor(protocolVersion)) {
-      throw BizException.of(
-          ResultCode.VALIDATION_ERROR,
-          "error.worker.unsupported_protocol_version",
-          protocolVersion,
-          SdkProtocolVersions.SUPPORTED_MAJOR_VERSIONS);
-    }
-  }
 
-  /**
-   * 租户级最低 SDK 版本门禁(opt-in):worker register 自报的 {@code sdkVersion} 主版本若 <b>低于</b> 该租户在 {@code
-   * batch.system_parameter}(key={@value #MIN_SDK_VERSION_PARAM_KEY})配置的最低主版本,拒绝注册(400 + i18n 引导升级)。
-   *
-   * <p>默认放行(向后兼容):
-   *
-   * <ul>
-   *   <li>该租户未配该 key → 不门禁(opt-in,不破坏现有 worker)。
-   *   <li>{@code sdkVersion} 空 / 空白 → 放行(legacy / 非 SDK worker,对齐协议门禁的 legacy 放行)。
-   *   <li>配置值或上报值解析不出主版本(脏值)→ 放行 + log warn(不因脏配置 / 脏上报误杀注册)。
-   * </ul>
-   *
-   * <p>只比主版本(对齐协议门禁与 console {@code WorkerCompatibilityEvaluator},均为主版本),解析复用 {@link
-   * SdkVersions#parseMajor}。
-   */
-  private void rejectOutdatedSdkVersion(WorkerHeartbeatDto request) {
-    String reportedSdkVersion = request.sdkVersion();
-    if (reportedSdkVersion == null || reportedSdkVersion.isBlank()) {
-      return;
+    /**
+     * SDK Phase 3 M3.1:把 register 上报的 {@code taskTypes[].descriptor} upsert 到 {@code
+     * custom_task_type_registry}(source=SDK_DECLARED)。heartbeat 不带 taskTypes(null),仅 register 刷新。
+     * descriptor 全文序列化为 JSON 存 JSONB;code 以 SDK 端 {@code SdkTaskHandler.taskType()} 为权威(SDK 装配已对齐)。
+     */
+    private void upsertDeclaredTaskTypes(WorkerHeartbeatDto request) {
+        List<WorkerTaskTypeDescriptorDto> taskTypes = request.taskTypes();
+        if (taskTypes == null || taskTypes.isEmpty()) {
+            return;
+        }
+        for (WorkerTaskTypeDescriptorDto descriptor : taskTypes) {
+            if (EmptyChecks.isNull(descriptor)) {
+                continue;
+            }
+            String taskTypeCode = descriptor.code();
+            if (EmptyChecks.isBlank(taskTypeCode)) {
+                continue;
+            }
+            // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
+            // 拒了就让整次 register 抛 BizException(400),阻止凭据落入 custom_task_type_registry JSONB。
+            // code 来自上报载荷，不能拼入对外错误文案；拒入原因只保留固定上下文。
+            String ctxLabel = "sdk.taskType.descriptor";
+            SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.defaults(), ctxLabel);
+            SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.inputSchema(), ctxLabel);
+            customTaskTypeRegistryMapper.upsertDeclared(CustomTaskTypeUpsertParam.builder()
+                    .tenantId(request.tenantId())
+                    .taskTypeCode(taskTypeCode)
+                    .displayName(descriptor.displayName())
+                    .descriptor(JsonUtils.toJson(descriptor))
+                    .descriptorVersion(descriptor.version())
+                    .declaredByWorkerCode(request.workerCode())
+                    .build());
+        }
     }
-    String requiredMinVersion =
-        systemParameterMapper.selectParamValue(request.tenantId(), MIN_SDK_VERSION_PARAM_KEY);
-    if (requiredMinVersion == null || requiredMinVersion.isBlank()) {
-      return;
-    }
-    Integer requiredMajor = SdkVersions.parseMajor(requiredMinVersion);
-    if (requiredMajor == null) {
-      log.warn(
-          "Could not parse the major version from tenant {} setting {}=\"{}\"; skipping the minimum SDK version gate",
-          request.tenantId(),
-          MIN_SDK_VERSION_PARAM_KEY,
-          requiredMinVersion);
-      return;
-    }
-    Integer reportedMajor = SdkVersions.parseMajor(reportedSdkVersion);
-    if (reportedMajor == null) {
-      String workerCodeForLog = LogSanitizer.value(request.workerCode());
-      String reportedSdkVersionForLog = LogSanitizer.value(reportedSdkVersion);
-      log.warn(
-          "Could not parse the major version from worker {} sdkVersion=\"{}\"; skipping the minimum SDK version gate",
-          workerCodeForLog,
-          reportedSdkVersionForLog);
-      return;
-    }
-    if (reportedMajor < requiredMajor) {
-      throw BizException.of(
-          ResultCode.VALIDATION_ERROR,
-          "error.worker.sdk_version_too_old",
-          reportedSdkVersion,
-          requiredMinVersion);
-    }
-  }
 
-  /**
-   * SDK Phase 3 M3.1:把 register 上报的 {@code taskTypes[].descriptor} upsert 到 {@code
-   * custom_task_type_registry}(source=SDK_DECLARED)。heartbeat 不带 taskTypes(null),仅 register 刷新。
-   * descriptor 全文序列化为 JSON 存 JSONB;code 以 SDK 端 {@code SdkTaskHandler.taskType()} 为权威(SDK 装配已对齐)。
-   */
-  private void upsertDeclaredTaskTypes(WorkerHeartbeatDto request) {
-    List<WorkerTaskTypeDescriptorDto> taskTypes = request.taskTypes();
-    if (taskTypes == null || taskTypes.isEmpty()) {
-      return;
+    @Override
+    @Transactional
+    public WorkerRegistryEntity heartbeat(String workerCode, WorkerHeartbeatDto request) {
+        if (request == null) {
+            return null;
+        }
+        WorkerRegistryEntity registry =
+                workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
+        if (registry == null) {
+            return register(request);
+        }
+        String newStatus = resolveHeartbeatStatus(request, registry.status());
+        Integer newLoad = request.currentLoad() != null ? request.currentLoad() : registry.currentLoad();
+        JsonbString newTags;
+        if (EmptyChecks.isNotNull(request.capabilityTags())) {
+            String capabilityTagsJson = JsonUtils.toJson(request.capabilityTags());
+            newTags = JsonbString.of(capabilityTagsJson);
+        } else {
+            newTags = registry.capabilityTags();
+        }
+        // heartbeat_at 由 mapper xml 直接写为 DB current_timestamp（消除 worker 时钟漂移）。
+        workerRegistryMapper.touchHeartbeat(TouchHeartbeatParam.builder()
+                .tenantId(request.tenantId())
+                .workerCode(workerCode)
+                .nextStatus(newStatus)
+                .preservedStatuses(
+                        List.of(WorkerRegistryStatus.DECOMMISSIONED.code(), WorkerRegistryStatus.DRAINING.code()))
+                .currentLoad(newLoad)
+                .capabilityTags(newTags == null ? null : newTags.getValue())
+                .build());
+        // pipeline stage 行级进度(docs/design/pipeline-stage-progress-display.md):仅 LOAD/GENERATE
+        // 在跑时非空,写 in-mem cache(不持久化,5min TTL,FE 经 Console 端点读)
+        pipelineStageProgressCache.publish(request.tenantId(), workerCode, request.pipelineProgress());
+        return workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
     }
-    for (WorkerTaskTypeDescriptorDto descriptor : taskTypes) {
-      if (EmptyChecks.isNull(descriptor)) {
-        continue;
-      }
-      String taskTypeCode = descriptor.code();
-      if (EmptyChecks.isBlank(taskTypeCode)) {
-        continue;
-      }
-      // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
-      // 拒了就让整次 register 抛 BizException(400),阻止凭据落入 custom_task_type_registry JSONB。
-      // code 来自上报载荷，不能拼入对外错误文案；拒入原因只保留固定上下文。
-      String ctxLabel = "sdk.taskType.descriptor";
-      SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.defaults(), ctxLabel);
-      SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.inputSchema(), ctxLabel);
-      customTaskTypeRegistryMapper.upsertDeclared(CustomTaskTypeUpsertParam.builder()
-          .tenantId(request.tenantId())
-          .taskTypeCode(taskTypeCode)
-          .displayName(descriptor.displayName())
-          .descriptor(JsonUtils.toJson(descriptor))
-          .descriptorVersion(descriptor.version())
-          .declaredByWorkerCode(request.workerCode())
-          .build());
-    }
-  }
 
-  @Override
-  @Transactional
-  public WorkerRegistryEntity heartbeat(String workerCode, WorkerHeartbeatDto request) {
-    if (request == null) {
-      return null;
+    @Override
+    @Transactional
+    public void deactivate(String tenantId, String workerCode) {
+        updateStatus(tenantId, workerCode, WorkerRegistryStatus.OFFLINE.code());
     }
-    WorkerRegistryEntity registry =
-        workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
-    if (registry == null) {
-      return register(request);
-    }
-    String newStatus = resolveHeartbeatStatus(request, registry.status());
-    Integer newLoad =
-        request.currentLoad() != null ? request.currentLoad() : registry.currentLoad();
-    JsonbString newTags;
-    if (EmptyChecks.isNotNull(request.capabilityTags())) {
-      String capabilityTagsJson = JsonUtils.toJson(request.capabilityTags());
-      newTags = JsonbString.of(capabilityTagsJson);
-    } else {
-      newTags = registry.capabilityTags();
-    }
-    // heartbeat_at 由 mapper xml 直接写为 DB current_timestamp（消除 worker 时钟漂移）。
-    workerRegistryMapper.touchHeartbeat(TouchHeartbeatParam.builder()
-        .tenantId(request.tenantId())
-        .workerCode(workerCode)
-        .nextStatus(newStatus)
-        .preservedStatuses(List.of(
-            WorkerRegistryStatus.DECOMMISSIONED.code(), WorkerRegistryStatus.DRAINING.code()))
-        .currentLoad(newLoad)
-        .capabilityTags(newTags == null ? null : newTags.getValue())
-        .build());
-    // pipeline stage 行级进度(docs/design/pipeline-stage-progress-display.md):仅 LOAD/GENERATE
-    // 在跑时非空,写 in-mem cache(不持久化,5min TTL,FE 经 Console 端点读)
-    pipelineStageProgressCache.publish(request.tenantId(), workerCode, request.pipelineProgress());
-    return workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
-  }
 
-  @Override
-  @Transactional
-  public void deactivate(String tenantId, String workerCode) {
-    updateStatus(tenantId, workerCode, WorkerRegistryStatus.OFFLINE.code());
-  }
+    @Override
+    @Transactional
+    public WorkerRegistryEntity updateStatus(String tenantId, String workerCode, String status) {
+        WorkerRegistryEntity registry = workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+        if (registry == null) {
+            return null;
+        }
+        String newStatus = resolveIncomingStatus(null, status, registry.status());
+        int updated = workerRegistryMapper.updateStatusIfCurrent(tenantId, workerCode, registry.status(), newStatus);
+        if (updated == 0) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
+        }
+        return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+    }
 
-  @Override
-  @Transactional
-  public WorkerRegistryEntity updateStatus(String tenantId, String workerCode, String status) {
-    WorkerRegistryEntity registry =
-        workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-    if (registry == null) {
-      return null;
+    /**
+     * 首次注册走幂等 insert；重注册以读取到的状态作为 CAS 前态刷新运行信息，避免覆盖并发 drain/decommission。
+     */
+    private WorkerRegistryEntity persistRegistration(WorkerRegistryEntity registry, String expectedStatus) {
+        if (registry.id() == null) {
+            workerRegistryMapper.insert(registry);
+        } else {
+            int updated = workerRegistryMapper.updateRegistrationIfCurrent(registry, expectedStatus);
+            if (updated == 0) {
+                // 读取到写入之间状态被并发 drain/decommission 推进：保留平台状态，不用本次注册覆盖它。
+                // 这里只补可观测性，不重试成 ONLINE —— 那会把运维的排空决定悄悄撤销。
+                log.warn(
+                        "worker registration skipped by concurrent status change: tenantId={}, workerCode={},"
+                                + " expectedStatus={}",
+                        LogSanitizer.value(registry.tenantId()),
+                        LogSanitizer.value(registry.workerCode()),
+                        LogSanitizer.value(expectedStatus));
+            }
+        }
+        return workerRegistryMapper.selectByTenantAndWorkerCode(registry.tenantId(), registry.workerCode());
     }
-    String newStatus = resolveIncomingStatus(null, status, registry.status());
-    int updated = workerRegistryMapper.updateStatusIfCurrent(
-        tenantId, workerCode, registry.status(), newStatus);
-    if (updated == 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
-    }
-    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-  }
 
-  /**
-   * 首次注册走幂等 insert；重注册以读取到的状态作为 CAS 前态刷新运行信息，避免覆盖并发 drain/decommission。
-   */
-  private WorkerRegistryEntity persistRegistration(
-      WorkerRegistryEntity registry, String expectedStatus) {
-    if (registry.id() == null) {
-      workerRegistryMapper.insert(registry);
-    } else {
-      int updated = workerRegistryMapper.updateRegistrationIfCurrent(registry, expectedStatus);
-      if (updated == 0) {
-        // 读取到写入之间状态被并发 drain/decommission 推进：保留平台状态，不用本次注册覆盖它。
-        // 这里只补可观测性，不重试成 ONLINE —— 那会把运维的排空决定悄悄撤销。
-        log.warn(
-            "worker registration skipped by concurrent status change: tenantId={}, workerCode={},"
-                + " expectedStatus={}",
-            LogSanitizer.value(registry.tenantId()),
-            LogSanitizer.value(registry.workerCode()),
-            LogSanitizer.value(expectedStatus));
-      }
+    /**
+     * 注册代表新进程存活，不能继承上一代进程自报的停机标记。
+     *
+     * <p>平台发起的下线一定带 {@code drain_started_at}（见 drain 治理），这类 terminal 状态不因进程重启被清除；
+     * 没有 drain 起始时间的 DRAINING / DECOMMISSIONED 只可能是上一代进程关机时自报的残留，按新注册复活为 ONLINE。
+     */
+    private String resolveRegisterStatus(WorkerHeartbeatDto request, WorkerRegistryEntity registry) {
+        if (EmptyChecks.isNotNull(registry)
+                && EmptyChecks.isNotNull(registry.drainStartedAt())
+                && (WorkerRegistryStatus.DRAINING.code().equals(registry.status())
+                        || WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status()))) {
+            return registry.status();
+        }
+        return resolveIncomingStatus(
+                request, WorkerRegistryStatus.ONLINE.code(), EmptyChecks.isNull(registry) ? null : registry.status());
     }
-    return workerRegistryMapper.selectByTenantAndWorkerCode(
-        registry.tenantId(), registry.workerCode());
-  }
 
-  /**
-   * 注册代表新进程存活，不能继承上一代进程自报的停机标记。
-   *
-   * <p>平台发起的下线一定带 {@code drain_started_at}（见 drain 治理），这类 terminal 状态不因进程重启被清除；
-   * 没有 drain 起始时间的 DRAINING / DECOMMISSIONED 只可能是上一代进程关机时自报的残留，按新注册复活为 ONLINE。
-   */
-  private String resolveRegisterStatus(WorkerHeartbeatDto request, WorkerRegistryEntity registry) {
-    if (EmptyChecks.isNotNull(registry)
-        && EmptyChecks.isNotNull(registry.drainStartedAt())
-        && (WorkerRegistryStatus.DRAINING.code().equals(registry.status())
-            || WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status()))) {
-      return registry.status();
+    private String resolveHeartbeatStatus(WorkerHeartbeatDto request, String currentStatus) {
+        if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(currentStatus)) {
+            return currentStatus;
+        }
+        if (WorkerRegistryStatus.DRAINING.code().equals(currentStatus)) {
+            return currentStatus;
+        }
+        if (WorkerRegistryStatus.ONLINE.code().equals(currentStatus)) {
+            // 排空只能由 drain / status 入口发起。worker 在收到过 DRAINING 指令后会把本地状态固定为
+            // DRAINING 并持续上报，若心跳采纳，resume 拉回 ONLINE 后会被下一次心跳立刻覆盖。
+            return currentStatus;
+        }
+        return resolveIncomingStatus(request, WorkerRegistryStatus.ONLINE.code(), currentStatus);
     }
-    return resolveIncomingStatus(
-        request,
-        WorkerRegistryStatus.ONLINE.code(),
-        EmptyChecks.isNull(registry) ? null : registry.status());
-  }
 
-  private String resolveHeartbeatStatus(WorkerHeartbeatDto request, String currentStatus) {
-    if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(currentStatus)) {
-      return currentStatus;
+    private String resolveWorkerPoolCode(WorkerHeartbeatDto request) {
+        String requestedWorkerPoolCode = request.workerPoolCode();
+        if (EmptyChecks.isBlank(requestedWorkerPoolCode)) {
+            return request.workerCode();
+        }
+        return requestedWorkerPoolCode;
     }
-    if (WorkerRegistryStatus.DRAINING.code().equals(currentStatus)) {
-      return currentStatus;
-    }
-    if (WorkerRegistryStatus.ONLINE.code().equals(currentStatus)) {
-      // 排空只能由 drain / status 入口发起。worker 在收到过 DRAINING 指令后会把本地状态固定为
-      // DRAINING 并持续上报，若心跳采纳，resume 拉回 ONLINE 后会被下一次心跳立刻覆盖。
-      return currentStatus;
-    }
-    return resolveIncomingStatus(request, WorkerRegistryStatus.ONLINE.code(), currentStatus);
-  }
 
-  private String resolveWorkerPoolCode(WorkerHeartbeatDto request) {
-    String requestedWorkerPoolCode = request.workerPoolCode();
-    if (EmptyChecks.isBlank(requestedWorkerPoolCode)) {
-      return request.workerCode();
+    private String resolveIncomingStatus(WorkerHeartbeatDto request, String defaultStatus, String currentStatus) {
+        String requestedStatus = request == null ? null : request.status();
+        // SDK 上报的是 worker 存活态(register/heartbeat 恒发 "RUNNING"),非注册表可用性枚举。
+        // 仅当上报值是合法 WorkerRegistryStatus(ONLINE/OFFLINE/DRAINING/DECOMMISSIONED)才采纳,
+        // 否则回落 defaultStatus(register/heartbeat 默认 ONLINE)/ currentStatus。
+        // 防非枚举值(如 "RUNNING")直写违反 ck_worker_registry_status CHECK → 500
+        // (契约 fixtures 01/03-06:请求 status=RUNNING → 存储/响应 ONLINE)。
+        boolean requestedRegistryStatusIsValid =
+                EmptyChecks.isNotBlank(requestedStatus) && isValidRegistryStatus(requestedStatus);
+        if (requestedRegistryStatusIsValid) {
+            return requestedStatus;
+        }
+        if (EmptyChecks.isBlank(defaultStatus)) {
+            return currentStatus;
+        }
+        return defaultStatus;
     }
-    return requestedWorkerPoolCode;
-  }
 
-  private String resolveIncomingStatus(
-      WorkerHeartbeatDto request, String defaultStatus, String currentStatus) {
-    String requestedStatus = request == null ? null : request.status();
-    // SDK 上报的是 worker 存活态(register/heartbeat 恒发 "RUNNING"),非注册表可用性枚举。
-    // 仅当上报值是合法 WorkerRegistryStatus(ONLINE/OFFLINE/DRAINING/DECOMMISSIONED)才采纳,
-    // 否则回落 defaultStatus(register/heartbeat 默认 ONLINE)/ currentStatus。
-    // 防非枚举值(如 "RUNNING")直写违反 ck_worker_registry_status CHECK → 500
-    // (契约 fixtures 01/03-06:请求 status=RUNNING → 存储/响应 ONLINE)。
-    boolean requestedRegistryStatusIsValid =
-        EmptyChecks.isNotBlank(requestedStatus) && isValidRegistryStatus(requestedStatus);
-    if (requestedRegistryStatusIsValid) {
-      return requestedStatus;
+    private static boolean isValidRegistryStatus(String code) {
+        for (WorkerRegistryStatus status : WorkerRegistryStatus.values()) {
+            if (status.code().equals(code)) {
+                return true;
+            }
+        }
+        return false;
     }
-    if (EmptyChecks.isBlank(defaultStatus)) {
-      return currentStatus;
-    }
-    return defaultStatus;
-  }
-
-  private static boolean isValidRegistryStatus(String code) {
-    for (WorkerRegistryStatus status : WorkerRegistryStatus.values()) {
-      if (status.code().equals(code)) {
-        return true;
-      }
-    }
-    return false;
-  }
 }

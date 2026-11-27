@@ -25,14 +25,14 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum BatchType implements DictEnum {
-  IMPORT("IMPORT", "导入"),
-  EXPORT("EXPORT", "导出"),
-  PROCESS("PROCESS", "加工"),
-  DISPATCH("DISPATCH", "分发"),
-  SYNC("SYNC", "同步"),
-  GENERAL("GENERAL", "通用"),
-  WORKFLOW("WORKFLOW", "工作流");
+    IMPORT("IMPORT", "导入"),
+    EXPORT("EXPORT", "导出"),
+    PROCESS("PROCESS", "加工"),
+    DISPATCH("DISPATCH", "分发"),
+    SYNC("SYNC", "同步"),
+    GENERAL("GENERAL", "通用"),
+    WORKFLOW("WORKFLOW", "工作流");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

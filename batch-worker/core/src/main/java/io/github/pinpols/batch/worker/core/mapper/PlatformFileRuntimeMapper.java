@@ -14,87 +14,82 @@ import org.apache.ibatis.annotations.Param;
 
 public interface PlatformFileRuntimeMapper {
 
-  PlatformFileRecordView selectFileRecord(
-      @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
+    PlatformFileRecordView selectFileRecord(@Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
-  Long countFileRecordByStoragePath(
-      @Param("tenantId") String tenantId,
-      @Param("storageBucket") String storageBucket,
-      @Param("storagePath") String storagePath);
+    Long countFileRecordByStoragePath(
+            @Param("tenantId") String tenantId,
+            @Param("storageBucket") String storageBucket,
+            @Param("storagePath") String storagePath);
 
-  PlatformFileRecordView selectFileRecordByStoragePath(
-      @Param("tenantId") String tenantId,
-      @Param("storageBucket") String storageBucket,
-      @Param("storagePath") String storagePath);
+    PlatformFileRecordView selectFileRecordByStoragePath(
+            @Param("tenantId") String tenantId,
+            @Param("storageBucket") String storageBucket,
+            @Param("storagePath") String storagePath);
 
-  PlatformFileTemplateConfigView selectLatestTemplateConfig(
-      @Param("tenantId") String tenantId,
-      @Param("templateCode") String templateCode,
-      @Param("templateType") String templateType);
+    PlatformFileTemplateConfigView selectLatestTemplateConfig(
+            @Param("tenantId") String tenantId,
+            @Param("templateCode") String templateCode,
+            @Param("templateType") String templateType);
 
-  PlatformPipelineRunKeyView insertPipelineInstance(PlatformPipelineInsertParam params);
+    PlatformPipelineRunKeyView insertPipelineInstance(PlatformPipelineInsertParam params);
 
-  int bindFileToPipelineInstance(
-      @Param("tenantId") String tenantId,
-      @Param("pipelineInstanceId") Long pipelineInstanceId,
-      @Param("runStartedAt") OffsetDateTime runStartedAt,
-      @Param("fileId") Long fileId);
+    int bindFileToPipelineInstance(
+            @Param("tenantId") String tenantId,
+            @Param("pipelineInstanceId") Long pipelineInstanceId,
+            @Param("runStartedAt") OffsetDateTime runStartedAt,
+            @Param("fileId") Long fileId);
 
-  int updatePipelineStage(
-      @Param("pipelineInstanceId") Long pipelineInstanceId,
-      @Param("runStartedAt") OffsetDateTime runStartedAt,
-      @Param("currentStage") String currentStage,
-      @Param("lastSuccessStage") String lastSuccessStage);
+    int updatePipelineStage(
+            @Param("pipelineInstanceId") Long pipelineInstanceId,
+            @Param("runStartedAt") OffsetDateTime runStartedAt,
+            @Param("currentStage") String currentStage,
+            @Param("lastSuccessStage") String lastSuccessStage);
 
-  int markPipelineSuccess(PlatformPipelineFinishParam params);
+    int markPipelineSuccess(PlatformPipelineFinishParam params);
 
-  int markPipelineFailed(PlatformPipelineFinishParam params);
+    int markPipelineFailed(PlatformPipelineFinishParam params);
 
-  int markPipelineCompensating(
-      @Param("pipelineInstanceId") Long pipelineInstanceId,
-      @Param("runStartedAt") OffsetDateTime runStartedAt,
-      @Param("runStatus") String runStatus);
+    int markPipelineCompensating(
+            @Param("pipelineInstanceId") Long pipelineInstanceId,
+            @Param("runStartedAt") OffsetDateTime runStartedAt,
+            @Param("runStatus") String runStatus);
 
-  Integer selectNextStepRunSeq(
-      @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);
+    Integer selectNextStepRunSeq(
+            @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);
 
-  int lockStepRunSequence(
-      @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);
+    int lockStepRunSequence(@Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);
 
-  List<String> selectSucceededStepCodes(@Param("pipelineInstanceId") Long pipelineInstanceId);
+    List<String> selectSucceededStepCodes(@Param("pipelineInstanceId") Long pipelineInstanceId);
 
-  String selectLatestSucceededStepOutputSummary(
-      @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);
+    String selectLatestSucceededStepOutputSummary(
+            @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);
 
-  int insertStepRun(PlatformStepRunInsertParam params);
+    int insertStepRun(PlatformStepRunInsertParam params);
 
-  int finishStepRun(PlatformStepRunFinishParam params);
+    int finishStepRun(PlatformStepRunFinishParam params);
 
-  /** 在分配文件版本前锁住租户与逻辑文件身份；事务结束自动释放，也覆盖尚无文件行的首代登记。 */
-  int lockFileGeneration(@Param("tenantId") String tenantId, @Param("fileCode") String fileCode);
+    /** 在分配文件版本前锁住租户与逻辑文件身份；事务结束自动释放，也覆盖尚无文件行的首代登记。 */
+    int lockFileGeneration(@Param("tenantId") String tenantId, @Param("fileCode") String fileCode);
 
-  Integer selectMaxFileGenerationNo(
-      @Param("tenantId") String tenantId, @Param("fileCode") String fileCode);
+    Integer selectMaxFileGenerationNo(@Param("tenantId") String tenantId, @Param("fileCode") String fileCode);
 
-  int markHistoricalFileNotLatest(
-      @Param("tenantId") String tenantId, @Param("fileCode") String fileCode);
+    int markHistoricalFileNotLatest(@Param("tenantId") String tenantId, @Param("fileCode") String fileCode);
 
-  int insertFileRecord(PlatformFileInsertParam params);
+    int insertFileRecord(PlatformFileInsertParam params);
 
-  String selectFileStatus(@Param("fileId") Long fileId);
+    String selectFileStatus(@Param("fileId") Long fileId);
 
-  int updateFileRecordStatus(
-      @Param("fileId") Long fileId,
-      @Param("previousStatus") String previousStatus,
-      @Param("fileStatus") String fileStatus,
-      @Param("metadataJson") String metadataJson);
+    int updateFileRecordStatus(
+            @Param("fileId") Long fileId,
+            @Param("previousStatus") String previousStatus,
+            @Param("fileStatus") String fileStatus,
+            @Param("metadataJson") String metadataJson);
 
-  int updateFileRecordMetadata(
-      @Param("fileId") Long fileId, @Param("metadataJson") String metadataJson);
+    int updateFileRecordMetadata(@Param("fileId") Long fileId, @Param("metadataJson") String metadataJson);
 
-  int adoptReconciledFileRecord(PlatformReconciledFileAdoptionParam params);
+    int adoptReconciledFileRecord(PlatformReconciledFileAdoptionParam params);
 
-  int insertFileErrorRecord(PlatformFileErrorInsertParam params);
+    int insertFileErrorRecord(PlatformFileErrorInsertParam params);
 
-  int insertFileAuditLog(PlatformFileAuditInsertParam params);
+    int insertFileAuditLog(PlatformFileAuditInsertParam params);
 }

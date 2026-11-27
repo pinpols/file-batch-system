@@ -16,27 +16,28 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /** 使用 Testcontainers Postgres（platform + biz）、Kafka、对象存储和模拟的 orchestrator HTTP 端点加载导入 Worker。 */
 @SpringBootTest(
-    classes = BatchWorkerImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        classes = BatchWorkerImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导入工作器应用集成测试:容器化依赖下应用上下文可正常启动装配")
 class BatchWorkerImportApplicationIntegrationTest extends AbstractIntegrationTest {
 
-  @DynamicPropertySource
-  static void orchestratorStub(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
+    @DynamicPropertySource
+    static void orchestratorStub(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
-  @Autowired
-  ApplicationContext applicationContext;
+    @Autowired
+    ApplicationContext applicationContext;
 
-  @Test
-  @DisplayName("Worker 注册端口与主服务真实绑定端口一致")
-  void shouldRegisterActualBoundPort() {
-    Integer boundPort =
-        applicationContext.getEnvironment().getProperty("local.server.port", Integer.class);
-    assertThat(boundPort).isNotNull().isPositive();
-    assertThat(
-            applicationContext.getBean(AbstractWorkerLoop.class).ensureStarted().getPort())
-        .isEqualTo(boundPort);
-  }
+    @Test
+    @DisplayName("Worker 注册端口与主服务真实绑定端口一致")
+    void shouldRegisterActualBoundPort() {
+        Integer boundPort = applicationContext.getEnvironment().getProperty("local.server.port", Integer.class);
+        assertThat(boundPort).isNotNull().isPositive();
+        assertThat(applicationContext
+                        .getBean(AbstractWorkerLoop.class)
+                        .ensureStarted()
+                        .getPort())
+                .isEqualTo(boundPort);
+    }
 }

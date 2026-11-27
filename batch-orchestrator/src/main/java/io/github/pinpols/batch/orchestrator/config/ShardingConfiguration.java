@@ -27,64 +27,63 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class ShardingConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean
-  public ShardAssignmentProvider shardAssignmentProvider(
-      OutboxProperties outboxProperties, StringRedisTemplate stringRedisTemplate) {
-    if (outboxProperties.getShardingMode() == OutboxProperties.ShardingMode.DYNAMIC) {
-      validateDynamicSharding(outboxProperties.getSharding());
-      String memberId = resolveMemberId(outboxProperties);
-      long memberTtlMs = outboxProperties.getSharding().getMemberTtlMs();
-      Duration memberTtl = Duration.ofMillis(memberTtlMs);
-      String membersKey = outboxProperties.getSharding().getMembersKey();
-      long memberTtlSeconds = memberTtl.toSeconds();
-      log.info(
-          "Outbox sharding mode=DYNAMIC, memberId={}, membersKey={}, memberTtl={}s",
-          memberId,
-          membersKey,
-          memberTtlSeconds);
-      return new RedisShardAssignmentProvider(stringRedisTemplate, memberId, membersKey, memberTtl);
+    @Bean
+    @ConditionalOnMissingBean
+    public ShardAssignmentProvider shardAssignmentProvider(
+            OutboxProperties outboxProperties, StringRedisTemplate stringRedisTemplate) {
+        if (outboxProperties.getShardingMode() == OutboxProperties.ShardingMode.DYNAMIC) {
+            validateDynamicSharding(outboxProperties.getSharding());
+            String memberId = resolveMemberId(outboxProperties);
+            long memberTtlMs = outboxProperties.getSharding().getMemberTtlMs();
+            Duration memberTtl = Duration.ofMillis(memberTtlMs);
+            String membersKey = outboxProperties.getSharding().getMembersKey();
+            long memberTtlSeconds = memberTtl.toSeconds();
+            log.info(
+                    "Outbox sharding mode=DYNAMIC, memberId={}, membersKey={}, memberTtl={}s",
+                    memberId,
+                    membersKey,
+                    memberTtlSeconds);
+            return new RedisShardAssignmentProvider(stringRedisTemplate, memberId, membersKey, memberTtl);
+        }
+        log.info(
+                "Outbox sharding mode=STATIC, shardTotal={}, shardIndex={}",
+                outboxProperties.getShardTotal(),
+                outboxProperties.getShardIndex());
+        return new StaticShardAssignmentProvider(outboxProperties);
     }
-    log.info(
-        "Outbox sharding mode=STATIC, shardTotal={}, shardIndex={}",
-        outboxProperties.getShardTotal(),
-        outboxProperties.getShardIndex());
-    return new StaticShardAssignmentProvider(outboxProperties);
-  }
 
-  private void validateDynamicSharding(OutboxProperties.Sharding sharding) {
-    long heartbeatMs = sharding.getHeartbeatIntervalMs();
-    long memberTtlMs = sharding.getMemberTtlMs();
-    if (heartbeatMs <= 0) {
-      throw new IllegalStateException(
-          "batch.outbox.sharding.heartbeat-interval-ms must be greater than 0");
+    private void validateDynamicSharding(OutboxProperties.Sharding sharding) {
+        long heartbeatMs = sharding.getHeartbeatIntervalMs();
+        long memberTtlMs = sharding.getMemberTtlMs();
+        if (heartbeatMs <= 0) {
+            throw new IllegalStateException("batch.outbox.sharding.heartbeat-interval-ms must be greater than 0");
+        }
+        if (EmptyChecks.isBlank(sharding.getMembersKey())) {
+            throw new IllegalStateException("batch.outbox.sharding.members-key must not be blank");
+        }
+        if (memberTtlMs <= 0 || heartbeatMs > memberTtlMs / 3) {
+            throw new IllegalStateException(
+                    "batch.outbox.sharding.member-ttl-ms must be at least three times heartbeat-interval-ms");
+        }
     }
-    if (EmptyChecks.isBlank(sharding.getMembersKey())) {
-      throw new IllegalStateException("batch.outbox.sharding.members-key must not be blank");
-    }
-    if (memberTtlMs <= 0 || heartbeatMs > memberTtlMs / 3) {
-      throw new IllegalStateException(
-          "batch.outbox.sharding.member-ttl-ms must be at least three times heartbeat-interval-ms");
-    }
-  }
 
-  private String resolveMemberId(OutboxProperties props) {
-    String configured = props.getSharding().getMemberId();
-    if (configured != null && !configured.isBlank()) {
-      return configured;
-    }
-    // K8s Downward API 注入的 POD_NAME 优先；否则 hostname 回退
-    String pod = System.getenv("POD_NAME");
-    if (pod != null && !pod.isBlank()) {
-      return pod;
-    }
-    try {
-      InetAddress localHost = InetAddress.getLocalHost();
-      return localHost.getHostName();
-    } catch (UnknownHostException e) {
-      SwallowedExceptionLogger.info(ShardingConfiguration.class, "catch:UnknownHostException", e);
+    private String resolveMemberId(OutboxProperties props) {
+        String configured = props.getSharding().getMemberId();
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        // K8s Downward API 注入的 POD_NAME 优先；否则 hostname 回退
+        String pod = System.getenv("POD_NAME");
+        if (pod != null && !pod.isBlank()) {
+            return pod;
+        }
+        try {
+            InetAddress localHost = InetAddress.getLocalHost();
+            return localHost.getHostName();
+        } catch (UnknownHostException e) {
+            SwallowedExceptionLogger.info(ShardingConfiguration.class, "catch:UnknownHostException", e);
 
-      return "orchestrator-unknown-" + System.nanoTime();
+            return "orchestrator-unknown-" + System.nanoTime();
+        }
     }
-  }
 }

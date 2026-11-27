@@ -17,83 +17,83 @@ import org.springframework.stereotype.Component;
 @Component
 public class FixedWidthExportFormat extends AbstractExportFormat {
 
-  public FixedWidthExportFormat(ObjectMapper objectMapper) {
-    super(objectMapper);
-  }
-
-  @Override
-  public String formatType() {
-    return FileTemplateFormat.FIXED_WIDTH.code();
-  }
-
-  @Override
-  public long generate(ExportFormatContext ctx) throws Exception {
-    Long batchIdLong;
-    if (EmptyChecks.isNull(ctx.batchId())) {
-      batchIdLong = null;
-    } else {
-      Object rawBatchId = ctx.batchId();
-      String batchIdText = String.valueOf(rawBatchId);
-      batchIdLong = Long.valueOf(batchIdText);
+    public FixedWidthExportFormat(ObjectMapper objectMapper) {
+        super(objectMapper);
     }
-    ExportDataPlugin.DetailPage firstPage =
-        ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
-    boolean resuming = isResuming(ctx);
-    List<ColumnLayout> columns =
-        resolveFixedWidthColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
-    if (columns.isEmpty() && firstPage.rows().isEmpty()) {
-      if (resuming) {
-        // 与分隔符格式同一语义:有断点但无法还原列布局时保留位点与残文件,不能按旧字节登记零行成功。
-        throw new ExportResumeLayoutUnknownException(formatType());
-      }
-      return completeEmptyFirstRun(ctx);
-    }
-    int recordLength = resolveTemplateInt(ctx.jobContext(), "record_length", 0);
-    int headerRows =
-        resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig()).headerRows();
 
-    // ADR-038 P3:首页仅用于列解析(只读、幂等);续跑时 generatePaged 会忽略它、从 resumeCursor 续拉。
-    try (AutoCloseable ignored = strictEncoderScope();
-        ResumableExportFile file = openExportFile(ctx)) {
-      BufferedWriter writer = file.writer();
-      // 续跑时残文件已含表头,不可重写。
-      if (!resuming) {
-        writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows, ctx);
-      }
-      return ExportPageGenerationCoordinator.generatePaged(
-          ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
-            StringBuilder line = new StringBuilder();
-            for (ColumnLayout column : columns) {
-              Object sourceValue = resolveDelimitedValue(batch, detail, column.source());
-              String formattedValue = fixedWidth(sourceValue, column);
-              line.append(formattedValue);
+    @Override
+    public String formatType() {
+        return FileTemplateFormat.FIXED_WIDTH.code();
+    }
+
+    @Override
+    public long generate(ExportFormatContext ctx) throws Exception {
+        Long batchIdLong;
+        if (EmptyChecks.isNull(ctx.batchId())) {
+            batchIdLong = null;
+        } else {
+            Object rawBatchId = ctx.batchId();
+            String batchIdText = String.valueOf(rawBatchId);
+            batchIdLong = Long.valueOf(batchIdText);
+        }
+        ExportDataPlugin.DetailPage firstPage =
+                ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
+        boolean resuming = isResuming(ctx);
+        List<ColumnLayout> columns =
+                resolveFixedWidthColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
+        if (columns.isEmpty() && firstPage.rows().isEmpty()) {
+            if (resuming) {
+                // 与分隔符格式同一语义:有断点但无法还原列布局时保留位点与残文件,不能按旧字节登记零行成功。
+                throw new ExportResumeLayoutUnknownException(formatType());
             }
-            if (recordLength > 0) {
-              String lineText = line.toString();
-              String paddedLine = padRight(lineText, recordLength);
-              line = new StringBuilder(paddedLine);
+            return completeEmptyFirstRun(ctx);
+        }
+        int recordLength = resolveTemplateInt(ctx.jobContext(), "record_length", 0);
+        int headerRows =
+                resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig()).headerRows();
+
+        // ADR-038 P3:首页仅用于列解析(只读、幂等);续跑时 generatePaged 会忽略它、从 resumeCursor 续拉。
+        try (AutoCloseable ignored = strictEncoderScope();
+                ResumableExportFile file = openExportFile(ctx)) {
+            BufferedWriter writer = file.writer();
+            // 续跑时残文件已含表头,不可重写。
+            if (!resuming) {
+                writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows, ctx);
             }
-            writeText(writer, line.toString(), "data-row-" + (rowIndex + 1), null, ctx);
+            return ExportPageGenerationCoordinator.generatePaged(
+                    ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
+                        StringBuilder line = new StringBuilder();
+                        for (ColumnLayout column : columns) {
+                            Object sourceValue = resolveDelimitedValue(batch, detail, column.source());
+                            String formattedValue = fixedWidth(sourceValue, column);
+                            line.append(formattedValue);
+                        }
+                        if (recordLength > 0) {
+                            String lineText = line.toString();
+                            String paddedLine = padRight(lineText, recordLength);
+                            line = new StringBuilder(paddedLine);
+                        }
+                        writeText(writer, line.toString(), "data-row-" + (rowIndex + 1), null, ctx);
+                        writeNewLine(writer, ctx);
+                        if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
+                            writer.flush();
+                        }
+                    });
+        }
+    }
+
+    private void writeFixedWidthHeaderRows(
+            BufferedWriter writer,
+            List<ColumnLayout> columns,
+            int recordLength,
+            int headerRows,
+            ExportFormatContext ctx)
+            throws IOException {
+        int effectiveHeaderRows = Math.max(1, headerRows);
+        String header = fixedWidthLine(columns, recordLength, ColumnLayout::header);
+        for (int i = 0; i < effectiveHeaderRows; i++) {
+            writeText(writer, header, "header-" + (i + 1), null, ctx);
             writeNewLine(writer, ctx);
-            if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
-              writer.flush();
-            }
-          });
+        }
     }
-  }
-
-  private void writeFixedWidthHeaderRows(
-      BufferedWriter writer,
-      List<ColumnLayout> columns,
-      int recordLength,
-      int headerRows,
-      ExportFormatContext ctx)
-      throws IOException {
-    int effectiveHeaderRows = Math.max(1, headerRows);
-    String header = fixedWidthLine(columns, recordLength, ColumnLayout::header);
-    for (int i = 0; i < effectiveHeaderRows; i++) {
-      writeText(writer, header, "header-" + (i + 1), null, ctx);
-      writeNewLine(writer, ctx);
-    }
-  }
 }

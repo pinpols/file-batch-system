@@ -17,29 +17,28 @@ import java.util.List;
 
 public interface ConsoleConfigApplicationService {
 
-  List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request);
+    List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request);
 
-  List<ConfigGovernanceItemResponse> configGovernanceCatalog();
+    List<ConfigGovernanceItemResponse> configGovernanceCatalog();
 
-  Long createConfigRelease(ConfigReleaseUpsertRequest request);
+    Long createConfigRelease(ConfigReleaseUpsertRequest request);
 
-  String rollbackConfigRelease(Long releaseId, ConfigReleaseActionRequest request);
+    String rollbackConfigRelease(Long releaseId, ConfigReleaseActionRequest request);
 
-  List<ConsoleSecretVersionResponse> secretVersions(SecretVersionQueryRequest request);
+    List<ConsoleSecretVersionResponse> secretVersions(SecretVersionQueryRequest request);
 
-  Long rotateSecretVersion(SecretVersionRotateRequest request);
+    Long rotateSecretVersion(SecretVersionRotateRequest request);
 
-  void revokeSecretVersion(Long secretVersionId, SecretVersionRevokeRequest request);
+    void revokeSecretVersion(Long secretVersionId, SecretVersionRevokeRequest request);
 
-  List<ConsoleConfigChangeLogResponse> configChangeLogs(ConfigChangeLogQueryRequest request);
+    List<ConsoleConfigChangeLogResponse> configChangeLogs(ConfigChangeLogQueryRequest request);
 
-  ConsoleConfigReleaseResponse configReleaseDetail(String tenantId, Long releaseId);
+    ConsoleConfigReleaseResponse configReleaseDetail(String tenantId, Long releaseId);
 
-  ConsoleSecretVersionResponse secretVersionDetail(String tenantId, Long secretVersionId);
+    ConsoleSecretVersionResponse secretVersionDetail(String tenantId, Long secretVersionId);
 
-  ConfigReleaseDiffResponse diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB);
+    ConfigReleaseDiffResponse diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB);
 
-  /** 返回引用了 channel/template/calendar/window/queue 的 job 和 workflow。 */
-  ConfigDependenciesResponse configDependencies(
-      String tenantId, String configType, String configCode);
+    /** 返回引用了 channel/template/calendar/window/queue 的 job 和 workflow。 */
+    ConfigDependenciesResponse configDependencies(String tenantId, String configType, String configCode);
 }

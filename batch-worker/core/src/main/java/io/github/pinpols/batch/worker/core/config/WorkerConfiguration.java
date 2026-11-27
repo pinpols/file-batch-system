@@ -8,30 +8,30 @@ import java.util.List;
  */
 public interface WorkerConfiguration {
 
-  /** 固定 worker 标识符；设置后直接用作 workerId。 */
-  String workerCode();
+    /** 固定 worker 标识符；设置后直接用作 workerId。 */
+    String workerCode();
 
-  /** Worker 类型判别符（如 "IMPORT"、"EXPORT"、"DISPATCH"）。 */
-  String workerType();
+    /** Worker 类型判别符（如 "IMPORT"、"EXPORT"、"DISPATCH"）。 */
+    String workerType();
 
-  /** 该 worker 实例所属租户。 */
-  String tenantId();
+    /** 该 worker 实例所属租户。 */
+    String tenantId();
 
-  /** 心跳间隔毫秒数（可为 null，调用方须应用默认值）。 */
-  Long heartbeatIntervalMillis();
+    /** 心跳间隔毫秒数（可为 null，调用方须应用默认值）。 */
+    Long heartbeatIntervalMillis();
 
-  /** worker 消费的 Kafka topic。 */
-  String topic();
+    /** worker 消费的 Kafka topic。 */
+    String topic();
 
-  /** Kafka 消费者组 ID。 */
-  String consumerGroupId();
+    /** Kafka 消费者组 ID。 */
+    String consumerGroupId();
 
-  /**
-   * 能力标签列表，心跳上报到 orchestrator 后写入 {@code worker_registry.capability_tags} JSONB。 配合带 {@code
-   * resource_tag} 的 queue 做细粒度路由（参见 {@code DefaultWorkerSelector.matchesResourceTag}）。
-   * 默认返回空列表；worker 实现若不覆写等同于「不声明任何能力」。
-   */
-  default List<String> capabilityTags() {
-    return List.of();
-  }
+    /**
+     * 能力标签列表，心跳上报到 orchestrator 后写入 {@code worker_registry.capability_tags} JSONB。 配合带 {@code
+     * resource_tag} 的 queue 做细粒度路由（参见 {@code DefaultWorkerSelector.matchesResourceTag}）。
+     * 默认返回空列表；worker 实现若不覆写等同于「不声明任何能力」。
+     */
+    default List<String> capabilityTags() {
+        return List.of();
+    }
 }

@@ -27,71 +27,71 @@ import java.util.Map;
 @SuppressWarnings("java:S2583")
 public final class JsonUtils {
 
-  private static final ObjectMapper MAPPER = new ObjectMapper()
-      .findAndRegisterModules()
-      // 宽容 mapper 默认不开 unknown properties 检查，保持与既有调用兼容
-      .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .findAndRegisterModules()
+            // 宽容 mapper 默认不开 unknown properties 检查，保持与既有调用兼容
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-  private static final ObjectMapper STRICT_MAPPER = new ObjectMapper()
-      .findAndRegisterModules()
-      .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+    private static final ObjectMapper STRICT_MAPPER = new ObjectMapper()
+            .findAndRegisterModules()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
 
-  private JsonUtils() {}
+    private JsonUtils() {}
 
-  /** 创建平台侧默认 mapper，统一注册时间模块，避免业务类各自拼装 Jackson 配置。 */
-  public static ObjectMapper newDefaultMapper() {
-    return new ObjectMapper().findAndRegisterModules();
-  }
-
-  public static String toJson(Object value) {
-    try {
-      return MAPPER.writeValueAsString(value);
-    } catch (JsonProcessingException ex) {
-      throw new IllegalArgumentException("Failed to serialize JSON", ex);
+    /** 创建平台侧默认 mapper，统一注册时间模块，避免业务类各自拼装 Jackson 配置。 */
+    public static ObjectMapper newDefaultMapper() {
+        return new ObjectMapper().findAndRegisterModules();
     }
-  }
 
-  /** 宽容反序列化：未知字段被静默忽略。适合跨版本 / 可扩展 payload。 */
-  public static <T> T fromJson(String json, Class<T> type) {
-    try {
-      return MAPPER.readValue(json, type);
-    } catch (JsonProcessingException ex) {
-      throw new IllegalArgumentException("Failed to parse JSON", ex);
+    public static String toJson(Object value) {
+        try {
+            return MAPPER.writeValueAsString(value);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("Failed to serialize JSON", ex);
+        }
     }
-  }
 
-  /**
-   * 宽容反序列化（泛型版）：用于 {@code List<Foo>} / {@code Map<String, Foo>} 之类参数化类型。 调用方传入 {@link
-   * TypeReference}。
-   */
-  public static <T> T fromJson(String json, TypeReference<T> typeRef) {
-    try {
-      return MAPPER.readValue(json, typeRef);
-    } catch (JsonProcessingException ex) {
-      throw new IllegalArgumentException("Failed to parse JSON", ex);
+    /** 宽容反序列化：未知字段被静默忽略。适合跨版本 / 可扩展 payload。 */
+    public static <T> T fromJson(String json, Class<T> type) {
+        try {
+            return MAPPER.readValue(json, type);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("Failed to parse JSON", ex);
+        }
     }
-  }
 
-  /**
-   * 严格反序列化：未知字段直接抛 {@link IllegalArgumentException}。S-1.6：适合契约 DTO / 配置文件 /
-   * 受信任内部序列化，能在字段重命名或拼写错误时立即暴露。
-   */
-  public static <T> T fromJsonStrict(String json, Class<T> type) {
-    try {
-      return STRICT_MAPPER.readValue(json, type);
-    } catch (JsonProcessingException ex) {
-      throw new IllegalArgumentException("Failed to parse JSON (strict)", ex);
+    /**
+     * 宽容反序列化（泛型版）：用于 {@code List<Foo>} / {@code Map<String, Foo>} 之类参数化类型。 调用方传入 {@link
+     * TypeReference}。
+     */
+    public static <T> T fromJson(String json, TypeReference<T> typeRef) {
+        try {
+            return MAPPER.readValue(json, typeRef);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("Failed to parse JSON", ex);
+        }
     }
-  }
 
-  /**
-   * POJO → Map(LinkedHashMap)。给 DomainEventPublisher 之类的 payload 抽象用,避免 toJson + fromJson 二次序列化。
-   */
-  @SuppressWarnings("unchecked")
-  public static Map<String, Object> toMap(Object value) {
-    if (value == null) {
-      return Map.of();
+    /**
+     * 严格反序列化：未知字段直接抛 {@link IllegalArgumentException}。S-1.6：适合契约 DTO / 配置文件 /
+     * 受信任内部序列化，能在字段重命名或拼写错误时立即暴露。
+     */
+    public static <T> T fromJsonStrict(String json, Class<T> type) {
+        try {
+            return STRICT_MAPPER.readValue(json, type);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("Failed to parse JSON (strict)", ex);
+        }
     }
-    return MAPPER.convertValue(value, LinkedHashMap.class);
-  }
+
+    /**
+     * POJO → Map(LinkedHashMap)。给 DomainEventPublisher 之类的 payload 抽象用,避免 toJson + fromJson 二次序列化。
+     */
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> toMap(Object value) {
+        if (value == null) {
+            return Map.of();
+        }
+        return MAPPER.convertValue(value, LinkedHashMap.class);
+    }
 }

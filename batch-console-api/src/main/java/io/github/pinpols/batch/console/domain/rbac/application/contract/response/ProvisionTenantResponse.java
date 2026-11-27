@@ -12,6 +12,4 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ProvisionTenantResponse(
-    ConsoleTenantResponse tenant,
-    TenantConfigBatchInitResponse configInit,
-    TenantReadinessResponse readiness) {}
+        ConsoleTenantResponse tenant, TenantConfigBatchInitResponse configInit, TenantReadinessResponse readiness) {}

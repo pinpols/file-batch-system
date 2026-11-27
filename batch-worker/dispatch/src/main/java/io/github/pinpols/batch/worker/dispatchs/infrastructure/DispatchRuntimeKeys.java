@@ -11,22 +11,22 @@ import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
  */
 public final class DispatchRuntimeKeys {
 
-  public static final String DISPATCH_PAYLOAD = "dispatchPayload";
-  public static final String DISPATCH_RESULT = "dispatchResult";
-  public static final String DISPATCH_MANIFEST_REF = "dispatchManifestRef";
-  public static final String DISPATCH_RECORD = "dispatchRecord";
-  public static final String EXTERNAL_REQUEST_ID = "externalRequestId";
-  public static final String RECEIPT_CODE = "receiptCode";
-  public static final String RECEIPT_STATUS = "receiptStatus";
-  public static final String RETRY_REQUESTED = "retryRequested";
-  public static final String RETRY_RECOVERED = "retryRecovered";
-  public static final String DISPATCH_SECRET_BINDINGS = DispatchTaskKeys.SECRET_BINDINGS;
+    public static final String DISPATCH_PAYLOAD = "dispatchPayload";
+    public static final String DISPATCH_RESULT = "dispatchResult";
+    public static final String DISPATCH_MANIFEST_REF = "dispatchManifestRef";
+    public static final String DISPATCH_RECORD = "dispatchRecord";
+    public static final String EXTERNAL_REQUEST_ID = "externalRequestId";
+    public static final String RECEIPT_CODE = "receiptCode";
+    public static final String RECEIPT_STATUS = "receiptStatus";
+    public static final String RETRY_REQUESTED = "retryRequested";
+    public static final String RETRY_RECOVERED = "retryRecovered";
+    public static final String DISPATCH_SECRET_BINDINGS = DispatchTaskKeys.SECRET_BINDINGS;
 
-  /** 渠道编码键：dispatch payload 字段、file_record metadata 与审计明细三处同名同义。 */
-  public static final String CHANNEL_CODE = "channelCode";
+    /** 渠道编码键：dispatch payload 字段、file_record metadata 与审计明细三处同名同义。 */
+    public static final String CHANNEL_CODE = "channelCode";
 
-  /** 分发目标键：语义同 {@link #CHANNEL_CODE}，三处同名同义。 */
-  public static final String DISPATCH_TARGET = "dispatchTarget";
+    /** 分发目标键：语义同 {@link #CHANNEL_CODE}，三处同名同义。 */
+    public static final String DISPATCH_TARGET = "dispatchTarget";
 
-  private DispatchRuntimeKeys() {}
+    private DispatchRuntimeKeys() {}
 }

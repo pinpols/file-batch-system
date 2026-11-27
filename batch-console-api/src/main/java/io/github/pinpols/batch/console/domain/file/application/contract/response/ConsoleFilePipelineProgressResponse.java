@@ -3,7 +3,4 @@ package io.github.pinpols.batch.console.domain.file.application.contract.respons
 import java.util.List;
 
 public record ConsoleFilePipelineProgressResponse(
-    Long pipelineInstanceId,
-    Long fileId,
-    String fileName,
-    List<ConsoleFilePipelineStepProgressResponse> steps) {}
+        Long pipelineInstanceId, Long fileId, String fileName, List<ConsoleFilePipelineStepProgressResponse> steps) {}

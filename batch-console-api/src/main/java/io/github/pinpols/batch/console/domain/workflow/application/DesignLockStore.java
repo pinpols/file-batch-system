@@ -5,11 +5,11 @@ import java.time.Duration;
 /** Workflow 设计器编辑锁存储端口。 */
 public interface DesignLockStore {
 
-  Boolean acquire(String key, String payload, Duration ttl);
+    Boolean acquire(String key, String payload, Duration ttl);
 
-  Long release(String key, String userId);
+    Long release(String key, String userId);
 
-  Long renew(String key, String userId, String payload, long ttlMillis);
+    Long renew(String key, String userId, String payload, long ttlMillis);
 
-  String get(String key);
+    String get(String key);
 }

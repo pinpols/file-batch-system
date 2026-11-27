@@ -39,630 +39,621 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("流程有向图服务: 出边解析, 汇聚就绪判定与不可达下游级联跳过口径")
 class DefaultWorkflowDagServiceTest {
 
-  private WorkflowEdgeMapper edgeMapper;
-  private WorkflowNodeMapper nodeMapper;
-  private WorkflowNodeRunMapper nodeRunMapper;
-  private WorkflowConditionEvaluator conditionEvaluator;
-  private DefaultWorkflowDagService dagService;
-
-  @BeforeEach
-  void setUp() {
-    edgeMapper = mock(WorkflowEdgeMapper.class);
-    nodeMapper = mock(WorkflowNodeMapper.class);
-    nodeRunMapper = mock(WorkflowNodeRunMapper.class);
-    conditionEvaluator = mock(WorkflowConditionEvaluator.class);
-    // R3-P2-4：DagService 新增 MeterRegistry ObjectProvider 依赖；测试用空 provider（getIfAvailable→null）
-    @SuppressWarnings("unchecked")
-    ObjectProvider<MeterRegistry> meterProvider = mock(ObjectProvider.class);
-    dagService = new DefaultWorkflowDagService(
-        edgeMapper, nodeMapper, nodeRunMapper, conditionEvaluator, meterProvider);
-
-    // S3：原 tests 用 selectLatestByWorkflowRunIdAndNodeCode 单条 stub；
-    // service 内已切换为 selectLatestByWorkflowRunIdAndNodeCodesIn 批量。
-    // 在这里把批量 method 转发到单条 stub，原测试逻辑无需逐个改写。
-    lenient()
-        .when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(anyLong(), any()))
-        .thenAnswer(inv -> {
-          Long runId = inv.getArgument(0);
-          Collection<String> codes = inv.getArgument(1);
-          List<WorkflowNodeRunEntity> out = new ArrayList<>();
-          for (String c : codes) {
-            WorkflowNodeRunEntity e =
-                nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(runId, c);
-            if (e != null) {
-              out.add(e);
-            }
-          }
-          return out;
-        });
-
-    // 同样转发节点定义批量查询（resolveNextNodes 路径）
-    lenient()
-        .when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCodesIn(any(), any()))
-        .thenAnswer(inv -> {
-          Long defId = inv.getArgument(0);
-          Collection<String> codes = inv.getArgument(1);
-          List<WorkflowNodeEntity> out = new ArrayList<>();
-          for (String c : codes) {
-            WorkflowNodeEntity e = nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(defId, c);
-            if (e != null) {
-              out.add(e);
-            }
-          }
-          return out;
-        });
-  }
-
-  // ── resolveNextNodes ──────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("定义标识为空时解析下一节点返回空")
-  void shouldReturnEmptyWhenDefinitionIdIsNull() {
-    assertThat(dagService.resolveNextNodes(null, "START", true, null)).isEmpty();
-  }
-
-  @Test
-  @DisplayName("当前节点编码为空白时解析下一节点返回空")
-  void shouldReturnEmptyWhenCurrentNodeCodeIsBlank() {
-    assertThat(dagService.resolveNextNodes(1L, "  ", true, null)).isEmpty();
-  }
-
-  @Test
-  @DisplayName("当前节点没有出边时解析下一节点返回空")
-  void shouldReturnEmptyWhenNoOutgoingEdges() {
-    when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of());
-
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, null)).isEmpty();
-  }
-
-  @Test
-  @DisplayName("无条件边在成功与失败两种情况下都按原样跟随")
-  void shouldFollowAlwaysEdgeRegardlessOfSuccess() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.ALWAYS, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_B"))
-        .thenReturn(node("NODE_B", WorkflowNodeType.TASK.code()));
-
-    List<WorkflowDagService.DagNodeResolution> result =
-        dagService.resolveNextNodes(1L, "NODE_A", false, null);
-
-    assertThat(result).hasSize(1);
-    assertThat(result.get(0).nodeCode()).isEqualTo("NODE_B");
-  }
-
-  @Test
-  @DisplayName("运行快照存在时解析固定拓扑,不读取已编辑的实时定义")
-  void shouldResolveNextNodeFromRunSnapshotAfterDefinitionChanges() {
-    WorkflowEdgeEntity pinnedEdge = edge("NODE_A", "PINNED_NODE", Edge.ALWAYS, null);
-    pinnedEdge.setEnabled(true);
-    pinnedEdge.setTenantId("tenant-a");
-    pinnedEdge.setWorkflowDefinitionId(9L);
-    WorkflowNodeEntity sourceNode = node("NODE_A", WorkflowNodeType.TASK.code());
-    sourceNode.setTenantId("tenant-a");
-    sourceNode.setWorkflowDefinitionId(9L);
-    WorkflowNodeEntity pinnedNode = node("PINNED_NODE", WorkflowNodeType.JOB.code());
-    pinnedNode.setTenantId("tenant-a");
-    pinnedNode.setWorkflowDefinitionId(9L);
-    pinnedNode.setRelatedJobCode("PINNED_JOB");
-    WorkflowNodeEntity editedNode = node("LIVE_EDITED_NODE", WorkflowNodeType.JOB.code());
-    editedNode.setTenantId("tenant-a");
-    editedNode.setWorkflowDefinitionId(9L);
-    editedNode.setRelatedJobCode("EDITED_JOB");
-    WorkflowRunEntity run = new WorkflowRunEntity();
-    run.setId(77L);
-    run.setTenantId("tenant-a");
-    run.setWorkflowDefinitionId(9L);
-    run.setWorkflowVersionSnapshot(3);
-    run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
-        "schemaVersion",
-        2,
-        "workflowDefinitionId",
-        9,
-        "workflowVersion",
-        3,
-        "nodes",
-        List.of(sourceNode, pinnedNode, editedNode),
-        "edges",
-        List.of(pinnedEdge),
-        "jobDefinitions",
-        Map.of(
-            "PINNED_NODE", frozenJob("PINNED_JOB"),
-            "LIVE_EDITED_NODE", frozenJob("EDITED_JOB")))));
-
-    List<WorkflowDagService.DagNodeResolution> result =
-        dagService.resolveNextNodesForRun(run, "NODE_A", true, null);
-
-    assertThat(result)
-        .containsExactly(
-            new WorkflowDagService.DagNodeResolution("PINNED_NODE", WorkflowNodeType.JOB.code()));
-    verify(edgeMapper, never()).selectOutgoingEdges(9L, "NODE_A");
-    verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCode(9L, "PINNED_NODE");
-  }
-
-  @Test
-  @DisplayName("成功边只在成功时跟随, 失败时不跟随")
-  void shouldFollowSuccessEdgeOnlyWhenSuccessTrue() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.SUCCESS, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
-        .thenReturn(node("NODE_B", WorkflowNodeType.TASK.code()));
-
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, null)).hasSize(1);
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", false, null)).isEmpty();
-  }
-
-  @Test
-  @DisplayName("失败边只在失败时跟随, 成功时不跟随")
-  void shouldFollowFailureEdgeOnlyWhenSuccessFalse() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_ERROR", Edge.FAILURE, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
-        .thenReturn(node("NODE_ERROR", WorkflowNodeType.TASK.code()));
-
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", false, null)).hasSize(1);
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, null)).isEmpty();
-  }
-
-  @Test
-  @DisplayName("成功且条件成立时跟随条件边")
-  void shouldFollowConditionEdgeWhenSuccessAndConditionMet() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "amount > 100");
-    when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
-    when(conditionEvaluator.matches(eq("amount > 100"), anyString())).thenReturn(true);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
-        .thenReturn(node("NODE_B", WorkflowNodeType.TASK.code()));
-
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, "{\"amount\":200}"))
-        .hasSize(1);
-  }
-
-  @Test
-  @DisplayName("条件不成立时跳过条件边")
-  void shouldSkipConditionEdgeWhenConditionNotMet() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "amount > 100");
-    when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
-    when(conditionEvaluator.matches(anyString(), anyString())).thenReturn(false);
-
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, "{\"amount\":50}"))
-        .isEmpty();
-  }
-
-  @Test
-  @DisplayName("上游失败时条件边一律跳过")
-  void shouldSkipConditionEdgeOnFailure() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "x = 1");
-    when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
-
-    // success=false → condition edge is always skipped
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", false, "{}")).isEmpty();
-  }
-
-  @Test
-  @DisplayName("下一节点查不到定义时按终点类型返回, 节点编码保持不变")
-  void shouldReturnEndTypeWhenNextNodeNotInMapper() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_UNKNOWN", Edge.ALWAYS, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_UNKNOWN")).thenReturn(null);
-
-    List<WorkflowDagService.DagNodeResolution> result =
-        dagService.resolveNextNodes(1L, "NODE_A", true, null);
-
-    assertThat(result).hasSize(1);
-    assertThat(result.get(0).nodeCode()).isEqualTo("NODE_UNKNOWN");
-    assertThat(result.get(0).nodeType()).isEqualTo(WorkflowNodeType.END.code());
-  }
-
-  // ── isNodeReadyForDispatch ────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("流程运行标识为空时判定节点不可派发")
-  void shouldReturnFalseWhenWorkflowRunIdIsNull() {
-    assertThat(dagService.isNodeReadyForDispatch(null, 1L, "NODE_A", null)).isFalse();
-  }
-
-  @Test
-  @DisplayName("定义标识为空时判定节点不可派发")
-  void shouldReturnFalseWhenDefinitionIdIsNull() {
-    assertThat(dagService.isNodeReadyForDispatch(1L, null, "NODE_A", null)).isFalse();
-  }
-
-  @Test
-  @DisplayName("节点编码为空白时判定节点不可派发")
-  void shouldReturnFalseWhenNodeCodeIsBlank() {
-    assertThat(dagService.isNodeReadyForDispatch(1L, 1L, "", null)).isFalse();
-  }
-
-  @Test
-  @DisplayName("节点没有入边时判定可以派发")
-  void shouldReturnTrueWhenNoIncomingEdges() {
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
-        .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code()));
-    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of());
-
-    assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
-  }
-
-  @Test
-  @DisplayName("全量汇聚模式下上游全部成功时判定可以派发")
-  void shouldReturnTrueForAllJoinWhenAllPredecessorsSucceeded() {
-    WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
-    WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
-    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(edge1, edge2));
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A"))
-        .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code())); // no nodeParams → ALL mode
-
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
-        .thenReturn(nodeRun("PRED_1", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_2"))
-        .thenReturn(nodeRun("PRED_2", Workflow.SUCCESS));
-
-    assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
-  }
-
-  @Test
-  @DisplayName("全量汇聚模式下存在未终态的上游时判定不可派发")
-  void shouldReturnFalseForAllJoinWhenOnePredecessorNotTerminal() {
-    WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
-    WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
-    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(edge1, edge2));
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A"))
-        .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code()));
-
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
-        .thenReturn(nodeRun("PRED_1", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_2"))
-        .thenReturn(null); // not yet started
-
-    assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isFalse();
-  }
-
-  @Test
-  @DisplayName("操作员跳过的上游放行无条件边与成功边, 其他跳过原因不放行")
-  void shouldReleaseOnlyOperatorSkippedPredecessor() {
-    assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "SKIPPED", "OPERATOR_SKIPPED"))
-        .isTrue();
-    assertThat(readyWithSinglePredecessor(Edge.SUCCESS, "SKIPPED", "OPERATOR_SKIPPED"))
-        .isTrue();
-    assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "SKIPPED", "UPSTREAM_FAILED"))
-        .isFalse();
-    assertThat(readyWithSinglePredecessor(Edge.SUCCESS, "SKIPPED", "UPSTREAM_SKIPPED"))
-        .isFalse();
-    assertThat(readyWithSinglePredecessor(Edge.FAILURE, "SKIPPED", "OPERATOR_SKIPPED"))
-        .isFalse();
-  }
-
-  @Test
-  @DisplayName("等待跨日依赖的上游不是 DAG 终态; 状态码大小写不影响判定")
-  void shouldUseDagTerminalStatusesCaseInsensitively() {
-    assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "WAITING_DEPENDENCY", null))
-        .isFalse();
-    assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "RUNNING", null)).isFalse();
-    assertThat(readyWithSinglePredecessor(Edge.SUCCESS, "success", null)).isTrue();
-    assertThat(readyWithSinglePredecessor(Edge.FAILURE, "failed", null)).isTrue();
-  }
-
-  private boolean readyWithSinglePredecessor(
-      String edgeType, String predecessorStatus, String skipReasonCode) {
-    WorkflowEdgeEntity incoming = edge("PRED_1", "NODE_A", edgeType, null);
-    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(incoming));
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A"))
-        .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code()));
-    WorkflowNodeRunEntity predecessor = nodeRun("PRED_1", predecessorStatus);
-    predecessor.setSkipReasonCode(skipReasonCode);
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
-        .thenReturn(predecessor);
-    return dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null);
-  }
-
-  @Test
-  @DisplayName("任一汇聚模式下存在命中的上游时判定可以派发")
-  void shouldReturnTrueForAnyJoinWhenAtLeastOnePredecessorMatches() {
-    WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
-    WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
-    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(edge1, edge2));
-
-    WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
-    joinNode.setNodeParams("{\"joinMode\":\"ANY\"}");
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
-
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
-        .thenReturn(nodeRun("PRED_1", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_2")).thenReturn(null);
-
-    assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
-  }
-
-  @Test
-  @DisplayName("按数量汇聚模式下命中数达到阈值时判定可以派发")
-  void shouldReturnTrueForNOfJoinWhenThresholdMet() {
-    WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
-    WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
-    WorkflowEdgeEntity e3 = edge("P3", "NODE_A", Edge.SUCCESS, null);
-    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(e1, e2, e3));
-
-    WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
-    joinNode.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":2}");
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
-
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P1"))
-        .thenReturn(nodeRun("P1", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P2"))
-        .thenReturn(nodeRun("P2", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P3")).thenReturn(null);
-
-    assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
-  }
-
-  @Test
-  @DisplayName("数学整数阈值 1.0 与阈值 1 按相同语义汇聚")
-  void shouldTreatIntegralDecimalJoinThresholdAsInteger() {
-    WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
-    WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
-    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(e1, e2));
-    WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
-    joinNode.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":1.0}");
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P1"))
-        .thenReturn(nodeRun("P1", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P2")).thenReturn(null);
-    assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
-  }
-
-  @Test
-  @DisplayName("按数量汇聚模式下命中数未达阈值时判定不可派发")
-  void shouldReturnFalseForNOfJoinWhenThresholdNotMet() {
-    WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
-    WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
-    WorkflowEdgeEntity e3 = edge("P3", "NODE_A", Edge.SUCCESS, null);
-    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(e1, e2, e3));
-
-    WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
-    joinNode.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":3}");
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
-
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P1"))
-        .thenReturn(nodeRun("P1", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P2"))
-        .thenReturn(nodeRun("P2", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P3")).thenReturn(null);
-
-    assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isFalse();
-  }
-
-  // ── cascadeSkipDownstream ─────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("级联跳过的输入缺失时返回空集合")
-  void shouldReturnEmpty_whenCascadeSkipInputsMissing() {
-    assertThat(dagService.cascadeSkipDownstream(null, 1L, "X")).isEmpty();
-    assertThat(dagService.cascadeSkipDownstream(10L, null, "X")).isEmpty();
-    assertThat(dagService.cascadeSkipDownstream(10L, 1L, " ")).isEmpty();
-  }
-
-  @Test
-  @DisplayName("成功边因上游失败而永不可触发时, 为下游写入跳过记录")
-  void shouldWriteSkippedRow_whenSuccessEdgeCannotFire() {
-    // FAIL_NODE --SUCCESS--> NEXT (NEXT 仅此一条入边，FAIL_NODE 已 FAILED → NEXT 永远无法触发)
-    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "NEXT", Edge.SUCCESS, null);
-    WorkflowEdgeEntity incoming = edge("FAIL_NODE", "NEXT", Edge.SUCCESS, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
-    when(edgeMapper.selectIncomingEdges(1L, "NEXT")).thenReturn(List.of(incoming));
-    when(edgeMapper.selectOutgoingEdges(1L, "NEXT")).thenReturn(List.of());
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
-        .thenReturn(nodeRun("FAIL_NODE", Workflow.FAILED));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "NEXT")).thenReturn(null);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NEXT"))
-        .thenReturn(node("NEXT", WorkflowNodeType.TASK.code()));
-
-    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
-
-    assertThat(skipped).containsExactly("NEXT");
-    ArgumentCaptor<WorkflowNodeRunEntity> inserted =
-        ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
-    verify(nodeRunMapper).insert(inserted.capture());
-    assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
-    assertThat(inserted.getValue().getSkipReason()).isNull();
-  }
-
-  @Test
-  @DisplayName("汇聚节点仍有存活的上游时不被级联跳过")
-  void shouldNotSkip_whenJoinNodeHasLiveUpstream() {
-    // FAIL_NODE --SUCCESS--> JOIN
-    // OK_NODE  --SUCCESS--> JOIN  (OK_NODE 还 RUNNING，JOIN 不应被预先 skip)
-    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "JOIN", Edge.SUCCESS, null);
-    WorkflowEdgeEntity inFromFail = edge("FAIL_NODE", "JOIN", Edge.SUCCESS, null);
-    WorkflowEdgeEntity inFromOk = edge("OK_NODE", "JOIN", Edge.SUCCESS, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
-    when(edgeMapper.selectIncomingEdges(1L, "JOIN")).thenReturn(List.of(inFromFail, inFromOk));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
-        .thenReturn(nodeRun("FAIL_NODE", Workflow.FAILED));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "OK_NODE"))
-        .thenReturn(nodeRun("OK_NODE", Workflow.RUNNING));
-
-    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
-
-    assertThat(skipped).isEmpty();
-    verify(nodeRunMapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("ALL 汇聚的全部上游终态但部分边匹配时必须记录未满足原因")
-  void shouldSkipAllJoinWhenTerminalPredecessorsCannotSatisfyEveryIncomingEdge() {
-    WorkflowEdgeEntity fromSuccess = edge("SUCCESS_NODE", "JOIN", Edge.SUCCESS, null);
-    WorkflowEdgeEntity fromFailure = edge("FAILED_NODE", "JOIN", Edge.SUCCESS, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "FAILED_NODE")).thenReturn(List.of(fromFailure));
-    when(edgeMapper.selectIncomingEdges(1L, "JOIN")).thenReturn(List.of(fromSuccess, fromFailure));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "SUCCESS_NODE"))
-        .thenReturn(nodeRun("SUCCESS_NODE", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAILED_NODE"))
-        .thenReturn(nodeRun("FAILED_NODE", Workflow.FAILED));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "JOIN")).thenReturn(null);
-    when(edgeMapper.selectOutgoingEdges(1L, "JOIN")).thenReturn(List.of());
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "JOIN"))
-        .thenReturn(node("JOIN", WorkflowNodeType.TASK.code()));
-
-    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAILED_NODE");
-
-    assertThat(skipped).containsExactly("JOIN");
-    ArgumentCaptor<WorkflowNodeRunEntity> inserted =
-        ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
-    verify(nodeRunMapper).insert(inserted.capture());
-    assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
-  }
-
-  @Test
-  @DisplayName("N_OF 汇聚达不到阈值时即使有一条匹配边也必须记录跳过原因")
-  void shouldSkipNOfJoinWhenAllPredecessorsAreTerminalBelowThreshold() {
-    WorkflowEdgeEntity fromSuccess = edge("SUCCESS_NODE", "JOIN", Edge.SUCCESS, null);
-    WorkflowEdgeEntity fromFirstFailure = edge("FAILED_NODE_1", "JOIN", Edge.SUCCESS, null);
-    WorkflowEdgeEntity fromLastFailure = edge("FAILED_NODE_2", "JOIN", Edge.SUCCESS, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "FAILED_NODE_2")).thenReturn(List.of(fromLastFailure));
-    when(edgeMapper.selectIncomingEdges(1L, "JOIN"))
-        .thenReturn(List.of(fromSuccess, fromFirstFailure, fromLastFailure));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "SUCCESS_NODE"))
-        .thenReturn(nodeRun("SUCCESS_NODE", Workflow.SUCCESS));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAILED_NODE_1"))
-        .thenReturn(nodeRun("FAILED_NODE_1", Workflow.FAILED));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAILED_NODE_2"))
-        .thenReturn(nodeRun("FAILED_NODE_2", Workflow.FAILED));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "JOIN")).thenReturn(null);
-    when(edgeMapper.selectOutgoingEdges(1L, "JOIN")).thenReturn(List.of());
-    WorkflowNodeEntity join = node("JOIN", WorkflowNodeType.TASK.code());
-    join.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":2}");
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "JOIN")).thenReturn(join);
-
-    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAILED_NODE_2");
-
-    assertThat(skipped).containsExactly("JOIN");
-    ArgumentCaptor<WorkflowNodeRunEntity> inserted =
-        ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
-    verify(nodeRunMapper).insert(inserted.capture());
-    assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
-  }
-
-  @Test
-  @DisplayName("失败边能匹配上游状态时下游不被级联跳过")
-  void shouldNotSkip_whenFailureEdgeMatchesPredecessor() {
-    // FAIL_NODE --FAILURE--> CATCH (FAILURE 边匹配 FAILED 上游，CATCH 仍可正常派发)
-    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "CATCH", Edge.FAILURE, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
-
-    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
-
-    assertThat(skipped).isEmpty();
-    verify(nodeRunMapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("失败节点之后沿成功边成链时逐级向下游传播跳过")
-  void shouldRecurseSkipping_whenChainFollowsFailedNode() {
-    // FAIL_NODE --SUCCESS--> A --SUCCESS--> B (两条 SUCCESS 边，FAIL_NODE FAILED → A、B 都 skip)
-    WorkflowEdgeEntity failToA = edge("FAIL_NODE", "A", Edge.SUCCESS, null);
-    WorkflowEdgeEntity aToB = edge("A", "B", Edge.SUCCESS, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(failToA));
-    when(edgeMapper.selectOutgoingEdges(1L, "A")).thenReturn(List.of(aToB));
-    when(edgeMapper.selectOutgoingEdges(1L, "B")).thenReturn(List.of());
-    when(edgeMapper.selectIncomingEdges(1L, "A")).thenReturn(List.of(failToA));
-    when(edgeMapper.selectIncomingEdges(1L, "B")).thenReturn(List.of(aToB));
-
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
-        .thenReturn(nodeRun("FAIL_NODE", Workflow.FAILED));
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "A"))
-        .thenReturn(null) // canNeverFire 时 A 还没 node_run
-        .thenReturn(nodeRun("A", "SKIPPED")); // 级联到 B 时 A 已被插为 SKIPPED
-    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "B")).thenReturn(null);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
-        .thenReturn(node("DUMMY", WorkflowNodeType.TASK.code()));
-
-    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
-
-    assertThat(skipped).containsExactly("A", "B");
-  }
-
-  @Test
-  @DisplayName("终点节点不被写入跳过记录, 交由调度路径处理")
-  void shouldNotWriteSkippedRow_whenNodeIsEnd() {
-    // FAIL_NODE --SUCCESS--> END (END 节点不写 SKIPPED 行，由调度路径处理)
-    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "END", Edge.SUCCESS, null);
-    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
-
-    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
-
-    assertThat(skipped).isEmpty();
-    verify(nodeRunMapper, never()).insert(any());
-  }
-
-  @Test
-  @DisplayName("预加载图按 id 顺序解析 START 出边并忽略禁用边")
-  void shouldResolveInitialNodesFromPreloadedGraph() {
-    WorkflowEdgeEntity disabled = edge("START", "DISABLED_NODE", Edge.ALWAYS, null);
-    disabled.setEnabled(false);
-    WorkflowEdgeEntity toJob = edge("START", "JOB_A", Edge.ALWAYS, null);
-    toJob.setEnabled(true);
-    WorkflowEdgeEntity toMissing = edge("START", "MISSING", Edge.SUCCESS, null);
-    toMissing.setEnabled(true);
-
-    List<WorkflowDagService.DagNodeResolution> resolutions = dagService.resolveInitialNodes(
-        List.of(node("JOB_A", WorkflowNodeType.JOB.code())),
-        List.of(disabled, toJob, toMissing),
-        "{}");
-
-    assertThat(resolutions)
-        .containsExactly(
-            new WorkflowDagService.DagNodeResolution("JOB_A", WorkflowNodeType.JOB.code()),
-            new WorkflowDagService.DagNodeResolution("MISSING", WorkflowNodeType.END.code()));
-    verify(edgeMapper, never()).selectOutgoingEdges(anyLong(), anyString());
-    verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCodesIn(any(), any());
-  }
-
-  // ── helpers ───────────────────────────────────────────────────────────────
-
-  private static WorkflowEdgeEntity edge(
-      String from, String to, String edgeType, String conditionExpr) {
-    WorkflowEdgeEntity e = new WorkflowEdgeEntity();
-    e.setFromNodeCode(from);
-    e.setToNodeCode(to);
-    e.setEdgeType(edgeType);
-    e.setConditionExpr(conditionExpr);
-    return e;
-  }
-
-  private static WorkflowNodeEntity node(String nodeCode, String nodeType) {
-    WorkflowNodeEntity n = new WorkflowNodeEntity();
-    n.setNodeCode(nodeCode);
-    n.setNodeType(nodeType);
-    return n;
-  }
-
-  private static WorkflowNodeRunEntity nodeRun(String nodeCode, String status) {
-    WorkflowNodeRunEntity run = new WorkflowNodeRunEntity();
-    run.setNodeCode(nodeCode);
-    run.setNodeStatus(status);
-    return run;
-  }
-
-  private static Map<String, Object> frozenJob(String jobCode) {
-    Map<String, Object> executionDefinition = Map.of(
-        "id",
-        jobCode.equals("PINNED_JOB") ? 101 : 102,
-        "tenantId",
-        "tenant-a",
-        "jobCode",
-        jobCode,
-        "jobType",
-        "GENERAL",
-        "version",
-        1);
-    return Map.of(
-        "jobDefinitionId",
-        executionDefinition.get("id"),
-        "jobCode",
-        jobCode,
-        "jobType",
-        "GENERAL",
-        "jobDefinitionVersion",
-        1,
-        "executionDefinition",
-        executionDefinition);
-  }
+    private WorkflowEdgeMapper edgeMapper;
+    private WorkflowNodeMapper nodeMapper;
+    private WorkflowNodeRunMapper nodeRunMapper;
+    private WorkflowConditionEvaluator conditionEvaluator;
+    private DefaultWorkflowDagService dagService;
+
+    @BeforeEach
+    void setUp() {
+        edgeMapper = mock(WorkflowEdgeMapper.class);
+        nodeMapper = mock(WorkflowNodeMapper.class);
+        nodeRunMapper = mock(WorkflowNodeRunMapper.class);
+        conditionEvaluator = mock(WorkflowConditionEvaluator.class);
+        // R3-P2-4：DagService 新增 MeterRegistry ObjectProvider 依赖；测试用空 provider（getIfAvailable→null）
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> meterProvider = mock(ObjectProvider.class);
+        dagService =
+                new DefaultWorkflowDagService(edgeMapper, nodeMapper, nodeRunMapper, conditionEvaluator, meterProvider);
+
+        // S3：原 tests 用 selectLatestByWorkflowRunIdAndNodeCode 单条 stub；
+        // service 内已切换为 selectLatestByWorkflowRunIdAndNodeCodesIn 批量。
+        // 在这里把批量 method 转发到单条 stub，原测试逻辑无需逐个改写。
+        lenient()
+                .when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(anyLong(), any()))
+                .thenAnswer(inv -> {
+                    Long runId = inv.getArgument(0);
+                    Collection<String> codes = inv.getArgument(1);
+                    List<WorkflowNodeRunEntity> out = new ArrayList<>();
+                    for (String c : codes) {
+                        WorkflowNodeRunEntity e = nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(runId, c);
+                        if (e != null) {
+                            out.add(e);
+                        }
+                    }
+                    return out;
+                });
+
+        // 同样转发节点定义批量查询（resolveNextNodes 路径）
+        lenient()
+                .when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCodesIn(any(), any()))
+                .thenAnswer(inv -> {
+                    Long defId = inv.getArgument(0);
+                    Collection<String> codes = inv.getArgument(1);
+                    List<WorkflowNodeEntity> out = new ArrayList<>();
+                    for (String c : codes) {
+                        WorkflowNodeEntity e = nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(defId, c);
+                        if (e != null) {
+                            out.add(e);
+                        }
+                    }
+                    return out;
+                });
+    }
+
+    // ── resolveNextNodes ──────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("定义标识为空时解析下一节点返回空")
+    void shouldReturnEmptyWhenDefinitionIdIsNull() {
+        assertThat(dagService.resolveNextNodes(null, "START", true, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("当前节点编码为空白时解析下一节点返回空")
+    void shouldReturnEmptyWhenCurrentNodeCodeIsBlank() {
+        assertThat(dagService.resolveNextNodes(1L, "  ", true, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("当前节点没有出边时解析下一节点返回空")
+    void shouldReturnEmptyWhenNoOutgoingEdges() {
+        when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of());
+
+        assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("无条件边在成功与失败两种情况下都按原样跟随")
+    void shouldFollowAlwaysEdgeRegardlessOfSuccess() {
+        WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.ALWAYS, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_B"))
+                .thenReturn(node("NODE_B", WorkflowNodeType.TASK.code()));
+
+        List<WorkflowDagService.DagNodeResolution> result = dagService.resolveNextNodes(1L, "NODE_A", false, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).nodeCode()).isEqualTo("NODE_B");
+    }
+
+    @Test
+    @DisplayName("运行快照存在时解析固定拓扑,不读取已编辑的实时定义")
+    void shouldResolveNextNodeFromRunSnapshotAfterDefinitionChanges() {
+        WorkflowEdgeEntity pinnedEdge = edge("NODE_A", "PINNED_NODE", Edge.ALWAYS, null);
+        pinnedEdge.setEnabled(true);
+        pinnedEdge.setTenantId("tenant-a");
+        pinnedEdge.setWorkflowDefinitionId(9L);
+        WorkflowNodeEntity sourceNode = node("NODE_A", WorkflowNodeType.TASK.code());
+        sourceNode.setTenantId("tenant-a");
+        sourceNode.setWorkflowDefinitionId(9L);
+        WorkflowNodeEntity pinnedNode = node("PINNED_NODE", WorkflowNodeType.JOB.code());
+        pinnedNode.setTenantId("tenant-a");
+        pinnedNode.setWorkflowDefinitionId(9L);
+        pinnedNode.setRelatedJobCode("PINNED_JOB");
+        WorkflowNodeEntity editedNode = node("LIVE_EDITED_NODE", WorkflowNodeType.JOB.code());
+        editedNode.setTenantId("tenant-a");
+        editedNode.setWorkflowDefinitionId(9L);
+        editedNode.setRelatedJobCode("EDITED_JOB");
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.setId(77L);
+        run.setTenantId("tenant-a");
+        run.setWorkflowDefinitionId(9L);
+        run.setWorkflowVersionSnapshot(3);
+        run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
+                "schemaVersion",
+                2,
+                "workflowDefinitionId",
+                9,
+                "workflowVersion",
+                3,
+                "nodes",
+                List.of(sourceNode, pinnedNode, editedNode),
+                "edges",
+                List.of(pinnedEdge),
+                "jobDefinitions",
+                Map.of(
+                        "PINNED_NODE", frozenJob("PINNED_JOB"),
+                        "LIVE_EDITED_NODE", frozenJob("EDITED_JOB")))));
+
+        List<WorkflowDagService.DagNodeResolution> result =
+                dagService.resolveNextNodesForRun(run, "NODE_A", true, null);
+
+        assertThat(result)
+                .containsExactly(new WorkflowDagService.DagNodeResolution("PINNED_NODE", WorkflowNodeType.JOB.code()));
+        verify(edgeMapper, never()).selectOutgoingEdges(9L, "NODE_A");
+        verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCode(9L, "PINNED_NODE");
+    }
+
+    @Test
+    @DisplayName("成功边只在成功时跟随, 失败时不跟随")
+    void shouldFollowSuccessEdgeOnlyWhenSuccessTrue() {
+        WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.SUCCESS, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
+                .thenReturn(node("NODE_B", WorkflowNodeType.TASK.code()));
+
+        assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, null)).hasSize(1);
+        assertThat(dagService.resolveNextNodes(1L, "NODE_A", false, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("失败边只在失败时跟随, 成功时不跟随")
+    void shouldFollowFailureEdgeOnlyWhenSuccessFalse() {
+        WorkflowEdgeEntity edge = edge("NODE_A", "NODE_ERROR", Edge.FAILURE, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
+                .thenReturn(node("NODE_ERROR", WorkflowNodeType.TASK.code()));
+
+        assertThat(dagService.resolveNextNodes(1L, "NODE_A", false, null)).hasSize(1);
+        assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("成功且条件成立时跟随条件边")
+    void shouldFollowConditionEdgeWhenSuccessAndConditionMet() {
+        WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "amount > 100");
+        when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
+        when(conditionEvaluator.matches(eq("amount > 100"), anyString())).thenReturn(true);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
+                .thenReturn(node("NODE_B", WorkflowNodeType.TASK.code()));
+
+        assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, "{\"amount\":200}"))
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("条件不成立时跳过条件边")
+    void shouldSkipConditionEdgeWhenConditionNotMet() {
+        WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "amount > 100");
+        when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
+        when(conditionEvaluator.matches(anyString(), anyString())).thenReturn(false);
+
+        assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, "{\"amount\":50}"))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("上游失败时条件边一律跳过")
+    void shouldSkipConditionEdgeOnFailure() {
+        WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "x = 1");
+        when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
+
+        // success=false → condition edge is always skipped
+        assertThat(dagService.resolveNextNodes(1L, "NODE_A", false, "{}")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("下一节点查不到定义时按终点类型返回, 节点编码保持不变")
+    void shouldReturnEndTypeWhenNextNodeNotInMapper() {
+        WorkflowEdgeEntity edge = edge("NODE_A", "NODE_UNKNOWN", Edge.ALWAYS, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_UNKNOWN"))
+                .thenReturn(null);
+
+        List<WorkflowDagService.DagNodeResolution> result = dagService.resolveNextNodes(1L, "NODE_A", true, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).nodeCode()).isEqualTo("NODE_UNKNOWN");
+        assertThat(result.get(0).nodeType()).isEqualTo(WorkflowNodeType.END.code());
+    }
+
+    // ── isNodeReadyForDispatch ────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("流程运行标识为空时判定节点不可派发")
+    void shouldReturnFalseWhenWorkflowRunIdIsNull() {
+        assertThat(dagService.isNodeReadyForDispatch(null, 1L, "NODE_A", null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("定义标识为空时判定节点不可派发")
+    void shouldReturnFalseWhenDefinitionIdIsNull() {
+        assertThat(dagService.isNodeReadyForDispatch(1L, null, "NODE_A", null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("节点编码为空白时判定节点不可派发")
+    void shouldReturnFalseWhenNodeCodeIsBlank() {
+        assertThat(dagService.isNodeReadyForDispatch(1L, 1L, "", null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("节点没有入边时判定可以派发")
+    void shouldReturnTrueWhenNoIncomingEdges() {
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
+                .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code()));
+        when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of());
+
+        assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
+    }
+
+    @Test
+    @DisplayName("全量汇聚模式下上游全部成功时判定可以派发")
+    void shouldReturnTrueForAllJoinWhenAllPredecessorsSucceeded() {
+        WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
+        WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
+        when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(edge1, edge2));
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A"))
+                .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code())); // no nodeParams → ALL mode
+
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
+                .thenReturn(nodeRun("PRED_1", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_2"))
+                .thenReturn(nodeRun("PRED_2", Workflow.SUCCESS));
+
+        assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
+    }
+
+    @Test
+    @DisplayName("全量汇聚模式下存在未终态的上游时判定不可派发")
+    void shouldReturnFalseForAllJoinWhenOnePredecessorNotTerminal() {
+        WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
+        WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
+        when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(edge1, edge2));
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A"))
+                .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code()));
+
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
+                .thenReturn(nodeRun("PRED_1", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_2"))
+                .thenReturn(null); // not yet started
+
+        assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("操作员跳过的上游放行无条件边与成功边, 其他跳过原因不放行")
+    void shouldReleaseOnlyOperatorSkippedPredecessor() {
+        assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "SKIPPED", "OPERATOR_SKIPPED"))
+                .isTrue();
+        assertThat(readyWithSinglePredecessor(Edge.SUCCESS, "SKIPPED", "OPERATOR_SKIPPED"))
+                .isTrue();
+        assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "SKIPPED", "UPSTREAM_FAILED"))
+                .isFalse();
+        assertThat(readyWithSinglePredecessor(Edge.SUCCESS, "SKIPPED", "UPSTREAM_SKIPPED"))
+                .isFalse();
+        assertThat(readyWithSinglePredecessor(Edge.FAILURE, "SKIPPED", "OPERATOR_SKIPPED"))
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("等待跨日依赖的上游不是 DAG 终态; 状态码大小写不影响判定")
+    void shouldUseDagTerminalStatusesCaseInsensitively() {
+        assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "WAITING_DEPENDENCY", null))
+                .isFalse();
+        assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "RUNNING", null)).isFalse();
+        assertThat(readyWithSinglePredecessor(Edge.SUCCESS, "success", null)).isTrue();
+        assertThat(readyWithSinglePredecessor(Edge.FAILURE, "failed", null)).isTrue();
+    }
+
+    private boolean readyWithSinglePredecessor(String edgeType, String predecessorStatus, String skipReasonCode) {
+        WorkflowEdgeEntity incoming = edge("PRED_1", "NODE_A", edgeType, null);
+        when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(incoming));
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A"))
+                .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code()));
+        WorkflowNodeRunEntity predecessor = nodeRun("PRED_1", predecessorStatus);
+        predecessor.setSkipReasonCode(skipReasonCode);
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
+                .thenReturn(predecessor);
+        return dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null);
+    }
+
+    @Test
+    @DisplayName("任一汇聚模式下存在命中的上游时判定可以派发")
+    void shouldReturnTrueForAnyJoinWhenAtLeastOnePredecessorMatches() {
+        WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
+        WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
+        when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(edge1, edge2));
+
+        WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
+        joinNode.setNodeParams("{\"joinMode\":\"ANY\"}");
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
+
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
+                .thenReturn(nodeRun("PRED_1", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_2"))
+                .thenReturn(null);
+
+        assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
+    }
+
+    @Test
+    @DisplayName("按数量汇聚模式下命中数达到阈值时判定可以派发")
+    void shouldReturnTrueForNOfJoinWhenThresholdMet() {
+        WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
+        WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
+        WorkflowEdgeEntity e3 = edge("P3", "NODE_A", Edge.SUCCESS, null);
+        when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(e1, e2, e3));
+
+        WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
+        joinNode.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":2}");
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
+
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P1"))
+                .thenReturn(nodeRun("P1", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P2"))
+                .thenReturn(nodeRun("P2", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P3")).thenReturn(null);
+
+        assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
+    }
+
+    @Test
+    @DisplayName("数学整数阈值 1.0 与阈值 1 按相同语义汇聚")
+    void shouldTreatIntegralDecimalJoinThresholdAsInteger() {
+        WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
+        WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
+        when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(e1, e2));
+        WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
+        joinNode.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":1.0}");
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P1"))
+                .thenReturn(nodeRun("P1", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P2")).thenReturn(null);
+        assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
+    }
+
+    @Test
+    @DisplayName("按数量汇聚模式下命中数未达阈值时判定不可派发")
+    void shouldReturnFalseForNOfJoinWhenThresholdNotMet() {
+        WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
+        WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
+        WorkflowEdgeEntity e3 = edge("P3", "NODE_A", Edge.SUCCESS, null);
+        when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(e1, e2, e3));
+
+        WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
+        joinNode.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":3}");
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
+
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P1"))
+                .thenReturn(nodeRun("P1", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P2"))
+                .thenReturn(nodeRun("P2", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P3")).thenReturn(null);
+
+        assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isFalse();
+    }
+
+    // ── cascadeSkipDownstream ─────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("级联跳过的输入缺失时返回空集合")
+    void shouldReturnEmpty_whenCascadeSkipInputsMissing() {
+        assertThat(dagService.cascadeSkipDownstream(null, 1L, "X")).isEmpty();
+        assertThat(dagService.cascadeSkipDownstream(10L, null, "X")).isEmpty();
+        assertThat(dagService.cascadeSkipDownstream(10L, 1L, " ")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("成功边因上游失败而永不可触发时, 为下游写入跳过记录")
+    void shouldWriteSkippedRow_whenSuccessEdgeCannotFire() {
+        // FAIL_NODE --SUCCESS--> NEXT (NEXT 仅此一条入边，FAIL_NODE 已 FAILED → NEXT 永远无法触发)
+        WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "NEXT", Edge.SUCCESS, null);
+        WorkflowEdgeEntity incoming = edge("FAIL_NODE", "NEXT", Edge.SUCCESS, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
+        when(edgeMapper.selectIncomingEdges(1L, "NEXT")).thenReturn(List.of(incoming));
+        when(edgeMapper.selectOutgoingEdges(1L, "NEXT")).thenReturn(List.of());
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
+                .thenReturn(nodeRun("FAIL_NODE", Workflow.FAILED));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "NEXT")).thenReturn(null);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NEXT"))
+                .thenReturn(node("NEXT", WorkflowNodeType.TASK.code()));
+
+        List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+        assertThat(skipped).containsExactly("NEXT");
+        ArgumentCaptor<WorkflowNodeRunEntity> inserted = ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
+        verify(nodeRunMapper).insert(inserted.capture());
+        assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
+        assertThat(inserted.getValue().getSkipReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("汇聚节点仍有存活的上游时不被级联跳过")
+    void shouldNotSkip_whenJoinNodeHasLiveUpstream() {
+        // FAIL_NODE --SUCCESS--> JOIN
+        // OK_NODE  --SUCCESS--> JOIN  (OK_NODE 还 RUNNING，JOIN 不应被预先 skip)
+        WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "JOIN", Edge.SUCCESS, null);
+        WorkflowEdgeEntity inFromFail = edge("FAIL_NODE", "JOIN", Edge.SUCCESS, null);
+        WorkflowEdgeEntity inFromOk = edge("OK_NODE", "JOIN", Edge.SUCCESS, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
+        when(edgeMapper.selectIncomingEdges(1L, "JOIN")).thenReturn(List.of(inFromFail, inFromOk));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
+                .thenReturn(nodeRun("FAIL_NODE", Workflow.FAILED));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "OK_NODE"))
+                .thenReturn(nodeRun("OK_NODE", Workflow.RUNNING));
+
+        List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+        assertThat(skipped).isEmpty();
+        verify(nodeRunMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("ALL 汇聚的全部上游终态但部分边匹配时必须记录未满足原因")
+    void shouldSkipAllJoinWhenTerminalPredecessorsCannotSatisfyEveryIncomingEdge() {
+        WorkflowEdgeEntity fromSuccess = edge("SUCCESS_NODE", "JOIN", Edge.SUCCESS, null);
+        WorkflowEdgeEntity fromFailure = edge("FAILED_NODE", "JOIN", Edge.SUCCESS, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "FAILED_NODE")).thenReturn(List.of(fromFailure));
+        when(edgeMapper.selectIncomingEdges(1L, "JOIN")).thenReturn(List.of(fromSuccess, fromFailure));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "SUCCESS_NODE"))
+                .thenReturn(nodeRun("SUCCESS_NODE", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAILED_NODE"))
+                .thenReturn(nodeRun("FAILED_NODE", Workflow.FAILED));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "JOIN")).thenReturn(null);
+        when(edgeMapper.selectOutgoingEdges(1L, "JOIN")).thenReturn(List.of());
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "JOIN"))
+                .thenReturn(node("JOIN", WorkflowNodeType.TASK.code()));
+
+        List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAILED_NODE");
+
+        assertThat(skipped).containsExactly("JOIN");
+        ArgumentCaptor<WorkflowNodeRunEntity> inserted = ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
+        verify(nodeRunMapper).insert(inserted.capture());
+        assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
+    }
+
+    @Test
+    @DisplayName("N_OF 汇聚达不到阈值时即使有一条匹配边也必须记录跳过原因")
+    void shouldSkipNOfJoinWhenAllPredecessorsAreTerminalBelowThreshold() {
+        WorkflowEdgeEntity fromSuccess = edge("SUCCESS_NODE", "JOIN", Edge.SUCCESS, null);
+        WorkflowEdgeEntity fromFirstFailure = edge("FAILED_NODE_1", "JOIN", Edge.SUCCESS, null);
+        WorkflowEdgeEntity fromLastFailure = edge("FAILED_NODE_2", "JOIN", Edge.SUCCESS, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "FAILED_NODE_2")).thenReturn(List.of(fromLastFailure));
+        when(edgeMapper.selectIncomingEdges(1L, "JOIN"))
+                .thenReturn(List.of(fromSuccess, fromFirstFailure, fromLastFailure));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "SUCCESS_NODE"))
+                .thenReturn(nodeRun("SUCCESS_NODE", Workflow.SUCCESS));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAILED_NODE_1"))
+                .thenReturn(nodeRun("FAILED_NODE_1", Workflow.FAILED));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAILED_NODE_2"))
+                .thenReturn(nodeRun("FAILED_NODE_2", Workflow.FAILED));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "JOIN")).thenReturn(null);
+        when(edgeMapper.selectOutgoingEdges(1L, "JOIN")).thenReturn(List.of());
+        WorkflowNodeEntity join = node("JOIN", WorkflowNodeType.TASK.code());
+        join.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":2}");
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "JOIN")).thenReturn(join);
+
+        List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAILED_NODE_2");
+
+        assertThat(skipped).containsExactly("JOIN");
+        ArgumentCaptor<WorkflowNodeRunEntity> inserted = ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
+        verify(nodeRunMapper).insert(inserted.capture());
+        assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
+    }
+
+    @Test
+    @DisplayName("失败边能匹配上游状态时下游不被级联跳过")
+    void shouldNotSkip_whenFailureEdgeMatchesPredecessor() {
+        // FAIL_NODE --FAILURE--> CATCH (FAILURE 边匹配 FAILED 上游，CATCH 仍可正常派发)
+        WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "CATCH", Edge.FAILURE, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
+
+        List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+        assertThat(skipped).isEmpty();
+        verify(nodeRunMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("失败节点之后沿成功边成链时逐级向下游传播跳过")
+    void shouldRecurseSkipping_whenChainFollowsFailedNode() {
+        // FAIL_NODE --SUCCESS--> A --SUCCESS--> B (两条 SUCCESS 边，FAIL_NODE FAILED → A、B 都 skip)
+        WorkflowEdgeEntity failToA = edge("FAIL_NODE", "A", Edge.SUCCESS, null);
+        WorkflowEdgeEntity aToB = edge("A", "B", Edge.SUCCESS, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(failToA));
+        when(edgeMapper.selectOutgoingEdges(1L, "A")).thenReturn(List.of(aToB));
+        when(edgeMapper.selectOutgoingEdges(1L, "B")).thenReturn(List.of());
+        when(edgeMapper.selectIncomingEdges(1L, "A")).thenReturn(List.of(failToA));
+        when(edgeMapper.selectIncomingEdges(1L, "B")).thenReturn(List.of(aToB));
+
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
+                .thenReturn(nodeRun("FAIL_NODE", Workflow.FAILED));
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "A"))
+                .thenReturn(null) // canNeverFire 时 A 还没 node_run
+                .thenReturn(nodeRun("A", "SKIPPED")); // 级联到 B 时 A 已被插为 SKIPPED
+        when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "B")).thenReturn(null);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
+                .thenReturn(node("DUMMY", WorkflowNodeType.TASK.code()));
+
+        List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+        assertThat(skipped).containsExactly("A", "B");
+    }
+
+    @Test
+    @DisplayName("终点节点不被写入跳过记录, 交由调度路径处理")
+    void shouldNotWriteSkippedRow_whenNodeIsEnd() {
+        // FAIL_NODE --SUCCESS--> END (END 节点不写 SKIPPED 行，由调度路径处理)
+        WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "END", Edge.SUCCESS, null);
+        when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
+
+        List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+        assertThat(skipped).isEmpty();
+        verify(nodeRunMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("预加载图按 id 顺序解析 START 出边并忽略禁用边")
+    void shouldResolveInitialNodesFromPreloadedGraph() {
+        WorkflowEdgeEntity disabled = edge("START", "DISABLED_NODE", Edge.ALWAYS, null);
+        disabled.setEnabled(false);
+        WorkflowEdgeEntity toJob = edge("START", "JOB_A", Edge.ALWAYS, null);
+        toJob.setEnabled(true);
+        WorkflowEdgeEntity toMissing = edge("START", "MISSING", Edge.SUCCESS, null);
+        toMissing.setEnabled(true);
+
+        List<WorkflowDagService.DagNodeResolution> resolutions = dagService.resolveInitialNodes(
+                List.of(node("JOB_A", WorkflowNodeType.JOB.code())), List.of(disabled, toJob, toMissing), "{}");
+
+        assertThat(resolutions)
+                .containsExactly(
+                        new WorkflowDagService.DagNodeResolution("JOB_A", WorkflowNodeType.JOB.code()),
+                        new WorkflowDagService.DagNodeResolution("MISSING", WorkflowNodeType.END.code()));
+        verify(edgeMapper, never()).selectOutgoingEdges(anyLong(), anyString());
+        verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCodesIn(any(), any());
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static WorkflowEdgeEntity edge(String from, String to, String edgeType, String conditionExpr) {
+        WorkflowEdgeEntity e = new WorkflowEdgeEntity();
+        e.setFromNodeCode(from);
+        e.setToNodeCode(to);
+        e.setEdgeType(edgeType);
+        e.setConditionExpr(conditionExpr);
+        return e;
+    }
+
+    private static WorkflowNodeEntity node(String nodeCode, String nodeType) {
+        WorkflowNodeEntity n = new WorkflowNodeEntity();
+        n.setNodeCode(nodeCode);
+        n.setNodeType(nodeType);
+        return n;
+    }
+
+    private static WorkflowNodeRunEntity nodeRun(String nodeCode, String status) {
+        WorkflowNodeRunEntity run = new WorkflowNodeRunEntity();
+        run.setNodeCode(nodeCode);
+        run.setNodeStatus(status);
+        return run;
+    }
+
+    private static Map<String, Object> frozenJob(String jobCode) {
+        Map<String, Object> executionDefinition = Map.of(
+                "id",
+                jobCode.equals("PINNED_JOB") ? 101 : 102,
+                "tenantId",
+                "tenant-a",
+                "jobCode",
+                jobCode,
+                "jobType",
+                "GENERAL",
+                "version",
+                1);
+        return Map.of(
+                "jobDefinitionId",
+                executionDefinition.get("id"),
+                "jobCode",
+                jobCode,
+                "jobType",
+                "GENERAL",
+                "jobDefinitionVersion",
+                1,
+                "executionDefinition",
+                executionDefinition);
+    }
 }

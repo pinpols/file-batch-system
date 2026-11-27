@@ -16,32 +16,28 @@ import org.springframework.stereotype.Component;
 @Component
 public class WorkerCompatibilityEvaluator {
 
-  /**
-   * 计算单个 worker 的兼容状态。
-   *
-   * @param reportedSdkVersion worker register 上报的 SDK 库版本(可空,如 {@code "1.1.0"} / {@code
-   *     "2.0.0-rc"});非 SDK worker 或老 worker 为 null
-   * @return 兼容状态(永不为 null)
-   */
-  public WorkerCompatibility evaluate(String reportedSdkVersion) {
-    Integer major = SdkVersions.parseMajor(reportedSdkVersion);
-    String platformMajor = "v" + SdkPlatformConstants.CURRENT_SDK_MAJOR;
-    if (major == null) {
-      return new WorkerCompatibility(
-          Status.UNKNOWN, ReasonCode.SDK_VERSION_UNKNOWN, reportedSdkVersion, platformMajor);
+    /**
+     * 计算单个 worker 的兼容状态。
+     *
+     * @param reportedSdkVersion worker register 上报的 SDK 库版本(可空,如 {@code "1.1.0"} / {@code
+     *     "2.0.0-rc"});非 SDK worker 或老 worker 为 null
+     * @return 兼容状态(永不为 null)
+     */
+    public WorkerCompatibility evaluate(String reportedSdkVersion) {
+        Integer major = SdkVersions.parseMajor(reportedSdkVersion);
+        String platformMajor = "v" + SdkPlatformConstants.CURRENT_SDK_MAJOR;
+        if (major == null) {
+            return new WorkerCompatibility(
+                    Status.UNKNOWN, ReasonCode.SDK_VERSION_UNKNOWN, reportedSdkVersion, platformMajor);
+        }
+        if (major < SdkPlatformConstants.CURRENT_SDK_MAJOR) {
+            return new WorkerCompatibility(
+                    Status.SDK_OUTDATED, ReasonCode.SDK_VERSION_BEHIND, reportedSdkVersion, platformMajor);
+        }
+        if (major > SdkPlatformConstants.CURRENT_SDK_MAJOR) {
+            return new WorkerCompatibility(
+                    Status.PROTOCOL_UNSUPPORTED, ReasonCode.SDK_VERSION_AHEAD, reportedSdkVersion, platformMajor);
+        }
+        return new WorkerCompatibility(Status.OK, ReasonCode.COMPATIBLE, reportedSdkVersion, platformMajor);
     }
-    if (major < SdkPlatformConstants.CURRENT_SDK_MAJOR) {
-      return new WorkerCompatibility(
-          Status.SDK_OUTDATED, ReasonCode.SDK_VERSION_BEHIND, reportedSdkVersion, platformMajor);
-    }
-    if (major > SdkPlatformConstants.CURRENT_SDK_MAJOR) {
-      return new WorkerCompatibility(
-          Status.PROTOCOL_UNSUPPORTED,
-          ReasonCode.SDK_VERSION_AHEAD,
-          reportedSdkVersion,
-          platformMajor);
-    }
-    return new WorkerCompatibility(
-        Status.OK, ReasonCode.COMPATIBLE, reportedSdkVersion, platformMajor);
-  }
 }

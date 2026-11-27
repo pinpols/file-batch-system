@@ -28,254 +28,250 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @BatchIntegrationTest
 public abstract class AbstractIntegrationTest {
 
-  // 默认不跨测试运行复用，避免测试数据残留；本地性能调试可显式启用 Maven profile。
-  private static final boolean REUSE_TESTCONTAINERS =
-      Boolean.getBoolean("batch.testcontainers.reuse");
+    // 默认不跨测试运行复用，避免测试数据残留；本地性能调试可显式启用 Maven profile。
+    private static final boolean REUSE_TESTCONTAINERS = Boolean.getBoolean("batch.testcontainers.reuse");
 
-  // PG 不复用：outbox_event 等表的跨运行残留会破坏依赖其状态的集成测试。
-  @SuppressWarnings("resource")
-  protected static final PostgreSQLContainer PLATFORM_POSTGRES = TestPostgresContainers.platform()
-      .withInitScript("db/platform-init.sql")
-      .withCommand("postgres", "-c", "max_connections=500");
+    // PG 不复用：outbox_event 等表的跨运行残留会破坏依赖其状态的集成测试。
+    @SuppressWarnings("resource")
+    protected static final PostgreSQLContainer PLATFORM_POSTGRES = TestPostgresContainers.platform()
+            .withInitScript("db/platform-init.sql")
+            .withCommand("postgres", "-c", "max_connections=500");
 
-  @SuppressWarnings("resource")
-  protected static final PostgreSQLContainer BUSINESS_POSTGRES = TestPostgresContainers.business()
-      .withInitScript("db/create_biz_tables.sql")
-      .withCommand("postgres", "-c", "max_connections=500");
+    @SuppressWarnings("resource")
+    protected static final PostgreSQLContainer BUSINESS_POSTGRES = TestPostgresContainers.business()
+            .withInitScript("db/create_biz_tables.sql")
+            .withCommand("postgres", "-c", "max_connections=500");
 
-  // Kafka 不复用：故障注入用例需要 stop/start，且每次测试运行应从干净 broker 状态开始。
-  protected static final KafkaContainer KAFKA = TestKafkaContainers.create();
+    // Kafka 不复用：故障注入用例需要 stop/start，且每次测试运行应从干净 broker 状态开始。
+    protected static final KafkaContainer KAFKA = TestKafkaContainers.create();
 
-  @SuppressWarnings("resource")
-  protected static final TestObjectStoreEndpoint OBJECT_STORE = createObjectStoreEndpoint();
+    @SuppressWarnings("resource")
+    protected static final TestObjectStoreEndpoint OBJECT_STORE = createObjectStoreEndpoint();
 
-  @SuppressWarnings("resource")
-  protected static final GenericContainer<?> REDIS = createRedisContainer();
+    @SuppressWarnings("resource")
+    protected static final GenericContainer<?> REDIS = createRedisContainer();
 
-  static {
-    // 在同一 JVM 中所有集成测试类之间保持测试基础设施端口稳定。
-    PLATFORM_POSTGRES.start();
-    BUSINESS_POSTGRES.start();
-    KAFKA.start();
-    startObjectStoreIfNeeded();
-    REDIS.start();
-  }
-
-  protected AbstractIntegrationTest() {}
-
-  /**
-   * 供子类显式调用的 outbox 表 truncate 辅助方法。
-   *
-   * <p>**不放 @BeforeEach 全局回退**:实测 ImportFailureE2eIT 等测试在测试方法内依赖 outbox event scheduler 投递时间窗,全局
-   * truncate 会清掉 application 启动时已写入的 测试 fixture / 异步事件 → 测试 timeout。
-   *
-   * <p>只让确实需要「上轮残留必清」的测试(如 MultiTenantConcurrentE2eIT 的租户隔离断言) 显式在 @BeforeEach 调本方法。
-   */
-  protected static void truncateOutboxTables(DataSource dataSource) {
-    String sql = "TRUNCATE TABLE batch.outbox_event, "
-        + "batch.event_outbox_retry, "
-        + "batch.trigger_outbox_event, "
-        + "batch.worker_report_outbox "
-        + "CASCADE";
-    try (Connection c = dataSource.getConnection();
-        Statement s = c.createStatement()) {
-      s.execute(sql);
-    } catch (Exception ignored) {
-      // 容忍:表不存在(模块没跑到 outbox migration)
+    static {
+        // 在同一 JVM 中所有集成测试类之间保持测试基础设施端口稳定。
+        PLATFORM_POSTGRES.start();
+        BUSINESS_POSTGRES.start();
+        KAFKA.start();
+        startObjectStoreIfNeeded();
+        REDIS.start();
     }
-  }
 
-  @DynamicPropertySource
-  protected static void registerDynamicProperties(DynamicPropertyRegistry registry) {
-    registerDynamicProperties(registry, true);
-  }
+    protected AbstractIntegrationTest() {}
 
-  public static void registerDynamicProperties(
-      DynamicPropertyRegistry registry, boolean securityBypassMode) {
-    IntegrationTestInfrastructure.InfrastructureEndpoints endpoints =
-        new IntegrationTestInfrastructure.InfrastructureEndpoints(
-            PLATFORM_POSTGRES, BUSINESS_POSTGRES, KAFKA, OBJECT_STORE, REDIS);
-    IntegrationTestInfrastructure.registerDynamicProperties(
-        registry, endpoints, securityBypassMode);
-  }
-
-  protected static String platformJdbcUrl() {
-    return PLATFORM_POSTGRES.getJdbcUrl();
-  }
-
-  protected static String platformJdbcUsername() {
-    return PLATFORM_POSTGRES.getUsername();
-  }
-
-  protected static String platformJdbcPassword() {
-    return PLATFORM_POSTGRES.getPassword();
-  }
-
-  protected static String businessJdbcUrl() {
-    return BUSINESS_POSTGRES.getJdbcUrl();
-  }
-
-  protected static String businessJdbcUsername() {
-    return BUSINESS_POSTGRES.getUsername();
-  }
-
-  protected static String businessJdbcPassword() {
-    return BUSINESS_POSTGRES.getPassword();
-  }
-
-  protected static String kafkaBootstrapServers() {
-    return KAFKA.getBootstrapServers();
-  }
-
-  protected static void stopKafkaForFaultInjection() {
-    KAFKA.stop();
-  }
-
-  protected static void startKafkaAfterFaultInjection() {
-    if (!KAFKA.isRunning()) {
-      KAFKA.start();
+    /**
+     * 供子类显式调用的 outbox 表 truncate 辅助方法。
+     *
+     * <p>**不放 @BeforeEach 全局回退**:实测 ImportFailureE2eIT 等测试在测试方法内依赖 outbox event scheduler 投递时间窗,全局
+     * truncate 会清掉 application 启动时已写入的 测试 fixture / 异步事件 → 测试 timeout。
+     *
+     * <p>只让确实需要「上轮残留必清」的测试(如 MultiTenantConcurrentE2eIT 的租户隔离断言) 显式在 @BeforeEach 调本方法。
+     */
+    protected static void truncateOutboxTables(DataSource dataSource) {
+        String sql = "TRUNCATE TABLE batch.outbox_event, "
+                + "batch.event_outbox_retry, "
+                + "batch.trigger_outbox_event, "
+                + "batch.worker_report_outbox "
+                + "CASCADE";
+        try (Connection c = dataSource.getConnection();
+                Statement s = c.createStatement()) {
+            s.execute(sql);
+        } catch (Exception ignored) {
+            // 容忍:表不存在(模块没跑到 outbox migration)
+        }
     }
-  }
 
-  protected static String s3Endpoint() {
-    return requireObjectStore().getEndpoint();
-  }
-
-  protected static String s3Bucket() {
-    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
-      return IntegrationTestInfrastructure.objectStoreBucket();
+    @DynamicPropertySource
+    protected static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+        registerDynamicProperties(registry, true);
     }
-    return requireObjectStore().getDefaultBucket();
-  }
 
-  protected static String s3AccessKey() {
-    return requireObjectStore().getAccessKey();
-  }
-
-  protected static String s3SecretKey() {
-    return requireObjectStore().getSecretKey();
-  }
-
-  protected static String s3Region() {
-    return requireObjectStore().getRegion();
-  }
-
-  protected static boolean s3PathStyleEnabled() {
-    return requireObjectStore().isPathStyleEnabled();
-  }
-
-  /** 当前测试对象存储后端（s3 | filesystem），由系统属性 {@code batch.test.storage.backend} 决定。 */
-  protected static String storageBackend() {
-    return IntegrationTestInfrastructure.storageBackend();
-  }
-
-  /**
-   * 当前测试是否使用 S3 兼容对象存储后端。
-   *
-   * <p>供 {@code @EnabledIf("s3BackendActive")} 直接引用：需要直写对象存储（S3Client）的 fixture 在
-   * filesystem 后端下应整体跳过。判定与 {@link #storageBackend()} 同源，测试类不再各自硬编码后端字面量。
-   */
-  public static boolean s3BackendActive() {
-    return !IntegrationTestInfrastructure.isFilesystemBackend();
-  }
-
-  /** filesystem 后端测试根目录；S3 模式下返回的目录不会写入。 */
-  public static Path filesystemRoot() {
-    return IntegrationTestInfrastructure.filesystemRoot();
-  }
-
-  /** 按当前测试后端读取对象内容（S3 走兼容对象存储，filesystem 走临时根目录）。 */
-  public static byte[] readObject(String bucket, String key) {
-    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
-      Path path = filesystemRoot().resolve(bucket).resolve(key);
-      try {
-        return Files.readAllBytes(path);
-      } catch (IOException ex) {
-        throw new UncheckedIOException("filesystem test read failed: " + path, ex);
-      }
+    public static void registerDynamicProperties(DynamicPropertyRegistry registry, boolean securityBypassMode) {
+        IntegrationTestInfrastructure.InfrastructureEndpoints endpoints =
+                new IntegrationTestInfrastructure.InfrastructureEndpoints(
+                        PLATFORM_POSTGRES, BUSINESS_POSTGRES, KAFKA, OBJECT_STORE, REDIS);
+        IntegrationTestInfrastructure.registerDynamicProperties(registry, endpoints, securityBypassMode);
     }
-    return requireObjectStore()
-        .client()
-        .getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(key).build())
-        .asByteArray();
-  }
 
-  /** 按当前测试后端写入对象内容（测试 fixture 用）。 */
-  protected static void putObject(String bucket, String key, byte[] content) {
-    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
-      try {
-        Path path = filesystemRoot().resolve(bucket).resolve(key);
-        Files.createDirectories(path.getParent());
-        Files.write(path, content);
-      } catch (IOException ex) {
-        throw new UncheckedIOException("filesystem test write failed", ex);
-      }
-      return;
+    protected static String platformJdbcUrl() {
+        return PLATFORM_POSTGRES.getJdbcUrl();
     }
-    requireObjectStore()
-        .client()
-        .putObject(
-            PutObjectRequest.builder().bucket(bucket).key(key).build(),
-            RequestBody.fromBytes(content));
-  }
 
-  /** 确保 bucket（S3 桶 / FS 目录）存在。 */
-  protected static void ensureBucket(String bucket) {
-    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
-      try {
-        Files.createDirectories(filesystemRoot().resolve(bucket));
-      } catch (IOException ex) {
-        throw new UncheckedIOException(ex);
-      }
-      return;
+    protected static String platformJdbcUsername() {
+        return PLATFORM_POSTGRES.getUsername();
     }
-    requireObjectStore().ensureBucketExists(bucket);
-  }
 
-  protected static void ensureS3Bucket(String bucketName) {
-    ensureBucket(bucketName);
-  }
-
-  protected static String redisHost() {
-    return REDIS.getHost();
-  }
-
-  protected static int redisPort() {
-    return REDIS.getMappedPort(TestValkeyContainers.REDIS_PORT);
-  }
-
-  private static TestObjectStoreEndpoint createObjectStoreEndpoint() {
-    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
-      return null;
+    protected static String platformJdbcPassword() {
+        return PLATFORM_POSTGRES.getPassword();
     }
-    TestObjectStoreEndpoint endpoint = TestObjectStoreContainers.createEndpoint();
-    if (endpoint instanceof MinioObjectStoreContainer container) {
-      TestContainerLabels.configureLocalReuse(container, REUSE_TESTCONTAINERS);
-      return container;
-    }
-    return endpoint;
-  }
 
-  private static GenericContainer<?> createRedisContainer() {
-    GenericContainer<?> container = TestValkeyContainers.createPersistent();
-    TestContainerLabels.configureLocalReuse(container, REUSE_TESTCONTAINERS);
-    return container;
-  }
+    protected static String businessJdbcUrl() {
+        return BUSINESS_POSTGRES.getJdbcUrl();
+    }
 
-  private static void startObjectStoreIfNeeded() {
-    if (OBJECT_STORE instanceof MinioObjectStoreContainer container) {
-      container.start();
-      return;
+    protected static String businessJdbcUsername() {
+        return BUSINESS_POSTGRES.getUsername();
     }
-    if (EmptyChecks.isNotNull(OBJECT_STORE)) {
-      OBJECT_STORE.ensureBucketExists(OBJECT_STORE.getDefaultBucket());
-    }
-  }
 
-  private static TestObjectStoreEndpoint requireObjectStore() {
-    if (EmptyChecks.isNull(OBJECT_STORE)) {
-      throw new IllegalStateException("S3-compatible test object store is not configured");
+    protected static String businessJdbcPassword() {
+        return BUSINESS_POSTGRES.getPassword();
     }
-    return OBJECT_STORE;
-  }
+
+    protected static String kafkaBootstrapServers() {
+        return KAFKA.getBootstrapServers();
+    }
+
+    protected static void stopKafkaForFaultInjection() {
+        KAFKA.stop();
+    }
+
+    protected static void startKafkaAfterFaultInjection() {
+        if (!KAFKA.isRunning()) {
+            KAFKA.start();
+        }
+    }
+
+    protected static String s3Endpoint() {
+        return requireObjectStore().getEndpoint();
+    }
+
+    protected static String s3Bucket() {
+        if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+            return IntegrationTestInfrastructure.objectStoreBucket();
+        }
+        return requireObjectStore().getDefaultBucket();
+    }
+
+    protected static String s3AccessKey() {
+        return requireObjectStore().getAccessKey();
+    }
+
+    protected static String s3SecretKey() {
+        return requireObjectStore().getSecretKey();
+    }
+
+    protected static String s3Region() {
+        return requireObjectStore().getRegion();
+    }
+
+    protected static boolean s3PathStyleEnabled() {
+        return requireObjectStore().isPathStyleEnabled();
+    }
+
+    /** 当前测试对象存储后端（s3 | filesystem），由系统属性 {@code batch.test.storage.backend} 决定。 */
+    protected static String storageBackend() {
+        return IntegrationTestInfrastructure.storageBackend();
+    }
+
+    /**
+     * 当前测试是否使用 S3 兼容对象存储后端。
+     *
+     * <p>供 {@code @EnabledIf("s3BackendActive")} 直接引用：需要直写对象存储（S3Client）的 fixture 在
+     * filesystem 后端下应整体跳过。判定与 {@link #storageBackend()} 同源，测试类不再各自硬编码后端字面量。
+     */
+    public static boolean s3BackendActive() {
+        return !IntegrationTestInfrastructure.isFilesystemBackend();
+    }
+
+    /** filesystem 后端测试根目录；S3 模式下返回的目录不会写入。 */
+    public static Path filesystemRoot() {
+        return IntegrationTestInfrastructure.filesystemRoot();
+    }
+
+    /** 按当前测试后端读取对象内容（S3 走兼容对象存储，filesystem 走临时根目录）。 */
+    public static byte[] readObject(String bucket, String key) {
+        if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+            Path path = filesystemRoot().resolve(bucket).resolve(key);
+            try {
+                return Files.readAllBytes(path);
+            } catch (IOException ex) {
+                throw new UncheckedIOException("filesystem test read failed: " + path, ex);
+            }
+        }
+        return requireObjectStore()
+                .client()
+                .getObjectAsBytes(
+                        GetObjectRequest.builder().bucket(bucket).key(key).build())
+                .asByteArray();
+    }
+
+    /** 按当前测试后端写入对象内容（测试 fixture 用）。 */
+    protected static void putObject(String bucket, String key, byte[] content) {
+        if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+            try {
+                Path path = filesystemRoot().resolve(bucket).resolve(key);
+                Files.createDirectories(path.getParent());
+                Files.write(path, content);
+            } catch (IOException ex) {
+                throw new UncheckedIOException("filesystem test write failed", ex);
+            }
+            return;
+        }
+        requireObjectStore()
+                .client()
+                .putObject(PutObjectRequest.builder().bucket(bucket).key(key).build(), RequestBody.fromBytes(content));
+    }
+
+    /** 确保 bucket（S3 桶 / FS 目录）存在。 */
+    protected static void ensureBucket(String bucket) {
+        if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+            try {
+                Files.createDirectories(filesystemRoot().resolve(bucket));
+            } catch (IOException ex) {
+                throw new UncheckedIOException(ex);
+            }
+            return;
+        }
+        requireObjectStore().ensureBucketExists(bucket);
+    }
+
+    protected static void ensureS3Bucket(String bucketName) {
+        ensureBucket(bucketName);
+    }
+
+    protected static String redisHost() {
+        return REDIS.getHost();
+    }
+
+    protected static int redisPort() {
+        return REDIS.getMappedPort(TestValkeyContainers.REDIS_PORT);
+    }
+
+    private static TestObjectStoreEndpoint createObjectStoreEndpoint() {
+        if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+            return null;
+        }
+        TestObjectStoreEndpoint endpoint = TestObjectStoreContainers.createEndpoint();
+        if (endpoint instanceof MinioObjectStoreContainer container) {
+            TestContainerLabels.configureLocalReuse(container, REUSE_TESTCONTAINERS);
+            return container;
+        }
+        return endpoint;
+    }
+
+    private static GenericContainer<?> createRedisContainer() {
+        GenericContainer<?> container = TestValkeyContainers.createPersistent();
+        TestContainerLabels.configureLocalReuse(container, REUSE_TESTCONTAINERS);
+        return container;
+    }
+
+    private static void startObjectStoreIfNeeded() {
+        if (OBJECT_STORE instanceof MinioObjectStoreContainer container) {
+            container.start();
+            return;
+        }
+        if (EmptyChecks.isNotNull(OBJECT_STORE)) {
+            OBJECT_STORE.ensureBucketExists(OBJECT_STORE.getDefaultBucket());
+        }
+    }
+
+    private static TestObjectStoreEndpoint requireObjectStore() {
+        if (EmptyChecks.isNull(OBJECT_STORE)) {
+            throw new IllegalStateException("S3-compatible test object store is not configured");
+        }
+        return OBJECT_STORE;
+    }
 }

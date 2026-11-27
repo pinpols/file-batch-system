@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface FileArrivalGroupMapper {
 
-  List<FileArrivalGroupView> selectByQuery(FileArrivalGroupQuery query);
+    List<FileArrivalGroupView> selectByQuery(FileArrivalGroupQuery query);
 
-  long countByQuery(FileArrivalGroupQuery query);
+    long countByQuery(FileArrivalGroupQuery query);
 }

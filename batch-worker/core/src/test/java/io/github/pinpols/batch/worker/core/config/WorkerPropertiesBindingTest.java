@@ -25,158 +25,157 @@ import org.springframework.mock.env.MockEnvironment;
 @DisplayName("Worker 启动期配置绑定与参数校验")
 class WorkerPropertiesBindingTest {
 
-  private final ApplicationContextRunner runner = new ApplicationContextRunner()
-      .withConfiguration(AutoConfigurations.of(ValidationAutoConfiguration.class))
-      .withUserConfiguration(BindingConfiguration.class)
-      .withPropertyValues("spring.kafka.bootstrap-servers=localhost:9092");
+    private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(ValidationAutoConfiguration.class))
+            .withUserConfiguration(BindingConfiguration.class)
+            .withPropertyValues("spring.kafka.bootstrap-servers=localhost:9092");
 
-  @Test
-  @DisplayName("缺省配置保留 Kafka 拉取与监听参数及 Worker 并发和续租参数")
-  void shouldBindDefaults() {
-    runner.run(context -> {
-      assertThat(context).hasNotFailed();
-      WorkerKafkaProperties kafka = context.getBean(WorkerKafkaProperties.class);
-      assertThat(kafka.getBootstrapServers()).isEqualTo("localhost:9092");
-      assertThat(kafka.getConsumer().getAutoOffsetReset()).isEqualTo("latest");
-      assertThat(kafka.getConsumer().getMaxPollRecords()).isEqualTo(20);
-      assertThat(kafka.getConsumer().getFetchMinSize()).isEqualTo(1024);
-      assertThat(kafka.getConsumer().getFetchMaxWait()).isEqualTo(500);
-      assertThat(kafka.getConsumer().getMaxPollIntervalMs()).isEqualTo(600_000);
-      assertThat(kafka.getConsumer().getMetadataMaxAgeMs()).isEqualTo(30_000);
-      assertThat(kafka.getListener().getConcurrency()).isEqualTo(1);
-      assertThat(context.getBean(WorkerConcurrencyProperties.class).getMaxConcurrentTasks())
-          .isPositive();
-      WorkerLeaseProperties lease = context.getBean(WorkerLeaseProperties.class);
-      assertThat(lease.getRenewIntervalMillis()).isEqualTo(10_000L);
-      assertThat(lease.getConsecutiveFailureAlertThreshold()).isEqualTo(3);
-      assertThat(lease.getCircuitHalfOpenTickInterval()).isEqualTo(5);
-      assertThat(lease.getRenewBatchMaxItems()).isEqualTo(256);
-    });
-  }
-
-  @Test
-  @DisplayName("现有配置键完整绑定, Kafka 允许零字节和零等待配置")
-  void shouldBindExistingKeysAndZeroValues() {
-    runner
-        .withPropertyValues(
-            "spring.kafka.consumer.auto-offset-reset=earliest",
-            "spring.kafka.consumer.max-poll-records=4",
-            "spring.kafka.consumer.fetch-min-size=0",
-            "spring.kafka.consumer.fetch-max-wait=0",
-            "spring.kafka.consumer.max-poll-interval-ms=1200000",
-            "spring.kafka.consumer.metadata-max-age-ms=0",
-            "spring.kafka.listener.concurrency=2",
-            "batch.worker.max-concurrent-tasks=8",
-            "batch.worker.lease.renew-interval-millis=2500",
-            "batch.worker.lease.consecutive-failure-alert-threshold=4",
-            "batch.worker.lease.circuit-half-open-tick-interval=6",
-            "batch.worker.lease.renew-batch-max-items=128")
-        .run(context -> {
-          assertThat(context).hasNotFailed();
-          WorkerKafkaProperties kafka = context.getBean(WorkerKafkaProperties.class);
-          assertThat(kafka.getConsumer().getAutoOffsetReset()).isEqualTo("earliest");
-          assertThat(kafka.getConsumer().getMaxPollRecords()).isEqualTo(4);
-          assertThat(kafka.getConsumer().getFetchMinSize()).isZero();
-          assertThat(kafka.getConsumer().getFetchMaxWait()).isZero();
-          assertThat(kafka.getConsumer().getMaxPollIntervalMs()).isEqualTo(1_200_000);
-          assertThat(kafka.getConsumer().getMetadataMaxAgeMs()).isZero();
-          assertThat(kafka.getListener().getConcurrency()).isEqualTo(2);
-          assertThat(context.getBean(WorkerConcurrencyProperties.class).getMaxConcurrentTasks())
-              .isEqualTo(8);
-          WorkerLeaseProperties lease = context.getBean(WorkerLeaseProperties.class);
-          assertThat(lease.getRenewIntervalMillis()).isEqualTo(2_500L);
-          assertThat(lease.getConsecutiveFailureAlertThreshold()).isEqualTo(4);
-          assertThat(lease.getCircuitHalfOpenTickInterval()).isEqualTo(6);
-          assertThat(lease.getRenewBatchMaxItems()).isEqualTo(128);
+    @Test
+    @DisplayName("缺省配置保留 Kafka 拉取与监听参数及 Worker 并发和续租参数")
+    void shouldBindDefaults() {
+        runner.run(context -> {
+            assertThat(context).hasNotFailed();
+            WorkerKafkaProperties kafka = context.getBean(WorkerKafkaProperties.class);
+            assertThat(kafka.getBootstrapServers()).isEqualTo("localhost:9092");
+            assertThat(kafka.getConsumer().getAutoOffsetReset()).isEqualTo("latest");
+            assertThat(kafka.getConsumer().getMaxPollRecords()).isEqualTo(20);
+            assertThat(kafka.getConsumer().getFetchMinSize()).isEqualTo(1024);
+            assertThat(kafka.getConsumer().getFetchMaxWait()).isEqualTo(500);
+            assertThat(kafka.getConsumer().getMaxPollIntervalMs()).isEqualTo(600_000);
+            assertThat(kafka.getConsumer().getMetadataMaxAgeMs()).isEqualTo(30_000);
+            assertThat(kafka.getListener().getConcurrency()).isEqualTo(1);
+            assertThat(context.getBean(WorkerConcurrencyProperties.class).getMaxConcurrentTasks())
+                    .isPositive();
+            WorkerLeaseProperties lease = context.getBean(WorkerLeaseProperties.class);
+            assertThat(lease.getRenewIntervalMillis()).isEqualTo(10_000L);
+            assertThat(lease.getConsecutiveFailureAlertThreshold()).isEqualTo(3);
+            assertThat(lease.getCircuitHalfOpenTickInterval()).isEqualTo(5);
+            assertThat(lease.getRenewBatchMaxItems()).isEqualTo(256);
         });
-  }
-
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "spring.kafka.bootstrap-servers=",
-        "spring.kafka.consumer.auto-offset-reset=",
-        "spring.kafka.consumer.max-poll-records=0",
-        "spring.kafka.consumer.fetch-min-size=-1",
-        "spring.kafka.consumer.fetch-max-wait=-1",
-        "spring.kafka.consumer.max-poll-interval-ms=0",
-        "spring.kafka.consumer.metadata-max-age-ms=-1",
-        "spring.kafka.listener.concurrency=0",
-        "batch.worker.max-concurrent-tasks=0",
-        "batch.worker.lease.renew-interval-millis=0",
-        "batch.worker.lease.consecutive-failure-alert-threshold=0",
-        "batch.worker.lease.circuit-half-open-tick-interval=0",
-        "batch.worker.lease.renew-batch-max-items=0"
-      })
-  @DisplayName("不可执行的参数在绑定期拒绝, 不等到监听或续租启动")
-  void shouldRejectInvalidValues(String property) {
-    runner.withPropertyValues(property).run(context -> {
-      assertThat(context).hasFailed();
-      assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(BindValidationException.class);
-    });
-  }
-
-  @Test
-  @DisplayName("实际共享YAML缺省关闭批量领取和上报，保留5ms微批等待及32项上限")
-  void shouldBindBatchTransportDefaultsFromSharedYaml() throws IOException {
-    MockEnvironment environment = sharedDefaultsEnvironment(Map.of());
-
-    OrchestratorTaskClientProperties client = Binder.get(environment)
-        .bind("batch.worker.task-client", OrchestratorTaskClientProperties.class)
-        .get();
-    WorkerBatchClaimProperties claim = Binder.get(environment)
-        .bind("batch.worker.batch-claim", WorkerBatchClaimProperties.class)
-        .get();
-
-    assertThat(client.isReportBatchEnabled()).isFalse();
-    assertThat(client.getReportBatchWaitMillis()).isEqualTo(5L);
-    assertThat(claim.isEnabled()).isFalse();
-    assertThat(claim.effectiveBatchSize()).isEqualTo(32);
-  }
-
-  @Test
-  @DisplayName("环境桥接实际绑定批量开关与claim上限，显式零等待不被默认值覆盖")
-  void shouldBindBatchTransportEnvironmentAndPreserveZeroWait() throws IOException {
-    Map<String, Object> variables = Map.of(
-        "BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_ENABLED", "true",
-        "BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_WAIT_MILLIS", "0",
-        "BATCH_WORKER_BATCH_CLAIM_ENABLED", "true",
-        "BATCH_WORKER_BATCH_CLAIM_MAX_BATCH_SIZE", "5");
-    MockEnvironment environment = sharedDefaultsEnvironment(variables);
-
-    OrchestratorTaskClientProperties client = Binder.get(environment)
-        .bind("batch.worker.task-client", OrchestratorTaskClientProperties.class)
-        .get();
-    WorkerBatchClaimProperties claim = Binder.get(environment)
-        .bind("batch.worker.batch-claim", WorkerBatchClaimProperties.class)
-        .get();
-
-    assertThat(client.isReportBatchEnabled()).isTrue();
-    assertThat(client.getReportBatchWaitMillis()).isZero();
-    assertThat(claim.isEnabled()).isTrue();
-    assertThat(claim.effectiveBatchSize()).isEqualTo(5);
-  }
-
-  private static MockEnvironment sharedDefaultsEnvironment(Map<String, Object> variables)
-      throws IOException {
-    MockEnvironment environment = new MockEnvironment();
-    SystemEnvironmentPropertySource envSource =
-        new SystemEnvironmentPropertySource("batch-transport-env", variables);
-    environment.getPropertySources().addFirst(envSource);
-    YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
-    ClassPathResource resource = new ClassPathResource("batch-defaults.yml");
-    List<PropertySource<?>> sources = loader.load("actual-batch-defaults", resource);
-    for (PropertySource<?> source : sources) {
-      environment.getPropertySources().addLast(source);
     }
-    return environment;
-  }
 
-  @Configuration(proxyBeanMethods = false)
-  @EnableConfigurationProperties({
-    WorkerKafkaProperties.class,
-    WorkerConcurrencyProperties.class,
-    WorkerLeaseProperties.class
-  })
-  static class BindingConfiguration {}
+    @Test
+    @DisplayName("现有配置键完整绑定, Kafka 允许零字节和零等待配置")
+    void shouldBindExistingKeysAndZeroValues() {
+        runner.withPropertyValues(
+                        "spring.kafka.consumer.auto-offset-reset=earliest",
+                        "spring.kafka.consumer.max-poll-records=4",
+                        "spring.kafka.consumer.fetch-min-size=0",
+                        "spring.kafka.consumer.fetch-max-wait=0",
+                        "spring.kafka.consumer.max-poll-interval-ms=1200000",
+                        "spring.kafka.consumer.metadata-max-age-ms=0",
+                        "spring.kafka.listener.concurrency=2",
+                        "batch.worker.max-concurrent-tasks=8",
+                        "batch.worker.lease.renew-interval-millis=2500",
+                        "batch.worker.lease.consecutive-failure-alert-threshold=4",
+                        "batch.worker.lease.circuit-half-open-tick-interval=6",
+                        "batch.worker.lease.renew-batch-max-items=128")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    WorkerKafkaProperties kafka = context.getBean(WorkerKafkaProperties.class);
+                    assertThat(kafka.getConsumer().getAutoOffsetReset()).isEqualTo("earliest");
+                    assertThat(kafka.getConsumer().getMaxPollRecords()).isEqualTo(4);
+                    assertThat(kafka.getConsumer().getFetchMinSize()).isZero();
+                    assertThat(kafka.getConsumer().getFetchMaxWait()).isZero();
+                    assertThat(kafka.getConsumer().getMaxPollIntervalMs()).isEqualTo(1_200_000);
+                    assertThat(kafka.getConsumer().getMetadataMaxAgeMs()).isZero();
+                    assertThat(kafka.getListener().getConcurrency()).isEqualTo(2);
+                    assertThat(context.getBean(WorkerConcurrencyProperties.class)
+                                    .getMaxConcurrentTasks())
+                            .isEqualTo(8);
+                    WorkerLeaseProperties lease = context.getBean(WorkerLeaseProperties.class);
+                    assertThat(lease.getRenewIntervalMillis()).isEqualTo(2_500L);
+                    assertThat(lease.getConsecutiveFailureAlertThreshold()).isEqualTo(4);
+                    assertThat(lease.getCircuitHalfOpenTickInterval()).isEqualTo(6);
+                    assertThat(lease.getRenewBatchMaxItems()).isEqualTo(128);
+                });
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "spring.kafka.bootstrap-servers=",
+                "spring.kafka.consumer.auto-offset-reset=",
+                "spring.kafka.consumer.max-poll-records=0",
+                "spring.kafka.consumer.fetch-min-size=-1",
+                "spring.kafka.consumer.fetch-max-wait=-1",
+                "spring.kafka.consumer.max-poll-interval-ms=0",
+                "spring.kafka.consumer.metadata-max-age-ms=-1",
+                "spring.kafka.listener.concurrency=0",
+                "batch.worker.max-concurrent-tasks=0",
+                "batch.worker.lease.renew-interval-millis=0",
+                "batch.worker.lease.consecutive-failure-alert-threshold=0",
+                "batch.worker.lease.circuit-half-open-tick-interval=0",
+                "batch.worker.lease.renew-batch-max-items=0"
+            })
+    @DisplayName("不可执行的参数在绑定期拒绝, 不等到监听或续租启动")
+    void shouldRejectInvalidValues(String property) {
+        runner.withPropertyValues(property).run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(BindValidationException.class);
+        });
+    }
+
+    @Test
+    @DisplayName("实际共享YAML缺省关闭批量领取和上报，保留5ms微批等待及32项上限")
+    void shouldBindBatchTransportDefaultsFromSharedYaml() throws IOException {
+        MockEnvironment environment = sharedDefaultsEnvironment(Map.of());
+
+        OrchestratorTaskClientProperties client = Binder.get(environment)
+                .bind("batch.worker.task-client", OrchestratorTaskClientProperties.class)
+                .get();
+        WorkerBatchClaimProperties claim = Binder.get(environment)
+                .bind("batch.worker.batch-claim", WorkerBatchClaimProperties.class)
+                .get();
+
+        assertThat(client.isReportBatchEnabled()).isFalse();
+        assertThat(client.getReportBatchWaitMillis()).isEqualTo(5L);
+        assertThat(claim.isEnabled()).isFalse();
+        assertThat(claim.effectiveBatchSize()).isEqualTo(32);
+    }
+
+    @Test
+    @DisplayName("环境桥接实际绑定批量开关与claim上限，显式零等待不被默认值覆盖")
+    void shouldBindBatchTransportEnvironmentAndPreserveZeroWait() throws IOException {
+        Map<String, Object> variables = Map.of(
+                "BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_ENABLED", "true",
+                "BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_WAIT_MILLIS", "0",
+                "BATCH_WORKER_BATCH_CLAIM_ENABLED", "true",
+                "BATCH_WORKER_BATCH_CLAIM_MAX_BATCH_SIZE", "5");
+        MockEnvironment environment = sharedDefaultsEnvironment(variables);
+
+        OrchestratorTaskClientProperties client = Binder.get(environment)
+                .bind("batch.worker.task-client", OrchestratorTaskClientProperties.class)
+                .get();
+        WorkerBatchClaimProperties claim = Binder.get(environment)
+                .bind("batch.worker.batch-claim", WorkerBatchClaimProperties.class)
+                .get();
+
+        assertThat(client.isReportBatchEnabled()).isTrue();
+        assertThat(client.getReportBatchWaitMillis()).isZero();
+        assertThat(claim.isEnabled()).isTrue();
+        assertThat(claim.effectiveBatchSize()).isEqualTo(5);
+    }
+
+    private static MockEnvironment sharedDefaultsEnvironment(Map<String, Object> variables) throws IOException {
+        MockEnvironment environment = new MockEnvironment();
+        SystemEnvironmentPropertySource envSource =
+                new SystemEnvironmentPropertySource("batch-transport-env", variables);
+        environment.getPropertySources().addFirst(envSource);
+        YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
+        ClassPathResource resource = new ClassPathResource("batch-defaults.yml");
+        List<PropertySource<?>> sources = loader.load("actual-batch-defaults", resource);
+        for (PropertySource<?> source : sources) {
+            environment.getPropertySources().addLast(source);
+        }
+        return environment;
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties({
+        WorkerKafkaProperties.class,
+        WorkerConcurrencyProperties.class,
+        WorkerLeaseProperties.class
+    })
+    static class BindingConfiguration {}
 }

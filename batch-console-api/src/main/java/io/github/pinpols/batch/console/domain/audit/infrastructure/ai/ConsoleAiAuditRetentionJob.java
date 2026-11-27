@@ -23,44 +23,44 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class ConsoleAiAuditRetentionJob {
 
-  /** AI 审计保留清理任务的执行间隔（小时）。 */
-  private static final int PURGE_INTERVAL_HOURS = 24;
+    /** AI 审计保留清理任务的执行间隔（小时）。 */
+    private static final int PURGE_INTERVAL_HOURS = 24;
 
-  private final ConsoleAiProperties properties;
-  private final ConsoleAiAuditLogMapper mapper;
-  private ScheduledExecutorService executor;
+    private final ConsoleAiProperties properties;
+    private final ConsoleAiAuditLogMapper mapper;
+    private ScheduledExecutorService executor;
 
-  @PostConstruct
-  void start() {
-    if (!properties.isAuditRetentionEnabled() || properties.getAuditRetentionDays() <= 0) {
-      return;
+    @PostConstruct
+    void start() {
+        if (!properties.isAuditRetentionEnabled() || properties.getAuditRetentionDays() <= 0) {
+            return;
+        }
+        executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "console-ai-audit-retention");
+            thread.setDaemon(true);
+            return thread;
+        });
+        executor.scheduleWithFixedDelay(this::purge, 1, PURGE_INTERVAL_HOURS, TimeUnit.HOURS);
     }
-    executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
-      Thread thread = new Thread(runnable, "console-ai-audit-retention");
-      thread.setDaemon(true);
-      return thread;
-    });
-    executor.scheduleWithFixedDelay(this::purge, 1, PURGE_INTERVAL_HOURS, TimeUnit.HOURS);
-  }
 
-  @PreDestroy
-  void stop() {
-    if (EmptyChecks.isNotNull(executor)) {
-      executor.shutdownNow();
+    @PreDestroy
+    void stop() {
+        if (EmptyChecks.isNotNull(executor)) {
+            executor.shutdownNow();
+        }
     }
-  }
 
-  private void purge() {
-    try {
-      Instant currentInstant = BatchDateTimeSupport.utcNow();
-      OffsetDateTime currentUtcTime = OffsetDateTime.ofInstant(currentInstant, ZoneOffset.UTC);
-      int retentionDays = properties.getAuditRetentionDays();
-      Duration retentionPeriod = Duration.ofDays(retentionDays);
-      OffsetDateTime cutoff = currentUtcTime.minus(retentionPeriod);
-      int deleted = mapper.deleteBefore(cutoff);
-      log.info("AI audit retention completed: cutoff={}, deleted={}", cutoff, deleted);
-    } catch (RuntimeException exception) {
-      log.warn("AI audit retention failed", exception);
+    private void purge() {
+        try {
+            Instant currentInstant = BatchDateTimeSupport.utcNow();
+            OffsetDateTime currentUtcTime = OffsetDateTime.ofInstant(currentInstant, ZoneOffset.UTC);
+            int retentionDays = properties.getAuditRetentionDays();
+            Duration retentionPeriod = Duration.ofDays(retentionDays);
+            OffsetDateTime cutoff = currentUtcTime.minus(retentionPeriod);
+            int deleted = mapper.deleteBefore(cutoff);
+            log.info("AI audit retention completed: cutoff={}, deleted={}", cutoff, deleted);
+        } catch (RuntimeException exception) {
+            log.warn("AI audit retention failed", exception);
+        }
     }
-  }
 }

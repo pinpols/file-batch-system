@@ -36,103 +36,101 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * forensics；任务/实例终态为 FAILED。
  */
 @E2eSpringBootTest(
-    classes = E2eProcessApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.process.worker-type=PROCESS")
+        classes = E2eProcessApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.process.worker-type=PROCESS")
 @E2eBusinessSchema
 @DisplayName("PROCESS 失败链路端到端:用户校验规则不通过时提交阶段中止,目标表零写入,暂存数据留档,任务与实例均为失败终态")
 class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
-  private final WorkflowRunLaunchService launchService;
-  private final JdbcTemplate jdbcTemplate;
-  private final DataSource businessDataSource;
-  private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
-  private final ObjectMapper objectMapper;
+    private final WorkflowRunLaunchService launchService;
+    private final JdbcTemplate jdbcTemplate;
+    private final DataSource businessDataSource;
+    private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    private final ObjectMapper objectMapper;
 
-  @Autowired
-  ProcessFailurePipelineE2eIT(
-      WorkflowRunLaunchService launchService,
-      JdbcTemplate jdbcTemplate,
-      @Qualifier("processBusinessDataSource") DataSource businessDataSource,
-      E2eOutboxPublishSupport e2eOutboxPublishSupport,
-      ObjectMapper objectMapper) {
-    this.launchService = launchService;
-    this.jdbcTemplate = jdbcTemplate;
-    this.businessDataSource = businessDataSource;
-    this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
-    this.objectMapper = objectMapper;
-  }
+    @Autowired
+    ProcessFailurePipelineE2eIT(
+            WorkflowRunLaunchService launchService,
+            JdbcTemplate jdbcTemplate,
+            @Qualifier("processBusinessDataSource") DataSource businessDataSource,
+            E2eOutboxPublishSupport e2eOutboxPublishSupport,
+            ObjectMapper objectMapper) {
+        this.launchService = launchService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.businessDataSource = businessDataSource;
+        this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
+        this.objectMapper = objectMapper;
+    }
 
-  @Test
-  @DisplayName("校验规则不通过时提交阶段整体中止:目标表没有新增,暂存数据保留供追溯,任务与实例落到失败终态")
-  void wap_sqlTransform_validationFailureAbortsCommit() throws Exception {
-    final String selectCountSql = """
+    @Test
+    @DisplayName("校验规则不通过时提交阶段整体中止:目标表没有新增,暂存数据保留供追溯,任务与实例落到失败终态")
+    void wap_sqlTransform_validationFailureAbortsCommit() throws Exception {
+        final String selectCountSql = """
         select count(*)::int from biz.process_account_summary
     """;
-    final String selectCountSql2 = """
+        final String selectCountSql2 = """
         select count(*)::int from batch.process_staging where tenant_id=?
     """;
 
-    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API, BIZ_DATE);
-    ProcessE2eFixture.cleanProcessRows(businessJdbc);
-    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
-    // 用户校验规则：要求所有行 total_amount >= 1000（本批数据是 30/7，所以会失败）
-    Map<String, Object> validationRule = Map.of(
-        "name",
-        "min_total_threshold",
-        "checkSql",
-        "select bool_and((payload->>'total_amount')::numeric >= 1000) AS pass,"
-            + " 'total_amount must be >= 1000' AS message"
-            + " from batch.process_staging where batch_key = :batchKey");
-    ProcessE2eFixture.configureSqlTransformJobParameters(
-        jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of(validationRule));
+        JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API, BIZ_DATE);
+        ProcessE2eFixture.cleanProcessRows(businessJdbc);
+        ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
+        // 用户校验规则：要求所有行 total_amount >= 1000（本批数据是 30/7，所以会失败）
+        Map<String, Object> validationRule = Map.of(
+                "name",
+                "min_total_threshold",
+                "checkSql",
+                "select bool_and((payload->>'total_amount')::numeric >= 1000) AS pass,"
+                        + " 'total_amount must be >= 1000' AS message"
+                        + " from batch.process_staging where batch_key = :batchKey");
+        ProcessE2eFixture.configureSqlTransformJobParameters(
+                jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of(validationRule));
 
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("bizDate", BIZ_DATE.toString());
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("bizDate", BIZ_DATE.toString());
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-process-validate-fail",
-        params));
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-process-validate-fail",
+                params));
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          E2eStatusLogger.logJobFlowSnapshot(
-              jdbcTemplate, TENANT, seed.dedupKey(), "ProcessE2e-validate-fail");
-          Map<String, Object> outcome = loadProcessOutcome(seed.dedupKey());
-          assertThat(outcome.get("task_status")).isEqualTo("FAILED");
-          assertThat(outcome.get("instance_status")).isEqualTo("FAILED");
-        });
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    E2eStatusLogger.logJobFlowSnapshot(
+                            jdbcTemplate, TENANT, seed.dedupKey(), "ProcessE2e-validate-fail");
+                    Map<String, Object> outcome = loadProcessOutcome(seed.dedupKey());
+                    assertThat(outcome.get("task_status")).isEqualTo("FAILED");
+                    assertThat(outcome.get("instance_status")).isEqualTo("FAILED");
+                });
 
-    // Target 表保持空（COMMIT 没跑）
-    Integer selectedCount = businessJdbc.queryForObject(selectCountSql, Integer.class);
-    assertThat(selectedCount).isZero();
-    // staging 仍含本批的 2 行（留 forensics，直到下次 prepare 才清）
-    Integer selectedCountRead2 =
-        businessJdbc.queryForObject(selectCountSql2, Integer.class, TENANT);
-    assertThat(selectedCountRead2).isEqualTo(2);
-  }
+        // Target 表保持空（COMMIT 没跑）
+        Integer selectedCount = businessJdbc.queryForObject(selectCountSql, Integer.class);
+        assertThat(selectedCount).isZero();
+        // staging 仍含本批的 2 行（留 forensics，直到下次 prepare 才清）
+        Integer selectedCountRead2 = businessJdbc.queryForObject(selectCountSql2, Integer.class, TENANT);
+        assertThat(selectedCountRead2).isEqualTo(2);
+    }
 
-  private Map<String, Object> loadProcessOutcome(String dedupKey) {
-    final String selectTaskStatusSql = """
+    private Map<String, Object> loadProcessOutcome(String dedupKey) {
+        final String selectTaskStatusSql = """
         select t.task_status, ji.instance_status, ji.high_water_mark_out
         from batch.job_task t
         join batch.job_instance ji on ji.id = t.job_instance_id
         where ji.tenant_id = ? and ji.dedup_key = ?
         """;
 
-    return jdbcTemplate.queryForMap(selectTaskStatusSql, TENANT, dedupKey);
-  }
+        return jdbcTemplate.queryForMap(selectTaskStatusSql, TENANT, dedupKey);
+    }
 }

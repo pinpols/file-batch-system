@@ -55,327 +55,325 @@ import org.springframework.core.env.Environment;
 @Slf4j
 public abstract class AbstractWorkerLoop implements EnvironmentAware {
 
-  /**
-   * workerId（池编码 + "-" + 实例 ID）的长度上限，对应 worker_registry.worker_code VARCHAR(128)
-   * （V3__create_config_tables.sql）。
-   */
-  private static final int WORKER_ID_MAX_LENGTH = 128;
+    /**
+     * workerId（池编码 + "-" + 实例 ID）的长度上限，对应 worker_registry.worker_code VARCHAR(128)
+     * （V3__create_config_tables.sql）。
+     */
+    private static final int WORKER_ID_MAX_LENGTH = 128;
 
-  /** workerId 超长时保留的实例 ID 后缀长度上限；剩余长度留给池编码前缀和连接符。 */
-  private static final int INSTANCE_ID_SUFFIX_MAX_LENGTH = 64;
+    /** workerId 超长时保留的实例 ID 后缀长度上限；剩余长度留给池编码前缀和连接符。 */
+    private static final int INSTANCE_ID_SUFFIX_MAX_LENGTH = 64;
 
-  /** 注册失败单行日志沿 cause 链拼接摘要时的长度上限，只限制日志长度，不落库。 */
-  private static final int REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH = 500;
+    /** 注册失败单行日志沿 cause 链拼接摘要时的长度上限，只限制日志长度，不落库。 */
+    private static final int REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH = 500;
 
-  private final WorkerLifecycleManager workerLifecycleManager;
-  private final HeartbeatService heartbeatService;
-  private final BatchDateTimeSupport dateTimeSupport;
-  private final WorkerIdentityProperties identityProperties;
-  private final int maxConcurrentTasks;
-  private final boolean failFastOnStartup;
-  private final AtomicBoolean started = new AtomicBoolean(false);
-  private final AtomicBoolean applicationReady = new AtomicBoolean(false);
-  private final AtomicBoolean stopping = new AtomicBoolean(false);
-  private final AtomicReference<WorkerRegistration> registration = new AtomicReference<>();
+    private final WorkerLifecycleManager workerLifecycleManager;
+    private final HeartbeatService heartbeatService;
+    private final BatchDateTimeSupport dateTimeSupport;
+    private final WorkerIdentityProperties identityProperties;
+    private final int maxConcurrentTasks;
+    private final boolean failFastOnStartup;
+    private final AtomicBoolean started = new AtomicBoolean(false);
+    private final AtomicBoolean applicationReady = new AtomicBoolean(false);
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private final AtomicReference<WorkerRegistration> registration = new AtomicReference<>();
 
-  /**
-   * Spring 回调注入运行时环境。端口只采用主 WebServer 绑定后写入的 local.server.port，
-   * 不采用 server.port 配置值或独立 management 服务的 local.management.port。
-   */
-  private Environment environment;
+    /**
+     * Spring 回调注入运行时环境。端口只采用主 WebServer 绑定后写入的 local.server.port，
+     * 不采用 server.port 配置值或独立 management 服务的 local.management.port。
+     */
+    private Environment environment;
 
-  protected AbstractWorkerLoop(
-      WorkerLifecycleManager workerLifecycleManager,
-      HeartbeatService heartbeatService,
-      BatchDateTimeSupport dateTimeSupport,
-      int maxConcurrentTasks) {
-    this(
-        workerLifecycleManager,
-        heartbeatService,
-        dateTimeSupport,
-        maxConcurrentTasks,
-        new WorkerIdentityProperties(),
-        new WorkerRegistryStartupProperties());
-  }
-
-  protected AbstractWorkerLoop(
-      WorkerLifecycleManager workerLifecycleManager,
-      HeartbeatService heartbeatService,
-      BatchDateTimeSupport dateTimeSupport,
-      int maxConcurrentTasks,
-      WorkerIdentityProperties identityProperties) {
-    this(
-        workerLifecycleManager,
-        heartbeatService,
-        dateTimeSupport,
-        maxConcurrentTasks,
-        identityProperties,
-        new WorkerRegistryStartupProperties());
-  }
-
-  protected AbstractWorkerLoop(
-      WorkerLifecycleManager workerLifecycleManager,
-      HeartbeatService heartbeatService,
-      BatchDateTimeSupport dateTimeSupport,
-      int maxConcurrentTasks,
-      WorkerIdentityProperties identityProperties,
-      WorkerRegistryStartupProperties workerRegistryStartupProperties) {
-    this.workerLifecycleManager = workerLifecycleManager;
-    this.heartbeatService = heartbeatService;
-    this.dateTimeSupport = dateTimeSupport;
-    this.maxConcurrentTasks = maxConcurrentTasks;
-    this.identityProperties = identityProperties;
-    this.failFastOnStartup = workerRegistryStartupProperties.isFailFastOnStartup();
-  }
-
-  /** Worker 配置（topic、tenantId、workerType 等）。 */
-  protected abstract WorkerConfiguration workerConfiguration();
-
-  /** worker 逻辑分组，如 {@code import}/{@code export}/{@code dispatch}。 */
-  protected abstract String workerGroup();
-
-  /** Worker 进程可选上报的执行器能力；默认不声明。 */
-  protected List<WorkerTaskCapabilityDto> taskCapabilities() {
-    return List.of();
-  }
-
-  /** 本 Worker 实际可执行插件的 Replay 声明目录；缺省为空，调用方按未知能力失败关闭。 */
-  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
-    return List.of();
-  }
-
-  @Override
-  public void setEnvironment(Environment environment) {
-    this.environment = environment;
-  }
-
-  /**
-   * 注册上报端口必须来自 Spring 主 WebServer 的实际绑定结果。
-   *
-   * <p>{@code local.server.port} 由 Spring Boot 在 WebServer 真正绑定后写入 Environment，因此 {@code
-   * server.port=0}（随机端口）也能上报正确结果。心跳或消费者提前触发注册时，若服务尚未绑定则拒绝注册，
-   * 后续沿既有重试路径再次尝试，避免把配置端口当作监听成功的证据。
-   */
-  private int resolveWorkerPort() {
-    int port = EmptyChecks.isNull(environment)
-        ? -1
-        : Objects.requireNonNullElse(
-            environment.getProperty("local.server.port", Integer.class), -1);
-    if (port < 1 || port > 65535) {
-      throw new IllegalStateException("worker main HTTP server has no valid bound port");
+    protected AbstractWorkerLoop(
+            WorkerLifecycleManager workerLifecycleManager,
+            HeartbeatService heartbeatService,
+            BatchDateTimeSupport dateTimeSupport,
+            int maxConcurrentTasks) {
+        this(
+                workerLifecycleManager,
+                heartbeatService,
+                dateTimeSupport,
+                maxConcurrentTasks,
+                new WorkerIdentityProperties(),
+                new WorkerRegistryStartupProperties());
     }
-    return port;
-  }
 
-  @Order(Ordered.LOWEST_PRECEDENCE - 100)
-  @EventListener(ApplicationReadyEvent.class)
-  public void onReady() {
-    applicationReady.set(true);
-    try {
-      ensureStarted();
-    } catch (Exception ex) {
-      if (failFastOnStartup) {
-        throw ex;
-      }
-      log.warn(
-          "{} worker register-on-startup failed; will retry on heartbeat. reason={}",
-          workerGroup(),
-          summarizeRegistrationFailure(ex));
+    protected AbstractWorkerLoop(
+            WorkerLifecycleManager workerLifecycleManager,
+            HeartbeatService heartbeatService,
+            BatchDateTimeSupport dateTimeSupport,
+            int maxConcurrentTasks,
+            WorkerIdentityProperties identityProperties) {
+        this(
+                workerLifecycleManager,
+                heartbeatService,
+                dateTimeSupport,
+                maxConcurrentTasks,
+                identityProperties,
+                new WorkerRegistryStartupProperties());
     }
-  }
 
-  /**
-   * 由子类的 {@code @Scheduled} 方法调用。
-   *
-   * <p>把 {@code @Scheduled} 放在子类，是为了避免在抽象层硬编码配置 key（各 worker 的心跳间隔配置可能不同）。
-   */
-  protected void doHeartbeat() {
-    if (stopping.get() || !applicationReady.get()) {
-      return;
+    protected AbstractWorkerLoop(
+            WorkerLifecycleManager workerLifecycleManager,
+            HeartbeatService heartbeatService,
+            BatchDateTimeSupport dateTimeSupport,
+            int maxConcurrentTasks,
+            WorkerIdentityProperties identityProperties,
+            WorkerRegistryStartupProperties workerRegistryStartupProperties) {
+        this.workerLifecycleManager = workerLifecycleManager;
+        this.heartbeatService = heartbeatService;
+        this.dateTimeSupport = dateTimeSupport;
+        this.maxConcurrentTasks = maxConcurrentTasks;
+        this.identityProperties = identityProperties;
+        this.failFastOnStartup = workerRegistryStartupProperties.isFailFastOnStartup();
     }
-    WorkerRegistration current;
-    try {
-      current = ensureStarted();
-    } catch (Exception ex) {
-      log.warn(
-          "{} worker start/register failed; will retry on next heartbeat. cause={}",
-          workerGroup(),
-          SwallowedExceptionLogger.summary(ex));
-      return;
-    }
-    try {
-      if (stopping.get()) {
-        return;
-      }
-      heartbeatService.beat(current.getWorkerId());
-    } catch (Exception ex) {
-      log.warn(
-          "{} worker heartbeat unavailable: {} ({})",
-          workerGroup(),
-          SwallowedExceptionLogger.summary(ex),
-          ex.getClass().getSimpleName());
-    }
-  }
 
-  /** 幂等启动：首次调用注册 worker，后续调用直接返回注册信息；双重检查加锁保证线程安全。 */
-  public WorkerRegistration ensureStarted() {
-    if (started.get()) {
-      return registration.get();
-    }
-    synchronized (this) {
-      if (started.get()) {
-        return registration.get();
-      }
-      WorkerConfiguration cfg = workerConfiguration();
-      String workerPoolCode = resolveWorkerPoolCode(cfg);
-      WorkerRegistration workerRegistration = new WorkerRegistration();
-      String workerId = buildWorkerId(workerPoolCode);
-      workerRegistration.setWorkerId(workerId);
-      workerRegistration.setWorkerCode(workerPoolCode);
-      workerRegistration.setTenantId(cfg.tenantId());
-      workerRegistration.setWorkerType(cfg.workerType());
-      // 源头归一 workerGroup 为大写，避免 IMPORT / import 同语义字符串被 ResourceScheduler 等值比较误失配
-      String normalizedWorkerGroup = CodeNormalizer.toUpperOrNull(workerGroup());
-      workerRegistration.setWorkerGroup(normalizedWorkerGroup);
-      String workerHost = resolveHostName();
-      workerRegistration.setHost(workerHost);
-      int workerPort = resolveWorkerPort();
-      workerRegistration.setPort(workerPort);
-      OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
-      workerRegistration.setRegisteredAt(now);
-      workerRegistration.setLastHeartbeatAt(now);
-      workerRegistration.setMaxConcurrent(maxConcurrentTasks);
-      List<String> effectiveCapabilityTags = Stream.concat(
-              cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
-          .distinct()
-          .toList();
-      workerRegistration.setCapabilityTags(effectiveCapabilityTags);
-      workerRegistration.setTaskCapabilities(taskCapabilities());
-      workerRegistration.setReplayCapabilities(replayCapabilities());
-      WorkerRegistration startedRegistration = workerLifecycleManager.start(workerRegistration);
-      registration.set(startedRegistration);
-      started.set(true);
-      log.info(
-          "{} worker started: workerId={}, tenantId={}",
-          workerGroup(),
-          startedRegistration.getWorkerId(),
-          startedRegistration.getTenantId());
-      return startedRegistration;
-    }
-  }
+    /** Worker 配置（topic、tenantId、workerType 等）。 */
+    protected abstract WorkerConfiguration workerConfiguration();
 
-  @PreDestroy
-  public void shutdown() {
-    stopping.set(true);
-    WorkerRegistration current = registration.get();
-    if (current != null) {
-      try {
-        workerLifecycleManager.shutdown(current.getWorkerId());
-      } catch (Exception ex) {
-        log.warn(
-            "{} worker shutdown signal failed: {} ({})",
-            workerGroup(),
-            SwallowedExceptionLogger.summary(ex),
-            ex.getClass().getSimpleName());
-      }
-    }
-  }
+    /** worker 逻辑分组，如 {@code import}/{@code export}/{@code dispatch}。 */
+    protected abstract String workerGroup();
 
-  @EventListener(ContextClosedEvent.class)
-  public void onContextClosed(ContextClosedEvent event) {
-    stopping.set(true);
-  }
+    /** Worker 进程可选上报的执行器能力；默认不声明。 */
+    protected List<WorkerTaskCapabilityDto> taskCapabilities() {
+        return List.of();
+    }
 
-  // S2259 无法识别 Texts.hasText(instanceId) 已在使用前排除 null。
-  @SuppressWarnings("java:S2259")
-  private String buildWorkerId(String poolCode) {
-    String instanceId =
-        EmptyChecks.isNull(identityProperties) ? null : identityProperties.getInstanceId();
-    if (!Texts.hasText(instanceId)) {
-      return poolCode;
+    /** 本 Worker 实际可执行插件的 Replay 声明目录；缺省为空，调用方按未知能力失败关闭。 */
+    protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+        return List.of();
     }
-    String normalizedInstanceId = instanceId.replaceAll("[^a-zA-Z0-9._-]", "_");
-    String combined = poolCode + "-" + normalizedInstanceId;
-    if (combined.length() <= WORKER_ID_MAX_LENGTH) {
-      return combined;
-    }
-    int suffixLength = Math.min(normalizedInstanceId.length(), INSTANCE_ID_SUFFIX_MAX_LENGTH);
-    String suffix = normalizedInstanceId.substring(normalizedInstanceId.length() - suffixLength);
-    // 减 1 留给池编码与实例后缀之间的连接符 "-"。
-    int poolLength = Math.max(1, WORKER_ID_MAX_LENGTH - 1 - suffixLength);
-    int poolPrefixEnd = Math.min(poolCode.length(), poolLength);
-    return poolCode.substring(0, poolPrefixEnd) + "-" + suffix;
-  }
 
-  private String resolveWorkerPoolCode(WorkerConfiguration cfg) {
-    if (Texts.hasText(cfg.workerCode())) {
-      return cfg.workerCode();
+    @Override
+    public void setEnvironment(Environment environment) {
+        this.environment = environment;
     }
-    if (Texts.hasText(cfg.workerType())) {
-      return cfg.workerType().toLowerCase(Locale.ROOT) + "-" + UUID.randomUUID();
-    }
-    return workerGroup() + "-" + UUID.randomUUID();
-  }
 
-  private String resolveHostName() {
-    try {
-      return InetAddress.getLocalHost().getHostName();
-    } catch (UnknownHostException ex) {
-      SwallowedExceptionLogger.info(AbstractWorkerLoop.class, "catch:UnknownHostException", ex);
+    /**
+     * 注册上报端口必须来自 Spring 主 WebServer 的实际绑定结果。
+     *
+     * <p>{@code local.server.port} 由 Spring Boot 在 WebServer 真正绑定后写入 Environment，因此 {@code
+     * server.port=0}（随机端口）也能上报正确结果。心跳或消费者提前触发注册时，若服务尚未绑定则拒绝注册，
+     * 后续沿既有重试路径再次尝试，避免把配置端口当作监听成功的证据。
+     */
+    private int resolveWorkerPort() {
+        int port = EmptyChecks.isNull(environment)
+                ? -1
+                : Objects.requireNonNullElse(environment.getProperty("local.server.port", Integer.class), -1);
+        if (port < 1 || port > 65535) {
+            throw new IllegalStateException("worker main HTTP server has no valid bound port");
+        }
+        return port;
+    }
 
-      return "localhost";
+    @Order(Ordered.LOWEST_PRECEDENCE - 100)
+    @EventListener(ApplicationReadyEvent.class)
+    public void onReady() {
+        applicationReady.set(true);
+        try {
+            ensureStarted();
+        } catch (Exception ex) {
+            if (failFastOnStartup) {
+                throw ex;
+            }
+            log.warn(
+                    "{} worker register-on-startup failed; will retry on heartbeat. reason={}",
+                    workerGroup(),
+                    summarizeRegistrationFailure(ex));
+        }
     }
-  }
 
-  /** 单行日志用：{@link Exception#getMessage()} 常为 null（如 RestClient I/O 失败），沿 cause 链拼可读摘要，不打堆栈。 */
-  private static String summarizeRegistrationFailure(Throwable ex) {
-    if (ex == null) {
-      return "unknown";
+    /**
+     * 由子类的 {@code @Scheduled} 方法调用。
+     *
+     * <p>把 {@code @Scheduled} 放在子类，是为了避免在抽象层硬编码配置 key（各 worker 的心跳间隔配置可能不同）。
+     */
+    protected void doHeartbeat() {
+        if (stopping.get() || !applicationReady.get()) {
+            return;
+        }
+        WorkerRegistration current;
+        try {
+            current = ensureStarted();
+        } catch (Exception ex) {
+            log.warn(
+                    "{} worker start/register failed; will retry on next heartbeat. cause={}",
+                    workerGroup(),
+                    SwallowedExceptionLogger.summary(ex));
+            return;
+        }
+        try {
+            if (stopping.get()) {
+                return;
+            }
+            heartbeatService.beat(current.getWorkerId());
+        } catch (Exception ex) {
+            log.warn(
+                    "{} worker heartbeat unavailable: {} ({})",
+                    workerGroup(),
+                    SwallowedExceptionLogger.summary(ex),
+                    ex.getClass().getSimpleName());
+        }
     }
-    String top = ex.getMessage();
-    if (Texts.hasText(top)) {
-      Throwable root = ex;
-      while (root.getCause() != null) {
-        root = root.getCause();
-      }
-      if (root != ex) {
-        String rm = root.getMessage();
-        String rootPart = Texts.hasText(rm)
-            ? root.getClass().getSimpleName() + ": " + rm
-            : root.getClass().getSimpleName();
-        return top + " [" + rootPart + "]" + registrationFailureHint(ex);
-      }
-      return top + registrationFailureHint(ex);
-    }
-    StringBuilder sb = new StringBuilder();
-    for (Throwable t = ex;
-        EmptyChecks.isNotNull(t) && sb.length() < REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH;
-        t = t.getCause()) {
-      if (EmptyChecks.isNotEmpty(sb)) {
-        sb.append(" <- ");
-      }
-      sb.append(t.getClass().getSimpleName());
-      String m = t.getMessage();
-      if (Texts.hasText(m)) {
-        sb.append(": ").append(m);
-      }
-    }
-    String core = EmptyChecks.isNotEmpty(sb) ? sb.toString() : ex.getClass().getSimpleName();
-    return core + registrationFailureHint(ex);
-  }
 
-  private static String registrationFailureHint(Throwable ex) {
-    for (Throwable t = ex; t != null; t = t.getCause()) {
-      if (t instanceof ConnectException) {
-        return "；原因：无法连上 Orchestrator（未启动、端口错误或未监听）";
-      }
-      if (t instanceof ClosedChannelException) {
-        return "；原因：连接在建立过程中被关闭";
-      }
-      if (t instanceof UnknownHostException) {
-        return "；原因：主机名无法解析";
-      }
+    /** 幂等启动：首次调用注册 worker，后续调用直接返回注册信息；双重检查加锁保证线程安全。 */
+    public WorkerRegistration ensureStarted() {
+        if (started.get()) {
+            return registration.get();
+        }
+        synchronized (this) {
+            if (started.get()) {
+                return registration.get();
+            }
+            WorkerConfiguration cfg = workerConfiguration();
+            String workerPoolCode = resolveWorkerPoolCode(cfg);
+            WorkerRegistration workerRegistration = new WorkerRegistration();
+            String workerId = buildWorkerId(workerPoolCode);
+            workerRegistration.setWorkerId(workerId);
+            workerRegistration.setWorkerCode(workerPoolCode);
+            workerRegistration.setTenantId(cfg.tenantId());
+            workerRegistration.setWorkerType(cfg.workerType());
+            // 源头归一 workerGroup 为大写，避免 IMPORT / import 同语义字符串被 ResourceScheduler 等值比较误失配
+            String normalizedWorkerGroup = CodeNormalizer.toUpperOrNull(workerGroup());
+            workerRegistration.setWorkerGroup(normalizedWorkerGroup);
+            String workerHost = resolveHostName();
+            workerRegistration.setHost(workerHost);
+            int workerPort = resolveWorkerPort();
+            workerRegistration.setPort(workerPort);
+            OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
+            workerRegistration.setRegisteredAt(now);
+            workerRegistration.setLastHeartbeatAt(now);
+            workerRegistration.setMaxConcurrent(maxConcurrentTasks);
+            List<String> effectiveCapabilityTags = Stream.concat(
+                            cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
+                    .distinct()
+                    .toList();
+            workerRegistration.setCapabilityTags(effectiveCapabilityTags);
+            workerRegistration.setTaskCapabilities(taskCapabilities());
+            workerRegistration.setReplayCapabilities(replayCapabilities());
+            WorkerRegistration startedRegistration = workerLifecycleManager.start(workerRegistration);
+            registration.set(startedRegistration);
+            started.set(true);
+            log.info(
+                    "{} worker started: workerId={}, tenantId={}",
+                    workerGroup(),
+                    startedRegistration.getWorkerId(),
+                    startedRegistration.getTenantId());
+            return startedRegistration;
+        }
     }
-    return "";
-  }
+
+    @PreDestroy
+    public void shutdown() {
+        stopping.set(true);
+        WorkerRegistration current = registration.get();
+        if (current != null) {
+            try {
+                workerLifecycleManager.shutdown(current.getWorkerId());
+            } catch (Exception ex) {
+                log.warn(
+                        "{} worker shutdown signal failed: {} ({})",
+                        workerGroup(),
+                        SwallowedExceptionLogger.summary(ex),
+                        ex.getClass().getSimpleName());
+            }
+        }
+    }
+
+    @EventListener(ContextClosedEvent.class)
+    public void onContextClosed(ContextClosedEvent event) {
+        stopping.set(true);
+    }
+
+    // S2259 无法识别 Texts.hasText(instanceId) 已在使用前排除 null。
+    @SuppressWarnings("java:S2259")
+    private String buildWorkerId(String poolCode) {
+        String instanceId = EmptyChecks.isNull(identityProperties) ? null : identityProperties.getInstanceId();
+        if (!Texts.hasText(instanceId)) {
+            return poolCode;
+        }
+        String normalizedInstanceId = instanceId.replaceAll("[^a-zA-Z0-9._-]", "_");
+        String combined = poolCode + "-" + normalizedInstanceId;
+        if (combined.length() <= WORKER_ID_MAX_LENGTH) {
+            return combined;
+        }
+        int suffixLength = Math.min(normalizedInstanceId.length(), INSTANCE_ID_SUFFIX_MAX_LENGTH);
+        String suffix = normalizedInstanceId.substring(normalizedInstanceId.length() - suffixLength);
+        // 减 1 留给池编码与实例后缀之间的连接符 "-"。
+        int poolLength = Math.max(1, WORKER_ID_MAX_LENGTH - 1 - suffixLength);
+        int poolPrefixEnd = Math.min(poolCode.length(), poolLength);
+        return poolCode.substring(0, poolPrefixEnd) + "-" + suffix;
+    }
+
+    private String resolveWorkerPoolCode(WorkerConfiguration cfg) {
+        if (Texts.hasText(cfg.workerCode())) {
+            return cfg.workerCode();
+        }
+        if (Texts.hasText(cfg.workerType())) {
+            return cfg.workerType().toLowerCase(Locale.ROOT) + "-" + UUID.randomUUID();
+        }
+        return workerGroup() + "-" + UUID.randomUUID();
+    }
+
+    private String resolveHostName() {
+        try {
+            return InetAddress.getLocalHost().getHostName();
+        } catch (UnknownHostException ex) {
+            SwallowedExceptionLogger.info(AbstractWorkerLoop.class, "catch:UnknownHostException", ex);
+
+            return "localhost";
+        }
+    }
+
+    /** 单行日志用：{@link Exception#getMessage()} 常为 null（如 RestClient I/O 失败），沿 cause 链拼可读摘要，不打堆栈。 */
+    private static String summarizeRegistrationFailure(Throwable ex) {
+        if (ex == null) {
+            return "unknown";
+        }
+        String top = ex.getMessage();
+        if (Texts.hasText(top)) {
+            Throwable root = ex;
+            while (root.getCause() != null) {
+                root = root.getCause();
+            }
+            if (root != ex) {
+                String rm = root.getMessage();
+                String rootPart = Texts.hasText(rm)
+                        ? root.getClass().getSimpleName() + ": " + rm
+                        : root.getClass().getSimpleName();
+                return top + " [" + rootPart + "]" + registrationFailureHint(ex);
+            }
+            return top + registrationFailureHint(ex);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Throwable t = ex;
+                EmptyChecks.isNotNull(t) && sb.length() < REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH;
+                t = t.getCause()) {
+            if (EmptyChecks.isNotEmpty(sb)) {
+                sb.append(" <- ");
+            }
+            sb.append(t.getClass().getSimpleName());
+            String m = t.getMessage();
+            if (Texts.hasText(m)) {
+                sb.append(": ").append(m);
+            }
+        }
+        String core = EmptyChecks.isNotEmpty(sb) ? sb.toString() : ex.getClass().getSimpleName();
+        return core + registrationFailureHint(ex);
+    }
+
+    private static String registrationFailureHint(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof ConnectException) {
+                return "；原因：无法连上 Orchestrator（未启动、端口错误或未监听）";
+            }
+            if (t instanceof ClosedChannelException) {
+                return "；原因：连接在建立过程中被关闭";
+            }
+            if (t instanceof UnknownHostException) {
+                return "；原因：主机名无法解析";
+            }
+        }
+        return "";
+    }
 }

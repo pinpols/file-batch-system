@@ -36,206 +36,182 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("控制台运维查询服务")
 class ConsoleOpsQueryServiceTest {
 
-  @Mock
-  private AuditLogMapper auditLogMapper;
+    @Mock
+    private AuditLogMapper auditLogMapper;
 
-  @Mock
-  private WorkerRegistryMapper workerRegistryMapper;
+    @Mock
+    private WorkerRegistryMapper workerRegistryMapper;
 
-  @Mock
-  private BatchDayMapper batchDayMapper;
+    @Mock
+    private BatchDayMapper batchDayMapper;
 
-  @Mock
-  private AlertEventMapper alertEventMapper;
+    @Mock
+    private AlertEventMapper alertEventMapper;
 
-  @Mock
-  private ApprovalCommandMapper approvalCommandMapper;
+    @Mock
+    private ApprovalCommandMapper approvalCommandMapper;
 
-  @Mock
-  private LocalizedErrorRenderer localizedErrorRenderer;
+    @Mock
+    private LocalizedErrorRenderer localizedErrorRenderer;
 
-  @Mock
-  private BatchTimezoneProvider timezoneProvider;
+    @Mock
+    private BatchTimezoneProvider timezoneProvider;
 
-  @Test
-  @DisplayName("查询 Worker 列表时返回已持久化的执行器能力")
-  void shouldIncludeWorkerTaskCapabilities_whenLoadingWorkerList() {
-    WorkerRegistryView worker = new WorkerRegistryView();
-    worker.setId(1L);
-    worker.setTenantId("tenant-a");
-    worker.setWorkerCode("atomic-1");
-    worker.setWorkerGroup("atomic");
-    worker.setStatus("ONLINE");
-    worker.setCapabilityTagsJson("[\"atomic\"]");
-    worker.setResourceTag("disk");
-    worker.setTaskCapabilitiesJson("[{\"taskType\":\"file_sha256\",\"resourceKinds\":[\"DISK\"],"
-        + "\"idempotent\":true,\"cancellable\":false,"
-        + "\"recommendedTimeoutMillis\":300000}]");
-    when(workerRegistryMapper.selectByQuery(any())).thenReturn(List.of(worker));
-    when(workerRegistryMapper.countByQuery(any())).thenReturn(1L);
-    ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
-        null, null, null, null, null, null, workerRegistryMapper, null, null, null, null, null);
-    TenantIdResolver tenantResolver = requestTenantId -> requestTenantId;
-    ConsoleOpsQueryService service = new ConsoleOpsQueryService(
-        tenantResolver, mappers, localizedErrorRenderer, timezoneProvider);
-    WorkerRegistryQueryRequest request = new WorkerRegistryQueryRequest();
-    request.setTenantId("tenant-a");
+    @Test
+    @DisplayName("查询 Worker 列表时返回已持久化的执行器能力")
+    void shouldIncludeWorkerTaskCapabilities_whenLoadingWorkerList() {
+        WorkerRegistryView worker = new WorkerRegistryView();
+        worker.setId(1L);
+        worker.setTenantId("tenant-a");
+        worker.setWorkerCode("atomic-1");
+        worker.setWorkerGroup("atomic");
+        worker.setStatus("ONLINE");
+        worker.setCapabilityTagsJson("[\"atomic\"]");
+        worker.setResourceTag("disk");
+        worker.setTaskCapabilitiesJson("[{\"taskType\":\"file_sha256\",\"resourceKinds\":[\"DISK\"],"
+                + "\"idempotent\":true,\"cancellable\":false,"
+                + "\"recommendedTimeoutMillis\":300000}]");
+        when(workerRegistryMapper.selectByQuery(any())).thenReturn(List.of(worker));
+        when(workerRegistryMapper.countByQuery(any())).thenReturn(1L);
+        ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
+                null, null, null, null, null, null, workerRegistryMapper, null, null, null, null, null);
+        TenantIdResolver tenantResolver = requestTenantId -> requestTenantId;
+        ConsoleOpsQueryService service =
+                new ConsoleOpsQueryService(tenantResolver, mappers, localizedErrorRenderer, timezoneProvider);
+        WorkerRegistryQueryRequest request = new WorkerRegistryQueryRequest();
+        request.setTenantId("tenant-a");
 
-    var response = service.workers(request).items().getFirst();
+        var response = service.workers(request).items().getFirst();
 
-    assertThat(response.capabilityTags()).isEqualTo("[\"atomic\"]");
-    assertThat(response.resourceTag()).isEqualTo("disk");
-    assertThat(response.taskCapabilities()).singleElement().satisfies(capability -> {
-      assertThat(capability.taskType()).isEqualTo("file_sha256");
-      assertThat(capability.resourceKinds()).containsExactly("DISK");
-      assertThat(capability.recommendedTimeoutMillis()).isEqualTo(300_000L);
-    });
-  }
+        assertThat(response.capabilityTags()).isEqualTo("[\"atomic\"]");
+        assertThat(response.resourceTag()).isEqualTo("disk");
+        assertThat(response.taskCapabilities()).singleElement().satisfies(capability -> {
+            assertThat(capability.taskType()).isEqualTo("file_sha256");
+            assertThat(capability.resourceKinds()).containsExactly("DISK");
+            assertThat(capability.recommendedTimeoutMillis()).isEqualTo(300_000L);
+        });
+    }
 
-  @Test
-  @DisplayName("告警详情和审批载荷只在查询响应中递归脱敏")
-  void shouldMaskDynamicJsonInReadResponses() {
-    AlertEventEntity alert = new AlertEventEntity();
-    alert.setId(2L);
-    alert.setTenantId("tenant-a");
-    alert.setDetailJson("{\"reason\":\"failed\",\"auth\":{\"clientSecret\":\"raw\"}}");
-    ApprovalCommandEntity approval = new ApprovalCommandEntity();
-    approval.setId(3L);
-    approval.setTenantId("tenant-a");
-    approval.setPayloadJson("{\"action\":\"retry\",\"apiToken\":\"raw\"}");
-    when(alertEventMapper.selectByQuery(any())).thenReturn(List.of(alert));
-    when(alertEventMapper.countByQuery(any())).thenReturn(1L);
-    when(approvalCommandMapper.selectByQuery(any())).thenReturn(List.of(approval));
-    when(approvalCommandMapper.countByQuery(any())).thenReturn(1L);
-    ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
-        null,
-        alertEventMapper,
-        approvalCommandMapper,
-        null,
-        null,
-        null,
-        workerRegistryMapper,
-        null,
-        null,
-        null,
-        null,
-        null);
-    ConsoleOpsQueryService service = new ConsoleOpsQueryService(
-        requestTenantId -> requestTenantId, mappers, localizedErrorRenderer, timezoneProvider);
-    AlertEventQueryRequest alertRequest = new AlertEventQueryRequest();
-    alertRequest.setTenantId("tenant-a");
-    ApprovalCommandQueryRequest approvalRequest = new ApprovalCommandQueryRequest();
-    approvalRequest.setTenantId("tenant-a");
+    @Test
+    @DisplayName("告警详情和审批载荷只在查询响应中递归脱敏")
+    void shouldMaskDynamicJsonInReadResponses() {
+        AlertEventEntity alert = new AlertEventEntity();
+        alert.setId(2L);
+        alert.setTenantId("tenant-a");
+        alert.setDetailJson("{\"reason\":\"failed\",\"auth\":{\"clientSecret\":\"raw\"}}");
+        ApprovalCommandEntity approval = new ApprovalCommandEntity();
+        approval.setId(3L);
+        approval.setTenantId("tenant-a");
+        approval.setPayloadJson("{\"action\":\"retry\",\"apiToken\":\"raw\"}");
+        when(alertEventMapper.selectByQuery(any())).thenReturn(List.of(alert));
+        when(alertEventMapper.countByQuery(any())).thenReturn(1L);
+        when(approvalCommandMapper.selectByQuery(any())).thenReturn(List.of(approval));
+        when(approvalCommandMapper.countByQuery(any())).thenReturn(1L);
+        ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
+                null,
+                alertEventMapper,
+                approvalCommandMapper,
+                null,
+                null,
+                null,
+                workerRegistryMapper,
+                null,
+                null,
+                null,
+                null,
+                null);
+        ConsoleOpsQueryService service = new ConsoleOpsQueryService(
+                requestTenantId -> requestTenantId, mappers, localizedErrorRenderer, timezoneProvider);
+        AlertEventQueryRequest alertRequest = new AlertEventQueryRequest();
+        alertRequest.setTenantId("tenant-a");
+        ApprovalCommandQueryRequest approvalRequest = new ApprovalCommandQueryRequest();
+        approvalRequest.setTenantId("tenant-a");
 
-    var alertResponse = service.alertEvents(alertRequest).items().getFirst();
-    var approvalResponse = service.approvals(approvalRequest).items().getFirst();
+        var alertResponse = service.alertEvents(alertRequest).items().getFirst();
+        var approvalResponse = service.approvals(approvalRequest).items().getFirst();
 
-    // 告警详情保持可解析的 JSON（客户端据此生成运行跳转），只脱敏不做 HTML 转义
-    assertThat(alertResponse.detailJson())
-        .contains("\"reason\":\"failed\"")
-        .contains("\"clientSecret\":\"****\"")
-        .doesNotContain("&quot;")
-        .doesNotContain("raw");
-    assertThat(approvalResponse.payloadJson())
-        .contains("\"action\":\"retry\"")
-        .contains("\"apiToken\":\"****\"")
-        .doesNotContain("raw");
-  }
+        // 告警详情保持可解析的 JSON（客户端据此生成运行跳转），只脱敏不做 HTML 转义
+        assertThat(alertResponse.detailJson())
+                .contains("\"reason\":\"failed\"")
+                .contains("\"clientSecret\":\"****\"")
+                .doesNotContain("&quot;")
+                .doesNotContain("raw");
+        assertThat(approvalResponse.payloadJson())
+                .contains("\"action\":\"retry\"")
+                .contains("\"apiToken\":\"****\"")
+                .doesNotContain("raw");
+    }
 
-  @Test
-  @DisplayName("审计日志查询和导出遮蔽证据引用与自由文本凭据")
-  void shouldMaskAuditLogEvidenceInReadResponses() {
-    FileAuditLogRow row = new FileAuditLogRow(
-        4L,
-        "tenant-a",
-        1L,
-        "FILE_DOWNLOAD",
-        "SUCCESS",
-        "USER",
-        "operator-a",
-        "trace-a",
-        "https://user:pass@example.test/evidence",
-        "{\"password\":\"raw-pass\",\"path\":\"/tmp/a\"}",
-        Instant.parse("2026-11-14T00:00:00Z"));
-    when(auditLogMapper.selectByQuery(any())).thenReturn(List.of(row));
-    when(auditLogMapper.countByQuery(any())).thenReturn(1L);
-    ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
-        auditLogMapper,
-        null,
-        null,
-        null,
-        null,
-        null,
-        workerRegistryMapper,
-        null,
-        null,
-        null,
-        null,
-        null);
-    ConsoleOpsQueryService service = new ConsoleOpsQueryService(
-        requestTenantId -> requestTenantId, mappers, localizedErrorRenderer, timezoneProvider);
-    AuditLogQueryRequest request = new AuditLogQueryRequest();
-    request.setTenantId("tenant-a");
+    @Test
+    @DisplayName("审计日志查询和导出遮蔽证据引用与自由文本凭据")
+    void shouldMaskAuditLogEvidenceInReadResponses() {
+        FileAuditLogRow row = new FileAuditLogRow(
+                4L,
+                "tenant-a",
+                1L,
+                "FILE_DOWNLOAD",
+                "SUCCESS",
+                "USER",
+                "operator-a",
+                "trace-a",
+                "https://user:pass@example.test/evidence",
+                "{\"password\":\"raw-pass\",\"path\":\"/tmp/a\"}",
+                Instant.parse("2026-11-14T00:00:00Z"));
+        when(auditLogMapper.selectByQuery(any())).thenReturn(List.of(row));
+        when(auditLogMapper.countByQuery(any())).thenReturn(1L);
+        ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
+                auditLogMapper, null, null, null, null, null, workerRegistryMapper, null, null, null, null, null);
+        ConsoleOpsQueryService service = new ConsoleOpsQueryService(
+                requestTenantId -> requestTenantId, mappers, localizedErrorRenderer, timezoneProvider);
+        AuditLogQueryRequest request = new AuditLogQueryRequest();
+        request.setTenantId("tenant-a");
 
-    var response = service.auditLogs(request).items().getFirst();
+        var response = service.auditLogs(request).items().getFirst();
 
-    assertThat(response.evidenceRef())
-        .isEqualTo("https://****@example.test/evidence")
-        .doesNotContain("user:pass");
-    assertThat(response.detailSummary())
-        .contains("\"password\":\"****\"")
-        .contains("\"path\":\"/tmp/a\"")
-        .doesNotContain("raw-pass");
-  }
+        assertThat(response.evidenceRef())
+                .isEqualTo("https://****@example.test/evidence")
+                .doesNotContain("user:pass");
+        assertThat(response.detailSummary())
+                .contains("\"password\":\"****\"")
+                .contains("\"path\":\"/tmp/a\"")
+                .doesNotContain("raw-pass");
+    }
 
-  @Test
-  @DisplayName("批次日窗口响应包括 occurrence 拒绝原因和请求关联")
-  void shouldExposeScheduledOccurrencesInBatchDayWindow() {
-    LocalDate bizDate = LocalDate.of(2026, 10, 15);
-    BatchDayView row =
-        new BatchDayView(bizDate, "SETTLED", null, null, null, null, 0, 0, 0L, 0L, 0L, 0L, true);
-    when(batchDayMapper.selectWindow("tenant-a", "CALENDAR", bizDate)).thenReturn(row);
-    when(batchDayMapper.selectJobSummaries("tenant-a", "CALENDAR", bizDate)).thenReturn(List.of());
-    BatchDayScheduledOccurrenceView occurrenceRow = new BatchDayScheduledOccurrenceView(
-        42L,
-        "daily-settlement",
-        null,
-        3,
-        Instant.parse("2026-10-15T02:00:00Z"),
-        bizDate,
-        "CLOSED_DAY_REJECTED",
-        null,
-        "explicit CATCH_UP or RERUN request required");
-    when(batchDayMapper.selectScheduledOccurrences("tenant-a", "CALENDAR", bizDate))
-        .thenReturn(List.of(occurrenceRow));
-    ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        workerRegistryMapper,
-        null,
-        null,
-        null,
-        batchDayMapper,
-        null);
-    ConsoleOpsQueryService service = new ConsoleOpsQueryService(
-        requestTenantId -> requestTenantId, mappers, localizedErrorRenderer, timezoneProvider);
-    BatchDayWindowQueryRequest request = new BatchDayWindowQueryRequest();
-    request.setTenantId("tenant-a");
-    request.setCalendarCode("CALENDAR");
+    @Test
+    @DisplayName("批次日窗口响应包括 occurrence 拒绝原因和请求关联")
+    void shouldExposeScheduledOccurrencesInBatchDayWindow() {
+        LocalDate bizDate = LocalDate.of(2026, 10, 15);
+        BatchDayView row = new BatchDayView(bizDate, "SETTLED", null, null, null, null, 0, 0, 0L, 0L, 0L, 0L, true);
+        when(batchDayMapper.selectWindow("tenant-a", "CALENDAR", bizDate)).thenReturn(row);
+        when(batchDayMapper.selectJobSummaries("tenant-a", "CALENDAR", bizDate)).thenReturn(List.of());
+        BatchDayScheduledOccurrenceView occurrenceRow = new BatchDayScheduledOccurrenceView(
+                42L,
+                "daily-settlement",
+                null,
+                3,
+                Instant.parse("2026-10-15T02:00:00Z"),
+                bizDate,
+                "CLOSED_DAY_REJECTED",
+                null,
+                "explicit CATCH_UP or RERUN request required");
+        when(batchDayMapper.selectScheduledOccurrences("tenant-a", "CALENDAR", bizDate))
+                .thenReturn(List.of(occurrenceRow));
+        ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
+                null, null, null, null, null, null, workerRegistryMapper, null, null, null, batchDayMapper, null);
+        ConsoleOpsQueryService service = new ConsoleOpsQueryService(
+                requestTenantId -> requestTenantId, mappers, localizedErrorRenderer, timezoneProvider);
+        BatchDayWindowQueryRequest request = new BatchDayWindowQueryRequest();
+        request.setTenantId("tenant-a");
+        request.setCalendarCode("CALENDAR");
 
-    var response = service.batchDayWindow("2026-10-15", request);
-    assertThat(response.frozen()).isTrue();
-    var occurrence = response.scheduledOccurrences().getFirst();
+        var response = service.batchDayWindow("2026-10-15", request);
+        assertThat(response.frozen()).isTrue();
+        var occurrence = response.scheduledOccurrences().getFirst();
 
-    assertThat(occurrence.workflowDefinitionId()).isEqualTo(42L);
-    assertThat(occurrence.workflowCode()).isEqualTo("daily-settlement");
-    assertThat(occurrence.occurrenceStatus()).isEqualTo("CLOSED_DAY_REJECTED");
-    assertThat(occurrence.requestId()).isNull();
-    assertThat(occurrence.lastRejectionReason())
-        .isEqualTo("explicit CATCH_UP or RERUN request required");
-  }
+        assertThat(occurrence.workflowDefinitionId()).isEqualTo(42L);
+        assertThat(occurrence.workflowCode()).isEqualTo("daily-settlement");
+        assertThat(occurrence.occurrenceStatus()).isEqualTo("CLOSED_DAY_REJECTED");
+        assertThat(occurrence.requestId()).isNull();
+        assertThat(occurrence.lastRejectionReason()).isEqualTo("explicit CATCH_UP or RERUN request required");
+    }
 }

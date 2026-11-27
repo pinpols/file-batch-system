@@ -37,30 +37,30 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @RequiredArgsConstructor
 public class ConsoleFilesystemPresignDownloadController {
 
-  private final ConsoleFilesystemPresignDownloadService downloadService;
+    private final ConsoleFilesystemPresignDownloadService downloadService;
 
-  /** FS presign URL 单击下载。 */
-  @GetMapping("/fs-download")
-  public ResponseEntity<StreamingResponseBody> download(
-      @RequestParam("b") @NotBlank String bucket,
-      @RequestParam("k") @NotBlank String key,
-      @RequestParam("e") @NotNull Long expEpochSec,
-      @RequestParam("s") @NotBlank String signature) {
-    ConsoleFilesystemPresignDownloadService.PresignedDownload download =
-        downloadService.open(bucket, key, expEpochSec, signature);
-    StreamingResponseBody body = (OutputStream out) -> {
-      try (InputStream in = download.content()) {
-        in.transferTo(out);
-      }
-    };
-    return ResponseEntity.ok()
-        .header(
-            HttpHeaders.CONTENT_DISPOSITION,
-            ContentDisposition.attachment()
-                .filename(download.fileName())
-                .build()
-                .toString())
-        .contentType(MediaType.APPLICATION_OCTET_STREAM)
-        .body(body);
-  }
+    /** FS presign URL 单击下载。 */
+    @GetMapping("/fs-download")
+    public ResponseEntity<StreamingResponseBody> download(
+            @RequestParam("b") @NotBlank String bucket,
+            @RequestParam("k") @NotBlank String key,
+            @RequestParam("e") @NotNull Long expEpochSec,
+            @RequestParam("s") @NotBlank String signature) {
+        ConsoleFilesystemPresignDownloadService.PresignedDownload download =
+                downloadService.open(bucket, key, expEpochSec, signature);
+        StreamingResponseBody body = (OutputStream out) -> {
+            try (InputStream in = download.content()) {
+                in.transferTo(out);
+            }
+        };
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(download.fileName())
+                                .build()
+                                .toString())
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(body);
+    }
 }

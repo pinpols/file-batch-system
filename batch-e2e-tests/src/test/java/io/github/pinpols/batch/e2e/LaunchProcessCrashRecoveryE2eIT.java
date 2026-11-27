@@ -52,384 +52,373 @@ import org.springframework.test.context.jdbc.Sql;
 
 /** 使用生产分组/抑制规则；只替换外部接收端配置。 */
 @E2eSpringBootTest(
-    classes = E2eImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {
-      "batch.outbox.poll-interval-millis=200",
-      "batch.outbox.min-poll-interval-millis=200",
-      "batch.trigger.launch.reconcile.min-age-seconds=3600"
-    })
+        classes = E2eImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+            "batch.outbox.poll-interval-millis=200",
+            "batch.outbox.min-poll-interval-millis=200",
+            "batch.trigger.launch.reconcile.min-age-seconds=3600"
+        })
 @E2eBusinessSchema
 @Sql(scripts = E2eTestSql.IMPORT_TEMPLATE_SEED)
 @Tag("critical")
 @DisplayName("请求接纳与 Kafka 消费确认窗口的独立进程强杀恢复")
 class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
 
-  private final JdbcTemplate jdbc;
+    private final JdbcTemplate jdbc;
 
-  private final KafkaListenerEndpointRegistry listeners;
+    private final KafkaListenerEndpointRegistry listeners;
 
-  private final DataSource businessDataSource;
+    private final DataSource businessDataSource;
 
-  @Autowired
-  LaunchProcessCrashRecoveryE2eIT(
-      JdbcTemplate jdbc,
-      KafkaListenerEndpointRegistry listeners,
-      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
-    this.jdbc = jdbc;
-    this.listeners = listeners;
-    this.businessDataSource = businessDataSource;
-  }
+    @Autowired
+    LaunchProcessCrashRecoveryE2eIT(
+            JdbcTemplate jdbc,
+            KafkaListenerEndpointRegistry listeners,
+            @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+        this.jdbc = jdbc;
+        this.listeners = listeners;
+        this.businessDataSource = businessDataSource;
+    }
 
-  private enum CrashWindow {
-    PUBLISHER_AFTER_ACCEPTANCE,
-    CONSUMER_BEFORE_OFFSET
-  }
+    private enum CrashWindow {
+        PUBLISHER_AFTER_ACCEPTANCE,
+        CONSUMER_BEFORE_OFFSET
+    }
 
-  @ParameterizedTest
-  @EnumSource(CrashWindow.class)
-  @DisplayName("持久化事实提交后强杀发布或消费 JVM,新进程自动恢复同一请求且业务结果唯一")
-  void shouldRecoverAcceptedLaunch_whenProcessDiesBeforeDeliveryAcknowledgement(CrashWindow window)
-      throws Exception {
-    final String selectPgBackendPidSql = """
+    @ParameterizedTest
+    @EnumSource(CrashWindow.class)
+    @DisplayName("持久化事实提交后强杀发布或消费 JVM,新进程自动恢复同一请求且业务结果唯一")
+    void shouldRecoverAcceptedLaunch_whenProcessDiesBeforeDeliveryAcknowledgement(CrashWindow window) throws Exception {
+        final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
 
-    final String deleteTriggerRequestSql = """
+        final String deleteTriggerRequestSql = """
             delete from batch.trigger_request where tenant_id='t1' and request_id=?
         """;
-    final String createFunctionSql = """
+        final String createFunctionSql = """
         create function batch.e2e_hold_launch_boundary() returns trigger language plpgsql as $$
         begin perform pg_advisory_xact_lock(TG_ARGV[0]::bigint); return new; end $$
         """;
-    final String selectCountSql = """
+        final String selectCountSql = """
                 select count(*) from pg_stat_activity
                 where ? = any(pg_blocking_pids(pid)) and query ilike ?
                 """;
-    final String selectRequestStatusSql = """
+        final String selectRequestStatusSql = """
             select request_status from batch.trigger_request where tenant_id='t1' and request_id=?
             """;
-    final String selectPublishStatusSql = """
+        final String selectPublishStatusSql = """
               select publish_status from batch.trigger_outbox_event where tenant_id='t1' and request_id=?
               """;
-    final String selectRunStatusSql = """
+        final String selectRunStatusSql = """
             select run_status from batch.workflow_run where tenant_id='t1' and workflow_definition_id=?
             """;
-    final String selectCountSql2 = """
+        final String selectCountSql2 = """
             select count(*) from biz.customer_account where tenant_id='t1' and customer_no=?
             """;
-    final String selectPublishStatusSql2 = """
+        final String selectPublishStatusSql2 = """
             select publish_status from batch.trigger_outbox_event where tenant_id='t1' and request_id=?
             """;
-    final String selectCountSql3 = """
+        final String selectCountSql3 = """
           select count(*) from batch.job_task t join batch.job_instance j
           on j.id=t.job_instance_id and j.tenant_id=t.tenant_id
           where j.tenant_id='t1' and j.job_code=?
           """;
-    final String selectCountSql4 = """
+        final String selectCountSql4 = """
           select count(*) from batch.outbox_event where tenant_id='t1'
           and event_type='IMPORT' and payload_json->>'jobCode'=?
           """;
-    final String dropFunctionSql = """
+        final String dropFunctionSql = """
         drop function if exists batch.e2e_hold_launch_boundary()
     """;
 
-    // 在持久化启动边界处真实退出 JVM；恢复使用生产轮询和 Kafka 位点。
-    var parentListener = listeners.getListenerContainer(
-        OrchestratorKafkaConsumerConfiguration.TRIGGER_LAUNCH_LISTENER_ID);
-    assertThat(parentListener).isNotNull();
-    parentListener.stop();
-    await().atMost(Duration.ofSeconds(15)).until(() -> !parentListener.isRunning());
-    LocalDate bizDate = LocalDate.now(ZoneOffset.UTC).plusDays(1L + window.ordinal());
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, "t1", "IMPORT", "import", TriggerType.API, bizDate);
-    jdbc.update(deleteTriggerRequestSql, seed.requestId());
-    String customer = "JVMLOSS" + Long.toUnsignedString(System.nanoTime());
-    String group = "r22-launch-" + seed.requestId();
-    long lockKey = System.nanoTime();
-    boolean publisherCrash = window == CrashWindow.PUBLISHER_AFTER_ACCEPTANCE;
-    String table = publisherCrash ? "trigger_outbox_event" : "trigger_request";
-    String condition = publisherCrash
-        ? "old.publish_status = 'NEW' and new.publish_status = 'PUBLISHING'"
-        : "old.request_status = 'ACCEPTED' and new.request_status = 'LAUNCHED'";
-    List<Child> children = new ArrayList<>();
-    jdbc.execute(createFunctionSql);
-    try {
-      final String createTriggerSql = """
+        // 在持久化启动边界处真实退出 JVM；恢复使用生产轮询和 Kafka 位点。
+        var parentListener =
+                listeners.getListenerContainer(OrchestratorKafkaConsumerConfiguration.TRIGGER_LAUNCH_LISTENER_ID);
+        assertThat(parentListener).isNotNull();
+        parentListener.stop();
+        await().atMost(Duration.ofSeconds(15)).until(() -> !parentListener.isRunning());
+        LocalDate bizDate = LocalDate.now(ZoneOffset.UTC).plusDays(1L + window.ordinal());
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbc, "t1", "IMPORT", "import", TriggerType.API, bizDate);
+        jdbc.update(deleteTriggerRequestSql, seed.requestId());
+        String customer = "JVMLOSS" + Long.toUnsignedString(System.nanoTime());
+        String group = "r22-launch-" + seed.requestId();
+        long lockKey = System.nanoTime();
+        boolean publisherCrash = window == CrashWindow.PUBLISHER_AFTER_ACCEPTANCE;
+        String table = publisherCrash ? "trigger_outbox_event" : "trigger_request";
+        String condition = publisherCrash
+                ? "old.publish_status = 'NEW' and new.publish_status = 'PUBLISHING'"
+                : "old.request_status = 'ACCEPTED' and new.request_status = 'LAUNCHED'";
+        List<Child> children = new ArrayList<>();
+        jdbc.execute(createFunctionSql);
+        try {
+            final String createTriggerSql = """
           create trigger e2e_hold_launch_boundary before update on batch.%s
           for each row when (new.tenant_id = 't1' and new.request_id = '%s' and (%s))
           execute function batch.e2e_hold_launch_boundary('%s')
           """.formatted(table, seed.requestId(), condition, lockKey);
-      jdbc.execute(createTriggerSql);
-      Child trigger = startChild(E2eTriggerApplication.class, group, children);
-      Child consumer = startChild(E2eReportRecoveryOrchestratorApplication.class, group, children);
-      ConsumerRecord<String, String> delivered = null;
-      Long originalRoot = null;
-      try (Connection gate = DriverManager.getConnection(
-              platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
-          var sql = gate.createStatement()) {
-        final String selectPgAdvisoryLockSql = """
+            jdbc.execute(createTriggerSql);
+            Child trigger = startChild(E2eTriggerApplication.class, group, children);
+            Child consumer = startChild(E2eReportRecoveryOrchestratorApplication.class, group, children);
+            ConsumerRecord<String, String> delivered = null;
+            Long originalRoot = null;
+            try (Connection gate = DriverManager.getConnection(
+                            platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
+                    var sql = gate.createStatement()) {
+                final String selectPgAdvisoryLockSql = """
                 select pg_advisory_lock(%s)\
                 """.formatted(lockKey);
-        sql.execute(selectPgAdvisoryLockSql);
-        int gatePid;
-        try (var rows = sql.executeQuery(selectPgBackendPidSql)) {
-          assertThat(rows.next()).isTrue();
-          gatePid = rows.getInt(1);
-        }
-        HttpResponse<String> accepted = HttpClient.newHttpClient()
-            .send(
-                HttpRequest.newBuilder(
-                        URI.create("http://127.0.0.1:" + trigger.port() + "/api/triggers/launch"))
-                    .timeout(Duration.ofSeconds(20))
-                    .header("Content-Type", "application/json")
-                    .header("Idempotency-Key", seed.dedupKey())
-                    .header("X-Request-Id", seed.requestId())
-                    .header("X-Trace-Id", "r22-" + seed.requestId())
-                    .POST(HttpRequest.BodyPublishers.ofString(JsonUtils.toJson(Map.of(
-                        "tenantId",
-                        "t1",
-                        "workflowDefinitionId",
-                        seed.workflowDefinitionId(),
-                        "bizDate",
-                        bizDate.toString(),
-                        "triggerType",
-                        "API",
-                        "params",
-                        Map.of(
-                            "fileFormatType",
-                            "JSON",
-                            "templateCode",
-                            "IMP-CUSTOMER-JSON-ARRAY",
-                            "bizType",
-                            "CUSTOMER",
-                            "content",
-                            JsonUtils.toJson(List.of(Map.of(
-                                "customerNo",
-                                customer,
-                                "customerName",
-                                "Crash recovery",
-                                "customerType",
-                                "PERSONAL",
-                                "certificateNo",
-                                customer,
-                                "status",
-                                "ACTIVE"))))))))
-                    .build(),
-                HttpResponse.BodyHandlers.ofString());
-        assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
-        await().atMost(Duration.ofSeconds(60)).untilAsserted(() -> {
-          Integer selectedPgStatActivityCount = jdbc.queryForObject(
-              selectCountSql, Integer.class, gatePid, "%update batch." + table + "%");
-          assertThat(selectedPgStatActivityCount).isEqualTo(1);
-        });
-        String selectedRequestStatus =
-            jdbc.queryForObject(selectRequestStatusSql, String.class, seed.requestId());
-        assertThat(selectedRequestStatus).isEqualTo("ACCEPTED");
-        if (publisherCrash) {
-          assertThat(rootCount(seed)).isZero();
-          String selectedPublishStatus =
-              jdbc.queryForObject(selectPublishStatusSql, String.class, seed.requestId());
-          assertThat(selectedPublishStatus).isEqualTo("NEW");
-          trigger.kill();
-        } else {
-          assertThat(rootCount(seed)).isEqualTo(1);
-          originalRoot = rootId(seed);
-          assertThat(jobCount(seed)).isEqualTo(1);
-          delivered = readLaunchRecord(seed.requestId());
-          assertOffsetNotCommitted(group, delivered);
-          consumer.kill();
-          assertOffsetNotCommitted(group, delivered);
-        }
-      }
-      // 只有独立 Orchestrator JVM 可以消费此测试的启动主题。
-      final String dropTriggerSql = """
+                sql.execute(selectPgAdvisoryLockSql);
+                int gatePid;
+                try (var rows = sql.executeQuery(selectPgBackendPidSql)) {
+                    assertThat(rows.next()).isTrue();
+                    gatePid = rows.getInt(1);
+                }
+                HttpResponse<String> accepted = HttpClient.newHttpClient()
+                        .send(
+                                HttpRequest.newBuilder(URI.create(
+                                                "http://127.0.0.1:" + trigger.port() + "/api/triggers/launch"))
+                                        .timeout(Duration.ofSeconds(20))
+                                        .header("Content-Type", "application/json")
+                                        .header("Idempotency-Key", seed.dedupKey())
+                                        .header("X-Request-Id", seed.requestId())
+                                        .header("X-Trace-Id", "r22-" + seed.requestId())
+                                        .POST(HttpRequest.BodyPublishers.ofString(JsonUtils.toJson(Map.of(
+                                                "tenantId",
+                                                "t1",
+                                                "workflowDefinitionId",
+                                                seed.workflowDefinitionId(),
+                                                "bizDate",
+                                                bizDate.toString(),
+                                                "triggerType",
+                                                "API",
+                                                "params",
+                                                Map.of(
+                                                        "fileFormatType",
+                                                        "JSON",
+                                                        "templateCode",
+                                                        "IMP-CUSTOMER-JSON-ARRAY",
+                                                        "bizType",
+                                                        "CUSTOMER",
+                                                        "content",
+                                                        JsonUtils.toJson(List.of(Map.of(
+                                                                "customerNo",
+                                                                customer,
+                                                                "customerName",
+                                                                "Crash recovery",
+                                                                "customerType",
+                                                                "PERSONAL",
+                                                                "certificateNo",
+                                                                customer,
+                                                                "status",
+                                                                "ACTIVE"))))))))
+                                        .build(),
+                                HttpResponse.BodyHandlers.ofString());
+                assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
+                await().atMost(Duration.ofSeconds(60)).untilAsserted(() -> {
+                    Integer selectedPgStatActivityCount =
+                            jdbc.queryForObject(selectCountSql, Integer.class, gatePid, "%update batch." + table + "%");
+                    assertThat(selectedPgStatActivityCount).isEqualTo(1);
+                });
+                String selectedRequestStatus =
+                        jdbc.queryForObject(selectRequestStatusSql, String.class, seed.requestId());
+                assertThat(selectedRequestStatus).isEqualTo("ACCEPTED");
+                if (publisherCrash) {
+                    assertThat(rootCount(seed)).isZero();
+                    String selectedPublishStatus =
+                            jdbc.queryForObject(selectPublishStatusSql, String.class, seed.requestId());
+                    assertThat(selectedPublishStatus).isEqualTo("NEW");
+                    trigger.kill();
+                } else {
+                    assertThat(rootCount(seed)).isEqualTo(1);
+                    originalRoot = rootId(seed);
+                    assertThat(jobCount(seed)).isEqualTo(1);
+                    delivered = readLaunchRecord(seed.requestId());
+                    assertOffsetNotCommitted(group, delivered);
+                    consumer.kill();
+                    assertOffsetNotCommitted(group, delivered);
+                }
+            }
+            // 只有独立 Orchestrator JVM 可以消费此测试的启动主题。
+            final String dropTriggerSql = """
           drop trigger e2e_hold_launch_boundary on batch.%s\
           """.formatted(table);
-      jdbc.execute(dropTriggerSql);
-      if (publisherCrash) {
-        startChild(E2eTriggerApplication.class, group, children);
-      } else {
-        startChild(E2eReportRecoveryOrchestratorApplication.class, group, children);
-      }
-      await().atMost(Duration.ofSeconds(90)).untilAsserted(() -> {
-        assertThat(rootCount(seed)).isEqualTo(1);
-        String selectedRunStatus =
-            jdbc.queryForObject(selectRunStatusSql, String.class, seed.workflowDefinitionId());
-        assertThat(selectedRunStatus).isEqualTo("SUCCESS");
-        Integer selectedCustomerAccountCount = new JdbcTemplate(businessDataSource)
-            .queryForObject(selectCountSql2, Integer.class, customer);
-        assertThat(selectedCustomerAccountCount).isEqualTo(1);
-        String selectedRequestStatusRead2 =
-            jdbc.queryForObject(selectRequestStatusSql, String.class, seed.requestId());
-        assertThat(selectedRequestStatusRead2).isEqualTo("LAUNCHED");
-        String selectedPublishStatusRead2 =
-            jdbc.queryForObject(selectPublishStatusSql2, String.class, seed.requestId());
-        assertThat(selectedPublishStatusRead2).isEqualTo("PUBLISHED");
-      });
-      if (!publisherCrash) {
-        assertThat(rootId(seed)).isEqualTo(originalRoot);
-      }
-      ConsumerRecord<String, String> record =
-          publisherCrash ? readLaunchRecord(seed.requestId()) : delivered;
-      // 不手动发布消息、不调用 Kafka send、不重置位点，也不更新恢复状态。
-      // SIGKILL 不会主动离开消费者组。Kafka 未修改的 45 秒会话超时必须先到期，
-      await()
-          .atMost(Duration.ofSeconds(90))
-          .pollInterval(Duration.ofSeconds(1))
-          .untilAsserted(
-              () -> assertThat(committedOffset(group, record)).isGreaterThan(record.offset()));
-      assertThat(jobCount(seed)).isEqualTo(1);
-      Integer selectedJobTaskCount =
-          jdbc.queryForObject(selectCountSql3, Integer.class, seed.jobCode());
-      assertThat(selectedJobTaskCount).isEqualTo(1);
-      Integer selectedOutboxEventCount =
-          jdbc.queryForObject(selectCountSql4, Integer.class, seed.jobCode());
-      assertThat(selectedOutboxEventCount).isEqualTo(1);
-    } finally {
-      for (Child child : children.reversed()) {
-        child.close();
-      }
-      final String dropTriggerSql = """
+            jdbc.execute(dropTriggerSql);
+            if (publisherCrash) {
+                startChild(E2eTriggerApplication.class, group, children);
+            } else {
+                startChild(E2eReportRecoveryOrchestratorApplication.class, group, children);
+            }
+            await().atMost(Duration.ofSeconds(90)).untilAsserted(() -> {
+                assertThat(rootCount(seed)).isEqualTo(1);
+                String selectedRunStatus =
+                        jdbc.queryForObject(selectRunStatusSql, String.class, seed.workflowDefinitionId());
+                assertThat(selectedRunStatus).isEqualTo("SUCCESS");
+                Integer selectedCustomerAccountCount =
+                        new JdbcTemplate(businessDataSource).queryForObject(selectCountSql2, Integer.class, customer);
+                assertThat(selectedCustomerAccountCount).isEqualTo(1);
+                String selectedRequestStatusRead2 =
+                        jdbc.queryForObject(selectRequestStatusSql, String.class, seed.requestId());
+                assertThat(selectedRequestStatusRead2).isEqualTo("LAUNCHED");
+                String selectedPublishStatusRead2 =
+                        jdbc.queryForObject(selectPublishStatusSql2, String.class, seed.requestId());
+                assertThat(selectedPublishStatusRead2).isEqualTo("PUBLISHED");
+            });
+            if (!publisherCrash) {
+                assertThat(rootId(seed)).isEqualTo(originalRoot);
+            }
+            ConsumerRecord<String, String> record = publisherCrash ? readLaunchRecord(seed.requestId()) : delivered;
+            // 不手动发布消息、不调用 Kafka send、不重置位点，也不更新恢复状态。
+            // SIGKILL 不会主动离开消费者组。Kafka 未修改的 45 秒会话超时必须先到期，
+            await().atMost(Duration.ofSeconds(90))
+                    .pollInterval(Duration.ofSeconds(1))
+                    .untilAsserted(
+                            () -> assertThat(committedOffset(group, record)).isGreaterThan(record.offset()));
+            assertThat(jobCount(seed)).isEqualTo(1);
+            Integer selectedJobTaskCount = jdbc.queryForObject(selectCountSql3, Integer.class, seed.jobCode());
+            assertThat(selectedJobTaskCount).isEqualTo(1);
+            Integer selectedOutboxEventCount = jdbc.queryForObject(selectCountSql4, Integer.class, seed.jobCode());
+            assertThat(selectedOutboxEventCount).isEqualTo(1);
+        } finally {
+            for (Child child : children.reversed()) {
+                child.close();
+            }
+            final String dropTriggerSql = """
           drop trigger if exists e2e_hold_launch_boundary on batch.%s\
           """.formatted(table);
-      jdbc.execute(dropTriggerSql);
-      jdbc.execute(dropFunctionSql);
+            jdbc.execute(dropTriggerSql);
+            jdbc.execute(dropFunctionSql);
+        }
     }
-  }
 
-  private int rootCount(LaunchSeed seed) {
-    final String selectCountSql = """
+    private int rootCount(LaunchSeed seed) {
+        final String selectCountSql = """
         select count(*) from batch.workflow_run where tenant_id='t1' and workflow_definition_id=?
     """;
 
-    return jdbc.queryForObject(selectCountSql, Integer.class, seed.workflowDefinitionId());
-  }
+        return jdbc.queryForObject(selectCountSql, Integer.class, seed.workflowDefinitionId());
+    }
 
-  private Long rootId(LaunchSeed seed) {
-    final String selectIdSql = """
+    private Long rootId(LaunchSeed seed) {
+        final String selectIdSql = """
         select id from batch.workflow_run where tenant_id='t1' and workflow_definition_id=?
     """;
 
-    return jdbc.queryForObject(selectIdSql, Long.class, seed.workflowDefinitionId());
-  }
+        return jdbc.queryForObject(selectIdSql, Long.class, seed.workflowDefinitionId());
+    }
 
-  private int jobCount(LaunchSeed seed) {
-    final String selectCountSql = """
+    private int jobCount(LaunchSeed seed) {
+        final String selectCountSql = """
         select count(*) from batch.job_instance where tenant_id='t1' and job_code=?
     """;
 
-    return jdbc.queryForObject(selectCountSql, Integer.class, seed.jobCode());
-  }
+        return jdbc.queryForObject(selectCountSql, Integer.class, seed.jobCode());
+    }
 
-  private ConsumerRecord<String, String> readLaunchRecord(String requestId) {
-    try (KafkaConsumer<String, String> reader = new KafkaConsumer<>(Map.of(
-        "bootstrap.servers",
-        kafkaBootstrapServers(),
-        "enable.auto.commit",
-        false,
-        "key.deserializer",
-        StringDeserializer.class,
-        "value.deserializer",
-        StringDeserializer.class))) {
-      var partitions = reader.partitionsFor(BatchTopics.TRIGGER_LAUNCH_V1).stream()
-          .map(p -> new TopicPartition(p.topic(), p.partition()))
-          .toList();
-      reader.assign(partitions);
-      reader.seekToBeginning(partitions);
-      long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
-      while (System.nanoTime() < deadline) {
-        for (var record : reader.poll(Duration.ofMillis(200))) {
-          if (record.value().contains(requestId)) {
-            return record;
-          }
+    private ConsumerRecord<String, String> readLaunchRecord(String requestId) {
+        try (KafkaConsumer<String, String> reader = new KafkaConsumer<>(Map.of(
+                "bootstrap.servers",
+                kafkaBootstrapServers(),
+                "enable.auto.commit",
+                false,
+                "key.deserializer",
+                StringDeserializer.class,
+                "value.deserializer",
+                StringDeserializer.class))) {
+            var partitions = reader.partitionsFor(BatchTopics.TRIGGER_LAUNCH_V1).stream()
+                    .map(p -> new TopicPartition(p.topic(), p.partition()))
+                    .toList();
+            reader.assign(partitions);
+            reader.seekToBeginning(partitions);
+            long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+            while (System.nanoTime() < deadline) {
+                for (var record : reader.poll(Duration.ofMillis(200))) {
+                    if (record.value().contains(requestId)) {
+                        return record;
+                    }
+                }
+            }
+            throw new AssertionError("launch record missing for " + requestId);
         }
-      }
-      throw new AssertionError("launch record missing for " + requestId);
-    }
-  }
-
-  private void assertOffsetNotCommitted(String group, ConsumerRecord<String, String> record)
-      throws Exception {
-    assertThat(committedOffset(group, record)).isLessThanOrEqualTo(record.offset());
-  }
-
-  private long committedOffset(String group, ConsumerRecord<String, String> record)
-      throws Exception {
-    try (Admin admin = Admin.create(Map.of("bootstrap.servers", kafkaBootstrapServers()))) {
-      var offsets = admin
-          .listConsumerGroupOffsets(group)
-          .partitionsToOffsetAndMetadata()
-          .get(10, TimeUnit.SECONDS);
-      var offset = offsets.get(new TopicPartition(record.topic(), record.partition()));
-      return EmptyChecks.isNull(offset) ? -1 : offset.offset();
-    }
-  }
-
-  private Child startChild(Class<?> application, String group, List<Child> children)
-      throws Exception {
-    boolean trigger = application == E2eTriggerApplication.class;
-    int port;
-    try (ServerSocket socket = new ServerSocket(0)) {
-      port = socket.getLocalPort();
-    }
-    Map<String, Object> properties = new LinkedHashMap<>();
-    AbstractIntegrationTest.registerDynamicProperties(
-        (name, supplier) -> properties.put(name, supplier.get()));
-    properties.put("spring.profiles.active", "test,e2e");
-    properties.put("spring.flyway.enabled", false);
-    properties.put("spring.main.web-application-type", trigger ? "servlet" : "none");
-    properties.put("server.port", port);
-    properties.put("spring.quartz.auto-startup", false);
-    properties.put("batch.orchestrator.base-url", "http://127.0.0.1:1");
-    properties.put("batch.startup-self-check.enabled", false);
-    properties.put("batch.trigger.outbox.poll-interval-millis", 200);
-    properties.put("batch.trigger.outbox.publishing-timeout-seconds", 3);
-    properties.put("batch.trigger.consumer.group-id", group);
-    properties.put("batch.trigger.launch.reconcile.min-age-seconds", 3600);
-    List<String> command = new ArrayList<>(List.of(
-        Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-        "-cp",
-        System.getProperty("surefire.test.class.path", System.getProperty("java.class.path")),
-        application.getName()));
-    properties.forEach((name, value) -> command.add("--" + name + "=" + value));
-    Path directory = Path.of("../logs/verification/workflow").toAbsolutePath().normalize();
-    Files.createDirectories(directory);
-    Path log =
-        Files.createTempFile(directory, "r22-" + (trigger ? "trigger-" : "consumer-"), ".log");
-    Child child = new Child(
-        new ProcessBuilder(command)
-            .redirectErrorStream(true)
-            .redirectOutput(log.toFile())
-            .start(),
-        port,
-        log);
-    children.add(child);
-    await()
-        .atMost(Duration.ofSeconds(90))
-        .until(() -> Files.readString(log).contains("Started " + application.getSimpleName())
-            || !child.process().isAlive());
-    assertThat(child.process().isAlive()).as("child startup log: %s", log).isTrue();
-    return child;
-  }
-
-  private record Child(Process process, int port, Path log) implements AutoCloseable {
-    void kill() throws Exception {
-      process.destroyForcibly();
-      assertThat(process.waitFor(15, TimeUnit.SECONDS))
-          .as("force-killed child: %s", log)
-          .isTrue();
     }
 
-    @Override
-    public void close() throws Exception {
-      if (process.isAlive()) {
-        process.destroy();
-        if (!process.waitFor(10, TimeUnit.SECONDS)) {
-          kill();
+    private void assertOffsetNotCommitted(String group, ConsumerRecord<String, String> record) throws Exception {
+        assertThat(committedOffset(group, record)).isLessThanOrEqualTo(record.offset());
+    }
+
+    private long committedOffset(String group, ConsumerRecord<String, String> record) throws Exception {
+        try (Admin admin = Admin.create(Map.of("bootstrap.servers", kafkaBootstrapServers()))) {
+            var offsets = admin.listConsumerGroupOffsets(group)
+                    .partitionsToOffsetAndMetadata()
+                    .get(10, TimeUnit.SECONDS);
+            var offset = offsets.get(new TopicPartition(record.topic(), record.partition()));
+            return EmptyChecks.isNull(offset) ? -1 : offset.offset();
         }
-      }
-      assertThat(process.isAlive()).isFalse();
     }
-  }
+
+    private Child startChild(Class<?> application, String group, List<Child> children) throws Exception {
+        boolean trigger = application == E2eTriggerApplication.class;
+        int port;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            port = socket.getLocalPort();
+        }
+        Map<String, Object> properties = new LinkedHashMap<>();
+        AbstractIntegrationTest.registerDynamicProperties((name, supplier) -> properties.put(name, supplier.get()));
+        properties.put("spring.profiles.active", "test,e2e");
+        properties.put("spring.flyway.enabled", false);
+        properties.put("spring.main.web-application-type", trigger ? "servlet" : "none");
+        properties.put("server.port", port);
+        properties.put("spring.quartz.auto-startup", false);
+        properties.put("batch.orchestrator.base-url", "http://127.0.0.1:1");
+        properties.put("batch.startup-self-check.enabled", false);
+        properties.put("batch.trigger.outbox.poll-interval-millis", 200);
+        properties.put("batch.trigger.outbox.publishing-timeout-seconds", 3);
+        properties.put("batch.trigger.consumer.group-id", group);
+        properties.put("batch.trigger.launch.reconcile.min-age-seconds", 3600);
+        List<String> command = new ArrayList<>(List.of(
+                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                "-cp",
+                System.getProperty("surefire.test.class.path", System.getProperty("java.class.path")),
+                application.getName()));
+        properties.forEach((name, value) -> command.add("--" + name + "=" + value));
+        Path directory =
+                Path.of("../logs/verification/workflow").toAbsolutePath().normalize();
+        Files.createDirectories(directory);
+        Path log = Files.createTempFile(directory, "r22-" + (trigger ? "trigger-" : "consumer-"), ".log");
+        Child child = new Child(
+                new ProcessBuilder(command)
+                        .redirectErrorStream(true)
+                        .redirectOutput(log.toFile())
+                        .start(),
+                port,
+                log);
+        children.add(child);
+        await().atMost(Duration.ofSeconds(90))
+                .until(() -> Files.readString(log).contains("Started " + application.getSimpleName())
+                        || !child.process().isAlive());
+        assertThat(child.process().isAlive()).as("child startup log: %s", log).isTrue();
+        return child;
+    }
+
+    private record Child(Process process, int port, Path log) implements AutoCloseable {
+        void kill() throws Exception {
+            process.destroyForcibly();
+            assertThat(process.waitFor(15, TimeUnit.SECONDS))
+                    .as("force-killed child: %s", log)
+                    .isTrue();
+        }
+
+        @Override
+        public void close() throws Exception {
+            if (process.isAlive()) {
+                process.destroy();
+                if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                    kill();
+                }
+            }
+            assertThat(process.isAlive()).isFalse();
+        }
+    }
 }

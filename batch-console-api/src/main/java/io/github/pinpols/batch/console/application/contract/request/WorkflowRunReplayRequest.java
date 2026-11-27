@@ -11,27 +11,27 @@ import lombok.Data;
 @Data
 public class WorkflowRunReplayRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotNull
-  private Long workflowRunId;
+    @NotNull
+    private Long workflowRunId;
 
-  @NotBlank
-  @Size(max = 512, message = "reason too long (max 512)")
-  private String reason;
+    @NotBlank
+    @Size(max = 512, message = "reason too long (max 512)")
+    private String reason;
 
-  @Size(max = 64)
-  private String resultPolicy;
+    @Size(max = 64)
+    private String resultPolicy;
 
-  @Size(max = 64)
-  private String configVersionPolicy;
+    @Size(max = 64)
+    private String configVersionPolicy;
 
-  private Integer configVersion;
+    private Integer configVersion;
 
-  @Pattern(regexp = "[0-9a-fA-F-]{36}")
-  private String operationKey;
+    @Pattern(regexp = "[0-9a-fA-F-]{36}")
+    private String operationKey;
 
-  @Size(max = 128)
-  private String previewToken;
+    @Size(max = 128)
+    private String previewToken;
 }

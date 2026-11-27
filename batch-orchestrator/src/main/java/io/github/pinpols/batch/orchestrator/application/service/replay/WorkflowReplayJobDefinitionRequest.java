@@ -8,10 +8,10 @@ import lombok.Builder;
 /** 冻结整 Workflow 重放图中单个节点的配置选择。 */
 @Builder
 public record WorkflowReplayJobDefinitionRequest(
-    String tenantId,
-    String nodeCode,
-    String jobCode,
-    WorkflowRunExecutionSnapshot sourceSnapshot,
-    JobDefinitionView latestDefinition,
-    ConfigVersionPolicy policy,
-    Integer specifiedVersion) {}
+        String tenantId,
+        String nodeCode,
+        String jobCode,
+        WorkflowRunExecutionSnapshot sourceSnapshot,
+        JobDefinitionView latestDefinition,
+        ConfigVersionPolicy policy,
+        Integer specifiedVersion) {}

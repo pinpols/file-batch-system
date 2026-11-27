@@ -7,8 +7,8 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface FileTemplateSnapshotMapper {
 
-  String selectLatestConfiguration(
-      @Param("tenantId") String tenantId,
-      @Param("templateCode") String templateCode,
-      @Param("templateType") String templateType);
+    String selectLatestConfiguration(
+            @Param("tenantId") String tenantId,
+            @Param("templateCode") String templateCode,
+            @Param("templateType") String templateType);
 }

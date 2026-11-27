@@ -59,47 +59,45 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("Trigger REST 入口:启动/启动状态查询/补跑审批的入参校验与请求标识生成")
 class TriggerControllerTest {
 
-  @Mock
-  private TriggerService triggerService;
+    @Mock
+    private TriggerService triggerService;
 
-  @Mock
-  private TriggerGracefulShutdown triggerGracefulShutdown;
+    @Mock
+    private TriggerGracefulShutdown triggerGracefulShutdown;
 
-  @Mock
-  private TriggerApiKeyVerifier apiKeyVerifier;
+    @Mock
+    private TriggerApiKeyVerifier apiKeyVerifier;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new TriggerController(new TriggerApiApplicationService(
-                triggerService,
-                new TriggerDrainService(new TriggerDrainAdapter(triggerGracefulShutdown)),
-                new TriggerLaunchAdmissionService(
-                    new TriggerApiAdmissionGuard(new TriggerRuntimeProperties()),
-                    new TriggerDrainService(new TriggerDrainAdapter(triggerGracefulShutdown))),
-                new TriggerRequestPolicy(apiKeyVerifier))))
-        .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
-        .setMessageConverters(new JacksonJsonHttpMessageConverter())
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        mockMvc = MockMvcBuilders.standaloneSetup(new TriggerController(new TriggerApiApplicationService(
+                        triggerService,
+                        new TriggerDrainService(new TriggerDrainAdapter(triggerGracefulShutdown)),
+                        new TriggerLaunchAdmissionService(
+                                new TriggerApiAdmissionGuard(new TriggerRuntimeProperties()),
+                                new TriggerDrainService(new TriggerDrainAdapter(triggerGracefulShutdown))),
+                        new TriggerRequestPolicy(apiKeyVerifier))))
+                .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
+                .setMessageConverters(new JacksonJsonHttpMessageConverter())
+                .build();
+    }
 
-  @AfterEach
-  void clearSecurityContext() {
-    SecurityContextHolder.clearContext();
-  }
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
-  @Test
-  @DisplayName("启动请求未带 requestId/traceId 时,服务端按幂等键生成 req- 前缀请求号与 32 位 traceId")
-  void shouldGenerateRequestAndTraceIdsWhenHeadersAreMissing() throws Exception {
-    when(triggerService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-response"));
+    @Test
+    @DisplayName("启动请求未带 requestId/traceId 时,服务端按幂等键生成 req- 前缀请求号与 32 位 traceId")
+    void shouldGenerateRequestAndTraceIdsWhenHeadersAreMissing() throws Exception {
+        when(triggerService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-response"));
 
-    mockMvc
-        .perform(post("/api/triggers/launch")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/triggers/launch")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "workflowDefinitionId": 41,
@@ -107,29 +105,27 @@ class TriggerControllerTest {
                       "triggerType": "API"
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.instanceNo").value("inst-001"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.instanceNo").value("inst-001"));
 
-    ArgumentCaptor<TriggerLaunchCommand> captor =
-        ArgumentCaptor.forClass(TriggerLaunchCommand.class);
-    verify(triggerService).launch(captor.capture());
-    TriggerLaunchCommand command = captor.getValue();
-    assertThat(command.idempotencyKey()).isEqualTo("idem-001");
-    assertThat(command.requestId()).startsWith("req-");
-    assertThat(command.traceId()).hasSize(32);
-  }
+        ArgumentCaptor<TriggerLaunchCommand> captor = ArgumentCaptor.forClass(TriggerLaunchCommand.class);
+        verify(triggerService).launch(captor.capture());
+        TriggerLaunchCommand command = captor.getValue();
+        assertThat(command.idempotencyKey()).isEqualTo("idem-001");
+        assertThat(command.requestId()).startsWith("req-");
+        assertThat(command.traceId()).hasSize(32);
+    }
 
-  @Test
-  @DisplayName("外部事件来源与事件 ID 通过 HTTP 请求绑定并交给 Trigger 服务")
-  void shouldBindExternalEventSourceIdentityFromHttpRequest() throws Exception {
-    when(triggerService.launch(any())).thenReturn(new LaunchResponse("req-event", "trace-event"));
+    @Test
+    @DisplayName("外部事件来源与事件 ID 通过 HTTP 请求绑定并交给 Trigger 服务")
+    void shouldBindExternalEventSourceIdentityFromHttpRequest() throws Exception {
+        when(triggerService.launch(any())).thenReturn(new LaunchResponse("req-event", "trace-event"));
 
-    mockMvc
-        .perform(post("/api/triggers/launch")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "event-key")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/triggers/launch")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "event-key")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "workflowDefinitionId": 41,
@@ -140,31 +136,28 @@ class TriggerControllerTest {
                       "externalEventId": "payment-17"
                     }
                     """))
-        .andExpect(status().isOk());
+                .andExpect(status().isOk());
 
-    ArgumentCaptor<TriggerLaunchCommand> captor =
-        ArgumentCaptor.forClass(TriggerLaunchCommand.class);
-    verify(triggerService).launch(captor.capture());
-    assertThat(captor.getValue().request().externalEventSource()).isEqualTo("billing");
-    assertThat(captor.getValue().request().externalEventId()).isEqualTo("payment-17");
-  }
+        ArgumentCaptor<TriggerLaunchCommand> captor = ArgumentCaptor.forClass(TriggerLaunchCommand.class);
+        verify(triggerService).launch(captor.capture());
+        assertThat(captor.getValue().request().externalEventSource()).isEqualTo("billing");
+        assertThat(captor.getValue().request().externalEventId()).isEqualTo("payment-17");
+    }
 
-  @Test
-  @DisplayName("API Key principal 只能以自身 source 和 tenant 启动 EVENT")
-  void shouldBindExternalEventLaunchToAuthenticatedSource() throws Exception {
-    TriggerApiKeyPrincipal principal =
-        new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
-    SecurityContextHolder.getContext()
-        .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-            principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
-    when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "billing")).thenReturn(true);
-    when(triggerService.launch(any())).thenReturn(new LaunchResponse("req-event", "trace-event"));
+    @Test
+    @DisplayName("API Key principal 只能以自身 source 和 tenant 启动 EVENT")
+    void shouldBindExternalEventLaunchToAuthenticatedSource() throws Exception {
+        TriggerApiKeyPrincipal principal = new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
+        SecurityContextHolder.getContext()
+                .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
+        when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "billing")).thenReturn(true);
+        when(triggerService.launch(any())).thenReturn(new LaunchResponse("req-event", "trace-event"));
 
-    mockMvc
-        .perform(post("/api/triggers/launch")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "event-key")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/triggers/launch")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "event-key")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "workflowDefinitionId": 41,
@@ -175,30 +168,28 @@ class TriggerControllerTest {
                       "externalEventId": "payment-17"
                     }
                     """))
-        .andExpect(status().isOk());
+                .andExpect(status().isOk());
 
-    verify(apiKeyVerifier).authorizesExternalEvent(principal, "t1", "billing");
-    verify(triggerService).launch(any(TriggerLaunchCommand.class));
-  }
+        verify(apiKeyVerifier).authorizesExternalEvent(principal, "t1", "billing");
+        verify(triggerService).launch(any(TriggerLaunchCommand.class));
+    }
 
-  @Test
-  @DisplayName("伪造来源时即使处于排水状态也先拒绝授权")
-  void shouldRejectExternalEventIdentityNotBoundToApiKey() throws Exception {
-    TriggerApiKeyPrincipal principal =
-        new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
-    SecurityContextHolder.getContext()
-        .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-            principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
-    when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "forged-source"))
-        .thenReturn(false);
-    // 授权应先拒绝，因此排水状态桩可能不被访问。
-    lenient().when(triggerGracefulShutdown.isDraining()).thenReturn(true);
+    @Test
+    @DisplayName("伪造来源时即使处于排水状态也先拒绝授权")
+    void shouldRejectExternalEventIdentityNotBoundToApiKey() throws Exception {
+        TriggerApiKeyPrincipal principal = new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
+        SecurityContextHolder.getContext()
+                .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
+        when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "forged-source"))
+                .thenReturn(false);
+        // 授权应先拒绝，因此排水状态桩可能不被访问。
+        lenient().when(triggerGracefulShutdown.isDraining()).thenReturn(true);
 
-    mockMvc
-        .perform(post("/api/triggers/launch")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "forged-event-key")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/triggers/launch")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "forged-event-key")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "workflowDefinitionId": 41,
@@ -209,74 +200,64 @@ class TriggerControllerTest {
                       "externalEventId": "payment-17"
                     }
                     """))
-        .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden());
 
-    verify(triggerService, never()).launch(any());
-    verifyNoInteractions(triggerGracefulShutdown);
-  }
+        verify(triggerService, never()).launch(any());
+        verifyNoInteractions(triggerGracefulShutdown);
+    }
 
-  @Test
-  @DisplayName("外部来源 API Key 查询状态时按 tenant 和 source 隔离")
-  void shouldScopeExternalEventStatusByAuthenticatedSource() throws Exception {
-    TriggerApiKeyPrincipal principal =
-        new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
-    SecurityContextHolder.getContext()
-        .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-            principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
-    when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "billing")).thenReturn(true);
-    when(triggerService.findLaunchStatus("t1", "event-key", "billing"))
-        .thenReturn(
-            new TriggerLaunchStatus("req-event", "trace-event", "LAUNCHED", null, null, null));
+    @Test
+    @DisplayName("外部来源 API Key 查询状态时按 tenant 和 source 隔离")
+    void shouldScopeExternalEventStatusByAuthenticatedSource() throws Exception {
+        TriggerApiKeyPrincipal principal = new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
+        SecurityContextHolder.getContext()
+                .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
+        when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "billing")).thenReturn(true);
+        when(triggerService.findLaunchStatus("t1", "event-key", "billing"))
+                .thenReturn(new TriggerLaunchStatus("req-event", "trace-event", "LAUNCHED", null, null, null));
 
-    mockMvc
-        .perform(get("/api/triggers/launch/status")
-            .queryParam("tenantId", "t1")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "event-key"))
-        .andExpect(status().isOk());
+        mockMvc.perform(get("/api/triggers/launch/status")
+                        .queryParam("tenantId", "t1")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "event-key"))
+                .andExpect(status().isOk());
 
-    verify(triggerService).findLaunchStatus("t1", "event-key", "billing");
-  }
+        verify(triggerService).findLaunchStatus("t1", "event-key", "billing");
+    }
 
-  @Test
-  @DisplayName("外部来源 API Key 不能查询其他租户状态")
-  void shouldRejectExternalEventStatusForAnotherTenant() throws Exception {
-    TriggerApiKeyPrincipal principal =
-        new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
-    SecurityContextHolder.getContext()
-        .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-            principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
-    when(apiKeyVerifier.authorizesExternalEvent(principal, "t2", "billing")).thenReturn(false);
+    @Test
+    @DisplayName("外部来源 API Key 不能查询其他租户状态")
+    void shouldRejectExternalEventStatusForAnotherTenant() throws Exception {
+        TriggerApiKeyPrincipal principal = new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
+        SecurityContextHolder.getContext()
+                .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
+        when(apiKeyVerifier.authorizesExternalEvent(principal, "t2", "billing")).thenReturn(false);
 
-    mockMvc
-        .perform(get("/api/triggers/launch/status")
-            .queryParam("tenantId", "t2")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "event-key"))
-        .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/triggers/launch/status")
+                        .queryParam("tenantId", "t2")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "event-key"))
+                .andExpect(status().isForbidden());
 
-    verify(triggerService, never()).findLaunchStatus(any(), any(), any());
-  }
+        verify(triggerService, never()).findLaunchStatus(any(), any(), any());
+    }
 
-  @Test
-  @DisplayName("外部来源事件接纳只按 API Key 来源路由并返回冻结目标")
-  void shouldLaunchExternalEventForAuthenticatedSource() throws Exception {
-    TriggerApiKeyPrincipal principal =
-        new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
-    SecurityContextHolder.getContext()
-        .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-            principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
-    when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "billing")).thenReturn(true);
-    when(triggerService.launchExternalEvent(any()))
-        .thenReturn(new ExternalEventLaunchResponse(
-            "delivery-1",
-            "evt-1",
-            "trace-1",
-            List.of(new ExternalEventLaunchTarget(21L, "req-1"))));
+    @Test
+    @DisplayName("外部来源事件接纳只按 API Key 来源路由并返回冻结目标")
+    void shouldLaunchExternalEventForAuthenticatedSource() throws Exception {
+        TriggerApiKeyPrincipal principal = new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
+        SecurityContextHolder.getContext()
+                .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
+        when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "billing")).thenReturn(true);
+        when(triggerService.launchExternalEvent(any()))
+                .thenReturn(new ExternalEventLaunchResponse(
+                        "delivery-1", "evt-1", "trace-1", List.of(new ExternalEventLaunchTarget(21L, "req-1"))));
 
-    mockMvc
-        .perform(post("/api/triggers/events")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-event-1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/triggers/events")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-event-1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                 {
                   "tenantId": "t1",
                   "externalEventCode": "PAYMENT_SETTLED",
@@ -285,95 +266,91 @@ class TriggerControllerTest {
                   "params": {"paymentId": "p-1"}
                 }
                 """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.requestId").value("delivery-1"))
-        .andExpect(jsonPath("$.data.targets[0].workflowDefinitionId").value(21))
-        .andExpect(jsonPath("$.data.targets[0].requestId").value("req-1"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.requestId").value("delivery-1"))
+                .andExpect(jsonPath("$.data.targets[0].workflowDefinitionId").value(21))
+                .andExpect(jsonPath("$.data.targets[0].requestId").value("req-1"));
 
-    var command = ArgumentCaptor.forClass(ExternalEventLaunchCommand.class);
-    verify(triggerService).launchExternalEvent(command.capture());
-    assertThat(command.getValue().eventSource()).isEqualTo("billing");
-    assertThat(command.getValue().idempotencyKey()).isEqualTo("idem-event-1");
-    assertThat(command.getValue().request().externalEventId()).isEqualTo("evt-1");
-  }
+        var command = ArgumentCaptor.forClass(ExternalEventLaunchCommand.class);
+        verify(triggerService).launchExternalEvent(command.capture());
+        assertThat(command.getValue().eventSource()).isEqualTo("billing");
+        assertThat(command.getValue().idempotencyKey()).isEqualTo("idem-event-1");
+        assertThat(command.getValue().request().externalEventId()).isEqualTo("evt-1");
+    }
 
-  @Test
-  @DisplayName("外部事件状态按调用方幂等键聚合所有 Workflow 目标")
-  void shouldReturnExternalEventStatusByIdempotencyKey() throws Exception {
-    TriggerApiKeyPrincipal principal =
-        new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
-    SecurityContextHolder.getContext()
-        .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-            principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
-    when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "billing")).thenReturn(true);
-    when(triggerService.findExternalEventStatus("t1", "billing", "idem-event-1"))
-        .thenReturn(new ExternalEventLaunchStatus(
-            "delivery-1",
-            "billing",
-            "evt-1",
-            "PAYMENT_SETTLED",
-            LocalDate.of(2026, 3, 27),
-            "trace-1",
-            List.of(new ExternalEventTargetStatus(
-                21L, "WF_A", "req-1", "trace-1", "ACCEPTED", null, null, null, null, null)),
-            null));
+    @Test
+    @DisplayName("外部事件状态按调用方幂等键聚合所有 Workflow 目标")
+    void shouldReturnExternalEventStatusByIdempotencyKey() throws Exception {
+        TriggerApiKeyPrincipal principal = new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
+        SecurityContextHolder.getContext()
+                .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
+        when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "billing")).thenReturn(true);
+        when(triggerService.findExternalEventStatus("t1", "billing", "idem-event-1"))
+                .thenReturn(new ExternalEventLaunchStatus(
+                        "delivery-1",
+                        "billing",
+                        "evt-1",
+                        "PAYMENT_SETTLED",
+                        LocalDate.of(2026, 3, 27),
+                        "trace-1",
+                        List.of(new ExternalEventTargetStatus(
+                                21L, "WF_A", "req-1", "trace-1", "ACCEPTED", null, null, null, null, null)),
+                        null));
 
-    mockMvc
-        .perform(get("/api/triggers/events/status")
-            .queryParam("tenantId", "t1")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-event-1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.eventId").value("evt-1"))
-        .andExpect(jsonPath("$.data.targets[0].workflowDefinitionId").value(21));
+        mockMvc.perform(get("/api/triggers/events/status")
+                        .queryParam("tenantId", "t1")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-event-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.eventId").value("evt-1"))
+                .andExpect(jsonPath("$.data.targets[0].workflowDefinitionId").value(21));
 
-    verify(triggerService).findExternalEventStatus("t1", "billing", "idem-event-1");
-  }
+        verify(triggerService).findExternalEventStatus("t1", "billing", "idem-event-1");
+    }
 
-  @Test
-  @DisplayName("按租户与幂等键查询启动状态,返回请求号/请求状态/关联作业实例号与实例状态")
-  void shouldReturnLaunchStatusByTenantAndIdempotencyKey() throws Exception {
-    when(triggerService.findLaunchStatus("t1", "idem-status"))
-        .thenReturn(
-            new TriggerLaunchStatus("req-001", "trace-001", "LAUNCHED", 42L, "SUCCESS", null));
+    @Test
+    @DisplayName("按租户与幂等键查询启动状态,返回请求号/请求状态/关联作业实例号与实例状态")
+    void shouldReturnLaunchStatusByTenantAndIdempotencyKey() throws Exception {
+        when(triggerService.findLaunchStatus("t1", "idem-status"))
+                .thenReturn(new TriggerLaunchStatus("req-001", "trace-001", "LAUNCHED", 42L, "SUCCESS", null));
 
-    mockMvc
-        .perform(get("/api/triggers/launch/status")
-            .queryParam("tenantId", "t1")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-status"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.requestId").value("req-001"))
-        .andExpect(jsonPath("$.data.requestStatus").value("LAUNCHED"))
-        .andExpect(jsonPath("$.data.relatedJobInstanceId").value(42))
-        .andExpect(jsonPath("$.data.instanceStatus").value("SUCCESS"));
-  }
+        mockMvc.perform(get("/api/triggers/launch/status")
+                        .queryParam("tenantId", "t1")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.requestId").value("req-001"))
+                .andExpect(jsonPath("$.data.requestStatus").value("LAUNCHED"))
+                .andExpect(jsonPath("$.data.relatedJobInstanceId").value(42))
+                .andExpect(jsonPath("$.data.instanceStatus").value("SUCCESS"));
+    }
 
-  @Test
-  @DisplayName("启动入参租户无效时返回 400 校验错误,且不调用 TriggerService")
-  void shouldReturnValidationErrorWhenRequiredFieldsAreMissing() throws Exception {
-    mockMvc
-        .perform(post("/api/triggers/launch")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("启动入参租户无效时返回 400 校验错误,且不调用 TriggerService")
+    void shouldReturnValidationErrorWhenRequiredFieldsAreMissing() throws Exception {
+        mockMvc.perform(post("/api/triggers/launch")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "",
                       "workflowDefinitionId": 41,
                       "bizDate": "2026-03-27"
                     }
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-        .andExpect(content().string(containsString("tenantId is required")));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(content().string(containsString("tenantId is required")));
 
-    verifyNoInteractions(triggerService);
-  }
+        verifyNoInteractions(triggerService);
+    }
 
-  @Test
-  @DisplayName("缺少幂等键请求头时以 400 MISSING_IDEMPOTENCY_KEY 拒绝,不进入 TriggerService")
-  void shouldReturnMissingIdempotencyKeyWhenHeaderIsAbsent() throws Exception {
-    mockMvc
-        .perform(post("/api/triggers/launch").contentType(APPLICATION_JSON).content("""
+    @Test
+    @DisplayName("缺少幂等键请求头时以 400 MISSING_IDEMPOTENCY_KEY 拒绝,不进入 TriggerService")
+    void shouldReturnMissingIdempotencyKeyWhenHeaderIsAbsent() throws Exception {
+        mockMvc.perform(post("/api/triggers/launch")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "workflowDefinitionId": 41,
@@ -381,69 +358,65 @@ class TriggerControllerTest {
                       "triggerType": "API"
                     }
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
 
-    verifyNoInteractions(triggerService);
-  }
+        verifyNoInteractions(triggerService);
+    }
 
-  @Test
-  @DisplayName("补跑审批入参合法时放行,返回审批生成的实例编号并调用 TriggerService")
-  void shouldApproveCatchUpWhenPayloadIsValid() throws Exception {
-    when(triggerService.approvePendingCatchUp(any()))
-        .thenReturn(new LaunchResponse("inst-cu", "trace-cu"));
+    @Test
+    @DisplayName("补跑审批入参合法时放行,返回审批生成的实例编号并调用 TriggerService")
+    void shouldApproveCatchUpWhenPayloadIsValid() throws Exception {
+        when(triggerService.approvePendingCatchUp(any())).thenReturn(new LaunchResponse("inst-cu", "trace-cu"));
 
-    mockMvc
-        .perform(post("/api/triggers/catch-up/approve")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cu-1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/triggers/catch-up/approve")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cu-1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "requestId": "req-cu-1",
                       "reason": "approved"
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.instanceNo").value("inst-cu"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.instanceNo").value("inst-cu"));
 
-    verify(triggerService).approvePendingCatchUp(any());
-  }
+        verify(triggerService).approvePendingCatchUp(any());
+    }
 
-  @Test
-  @DisplayName("补跑审批租户名为空时返回 400 校验错误(must not be blank),且不调用 TriggerService")
-  void shouldReturnValidationErrorWhenCatchUpApprovalTenantIsMissing() throws Exception {
-    mockMvc
-        .perform(post("/api/triggers/catch-up/approve")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-003")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("补跑审批租户名为空时返回 400 校验错误(must not be blank),且不调用 TriggerService")
+    void shouldReturnValidationErrorWhenCatchUpApprovalTenantIsMissing() throws Exception {
+        mockMvc.perform(post("/api/triggers/catch-up/approve")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-003")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "",
                       "requestId": "req-001",
                       "reason": "ok"
                     }
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-        .andExpect(content().string(containsString("must not be blank")));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(content().string(containsString("must not be blank")));
 
-    verifyNoInteractions(triggerService);
-  }
+        verifyNoInteractions(triggerService);
+    }
 
-  @Test
-  @DisplayName("平台库连接池耗尽时返回 503 + Retry-After,而不是通用 500")
-  void shouldReturnRetryableUnavailableWhenJdbcPoolIsExhausted() throws Exception {
-    when(triggerService.launch(any()))
-        .thenThrow(new CannotGetJdbcConnectionException(
-            "Failed to obtain JDBC Connection", new SQLException("connection is not available")));
+    @Test
+    @DisplayName("平台库连接池耗尽时返回 503 + Retry-After,而不是通用 500")
+    void shouldReturnRetryableUnavailableWhenJdbcPoolIsExhausted() throws Exception {
+        when(triggerService.launch(any()))
+                .thenThrow(new CannotGetJdbcConnectionException(
+                        "Failed to obtain JDBC Connection", new SQLException("connection is not available")));
 
-    mockMvc
-        .perform(post("/api/triggers/launch")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-pool-001")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/triggers/launch")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-pool-001")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "workflowDefinitionId": 41,
@@ -451,8 +424,8 @@ class TriggerControllerTest {
                       "triggerType": "API"
                     }
                     """))
-        .andExpect(status().isServiceUnavailable())
-        .andExpect(header().string("Retry-After", "5"))
-        .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
-  }
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "5"))
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+    }
 }

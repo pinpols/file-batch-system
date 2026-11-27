@@ -35,122 +35,121 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WorkflowRunStuckReconcilerTest {
 
-  @Mock
-  private WorkflowRunMapper workflowRunMapper;
+    @Mock
+    private WorkflowRunMapper workflowRunMapper;
 
-  @Mock
-  private WorkflowNodeRunMapper workflowNodeRunMapper;
+    @Mock
+    private WorkflowNodeRunMapper workflowNodeRunMapper;
 
-  @Mock
-  private WorkflowRunResumeProgressor resumeProgressor;
+    @Mock
+    private WorkflowRunResumeProgressor resumeProgressor;
 
-  @Mock
-  private BatchOrchestratorGovernanceProperties governance;
+    @Mock
+    private BatchOrchestratorGovernanceProperties governance;
 
-  @Mock
-  private TimeoutEnforcerProperties timeoutProperties;
+    @Mock
+    private TimeoutEnforcerProperties timeoutProperties;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Mock
-  private MeterRegistry meterRegistry;
+    @Mock
+    private MeterRegistry meterRegistry;
 
-  @AfterEach
-  void clearTenantContext() {
-    RlsTenantContextHolder.clear();
-  }
-
-  @DisplayName("每个核对候选使用其所属租户上下文")
-  @Test
-  void shouldUseOwningTenant_whenReconcilingCandidate() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(governance.timeout()).thenReturn(timeoutProperties);
-    when(timeoutProperties.getWorkflowStuckThresholdSeconds()).thenReturn(60L);
-    when(timeoutProperties.getBatchSize()).thenReturn(10);
-    when(workflowRunMapper.selectStuckRunningCandidates(any(), eq(10)))
-        .thenReturn(List.of(candidate(1L, "tenant-a"), candidate(2L, "tenant-b")));
-    when(workflowRunMapper.selectById("tenant-a", 1L)).thenAnswer(invocation -> {
-      assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-a");
-      return null;
-    });
-    when(workflowRunMapper.selectById("tenant-b", 2L)).thenAnswer(invocation -> {
-      assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-b");
-      return null;
-    });
-    Mockito.doAnswer(invocation -> {
-          assertThat(RlsTenantContextHolder.get()).isEqualTo(invocation.getArgument(0));
-          return null;
-        })
-        .when(resumeProgressor)
-        .resume(any(), any());
-
-    reconciler().reconcile();
-
-    verify(resumeProgressor).resume("tenant-a", 1L);
-    verify(resumeProgressor).resume("tenant-b", 2L);
-    assertThat(RlsTenantContextHolder.get()).isNull();
-  }
-
-  @DisplayName("全部节点终态且存在失败节点时将运行置为失败")
-  @Test
-  void shouldFinalizeAsFailed_whenAllNodesTerminalAndOneFailed() {
-    UpdateWorkflowRunStatusParam param = reconcileWithNodes("SUCCESS", "FAILED");
-
-    assertThat(param.getRunStatus()).isEqualTo(WorkflowRunStatus.FAILED.code());
-  }
-
-  @DisplayName("全部节点终态且无失败节点时将运行置为成功")
-  @Test
-  void shouldFinalizeAsSuccess_whenAllNodesTerminalWithoutFailure() {
-    UpdateWorkflowRunStatusParam param = reconcileWithNodes("SUCCESS", "SKIPPED");
-
-    assertThat(param.getRunStatus()).isEqualTo(WorkflowRunStatus.SUCCESS.code());
-  }
-
-  private UpdateWorkflowRunStatusParam reconcileWithNodes(String... nodeStatuses) {
-    WorkflowRunEntity running = candidate(1L, "tenant-a");
-    running.setRunStatus(WorkflowRunStatus.RUNNING.code());
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(governance.timeout()).thenReturn(timeoutProperties);
-    when(timeoutProperties.getWorkflowStuckThresholdSeconds()).thenReturn(60L);
-    when(timeoutProperties.getBatchSize()).thenReturn(10);
-    when(workflowRunMapper.selectStuckRunningCandidates(any(), eq(10)))
-        .thenReturn(List.of(running));
-    when(workflowRunMapper.selectById("tenant-a", 1L)).thenReturn(running);
-    List<WorkflowNodeRunEntity> nodeRuns = new ArrayList<>();
-    for (String status : nodeStatuses) {
-      WorkflowNodeRunEntity node = new WorkflowNodeRunEntity();
-      node.setNodeStatus(status);
-      nodeRuns.add(node);
+    @AfterEach
+    void clearTenantContext() {
+        RlsTenantContextHolder.clear();
     }
-    when(workflowNodeRunMapper.selectByWorkflowRunId(1L)).thenReturn(nodeRuns);
-    when(workflowRunMapper.updateStatus(any())).thenReturn(1);
-    when(meterRegistry.counter(any(String.class))).thenReturn(Mockito.mock(Counter.class));
 
-    reconciler().reconcile();
+    @DisplayName("每个核对候选使用其所属租户上下文")
+    @Test
+    void shouldUseOwningTenant_whenReconcilingCandidate() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        when(governance.timeout()).thenReturn(timeoutProperties);
+        when(timeoutProperties.getWorkflowStuckThresholdSeconds()).thenReturn(60L);
+        when(timeoutProperties.getBatchSize()).thenReturn(10);
+        when(workflowRunMapper.selectStuckRunningCandidates(any(), eq(10)))
+                .thenReturn(List.of(candidate(1L, "tenant-a"), candidate(2L, "tenant-b")));
+        when(workflowRunMapper.selectById("tenant-a", 1L)).thenAnswer(invocation -> {
+            assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-a");
+            return null;
+        });
+        when(workflowRunMapper.selectById("tenant-b", 2L)).thenAnswer(invocation -> {
+            assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-b");
+            return null;
+        });
+        Mockito.doAnswer(invocation -> {
+                    assertThat(RlsTenantContextHolder.get()).isEqualTo(invocation.getArgument(0));
+                    return null;
+                })
+                .when(resumeProgressor)
+                .resume(any(), any());
 
-    ArgumentCaptor<UpdateWorkflowRunStatusParam> captor =
-        ArgumentCaptor.forClass(UpdateWorkflowRunStatusParam.class);
-    verify(workflowRunMapper).updateStatus(captor.capture());
-    return captor.getValue();
-  }
+        reconciler().reconcile();
 
-  private WorkflowRunStuckReconciler reconciler() {
-    return new WorkflowRunStuckReconciler(
-        workflowRunMapper,
-        workflowNodeRunMapper,
-        resumeProgressor,
-        governance,
-        gracefulShutdown,
-        meterRegistry,
-        Mockito.mock(WorkflowLaunchWaitResumeTrigger.class));
-  }
+        verify(resumeProgressor).resume("tenant-a", 1L);
+        verify(resumeProgressor).resume("tenant-b", 2L);
+        assertThat(RlsTenantContextHolder.get()).isNull();
+    }
 
-  private WorkflowRunEntity candidate(Long id, String tenantId) {
-    WorkflowRunEntity run = new WorkflowRunEntity();
-    run.setId(id);
-    run.setTenantId(tenantId);
-    return run;
-  }
+    @DisplayName("全部节点终态且存在失败节点时将运行置为失败")
+    @Test
+    void shouldFinalizeAsFailed_whenAllNodesTerminalAndOneFailed() {
+        UpdateWorkflowRunStatusParam param = reconcileWithNodes("SUCCESS", "FAILED");
+
+        assertThat(param.getRunStatus()).isEqualTo(WorkflowRunStatus.FAILED.code());
+    }
+
+    @DisplayName("全部节点终态且无失败节点时将运行置为成功")
+    @Test
+    void shouldFinalizeAsSuccess_whenAllNodesTerminalWithoutFailure() {
+        UpdateWorkflowRunStatusParam param = reconcileWithNodes("SUCCESS", "SKIPPED");
+
+        assertThat(param.getRunStatus()).isEqualTo(WorkflowRunStatus.SUCCESS.code());
+    }
+
+    private UpdateWorkflowRunStatusParam reconcileWithNodes(String... nodeStatuses) {
+        WorkflowRunEntity running = candidate(1L, "tenant-a");
+        running.setRunStatus(WorkflowRunStatus.RUNNING.code());
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        when(governance.timeout()).thenReturn(timeoutProperties);
+        when(timeoutProperties.getWorkflowStuckThresholdSeconds()).thenReturn(60L);
+        when(timeoutProperties.getBatchSize()).thenReturn(10);
+        when(workflowRunMapper.selectStuckRunningCandidates(any(), eq(10))).thenReturn(List.of(running));
+        when(workflowRunMapper.selectById("tenant-a", 1L)).thenReturn(running);
+        List<WorkflowNodeRunEntity> nodeRuns = new ArrayList<>();
+        for (String status : nodeStatuses) {
+            WorkflowNodeRunEntity node = new WorkflowNodeRunEntity();
+            node.setNodeStatus(status);
+            nodeRuns.add(node);
+        }
+        when(workflowNodeRunMapper.selectByWorkflowRunId(1L)).thenReturn(nodeRuns);
+        when(workflowRunMapper.updateStatus(any())).thenReturn(1);
+        when(meterRegistry.counter(any(String.class))).thenReturn(Mockito.mock(Counter.class));
+
+        reconciler().reconcile();
+
+        ArgumentCaptor<UpdateWorkflowRunStatusParam> captor =
+                ArgumentCaptor.forClass(UpdateWorkflowRunStatusParam.class);
+        verify(workflowRunMapper).updateStatus(captor.capture());
+        return captor.getValue();
+    }
+
+    private WorkflowRunStuckReconciler reconciler() {
+        return new WorkflowRunStuckReconciler(
+                workflowRunMapper,
+                workflowNodeRunMapper,
+                resumeProgressor,
+                governance,
+                gracefulShutdown,
+                meterRegistry,
+                Mockito.mock(WorkflowLaunchWaitResumeTrigger.class));
+    }
+
+    private WorkflowRunEntity candidate(Long id, String tenantId) {
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.setId(id);
+        run.setTenantId(tenantId);
+        return run;
+    }
 }

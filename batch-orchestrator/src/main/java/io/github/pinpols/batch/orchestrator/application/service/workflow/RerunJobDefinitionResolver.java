@@ -20,127 +20,116 @@ import org.springframework.stereotype.Component;
 @Component
 public class RerunJobDefinitionResolver {
 
-  private static final String OPERATION_JOB_RERUN = "JOB_RERUN";
-  private static final String PARAM_OPERATION_TYPE = "operationType";
-  private static final String PARAM_PARENT_INSTANCE_ID = "parentInstanceId";
-  private static final String PARAM_CONFIG_VERSION_POLICY = "_rerunConfigVersionPolicy";
-  private static final String PARAM_CONFIG_VERSION = "_rerunConfigVersion";
+    private static final String OPERATION_JOB_RERUN = "JOB_RERUN";
+    private static final String PARAM_OPERATION_TYPE = "operationType";
+    private static final String PARAM_PARENT_INSTANCE_ID = "parentInstanceId";
+    private static final String PARAM_CONFIG_VERSION_POLICY = "_rerunConfigVersionPolicy";
+    private static final String PARAM_CONFIG_VERSION = "_rerunConfigVersion";
 
-  private final JobInstanceMapper jobInstanceMapper;
-  private final WorkflowRunMapper workflowRunMapper;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final WorkflowRunMapper workflowRunMapper;
 
-  public RerunJobDefinitionResolver(
-      JobInstanceMapper jobInstanceMapper, WorkflowRunMapper workflowRunMapper) {
-    this.jobInstanceMapper = jobInstanceMapper;
-    this.workflowRunMapper = workflowRunMapper;
-  }
-
-  public JobDefinitionView resolve(
-      LaunchRequest request, String jobCode, JobDefinitionView latestDefinition) {
-    Map<String, Object> params = EmptyChecks.isNull(request.params()) ? Map.of() : request.params();
-    if (!OPERATION_JOB_RERUN.equals(params.get(PARAM_OPERATION_TYPE))) {
-      return latestDefinition;
-    }
-    Long sourceInstanceId = positiveLong(params.get(PARAM_PARENT_INSTANCE_ID));
-    if (EmptyChecks.isNull(sourceInstanceId)) {
-      throw conflict("error.rerun.source_instance_required");
-    }
-    JobInstanceEntity source = jobInstanceMapper.selectById(request.tenantId(), sourceInstanceId);
-    boolean sourceInstanceDoesNotMatchRequestedJob = EmptyChecks.isNull(source)
-        || !request.tenantId().equals(source.getTenantId())
-        || !jobCode.equals(source.getJobCode())
-        || EmptyChecks.isNull(latestDefinition)
-        || EmptyChecks.isNull(latestDefinition.id())
-        || !latestDefinition.id().equals(source.getJobDefinitionId());
-    if (sourceInstanceDoesNotMatchRequestedJob) {
-      throw conflict("error.rerun.source_instance_mismatch");
+    public RerunJobDefinitionResolver(JobInstanceMapper jobInstanceMapper, WorkflowRunMapper workflowRunMapper) {
+        this.jobInstanceMapper = jobInstanceMapper;
+        this.workflowRunMapper = workflowRunMapper;
     }
 
-    String rawPolicy = text(params.get(PARAM_CONFIG_VERSION_POLICY));
-    ConfigVersionPolicy policy = EmptyChecks.isBlank(rawPolicy)
-        ? ConfigVersionPolicy.USE_ORIGINAL_CONFIG
-        : ConfigVersionPolicy.fromCodeOrNull(rawPolicy);
-    if (EmptyChecks.isNull(policy)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_policy_invalid");
-    }
-    return switch (policy) {
-      case USE_LATEST_CONFIG -> latestDefinition;
-      case USE_ORIGINAL_CONFIG -> originalDefinition(request.tenantId(), source, jobCode);
-      case USE_SPECIFIED_VERSION ->
-        specifiedDefinition(request.tenantId(), source, jobCode, params);
-    };
-  }
+    public JobDefinitionView resolve(LaunchRequest request, String jobCode, JobDefinitionView latestDefinition) {
+        Map<String, Object> params = EmptyChecks.isNull(request.params()) ? Map.of() : request.params();
+        if (!OPERATION_JOB_RERUN.equals(params.get(PARAM_OPERATION_TYPE))) {
+            return latestDefinition;
+        }
+        Long sourceInstanceId = positiveLong(params.get(PARAM_PARENT_INSTANCE_ID));
+        if (EmptyChecks.isNull(sourceInstanceId)) {
+            throw conflict("error.rerun.source_instance_required");
+        }
+        JobInstanceEntity source = jobInstanceMapper.selectById(request.tenantId(), sourceInstanceId);
+        boolean sourceInstanceDoesNotMatchRequestedJob = EmptyChecks.isNull(source)
+                || !request.tenantId().equals(source.getTenantId())
+                || !jobCode.equals(source.getJobCode())
+                || EmptyChecks.isNull(latestDefinition)
+                || EmptyChecks.isNull(latestDefinition.id())
+                || !latestDefinition.id().equals(source.getJobDefinitionId());
+        if (sourceInstanceDoesNotMatchRequestedJob) {
+            throw conflict("error.rerun.source_instance_mismatch");
+        }
 
-  private JobDefinitionView originalDefinition(
-      String tenantId, JobInstanceEntity source, String jobCode) {
-    WorkflowRunEntity sourceRun =
-        workflowRunMapper.selectByNodeJobInstanceId(tenantId, source.getId());
-    JobDefinitionView snapshot =
-        jobDefinitionFromRun(sourceRun, jobCode, source.getJobDefinitionId());
-    if (EmptyChecks.isNull(snapshot)
-        || !Objects.equals(snapshot.version(), source.getJobDefinitionVersion())) {
-      throw conflict("error.rerun.original_config_unavailable");
+        String rawPolicy = text(params.get(PARAM_CONFIG_VERSION_POLICY));
+        ConfigVersionPolicy policy = EmptyChecks.isBlank(rawPolicy)
+                ? ConfigVersionPolicy.USE_ORIGINAL_CONFIG
+                : ConfigVersionPolicy.fromCodeOrNull(rawPolicy);
+        if (EmptyChecks.isNull(policy)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_policy_invalid");
+        }
+        return switch (policy) {
+            case USE_LATEST_CONFIG -> latestDefinition;
+            case USE_ORIGINAL_CONFIG -> originalDefinition(request.tenantId(), source, jobCode);
+            case USE_SPECIFIED_VERSION -> specifiedDefinition(request.tenantId(), source, jobCode, params);
+        };
     }
-    return snapshot;
-  }
 
-  private JobDefinitionView specifiedDefinition(
-      String tenantId, JobInstanceEntity source, String jobCode, Map<String, Object> params) {
-    Integer version = positiveInteger(params.get(PARAM_CONFIG_VERSION));
-    if (EmptyChecks.isNull(version)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_required");
+    private JobDefinitionView originalDefinition(String tenantId, JobInstanceEntity source, String jobCode) {
+        WorkflowRunEntity sourceRun = workflowRunMapper.selectByNodeJobInstanceId(tenantId, source.getId());
+        JobDefinitionView snapshot = jobDefinitionFromRun(sourceRun, jobCode, source.getJobDefinitionId());
+        if (EmptyChecks.isNull(snapshot) || !Objects.equals(snapshot.version(), source.getJobDefinitionVersion())) {
+            throw conflict("error.rerun.original_config_unavailable");
+        }
+        return snapshot;
     }
-    WorkflowRunEntity versionedRun = workflowRunMapper.selectLatestJobDefinitionSnapshot(
-        tenantId, source.getJobDefinitionId(), jobCode, version);
-    JobDefinitionView snapshot =
-        jobDefinitionFromRun(versionedRun, jobCode, source.getJobDefinitionId());
-    if (EmptyChecks.isNull(snapshot) || !version.equals(snapshot.version())) {
-      throw BizException.of(
-          ResultCode.NOT_FOUND, "error.rerun.config_version_unavailable", version);
+
+    private JobDefinitionView specifiedDefinition(
+            String tenantId, JobInstanceEntity source, String jobCode, Map<String, Object> params) {
+        Integer version = positiveInteger(params.get(PARAM_CONFIG_VERSION));
+        if (EmptyChecks.isNull(version)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_required");
+        }
+        WorkflowRunEntity versionedRun = workflowRunMapper.selectLatestJobDefinitionSnapshot(
+                tenantId, source.getJobDefinitionId(), jobCode, version);
+        JobDefinitionView snapshot = jobDefinitionFromRun(versionedRun, jobCode, source.getJobDefinitionId());
+        if (EmptyChecks.isNull(snapshot) || !version.equals(snapshot.version())) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.rerun.config_version_unavailable", version);
+        }
+        return snapshot;
     }
-    return snapshot;
-  }
 
-  private JobDefinitionView jobDefinitionFromRun(
-      WorkflowRunEntity run, String jobCode, Long jobDefinitionId) {
-    WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
-    if (EmptyChecks.isNull(snapshot)) {
-      return null;
+    private JobDefinitionView jobDefinitionFromRun(WorkflowRunEntity run, String jobCode, Long jobDefinitionId) {
+        WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
+        if (EmptyChecks.isNull(snapshot)) {
+            return null;
+        }
+        List<JobDefinitionView> matches = snapshot.jobDefinitions().values().stream()
+                .filter(job -> jobCode.equals(job.jobCode()) && jobDefinitionId.equals(job.id()))
+                .toList();
+        return matches.size() == 1 ? matches.get(0) : null;
     }
-    List<JobDefinitionView> matches = snapshot.jobDefinitions().values().stream()
-        .filter(job -> jobCode.equals(job.jobCode()) && jobDefinitionId.equals(job.id()))
-        .toList();
-    return matches.size() == 1 ? matches.get(0) : null;
-  }
 
-  private Long positiveLong(Object value) {
-    try {
-      String numericText = text(value);
-      BigDecimal decimalValue = new BigDecimal(numericText);
-      long parsed = decimalValue.longValueExact();
-      return parsed > 0 ? parsed : null;
-    } catch (RuntimeException invalid) {
-      return null;
+    private Long positiveLong(Object value) {
+        try {
+            String numericText = text(value);
+            BigDecimal decimalValue = new BigDecimal(numericText);
+            long parsed = decimalValue.longValueExact();
+            return parsed > 0 ? parsed : null;
+        } catch (RuntimeException invalid) {
+            return null;
+        }
     }
-  }
 
-  private Integer positiveInteger(Object value) {
-    try {
-      String numericText = text(value);
-      BigDecimal decimalValue = new BigDecimal(numericText);
-      int parsed = decimalValue.intValueExact();
-      return parsed > 0 ? parsed : null;
-    } catch (RuntimeException invalid) {
-      return null;
+    private Integer positiveInteger(Object value) {
+        try {
+            String numericText = text(value);
+            BigDecimal decimalValue = new BigDecimal(numericText);
+            int parsed = decimalValue.intValueExact();
+            return parsed > 0 ? parsed : null;
+        } catch (RuntimeException invalid) {
+            return null;
+        }
     }
-  }
 
-  private String text(Object value) {
-    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
-  }
+    private String text(Object value) {
+        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+    }
 
-  private BizException conflict(String messageKey) {
-    return BizException.of(ResultCode.STATE_CONFLICT, messageKey);
-  }
+    private BizException conflict(String messageKey) {
+        return BizException.of(ResultCode.STATE_CONFLICT, messageKey);
+    }
 }

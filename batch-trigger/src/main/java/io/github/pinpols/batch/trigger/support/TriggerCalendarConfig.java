@@ -10,10 +10,10 @@ import lombok.Data;
 @Data
 public class TriggerCalendarConfig {
 
-  private Long id;
-  private String tenantId;
-  private String calendarCode;
-  private String timezone;
-  private String holidayRollRule;
-  private LocalTime cutoffTime;
+    private Long id;
+    private String tenantId;
+    private String calendarCode;
+    private String timezone;
+    private String holidayRollRule;
+    private LocalTime cutoffTime;
 }

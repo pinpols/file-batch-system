@@ -29,39 +29,38 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkerDrainTimeoutScheduler {
 
-  private final WorkerRegistryMapper workerRegistryMapper;
-  private final WorkerDrainGovernanceService workerDrainGovernanceService;
-  private final WorkerDrainProperties workerDrainProperties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final WorkerRegistryMapper workerRegistryMapper;
+    private final WorkerDrainGovernanceService workerDrainGovernanceService;
+    private final WorkerDrainProperties workerDrainProperties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.worker.drain.check-interval-millis:15000}")
-  @SchedulerLock(name = "worker_drain_timeout", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
-  public void expireDrains() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.worker.drain.check-interval-millis:15000}")
+    @SchedulerLock(name = "worker_drain_timeout", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
+    public void expireDrains() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!workerDrainProperties.isEnabled()) {
+            return;
+        }
+        Instant now = BatchDateTimeSupport.utcNow();
+        List<WorkerRegistryEntity> draining = workerRegistryMapper.selectByStatus(WorkerRegistryStatus.DRAINING.code());
+        for (WorkerRegistryEntity worker : draining) {
+            if (worker == null || worker.drainDeadlineAt() == null) {
+                continue;
+            }
+            String tenantId = worker.tenantId();
+            if (tenantId == null || tenantId.isBlank()) {
+                continue;
+            }
+            if (!worker.drainDeadlineAt().isAfter(now)) {
+                // RLS Phase B：takeoverAfterDrainTimeout 内部强制下线 worker + 重派 partition + 写审计日志，
+                // 全链路 mapper 需要绑定 worker 所属 tenant。
+                RlsTenantContextHolder.runWithTenant(
+                        tenantId,
+                        () -> workerDrainGovernanceService.takeoverAfterDrainTimeout(
+                                worker.tenantId(), worker.workerCode()));
+            }
+        }
     }
-    if (!workerDrainProperties.isEnabled()) {
-      return;
-    }
-    Instant now = BatchDateTimeSupport.utcNow();
-    List<WorkerRegistryEntity> draining =
-        workerRegistryMapper.selectByStatus(WorkerRegistryStatus.DRAINING.code());
-    for (WorkerRegistryEntity worker : draining) {
-      if (worker == null || worker.drainDeadlineAt() == null) {
-        continue;
-      }
-      String tenantId = worker.tenantId();
-      if (tenantId == null || tenantId.isBlank()) {
-        continue;
-      }
-      if (!worker.drainDeadlineAt().isAfter(now)) {
-        // RLS Phase B：takeoverAfterDrainTimeout 内部强制下线 worker + 重派 partition + 写审计日志，
-        // 全链路 mapper 需要绑定 worker 所属 tenant。
-        RlsTenantContextHolder.runWithTenant(
-            tenantId,
-            () -> workerDrainGovernanceService.takeoverAfterDrainTimeout(
-                worker.tenantId(), worker.workerCode()));
-      }
-    }
-  }
 }

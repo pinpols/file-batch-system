@@ -31,40 +31,38 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class ImportInternalAuthFilter extends OncePerRequestFilter {
 
-  private static final String HEADER_SECRET = CommonConstants.INTERNAL_SECRET_HEADER;
+    private static final String HEADER_SECRET = CommonConstants.INTERNAL_SECRET_HEADER;
 
-  private static final String UNAUTHORIZED_BODY =
-      "{\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid X-Internal-Secret\"}";
+    private static final String UNAUTHORIZED_BODY =
+            "{\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid X-Internal-Secret\"}";
 
-  private final BatchSecurityProperties securityProperties;
+    private final BatchSecurityProperties securityProperties;
 
-  @Override
-  protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-      throws ServletException, IOException {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
 
-    String path = ServletRequestPaths.applicationPath(request);
-    boolean isInternalPath =
-        "/internal".equals(path) || (EmptyChecks.isNotNull(path) && path.startsWith("/internal/"));
-    if (!isInternalPath) {
-      chain.doFilter(request, response);
-      return;
+        String path = ServletRequestPaths.applicationPath(request);
+        boolean isInternalPath =
+                "/internal".equals(path) || (EmptyChecks.isNotNull(path) && path.startsWith("/internal/"));
+        if (!isInternalPath) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        if (securityProperties.isBypassMode()) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        String header = request.getHeader(HEADER_SECRET);
+        if (header != null && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write(UNAUTHORIZED_BODY);
     }
-
-    if (securityProperties.isBypassMode()) {
-      chain.doFilter(request, response);
-      return;
-    }
-
-    String header = request.getHeader(HEADER_SECRET);
-    if (header != null
-        && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
-      chain.doFilter(request, response);
-      return;
-    }
-
-    response.setStatus(HttpStatus.UNAUTHORIZED.value());
-    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-    response.getWriter().write(UNAUTHORIZED_BODY);
-  }
 }

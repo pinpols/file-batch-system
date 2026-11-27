@@ -8,5 +8,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.job-dependency-wait")
 public class JobDependencyWaitProperties {
 
-  private long timeoutAlertSeconds = 86_400L;
+    private long timeoutAlertSeconds = 86_400L;
 }

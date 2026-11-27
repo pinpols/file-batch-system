@@ -14,9 +14,9 @@ import java.util.Map;
  * @param timeRemaining = timeout_seconds - elapsed，&lt;= 0 时 scheduler 先于 probe 标 TIMEOUT
  */
 public record SensorContext(
-    String tenantId,
-    Long workflowNodeRunId,
-    Map<String, Object> sensorSpec,
-    Map<String, Object> workflowRunVars,
-    Duration timeRemaining,
-    Long workflowDefinitionId) {}
+        String tenantId,
+        Long workflowNodeRunId,
+        Map<String, Object> sensorSpec,
+        Map<String, Object> workflowRunVars,
+        Duration timeRemaining,
+        Long workflowDefinitionId) {}

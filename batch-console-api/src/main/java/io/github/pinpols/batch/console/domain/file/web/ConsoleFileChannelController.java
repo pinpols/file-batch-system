@@ -34,47 +34,45 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleFileChannelController {
 
-  private final ConsoleFileChannelApplicationService fileChannelApplicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleFileChannelApplicationService fileChannelApplicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** 分页查询文件通道列表。 */
-  @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
-  public CommonResponse<PageResponse<ConsoleFileChannelResponse>> list(
-      @Valid @ModelAttribute FileChannelQueryRequest request) {
-    return responseFactory.success(fileChannelApplicationService.list(request));
-  }
+    /** 分页查询文件通道列表。 */
+    @GetMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
+    public CommonResponse<PageResponse<ConsoleFileChannelResponse>> list(
+            @Valid @ModelAttribute FileChannelQueryRequest request) {
+        return responseFactory.success(fileChannelApplicationService.list(request));
+    }
 
-  /** 获取文件通道详情。 */
-  @GetMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
-  public CommonResponse<ConsoleFileChannelResponse> get(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(fileChannelApplicationService.get(id, tenantId));
-  }
+    /** 获取文件通道详情。 */
+    @GetMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
+    public CommonResponse<ConsoleFileChannelResponse> get(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(fileChannelApplicationService.get(id, tenantId));
+    }
 
-  /** 新建文件通道。 */
-  @PostMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<ConsoleFileChannelResponse> create(
-      @Valid @RequestBody FileChannelCreateRequest request) {
-    return responseFactory.success(fileChannelApplicationService.create(request));
-  }
+    /** 新建文件通道。 */
+    @PostMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<ConsoleFileChannelResponse> create(@Valid @RequestBody FileChannelCreateRequest request) {
+        return responseFactory.success(fileChannelApplicationService.create(request));
+    }
 
-  /** 更新文件通道。 */
-  @PutMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<ConsoleFileChannelResponse> update(
-      @PathVariable Long id, @Valid @RequestBody FileChannelUpdateRequest request) {
-    return responseFactory.success(fileChannelApplicationService.update(id, request));
-  }
+    /** 更新文件通道。 */
+    @PutMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<ConsoleFileChannelResponse> update(
+            @PathVariable Long id, @Valid @RequestBody FileChannelUpdateRequest request) {
+        return responseFactory.success(fileChannelApplicationService.update(id, request));
+    }
 
-  /** 启用/禁用文件通道。 */
-  @PatchMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<Void> patch(
-      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    fileChannelApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
-    return responseFactory.success(null);
-  }
+    /** 启用/禁用文件通道。 */
+    @PatchMapping("/{id}")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+    public CommonResponse<Void> patch(@PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        fileChannelApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
+        return responseFactory.success(null);
+    }
 }

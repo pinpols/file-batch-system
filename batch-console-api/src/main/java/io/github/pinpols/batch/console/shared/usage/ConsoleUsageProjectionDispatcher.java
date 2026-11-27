@@ -16,20 +16,20 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConsoleUsageProjectionDispatcher {
 
-  /** 有界线程池的 bean 名；队列满时由 {@link #submit} 丢弃并告警。 */
-  public static final String EXECUTOR_BEAN_NAME = "usageTaskExecutor";
+    /** 有界线程池的 bean 名；队列满时由 {@link #submit} 丢弃并告警。 */
+    public static final String EXECUTOR_BEAN_NAME = "usageTaskExecutor";
 
-  private final Executor executor;
+    private final Executor executor;
 
-  public ConsoleUsageProjectionDispatcher(@Qualifier(EXECUTOR_BEAN_NAME) Executor executor) {
-    this.executor = executor;
-  }
-
-  public void submit(Runnable projection) {
-    try {
-      executor.execute(projection);
-    } catch (RejectedExecutionException rejected) {
-      log.warn("usage projection dropped because the bounded queue is full");
+    public ConsoleUsageProjectionDispatcher(@Qualifier(EXECUTOR_BEAN_NAME) Executor executor) {
+        this.executor = executor;
     }
-  }
+
+    public void submit(Runnable projection) {
+        try {
+            executor.execute(projection);
+        } catch (RejectedExecutionException rejected) {
+            log.warn("usage projection dropped because the bounded queue is full");
+        }
+    }
 }

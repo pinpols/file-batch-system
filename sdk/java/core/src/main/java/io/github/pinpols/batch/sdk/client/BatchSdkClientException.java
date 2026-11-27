@@ -10,33 +10,33 @@ package io.github.pinpols.batch.sdk.client;
  */
 public class BatchSdkClientException extends RuntimeException {
 
-  /** 异常发生的生命周期阶段,用于租户区分处理策略。 */
-  public enum Stage {
-    /** 启动期 — {@code BatchPlatformClient.start()} 调 register / dispatcher 装配 时失败。 */
-    START,
-    /** Worker 向平台注册时失败(HTTP / 鉴权 / 网络)。 */
-    REGISTER,
-    /** 配置校验失败(builder / config 不合法)。 */
-    CONFIG,
-    /** Shutdown 阶段失败(drain 超时 / 资源关闭异常)。 */
-    SHUTDOWN,
-    /** Lane E #4-Java:Kafka SASL 认证失败 — 凭据已坏,不可恢复,需 Pod 重启 + 运维介入。 */
-    KAFKA_AUTH
-  }
+    /** 异常发生的生命周期阶段,用于租户区分处理策略。 */
+    public enum Stage {
+        /** 启动期 — {@code BatchPlatformClient.start()} 调 register / dispatcher 装配 时失败。 */
+        START,
+        /** Worker 向平台注册时失败(HTTP / 鉴权 / 网络)。 */
+        REGISTER,
+        /** 配置校验失败(builder / config 不合法)。 */
+        CONFIG,
+        /** Shutdown 阶段失败(drain 超时 / 资源关闭异常)。 */
+        SHUTDOWN,
+        /** Lane E #4-Java:Kafka SASL 认证失败 — 凭据已坏,不可恢复,需 Pod 重启 + 运维介入。 */
+        KAFKA_AUTH
+    }
 
-  private final Stage stage;
+    private final Stage stage;
 
-  public BatchSdkClientException(Stage stage, String message) {
-    super(message);
-    this.stage = stage;
-  }
+    public BatchSdkClientException(Stage stage, String message) {
+        super(message);
+        this.stage = stage;
+    }
 
-  public BatchSdkClientException(Stage stage, String message, Throwable cause) {
-    super(message, cause);
-    this.stage = stage;
-  }
+    public BatchSdkClientException(Stage stage, String message, Throwable cause) {
+        super(message, cause);
+        this.stage = stage;
+    }
 
-  public Stage stage() {
-    return stage;
-  }
+    public Stage stage() {
+        return stage;
+    }
 }

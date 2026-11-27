@@ -14,198 +14,194 @@ import java.util.stream.Collectors;
 
 /** 从模板配置的 {@code query_param_schema.jdbcMappedExport} 或 {@code jdbc_mapped_export} 解析而来的导出规格。 */
 public record JdbcMappedExportSpec(
-    String schema,
-    String batchTable,
-    String batchTenantColumn,
-    String batchNoColumn,
-    List<String> batchSelectColumns,
-    String detailTable,
-    String detailFkColumn,
-    String detailOrderByColumn,
-    String detailTiebreakerColumn,
-    List<String> detailSelectColumns) {
+        String schema,
+        String batchTable,
+        String batchTenantColumn,
+        String batchNoColumn,
+        List<String> batchSelectColumns,
+        String detailTable,
+        String detailFkColumn,
+        String detailOrderByColumn,
+        String detailTiebreakerColumn,
+        List<String> detailSelectColumns) {
 
-  /**
-   * 从模板配置中解析 JdbcMappedExportSpec。
-   *
-   * @param templateConfig 模板配置 Map
-   * @param objectMapper JSON 解析工具
-   * @return 解析结果
-   * @throws IllegalArgumentException 配置缺失或校验失败时抛出
-   */
-  public static JdbcMappedExportSpec parse(
-      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-    Map<String, Object> root = extract(templateConfig, objectMapper);
-    if (root.isEmpty()) {
-      throw new IllegalArgumentException("jdbc_mapped_export spec missing");
+    /**
+     * 从模板配置中解析 JdbcMappedExportSpec。
+     *
+     * @param templateConfig 模板配置 Map
+     * @param objectMapper JSON 解析工具
+     * @return 解析结果
+     * @throws IllegalArgumentException 配置缺失或校验失败时抛出
+     */
+    public static JdbcMappedExportSpec parse(Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+        Map<String, Object> root = extract(templateConfig, objectMapper);
+        if (root.isEmpty()) {
+            throw new IllegalArgumentException("jdbc_mapped_export spec missing");
+        }
+        Object schemaValue = root.getOrDefault("schema", "biz");
+        String rawSchema = String.valueOf(schemaValue);
+        String schema = rawSchema.trim();
+        String batchTable = required(root, "batchTable");
+        String batchTenantColumn = required(root, "batchTenantColumn");
+        String batchNoColumn = required(root, "batchNoColumn");
+        List<String> batchCols = parseStringList(root.get("batchSelectColumns"));
+        String detailTable = required(root, "detailTable");
+        String detailFk = required(root, "detailFkColumn");
+        String orderCol = required(root, "detailOrderByColumn");
+        String tiebreakerCol = optional(root.get("detailTiebreakerColumn"), root.get("detail_tiebreaker_column"));
+        if (EmptyChecks.isNotNull(tiebreakerCol) && tiebreakerCol.equalsIgnoreCase(orderCol)) {
+            throw new IllegalArgumentException(
+                    "jdbc_mapped_export.detailTiebreakerColumn must differ from detailOrderByColumn");
+        }
+        // detailSelectColumns 缺省(不写 / 空 [])时,从模板 field_mappings[*].sourceColumn 去重推断,
+        // 避免把"导出哪些列"在 field_mappings 与 detailSelectColumns 里写两遍。这是去重而非自动默认:
+        // 列归属仍是 SQL 投影,batchSelectColumns 等结构连接列保持显式必填。
+        List<String> detailCols = parseStringList(root.get("detailSelectColumns"));
+        if (detailCols.isEmpty()) {
+            detailCols = inferDetailColumnsFromFieldMappings(templateConfig, objectMapper);
+        }
+        if (batchCols.isEmpty() || detailCols.isEmpty()) {
+            throw new IllegalArgumentException("batchSelectColumns and detailSelectColumns are required");
+        }
+        return new JdbcMappedExportSpec(
+                schema,
+                batchTable,
+                batchTenantColumn,
+                batchNoColumn,
+                batchCols,
+                detailTable,
+                detailFk,
+                orderCol,
+                tiebreakerCol,
+                detailCols);
     }
-    Object schemaValue = root.getOrDefault("schema", "biz");
-    String rawSchema = String.valueOf(schemaValue);
-    String schema = rawSchema.trim();
-    String batchTable = required(root, "batchTable");
-    String batchTenantColumn = required(root, "batchTenantColumn");
-    String batchNoColumn = required(root, "batchNoColumn");
-    List<String> batchCols = parseStringList(root.get("batchSelectColumns"));
-    String detailTable = required(root, "detailTable");
-    String detailFk = required(root, "detailFkColumn");
-    String orderCol = required(root, "detailOrderByColumn");
-    String tiebreakerCol =
-        optional(root.get("detailTiebreakerColumn"), root.get("detail_tiebreaker_column"));
-    if (EmptyChecks.isNotNull(tiebreakerCol) && tiebreakerCol.equalsIgnoreCase(orderCol)) {
-      throw new IllegalArgumentException(
-          "jdbc_mapped_export.detailTiebreakerColumn must differ from detailOrderByColumn");
-    }
-    // detailSelectColumns 缺省(不写 / 空 [])时,从模板 field_mappings[*].sourceColumn 去重推断,
-    // 避免把"导出哪些列"在 field_mappings 与 detailSelectColumns 里写两遍。这是去重而非自动默认:
-    // 列归属仍是 SQL 投影,batchSelectColumns 等结构连接列保持显式必填。
-    List<String> detailCols = parseStringList(root.get("detailSelectColumns"));
-    if (detailCols.isEmpty()) {
-      detailCols = inferDetailColumnsFromFieldMappings(templateConfig, objectMapper);
-    }
-    if (batchCols.isEmpty() || detailCols.isEmpty()) {
-      throw new IllegalArgumentException("batchSelectColumns and detailSelectColumns are required");
-    }
-    return new JdbcMappedExportSpec(
-        schema,
-        batchTable,
-        batchTenantColumn,
-        batchNoColumn,
-        batchCols,
-        detailTable,
-        detailFk,
-        orderCol,
-        tiebreakerCol,
-        detailCols);
-  }
 
-  /**
-   * 校验所有表名、列名标识符以及 schema 白名单。
-   *
-   * @param allowedSchemas 允许的 schema 列表
-   * @throws IllegalArgumentException 任一标识符不合法时抛出
-   */
-  public void validateIdentifiers(List<String> allowedSchemas) {
-    JdbcMappedSqlValidator.requireInAllowlist(schema, allowedSchemas);
-    JdbcMappedSqlValidator.requireIdentifier(batchTable, "batchTable");
-    JdbcMappedSqlValidator.requireIdentifier(batchTenantColumn, "batchTenantColumn");
-    JdbcMappedSqlValidator.requireIdentifier(batchNoColumn, "batchNoColumn");
-    for (String c : batchSelectColumns) {
-      JdbcMappedSqlValidator.requireIdentifier(c, "batchSelectColumns");
+    /**
+     * 校验所有表名、列名标识符以及 schema 白名单。
+     *
+     * @param allowedSchemas 允许的 schema 列表
+     * @throws IllegalArgumentException 任一标识符不合法时抛出
+     */
+    public void validateIdentifiers(List<String> allowedSchemas) {
+        JdbcMappedSqlValidator.requireInAllowlist(schema, allowedSchemas);
+        JdbcMappedSqlValidator.requireIdentifier(batchTable, "batchTable");
+        JdbcMappedSqlValidator.requireIdentifier(batchTenantColumn, "batchTenantColumn");
+        JdbcMappedSqlValidator.requireIdentifier(batchNoColumn, "batchNoColumn");
+        for (String c : batchSelectColumns) {
+            JdbcMappedSqlValidator.requireIdentifier(c, "batchSelectColumns");
+        }
+        JdbcMappedSqlValidator.requireIdentifier(detailTable, "detailTable");
+        JdbcMappedSqlValidator.requireIdentifier(detailFkColumn, "detailFkColumn");
+        JdbcMappedSqlValidator.requireIdentifier(detailOrderByColumn, "detailOrderByColumn");
+        if (tiebreakerColumnIsConfigured()) {
+            JdbcMappedSqlValidator.requireIdentifier(detailTiebreakerColumn, "detailTiebreakerColumn");
+        }
+        for (String c : detailSelectColumns) {
+            JdbcMappedSqlValidator.requireIdentifier(c, "detailSelectColumns");
+        }
+        if (!batchSelectColumns.contains("id")) {
+            throw new IllegalArgumentException("batchSelectColumns must include id for detail FK join");
+        }
     }
-    JdbcMappedSqlValidator.requireIdentifier(detailTable, "detailTable");
-    JdbcMappedSqlValidator.requireIdentifier(detailFkColumn, "detailFkColumn");
-    JdbcMappedSqlValidator.requireIdentifier(detailOrderByColumn, "detailOrderByColumn");
-    if (tiebreakerColumnIsConfigured()) {
-      JdbcMappedSqlValidator.requireIdentifier(detailTiebreakerColumn, "detailTiebreakerColumn");
-    }
-    for (String c : detailSelectColumns) {
-      JdbcMappedSqlValidator.requireIdentifier(c, "detailSelectColumns");
-    }
-    if (!batchSelectColumns.contains("id")) {
-      throw new IllegalArgumentException("batchSelectColumns must include id for detail FK join");
-    }
-  }
 
-  /** 是否配置了唯一排序后缀；配置后分页使用 (排序列, 后缀列) 复合游标。 */
-  public boolean tiebreakerColumnIsConfigured() {
-    return EmptyChecks.isNotEmpty(detailTiebreakerColumn);
-  }
+    /** 是否配置了唯一排序后缀；配置后分页使用 (排序列, 后缀列) 复合游标。 */
+    public boolean tiebreakerColumnIsConfigured() {
+        return EmptyChecks.isNotEmpty(detailTiebreakerColumn);
+    }
 
-  private static String optional(Object... values) {
-    for (Object value : values) {
-      if (EmptyChecks.isNull(value)) {
-        continue;
-      }
-      String rawValue = String.valueOf(value);
-      if (Texts.hasText(rawValue)) {
+    private static String optional(Object... values) {
+        for (Object value : values) {
+            if (EmptyChecks.isNull(value)) {
+                continue;
+            }
+            String rawValue = String.valueOf(value);
+            if (Texts.hasText(rawValue)) {
+                return rawValue.trim();
+            }
+        }
+        return null;
+    }
+
+    private static String required(Map<String, Object> root, String key) {
+        Object v = root.get(key);
+        if (EmptyChecks.isNull(v)) {
+            throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
+        }
+        String presenceText = String.valueOf(v);
+        if (!Texts.hasText(presenceText)) {
+            throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
+        }
+        String rawValue = String.valueOf(v);
         return rawValue.trim();
-      }
     }
-    return null;
-  }
 
-  private static String required(Map<String, Object> root, String key) {
-    Object v = root.get(key);
-    if (EmptyChecks.isNull(v)) {
-      throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> extract(Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+        if (templateConfig == null) {
+            return Map.of();
+        }
+        Object direct = templateConfig.get("jdbc_mapped_export");
+        if (direct instanceof Map<?, ?> m) {
+            return (Map<String, Object>) m;
+        }
+        Object qps = templateConfig.get("query_param_schema");
+        Map<String, Object> qpsMap = ExportConfigValueSupport.toMap(qps, objectMapper, JdbcMappedExportSpec.class);
+        Object nested = qpsMap.get("jdbcMappedExport");
+        if (nested instanceof Map<?, ?> m) {
+            return (Map<String, Object>) m;
+        }
+        return Map.of();
     }
-    String presenceText = String.valueOf(v);
-    if (!Texts.hasText(presenceText)) {
-      throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
-    }
-    String rawValue = String.valueOf(v);
-    return rawValue.trim();
-  }
 
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> extract(
-      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-    if (templateConfig == null) {
-      return Map.of();
+    private static List<String> parseStringList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
+                .map(o -> {
+                    String rawValue = String.valueOf(o);
+                    return rawValue.trim();
+                })
+                .toList();
     }
-    Object direct = templateConfig.get("jdbc_mapped_export");
-    if (direct instanceof Map<?, ?> m) {
-      return (Map<String, Object>) m;
-    }
-    Object qps = templateConfig.get("query_param_schema");
-    Map<String, Object> qpsMap =
-        ExportConfigValueSupport.toMap(qps, objectMapper, JdbcMappedExportSpec.class);
-    Object nested = qpsMap.get("jdbcMappedExport");
-    if (nested instanceof Map<?, ?> m) {
-      return (Map<String, Object>) m;
-    }
-    return Map.of();
-  }
 
-  private static List<String> parseStringList(Object raw) {
-    if (!(raw instanceof List<?> list)) {
-      return List.of();
+    /** 从模板顶层 {@code field_mappings[*].sourceColumn} 去重保序推断导出明细列。 */
+    private static List<String> inferDetailColumnsFromFieldMappings(
+            Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+        if (templateConfig == null) {
+            return List.of();
+        }
+        Object raw = templateConfig.get("field_mappings");
+        if (raw == null) {
+            return List.of();
+        }
+        List<?> list;
+        if (raw instanceof List<?> l) {
+            list = l;
+        } else {
+            String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
+            if (!Texts.hasText(text)) {
+                return List.of();
+            }
+            try {
+                list = objectMapper.readValue(text, List.class);
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(JdbcMappedExportSpec.class, "catch:Exception", ignored);
+                return List.of();
+            }
+        }
+        return list.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .map(mapping -> mapping.get("sourceColumn"))
+                .filter(src -> src != null && Texts.hasText(String.valueOf(src)))
+                .map(src -> {
+                    String rawValue = String.valueOf(src);
+                    return rawValue.trim();
+                })
+                .collect(Collectors.toCollection(LinkedHashSet::new))
+                .stream()
+                .toList();
     }
-    return list.stream()
-        .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
-        .map(o -> {
-          String rawValue = String.valueOf(o);
-          return rawValue.trim();
-        })
-        .toList();
-  }
-
-  /** 从模板顶层 {@code field_mappings[*].sourceColumn} 去重保序推断导出明细列。 */
-  private static List<String> inferDetailColumnsFromFieldMappings(
-      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-    if (templateConfig == null) {
-      return List.of();
-    }
-    Object raw = templateConfig.get("field_mappings");
-    if (raw == null) {
-      return List.of();
-    }
-    List<?> list;
-    if (raw instanceof List<?> l) {
-      list = l;
-    } else {
-      String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
-      if (!Texts.hasText(text)) {
-        return List.of();
-      }
-      try {
-        list = objectMapper.readValue(text, List.class);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(JdbcMappedExportSpec.class, "catch:Exception", ignored);
-        return List.of();
-      }
-    }
-    return list.stream()
-        .filter(Map.class::isInstance)
-        .map(Map.class::cast)
-        .map(mapping -> mapping.get("sourceColumn"))
-        .filter(src -> src != null && Texts.hasText(String.valueOf(src)))
-        .map(src -> {
-          String rawValue = String.valueOf(src);
-          return rawValue.trim();
-        })
-        .collect(Collectors.toCollection(LinkedHashSet::new))
-        .stream()
-        .toList();
-  }
 }

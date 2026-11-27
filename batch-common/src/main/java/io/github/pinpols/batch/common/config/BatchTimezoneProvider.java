@@ -26,76 +26,75 @@ import org.springframework.stereotype.Component;
 @EnableConfigurationProperties(BatchTimezoneProperties.class)
 public class BatchTimezoneProvider {
 
-  private static final ZoneId FALLBACK_ZONE = ZoneId.of(CommonConstants.DEFAULT_TIMEZONE_ID);
+    private static final ZoneId FALLBACK_ZONE = ZoneId.of(CommonConstants.DEFAULT_TIMEZONE_ID);
 
-  private final ZoneId defaultZone;
-  private final String configuredDefaultZone;
+    private final ZoneId defaultZone;
+    private final String configuredDefaultZone;
 
-  public BatchTimezoneProvider(BatchTimezoneProperties properties) {
-    String raw = properties == null ? null : properties.getDefaultZone();
-    this.configuredDefaultZone = Texts.hasText(raw) ? raw.trim() : FALLBACK_ZONE.getId();
-    this.defaultZone = parseDefaultZone(this.configuredDefaultZone);
-  }
-
-  @PostConstruct
-  void logBootstrap() {
-    log.info(
-        "batch timezone provider initialized: default-zone={} configured-default-zone='{}'",
-        defaultZone,
-        configuredDefaultZone);
-  }
-
-  /**
-   * 平台默认业务时区。
-   *
-   * <p>来自 batch.timezone.default-zone。配置为空时使用 Asia/Shanghai；配置非法时应用启动失败，避免账期静默换日。
-   */
-  public ZoneId defaultZone() {
-    return defaultZone;
-  }
-
-  /**
-   * 优先使用业务侧显式时区。
-   *
-   * <p>适用于：
-   *
-   * <ul>
-   *   <li>business_calendar.timezone
-   *   <li>schedule.timezone
-   *   <li>tenant.timezone
-   *   <li>user.timezone
-   * </ul>
-   *
-   * <p>为空或非法时，回退到平台默认业务时区。
-   */
-  public ZoneId resolveOrDefault(String preferred) {
-    if (!Texts.hasText(preferred)) {
-      return defaultZone;
+    public BatchTimezoneProvider(BatchTimezoneProperties properties) {
+        String raw = properties == null ? null : properties.getDefaultZone();
+        this.configuredDefaultZone = Texts.hasText(raw) ? raw.trim() : FALLBACK_ZONE.getId();
+        this.defaultZone = parseDefaultZone(this.configuredDefaultZone);
     }
 
-    String text = preferred.trim();
-    try {
-      return ZoneId.of(text);
-    } catch (DateTimeException invalid) {
-      String preferredText = text;
-      ZoneId fallbackZone = defaultZone;
-      String causeSummary = SwallowedExceptionLogger.summary(invalid);
-      log.warn(
-          "invalid preferred timezone='{}', falling back to default {}: {}",
-          preferredText,
-          fallbackZone,
-          causeSummary);
-      return defaultZone;
+    @PostConstruct
+    void logBootstrap() {
+        log.info(
+                "batch timezone provider initialized: default-zone={} configured-default-zone='{}'",
+                defaultZone,
+                configuredDefaultZone);
     }
-  }
 
-  private ZoneId parseDefaultZone(String configured) {
-    try {
-      return ZoneId.of(configured);
-    } catch (DateTimeException invalid) {
-      throw new IllegalStateException(
-          "invalid batch.timezone.default-zone='" + configured + "'; use a valid IANA timezone",
-          invalid);
+    /**
+     * 平台默认业务时区。
+     *
+     * <p>来自 batch.timezone.default-zone。配置为空时使用 Asia/Shanghai；配置非法时应用启动失败，避免账期静默换日。
+     */
+    public ZoneId defaultZone() {
+        return defaultZone;
     }
-  }
+
+    /**
+     * 优先使用业务侧显式时区。
+     *
+     * <p>适用于：
+     *
+     * <ul>
+     *   <li>business_calendar.timezone
+     *   <li>schedule.timezone
+     *   <li>tenant.timezone
+     *   <li>user.timezone
+     * </ul>
+     *
+     * <p>为空或非法时，回退到平台默认业务时区。
+     */
+    public ZoneId resolveOrDefault(String preferred) {
+        if (!Texts.hasText(preferred)) {
+            return defaultZone;
+        }
+
+        String text = preferred.trim();
+        try {
+            return ZoneId.of(text);
+        } catch (DateTimeException invalid) {
+            String preferredText = text;
+            ZoneId fallbackZone = defaultZone;
+            String causeSummary = SwallowedExceptionLogger.summary(invalid);
+            log.warn(
+                    "invalid preferred timezone='{}', falling back to default {}: {}",
+                    preferredText,
+                    fallbackZone,
+                    causeSummary);
+            return defaultZone;
+        }
+    }
+
+    private ZoneId parseDefaultZone(String configured) {
+        try {
+            return ZoneId.of(configured);
+        } catch (DateTimeException invalid) {
+            throw new IllegalStateException(
+                    "invalid batch.timezone.default-zone='" + configured + "'; use a valid IANA timezone", invalid);
+        }
+    }
 }

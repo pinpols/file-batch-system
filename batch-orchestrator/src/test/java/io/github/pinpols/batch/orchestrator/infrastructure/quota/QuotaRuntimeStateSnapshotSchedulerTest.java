@@ -31,60 +31,60 @@ import org.springframework.transaction.annotation.Transactional;
 @DisplayName("配额运行态快照调度器: 快照开关门控语义与单条写入的事务边界")
 class QuotaRuntimeStateSnapshotSchedulerTest {
 
-  @Mock
-  private QuotaRuntimeStateService quotaRuntimeStateService;
+    @Mock
+    private QuotaRuntimeStateService quotaRuntimeStateService;
 
-  @Mock
-  private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
+    @Mock
+    private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
 
-  @Mock
-  private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+    @Mock
+    private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
 
-  @Mock
-  private ResourceQueueMapper resourceQueueMapper;
+    @Mock
+    private ResourceQueueMapper resourceQueueMapper;
 
-  @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
 
-  private QuotaRuntimeStateSnapshotScheduler scheduler(boolean snapshotEnabled) {
-    QuotaProperties quotaProperties = new QuotaProperties();
-    quotaProperties.getSnapshot().setEnabled(snapshotEnabled);
-    return new QuotaRuntimeStateSnapshotScheduler(
-        new QuotaRuntimeStateSnapshotWriter(quotaRuntimeStateService, quotaRuntimeStateMapper),
-        tenantQuotaPolicyMapper,
-        resourceQueueMapper,
-        quotaProperties,
-        gracefulShutdown);
-  }
+    private QuotaRuntimeStateSnapshotScheduler scheduler(boolean snapshotEnabled) {
+        QuotaProperties quotaProperties = new QuotaProperties();
+        quotaProperties.getSnapshot().setEnabled(snapshotEnabled);
+        return new QuotaRuntimeStateSnapshotScheduler(
+                new QuotaRuntimeStateSnapshotWriter(quotaRuntimeStateService, quotaRuntimeStateMapper),
+                tenantQuotaPolicyMapper,
+                resourceQueueMapper,
+                quotaProperties,
+                gracefulShutdown);
+    }
 
-  @Test
-  @DisplayName("开关关闭时直接早退, 不枚举租户也不写入任何快照")
-  void disabled_shortCircuitsBeforeEnumeratingTenants() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
+    @Test
+    @DisplayName("开关关闭时直接早退, 不枚举租户也不写入任何快照")
+    void disabled_shortCircuitsBeforeEnumeratingTenants() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
 
-    scheduler(false).snapshot();
+        scheduler(false).snapshot();
 
-    verify(tenantQuotaPolicyMapper, never()).selectDistinctEnabledTenantIds();
-    verify(quotaRuntimeStateMapper, never()).insert(any());
-  }
+        verify(tenantQuotaPolicyMapper, never()).selectDistinctEnabledTenantIds();
+        verify(quotaRuntimeStateMapper, never()).insert(any());
+    }
 
-  @Test
-  @DisplayName("开关开启时进入租户枚举流程, 租户列表为空时不产生写入")
-  void enabled_enumeratesTenants() {
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds()).thenReturn(List.of());
+    @Test
+    @DisplayName("开关开启时进入租户枚举流程, 租户列表为空时不产生写入")
+    void enabled_enumeratesTenants() {
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        when(tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds()).thenReturn(List.of());
 
-    scheduler(true).snapshot();
+        scheduler(true).snapshot();
 
-    verify(tenantQuotaPolicyMapper).selectDistinctEnabledTenantIds();
-  }
+        verify(tenantQuotaPolicyMapper).selectDistinctEnabledTenantIds();
+    }
 
-  @Test
-  @DisplayName("单条快照写入保留独立事务边界, 保证按条提交而非整批共享事务")
-  void shouldKeepTransactionalBoundary_whenWritingSingleSnapshot() throws Exception {
-    Method write = QuotaRuntimeStateSnapshotWriter.class.getDeclaredMethod(
-        "writeIfActive", String.class, String.class, String.class, String.class, int.class);
+    @Test
+    @DisplayName("单条快照写入保留独立事务边界, 保证按条提交而非整批共享事务")
+    void shouldKeepTransactionalBoundary_whenWritingSingleSnapshot() throws Exception {
+        Method write = QuotaRuntimeStateSnapshotWriter.class.getDeclaredMethod(
+                "writeIfActive", String.class, String.class, String.class, String.class, int.class);
 
-    Assertions.assertThat(write.getAnnotation(Transactional.class)).isNotNull();
-  }
+        Assertions.assertThat(write.getAnnotation(Transactional.class)).isNotNull();
+    }
 }

@@ -17,9 +17,9 @@ package io.github.pinpols.batch.common.tenant.routing;
  */
 public interface BusinessPlacementResolver {
 
-  /**
-   * @param tenantId 当前租户(取自 {@code RlsTenantContextHolder.get()});null/空 表示无租户上下文
-   * @return placement key(数据源标识);永不返回 null
-   */
-  String resolve(String tenantId);
+    /**
+     * @param tenantId 当前租户(取自 {@code RlsTenantContextHolder.get()});null/空 表示无租户上下文
+     * @return placement key(数据源标识);永不返回 null
+     */
+    String resolve(String tenantId);
 }

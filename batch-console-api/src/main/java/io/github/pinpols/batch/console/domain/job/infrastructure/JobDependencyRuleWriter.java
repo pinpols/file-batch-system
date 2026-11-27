@@ -13,13 +13,13 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JobDependencyRuleWriter {
 
-  private final JobDefinitionMapper jobDefinitionMapper;
+    private final JobDefinitionMapper jobDefinitionMapper;
 
-  public void replace(String tenantId, String downstream, List<JobDependencyRuleRequest> rules) {
-    Objects.requireNonNull(rules, "rules");
-    jobDefinitionMapper.deleteDependencies(tenantId, downstream);
-    if (EmptyChecks.isNotEmpty(rules)) {
-      jobDefinitionMapper.insertDependencyRules(tenantId, downstream, rules);
+    public void replace(String tenantId, String downstream, List<JobDependencyRuleRequest> rules) {
+        Objects.requireNonNull(rules, "rules");
+        jobDefinitionMapper.deleteDependencies(tenantId, downstream);
+        if (EmptyChecks.isNotEmpty(rules)) {
+            jobDefinitionMapper.insertDependencyRules(tenantId, downstream, rules);
+        }
     }
-  }
 }

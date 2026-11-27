@@ -42,358 +42,337 @@ import org.xml.sax.XMLReader;
 @SuppressWarnings("java:S2259")
 public final class ConsoleSingleSheetExcelImportSupport {
 
-  private static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
+    private static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
 
-  /** 超过此大小（字节）的文件使用 SAX 流式解析，避免大文件 OOM。默认 2 MB。 */
-  private static final int SAX_THRESHOLD_BYTES = 2 * 1024 * 1024;
+    /** 超过此大小（字节）的文件使用 SAX 流式解析，避免大文件 OOM。默认 2 MB。 */
+    private static final int SAX_THRESHOLD_BYTES = 2 * 1024 * 1024;
 
-  private static final MediaType EXCEL_MEDIA_TYPE =
-      MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    private static final MediaType EXCEL_MEDIA_TYPE =
+            MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-  private ConsoleSingleSheetExcelImportSupport() {}
+    private ConsoleSingleSheetExcelImportSupport() {}
 
-  public interface SingleSheetImportSession {
+    public interface SingleSheetImportSession {
 
-    String fileName();
+        String fileName();
 
-    String tenantId();
+        String tenantId();
 
-    String sheetName();
+        String sheetName();
 
-    Instant uploadedAt();
+        Instant uploadedAt();
 
-    List<Map<String, String>> rows();
-  }
-
-  public record ParsedWorkbook(
-      String fileName, String tenantId, String sheetName, List<Map<String, String>> rows) {}
-
-  public record ParsedSession(
-      String fileName,
-      String tenantId,
-      String sheetName,
-      Instant uploadedAt,
-      List<Map<String, String>> rows) {}
-
-  public static ResponseEntity<InputStreamResource> excelResponse(
-      String fileName, byte[] workbookBytes) {
-    ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
-    String contentDisposition =
-        ContentDisposition.attachment().filename(fileName).build().toString();
-    responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition);
-    responseBuilder.contentType(EXCEL_MEDIA_TYPE);
-    ByteArrayInputStream workbookInputStream = new ByteArrayInputStream(workbookBytes);
-    InputStreamResource workbookResource = new InputStreamResource(workbookInputStream);
-    return responseBuilder.body(workbookResource);
-  }
-
-  public static ParsedWorkbook parseWorkbook(
-      byte[] bytes,
-      String tenantId,
-      String originalFileName,
-      String defaultFileName,
-      List<String> columns,
-      Set<String> requiredHeaders) {
-    if (bytes.length > SAX_THRESHOLD_BYTES) {
-      return parseWorkbookSax(
-          bytes, tenantId, originalFileName, defaultFileName, columns, requiredHeaders);
+        List<Map<String, String>> rows();
     }
-    return parseWorkbookDom(
-        bytes, tenantId, originalFileName, defaultFileName, columns, requiredHeaders);
-  }
 
-  /** DOM 模式（小文件 ≤ 2MB）：加载整个 Workbook 到内存。 */
-  private static ParsedWorkbook parseWorkbookDom(
-      byte[] bytes,
-      String tenantId,
-      String originalFileName,
-      String defaultFileName,
-      List<String> columns,
-      Set<String> requiredHeaders) {
-    try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
-      if (workbook.getNumberOfSheets() == 0) {
-        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
-      }
-      Sheet sheet = workbook.getSheetAt(0);
-      String sheetName = sheet.getSheetName();
-      DataFormatter formatter = new DataFormatter();
-      Row headerRow = sheet.getRow(sheet.getFirstRowNum());
-      Guard.require(headerRow != null, "excel header row is missing");
-      Map<String, Integer> headerIndex = readHeaderIndex(headerRow, formatter);
-      validateHeaders(headerIndex, requiredHeaders);
-      List<Map<String, String>> rows = new ArrayList<>();
-      for (int rowIndex = headerRow.getRowNum() + 1;
-          rowIndex <= sheet.getLastRowNum();
-          rowIndex++) {
-        Row row = sheet.getRow(rowIndex);
-        boolean rowIsAbsentOrBlank = EmptyChecks.isNull(row) || rowIsBlank(row, formatter);
-        if (rowIsAbsentOrBlank) {
-          continue;
+    public record ParsedWorkbook(String fileName, String tenantId, String sheetName, List<Map<String, String>> rows) {}
+
+    public record ParsedSession(
+            String fileName, String tenantId, String sheetName, Instant uploadedAt, List<Map<String, String>> rows) {}
+
+    public static ResponseEntity<InputStreamResource> excelResponse(String fileName, byte[] workbookBytes) {
+        ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
+        String contentDisposition =
+                ContentDisposition.attachment().filename(fileName).build().toString();
+        responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition);
+        responseBuilder.contentType(EXCEL_MEDIA_TYPE);
+        ByteArrayInputStream workbookInputStream = new ByteArrayInputStream(workbookBytes);
+        InputStreamResource workbookResource = new InputStreamResource(workbookInputStream);
+        return responseBuilder.body(workbookResource);
+    }
+
+    public static ParsedWorkbook parseWorkbook(
+            byte[] bytes,
+            String tenantId,
+            String originalFileName,
+            String defaultFileName,
+            List<String> columns,
+            Set<String> requiredHeaders) {
+        if (bytes.length > SAX_THRESHOLD_BYTES) {
+            return parseWorkbookSax(bytes, tenantId, originalFileName, defaultFileName, columns, requiredHeaders);
         }
-        Map<String, String> rowValues = new LinkedHashMap<>();
-        for (String header : columns) {
-          Integer columnIndex = headerIndex.get(header);
-          String cellValue = cellText(row, columnIndex, formatter);
-          String normalizedCellValue = normalize(cellValue);
-          rowValues.put(header, normalizedCellValue);
+        return parseWorkbookDom(bytes, tenantId, originalFileName, defaultFileName, columns, requiredHeaders);
+    }
+
+    /** DOM 模式（小文件 ≤ 2MB）：加载整个 Workbook 到内存。 */
+    private static ParsedWorkbook parseWorkbookDom(
+            byte[] bytes,
+            String tenantId,
+            String originalFileName,
+            String defaultFileName,
+            List<String> columns,
+            Set<String> requiredHeaders) {
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            if (workbook.getNumberOfSheets() == 0) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            String sheetName = sheet.getSheetName();
+            DataFormatter formatter = new DataFormatter();
+            Row headerRow = sheet.getRow(sheet.getFirstRowNum());
+            Guard.require(headerRow != null, "excel header row is missing");
+            Map<String, Integer> headerIndex = readHeaderIndex(headerRow, formatter);
+            validateHeaders(headerIndex, requiredHeaders);
+            List<Map<String, String>> rows = new ArrayList<>();
+            for (int rowIndex = headerRow.getRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                boolean rowIsAbsentOrBlank = EmptyChecks.isNull(row) || rowIsBlank(row, formatter);
+                if (rowIsAbsentOrBlank) {
+                    continue;
+                }
+                Map<String, String> rowValues = new LinkedHashMap<>();
+                for (String header : columns) {
+                    Integer columnIndex = headerIndex.get(header);
+                    String cellValue = cellText(row, columnIndex, formatter);
+                    String normalizedCellValue = normalize(cellValue);
+                    rowValues.put(header, normalizedCellValue);
+                }
+                fillTenantDefault(rowValues, columns, tenantId);
+                rows.add(rowValues);
+            }
+            String resolvedFileName = resolveFileName(originalFileName, defaultFileName);
+            return new ParsedWorkbook(resolvedFileName, tenantId, sheetName, rows);
+        } catch (BizException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "failed to read excel workbook: " + exception.getMessage());
         }
-        fillTenantDefault(rowValues, columns, tenantId);
-        rows.add(rowValues);
-      }
-      String resolvedFileName = resolveFileName(originalFileName, defaultFileName);
-      return new ParsedWorkbook(resolvedFileName, tenantId, sheetName, rows);
-    } catch (BizException exception) {
-      throw exception;
-    } catch (Exception exception) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "failed to read excel workbook: " + exception.getMessage());
-    }
-  }
-
-  /** SAX 流式模式（大文件 > 2MB）：逐行事件驱动解析，内存占用恒定。 */
-  private static ParsedWorkbook parseWorkbookSax(
-      byte[] bytes,
-      String tenantId,
-      String originalFileName,
-      String defaultFileName,
-      List<String> columns,
-      Set<String> requiredHeaders) {
-    try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(bytes))) {
-      ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
-      XSSFReader reader = new XSSFReader(pkg);
-      StylesTable styles = reader.getStylesTable();
-
-      XSSFReader.SheetIterator sheetIter = (XSSFReader.SheetIterator) reader.getSheetsData();
-      if (!sheetIter.hasNext()) {
-        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
-      }
-      String sheetName;
-      List<Map<String, String>> rows = new ArrayList<>();
-      try (InputStream sheetStream = sheetIter.next()) {
-        sheetName = sheetIter.getSheetName();
-        SaxSheetHandler handler = new SaxSheetHandler(columns, requiredHeaders, tenantId);
-        XMLReader xmlReader =
-            SAXParserFactory.newDefaultInstance().newSAXParser().getXMLReader();
-        xmlReader.setContentHandler(
-            new XSSFSheetXMLHandler(styles, strings, handler, new DataFormatter(), false));
-        xmlReader.parse(new InputSource(sheetStream));
-        rows.addAll(handler.rows());
-      }
-      String resolvedFileName = resolveFileName(originalFileName, defaultFileName);
-      return new ParsedWorkbook(resolvedFileName, tenantId, sheetName, rows);
-    } catch (BizException exception) {
-      throw exception;
-    } catch (Exception exception) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "failed to read excel workbook (streaming): " + exception.getMessage());
-    }
-  }
-
-  private static void fillTenantDefault(
-      Map<String, String> rowValues, List<String> columns, String tenantId) {
-    if (columns.contains(COL_TENANT_ID)) {
-      rowValues.put(
-          COL_TENANT_ID,
-          Texts.hasText(rowValues.get(COL_TENANT_ID)) ? rowValues.get(COL_TENANT_ID) : tenantId);
-    }
-  }
-
-  /** SAX 事件处理器：逐行收集单元格值，第一行作为 header 映射，后续行作为数据。 */
-  private static class SaxSheetHandler implements XSSFSheetXMLHandler.SheetContentsHandler {
-
-    private final List<String> columns;
-    private final Set<String> requiredHeaders;
-    private final String tenantId;
-
-    private Map<String, Integer> headerIndex;
-    private final List<Map<String, String>> rows = new ArrayList<>();
-    private Map<String, String> currentRow;
-    private boolean isHeaderRow = true;
-    private final Map<Integer, String> currentCells = new LinkedHashMap<>();
-
-    SaxSheetHandler(List<String> columns, Set<String> requiredHeaders, String tenantId) {
-      this.columns = columns;
-      this.requiredHeaders = requiredHeaders;
-      this.tenantId = tenantId;
     }
 
-    List<Map<String, String>> rows() {
-      return rows;
-    }
+    /** SAX 流式模式（大文件 > 2MB）：逐行事件驱动解析，内存占用恒定。 */
+    private static ParsedWorkbook parseWorkbookSax(
+            byte[] bytes,
+            String tenantId,
+            String originalFileName,
+            String defaultFileName,
+            List<String> columns,
+            Set<String> requiredHeaders) {
+        try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(bytes))) {
+            ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
+            XSSFReader reader = new XSSFReader(pkg);
+            StylesTable styles = reader.getStylesTable();
 
-    @Override
-    public void startRow(int rowNum) {
-      currentCells.clear();
-      currentRow = isHeaderRow ? null : new LinkedHashMap<>();
-    }
-
-    @Override
-    public void endRow(int rowNum) {
-      if (isHeaderRow) {
-        headerIndex = new LinkedHashMap<>();
-        currentCells.forEach((colIdx, value) -> {
-          String header = normalize(value);
-          if (Texts.hasText(header)) {
-            headerIndex.put(header, colIdx);
-          }
-        });
-        validateHeaders(headerIndex, requiredHeaders);
-        isHeaderRow = false;
-        return;
-      }
-      if (currentRow != null && !currentCells.isEmpty()) {
-        for (String header : columns) {
-          Integer colIdx = headerIndex.get(header);
-          String cellValue = colIdx != null ? currentCells.get(colIdx) : null;
-          String normalizedCellValue = normalize(cellValue);
-          currentRow.put(header, normalizedCellValue);
+            XSSFReader.SheetIterator sheetIter = (XSSFReader.SheetIterator) reader.getSheetsData();
+            if (!sheetIter.hasNext()) {
+                throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
+            }
+            String sheetName;
+            List<Map<String, String>> rows = new ArrayList<>();
+            try (InputStream sheetStream = sheetIter.next()) {
+                sheetName = sheetIter.getSheetName();
+                SaxSheetHandler handler = new SaxSheetHandler(columns, requiredHeaders, tenantId);
+                XMLReader xmlReader =
+                        SAXParserFactory.newDefaultInstance().newSAXParser().getXMLReader();
+                xmlReader.setContentHandler(
+                        new XSSFSheetXMLHandler(styles, strings, handler, new DataFormatter(), false));
+                xmlReader.parse(new InputSource(sheetStream));
+                rows.addAll(handler.rows());
+            }
+            String resolvedFileName = resolveFileName(originalFileName, defaultFileName);
+            return new ParsedWorkbook(resolvedFileName, tenantId, sheetName, rows);
+        } catch (BizException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "failed to read excel workbook (streaming): " + exception.getMessage());
         }
-        fillTenantDefault(currentRow, columns, tenantId);
-        // 跳过全空行
-        boolean allBlank = currentRow.values().stream().noneMatch(Texts::hasText);
-        if (!allBlank) {
-          rows.add(currentRow);
+    }
+
+    private static void fillTenantDefault(Map<String, String> rowValues, List<String> columns, String tenantId) {
+        if (columns.contains(COL_TENANT_ID)) {
+            rowValues.put(
+                    COL_TENANT_ID,
+                    Texts.hasText(rowValues.get(COL_TENANT_ID)) ? rowValues.get(COL_TENANT_ID) : tenantId);
         }
-      }
     }
 
-    @Override
-    public void cell(String cellReference, String formattedValue, XSSFComment comment) {
-      int colIdx = cellRefToIndex(cellReference);
-      currentCells.put(colIdx, formattedValue);
-    }
+    /** SAX 事件处理器：逐行收集单元格值，第一行作为 header 映射，后续行作为数据。 */
+    private static class SaxSheetHandler implements XSSFSheetXMLHandler.SheetContentsHandler {
 
-    private static int cellRefToIndex(String cellReference) {
-      int col = 0;
-      for (int i = 0; i < cellReference.length(); i++) {
-        char ch = cellReference.charAt(i);
-        if (ch >= 'A' && ch <= 'Z') {
-          col = col * 26 + (ch - 'A' + 1);
-        } else {
-          break;
+        private final List<String> columns;
+        private final Set<String> requiredHeaders;
+        private final String tenantId;
+
+        private Map<String, Integer> headerIndex;
+        private final List<Map<String, String>> rows = new ArrayList<>();
+        private Map<String, String> currentRow;
+        private boolean isHeaderRow = true;
+        private final Map<Integer, String> currentCells = new LinkedHashMap<>();
+
+        SaxSheetHandler(List<String> columns, Set<String> requiredHeaders, String tenantId) {
+            this.columns = columns;
+            this.requiredHeaders = requiredHeaders;
+            this.tenantId = tenantId;
         }
-      }
-      return col - 1;
-    }
-  }
 
-  public static ParsedSession loadSession(
-      String uploadToken, SingleSheetImportSession session, ConsoleTenantGuard tenantGuard) {
-    Guard.requireFound(session, "excel upload session not found");
-    tenantGuard.assertTenantAllowed(session.tenantId());
-    return new ParsedSession(
-        session.fileName(),
-        session.tenantId(),
-        session.sheetName(),
-        session.uploadedAt(),
-        session.rows());
-  }
-
-  public record WritePreviewWorkbookParam(
-      ParsedSession session,
-      List<String> columns,
-      Map<String, ConsoleExcelStyles.ColumnGuide> guides,
-      Consumer<Sheet> validationApplier,
-      Consumer<Workbook> extraSheetWriter,
-      List<WorkbookIssue> issues,
-      int fallbackColumnIndex,
-      String systemErrorMessage) {}
-
-  public static byte[] writePreviewWorkbook(WritePreviewWorkbookParam param) {
-    ParsedSession session = param.session();
-    List<String> columns = param.columns();
-    Map<String, ConsoleExcelStyles.ColumnGuide> guides = param.guides();
-    Consumer<Sheet> validationApplier = param.validationApplier();
-    Consumer<Workbook> extraSheetWriter = param.extraSheetWriter();
-    List<WorkbookIssue> issues = param.issues();
-    int fallbackColumnIndex = param.fallbackColumnIndex();
-    String systemErrorMessage = param.systemErrorMessage();
-    try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
-      Sheet dataSheet = workbook.createSheet(session.sheetName());
-      dataSheet.createFreezePane(0, 1, 0, 1);
-      ConsoleExcelStyles.writeTemplateHeaders(dataSheet, columns, guides, workbook);
-      int rowIndex = 1;
-      for (Map<String, String> rawRow : session.rows()) {
-        Row dataRow = dataSheet.createRow(rowIndex++);
-        for (int columnIndex = 0; columnIndex < columns.size(); columnIndex++) {
-          String columnName = columns.get(columnIndex);
-          String value = rawRow.get(columnName);
-          dataRow
-              .createCell(columnIndex)
-              .setCellValue(ConsoleExcelStyles.escapeFormula(value == null ? "" : value));
+        List<Map<String, String>> rows() {
+            return rows;
         }
-      }
-      validationApplier.accept(dataSheet);
-      ConsoleExcelStyles.setWidths(dataSheet, columns);
-      extraSheetWriter.accept(workbook);
-      ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, issues);
-      ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-          dataSheet, columns, issues, fallbackColumnIndex);
-      return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
-    } catch (IOException exception) {
-      throw BizException.of(
-          ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.detailKey(), systemErrorMessage);
-    }
-  }
 
-  private static String resolveFileName(String fileName, String defaultFileName) {
-    return Texts.hasText(fileName) ? fileName : defaultFileName;
-  }
+        @Override
+        public void startRow(int rowNum) {
+            currentCells.clear();
+            currentRow = isHeaderRow ? null : new LinkedHashMap<>();
+        }
 
-  private static Map<String, Integer> readHeaderIndex(Row headerRow, DataFormatter formatter) {
-    Map<String, Integer> headerIndex = new LinkedHashMap<>();
-    for (int cellIndex = headerRow.getFirstCellNum();
-        cellIndex < headerRow.getLastCellNum();
-        cellIndex++) {
-      String header = normalize(formatter.formatCellValue(headerRow.getCell(cellIndex)));
-      if (Texts.hasText(header)) {
-        headerIndex.put(header, cellIndex);
-      }
-    }
-    return headerIndex;
-  }
+        @Override
+        public void endRow(int rowNum) {
+            if (isHeaderRow) {
+                headerIndex = new LinkedHashMap<>();
+                currentCells.forEach((colIdx, value) -> {
+                    String header = normalize(value);
+                    if (Texts.hasText(header)) {
+                        headerIndex.put(header, colIdx);
+                    }
+                });
+                validateHeaders(headerIndex, requiredHeaders);
+                isHeaderRow = false;
+                return;
+            }
+            if (currentRow != null && !currentCells.isEmpty()) {
+                for (String header : columns) {
+                    Integer colIdx = headerIndex.get(header);
+                    String cellValue = colIdx != null ? currentCells.get(colIdx) : null;
+                    String normalizedCellValue = normalize(cellValue);
+                    currentRow.put(header, normalizedCellValue);
+                }
+                fillTenantDefault(currentRow, columns, tenantId);
+                // 跳过全空行
+                boolean allBlank = currentRow.values().stream().noneMatch(Texts::hasText);
+                if (!allBlank) {
+                    rows.add(currentRow);
+                }
+            }
+        }
 
-  private static void validateHeaders(
-      Map<String, Integer> headerIndex, Set<String> requiredHeaders) {
-    List<String> missingHeaders = requiredHeaders.stream()
-        .filter(header -> !headerIndex.containsKey(header))
-        .toList();
-    if (!missingHeaders.isEmpty()) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "excel missing required headers: " + String.join(", ", missingHeaders));
-    }
-  }
+        @Override
+        public void cell(String cellReference, String formattedValue, XSSFComment comment) {
+            int colIdx = cellRefToIndex(cellReference);
+            currentCells.put(colIdx, formattedValue);
+        }
 
-  private static boolean rowIsBlank(Row row, DataFormatter formatter) {
-    for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
-      String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
-      if (Texts.hasText(value)) {
-        return false;
-      }
+        private static int cellRefToIndex(String cellReference) {
+            int col = 0;
+            for (int i = 0; i < cellReference.length(); i++) {
+                char ch = cellReference.charAt(i);
+                if (ch >= 'A' && ch <= 'Z') {
+                    col = col * 26 + (ch - 'A' + 1);
+                } else {
+                    break;
+                }
+            }
+            return col - 1;
+        }
     }
-    return true;
-  }
 
-  private static String cellText(Row row, Integer columnIndex, DataFormatter formatter) {
-    if (columnIndex == null) {
-      return null;
+    public static ParsedSession loadSession(
+            String uploadToken, SingleSheetImportSession session, ConsoleTenantGuard tenantGuard) {
+        Guard.requireFound(session, "excel upload session not found");
+        tenantGuard.assertTenantAllowed(session.tenantId());
+        return new ParsedSession(
+                session.fileName(), session.tenantId(), session.sheetName(), session.uploadedAt(), session.rows());
     }
-    if (row.getCell(columnIndex) == null) {
-      return null;
-    }
-    return formatter.formatCellValue(row.getCell(columnIndex));
-  }
 
-  private static String normalize(String value) {
-    if (!Texts.hasText(value)) {
-      return null;
+    public record WritePreviewWorkbookParam(
+            ParsedSession session,
+            List<String> columns,
+            Map<String, ConsoleExcelStyles.ColumnGuide> guides,
+            Consumer<Sheet> validationApplier,
+            Consumer<Workbook> extraSheetWriter,
+            List<WorkbookIssue> issues,
+            int fallbackColumnIndex,
+            String systemErrorMessage) {}
+
+    public static byte[] writePreviewWorkbook(WritePreviewWorkbookParam param) {
+        ParsedSession session = param.session();
+        List<String> columns = param.columns();
+        Map<String, ConsoleExcelStyles.ColumnGuide> guides = param.guides();
+        Consumer<Sheet> validationApplier = param.validationApplier();
+        Consumer<Workbook> extraSheetWriter = param.extraSheetWriter();
+        List<WorkbookIssue> issues = param.issues();
+        int fallbackColumnIndex = param.fallbackColumnIndex();
+        String systemErrorMessage = param.systemErrorMessage();
+        try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
+            Sheet dataSheet = workbook.createSheet(session.sheetName());
+            dataSheet.createFreezePane(0, 1, 0, 1);
+            ConsoleExcelStyles.writeTemplateHeaders(dataSheet, columns, guides, workbook);
+            int rowIndex = 1;
+            for (Map<String, String> rawRow : session.rows()) {
+                Row dataRow = dataSheet.createRow(rowIndex++);
+                for (int columnIndex = 0; columnIndex < columns.size(); columnIndex++) {
+                    String columnName = columns.get(columnIndex);
+                    String value = rawRow.get(columnName);
+                    dataRow.createCell(columnIndex)
+                            .setCellValue(ConsoleExcelStyles.escapeFormula(value == null ? "" : value));
+                }
+            }
+            validationApplier.accept(dataSheet);
+            ConsoleExcelStyles.setWidths(dataSheet, columns);
+            extraSheetWriter.accept(workbook);
+            ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, issues);
+            ConsoleExcelPreviewWorkbookSupport.addIssueComments(dataSheet, columns, issues, fallbackColumnIndex);
+            return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
+        } catch (IOException exception) {
+            throw BizException.of(ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.detailKey(), systemErrorMessage);
+        }
     }
-    return value.trim();
-  }
+
+    private static String resolveFileName(String fileName, String defaultFileName) {
+        return Texts.hasText(fileName) ? fileName : defaultFileName;
+    }
+
+    private static Map<String, Integer> readHeaderIndex(Row headerRow, DataFormatter formatter) {
+        Map<String, Integer> headerIndex = new LinkedHashMap<>();
+        for (int cellIndex = headerRow.getFirstCellNum(); cellIndex < headerRow.getLastCellNum(); cellIndex++) {
+            String header = normalize(formatter.formatCellValue(headerRow.getCell(cellIndex)));
+            if (Texts.hasText(header)) {
+                headerIndex.put(header, cellIndex);
+            }
+        }
+        return headerIndex;
+    }
+
+    private static void validateHeaders(Map<String, Integer> headerIndex, Set<String> requiredHeaders) {
+        List<String> missingHeaders = requiredHeaders.stream()
+                .filter(header -> !headerIndex.containsKey(header))
+                .toList();
+        if (!missingHeaders.isEmpty()) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "excel missing required headers: " + String.join(", ", missingHeaders));
+        }
+    }
+
+    private static boolean rowIsBlank(Row row, DataFormatter formatter) {
+        for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
+            String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
+            if (Texts.hasText(value)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String cellText(Row row, Integer columnIndex, DataFormatter formatter) {
+        if (columnIndex == null) {
+            return null;
+        }
+        if (row.getCell(columnIndex) == null) {
+            return null;
+        }
+        return formatter.formatCellValue(row.getCell(columnIndex));
+    }
+
+    private static String normalize(String value) {
+        if (!Texts.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
 }

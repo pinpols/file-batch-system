@@ -22,85 +22,84 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 @Service
 public class ConfigCacheInvalidationRelay {
-  private static final int MAX_PER_POLL = 100;
-  private final ConfigCacheInvalidationOutboxMapper outbox;
-  private final ConsoleConfigCacheInvalidationService invalidation;
-  private final TransactionTemplate transactions;
-  private final AtomicBoolean stopping = new AtomicBoolean();
-  private ScheduledExecutorService scheduler;
+    private static final int MAX_PER_POLL = 100;
+    private final ConfigCacheInvalidationOutboxMapper outbox;
+    private final ConsoleConfigCacheInvalidationService invalidation;
+    private final TransactionTemplate transactions;
+    private final AtomicBoolean stopping = new AtomicBoolean();
+    private ScheduledExecutorService scheduler;
 
-  public ConfigCacheInvalidationRelay(
-      ConfigCacheInvalidationOutboxMapper outbox,
-      ConsoleConfigCacheInvalidationService invalidation,
-      @Qualifier("transactionManager") PlatformTransactionManager transactionManager) {
-    this.outbox = outbox;
-    this.invalidation = invalidation;
-    this.transactions = new TransactionTemplate(transactionManager);
-  }
-
-  @EventListener(ApplicationReadyEvent.class)
-  public synchronized void start() {
-    if (EmptyChecks.isNotNull(scheduler) || stopping.get()) {
-      return;
+    public ConfigCacheInvalidationRelay(
+            ConfigCacheInvalidationOutboxMapper outbox,
+            ConsoleConfigCacheInvalidationService invalidation,
+            @Qualifier("transactionManager") PlatformTransactionManager transactionManager) {
+        this.outbox = outbox;
+        this.invalidation = invalidation;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
-    scheduler = Executors.newSingleThreadScheduledExecutor(
-        Thread.ofPlatform().name("config-cache-invalidation-relay").daemon(true).factory());
-    scheduler.scheduleWithFixedDelay(this::pollSafely, 1, 5, TimeUnit.SECONDS);
-  }
 
-  private void pollSafely() {
-    try {
-      poll();
-    } catch (RuntimeException failure) {
-      log.warn("配置缓存失效队列轮询失败: {}", SwallowedExceptionLogger.summary(failure));
-      log.debug("配置缓存失效队列轮询失败详情", failure);
-    }
-  }
-
-  public void poll() {
-    for (int i = 0; i < MAX_PER_POLL && !stopping.get(); i++) {
-      String token = UUID.randomUUID().toString();
-      ConfigCacheInvalidationIntent intent = transactions.execute(status -> {
-        ConfigCacheInvalidationIntent next = outbox.lockNext();
-        if (EmptyChecks.isNotNull(next)) {
-          outbox.claim(next.id(), next.tenantId(), token);
+    @EventListener(ApplicationReadyEvent.class)
+    public synchronized void start() {
+        if (EmptyChecks.isNotNull(scheduler) || stopping.get()) {
+            return;
         }
-        return next;
-      });
-      if (EmptyChecks.isNull(intent)) {
-        return;
-      }
-      try {
-        invalidation.deliver(intent);
-        transactions.executeWithoutResult(
-            status -> outbox.acknowledge(intent.id(), intent.tenantId(), token));
-      } catch (RuntimeException failure) {
-        transactions.executeWithoutResult(
-            status -> outbox.retry(intent.id(), intent.tenantId(), token));
-        log.warn(
-            "配置缓存失效投递失败: id={}, reason={}", intent.id(), SwallowedExceptionLogger.summary(failure));
-        log.debug("配置缓存失效投递失败详情: id={}", intent.id(), failure);
-      }
+        scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform()
+                .name("config-cache-invalidation-relay")
+                .daemon(true)
+                .factory());
+        scheduler.scheduleWithFixedDelay(this::pollSafely, 1, 5, TimeUnit.SECONDS);
     }
-  }
 
-  @EventListener(ContextClosedEvent.class)
-  public void stopOnContextClosed() {
-    stop();
-  }
-
-  @PreDestroy
-  public synchronized void stop() {
-    stopping.set(true);
-    if (EmptyChecks.isNotNull(scheduler)) {
-      scheduler.shutdown();
-      try {
-        if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-          log.warn("配置缓存失效投递线程未在停机等待时间内退出，未确认记录将由租约重试");
+    private void pollSafely() {
+        try {
+            poll();
+        } catch (RuntimeException failure) {
+            log.warn("配置缓存失效队列轮询失败: {}", SwallowedExceptionLogger.summary(failure));
+            log.debug("配置缓存失效队列轮询失败详情", failure);
         }
-      } catch (InterruptedException interrupted) {
-        Thread.currentThread().interrupt();
-      }
     }
-  }
+
+    public void poll() {
+        for (int i = 0; i < MAX_PER_POLL && !stopping.get(); i++) {
+            String token = UUID.randomUUID().toString();
+            ConfigCacheInvalidationIntent intent = transactions.execute(status -> {
+                ConfigCacheInvalidationIntent next = outbox.lockNext();
+                if (EmptyChecks.isNotNull(next)) {
+                    outbox.claim(next.id(), next.tenantId(), token);
+                }
+                return next;
+            });
+            if (EmptyChecks.isNull(intent)) {
+                return;
+            }
+            try {
+                invalidation.deliver(intent);
+                transactions.executeWithoutResult(status -> outbox.acknowledge(intent.id(), intent.tenantId(), token));
+            } catch (RuntimeException failure) {
+                transactions.executeWithoutResult(status -> outbox.retry(intent.id(), intent.tenantId(), token));
+                log.warn("配置缓存失效投递失败: id={}, reason={}", intent.id(), SwallowedExceptionLogger.summary(failure));
+                log.debug("配置缓存失效投递失败详情: id={}", intent.id(), failure);
+            }
+        }
+    }
+
+    @EventListener(ContextClosedEvent.class)
+    public void stopOnContextClosed() {
+        stop();
+    }
+
+    @PreDestroy
+    public synchronized void stop() {
+        stopping.set(true);
+        if (EmptyChecks.isNotNull(scheduler)) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    log.warn("配置缓存失效投递线程未在停机等待时间内退出，未确认记录将由租约重试");
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
 }

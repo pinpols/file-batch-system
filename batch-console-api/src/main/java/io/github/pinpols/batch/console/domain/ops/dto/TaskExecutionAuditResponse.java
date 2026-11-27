@@ -13,28 +13,28 @@ import java.time.Instant;
  * @param outcome 执行者与执行结果
  */
 public record TaskExecutionAuditResponse(
-    Long taskId,
-    Long jobInstanceId,
-    String jobCode,
-    String taskStatus,
-    Object effectiveParameters,
-    Outcome outcome) {
+        Long taskId,
+        Long jobInstanceId,
+        String jobCode,
+        String taskStatus,
+        Object effectiveParameters,
+        Outcome outcome) {
 
-  /**
-   * 执行者与执行结果。
-   *
-   * @param assignedWorkerCode 执行该任务的 Worker
-   * @param startedAt 开始时间（UTC）
-   * @param finishedAt 结束时间（UTC）
-   * @param resultSummary Worker 回报的结果摘要，已脱敏
-   * @param errorCode 失败码
-   * @param errorMessage 失败信息，已脱敏
-   */
-  public record Outcome(
-      String assignedWorkerCode,
-      Instant startedAt,
-      Instant finishedAt,
-      Object resultSummary,
-      String errorCode,
-      String errorMessage) {}
+    /**
+     * 执行者与执行结果。
+     *
+     * @param assignedWorkerCode 执行该任务的 Worker
+     * @param startedAt 开始时间（UTC）
+     * @param finishedAt 结束时间（UTC）
+     * @param resultSummary Worker 回报的结果摘要，已脱敏
+     * @param errorCode 失败码
+     * @param errorMessage 失败信息，已脱敏
+     */
+    public record Outcome(
+            String assignedWorkerCode,
+            Instant startedAt,
+            Instant finishedAt,
+            Object resultSummary,
+            String errorCode,
+            String errorMessage) {}
 }

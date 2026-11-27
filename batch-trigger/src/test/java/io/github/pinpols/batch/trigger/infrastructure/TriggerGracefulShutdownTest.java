@@ -16,101 +16,101 @@ import org.springframework.context.event.ContextClosedEvent;
 @DisplayName("Trigger 优雅停机协调器:排水状态流转、Quartz standby/start 与生命周期相位契约")
 class TriggerGracefulShutdownTest {
 
-  private Scheduler scheduler;
-  private TriggerDrainState drainState;
-  private TriggerGracefulShutdown shutdown;
+    private Scheduler scheduler;
+    private TriggerDrainState drainState;
+    private TriggerGracefulShutdown shutdown;
 
-  @BeforeEach
-  void setUp() {
-    scheduler = mock(Scheduler.class);
-    drainState = new TriggerDrainState();
-    shutdown = new TriggerGracefulShutdown(scheduler, drainState);
-  }
+    @BeforeEach
+    void setUp() {
+        scheduler = mock(Scheduler.class);
+        drainState = new TriggerDrainState();
+        shutdown = new TriggerGracefulShutdown(scheduler, drainState);
+    }
 
-  @Test
-  @DisplayName("协调器初始不处于排水状态,启动后调度器可正常接受触发")
-  void shouldNotBeDrainingInitially() {
-    assertThat(shutdown.isDraining()).isFalse();
-  }
+    @Test
+    @DisplayName("协调器初始不处于排水状态,启动后调度器可正常接受触发")
+    void shouldNotBeDrainingInitially() {
+        assertThat(shutdown.isDraining()).isFalse();
+    }
 
-  @Test
-  @DisplayName("开始排水后状态置为排水并把 Quartz 调度器切到 standby,停止产生新触发")
-  void shouldStartDraining() throws SchedulerException {
-    shutdown.startDraining("test");
+    @Test
+    @DisplayName("开始排水后状态置为排水并把 Quartz 调度器切到 standby,停止产生新触发")
+    void shouldStartDraining() throws SchedulerException {
+        shutdown.startDraining("test");
 
-    assertThat(shutdown.isDraining()).isTrue();
-    verify(scheduler).standby();
-  }
+        assertThat(shutdown.isDraining()).isTrue();
+        verify(scheduler).standby();
+    }
 
-  @Test
-  @DisplayName("取消排水后重启调度器并清除排水状态,恢复对外触发能力")
-  void shouldStopDraining() throws SchedulerException {
-    when(scheduler.isShutdown()).thenReturn(false);
+    @Test
+    @DisplayName("取消排水后重启调度器并清除排水状态,恢复对外触发能力")
+    void shouldStopDraining() throws SchedulerException {
+        when(scheduler.isShutdown()).thenReturn(false);
 
-    shutdown.startDraining("test");
-    shutdown.stopDraining("cancel");
+        shutdown.startDraining("test");
+        shutdown.stopDraining("cancel");
 
-    assertThat(shutdown.isDraining()).isFalse();
-    verify(scheduler).start();
-  }
+        assertThat(shutdown.isDraining()).isFalse();
+        verify(scheduler).start();
+    }
 
-  @Test
-  @DisplayName("调度器处于 standby 且未启动时对外状态报告为 STANDBY,并同时反映是否正在排水")
-  void shouldReportSchedulerStatus() throws SchedulerException {
-    when(scheduler.isShutdown()).thenReturn(false);
-    when(scheduler.isInStandbyMode()).thenReturn(true);
-    when(scheduler.isStarted()).thenReturn(false);
+    @Test
+    @DisplayName("调度器处于 standby 且未启动时对外状态报告为 STANDBY,并同时反映是否正在排水")
+    void shouldReportSchedulerStatus() throws SchedulerException {
+        when(scheduler.isShutdown()).thenReturn(false);
+        when(scheduler.isInStandbyMode()).thenReturn(true);
+        when(scheduler.isStarted()).thenReturn(false);
 
-    TriggerGracefulShutdown.TriggerDrainStatus status = shutdown.status();
+        TriggerGracefulShutdown.TriggerDrainStatus status = shutdown.status();
 
-    assertThat(status.draining()).isFalse();
-    assertThat(status.schedulerStatus()).isEqualTo("STANDBY");
-  }
+        assertThat(status.draining()).isFalse();
+        assertThat(status.schedulerStatus()).isEqualTo("STANDBY");
+    }
 
-  @Test
-  @DisplayName("读取调度器状态期间开始排水时，状态报告应反映读取后发生的排水")
-  void shouldReadDrainStateAfterSchedulerStatus() throws SchedulerException {
-    when(scheduler.isShutdown()).thenReturn(false);
-    when(scheduler.isInStandbyMode()).thenAnswer(invocation -> {
-      drainState.startDraining("status-check");
-      return true;
-    });
+    @Test
+    @DisplayName("读取调度器状态期间开始排水时，状态报告应反映读取后发生的排水")
+    void shouldReadDrainStateAfterSchedulerStatus() throws SchedulerException {
+        when(scheduler.isShutdown()).thenReturn(false);
+        when(scheduler.isInStandbyMode()).thenAnswer(invocation -> {
+            drainState.startDraining("status-check");
+            return true;
+        });
 
-    TriggerGracefulShutdown.TriggerDrainStatus status = shutdown.status();
+        TriggerGracefulShutdown.TriggerDrainStatus status = shutdown.status();
 
-    assertThat(status.draining()).isTrue();
-    assertThat(status.drainingSince()).isNotNull();
-    assertThat(status.reason()).isEqualTo("status-check");
-    assertThat(status.schedulerStatus()).isEqualTo("STANDBY");
-  }
+        assertThat(status.draining()).isTrue();
+        assertThat(status.drainingSince()).isNotNull();
+        assertThat(status.reason()).isEqualTo("status-check");
+        assertThat(status.schedulerStatus()).isEqualTo("STANDBY");
+    }
 
-  @Test
-  @DisplayName("应用上下文关闭事件即触发排水,调度器进入 standby 防止停机期间继续触发")
-  void shouldStandbyOnContextClosed() throws SchedulerException {
-    when(scheduler.isShutdown()).thenReturn(false);
-    ContextClosedEvent event = mock(ContextClosedEvent.class);
+    @Test
+    @DisplayName("应用上下文关闭事件即触发排水,调度器进入 standby 防止停机期间继续触发")
+    void shouldStandbyOnContextClosed() throws SchedulerException {
+        when(scheduler.isShutdown()).thenReturn(false);
+        ContextClosedEvent event = mock(ContextClosedEvent.class);
 
-    shutdown.onApplicationEvent(event);
+        shutdown.onApplicationEvent(event);
 
-    assertThat(shutdown.isDraining()).isTrue();
-    verify(scheduler).standby();
-  }
+        assertThat(shutdown.isDraining()).isTrue();
+        verify(scheduler).standby();
+    }
 
-  @Test
-  @DisplayName("Quartz 声明为生命周期最早停止且自动启动,确保先于数据源连接池关闭")
-  void quartz_stopsAtEarliestLifecyclePhase() {
-    assertThat(shutdown.getPhase()).isEqualTo(BatchLifecyclePhases.FIRST_TO_STOP_RELAY);
-    assertThat(shutdown.isAutoStartup()).isTrue();
-  }
+    @Test
+    @DisplayName("Quartz 声明为生命周期最早停止且自动启动,确保先于数据源连接池关闭")
+    void quartz_stopsAtEarliestLifecyclePhase() {
+        assertThat(shutdown.getPhase()).isEqualTo(BatchLifecyclePhases.FIRST_TO_STOP_RELAY);
+        assertThat(shutdown.isAutoStartup()).isTrue();
+    }
 
-  @Test
-  @DisplayName("重复调用 stop 只执行一次 standby,停机流程幂等不重复操作调度器")
-  void lifecycleStop_isIdempotent() throws SchedulerException {
-    when(scheduler.isShutdown()).thenReturn(false);
+    @Test
+    @DisplayName("重复调用 stop 只执行一次 standby,停机流程幂等不重复操作调度器")
+    void lifecycleStop_isIdempotent() throws SchedulerException {
+        when(scheduler.isShutdown()).thenReturn(false);
 
-    shutdown.stop();
-    shutdown.stop();
+        shutdown.stop();
+        shutdown.stop();
 
-    verify(scheduler).standby();
-  }
+        verify(scheduler).standby();
+    }
 }

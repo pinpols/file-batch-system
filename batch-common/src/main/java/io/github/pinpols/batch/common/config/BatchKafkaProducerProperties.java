@@ -22,12 +22,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "spring.kafka.producer")
 public class BatchKafkaProducerProperties {
 
-  /** 应答级别;默认 all(配合 replication-factor=3 + min.insync.replicas=2 防丢)。 */
-  private String acks = "all";
+    /** 应答级别;默认 all(配合 replication-factor=3 + min.insync.replicas=2 防丢)。 */
+    private String acks = "all";
 
-  /** broker 抖动 / leader 切换时的 in-process 重试次数;配合幂等避免重复。 */
-  private int retries = 5;
+    /** broker 抖动 / leader 切换时的 in-process 重试次数;配合幂等避免重复。 */
+    private int retries = 5;
 
-  /** 透传到 Kafka client 的额外 producer 配置(键即原生配置名)。 */
-  private Map<String, String> properties = new LinkedHashMap<>();
+    /** 透传到 Kafka client 的额外 producer 配置(键即原生配置名)。 */
+    private Map<String, String> properties = new LinkedHashMap<>();
 }

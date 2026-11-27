@@ -8,11 +8,11 @@ package io.github.pinpols.batch.common.exception;
  * BUSINESS dead-letter，跳过自动重放无限循环。
  */
 public class WorkerConfigException extends RuntimeException {
-  public WorkerConfigException(String message) {
-    super(message);
-  }
+    public WorkerConfigException(String message) {
+        super(message);
+    }
 
-  public WorkerConfigException(String message, Throwable cause) {
-    super(message, cause);
-  }
+    public WorkerConfigException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

@@ -6,9 +6,9 @@ import lombok.Builder;
 
 @Builder
 public record BatchDayOperateCommand(
-    String tenantId,
-    String calendarCode,
-    LocalDate bizDate,
-    BatchDayOperation action,
-    String operatorId,
-    String reason) {}
+        String tenantId,
+        String calendarCode,
+        LocalDate bizDate,
+        BatchDayOperation action,
+        String operatorId,
+        String reason) {}

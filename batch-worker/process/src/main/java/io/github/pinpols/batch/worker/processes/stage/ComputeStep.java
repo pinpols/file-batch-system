@@ -14,39 +14,39 @@ import org.springframework.stereotype.Component;
 @Component
 public class ComputeStep implements ProcessStageStep {
 
-  /** Payload 中可选字段,允许业务通过 task params 临时指定 plugin 实现码(用于自定义插件按需 opt-in)。 */
-  public static final String ATTR_PROCESS_IMPL_CODE = "processImplCode";
+    /** Payload 中可选字段,允许业务通过 task params 临时指定 plugin 实现码(用于自定义插件按需 opt-in)。 */
+    public static final String ATTR_PROCESS_IMPL_CODE = "processImplCode";
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
+    private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  @Override
-  public ProcessStage stage() {
-    return ProcessStage.COMPUTE;
-  }
-
-  @Override
-  public ProcessStageResult execute(ProcessJobContext context) {
-    if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
-        .isDryRun()) {
-      context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, 0);
-      context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN_SKIPPED, "PROCESS_STAGING_WRITE");
-      return ProcessStageResult.success(stage());
+    @Override
+    public ProcessStage stage() {
+        return ProcessStage.COMPUTE;
     }
-    ProcessComputePlugin plugin = context.getResolvedPlugin();
-    if (EmptyChecks.isNull(plugin)) {
-      // 没有 plugin 配置时仍允许走通(便于开箱跑通骨架),但写一个 0 行的 processedCount 占位。
-      context.getAttributes().putIfAbsent(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, 0);
-      return ProcessStageResult.success(stage());
+
+    @Override
+    public ProcessStageResult execute(ProcessJobContext context) {
+        if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
+                .isDryRun()) {
+            context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, 0);
+            context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN_SKIPPED, "PROCESS_STAGING_WRITE");
+            return ProcessStageResult.success(stage());
+        }
+        ProcessComputePlugin plugin = context.getResolvedPlugin();
+        if (EmptyChecks.isNull(plugin)) {
+            // 没有 plugin 配置时仍允许走通(便于开箱跑通骨架),但写一个 0 行的 processedCount 占位。
+            context.getAttributes().putIfAbsent(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, 0);
+            return ProcessStageResult.success(stage());
+        }
+        ProcessStageResult result = plugin.compute(context);
+        return EmptyChecks.isNull(result)
+                ? ProcessStageResult.failure(
+                        stage(),
+                        "PROCESS_COMPUTE_EMPTY_RESULT",
+                        "error.process.compute.empty_result",
+                        new Object[0],
+                        "process compute returned null",
+                        ERROR_OBJECT_MAPPER)
+                : result;
     }
-    ProcessStageResult result = plugin.compute(context);
-    return EmptyChecks.isNull(result)
-        ? ProcessStageResult.failure(
-            stage(),
-            "PROCESS_COMPUTE_EMPTY_RESULT",
-            "error.process.compute.empty_result",
-            new Object[0],
-            "process compute returned null",
-            ERROR_OBJECT_MAPPER)
-        : result;
-  }
 }

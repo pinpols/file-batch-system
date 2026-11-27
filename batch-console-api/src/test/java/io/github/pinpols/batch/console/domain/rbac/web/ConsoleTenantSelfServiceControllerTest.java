@@ -29,59 +29,55 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleTenantSelfServiceControllerTest {
 
-  @Mock
-  private ConsoleTenantSelfServiceApplicationService applicationService;
+    @Mock
+    private ConsoleTenantSelfServiceApplicationService applicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleTenantSelfServiceController(applicationService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleTenantSelfServiceController(applicationService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("按租户返回配额策略分页列表")
-  void shouldReturnQuota() throws Exception {
-    QuotaPolicyResponse policy =
-        new QuotaPolicyResponse(1L, "t1", "max-jobs", 100, 0, 0, 1, true, null, null, null);
-    when(applicationService.quota("t1")).thenReturn(new PageResponse<>(1, 1, 100, List.of(policy)));
+    @Test
+    @DisplayName("按租户返回配额策略分页列表")
+    void shouldReturnQuota() throws Exception {
+        QuotaPolicyResponse policy =
+                new QuotaPolicyResponse(1L, "t1", "max-jobs", 100, 0, 0, 1, true, null, null, null);
+        when(applicationService.quota("t1")).thenReturn(new PageResponse<>(1, 1, 100, List.of(policy)));
 
-    mockMvc
-        .perform(get("/api/console/tenants/quota").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.items[0].policyCode").value("max-jobs"));
-  }
+        mockMvc.perform(get("/api/console/tenants/quota").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.items[0].policyCode").value("max-jobs"));
+    }
 
-  @Test
-  @DisplayName("按租户汇总运行作业、日触发与文件数量")
-  void shouldReturnUsage() throws Exception {
-    when(applicationService.usage("t1"))
-        .thenReturn(new ConsoleTenantUsageSummaryResponse("5", "120", "42"));
+    @Test
+    @DisplayName("按租户汇总运行作业、日触发与文件数量")
+    void shouldReturnUsage() throws Exception {
+        when(applicationService.usage("t1")).thenReturn(new ConsoleTenantUsageSummaryResponse("5", "120", "42"));
 
-    mockMvc
-        .perform(get("/api/console/tenants/usage").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.runningJobs").value("5"))
-        .andExpect(jsonPath("$.data.dailyTriggers").value("120"))
-        .andExpect(jsonPath("$.data.fileCount").value("42"));
-  }
+        mockMvc.perform(get("/api/console/tenants/usage").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.runningJobs").value("5"))
+                .andExpect(jsonPath("$.data.dailyTriggers").value("120"))
+                .andExpect(jsonPath("$.data.fileCount").value("42"));
+    }
 }

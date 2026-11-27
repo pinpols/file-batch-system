@@ -35,145 +35,138 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("导出步骤执行适配器单测:上下文构建,阶段委派与成功响应元数据语义")
 class ExportStepExecutionAdapterTest {
 
-  @Mock
-  private ExportStageExecutor stageExecutor;
+    @Mock
+    private ExportStageExecutor stageExecutor;
 
-  @Mock
-  private PlatformFileRecordRepository runtimeRepository;
+    @Mock
+    private PlatformFileRecordRepository runtimeRepository;
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  private ExportStepExecutionAdapter adapter;
+    private ExportStepExecutionAdapter adapter;
 
-  @BeforeEach
-  void setUp() {
-    adapter = new ExportStepExecutionAdapter(
-        stageExecutor,
-        new ObjectMapper(),
-        pipelineRuns,
-        runtimeRepository,
-        emptyProvider(),
-        emptyProvider());
-  }
+    @BeforeEach
+    void setUp() {
+        adapter = new ExportStepExecutionAdapter(
+                stageExecutor, new ObjectMapper(), pipelineRuns, runtimeRepository, emptyProvider(), emptyProvider());
+    }
 
-  @Test
-  @DisplayName("适配器的管道类型与起始阶段同导出流程保持一致")
-  void shouldMatchExportPipeline_whenDescribingAdapter() {
-    assertThat(adapter.pipelineType()).isEqualTo(ExportWorkerType.EXPORT);
-    assertThat(adapter.initialStage()).isEqualTo(ExportStage.PREPARE.name());
-  }
+    @Test
+    @DisplayName("适配器的管道类型与起始阶段同导出流程保持一致")
+    void shouldMatchExportPipeline_whenDescribingAdapter() {
+        assertThat(adapter.pipelineType()).isEqualTo(ExportWorkerType.EXPORT);
+        assertThat(adapter.initialStage()).isEqualTo(ExportStage.PREPARE.name());
+    }
 
-  @Test
-  @DisplayName("回放预检使用固定系统 Pipeline 与原始请求上下文")
-  void shouldResolveReplayCapabilityFromPinnedExportRequest() {
-    when(stageExecutor.defaultStepDefinitions()).thenReturn(exportStageTemplates());
-    ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("export-plugin");
-    when(stageExecutor.resolveReplayCapability(any())).thenReturn(expected);
-    Map<String, Object> attributes = Map.of(
-        PipelineRuntimeKeys.PAYLOAD,
-        "{\"systemPipelineCode\":\"EXPORT\",\"systemPipelineVersion\":1,"
-            + "\"templateCode\":\"TPL_A\",\"operationType\":\"WORKFLOW_RUN\","
-            + "\"frozenFileTemplateProtected\":\"protected-template\"}",
-        PipelineRuntimeKeys.BIZ_DATE,
-        "2026-10-23");
-    StepExecutionRequest request =
-        new StepExecutionRequest("tenant-a", "job-export", "EXPORT", "worker-1", attributes);
+    @Test
+    @DisplayName("回放预检使用固定系统 Pipeline 与原始请求上下文")
+    void shouldResolveReplayCapabilityFromPinnedExportRequest() {
+        when(stageExecutor.defaultStepDefinitions()).thenReturn(exportStageTemplates());
+        ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("export-plugin");
+        when(stageExecutor.resolveReplayCapability(any())).thenReturn(expected);
+        Map<String, Object> attributes = Map.of(
+                PipelineRuntimeKeys.PAYLOAD,
+                "{\"systemPipelineCode\":\"EXPORT\",\"systemPipelineVersion\":1,"
+                        + "\"templateCode\":\"TPL_A\",\"operationType\":\"WORKFLOW_RUN\","
+                        + "\"frozenFileTemplateProtected\":\"protected-template\"}",
+                PipelineRuntimeKeys.BIZ_DATE,
+                "2026-10-23");
+        StepExecutionRequest request =
+                new StepExecutionRequest("tenant-a", "job-export", "EXPORT", "worker-1", attributes);
 
-    ReplayCapabilityDeclaration actual = adapter.resolveReplayCapability(request);
+        ReplayCapabilityDeclaration actual = adapter.resolveReplayCapability(request);
 
-    assertThat(actual).isEqualTo(expected);
-    verify(stageExecutor).resolveReplayCapability(any(ExportJobContext.class));
-  }
+        assertThat(actual).isEqualTo(expected);
+        verify(stageExecutor).resolveReplayCapability(any(ExportJobContext.class));
+    }
 
-  @Test
-  @DisplayName("构建上下文时解析载荷,并回填业务日期与文件标识")
-  void shouldParsePayloadIntoContext_whenBuildingContext() throws Exception {
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
-    attributes.put("payload", "{\"fileCode\":\"daily\",\"objectName\":\"daily.csv\"}");
+    @Test
+    @DisplayName("构建上下文时解析载荷,并回填业务日期与文件标识")
+    void shouldParsePayloadIntoContext_whenBuildingContext() throws Exception {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
+        attributes.put("payload", "{\"fileCode\":\"daily\",\"objectName\":\"daily.csv\"}");
 
-    ExportJobContext context = adapter.buildContext(request(attributes), attributes, 42L);
+        ExportJobContext context = adapter.buildContext(request(attributes), attributes, 42L);
 
-    assertThat(context.getBizDate()).isEqualTo("2026-09-11");
-    assertThat(context.getFileId()).isEqualTo("42");
-    assertThat(context.getAttributes().get("exportPayload"))
-        .isInstanceOfSatisfying(ExportPayload.class, payload -> {
-          assertThat(payload.fileCode()).isEqualTo("daily");
-          assertThat(payload.objectName()).isEqualTo("daily.csv");
-        });
-  }
+        assertThat(context.getBizDate()).isEqualTo("2026-09-11");
+        assertThat(context.getFileId()).isEqualTo("42");
+        assertThat(context.getAttributes().get("exportPayload"))
+                .isInstanceOfSatisfying(ExportPayload.class, payload -> {
+                    assertThat(payload.fileCode()).isEqualTo("daily");
+                    assertThat(payload.objectName()).isEqualTo("daily.csv");
+                });
+    }
 
-  @Test
-  @DisplayName("缺少管道实例时直接委派阶段执行,不额外加锁")
-  void shouldDelegateStages_whenPipelineInstanceMissing() {
-    ExportJobContext context = new ExportJobContext();
-    context.setAttributes(new LinkedHashMap<>());
-    List<ExportStageResult> expected = List.of(ExportStageResult.success(ExportStage.PREPARE));
-    when(stageExecutor.execute(context)).thenReturn(expected);
+    @Test
+    @DisplayName("缺少管道实例时直接委派阶段执行,不额外加锁")
+    void shouldDelegateStages_whenPipelineInstanceMissing() {
+        ExportJobContext context = new ExportJobContext();
+        context.setAttributes(new LinkedHashMap<>());
+        List<ExportStageResult> expected = List.of(ExportStageResult.success(ExportStage.PREPARE));
+        when(stageExecutor.execute(context)).thenReturn(expected);
 
-    assertThat(adapter.executeStages(context)).isSameAs(expected);
-    verify(stageExecutor).execute(context);
-  }
+        assertThat(adapter.executeStages(context)).isSameAs(expected);
+        verify(stageExecutor).execute(context);
+    }
 
-  @Test
-  @DisplayName("结果访问器如实反映阶段,错误码与消息,空结果判定为失败")
-  void shouldPreserveStageResultContract_whenReadingAccessors() {
-    ExportStageResult result =
-        ExportStageResult.failure(ExportStage.GENERATE, "WRITE_FAILED", "write failed");
+    @Test
+    @DisplayName("结果访问器如实反映阶段,错误码与消息,空结果判定为失败")
+    void shouldPreserveStageResultContract_whenReadingAccessors() {
+        ExportStageResult result = ExportStageResult.failure(ExportStage.GENERATE, "WRITE_FAILED", "write failed");
 
-    assertThat(adapter.isSuccess(null)).isFalse();
-    assertThat(adapter.isSuccess(result)).isFalse();
-    assertThat(adapter.resultStage(result)).isEqualTo("GENERATE");
-    assertThat(adapter.resultCode(result)).isEqualTo("WRITE_FAILED");
-    assertThat(adapter.resultMessage(result)).isEqualTo("write failed");
-  }
+        assertThat(adapter.isSuccess(null)).isFalse();
+        assertThat(adapter.isSuccess(result)).isFalse();
+        assertThat(adapter.resultStage(result)).isEqualTo("GENERATE");
+        assertThat(adapter.resultCode(result)).isEqualTo("WRITE_FAILED");
+        assertThat(adapter.resultMessage(result)).isEqualTo("write failed");
+    }
 
-  @Test
-  @DisplayName("成功响应把文件标识,记录数与文件大小写入节点输出")
-  @SuppressWarnings("unchecked")
-  void shouldPublishExportMetadata_whenBuildingSuccessResponse() {
-    ExportJobContext context = new ExportJobContext();
-    context.setBizDate("2026-09-11");
-    Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put(PipelineRuntimeKeys.FILE_ID, 42L);
-    attributes.put(PipelineRuntimeKeys.OBJECT_NAME, "daily.csv");
-    attributes.put(PipelineRuntimeKeys.RECORD_COUNT, 10L);
-    attributes.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, 128L);
-    context.setAttributes(attributes);
+    @Test
+    @DisplayName("成功响应把文件标识,记录数与文件大小写入节点输出")
+    @SuppressWarnings("unchecked")
+    void shouldPublishExportMetadata_whenBuildingSuccessResponse() {
+        ExportJobContext context = new ExportJobContext();
+        context.setBizDate("2026-09-11");
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put(PipelineRuntimeKeys.FILE_ID, 42L);
+        attributes.put(PipelineRuntimeKeys.OBJECT_NAME, "daily.csv");
+        attributes.put(PipelineRuntimeKeys.RECORD_COUNT, 10L);
+        attributes.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, 128L);
+        context.setAttributes(attributes);
 
-    StepExecutionResponse response = adapter.buildSuccessResponse(context, List.of(), attributes);
+        StepExecutionResponse response = adapter.buildSuccessResponse(context, List.of(), attributes);
 
-    assertThat(response.success()).isTrue();
-    assertThat(response.message()).isEqualTo("daily.csv");
-    assertThat((Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS))
-        .containsEntry(PipelineRuntimeKeys.FILE_ID, 42L)
-        .containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 10L)
-        .containsEntry("inputCount", 10L)
-        .containsEntry("outputCount", 10L)
-        .containsEntry(PipelineRuntimeKeys.FILE_SIZE_BYTES, 128L);
-  }
+        assertThat(response.success()).isTrue();
+        assertThat(response.message()).isEqualTo("daily.csv");
+        assertThat((Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS))
+                .containsEntry(PipelineRuntimeKeys.FILE_ID, 42L)
+                .containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 10L)
+                .containsEntry("inputCount", 10L)
+                .containsEntry("outputCount", 10L)
+                .containsEntry(PipelineRuntimeKeys.FILE_SIZE_BYTES, 128L);
+    }
 
-  private static StepExecutionRequest request(Map<String, Object> attributes) {
-    return new StepExecutionRequest(
-        "tenant-a", "job-export", "EXPORT_PREPARE", "worker-1", attributes);
-  }
+    private static StepExecutionRequest request(Map<String, Object> attributes) {
+        return new StepExecutionRequest("tenant-a", "job-export", "EXPORT_PREPARE", "worker-1", attributes);
+    }
 
-  private static List<PipelineStepTemplate> exportStageTemplates() {
-    return List.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE").stream()
-        .map(stage -> PipelineStepTemplate.builder()
-            .stageCode(stage)
-            .stepCode(stage)
-            .stepName(stage)
-            .stepOrder(1)
-            .implCode(stage)
-            .enabled(true)
-            .build())
-        .toList();
-  }
+    private static List<PipelineStepTemplate> exportStageTemplates() {
+        return List.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE").stream()
+                .map(stage -> PipelineStepTemplate.builder()
+                        .stageCode(stage)
+                        .stepCode(stage)
+                        .stepName(stage)
+                        .stepOrder(1)
+                        .implCode(stage)
+                        .enabled(true)
+                        .build())
+                .toList();
+    }
 
-  @SuppressWarnings("unchecked")
-  private static <T> ObjectProvider<T> emptyProvider() {
-    return mock(ObjectProvider.class);
-  }
+    @SuppressWarnings("unchecked")
+    private static <T> ObjectProvider<T> emptyProvider() {
+        return mock(ObjectProvider.class);
+    }
 }

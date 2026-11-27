@@ -36,89 +36,84 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultResourceQueueManager implements ResourceQueueManager {
 
-  private final ResourceQueueMapper resourceQueueMapper;
-  private final Cache<String, List<ResourceQueueEntity>> enabledQueuesByTenant;
+    private final ResourceQueueMapper resourceQueueMapper;
+    private final Cache<String, List<ResourceQueueEntity>> enabledQueuesByTenant;
 
-  @Autowired
-  public DefaultResourceQueueManager(
-      ResourceQueueMapper resourceQueueMapper,
-      OrchestratorConfigCacheProperties properties,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this(resourceQueueMapper, properties, meterRegistryProvider.getIfAvailable());
-  }
-
-  /** 保留给不启动 Spring 容器的单元测试和轻量调用方，参数默认值与生产配置类一致。 */
-  public DefaultResourceQueueManager(ResourceQueueMapper resourceQueueMapper) {
-    this(resourceQueueMapper, new OrchestratorConfigCacheProperties(), (MeterRegistry) null);
-  }
-
-  private DefaultResourceQueueManager(
-      ResourceQueueMapper resourceQueueMapper,
-      OrchestratorConfigCacheProperties properties,
-      MeterRegistry meterRegistry) {
-    this.resourceQueueMapper = resourceQueueMapper;
-    long localPositiveTtlMillis = properties.getLocalPositiveTtlMillis();
-    Duration localPositiveTtl = Duration.ofMillis(localPositiveTtlMillis);
-    this.enabledQueuesByTenant = Caffeine.newBuilder()
-        .expireAfterWrite(localPositiveTtl)
-        .maximumSize(properties.getLocalPositiveMaximumSize())
-        .recordStats()
-        .build();
-    if (meterRegistry != null) {
-      CaffeineCacheMetrics.monitor(
-          meterRegistry, enabledQueuesByTenant, "orchestrator.config.resource-queue.local");
+    @Autowired
+    public DefaultResourceQueueManager(
+            ResourceQueueMapper resourceQueueMapper,
+            OrchestratorConfigCacheProperties properties,
+            ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        this(resourceQueueMapper, properties, meterRegistryProvider.getIfAvailable());
     }
-  }
 
-  @Override
-  public ResourceQueueEntity resolveQueue(ResourceSchedulingRequest request) {
-    if (request == null || !Texts.hasText(request.getTenantId())) {
-      return null;
+    /** 保留给不启动 Spring 容器的单元测试和轻量调用方，参数默认值与生产配置类一致。 */
+    public DefaultResourceQueueManager(ResourceQueueMapper resourceQueueMapper) {
+        this(resourceQueueMapper, new OrchestratorConfigCacheProperties(), (MeterRegistry) null);
     }
-    List<ResourceQueueEntity> queues =
-        enabledQueuesByTenant.get(request.getTenantId(), this::loadEnabledQueues);
-    if (EmptyChecks.isEmpty(queues)) {
-      return null;
-    }
-    if (Texts.hasText(request.getQueueCode())) {
-      return queues.stream()
-          .filter(queue -> request.getQueueCode().equalsIgnoreCase(queue.queueCode()))
-          .findFirst()
-          .orElse(null);
-    }
-    return queues.stream()
-        .filter(queue -> matchesQueueType(queue, request.getWorkerType()))
-        .sorted(Comparator.comparing(
-                (ResourceQueueEntity queue) -> "MIXED".equalsIgnoreCase(queue.queueType()))
-            .thenComparing(
-                queue -> normalizedWeight(queue.fairShareWeight()), Comparator.reverseOrder())
-            .thenComparing(
-                queue -> normalizedWeight(queue.maxRunningJobs()), Comparator.reverseOrder())
-            .thenComparing(
-                queue -> normalizedWeight(queue.maxRunningPartitions()), Comparator.reverseOrder())
-            .thenComparing(
-                ResourceQueueEntity::queueCode, Comparator.nullsLast(String::compareToIgnoreCase)))
-        .findFirst()
-        .orElse(null);
-  }
 
-  private List<ResourceQueueEntity> loadEnabledQueues(String tenantId) {
-    List<ResourceQueueEntity> loaded = resourceQueueMapper.selectByTenantAndEnabled(tenantId, true);
-    return EmptyChecks.isEmpty(loaded) ? List.of() : List.copyOf(loaded);
-  }
-
-  private boolean matchesQueueType(ResourceQueueEntity queue, String workerType) {
-    if (queue == null) {
-      return false;
+    private DefaultResourceQueueManager(
+            ResourceQueueMapper resourceQueueMapper,
+            OrchestratorConfigCacheProperties properties,
+            MeterRegistry meterRegistry) {
+        this.resourceQueueMapper = resourceQueueMapper;
+        long localPositiveTtlMillis = properties.getLocalPositiveTtlMillis();
+        Duration localPositiveTtl = Duration.ofMillis(localPositiveTtlMillis);
+        this.enabledQueuesByTenant = Caffeine.newBuilder()
+                .expireAfterWrite(localPositiveTtl)
+                .maximumSize(properties.getLocalPositiveMaximumSize())
+                .recordStats()
+                .build();
+        if (meterRegistry != null) {
+            CaffeineCacheMetrics.monitor(
+                    meterRegistry, enabledQueuesByTenant, "orchestrator.config.resource-queue.local");
+        }
     }
-    if (!Texts.hasText(workerType)) {
-      return true;
-    }
-    return workerType.equalsIgnoreCase(queue.queueType())
-        || "MIXED".equalsIgnoreCase(queue.queueType());
-  }
 
-  private Integer normalizedWeight(Integer weight) {
-    return weight == null || weight <= 0 ? 1 : weight;
-  }
+    @Override
+    public ResourceQueueEntity resolveQueue(ResourceSchedulingRequest request) {
+        if (request == null || !Texts.hasText(request.getTenantId())) {
+            return null;
+        }
+        List<ResourceQueueEntity> queues = enabledQueuesByTenant.get(request.getTenantId(), this::loadEnabledQueues);
+        if (EmptyChecks.isEmpty(queues)) {
+            return null;
+        }
+        if (Texts.hasText(request.getQueueCode())) {
+            return queues.stream()
+                    .filter(queue -> request.getQueueCode().equalsIgnoreCase(queue.queueCode()))
+                    .findFirst()
+                    .orElse(null);
+        }
+        return queues.stream()
+                .filter(queue -> matchesQueueType(queue, request.getWorkerType()))
+                .sorted(Comparator.comparing((ResourceQueueEntity queue) -> "MIXED".equalsIgnoreCase(queue.queueType()))
+                        .thenComparing(queue -> normalizedWeight(queue.fairShareWeight()), Comparator.reverseOrder())
+                        .thenComparing(queue -> normalizedWeight(queue.maxRunningJobs()), Comparator.reverseOrder())
+                        .thenComparing(
+                                queue -> normalizedWeight(queue.maxRunningPartitions()), Comparator.reverseOrder())
+                        .thenComparing(
+                                ResourceQueueEntity::queueCode, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private List<ResourceQueueEntity> loadEnabledQueues(String tenantId) {
+        List<ResourceQueueEntity> loaded = resourceQueueMapper.selectByTenantAndEnabled(tenantId, true);
+        return EmptyChecks.isEmpty(loaded) ? List.of() : List.copyOf(loaded);
+    }
+
+    private boolean matchesQueueType(ResourceQueueEntity queue, String workerType) {
+        if (queue == null) {
+            return false;
+        }
+        if (!Texts.hasText(workerType)) {
+            return true;
+        }
+        return workerType.equalsIgnoreCase(queue.queueType()) || "MIXED".equalsIgnoreCase(queue.queueType());
+    }
+
+    private Integer normalizedWeight(Integer weight) {
+        return weight == null || weight <= 0 ? 1 : weight;
+    }
 }

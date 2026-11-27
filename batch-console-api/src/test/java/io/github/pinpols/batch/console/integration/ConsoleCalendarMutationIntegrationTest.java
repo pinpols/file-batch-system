@@ -20,14 +20,12 @@ import org.springframework.http.MediaType;
  *   <li>同 tenantId + calendarCode 重复创建 → 唯一约束撞
  * </ul>
  */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("业务日历写路径: 编码格式校验,落库字段透传与唯一约束")
 class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
-  private String body(String code) {
-    return """
+    private String body(String code) {
+        return """
         {
           "tenantId": "int-cal-ta",
           "calendarCode": "%s",
@@ -38,80 +36,77 @@ class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegration
           "enabled": false
         }
         """.formatted(code).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("创建日历: 返回成功,落库的租户,编码与时区与请求一致")
-  void shouldCreateCalendarWithValidCode() {
-    final String selectTenantIdSql = """
+    @Test
+    @DisplayName("创建日历: 返回成功,落库的租户,编码与时区与请求一致")
+    void shouldCreateCalendarWithValidCode() {
+        final String selectTenantIdSql = """
         SELECT tenant_id, calendar_code, timezone FROM batch.business_calendar WHERE calendar_code = ?\
         """;
-    final String deleteBatchDayCatchupControlSql = """
+        final String deleteBatchDayCatchupControlSql = """
         DELETE FROM batch.batch_day_catchup_control WHERE calendar_code = ?
     """;
-    final String deleteBusinessCalendarSql = """
+        final String deleteBusinessCalendarSql = """
         DELETE FROM batch.business_calendar WHERE calendar_code = ?
     """;
 
-    String code = "int_cal_create_" + System.currentTimeMillis();
+        String code = "int_cal_create_" + System.currentTimeMillis();
 
-    client
-        .post()
-        .uri("/api/console/calendars")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        client.post()
+                .uri("/api/console/calendars")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    var row = jdbcTemplate.queryForMap(selectTenantIdSql, code);
-    assertThat(row).containsEntry("tenant_id", "int-cal-ta");
-    assertThat(row).containsEntry("calendar_code", code);
-    assertThat(row).containsEntry("timezone", "Asia/Shanghai");
+        var row = jdbcTemplate.queryForMap(selectTenantIdSql, code);
+        assertThat(row).containsEntry("tenant_id", "int-cal-ta");
+        assertThat(row).containsEntry("calendar_code", code);
+        assertThat(row).containsEntry("timezone", "Asia/Shanghai");
 
-    jdbcTemplate.update(deleteBatchDayCatchupControlSql, code);
-    jdbcTemplate.update(deleteBusinessCalendarSql, code);
-  }
+        jdbcTemplate.update(deleteBatchDayCatchupControlSql, code);
+        jdbcTemplate.update(deleteBusinessCalendarSql, code);
+    }
 
-  @Test
-  @DisplayName("Console节假日导入按当前租户和日历身份写入")
-  void shouldImportHolidayForCalendarInResolvedTenant() {
-    final String selectIdSql = """
+    @Test
+    @DisplayName("Console节假日导入按当前租户和日历身份写入")
+    void shouldImportHolidayForCalendarInResolvedTenant() {
+        final String selectIdSql = """
         SELECT id FROM batch.business_calendar WHERE tenant_id = ? AND calendar_code = ?
     """;
-    final String selectTenantIdSql = """
+        final String selectTenantIdSql = """
         SELECT tenant_id FROM batch.calendar_holiday WHERE calendar_id = ? AND biz_date = DATE '2026-12-25'\
         """;
-    final String deleteCalendarHolidaySql = """
+        final String deleteCalendarHolidaySql = """
         DELETE FROM batch.calendar_holiday WHERE tenant_id = ? AND calendar_id = ?
     """;
-    final String deleteBatchDayCatchupControlSql = """
+        final String deleteBatchDayCatchupControlSql = """
         DELETE FROM batch.batch_day_catchup_control WHERE tenant_id = ?\s\
         AND calendar_code = (SELECT calendar_code FROM batch.business_calendar WHERE id = ?)\
         """;
-    final String deleteBusinessCalendarSql = """
+        final String deleteBusinessCalendarSql = """
         DELETE FROM batch.business_calendar WHERE tenant_id = ? AND id = ?
     """;
 
-    String code = "int_cal_holiday_" + System.currentTimeMillis();
-    client
-        .post()
-        .uri("/api/console/calendars")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-holiday-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        String code = "int_cal_holiday_" + System.currentTimeMillis();
+        client.post()
+                .uri("/api/console/calendars")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-holiday-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    Long calendarId = jdbcTemplate.queryForObject(selectIdSql, Long.class, "int-cal-ta", code);
-    try {
-      client
-          .post()
-          .uri("/api/console/calendars/{id}/holidays", calendarId)
-          .contentType(MediaType.APPLICATION_JSON)
-          .bodyValue("""
+        Long calendarId = jdbcTemplate.queryForObject(selectIdSql, Long.class, "int-cal-ta", code);
+        try {
+            client.post()
+                    .uri("/api/console/calendars/{id}/holidays", calendarId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("""
               {
                 "tenantId": "int-cal-ta",
                 "items": [{
@@ -121,89 +116,84 @@ class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegration
                 }]
               }
               """)
-          .exchange()
-          .expectStatus()
-          .isOk();
+                    .exchange()
+                    .expectStatus()
+                    .isOk();
 
-      String selectedTenantId =
-          jdbcTemplate.queryForObject(selectTenantIdSql, String.class, calendarId);
-      assertThat(selectedTenantId).isEqualTo("int-cal-ta");
-    } finally {
-      jdbcTemplate.update(deleteCalendarHolidaySql, "int-cal-ta", calendarId);
-      jdbcTemplate.update(deleteBatchDayCatchupControlSql, "int-cal-ta", calendarId);
-      jdbcTemplate.update(deleteBusinessCalendarSql, "int-cal-ta", calendarId);
+            String selectedTenantId = jdbcTemplate.queryForObject(selectTenantIdSql, String.class, calendarId);
+            assertThat(selectedTenantId).isEqualTo("int-cal-ta");
+        } finally {
+            jdbcTemplate.update(deleteCalendarHolidaySql, "int-cal-ta", calendarId);
+            jdbcTemplate.update(deleteBatchDayCatchupControlSql, "int-cal-ta", calendarId);
+            jdbcTemplate.update(deleteBusinessCalendarSql, "int-cal-ta", calendarId);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("编码含空格: 返回校验错误且不落库")
-  void shouldRejectInvalidCalendarCodeWithSpaces() {
-    final String selectCountSql = """
+    @Test
+    @DisplayName("编码含空格: 返回校验错误且不落库")
+    void shouldRejectInvalidCalendarCodeWithSpaces() {
+        final String selectCountSql = """
         SELECT COUNT(*) FROM batch.business_calendar WHERE calendar_code = ?
     """;
 
-    client
-        .post()
-        .uri("/api/console/calendars")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-bad-1")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("q q q"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest()
-        .expectBody(String.class)
-        .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
+        client.post()
+                .uri("/api/console/calendars")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-bad-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("q q q"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(String.class)
+                .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt = jdbcTemplate.queryForObject(selectCountSql, Long.class, "q q q");
-    assertThat(cnt).isZero();
-  }
+        Long cnt = jdbcTemplate.queryForObject(selectCountSql, Long.class, "q q q");
+        assertThat(cnt).isZero();
+    }
 
-  @Test
-  @DisplayName("编码为中文: 返回请求不合法")
-  void shouldRejectChineseCalendarCode() {
-    client
-        .post()
-        .uri("/api/console/calendars")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-bad-2")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body("中文日历"))
-        .exchange()
-        .expectStatus()
-        .isBadRequest();
-  }
+    @Test
+    @DisplayName("编码为中文: 返回请求不合法")
+    void shouldRejectChineseCalendarCode() {
+        client.post()
+                .uri("/api/console/calendars")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-bad-2")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("中文日历"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
 
-  @Test
-  @DisplayName("编码重复: 第二次写入失败,不产生重复日历")
-  void shouldRejectDuplicateCalendarCode() {
-    final String deleteBatchDayCatchupControlSql = """
+    @Test
+    @DisplayName("编码重复: 第二次写入失败,不产生重复日历")
+    void shouldRejectDuplicateCalendarCode() {
+        final String deleteBatchDayCatchupControlSql = """
         DELETE FROM batch.batch_day_catchup_control WHERE calendar_code = ?
     """;
-    final String deleteBusinessCalendarSql = """
+        final String deleteBusinessCalendarSql = """
         DELETE FROM batch.business_calendar WHERE calendar_code = ?
     """;
 
-    String code = "int_cal_dup_" + System.currentTimeMillis();
-    client
-        .post()
-        .uri("/api/console/calendars")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-dup-1-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .isOk();
+        String code = "int_cal_dup_" + System.currentTimeMillis();
+        client.post()
+                .uri("/api/console/calendars")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-dup-1-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-    client
-        .post()
-        .uri("/api/console/calendars")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-dup-2-" + code)
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(body(code))
-        .exchange()
-        .expectStatus()
-        .value(s -> assertThat(s).isIn(400, 409, 500));
+        client.post()
+                .uri("/api/console/calendars")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-dup-2-" + code)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body(code))
+                .exchange()
+                .expectStatus()
+                .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    jdbcTemplate.update(deleteBatchDayCatchupControlSql, code);
-    jdbcTemplate.update(deleteBusinessCalendarSql, code);
-  }
+        jdbcTemplate.update(deleteBatchDayCatchupControlSql, code);
+        jdbcTemplate.update(deleteBusinessCalendarSql, code);
+    }
 }

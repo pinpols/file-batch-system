@@ -20,52 +20,52 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class GlobalJobAdmissionGuardTest {
 
-  @Mock
-  private JobInstanceMapper mapper;
+    @Mock
+    private JobInstanceMapper mapper;
 
-  @Mock
-  private BatchOrchestratorGovernanceProperties governance;
+    @Mock
+    private BatchOrchestratorGovernanceProperties governance;
 
-  private ResourceSchedulerProperties properties;
-  private GlobalJobAdmissionGuard guard;
+    private ResourceSchedulerProperties properties;
+    private GlobalJobAdmissionGuard guard;
 
-  @Test
-  @DisplayName("开启全局上限时先获取准入锁再统计活跃作业数,保证并发判定不超卖")
-  void shouldAcquireAdmissionLockBeforeCountingActiveJobs_whenCapEnabled() {
-    properties.setGlobalMaxRunningJobs(10);
-    when(mapper.countActiveAll()).thenReturn(9L);
+    @Test
+    @DisplayName("开启全局上限时先获取准入锁再统计活跃作业数,保证并发判定不超卖")
+    void shouldAcquireAdmissionLockBeforeCountingActiveJobs_whenCapEnabled() {
+        properties.setGlobalMaxRunningJobs(10);
+        when(mapper.countActiveAll()).thenReturn(9L);
 
-    assertThat(guard.hasCapacity()).isTrue();
+        assertThat(guard.hasCapacity()).isTrue();
 
-    var ordered = inOrder(mapper);
-    ordered.verify(mapper).acquireGlobalJobAdmissionLock();
-    ordered.verify(mapper).countActiveAll();
-  }
+        var ordered = inOrder(mapper);
+        ordered.verify(mapper).acquireGlobalJobAdmissionLock();
+        ordered.verify(mapper).countActiveAll();
+    }
 
-  @Test
-  @DisplayName("活跃作业数达到全局上限时拒绝新的准入请求")
-  void shouldRejectAdmission_whenActiveJobsReachCap() {
-    properties.setGlobalMaxRunningJobs(10);
-    when(mapper.countActiveAll()).thenReturn(10L);
+    @Test
+    @DisplayName("活跃作业数达到全局上限时拒绝新的准入请求")
+    void shouldRejectAdmission_whenActiveJobsReachCap() {
+        properties.setGlobalMaxRunningJobs(10);
+        when(mapper.countActiveAll()).thenReturn(10L);
 
-    assertThat(guard.hasCapacity()).isFalse();
-  }
+        assertThat(guard.hasCapacity()).isFalse();
+    }
 
-  @Test
-  @DisplayName("全局上限关闭时直接放行,既不获取准入锁也不统计活跃作业数")
-  void shouldSkipDatabaseAccess_whenGlobalCapDisabled() {
-    properties.setGlobalMaxRunningJobs(0);
+    @Test
+    @DisplayName("全局上限关闭时直接放行,既不获取准入锁也不统计活跃作业数")
+    void shouldSkipDatabaseAccess_whenGlobalCapDisabled() {
+        properties.setGlobalMaxRunningJobs(0);
 
-    assertThat(guard.hasCapacity()).isTrue();
+        assertThat(guard.hasCapacity()).isTrue();
 
-    verify(mapper, never()).acquireGlobalJobAdmissionLock();
-    verify(mapper, never()).countActiveAll();
-  }
+        verify(mapper, never()).acquireGlobalJobAdmissionLock();
+        verify(mapper, never()).countActiveAll();
+    }
 
-  @BeforeEach
-  void initializeSubject() {
-    properties = new ResourceSchedulerProperties();
-    when(governance.resourceScheduler()).thenReturn(properties);
-    guard = new GlobalJobAdmissionGuard(mapper, governance);
-  }
+    @BeforeEach
+    void initializeSubject() {
+        properties = new ResourceSchedulerProperties();
+        when(governance.resourceScheduler()).thenReturn(properties);
+        guard = new GlobalJobAdmissionGuard(mapper, governance);
+    }
 }

@@ -25,62 +25,62 @@ import org.quartz.TriggerListener;
 @RequiredArgsConstructor
 public class QuartzMetricsListener implements JobListener, TriggerListener {
 
-  static final String NAME = "quartzMetricsListener";
+    static final String NAME = "quartzMetricsListener";
 
-  private final QuartzMetrics metrics;
-  private final ConcurrentMap<JobKey, Long> startTimes = new ConcurrentHashMap<>();
+    private final QuartzMetrics metrics;
+    private final ConcurrentMap<JobKey, Long> startTimes = new ConcurrentHashMap<>();
 
-  @Override
-  public String getName() {
-    return NAME;
-  }
-
-  // ── JobListener ─────────────────────────────────────────────
-
-  @Override
-  public void jobToBeExecuted(JobExecutionContext context) {
-    startTimes.put(context.getJobDetail().getKey(), System.nanoTime());
-  }
-
-  @Override
-  public void jobExecutionVetoed(JobExecutionContext context) {
-    // veto 路径不记 fire，但要清掉 start 防泄漏
-    startTimes.remove(context.getJobDetail().getKey());
-  }
-
-  @Override
-  public void jobWasExecuted(JobExecutionContext context, JobExecutionException jobException) {
-    JobKey key = context.getJobDetail().getKey();
-    Long start = startTimes.remove(key);
-    String group = key.getGroup();
-    metrics.fireCounter(group).increment();
-    if (EmptyChecks.isNotNull(start)) {
-      metrics.recordExecution(group, start);
+    @Override
+    public String getName() {
+        return NAME;
     }
-  }
 
-  // ── TriggerListener ─────────────────────────────────────────
+    // ── JobListener ─────────────────────────────────────────────
 
-  @Override
-  public void triggerFired(Trigger trigger, JobExecutionContext context) {
-    // 不在这里计 fire — 用 jobWasExecuted 计，因为 trigger fire 后可能被 veto
-  }
+    @Override
+    public void jobToBeExecuted(JobExecutionContext context) {
+        startTimes.put(context.getJobDetail().getKey(), System.nanoTime());
+    }
 
-  @Override
-  public boolean vetoJobExecution(Trigger trigger, JobExecutionContext context) {
-    return false;
-  }
+    @Override
+    public void jobExecutionVetoed(JobExecutionContext context) {
+        // veto 路径不记 fire，但要清掉 start 防泄漏
+        startTimes.remove(context.getJobDetail().getKey());
+    }
 
-  @Override
-  public void triggerMisfired(Trigger trigger) {
-    metrics.misfireCounter(trigger.getKey().getGroup()).increment();
-  }
+    @Override
+    public void jobWasExecuted(JobExecutionContext context, JobExecutionException jobException) {
+        JobKey key = context.getJobDetail().getKey();
+        Long start = startTimes.remove(key);
+        String group = key.getGroup();
+        metrics.fireCounter(group).increment();
+        if (EmptyChecks.isNotNull(start)) {
+            metrics.recordExecution(group, start);
+        }
+    }
 
-  @Override
-  public void triggerComplete(
-      Trigger trigger,
-      JobExecutionContext context,
-      Trigger.CompletedExecutionInstruction triggerInstructionCode) {
-    // 不需要在 trigger 端再记一次
-  }
+    // ── TriggerListener ─────────────────────────────────────────
+
+    @Override
+    public void triggerFired(Trigger trigger, JobExecutionContext context) {
+        // 不在这里计 fire — 用 jobWasExecuted 计，因为 trigger fire 后可能被 veto
+    }
+
+    @Override
+    public boolean vetoJobExecution(Trigger trigger, JobExecutionContext context) {
+        return false;
+    }
+
+    @Override
+    public void triggerMisfired(Trigger trigger) {
+        metrics.misfireCounter(trigger.getKey().getGroup()).increment();
+    }
+
+    @Override
+    public void triggerComplete(
+            Trigger trigger,
+            JobExecutionContext context,
+            Trigger.CompletedExecutionInstruction triggerInstructionCode) {
+        // 不需要在 trigger 端再记一次
+    }
 }

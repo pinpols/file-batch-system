@@ -34,167 +34,156 @@ import org.postgresql.util.PGobject;
 @DisplayName("导入解析阶段定长与 XML 格式单测:字段布局,首尾行跳过与安全拒绝语义")
 class ParseStepFixedWidthAndXmlTest {
 
-  private ParseStep parseStep;
+    private ParseStep parseStep;
 
-  @BeforeEach
-  void setUp() {
-    PlatformFileRecordRepository runtimeRepository = mock(PlatformFileRecordRepository.class);
-    ImportRecordGovernanceService recordGovernanceService =
-        mock(ImportRecordGovernanceService.class);
-    when(recordGovernanceService.withinThreshold(any())).thenReturn(true);
-    when(recordGovernanceService.isSkippable(any())).thenReturn(false);
-    parseStep = new ParseStep(new ObjectMapper(), runtimeRepository, recordGovernanceService);
-  }
-
-  // ── 定长格式 FIXED_WIDTH ───────────────────────────────────────────────────
-
-  /** 3 字段定长格式: customerNo(6) + customerName(20) + status(8)，trim 后落盘。 */
-  @Test
-  @DisplayName("定长格式按字段起始与长度切分,三条记录全部解析成明细")
-  void shouldParseFixedWidth_threeFieldRecords() {
-    String fixed =
-        // 字段布局:customerNo | customerName | status
-        "C00001Alice               ACTIVE  \n"
-            + "C00002Bob                 INACTIVE\n"
-            + "C00003Charlie             ACTIVE  \n";
-
-    Map<String, Object> templateConfig = Map.of(
-        "field_mappings",
-        List.of(
-            Map.of("source", "customerNo", "target", "customerNo", "start", 0, "length", 6),
-            Map.of("source", "customerName", "target", "customerName", "start", 6, "length", 20),
-            Map.of("source", "status", "target", "status", "start", 26, "length", 8)),
-        "record_length",
-        34,
-        "jdbc_mapped_import",
-        Map.of());
-
-    ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
-
-    ImportStageResult result = parseStep.execute(context);
-
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 3L);
-    assertNdjsonRecordCount(context, 3);
-    assertNdjsonContains(context, "C00001", "Alice", "ACTIVE");
-    assertNdjsonContains(context, "C00003", "Charlie", "ACTIVE");
-  }
-
-  @ParameterizedTest(name = "{0}")
-  @MethodSource("invalidFixedWidthMappings")
-  @DisplayName("定长字段映射不允许小数、溢出或忽略无效字段")
-  void rejectsInvalidFixedWidthMappings(String scenario, List<Map<String, Object>> mappings)
-      throws Exception {
-    Map<String, Object> templateConfig =
-        Map.of("field_mappings", mappings, "jdbc_mapped_import", Map.of());
-    ImportJobContext context = buildContext("ABCDE\n", "FIXED_WIDTH", templateConfig);
-    try {
-      ImportStageResult result = parseStep.execute(context);
-      assertThat(result.success()).as(scenario).isFalse();
-    } finally {
-      Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
-      if (path != null) Files.deleteIfExists(Path.of(path.toString()));
+    @BeforeEach
+    void setUp() {
+        PlatformFileRecordRepository runtimeRepository = mock(PlatformFileRecordRepository.class);
+        ImportRecordGovernanceService recordGovernanceService = mock(ImportRecordGovernanceService.class);
+        when(recordGovernanceService.withinThreshold(any())).thenReturn(true);
+        when(recordGovernanceService.isSkippable(any())).thenReturn(false);
+        parseStep = new ParseStep(new ObjectMapper(), runtimeRepository, recordGovernanceService);
     }
-  }
 
-  private static Stream<Arguments> invalidFixedWidthMappings() {
-    return Stream.of(
-        Arguments.of(
-            "fractional start", List.of(Map.of("target", "id", "start", 1.9, "length", 1))),
-        Arguments.of(
-            "overflow start", List.of(Map.of("target", "id", "start", 4294967296L, "length", 1))),
-        Arguments.of(
-            "fractional length", List.of(Map.of("target", "id", "start", 0, "length", 1.9))),
-        Arguments.of(
-            "overflow length", List.of(Map.of("target", "id", "start", 0, "length", 4294967297L))),
-        Arguments.of(
-            "missing start",
-            List.of(
-                Map.of("target", "id", "start", 0, "length", 1),
-                Map.of("target", "other", "length", 1))));
-  }
+    // ── 定长格式 FIXED_WIDTH ───────────────────────────────────────────────────
 
-  @ParameterizedTest(name = "{0}")
-  @MethodSource("otherInvalidFixedWidthMappings")
-  @DisplayName("定长字段映射拒绝负起点、零长度和无效目标")
-  void rejectsOtherInvalidFixedWidthMappings(String scenario, List<Map<String, Object>> mappings)
-      throws Exception {
-    ImportJobContext context =
-        buildContext("ABCDE\n", "FIXED_WIDTH", Map.of("field_mappings", mappings));
-    try {
-      assertThat(parseStep.execute(context).success()).as(scenario).isFalse();
-    } finally {
-      Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
-      if (path != null) Files.deleteIfExists(Path.of(path.toString()));
+    /** 3 字段定长格式: customerNo(6) + customerName(20) + status(8)，trim 后落盘。 */
+    @Test
+    @DisplayName("定长格式按字段起始与长度切分,三条记录全部解析成明细")
+    void shouldParseFixedWidth_threeFieldRecords() {
+        String fixed =
+                // 字段布局:customerNo | customerName | status
+                "C00001Alice               ACTIVE  \n"
+                        + "C00002Bob                 INACTIVE\n"
+                        + "C00003Charlie             ACTIVE  \n";
+
+        Map<String, Object> templateConfig = Map.of(
+                "field_mappings",
+                List.of(
+                        Map.of("source", "customerNo", "target", "customerNo", "start", 0, "length", 6),
+                        Map.of("source", "customerName", "target", "customerName", "start", 6, "length", 20),
+                        Map.of("source", "status", "target", "status", "start", 26, "length", 8)),
+                "record_length",
+                34,
+                "jdbc_mapped_import",
+                Map.of());
+
+        ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
+
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 3L);
+        assertNdjsonRecordCount(context, 3);
+        assertNdjsonContains(context, "C00001", "Alice", "ACTIVE");
+        assertNdjsonContains(context, "C00003", "Charlie", "ACTIVE");
     }
-  }
 
-  private static Stream<Arguments> otherInvalidFixedWidthMappings() {
-    return Stream.of(
-        Arguments.of("negative start", List.of(Map.of("target", "id", "start", -1, "length", 1))),
-        Arguments.of("zero length", List.of(Map.of("target", "id", "start", 0, "length", 0))),
-        Arguments.of("blank target", List.of(Map.of("target", " ", "start", 0, "length", 1))),
-        Arguments.of("numeric target", List.of(Map.of("target", 123, "start", 0, "length", 1))));
-  }
-
-  @Test
-  @DisplayName("定长字段映射接受范围内 Long 与 BigInteger 并按原位置解析")
-  void shouldAcceptValidIntegralFixedWidthMappings() throws Exception {
-    Map<String, Object> mapping =
-        Map.of("target", "id", "start", 1L, "length", BigInteger.valueOf(2));
-    ImportJobContext context =
-        buildContext("ABCDE\n", "FIXED_WIDTH", Map.of("field_mappings", List.of(mapping)));
-    try {
-      assertThat(parseStep.execute(context).success()).isTrue();
-      assertNdjsonContains(context, "BC");
-    } finally {
-      Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
-      if (path != null) Files.deleteIfExists(Path.of(path.toString()));
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("invalidFixedWidthMappings")
+    @DisplayName("定长字段映射不允许小数、溢出或忽略无效字段")
+    void rejectsInvalidFixedWidthMappings(String scenario, List<Map<String, Object>> mappings) throws Exception {
+        Map<String, Object> templateConfig = Map.of("field_mappings", mappings, "jdbc_mapped_import", Map.of());
+        ImportJobContext context = buildContext("ABCDE\n", "FIXED_WIDTH", templateConfig);
+        try {
+            ImportStageResult result = parseStep.execute(context);
+            assertThat(result.success()).as(scenario).isFalse();
+        } finally {
+            Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+            if (path != null) Files.deleteIfExists(Path.of(path.toString()));
+        }
     }
-  }
 
-  /** header_rows + footer_rows 用于跳过头尾。 */
-  @Test
-  @DisplayName("定长格式跳过声明数量的表头与表尾行,只解析数据行")
-  void shouldParseFixedWidth_skippingHeaderAndFooter() {
-    // 定长空格属于输入字节，保留逐行字符串，避免文本块处理尾随空白改变字段位置。
-    String fixed = "HEADER LINE                       \n"
-        + "C00001Alice               ACTIVE  \n"
-        + "C00002Bob                 INACTIVE\n"
-        + "FOOTER:total=2                    \n";
+    private static Stream<Arguments> invalidFixedWidthMappings() {
+        return Stream.of(
+                Arguments.of("fractional start", List.of(Map.of("target", "id", "start", 1.9, "length", 1))),
+                Arguments.of("overflow start", List.of(Map.of("target", "id", "start", 4294967296L, "length", 1))),
+                Arguments.of("fractional length", List.of(Map.of("target", "id", "start", 0, "length", 1.9))),
+                Arguments.of("overflow length", List.of(Map.of("target", "id", "start", 0, "length", 4294967297L))),
+                Arguments.of(
+                        "missing start",
+                        List.of(
+                                Map.of("target", "id", "start", 0, "length", 1),
+                                Map.of("target", "other", "length", 1))));
+    }
 
-    Map<String, Object> templateConfig = Map.of(
-        "field_mappings",
-        List.of(
-            Map.of("source", "customerNo", "target", "customerNo", "start", 0, "length", 6),
-            Map.of("source", "customerName", "target", "customerName", "start", 6, "length", 20),
-            Map.of("source", "status", "target", "status", "start", 26, "length", 8)),
-        "record_length",
-        34,
-        "header_rows",
-        1,
-        "footer_rows",
-        1,
-        "jdbc_mapped_import",
-        Map.of());
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("otherInvalidFixedWidthMappings")
+    @DisplayName("定长字段映射拒绝负起点、零长度和无效目标")
+    void rejectsOtherInvalidFixedWidthMappings(String scenario, List<Map<String, Object>> mappings) throws Exception {
+        ImportJobContext context = buildContext("ABCDE\n", "FIXED_WIDTH", Map.of("field_mappings", mappings));
+        try {
+            assertThat(parseStep.execute(context).success()).as(scenario).isFalse();
+        } finally {
+            Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+            if (path != null) Files.deleteIfExists(Path.of(path.toString()));
+        }
+    }
 
-    ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
+    private static Stream<Arguments> otherInvalidFixedWidthMappings() {
+        return Stream.of(
+                Arguments.of("negative start", List.of(Map.of("target", "id", "start", -1, "length", 1))),
+                Arguments.of("zero length", List.of(Map.of("target", "id", "start", 0, "length", 0))),
+                Arguments.of("blank target", List.of(Map.of("target", " ", "start", 0, "length", 1))),
+                Arguments.of("numeric target", List.of(Map.of("target", 123, "start", 0, "length", 1))));
+    }
 
-    ImportStageResult result = parseStep.execute(context);
+    @Test
+    @DisplayName("定长字段映射接受范围内 Long 与 BigInteger 并按原位置解析")
+    void shouldAcceptValidIntegralFixedWidthMappings() throws Exception {
+        Map<String, Object> mapping = Map.of("target", "id", "start", 1L, "length", BigInteger.valueOf(2));
+        ImportJobContext context = buildContext("ABCDE\n", "FIXED_WIDTH", Map.of("field_mappings", List.of(mapping)));
+        try {
+            assertThat(parseStep.execute(context).success()).isTrue();
+            assertNdjsonContains(context, "BC");
+        } finally {
+            Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+            if (path != null) Files.deleteIfExists(Path.of(path.toString()));
+        }
+    }
 
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
-    assertNdjsonRecordCount(context, 2);
-  }
+    /** header_rows + footer_rows 用于跳过头尾。 */
+    @Test
+    @DisplayName("定长格式跳过声明数量的表头与表尾行,只解析数据行")
+    void shouldParseFixedWidth_skippingHeaderAndFooter() {
+        // 定长空格属于输入字节，保留逐行字符串，避免文本块处理尾随空白改变字段位置。
+        String fixed = "HEADER LINE                       \n"
+                + "C00001Alice               ACTIVE  \n"
+                + "C00002Bob                 INACTIVE\n"
+                + "FOOTER:total=2                    \n";
 
-  /** PG jsonb 读取时 field_mappings 可能是 PGobject；运行时必须和 String/List 一样解析。 */
-  @Test
-  @DisplayName("字段映射以数据库 jsonb 形态给出时,同样按布局解析")
-  void shouldParseFixedWidth_whenFieldMappingsIsPgJsonbObject() throws Exception {
-    String fixed = "C00004Dana                ACTIVE  \n";
-    PGobject fieldMappings = new PGobject();
-    fieldMappings.setType("jsonb");
-    fieldMappings.setValue("""
+        Map<String, Object> templateConfig = Map.of(
+                "field_mappings",
+                List.of(
+                        Map.of("source", "customerNo", "target", "customerNo", "start", 0, "length", 6),
+                        Map.of("source", "customerName", "target", "customerName", "start", 6, "length", 20),
+                        Map.of("source", "status", "target", "status", "start", 26, "length", 8)),
+                "record_length",
+                34,
+                "header_rows",
+                1,
+                "footer_rows",
+                1,
+                "jdbc_mapped_import",
+                Map.of());
+
+        ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
+
+        ImportStageResult result = parseStep.execute(context);
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
+        assertNdjsonRecordCount(context, 2);
+    }
+
+    /** PG jsonb 读取时 field_mappings 可能是 PGobject；运行时必须和 String/List 一样解析。 */
+    @Test
+    @DisplayName("字段映射以数据库 jsonb 形态给出时,同样按布局解析")
+    void shouldParseFixedWidth_whenFieldMappingsIsPgJsonbObject() throws Exception {
+        String fixed = "C00004Dana                ACTIVE  \n";
+        PGobject fieldMappings = new PGobject();
+        fieldMappings.setType("jsonb");
+        fieldMappings.setValue("""
         [
           {"target": "customerNo", "start": 0, "length": 6},
           {"target": "customerName", "start": 6, "length": 20},
@@ -202,26 +191,26 @@ class ParseStepFixedWidthAndXmlTest {
         ]
         """.stripTrailing());
 
-    Map<String, Object> templateConfig = Map.of(
-        "field_mappings", fieldMappings, "record_length", 34, "jdbc_mapped_import", Map.of());
+        Map<String, Object> templateConfig =
+                Map.of("field_mappings", fieldMappings, "record_length", 34, "jdbc_mapped_import", Map.of());
 
-    ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
+        ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
 
-    ImportStageResult result = parseStep.execute(context);
+        ImportStageResult result = parseStep.execute(context);
 
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 1L);
-    assertNdjsonRecordCount(context, 1);
-    assertNdjsonContains(context, "C00004", "Dana", "ACTIVE");
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 1L);
+        assertNdjsonRecordCount(context, 1);
+        assertNdjsonContains(context, "C00004", "Dana", "ACTIVE");
+    }
 
-  // ── XML ────────────────────────────────────────────────────────────────────
+    // ── XML ────────────────────────────────────────────────────────────────────
 
-  /** 标准 records 包裹结构: &lt;records&gt;&lt;record&gt;...&lt;/record&gt;...&lt;/records&gt; */
-  @Test
-  @DisplayName("XML 格式按记录元素取子节点,两条记录字段完整")
-  void shouldParseXml_recordElementChildren() {
-    String xml = """
+    /** 标准 records 包裹结构: &lt;records&gt;&lt;record&gt;...&lt;/record&gt;...&lt;/records&gt; */
+    @Test
+    @DisplayName("XML 格式按记录元素取子节点,两条记录字段完整")
+    void shouldParseXml_recordElementChildren() {
+        String xml = """
         <?xml version='1.0' encoding='UTF-8'?>
         <records>
           <record>
@@ -237,105 +226,104 @@ class ParseStepFixedWidthAndXmlTest {
         </records>
         """.stripTrailing();
 
-    Map<String, Object> templateConfig =
-        Map.of("xmlRecordElement", "record", "jdbc_mapped_import", Map.of());
+        Map<String, Object> templateConfig = Map.of("xmlRecordElement", "record", "jdbc_mapped_import", Map.of());
 
-    ImportJobContext context = buildContext(xml, "XML", templateConfig);
+        ImportJobContext context = buildContext(xml, "XML", templateConfig);
 
-    ImportStageResult result = parseStep.execute(context);
+        ImportStageResult result = parseStep.execute(context);
 
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
-    assertNdjsonRecordCount(context, 2);
-    assertNdjsonContains(context, "C001", "Alice", "ACTIVE");
-    assertNdjsonContains(context, "C002", "Bob", "INACTIVE");
-  }
-
-  /** XXE 防护：DOCTYPE / entity 被 XmlFormatParser 拒绝（disallow-doctype-decl=true）。 */
-  @Test
-  @DisplayName("XML 含外部实体声明时拒绝解析,返回解析失败而非崩溃")
-  void shouldRejectXml_withDoctype_xxeProtection() {
-    String xmlWithDoctype = "<?xml version='1.0'?>"
-        + "<!DOCTYPE foo SYSTEM '/etc/passwd'>"
-        + "<records><record><customerNo>C001</customerNo></record></records>";
-
-    Map<String, Object> templateConfig =
-        Map.of("xmlRecordElement", "record", "jdbc_mapped_import", Map.of());
-
-    ImportJobContext context = buildContext(xmlWithDoctype, "XML", templateConfig);
-
-    ImportStageResult result = parseStep.execute(context);
-
-    // XmlFormatParser 抛出 + ParseStep 捕获 → 返回失败结果（不要崩进程，要友好失败）
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
-  }
-
-  // ── 辅助方法 ───────────────────────────────────────────────────────────────
-
-  private ImportJobContext buildContext(
-      String rawPayload, String fileFormatType, Map<String, Object> templateConfig) {
-    ImportPayload importPayload = new ImportPayload(
-        null,
-        null,
-        null,
-        null,
-        fileFormatType,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        rawPayload,
-        null,
-        null,
-        null,
-        null,
-        Boolean.TRUE,
-        Map.of());
-
-    ImportJobContext context = new ImportJobContext();
-    context.setTenantId("tenant-fixed-xml-test");
-    context.setJobCode("PARSE_FIXED_XML");
-    context.setWorkerId("worker-1");
-    context.setFileId("99");
-    context.setRawPayload(rawPayload);
-    Map<String, Object> attrs = new HashMap<>();
-    attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
-    attrs.put(PipelineRuntimeKeys.TASK_ID, 200L);
-    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
-    attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
-    context.setAttributes(attrs);
-    return context;
-  }
-
-  private void assertNdjsonRecordCount(ImportJobContext context, int expected) {
-    Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
-    assertThat(path).as("PARSED_RECORDS_PATH must be set on success").isNotNull();
-    try {
-      long lineCount =
-          Files.lines(Path.of(path.toString())).filter(l -> !l.isBlank()).count();
-      assertThat(lineCount).isEqualTo(expected);
-    } catch (Exception e) {
-      throw new AssertionError("Could not count NDJSON lines: " + e.getMessage(), e);
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
+        assertNdjsonRecordCount(context, 2);
+        assertNdjsonContains(context, "C001", "Alice", "ACTIVE");
+        assertNdjsonContains(context, "C002", "Bob", "INACTIVE");
     }
-  }
 
-  private void assertNdjsonContains(ImportJobContext context, String... expectedSubstrings) {
-    Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
-    try {
-      String content = Files.readString(Path.of(path.toString()));
-      for (String s : expectedSubstrings) {
-        assertThat(content).contains(s);
-      }
-    } catch (Exception e) {
-      throw new AssertionError("Could not read NDJSON: " + e.getMessage(), e);
+    /** XXE 防护：DOCTYPE / entity 被 XmlFormatParser 拒绝（disallow-doctype-decl=true）。 */
+    @Test
+    @DisplayName("XML 含外部实体声明时拒绝解析,返回解析失败而非崩溃")
+    void shouldRejectXml_withDoctype_xxeProtection() {
+        String xmlWithDoctype = "<?xml version='1.0'?>"
+                + "<!DOCTYPE foo SYSTEM '/etc/passwd'>"
+                + "<records><record><customerNo>C001</customerNo></record></records>";
+
+        Map<String, Object> templateConfig = Map.of("xmlRecordElement", "record", "jdbc_mapped_import", Map.of());
+
+        ImportJobContext context = buildContext(xmlWithDoctype, "XML", templateConfig);
+
+        ImportStageResult result = parseStep.execute(context);
+
+        // XmlFormatParser 抛出 + ParseStep 捕获 → 返回失败结果（不要崩进程，要友好失败）
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
     }
-  }
+
+    // ── 辅助方法 ───────────────────────────────────────────────────────────────
+
+    private ImportJobContext buildContext(
+            String rawPayload, String fileFormatType, Map<String, Object> templateConfig) {
+        ImportPayload importPayload = new ImportPayload(
+                null,
+                null,
+                null,
+                null,
+                fileFormatType,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                rawPayload,
+                null,
+                null,
+                null,
+                null,
+                Boolean.TRUE,
+                Map.of());
+
+        ImportJobContext context = new ImportJobContext();
+        context.setTenantId("tenant-fixed-xml-test");
+        context.setJobCode("PARSE_FIXED_XML");
+        context.setWorkerId("worker-1");
+        context.setFileId("99");
+        context.setRawPayload(rawPayload);
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
+        attrs.put(PipelineRuntimeKeys.TASK_ID, 200L);
+        attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
+        attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+        context.setAttributes(attrs);
+        return context;
+    }
+
+    private void assertNdjsonRecordCount(ImportJobContext context, int expected) {
+        Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+        assertThat(path).as("PARSED_RECORDS_PATH must be set on success").isNotNull();
+        try {
+            long lineCount = Files.lines(Path.of(path.toString()))
+                    .filter(l -> !l.isBlank())
+                    .count();
+            assertThat(lineCount).isEqualTo(expected);
+        } catch (Exception e) {
+            throw new AssertionError("Could not count NDJSON lines: " + e.getMessage(), e);
+        }
+    }
+
+    private void assertNdjsonContains(ImportJobContext context, String... expectedSubstrings) {
+        Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+        try {
+            String content = Files.readString(Path.of(path.toString()));
+            for (String s : expectedSubstrings) {
+                assertThat(content).contains(s);
+            }
+        } catch (Exception e) {
+            throw new AssertionError("Could not read NDJSON: " + e.getMessage(), e);
+        }
+    }
 }

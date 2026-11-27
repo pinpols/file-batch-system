@@ -6,9 +6,9 @@ import java.util.List;
 
 public interface EventOutboxRetryMapper {
 
-  int insert(EventOutboxRetryEntity entity);
+    int insert(EventOutboxRetryEntity entity);
 
-  int insertIntoArchive(EventOutboxRetryEntity entity);
+    int insertIntoArchive(EventOutboxRetryEntity entity);
 
-  List<EventOutboxRetryEntity> selectByQuery(EventOutboxRetryQuery query);
+    List<EventOutboxRetryEntity> selectByQuery(EventOutboxRetryQuery query);
 }

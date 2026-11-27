@@ -25,204 +25,195 @@ import net.sf.jsqlparser.util.TablesNamesFinder;
  */
 public class SqlTransformComputeSqlValidator {
 
-  /** 校验失败统一 i18n key,详情走 messageArgs[0]。 */
-  private static final String ERR_KEY = "error.process.sql_validation";
+    /** 校验失败统一 i18n key,详情走 messageArgs[0]。 */
+    private static final String ERR_KEY = "error.process.sql_validation";
 
-  private final SqlTransformComputeSecurityProperties security;
+    private final SqlTransformComputeSecurityProperties security;
 
-  public SqlTransformComputeSqlValidator(SqlTransformComputeSecurityProperties security) {
-    this.security = security;
-  }
+    public SqlTransformComputeSqlValidator(SqlTransformComputeSecurityProperties security) {
+        this.security = security;
+    }
 
-  /** 业务源 SQL 校验:AST + 禁 SELECT * + schema allowlist。 */
-  public String validateSelect(String raw) {
-    return validate(raw, true);
-  }
+    /** 业务源 SQL 校验:AST + 禁 SELECT * + schema allowlist。 */
+    public String validateSelect(String raw) {
+        return validate(raw, true);
+    }
 
-  /**
-   * 校验 VALIDATE 阶段的用户 check SQL:AST + 禁 SELECT *,且只能读取 {@link
-   * SqlTransformComputePlugin#STAGING_TABLE}。
-   */
-  public String validateUserCheckSelect(String raw) {
-    String sql = validate(raw, false);
-    Statement statement = parse(sql);
-    TablesNamesFinder<Void> tableNamesFinder = new TablesNamesFinder<>();
-    Set<String> discoveredTableNames = tableNamesFinder.getTables(statement);
-    List<String> tableNames = List.copyOf(discoveredTableNames);
-    for (String tableName : tableNames) {
-      if (!SqlTransformComputePlugin.STAGING_TABLE.equals(tableName.toLowerCase(Locale.ROOT))) {
+    /**
+     * 校验 VALIDATE 阶段的用户 check SQL:AST + 禁 SELECT *,且只能读取 {@link
+     * SqlTransformComputePlugin#STAGING_TABLE}。
+     */
+    public String validateUserCheckSelect(String raw) {
+        String sql = validate(raw, false);
+        Statement statement = parse(sql);
+        TablesNamesFinder<Void> tableNamesFinder = new TablesNamesFinder<>();
+        Set<String> discoveredTableNames = tableNamesFinder.getTables(statement);
+        List<String> tableNames = List.copyOf(discoveredTableNames);
+        for (String tableName : tableNames) {
+            if (!SqlTransformComputePlugin.STAGING_TABLE.equals(tableName.toLowerCase(Locale.ROOT))) {
+                throw BizException.of(
+                        ResultCode.INVALID_ARGUMENT,
+                        ERR_KEY,
+                        "sqlTransformCompute validation SQL may only read "
+                                + SqlTransformComputePlugin.STAGING_TABLE
+                                + ", found: "
+                                + tableName);
+            }
+        }
+        return sql;
+    }
+
+    private String validate(String raw, boolean enforceSchemaAllowlist) {
+        String sql = EmptyChecks.isNull(raw) ? "" : raw.trim();
+        if (!Texts.hasText(sql)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, ERR_KEY, "sqlTransformCompute SQL is blank");
+        }
+
+        Statement statement = parse(sql);
+        if (!(statement instanceof Select select)) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ERR_KEY,
+                    "sqlTransformCompute only allows SELECT/WITH queries, got: "
+                            + statement.getClass().getSimpleName());
+        }
+        boolean selectStarMustBeRejected = EmptyChecks.isNull(security) || security.isForbidSelectStar();
+        if (selectStarMustBeRejected) {
+            checkNoSelectStar(select);
+        }
+        List<String> allowedSchemas = null;
+        if (enforceSchemaAllowlist && EmptyChecks.isNotNull(security)) {
+            allowedSchemas = security.getAllowedSchemas();
+        }
+        boolean schemaAllowlistMustBeEnforced = EmptyChecks.isNotEmpty(allowedSchemas);
+        if (schemaAllowlistMustBeEnforced) {
+            checkAllowedSchemas(statement, allowedSchemas);
+        }
+        List<String> forbiddenFunctions = EmptyChecks.isNull(security) ? null : security.getForbiddenFunctions();
+        if (EmptyChecks.isNotEmpty(forbiddenFunctions)) {
+            checkNoForbiddenFunctions(statement, forbiddenFunctions);
+        }
+        // requireLimit 仅对主源 SQL (业务路径) 强制;VALIDATE 阶段读 process_staging 的检查 SQL 表本身已小,豁免。
+        boolean mainSourceRequiresLimit =
+                enforceSchemaAllowlist && EmptyChecks.isNotNull(security) && security.isRequireLimit();
+        if (mainSourceRequiresLimit) {
+            checkTopLevelLimit(select, security.getMaxLimitRows());
+        }
+        return sql;
+    }
+
+    /**
+     * 遍历已解析 AST 的所有函数调用节点,命中禁用列表(dblink / pg_terminate_backend / pg_read_server_files 等)即拒。 具体遍历实现见
+     * {@link SelectSqlAstValidator#findForbiddenFunctionCall}——AST 而非子串匹配:子串方案被注释绕过——{@code
+     * pg_read_server_files/**}{@code /('x')}这类"函数名与左括号之间插注释"的写法,jsqlparser 正常解析为函数调用,但子串方案的"右侧紧跟
+     * {@code (}"判定只跳空白不跳注释 → 漏判放行;带引号标识符 {@code "pg_..."(...)} 同样逃逸。AST 遍历直接看函数节点名,杜绝这两类绕过。
+     */
+    private static void checkNoForbiddenFunctions(Statement statement, List<String> forbidden) {
+        String hit = SelectSqlAstValidator.findForbiddenFunctionCall(statement, forbidden);
+        if (EmptyChecks.isNotNull(hit)) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ERR_KEY,
+                    "sqlTransformCompute SQL calls forbidden function '" + hit + "'");
+        }
+    }
+
+    /** 顶层 SELECT 必须带 LIMIT,且 ≤ maxLimitRows。SetOperationList / WITH 一并校验。 */
+    private static void checkTopLevelLimit(Select select, long maxLimitRows) {
+        Long limit = topLimitOf(select);
+        if (limit == null) { // empty-check: allow - Sonar S2259
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ERR_KEY,
+                    "sqlTransformCompute SQL must include a top-level LIMIT clause (≤ " + maxLimitRows + " rows)");
+        }
+        if (limit > maxLimitRows) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ERR_KEY,
+                    "sqlTransformCompute SQL LIMIT " + limit + " exceeds max " + maxLimitRows);
+        }
+    }
+
+    private static Long topLimitOf(Select body) {
+        if (body instanceof PlainSelect ps) {
+            Limit limit = ps.getLimit();
+            if (EmptyChecks.isNotNull(limit)) {
+                Object rowCount = limit.getRowCount();
+                return numericLimit(rowCount);
+            }
+        }
+        if (body instanceof SetOperationList sol) {
+            Limit limit = sol.getLimit();
+            if (EmptyChecks.isNotNull(limit)) {
+                Object rowCount = limit.getRowCount();
+                return numericLimit(rowCount);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 顶层 LIMIT 的行数必须是明确的数值字面量。返回 {@code null} 表示无 LIMIT 子句(由调用方判定是否强制)。
+     *
+     * <p>S8:此前对 {@code LIMIT :pageSize} / {@code LIMIT (SELECT ...)} / {@code LIMIT CASE ...} 这类非数值
+     * rowCount 在 {@code NumberFormatException} 后返 0 视为通过,{@code maxLimitRows} 上限被完全绕过。改为直接拒绝——
+     * requireLimit 的目的就是给结果集封顶,非数值 LIMIT 无法在解析期证明 ≤ 上限,一律拒。
+     */
+    private static Long numericLimit(Object rowCount) {
+        if (EmptyChecks.isNull(rowCount)) {
+            return null;
+        }
+        try {
+            String rowCountText = rowCount.toString();
+            String trimmedRowCountText = rowCountText.trim();
+            return Long.parseLong(trimmedRowCountText);
+        } catch (NumberFormatException e) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ERR_KEY,
+                    "sqlTransformCompute SQL top-level LIMIT must be a numeric literal (≤ maxLimitRows),"
+                            + " got non-numeric: "
+                            + rowCount);
+        }
+    }
+
+    private Statement parse(String sql) {
+        try {
+            return CCJSqlParserUtil.parse(sql);
+        } catch (Exception e) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT, ERR_KEY, e, "sqlTransformCompute SQL parse error: " + e.getMessage());
+        }
+    }
+
+    private void checkNoSelectStar(Select select) {
+        if (SelectSqlAstValidator.containsSelectStar(select)) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ERR_KEY,
+                    "sqlTransformCompute forbids SELECT * / SELECT table.*; enumerate columns explicitly");
+        }
+    }
+
+    private void checkAllowedSchemas(Statement statement, List<String> allowedSchemas) {
+        SchemaViolation violation = SelectSqlAstValidator.findSchemaViolation(statement, allowedSchemas);
+        if (EmptyChecks.isNull(violation)) {
+            return;
+        }
+        if (violation.unqualified()) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ERR_KEY,
+                    "sqlTransformCompute requires fully-qualified table names (schema.table), found: "
+                            + violation.violatingName());
+        }
         throw BizException.of(
-            ResultCode.INVALID_ARGUMENT,
-            ERR_KEY,
-            "sqlTransformCompute validation SQL may only read "
-                + SqlTransformComputePlugin.STAGING_TABLE
-                + ", found: "
-                + tableName);
-      }
+                ResultCode.INVALID_ARGUMENT,
+                ERR_KEY,
+                "sqlTransformCompute references disallowed schema '"
+                        + violation.violatingName()
+                        + "' - allowed: "
+                        + allowedSchemas);
     }
-    return sql;
-  }
-
-  private String validate(String raw, boolean enforceSchemaAllowlist) {
-    String sql = EmptyChecks.isNull(raw) ? "" : raw.trim();
-    if (!Texts.hasText(sql)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, ERR_KEY, "sqlTransformCompute SQL is blank");
-    }
-
-    Statement statement = parse(sql);
-    if (!(statement instanceof Select select)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ERR_KEY,
-          "sqlTransformCompute only allows SELECT/WITH queries, got: "
-              + statement.getClass().getSimpleName());
-    }
-    boolean selectStarMustBeRejected =
-        EmptyChecks.isNull(security) || security.isForbidSelectStar();
-    if (selectStarMustBeRejected) {
-      checkNoSelectStar(select);
-    }
-    List<String> allowedSchemas = null;
-    if (enforceSchemaAllowlist && EmptyChecks.isNotNull(security)) {
-      allowedSchemas = security.getAllowedSchemas();
-    }
-    boolean schemaAllowlistMustBeEnforced = EmptyChecks.isNotEmpty(allowedSchemas);
-    if (schemaAllowlistMustBeEnforced) {
-      checkAllowedSchemas(statement, allowedSchemas);
-    }
-    List<String> forbiddenFunctions =
-        EmptyChecks.isNull(security) ? null : security.getForbiddenFunctions();
-    if (EmptyChecks.isNotEmpty(forbiddenFunctions)) {
-      checkNoForbiddenFunctions(statement, forbiddenFunctions);
-    }
-    // requireLimit 仅对主源 SQL (业务路径) 强制;VALIDATE 阶段读 process_staging 的检查 SQL 表本身已小,豁免。
-    boolean mainSourceRequiresLimit =
-        enforceSchemaAllowlist && EmptyChecks.isNotNull(security) && security.isRequireLimit();
-    if (mainSourceRequiresLimit) {
-      checkTopLevelLimit(select, security.getMaxLimitRows());
-    }
-    return sql;
-  }
-
-  /**
-   * 遍历已解析 AST 的所有函数调用节点,命中禁用列表(dblink / pg_terminate_backend / pg_read_server_files 等)即拒。 具体遍历实现见
-   * {@link SelectSqlAstValidator#findForbiddenFunctionCall}——AST 而非子串匹配:子串方案被注释绕过——{@code
-   * pg_read_server_files/**}{@code /('x')}这类"函数名与左括号之间插注释"的写法,jsqlparser 正常解析为函数调用,但子串方案的"右侧紧跟
-   * {@code (}"判定只跳空白不跳注释 → 漏判放行;带引号标识符 {@code "pg_..."(...)} 同样逃逸。AST 遍历直接看函数节点名,杜绝这两类绕过。
-   */
-  private static void checkNoForbiddenFunctions(Statement statement, List<String> forbidden) {
-    String hit = SelectSqlAstValidator.findForbiddenFunctionCall(statement, forbidden);
-    if (EmptyChecks.isNotNull(hit)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ERR_KEY,
-          "sqlTransformCompute SQL calls forbidden function '" + hit + "'");
-    }
-  }
-
-  /** 顶层 SELECT 必须带 LIMIT,且 ≤ maxLimitRows。SetOperationList / WITH 一并校验。 */
-  private static void checkTopLevelLimit(Select select, long maxLimitRows) {
-    Long limit = topLimitOf(select);
-    if (limit == null) { // empty-check: allow - Sonar S2259
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ERR_KEY,
-          "sqlTransformCompute SQL must include a top-level LIMIT clause (≤ "
-              + maxLimitRows
-              + " rows)");
-    }
-    if (limit > maxLimitRows) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ERR_KEY,
-          "sqlTransformCompute SQL LIMIT " + limit + " exceeds max " + maxLimitRows);
-    }
-  }
-
-  private static Long topLimitOf(Select body) {
-    if (body instanceof PlainSelect ps) {
-      Limit limit = ps.getLimit();
-      if (EmptyChecks.isNotNull(limit)) {
-        Object rowCount = limit.getRowCount();
-        return numericLimit(rowCount);
-      }
-    }
-    if (body instanceof SetOperationList sol) {
-      Limit limit = sol.getLimit();
-      if (EmptyChecks.isNotNull(limit)) {
-        Object rowCount = limit.getRowCount();
-        return numericLimit(rowCount);
-      }
-    }
-    return null;
-  }
-
-  /**
-   * 顶层 LIMIT 的行数必须是明确的数值字面量。返回 {@code null} 表示无 LIMIT 子句(由调用方判定是否强制)。
-   *
-   * <p>S8:此前对 {@code LIMIT :pageSize} / {@code LIMIT (SELECT ...)} / {@code LIMIT CASE ...} 这类非数值
-   * rowCount 在 {@code NumberFormatException} 后返 0 视为通过,{@code maxLimitRows} 上限被完全绕过。改为直接拒绝——
-   * requireLimit 的目的就是给结果集封顶,非数值 LIMIT 无法在解析期证明 ≤ 上限,一律拒。
-   */
-  private static Long numericLimit(Object rowCount) {
-    if (EmptyChecks.isNull(rowCount)) {
-      return null;
-    }
-    try {
-      String rowCountText = rowCount.toString();
-      String trimmedRowCountText = rowCountText.trim();
-      return Long.parseLong(trimmedRowCountText);
-    } catch (NumberFormatException e) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ERR_KEY,
-          "sqlTransformCompute SQL top-level LIMIT must be a numeric literal (≤ maxLimitRows),"
-              + " got non-numeric: "
-              + rowCount);
-    }
-  }
-
-  private Statement parse(String sql) {
-    try {
-      return CCJSqlParserUtil.parse(sql);
-    } catch (Exception e) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ERR_KEY,
-          e,
-          "sqlTransformCompute SQL parse error: " + e.getMessage());
-    }
-  }
-
-  private void checkNoSelectStar(Select select) {
-    if (SelectSqlAstValidator.containsSelectStar(select)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ERR_KEY,
-          "sqlTransformCompute forbids SELECT * / SELECT table.*; enumerate columns explicitly");
-    }
-  }
-
-  private void checkAllowedSchemas(Statement statement, List<String> allowedSchemas) {
-    SchemaViolation violation =
-        SelectSqlAstValidator.findSchemaViolation(statement, allowedSchemas);
-    if (EmptyChecks.isNull(violation)) {
-      return;
-    }
-    if (violation.unqualified()) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ERR_KEY,
-          "sqlTransformCompute requires fully-qualified table names (schema.table), found: "
-              + violation.violatingName());
-    }
-    throw BizException.of(
-        ResultCode.INVALID_ARGUMENT,
-        ERR_KEY,
-        "sqlTransformCompute references disallowed schema '"
-            + violation.violatingName()
-            + "' - allowed: "
-            + allowedSchemas);
-  }
 }

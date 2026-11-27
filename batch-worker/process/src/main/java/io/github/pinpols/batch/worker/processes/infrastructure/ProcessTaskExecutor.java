@@ -25,56 +25,56 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProcessTaskExecutor implements BatchTaskExecutor {
 
-  /**
-   * 兼容构造器使用的能力超时秒数，
-   * 与 process worker 的 capability-timeout-seconds 默认值 1200 一致。
-   */
-  private static final long COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS = 1200L;
+    /**
+     * 兼容构造器使用的能力超时秒数，
+     * 与 process worker 的 capability-timeout-seconds 默认值 1200 一致。
+     */
+    private static final long COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS = 1200L;
 
-  private final ProcessStepExecutionAdapter delegate;
-  private final WorkerExecutionTimeoutProperties timeoutProperties;
+    private final ProcessStepExecutionAdapter delegate;
+    private final WorkerExecutionTimeoutProperties timeoutProperties;
 
-  /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
-  public ProcessTaskExecutor(ProcessStepExecutionAdapter delegate) {
-    this(delegate, compatibilityDefaults());
-  }
-
-  @Autowired
-  public ProcessTaskExecutor(
-      ProcessStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
-    this.delegate = delegate;
-    this.timeoutProperties = timeoutProperties;
-  }
-
-  private static WorkerExecutionTimeoutProperties compatibilityDefaults() {
-    WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
-    properties.setCapabilityTimeoutSeconds(COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS);
-    return properties;
-  }
-
-  @Override
-  public String taskType() {
-    return JobType.PROCESS.code();
-  }
-
-  @Override
-  public TaskCapability capability() {
-    Set<ResourceKind> supportedResources = Set.of(ResourceKind.CPU, ResourceKind.DB);
-    long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
-    Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
-    return new TaskCapability(supportedResources, false, true, capabilityTimeout);
-  }
-
-  @Override
-  public TaskResult execute(TaskContext ctx) {
-    StepExecutionRequest req = new StepExecutionRequest(
-        ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
-    StepExecutionResponse resp = delegate.execute(req);
-    if (resp.success()) {
-      String successMessage = EmptyChecks.isNull(resp.message()) ? "ok" : resp.message();
-      return TaskResult.ok(successMessage);
+    /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
+    public ProcessTaskExecutor(ProcessStepExecutionAdapter delegate) {
+        this(delegate, compatibilityDefaults());
     }
-    String failureMessage = EmptyChecks.isNull(resp.message()) ? resp.code() : resp.message();
-    return TaskResult.fail(failureMessage);
-  }
+
+    @Autowired
+    public ProcessTaskExecutor(
+            ProcessStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
+        this.delegate = delegate;
+        this.timeoutProperties = timeoutProperties;
+    }
+
+    private static WorkerExecutionTimeoutProperties compatibilityDefaults() {
+        WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
+        properties.setCapabilityTimeoutSeconds(COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS);
+        return properties;
+    }
+
+    @Override
+    public String taskType() {
+        return JobType.PROCESS.code();
+    }
+
+    @Override
+    public TaskCapability capability() {
+        Set<ResourceKind> supportedResources = Set.of(ResourceKind.CPU, ResourceKind.DB);
+        long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
+        Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
+        return new TaskCapability(supportedResources, false, true, capabilityTimeout);
+    }
+
+    @Override
+    public TaskResult execute(TaskContext ctx) {
+        StepExecutionRequest req = new StepExecutionRequest(
+                ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
+        StepExecutionResponse resp = delegate.execute(req);
+        if (resp.success()) {
+            String successMessage = EmptyChecks.isNull(resp.message()) ? "ok" : resp.message();
+            return TaskResult.ok(successMessage);
+        }
+        String failureMessage = EmptyChecks.isNull(resp.message()) ? resp.code() : resp.message();
+        return TaskResult.fail(failureMessage);
+    }
 }

@@ -8,12 +8,12 @@ package io.github.pinpols.batch.console.domain.rbac.view;
  * 维持历史 {@code resultType=map} 下 {@code String.valueOf} 的响应字符串语义。
  */
 public record ConsoleUserAccountRow(
-    Long id,
-    String tenantId,
-    String username,
-    String displayName,
-    String authoritiesCsv,
-    Boolean enabled,
-    Boolean mustChangePassword,
-    Object createdAt,
-    Object updatedAt) {}
+        Long id,
+        String tenantId,
+        String username,
+        String displayName,
+        String authoritiesCsv,
+        Boolean enabled,
+        Boolean mustChangePassword,
+        Object createdAt,
+        Object updatedAt) {}

@@ -21,27 +21,27 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("内部 Outbox 清理接口保护保留天数")
 class OutboxOpsControllerTest {
 
-  @Mock
-  private OutboxEventMapper outboxMapper;
+    @Mock
+    private OutboxEventMapper outboxMapper;
 
-  @Mock
-  private JobExecutionLogMapper logMapper;
+    @Mock
+    private JobExecutionLogMapper logMapper;
 
-  @ParameterizedTest
-  @CsvSource({"0, false", "-1, false", "0, true", "-1, true"})
-  @DisplayName("非法保留天数返回 400 且不触达数据层")
-  void shouldRejectInvalidRetention(int retainDays, boolean dryRun) throws Exception {
-    OutboxOpsApplicationService service = new OutboxOpsApplicationService(outboxMapper, logMapper);
-    MockMvc mvc = MockMvcBuilders.standaloneSetup(new OutboxOpsController(service))
-        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-        .build();
+    @ParameterizedTest
+    @CsvSource({"0, false", "-1, false", "0, true", "-1, true"})
+    @DisplayName("非法保留天数返回 400 且不触达数据层")
+    void shouldRejectInvalidRetention(int retainDays, boolean dryRun) throws Exception {
+        OutboxOpsApplicationService service = new OutboxOpsApplicationService(outboxMapper, logMapper);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new OutboxOpsController(service))
+                .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+                .build();
 
-    mvc.perform(post("/internal/outbox/cleanup")
-            .param("tenantId", "tenant-a")
-            .param("retainDays", String.valueOf(retainDays))
-            .param("dryRun", String.valueOf(dryRun)))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
-    verifyNoInteractions(outboxMapper, logMapper);
-  }
+        mvc.perform(post("/internal/outbox/cleanup")
+                        .param("tenantId", "tenant-a")
+                        .param("retainDays", String.valueOf(retainDays))
+                        .param("dryRun", String.valueOf(dryRun)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+        verifyNoInteractions(outboxMapper, logMapper);
+    }
 }

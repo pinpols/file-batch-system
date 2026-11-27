@@ -30,46 +30,43 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ReadinessWaitSweeper {
 
-  private static final int SWEEP_BATCH_SIZE = 100;
-  private static final String METRIC_TIMEOUT = "batch.trigger.readiness.wait.timeout.total";
+    private static final int SWEEP_BATCH_SIZE = 100;
+    private static final String METRIC_TIMEOUT = "batch.trigger.readiness.wait.timeout.total";
 
-  private final ScheduledOccurrenceMapper occurrenceMapper;
-  private final TriggerGracefulShutdown gracefulShutdown;
-  private final MeterRegistry meterRegistry;
+    private final ScheduledOccurrenceMapper occurrenceMapper;
+    private final TriggerGracefulShutdown gracefulShutdown;
+    private final MeterRegistry meterRegistry;
 
-  @Scheduled(fixedDelayString = "${batch.trigger.readiness-wait-sweep-interval-millis:60000}")
-  @SchedulerLock(
-      name = "trigger_readiness_wait_sweeper",
-      lockAtMostFor = "PT2M",
-      lockAtLeastFor = "PT5S")
-  public void sweep() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.trigger.readiness-wait-sweep-interval-millis:60000}")
+    @SchedulerLock(name = "trigger_readiness_wait_sweeper", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
+    public void sweep() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        Instant sweepAt = BatchDateTimeSupport.utcNow();
+        List<ExpiredReadinessWaitRow> expiredWaits =
+                occurrenceMapper.selectExpiredReadinessWaits(sweepAt, SWEEP_BATCH_SIZE);
+        if (EmptyChecks.isEmpty(expiredWaits)) {
+            return;
+        }
+        int timedOut = 0;
+        for (ExpiredReadinessWaitRow expiredWait : expiredWaits) {
+            int transitioned = occurrenceMapper.timeoutExpiredReadinessWait(
+                    expiredWait, sweepAt, ScheduledOccurrenceStatus.READINESS_TIMEOUT.code());
+            if (transitioned == 1) {
+                timedOut++;
+                meterRegistry.counter(METRIC_TIMEOUT).increment();
+                log.error(
+                        "readiness wait exceeded its window without a Quartz callback; scheduled fire is given"
+                                + " up: tenantId={}, workflowDefinitionId={}, scheduledFireTime={}, deadline={}",
+                        expiredWait.getTenantId(),
+                        expiredWait.getWorkflowDefinitionId(),
+                        expiredWait.getScheduledFireTime(),
+                        expiredWait.getDeadline());
+            }
+        }
+        if (timedOut > 0) {
+            log.info("readiness wait sweep completed: timedOut={}", timedOut);
+        }
     }
-    Instant sweepAt = BatchDateTimeSupport.utcNow();
-    List<ExpiredReadinessWaitRow> expiredWaits =
-        occurrenceMapper.selectExpiredReadinessWaits(sweepAt, SWEEP_BATCH_SIZE);
-    if (EmptyChecks.isEmpty(expiredWaits)) {
-      return;
-    }
-    int timedOut = 0;
-    for (ExpiredReadinessWaitRow expiredWait : expiredWaits) {
-      int transitioned = occurrenceMapper.timeoutExpiredReadinessWait(
-          expiredWait, sweepAt, ScheduledOccurrenceStatus.READINESS_TIMEOUT.code());
-      if (transitioned == 1) {
-        timedOut++;
-        meterRegistry.counter(METRIC_TIMEOUT).increment();
-        log.error(
-            "readiness wait exceeded its window without a Quartz callback; scheduled fire is given"
-                + " up: tenantId={}, workflowDefinitionId={}, scheduledFireTime={}, deadline={}",
-            expiredWait.getTenantId(),
-            expiredWait.getWorkflowDefinitionId(),
-            expiredWait.getScheduledFireTime(),
-            expiredWait.getDeadline());
-      }
-    }
-    if (timedOut > 0) {
-      log.info("readiness wait sweep completed: timedOut={}", timedOut);
-    }
-  }
 }

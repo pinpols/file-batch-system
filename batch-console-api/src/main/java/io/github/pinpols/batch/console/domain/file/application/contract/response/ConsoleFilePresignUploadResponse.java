@@ -9,12 +9,12 @@ package io.github.pinpols.batch.console.domain.file.application.contract.respons
  * 均恒非空。Console 与编排内部接口共用该固定 wire 契约，避免中间层继续依赖字段名字符串。
  */
 public record ConsoleFilePresignUploadResponse(
-    Long fileId,
-    String status,
-    String uploadMode,
-    String uploadMethod,
-    String contentField,
-    String uploadUrl,
-    String storageBucket,
-    String storagePath,
-    String fileName) {}
+        Long fileId,
+        String status,
+        String uploadMode,
+        String uploadMethod,
+        String contentField,
+        String uploadUrl,
+        String storageBucket,
+        String storagePath,
+        String fileName) {}

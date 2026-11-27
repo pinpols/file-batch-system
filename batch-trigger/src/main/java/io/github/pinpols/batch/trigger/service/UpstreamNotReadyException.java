@@ -14,24 +14,23 @@ import lombok.Getter;
 @Getter
 public class UpstreamNotReadyException extends RuntimeException {
 
-  private final String tenantId;
-  private final String jobCode;
-  private final String dependsOnJobCode;
-  private final transient LocalDate bizDate;
+    private final String tenantId;
+    private final String jobCode;
+    private final String dependsOnJobCode;
+    private final transient LocalDate bizDate;
 
-  public UpstreamNotReadyException(
-      String tenantId, String jobCode, String dependsOnJobCode, LocalDate bizDate) {
-    super("upstream not ready: tenantId="
-        + tenantId
-        + " jobCode="
-        + jobCode
-        + " dependsOn="
-        + dependsOnJobCode
-        + " bizDate="
-        + bizDate);
-    this.tenantId = tenantId;
-    this.jobCode = jobCode;
-    this.dependsOnJobCode = dependsOnJobCode;
-    this.bizDate = bizDate;
-  }
+    public UpstreamNotReadyException(String tenantId, String jobCode, String dependsOnJobCode, LocalDate bizDate) {
+        super("upstream not ready: tenantId="
+                + tenantId
+                + " jobCode="
+                + jobCode
+                + " dependsOn="
+                + dependsOnJobCode
+                + " bizDate="
+                + bizDate);
+        this.tenantId = tenantId;
+        this.jobCode = jobCode;
+        this.dependsOnJobCode = dependsOnJobCode;
+        this.bizDate = bizDate;
+    }
 }

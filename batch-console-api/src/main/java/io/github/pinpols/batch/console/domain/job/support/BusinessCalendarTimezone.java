@@ -8,22 +8,21 @@ import java.time.ZoneId;
 
 /** 日历实际保存的时区必须能被业务日期计算使用。 */
 public final class BusinessCalendarTimezone {
-  private BusinessCalendarTimezone() {}
+    private BusinessCalendarTimezone() {}
 
-  public static boolean isValid(String value) {
-    if (EmptyChecks.isNull(value)) return false;
-    try {
-      ZoneId.of(value);
-      return true;
-    } catch (DateTimeException invalid) {
-      return false;
+    public static boolean isValid(String value) {
+        if (EmptyChecks.isNull(value)) return false;
+        try {
+            ZoneId.of(value);
+            return true;
+        } catch (DateTimeException invalid) {
+            return false;
+        }
     }
-  }
 
-  public static void requireValid(String value) {
-    if (!isValid(value)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "timezone");
+    public static void requireValid(String value) {
+        if (!isValid(value)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "timezone");
+        }
     }
-  }
 }

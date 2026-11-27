@@ -18,29 +18,28 @@ import org.springframework.stereotype.Component;
 @Component("triggerMqMessagePublisher")
 public class KafkaMqMessagePublisher implements MqMessagePublisher {
 
-  private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
-  public KafkaMqMessagePublisher(
-      @Qualifier("triggerKafkaTemplate") KafkaTemplate<String, String> kafkaTemplate) {
-    this.kafkaTemplate = kafkaTemplate;
-  }
+    public KafkaMqMessagePublisher(@Qualifier("triggerKafkaTemplate") KafkaTemplate<String, String> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
+    }
 
-  @Override
-  public CompletableFuture<MqPublishResult> publish(MqMessage message) {
-    ProducerRecord<String, String> producerRecord =
-        new ProducerRecord<>(message.topic(), message.key(), message.payload());
-    message.headers().forEach((name, value) -> {
-      if (EmptyChecks.isNotNull(value)) {
-        byte[] encodedHeaderValue = value.getBytes(StandardCharsets.UTF_8);
-        RecordHeader recordHeader = new RecordHeader(name, encodedHeaderValue);
-        producerRecord.headers().add(recordHeader);
-      }
-    });
-    CompletableFuture<SendResult<String, String>> sendFuture =
-        kafkaTemplate.send(producerRecord).toCompletableFuture();
-    return sendFuture.thenApply(result -> {
-      RecordMetadata metadata = result.getRecordMetadata();
-      return new MqPublishResult(metadata.partition(), metadata.offset());
-    });
-  }
+    @Override
+    public CompletableFuture<MqPublishResult> publish(MqMessage message) {
+        ProducerRecord<String, String> producerRecord =
+                new ProducerRecord<>(message.topic(), message.key(), message.payload());
+        message.headers().forEach((name, value) -> {
+            if (EmptyChecks.isNotNull(value)) {
+                byte[] encodedHeaderValue = value.getBytes(StandardCharsets.UTF_8);
+                RecordHeader recordHeader = new RecordHeader(name, encodedHeaderValue);
+                producerRecord.headers().add(recordHeader);
+            }
+        });
+        CompletableFuture<SendResult<String, String>> sendFuture =
+                kafkaTemplate.send(producerRecord).toCompletableFuture();
+        return sendFuture.thenApply(result -> {
+            RecordMetadata metadata = result.getRecordMetadata();
+            return new MqPublishResult(metadata.partition(), metadata.offset());
+        });
+    }
 }

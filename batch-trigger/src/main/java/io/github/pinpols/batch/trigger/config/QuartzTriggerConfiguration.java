@@ -11,66 +11,62 @@ import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({
-  OrchestratorClientProperties.class,
-  TriggerRuntimeProperties.class,
-  TriggerOutboxRelayProperties.class
+    OrchestratorClientProperties.class,
+    TriggerRuntimeProperties.class,
+    TriggerOutboxRelayProperties.class
 })
 /** 装配 Quartz 调度器、作业工厂和触发器执行器。 */
 public class QuartzTriggerConfiguration {
 
-  /**
-   * P0 修复：TriggerOutboxRelay 专用 Spring 托管 scheduler。
-   *
-   * <p>替换原 {@code Executors.newSingleThreadScheduledExecutor} 自建线程池 （默认 unbounded queue，DB 慢时提交堆积可
-   * OOM；且游离于 Spring 生命周期外，无 Actuator 可见性）。
-   *
-   * <p>共享 {@code taskScheduler} 不直接复用：本 relay 是 IO 密集型固定间隔 poll，单独 1 线程避免与 其它 @Scheduled 任务互相阻塞；同时给
-   * Actuator 留专属 thread name 便于排查。
-   */
-  @Bean(name = "triggerOutboxRelayScheduler", destroyMethod = "shutdown")
-  public ThreadPoolTaskScheduler triggerOutboxRelayScheduler(
-      TriggerOutboxRelayProperties properties) {
-    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-    scheduler.setPoolSize(1);
-    scheduler.setThreadNamePrefix("trigger-outbox-relay-");
-    scheduler.setPhase(properties.getSchedulerPhase());
-    scheduler.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
-    int requestedShutdownWaitSeconds = properties.getShutdownAwaitSeconds();
-    int shutdownWaitSeconds = Math.max(0, requestedShutdownWaitSeconds);
-    scheduler.setAwaitTerminationSeconds(shutdownWaitSeconds);
-    scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
-    scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-    scheduler.setRemoveOnCancelPolicy(true);
-    return scheduler;
-  }
+    /**
+     * P0 修复：TriggerOutboxRelay 专用 Spring 托管 scheduler。
+     *
+     * <p>替换原 {@code Executors.newSingleThreadScheduledExecutor} 自建线程池 （默认 unbounded queue，DB 慢时提交堆积可
+     * OOM；且游离于 Spring 生命周期外，无 Actuator 可见性）。
+     *
+     * <p>共享 {@code taskScheduler} 不直接复用：本 relay 是 IO 密集型固定间隔 poll，单独 1 线程避免与 其它 @Scheduled 任务互相阻塞；同时给
+     * Actuator 留专属 thread name 便于排查。
+     */
+    @Bean(name = "triggerOutboxRelayScheduler", destroyMethod = "shutdown")
+    public ThreadPoolTaskScheduler triggerOutboxRelayScheduler(TriggerOutboxRelayProperties properties) {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("trigger-outbox-relay-");
+        scheduler.setPhase(properties.getSchedulerPhase());
+        scheduler.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
+        int requestedShutdownWaitSeconds = properties.getShutdownAwaitSeconds();
+        int shutdownWaitSeconds = Math.max(0, requestedShutdownWaitSeconds);
+        scheduler.setAwaitTerminationSeconds(shutdownWaitSeconds);
+        scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+        scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+        scheduler.setRemoveOnCancelPolicy(true);
+        return scheduler;
+    }
 
-  /** Kafka lag 查询使用独立线程，避免 AdminClient 超时阻塞 outbox 发布和其它周期任务。 */
-  @Bean(name = "triggerLaunchLagMonitorScheduler", destroyMethod = "shutdown")
-  public ThreadPoolTaskScheduler triggerLaunchLagMonitorScheduler(
-      TriggerOutboxRelayProperties properties) {
-    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-    scheduler.setPoolSize(1);
-    scheduler.setThreadNamePrefix("trigger-launch-lag-monitor-");
-    scheduler.setPhase(properties.getSchedulerPhase());
-    scheduler.setWaitForTasksToCompleteOnShutdown(false);
-    int requestedShutdownWaitSeconds = properties.getShutdownAwaitSeconds();
-    int shutdownWaitSeconds = Math.max(0, requestedShutdownWaitSeconds);
-    scheduler.setAwaitTerminationSeconds(shutdownWaitSeconds);
-    scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
-    scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-    scheduler.setRemoveOnCancelPolicy(true);
-    return scheduler;
-  }
+    /** Kafka lag 查询使用独立线程，避免 AdminClient 超时阻塞 outbox 发布和其它周期任务。 */
+    @Bean(name = "triggerLaunchLagMonitorScheduler", destroyMethod = "shutdown")
+    public ThreadPoolTaskScheduler triggerLaunchLagMonitorScheduler(TriggerOutboxRelayProperties properties) {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("trigger-launch-lag-monitor-");
+        scheduler.setPhase(properties.getSchedulerPhase());
+        scheduler.setWaitForTasksToCompleteOnShutdown(false);
+        int requestedShutdownWaitSeconds = properties.getShutdownAwaitSeconds();
+        int shutdownWaitSeconds = Math.max(0, requestedShutdownWaitSeconds);
+        scheduler.setAwaitTerminationSeconds(shutdownWaitSeconds);
+        scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+        scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+        scheduler.setRemoveOnCancelPolicy(true);
+        return scheduler;
+    }
 
-  @Bean
-  public RestClient orchestratorRestClient(
-      RestClient.Builder builder,
-      OrchestratorClientProperties properties,
-      BatchSecurityProperties securityProperties) {
-    return builder
-        .baseUrl(properties.getBaseUrl())
-        .defaultHeader(
-            CommonConstants.INTERNAL_SECRET_HEADER, securityProperties.getInternalSecret())
-        .build();
-  }
+    @Bean
+    public RestClient orchestratorRestClient(
+            RestClient.Builder builder,
+            OrchestratorClientProperties properties,
+            BatchSecurityProperties securityProperties) {
+        return builder.baseUrl(properties.getBaseUrl())
+                .defaultHeader(CommonConstants.INTERNAL_SECRET_HEADER, securityProperties.getInternalSecret())
+                .build();
+    }
 }

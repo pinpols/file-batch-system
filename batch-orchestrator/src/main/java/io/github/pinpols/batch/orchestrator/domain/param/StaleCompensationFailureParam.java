@@ -6,12 +6,7 @@ import lombok.Builder;
 /** 过期补偿失败收敛条件与错误证据。 */
 @Builder
 public record StaleCompensationFailureParam(
-    String runningStatus,
-    String failedStatus,
-    Instant cutoff,
-    String errorCode,
-    String errorMessage,
-    int limit) {
+        String runningStatus, String failedStatus, Instant cutoff, String errorCode, String errorMessage, int limit) {
 
-  public StaleCompensationFailureParam {}
+    public StaleCompensationFailureParam {}
 }

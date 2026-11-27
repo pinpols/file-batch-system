@@ -16,30 +16,29 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("租户自助应用服务：配额查询分页")
 class ConsoleTenantSelfServiceQuotaPageTest {
-  @Mock
-  private ConsoleQuotaPolicyApplicationService quotaService;
+    @Mock
+    private ConsoleQuotaPolicyApplicationService quotaService;
 
-  @Mock
-  private ConsoleSystemParameterService parameterService;
+    @Mock
+    private ConsoleSystemParameterService parameterService;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private BatchDateTimeSupport timeSupport;
+    @Mock
+    private BatchDateTimeSupport timeSupport;
 
-  @Mock
-  private ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver metadataResolver;
 
-  @Test
-  @DisplayName("配额查询只取第一页且每页 100 条")
-  void shouldListFirstQuotaPageWithHundredRows() {
-    ConsoleTenantSelfServiceApplicationService service =
-        new ConsoleTenantSelfServiceApplicationService(
-            quotaService, parameterService, tenantGuard, timeSupport, metadataResolver);
+    @Test
+    @DisplayName("配额查询只取第一页且每页 100 条")
+    void shouldListFirstQuotaPageWithHundredRows() {
+        ConsoleTenantSelfServiceApplicationService service = new ConsoleTenantSelfServiceApplicationService(
+                quotaService, parameterService, tenantGuard, timeSupport, metadataResolver);
 
-    service.quota("tenant-a");
+        service.quota("tenant-a");
 
-    verify(quotaService).listAll("tenant-a", 1, 100);
-  }
+        verify(quotaService).listAll("tenant-a", 1, 100);
+    }
 }

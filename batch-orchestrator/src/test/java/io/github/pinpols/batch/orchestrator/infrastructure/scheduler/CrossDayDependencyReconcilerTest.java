@@ -48,320 +48,317 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("跨天依赖对账调度器:验证开关关闭与停机排空时短路 + 依赖就绪后派发下游节点 + 等待超时/依赖定义缺失/解析失败时置失败并告警")
 class CrossDayDependencyReconcilerTest {
 
-  private OrchestratorWorkflowMappers workflowMappers;
-  private WorkflowNodeRunMapper nodeRunMapper;
-  private WorkflowRunMapper runMapper;
-  private WorkflowNodeMapper nodeMapper;
-  private CrossDayDependencyResolver resolver;
-  private WorkflowNodeDispatchService dispatchService;
-  private AlertEventService alertEventService;
-  private OrchestratorGracefulShutdown gracefulShutdown;
-  private CrossDayDependencyReconcileProperties properties;
-  private CrossDayDependencyReconciler reconciler;
-  private SecretPayloadProtector secretPayloadProtector;
+    private OrchestratorWorkflowMappers workflowMappers;
+    private WorkflowNodeRunMapper nodeRunMapper;
+    private WorkflowRunMapper runMapper;
+    private WorkflowNodeMapper nodeMapper;
+    private CrossDayDependencyResolver resolver;
+    private WorkflowNodeDispatchService dispatchService;
+    private AlertEventService alertEventService;
+    private OrchestratorGracefulShutdown gracefulShutdown;
+    private CrossDayDependencyReconcileProperties properties;
+    private CrossDayDependencyReconciler reconciler;
+    private SecretPayloadProtector secretPayloadProtector;
 
-  @BeforeEach
-  void setUp() {
-    nodeRunMapper = mock(WorkflowNodeRunMapper.class);
-    runMapper = mock(WorkflowRunMapper.class);
-    nodeMapper = mock(WorkflowNodeMapper.class);
-    workflowMappers = new OrchestratorWorkflowMappers(nodeMapper, runMapper, nodeRunMapper);
-    when(nodeRunMapper.updateStatus(any(UpdateNodeRunStatusParam.class))).thenReturn(1);
-    resolver = mock(CrossDayDependencyResolver.class);
-    dispatchService = mock(WorkflowNodeDispatchService.class);
-    @SuppressWarnings("unchecked")
-    ObjectProvider<WorkflowNodeDispatchService> provider = mock(ObjectProvider.class);
-    when(provider.getObject()).thenReturn(dispatchService);
-    alertEventService = mock(AlertEventService.class);
-    gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
-    when(gracefulShutdown.isDraining()).thenReturn(false);
-    properties = new CrossDayDependencyReconcileProperties();
-    properties.setEnabled(true);
-    properties.setBatchSize(50);
-    properties.setDefaultTimeoutSeconds(86_400L);
-    secretPayloadProtector = mock(SecretPayloadProtector.class);
-    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
-        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    reconciler = new CrossDayDependencyReconciler(
-        workflowMappers,
-        resolver,
-        provider,
-        alertEventService,
-        properties,
-        gracefulShutdown,
-        dateTimeSupport,
-        secretPayloadProtector);
-  }
+    @BeforeEach
+    void setUp() {
+        nodeRunMapper = mock(WorkflowNodeRunMapper.class);
+        runMapper = mock(WorkflowRunMapper.class);
+        nodeMapper = mock(WorkflowNodeMapper.class);
+        workflowMappers = new OrchestratorWorkflowMappers(nodeMapper, runMapper, nodeRunMapper);
+        when(nodeRunMapper.updateStatus(any(UpdateNodeRunStatusParam.class))).thenReturn(1);
+        resolver = mock(CrossDayDependencyResolver.class);
+        dispatchService = mock(WorkflowNodeDispatchService.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<WorkflowNodeDispatchService> provider = mock(ObjectProvider.class);
+        when(provider.getObject()).thenReturn(dispatchService);
+        alertEventService = mock(AlertEventService.class);
+        gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
+        when(gracefulShutdown.isDraining()).thenReturn(false);
+        properties = new CrossDayDependencyReconcileProperties();
+        properties.setEnabled(true);
+        properties.setBatchSize(50);
+        properties.setDefaultTimeoutSeconds(86_400L);
+        secretPayloadProtector = mock(SecretPayloadProtector.class);
+        BatchDateTimeSupport dateTimeSupport =
+                new BatchDateTimeSupport(Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+        reconciler = new CrossDayDependencyReconciler(
+                workflowMappers,
+                resolver,
+                provider,
+                alertEventService,
+                properties,
+                gracefulShutdown,
+                dateTimeSupport,
+                secretPayloadProtector);
+    }
 
-  @Test
-  @DisplayName("对账开关关闭时不查询任何等待依赖的节点,避免无效扫描")
-  void shouldSkipReconcile_whenScheduleDisabled() {
-    properties.setEnabled(false);
-    reconciler.scheduledReconcile();
-    verify(nodeRunMapper, never()).selectLatestByNodeStatus(anyString(), anyInt());
-  }
+    @Test
+    @DisplayName("对账开关关闭时不查询任何等待依赖的节点,避免无效扫描")
+    void shouldSkipReconcile_whenScheduleDisabled() {
+        properties.setEnabled(false);
+        reconciler.scheduledReconcile();
+        verify(nodeRunMapper, never()).selectLatestByNodeStatus(anyString(), anyInt());
+    }
 
-  @Test
-  @DisplayName("停机排空期间不发起对账查询,避免与关闭流程争抢资源")
-  void shouldSkipReconcile_whenShutdownDraining() {
-    when(gracefulShutdown.isDraining()).thenReturn(true);
-    reconciler.scheduledReconcile();
-    verify(nodeRunMapper, never()).selectLatestByNodeStatus(anyString(), anyInt());
-  }
+    @Test
+    @DisplayName("停机排空期间不发起对账查询,避免与关闭流程争抢资源")
+    void shouldSkipReconcile_whenShutdownDraining() {
+        when(gracefulShutdown.isDraining()).thenReturn(true);
+        reconciler.scheduledReconcile();
+        verify(nodeRunMapper, never()).selectLatestByNodeStatus(anyString(), anyInt());
+    }
 
-  @Test
-  @DisplayName("跨天依赖全部就绪时派发下游节点,且不改写节点运行状态")
-  void shouldDispatchNode_whenDependencyResolved() {
-    WorkflowNodeRunEntity waiting =
-        waitingNodeRun(101L, "AGG", "TASK", Instant.now().minusSeconds(60), 7L);
-    WorkflowRunEntity workflowRun = workflowRun("t1", 7L, 200L, 333L);
-    WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
-    waiting.setSourcePayloadProtected("{\"format\":\"encrypted\"}");
+    @Test
+    @DisplayName("跨天依赖全部就绪时派发下游节点,且不改写节点运行状态")
+    void shouldDispatchNode_whenDependencyResolved() {
+        WorkflowNodeRunEntity waiting =
+                waitingNodeRun(101L, "AGG", "TASK", Instant.now().minusSeconds(60), 7L);
+        WorkflowRunEntity workflowRun = workflowRun("t1", 7L, 200L, 333L);
+        WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
+        waiting.setSourcePayloadProtected("{\"format\":\"encrypted\"}");
 
-    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
-        .thenReturn(List.of(waiting));
-    when(runMapper.selectByIdAnyTenant(7L)).thenReturn(workflowRun);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
-    when(resolver.resolve(
-            eq("t1"), eq(LocalDate.of(2026, Month.MAY, 4)), anyString(), anyBoolean()))
-        .thenReturn(ResolutionResult.builder()
-            .status(CrossDayDependencyResolver.ResolutionStatus.RESOLVED)
-            .resolved(Map.of("alias", Map.of("k", "v")))
-            .build());
-    when(secretPayloadProtector.reveal(waiting.getSourcePayloadProtected()))
-        .thenReturn("{\"requestId\":\"stable-root-input\"}");
+        when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+                .thenReturn(List.of(waiting));
+        when(runMapper.selectByIdAnyTenant(7L)).thenReturn(workflowRun);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
+        when(resolver.resolve(eq("t1"), eq(LocalDate.of(2026, Month.MAY, 4)), anyString(), anyBoolean()))
+                .thenReturn(ResolutionResult.builder()
+                        .status(CrossDayDependencyResolver.ResolutionStatus.RESOLVED)
+                        .resolved(Map.of("alias", Map.of("k", "v")))
+                        .build());
+        when(secretPayloadProtector.reveal(waiting.getSourcePayloadProtected()))
+                .thenReturn("{\"requestId\":\"stable-root-input\"}");
 
-    reconciler.scheduledReconcile();
+        reconciler.scheduledReconcile();
 
-    verify(dispatchService)
-        .dispatchNode(
-            eq(null),
-            eq(workflowRun),
-            any(WorkflowDagService.DagNodeResolution.class),
-            eq("{\"requestId\":\"stable-root-input\"}"),
-            any());
-    verify(nodeRunMapper, never()).updateStatus(any(UpdateNodeRunStatusParam.class));
-  }
+        verify(dispatchService)
+                .dispatchNode(
+                        eq(null),
+                        eq(workflowRun),
+                        any(WorkflowDagService.DagNodeResolution.class),
+                        eq("{\"requestId\":\"stable-root-input\"}"),
+                        any());
+        verify(nodeRunMapper, never()).updateStatus(any(UpdateNodeRunStatusParam.class));
+    }
 
-  @Test
-  @DisplayName("Workflow 根运行没有旧式父 JobInstance 时仍按 WorkflowRun 业务日恢复依赖节点")
-  void shouldDispatchRootWorkflowNode_whenDependencyResolvedWithoutParentJobInstance() {
-    WorkflowNodeRunEntity waiting =
-        waitingNodeRun(106L, "JOB", "JOB", Instant.now().minusSeconds(60), 12L);
-    WorkflowRunEntity workflowRun = workflowRun("t1", 12L, 201L, null);
-    workflowRun.setDryRun(true);
-    WorkflowNodeEntity node = workflowNode(201L, "JOB", "JOB", "[{\"jobCode\":\"UPSTREAM\"}]");
-    waiting.setSourcePayloadProtected("{\"format\":\"encrypted\"}");
+    @Test
+    @DisplayName("Workflow 根运行没有旧式父 JobInstance 时仍按 WorkflowRun 业务日恢复依赖节点")
+    void shouldDispatchRootWorkflowNode_whenDependencyResolvedWithoutParentJobInstance() {
+        WorkflowNodeRunEntity waiting =
+                waitingNodeRun(106L, "JOB", "JOB", Instant.now().minusSeconds(60), 12L);
+        WorkflowRunEntity workflowRun = workflowRun("t1", 12L, 201L, null);
+        workflowRun.setDryRun(true);
+        WorkflowNodeEntity node = workflowNode(201L, "JOB", "JOB", "[{\"jobCode\":\"UPSTREAM\"}]");
+        waiting.setSourcePayloadProtected("{\"format\":\"encrypted\"}");
 
-    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
-        .thenReturn(List.of(waiting));
-    when(runMapper.selectByIdAnyTenant(12L)).thenReturn(workflowRun);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(201L, "JOB")).thenReturn(node);
-    when(resolver.resolve(
-            eq("t1"), eq(LocalDate.of(2026, Month.MAY, 4)), anyString(), anyBoolean()))
-        .thenReturn(ResolutionResult.builder()
-            .status(CrossDayDependencyResolver.ResolutionStatus.RESOLVED)
-            .resolved(Map.of("prior_day", Map.of("resultVersionId", 987L)))
-            .build());
-    when(secretPayloadProtector.reveal(waiting.getSourcePayloadProtected()))
-        .thenReturn("{\"requestId\":\"root-request\"}");
+        when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+                .thenReturn(List.of(waiting));
+        when(runMapper.selectByIdAnyTenant(12L)).thenReturn(workflowRun);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(201L, "JOB")).thenReturn(node);
+        when(resolver.resolve(eq("t1"), eq(LocalDate.of(2026, Month.MAY, 4)), anyString(), anyBoolean()))
+                .thenReturn(ResolutionResult.builder()
+                        .status(CrossDayDependencyResolver.ResolutionStatus.RESOLVED)
+                        .resolved(Map.of("prior_day", Map.of("resultVersionId", 987L)))
+                        .build());
+        when(secretPayloadProtector.reveal(waiting.getSourcePayloadProtected()))
+                .thenReturn("{\"requestId\":\"root-request\"}");
 
-    reconciler.scheduledReconcile();
+        reconciler.scheduledReconcile();
 
-    verify(resolver).resolve(eq("t1"), eq(LocalDate.of(2026, Month.MAY, 4)), anyString(), eq(true));
-    verify(dispatchService)
-        .dispatchNode(
-            eq(null),
-            eq(workflowRun),
-            any(WorkflowDagService.DagNodeResolution.class),
-            eq("{\"requestId\":\"root-request\"}"),
-            any());
-  }
+        verify(resolver).resolve(eq("t1"), eq(LocalDate.of(2026, Month.MAY, 4)), anyString(), eq(true));
+        verify(dispatchService)
+                .dispatchNode(
+                        eq(null),
+                        eq(workflowRun),
+                        any(WorkflowDagService.DagNodeResolution.class),
+                        eq("{\"requestId\":\"root-request\"}"),
+                        any());
+    }
 
-  @Test
-  @DisplayName("等待依赖超过节点超时窗口时置节点失败并发出告警,且不再派发")
-  void shouldMarkNodeFailedAndAlert_whenWaitingBeyondTimeout() {
-    Instant farPast = Instant.now().minusSeconds(100_000L);
-    WorkflowNodeRunEntity waiting = waitingNodeRun(102L, "AGG", "TASK", farPast, 8L);
-    WorkflowRunEntity workflowRun = workflowRun("t1", 8L, 200L, 334L);
-    WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
-    node.setCrossDayDependencyTimeoutSeconds(60);
+    @Test
+    @DisplayName("等待依赖超过节点超时窗口时置节点失败并发出告警,且不再派发")
+    void shouldMarkNodeFailedAndAlert_whenWaitingBeyondTimeout() {
+        Instant farPast = Instant.now().minusSeconds(100_000L);
+        WorkflowNodeRunEntity waiting = waitingNodeRun(102L, "AGG", "TASK", farPast, 8L);
+        WorkflowRunEntity workflowRun = workflowRun("t1", 8L, 200L, 334L);
+        WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
+        node.setCrossDayDependencyTimeoutSeconds(60);
 
-    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
-        .thenReturn(List.of(waiting));
-    when(runMapper.selectByIdAnyTenant(8L)).thenReturn(workflowRun);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
-    when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString(), anyBoolean()))
-        .thenReturn(ResolutionResult.builder()
-            .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
-            .resolved(Map.of())
-            .waitingReasons(List.of("MISSING:alias=t_minus_1"))
-            .build());
+        when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+                .thenReturn(List.of(waiting));
+        when(runMapper.selectByIdAnyTenant(8L)).thenReturn(workflowRun);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
+        when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString(), anyBoolean()))
+                .thenReturn(ResolutionResult.builder()
+                        .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
+                        .resolved(Map.of())
+                        .waitingReasons(List.of("MISSING:alias=t_minus_1"))
+                        .build());
 
-    reconciler.scheduledReconcile();
+        reconciler.scheduledReconcile();
 
-    verify(nodeRunMapper).updateStatus(any(UpdateNodeRunStatusParam.class));
-    verify(alertEventService, atLeastOnce()).emit(any(AlertEmitCommand.class));
-    verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
-  }
+        verify(nodeRunMapper).updateStatus(any(UpdateNodeRunStatusParam.class));
+        verify(alertEventService, atLeastOnce()).emit(any(AlertEmitCommand.class));
+        verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
+    }
 
-  @Test
-  @DisplayName("等待状态已经变化时不发送过期超时告警")
-  void shouldNotAlertWhenStaleTimeoutCannotUpdateNode() {
-    WorkflowNodeRunEntity waiting =
-        waitingNodeRun(102L, "AGG", "TASK", Instant.now().minusSeconds(100_000), 8L);
-    WorkflowRunEntity workflowRun = workflowRun("t1", 8L, 200L, 334L);
-    WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
-    node.setCrossDayDependencyTimeoutSeconds(60);
-    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
-        .thenReturn(List.of(waiting));
-    when(runMapper.selectByIdAnyTenant(8L)).thenReturn(workflowRun);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
-    when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString(), anyBoolean()))
-        .thenReturn(ResolutionResult.builder()
-            .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
-            .build());
-    when(nodeRunMapper.updateStatus(any(UpdateNodeRunStatusParam.class))).thenReturn(0);
+    @Test
+    @DisplayName("等待状态已经变化时不发送过期超时告警")
+    void shouldNotAlertWhenStaleTimeoutCannotUpdateNode() {
+        WorkflowNodeRunEntity waiting =
+                waitingNodeRun(102L, "AGG", "TASK", Instant.now().minusSeconds(100_000), 8L);
+        WorkflowRunEntity workflowRun = workflowRun("t1", 8L, 200L, 334L);
+        WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
+        node.setCrossDayDependencyTimeoutSeconds(60);
+        when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+                .thenReturn(List.of(waiting));
+        when(runMapper.selectByIdAnyTenant(8L)).thenReturn(workflowRun);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
+        when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString(), anyBoolean()))
+                .thenReturn(ResolutionResult.builder()
+                        .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
+                        .build());
+        when(nodeRunMapper.updateStatus(any(UpdateNodeRunStatusParam.class))).thenReturn(0);
 
-    reconciler.scheduledReconcile();
+        reconciler.scheduledReconcile();
 
-    verify(nodeRunMapper)
-        .updateStatus(argThat(param -> "WAITING_DEPENDENCY".equals(param.getExpectedStatus())));
-    verify(alertEventService, never()).emit(any(AlertEmitCommand.class));
-  }
+        verify(nodeRunMapper).updateStatus(argThat(param -> "WAITING_DEPENDENCY".equals(param.getExpectedStatus())));
+        verify(alertEventService, never()).emit(any(AlertEmitCommand.class));
+    }
 
-  @Test
-  @DisplayName("节点依赖定义已被移除时直接置失败,不再尝试解析跨天依赖")
-  void shouldMarkNodeFailed_whenDependencySpecRemoved() {
-    WorkflowNodeRunEntity waiting =
-        waitingNodeRun(103L, "AGG", "TASK", Instant.now().minusSeconds(30), 9L);
-    WorkflowRunEntity workflowRun = workflowRun("t1", 9L, 200L, 335L);
-    WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", null);
+    @Test
+    @DisplayName("节点依赖定义已被移除时直接置失败,不再尝试解析跨天依赖")
+    void shouldMarkNodeFailed_whenDependencySpecRemoved() {
+        WorkflowNodeRunEntity waiting =
+                waitingNodeRun(103L, "AGG", "TASK", Instant.now().minusSeconds(30), 9L);
+        WorkflowRunEntity workflowRun = workflowRun("t1", 9L, 200L, 335L);
+        WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", null);
 
-    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
-        .thenReturn(List.of(waiting));
-    when(runMapper.selectByIdAnyTenant(9L)).thenReturn(workflowRun);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
+        when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+                .thenReturn(List.of(waiting));
+        when(runMapper.selectByIdAnyTenant(9L)).thenReturn(workflowRun);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
 
-    reconciler.scheduledReconcile();
+        reconciler.scheduledReconcile();
 
-    verify(nodeRunMapper).updateStatus(any(UpdateNodeRunStatusParam.class));
-    verify(resolver, never()).resolve(anyString(), any(), anyString(), anyBoolean());
-  }
+        verify(nodeRunMapper).updateStatus(any(UpdateNodeRunStatusParam.class));
+        verify(resolver, never()).resolve(anyString(), any(), anyString(), anyBoolean());
+    }
 
-  @Test
-  @DisplayName("等待时长仍在超时窗口内时保持等待,既不置失败也不告警")
-  void shouldKeepWaiting_whenWithinTimeoutWindow() {
-    WorkflowNodeRunEntity waiting =
-        waitingNodeRun(104L, "AGG", "TASK", Instant.now().minusSeconds(10), 10L);
-    WorkflowRunEntity workflowRun = workflowRun("t1", 10L, 200L, 336L);
-    WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
-    node.setCrossDayDependencyTimeoutSeconds(86_400);
+    @Test
+    @DisplayName("等待时长仍在超时窗口内时保持等待,既不置失败也不告警")
+    void shouldKeepWaiting_whenWithinTimeoutWindow() {
+        WorkflowNodeRunEntity waiting =
+                waitingNodeRun(104L, "AGG", "TASK", Instant.now().minusSeconds(10), 10L);
+        WorkflowRunEntity workflowRun = workflowRun("t1", 10L, 200L, 336L);
+        WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
+        node.setCrossDayDependencyTimeoutSeconds(86_400);
 
-    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
-        .thenReturn(List.of(waiting));
-    when(runMapper.selectByIdAnyTenant(10L)).thenReturn(workflowRun);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
-    when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString(), anyBoolean()))
-        .thenReturn(ResolutionResult.builder()
-            .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
-            .resolved(Map.of())
-            .waitingReasons(List.of("MISSING:alias=t_minus_1"))
-            .build());
+        when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+                .thenReturn(List.of(waiting));
+        when(runMapper.selectByIdAnyTenant(10L)).thenReturn(workflowRun);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
+        when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString(), anyBoolean()))
+                .thenReturn(ResolutionResult.builder()
+                        .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
+                        .resolved(Map.of())
+                        .waitingReasons(List.of("MISSING:alias=t_minus_1"))
+                        .build());
 
-    reconciler.scheduledReconcile();
+        reconciler.scheduledReconcile();
 
-    verify(nodeRunMapper, never()).updateStatus(any(UpdateNodeRunStatusParam.class));
-    verify(alertEventService, never()).emit(any(AlertEmitCommand.class));
-  }
+        verify(nodeRunMapper, never()).updateStatus(any(UpdateNodeRunStatusParam.class));
+        verify(alertEventService, never()).emit(any(AlertEmitCommand.class));
+    }
 
-  @Test
-  @DisplayName("等待节点缺少业务日时解析器失败，停止派发并登记节点失败")
-  void shouldFailWaitingNode_whenBusinessDateMissing() {
-    WorkflowNodeRunEntity waiting =
-        waitingNodeRun(110L, "AGG", "JOB", Instant.now().minusSeconds(30), 15L);
-    WorkflowRunEntity run = workflowRun("t1", 15L, 200L, null);
-    run.setBizDate(null);
-    WorkflowNodeEntity node = workflowNode(200L, "AGG", "JOB", "[{\"jobCode\":\"X\"}]");
-    CrossDayDependencyResolver actual = new CrossDayDependencyResolver(
-        new BizDateArithmetic(), mock(ResultVersionQueryService.class));
-    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
-        .thenReturn(List.of(waiting));
-    when(runMapper.selectByIdAnyTenant(15L)).thenReturn(run);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
-    when(resolver.resolve(eq("t1"), eq(null), anyString(), anyBoolean()))
-        .thenAnswer(call -> actual.resolve(
-            call.getArgument(0), call.getArgument(1), call.getArgument(2), call.getArgument(3)));
+    @Test
+    @DisplayName("等待节点缺少业务日时解析器失败，停止派发并登记节点失败")
+    void shouldFailWaitingNode_whenBusinessDateMissing() {
+        WorkflowNodeRunEntity waiting =
+                waitingNodeRun(110L, "AGG", "JOB", Instant.now().minusSeconds(30), 15L);
+        WorkflowRunEntity run = workflowRun("t1", 15L, 200L, null);
+        run.setBizDate(null);
+        WorkflowNodeEntity node = workflowNode(200L, "AGG", "JOB", "[{\"jobCode\":\"X\"}]");
+        CrossDayDependencyResolver actual =
+                new CrossDayDependencyResolver(new BizDateArithmetic(), mock(ResultVersionQueryService.class));
+        when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+                .thenReturn(List.of(waiting));
+        when(runMapper.selectByIdAnyTenant(15L)).thenReturn(run);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
+        when(resolver.resolve(eq("t1"), eq(null), anyString(), anyBoolean()))
+                .thenAnswer(call -> actual.resolve(
+                        call.getArgument(0), call.getArgument(1), call.getArgument(2), call.getArgument(3)));
 
-    reconciler.scheduledReconcile();
+        reconciler.scheduledReconcile();
 
-    verify(nodeRunMapper)
-        .updateStatus(argThat(update -> "FAILED".equals(update.getNodeStatus())
-            && "CROSS_DAY_DEP_INVALID_CONTEXT".equals(update.getErrorCode())));
-    verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
-  }
+        verify(nodeRunMapper)
+                .updateStatus(argThat(update -> "FAILED".equals(update.getNodeStatus())
+                        && "CROSS_DAY_DEP_INVALID_CONTEXT".equals(update.getErrorCode())));
+        verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
+    }
 
-  @Test
-  @DisplayName("依赖解析返回失败时置节点失败并发出告警")
-  void shouldMarkNodeFailedAndAlert_whenResolverFails() {
-    WorkflowNodeRunEntity waiting =
-        waitingNodeRun(105L, "AGG", "TASK", Instant.now().minusSeconds(30), 11L);
-    WorkflowRunEntity workflowRun = workflowRun("t1", 11L, 200L, 337L);
-    WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
+    @Test
+    @DisplayName("依赖解析返回失败时置节点失败并发出告警")
+    void shouldMarkNodeFailedAndAlert_whenResolverFails() {
+        WorkflowNodeRunEntity waiting =
+                waitingNodeRun(105L, "AGG", "TASK", Instant.now().minusSeconds(30), 11L);
+        WorkflowRunEntity workflowRun = workflowRun("t1", 11L, 200L, 337L);
+        WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
 
-    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
-        .thenReturn(List.of(waiting));
-    when(runMapper.selectByIdAnyTenant(11L)).thenReturn(workflowRun);
-    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
-    when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString(), anyBoolean()))
-        .thenReturn(ResolutionResult.builder()
-            .status(CrossDayDependencyResolver.ResolutionStatus.FAILED)
-            .resolved(Map.of())
-            .failureCode("CROSS_DAY_DEP_INVALID_SPEC")
-            .build());
+        when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+                .thenReturn(List.of(waiting));
+        when(runMapper.selectByIdAnyTenant(11L)).thenReturn(workflowRun);
+        when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
+        when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString(), anyBoolean()))
+                .thenReturn(ResolutionResult.builder()
+                        .status(CrossDayDependencyResolver.ResolutionStatus.FAILED)
+                        .resolved(Map.of())
+                        .failureCode("CROSS_DAY_DEP_INVALID_SPEC")
+                        .build());
 
-    reconciler.scheduledReconcile();
+        reconciler.scheduledReconcile();
 
-    verify(nodeRunMapper).updateStatus(any(UpdateNodeRunStatusParam.class));
-    verify(alertEventService).emit(any(AlertEmitCommand.class));
-  }
+        verify(nodeRunMapper).updateStatus(any(UpdateNodeRunStatusParam.class));
+        verify(alertEventService).emit(any(AlertEmitCommand.class));
+    }
 
-  // ── helpers ─────────────────────────────────────────────────────────────
+    // ── helpers ─────────────────────────────────────────────────────────────
 
-  private static WorkflowNodeRunEntity waitingNodeRun(
-      Long id, String nodeCode, String nodeType, Instant startedAt, Long workflowRunId) {
-    WorkflowNodeRunEntity entity = new WorkflowNodeRunEntity();
-    entity.setId(id);
-    entity.setWorkflowRunId(workflowRunId);
-    entity.setNodeCode(nodeCode);
-    entity.setNodeType(nodeType);
-    entity.setRunSeq(1);
-    entity.setNodeStatus("WAITING_DEPENDENCY");
-    entity.setStartedAt(startedAt);
-    entity.setErrorCode("CROSS_DAY_DEP_WAITING");
-    entity.setErrorMessage("MISSING:alias=t_minus_1");
-    return entity;
-  }
+    private static WorkflowNodeRunEntity waitingNodeRun(
+            Long id, String nodeCode, String nodeType, Instant startedAt, Long workflowRunId) {
+        WorkflowNodeRunEntity entity = new WorkflowNodeRunEntity();
+        entity.setId(id);
+        entity.setWorkflowRunId(workflowRunId);
+        entity.setNodeCode(nodeCode);
+        entity.setNodeType(nodeType);
+        entity.setRunSeq(1);
+        entity.setNodeStatus("WAITING_DEPENDENCY");
+        entity.setStartedAt(startedAt);
+        entity.setErrorCode("CROSS_DAY_DEP_WAITING");
+        entity.setErrorMessage("MISSING:alias=t_minus_1");
+        return entity;
+    }
 
-  private static WorkflowRunEntity workflowRun(
-      String tenantId, Long id, Long workflowDefinitionId, Long relatedJobInstanceId) {
-    WorkflowRunEntity entity = new WorkflowRunEntity();
-    entity.setId(id);
-    entity.setTenantId(tenantId);
-    entity.setWorkflowDefinitionId(workflowDefinitionId);
-    entity.setRelatedJobInstanceId(relatedJobInstanceId);
-    entity.setBizDate(LocalDate.of(2026, Month.MAY, 4));
-    entity.setRunStatus("RUNNING");
-    return entity;
-  }
+    private static WorkflowRunEntity workflowRun(
+            String tenantId, Long id, Long workflowDefinitionId, Long relatedJobInstanceId) {
+        WorkflowRunEntity entity = new WorkflowRunEntity();
+        entity.setId(id);
+        entity.setTenantId(tenantId);
+        entity.setWorkflowDefinitionId(workflowDefinitionId);
+        entity.setRelatedJobInstanceId(relatedJobInstanceId);
+        entity.setBizDate(LocalDate.of(2026, Month.MAY, 4));
+        entity.setRunStatus("RUNNING");
+        return entity;
+    }
 
-  private static WorkflowNodeEntity workflowNode(
-      Long workflowDefinitionId, String nodeCode, String nodeType, String crossDayDeps) {
-    WorkflowNodeEntity entity = new WorkflowNodeEntity();
-    entity.setWorkflowDefinitionId(workflowDefinitionId);
-    entity.setNodeCode(nodeCode);
-    entity.setNodeType(nodeType);
-    entity.setCrossDayDependencies(crossDayDeps);
-    return entity;
-  }
+    private static WorkflowNodeEntity workflowNode(
+            Long workflowDefinitionId, String nodeCode, String nodeType, String crossDayDeps) {
+        WorkflowNodeEntity entity = new WorkflowNodeEntity();
+        entity.setWorkflowDefinitionId(workflowDefinitionId);
+        entity.setNodeCode(nodeCode);
+        entity.setNodeType(nodeType);
+        entity.setCrossDayDependencies(crossDayDeps);
+        return entity;
+    }
 }

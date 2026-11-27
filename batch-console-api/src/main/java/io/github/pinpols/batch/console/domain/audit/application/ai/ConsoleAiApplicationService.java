@@ -15,75 +15,72 @@ import reactor.core.publisher.Mono;
 /** 控制台 AI 对话应用服务：基于 Spring AI 的聊天与审计写入数据库。 */
 public interface ConsoleAiApplicationService {
 
-  /** 在请求线程完成授权与身份捕获，返回可交给后台线程执行的对象。 */
-  PreparedStream prepareStream(AiChatRequest request, String idempotencyKey);
+    /** 在请求线程完成授权与身份捕获，返回可交给后台线程执行的对象。 */
+    PreparedStream prepareStream(AiChatRequest request, String idempotencyKey);
 
-  interface PreparedStream {
-    String requestId();
+    interface PreparedStream {
+        String requestId();
 
-    AiChatResponse execute(StreamObserver observer);
-  }
+        AiChatResponse execute(StreamObserver observer);
+    }
 
-  interface StreamObserver {
-    void onDelta(String text);
+    interface StreamObserver {
+        void onDelta(String text);
 
-    boolean isCancelled();
+        boolean isCancelled();
 
-    boolean hasEmitted();
+        boolean hasEmitted();
 
-    Mono<Void> cancellationSignal();
-  }
+        Mono<Void> cancellationSignal();
+    }
 
-  List<ConversationSummary> conversations(String tenantId, String ownerUserId, int limit);
+    List<ConversationSummary> conversations(String tenantId, String ownerUserId, int limit);
 
-  PageResponse<ConversationSummary> conversationPage(
-      String tenantId, String ownerUserId, String cursor, int limit);
+    PageResponse<ConversationSummary> conversationPage(String tenantId, String ownerUserId, String cursor, int limit);
 
-  List<TurnSummary> turns(
-      String tenantId, String ownerUserId, String conversationId, Long beforeTurnNo, int limit);
+    List<TurnSummary> turns(String tenantId, String ownerUserId, String conversationId, Long beforeTurnNo, int limit);
 
-  ClientTurnSummary turnByClientId(String tenantId, String ownerUserId, UUID clientTurnId);
+    ClientTurnSummary turnByClientId(String tenantId, String ownerUserId, UUID clientTurnId);
 
-  void deleteConversation(String tenantId, String ownerUserId, String conversationId);
+    void deleteConversation(String tenantId, String ownerUserId, String conversationId);
 
-  AiCostSummary costSummary(String tenantId, YearMonth month);
+    AiCostSummary costSummary(String tenantId, YearMonth month);
 
-  record ConversationSummary(
-      String id,
-      String title,
-      String contextVersion,
-      Instant createdAt,
-      Instant updatedAt,
-      OffsetDateTime expiresAt) {}
+    record ConversationSummary(
+            String id,
+            String title,
+            String contextVersion,
+            Instant createdAt,
+            Instant updatedAt,
+            OffsetDateTime expiresAt) {}
 
-  @Builder
-  record TurnSummary(
-      long turnNo,
-      UUID clientTurnId,
-      String contextVersion,
-      String prompt,
-      String response,
-      String status,
-      String promptDecision,
-      String modelName,
-      Integer promptTokens,
-      Integer completionTokens,
-      BigDecimal estimatedCostUsd,
-      Instant createdAt,
-      Instant completedAt,
-      List<AttachmentSummary> attachments) {}
+    @Builder
+    record TurnSummary(
+            long turnNo,
+            UUID clientTurnId,
+            String contextVersion,
+            String prompt,
+            String response,
+            String status,
+            String promptDecision,
+            String modelName,
+            Integer promptTokens,
+            Integer completionTokens,
+            BigDecimal estimatedCostUsd,
+            Instant createdAt,
+            Instant completedAt,
+            List<AttachmentSummary> attachments) {}
 
-  record AttachmentSummary(
-      UUID id, String mediaType, Long byteSize, Integer width, Integer height) {}
+    record AttachmentSummary(UUID id, String mediaType, Long byteSize, Integer width, Integer height) {}
 
-  record ClientTurnSummary(String sessionId, TurnSummary turn) {}
+    record ClientTurnSummary(String sessionId, TurnSummary turn) {}
 
-  record AiCostSummary(
-      YearMonth month,
-      long requestCount,
-      long promptTokens,
-      long completionTokens,
-      BigDecimal estimatedCostUsd,
-      BigDecimal reservedCostUsd,
-      BigDecimal monthlyBudgetUsd) {}
+    record AiCostSummary(
+            YearMonth month,
+            long requestCount,
+            long promptTokens,
+            long completionTokens,
+            BigDecimal estimatedCostUsd,
+            BigDecimal reservedCostUsd,
+            BigDecimal monthlyBudgetUsd) {}
 }

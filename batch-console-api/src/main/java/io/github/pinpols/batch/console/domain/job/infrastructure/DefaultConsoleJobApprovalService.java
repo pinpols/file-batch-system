@@ -56,474 +56,438 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalService {
 
-  /**
-   * 补跑原因，
-   * 与 ConsoleCatchUpApprovalRequest / BatchDayCatchUpRequest.reason 的 @Size(max = 512) 一致。
-   */
-  private static final int REASON_MAX_LENGTH = 512;
+    /**
+     * 补跑原因，
+     * 与 ConsoleCatchUpApprovalRequest / BatchDayCatchUpRequest.reason 的 @Size(max = 512) 一致。
+     */
+    private static final int REASON_MAX_LENGTH = 512;
 
-  /** job_definition.job_code VARCHAR(128)（V4__create_definition_tables.sql）。 */
-  private static final int JOB_CODE_MAX_LENGTH = 128;
+    /** job_definition.job_code VARCHAR(128)（V4__create_definition_tables.sql）。 */
+    private static final int JOB_CODE_MAX_LENGTH = 128;
 
-  /** business_calendar.calendar_code VARCHAR(128)（V3__create_config_tables.sql）。 */
-  private static final int CALENDAR_CODE_MAX_LENGTH = 128;
+    /** business_calendar.calendar_code VARCHAR(128)（V3__create_config_tables.sql）。 */
+    private static final int CALENDAR_CODE_MAX_LENGTH = 128;
 
-  /**
-   * 自动补跑逐项幂等键的长度上限，
-   * 对应 trigger_request_idempotency_alias.idempotency_key VARCHAR(256)
-   * （V278__trigger_request_idempotency_alias.sql）；超长时改用缩短形式。
-   */
-  private static final int AUTO_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH = 256;
+    /**
+     * 自动补跑逐项幂等键的长度上限，
+     * 对应 trigger_request_idempotency_alias.idempotency_key VARCHAR(256)
+     * （V278__trigger_request_idempotency_alias.sql）；超长时改用缩短形式。
+     */
+    private static final int AUTO_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH = 256;
 
-  /**
-   * 需审批补跑逐项幂等键的长度上限，对应 approval_command.source_idempotency_key VARCHAR(128)
-   * （V27__approval_command.sql）；超长时改用缩短形式。
-   */
-  private static final int APPROVAL_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
+    /**
+     * 需审批补跑逐项幂等键的长度上限，对应 approval_command.source_idempotency_key VARCHAR(128)
+     * （V27__approval_command.sql）；超长时改用缩短形式。
+     */
+    private static final int APPROVAL_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 
-  /**
-   * 审批申请人 ID，对应 approval_command.requester_id VARCHAR(64)（V27__approval_command.sql）。
-   */
-  private static final int REQUESTER_ID_MAX_LENGTH = 64;
+    /**
+     * 审批申请人 ID，对应 approval_command.requester_id VARCHAR(64)（V27__approval_command.sql）。
+     */
+    private static final int REQUESTER_ID_MAX_LENGTH = 64;
 
-  /**
-   * 补跑审批引用的触发请求 ID，对应 trigger_request.request_id VARCHAR(128)
-   * （V5__create_runtime_tables.sql），
-   * 与 ConsoleCatchUpApprovalRequest.requestId 的 @Size(max = 128) 一致。
-   */
-  private static final int REQUEST_ID_MAX_LENGTH = 128;
+    /**
+     * 补跑审批引用的触发请求 ID，对应 trigger_request.request_id VARCHAR(128)
+     * （V5__create_runtime_tables.sql），
+     * 与 ConsoleCatchUpApprovalRequest.requestId 的 @Size(max = 128) 一致。
+     */
+    private static final int REQUEST_ID_MAX_LENGTH = 128;
 
-  private static final String CATCH_UP = "CATCH_UP";
-  private static final String CONFLICT_MESSAGE = "error.common.conflict";
+    private static final String CATCH_UP = "CATCH_UP";
+    private static final String CONFLICT_MESSAGE = "error.common.conflict";
 
-  private final ConsoleJobOperationsPort ops;
+    private final ConsoleJobOperationsPort ops;
 
-  /** P0-1(2026-05-16):同 ConsoleJobOpsSupport 一起切到带 secret 的 trigger client。 */
-  private final TriggerInternalRestClient triggerInternalRestClient;
+    /** P0-1(2026-05-16):同 ConsoleJobOpsSupport 一起切到带 secret 的 trigger client。 */
+    private final TriggerInternalRestClient triggerInternalRestClient;
 
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final BatchDayMapper batchDayMapper;
-  private final BusinessCalendarMapper businessCalendarMapper;
-  private final JobDefinitionMapper jobDefinitionMapper;
-  private final ManagedJobWorkflowReferencePort managedJobWorkflowReference;
-  private final BatchDayCatchUpOperationStore operationStore;
-  private final OrchestratorApprovalClient approvalClient;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final BatchDayMapper batchDayMapper;
+    private final BusinessCalendarMapper businessCalendarMapper;
+    private final JobDefinitionMapper jobDefinitionMapper;
+    private final ManagedJobWorkflowReferencePort managedJobWorkflowReference;
+    private final BatchDayCatchUpOperationStore operationStore;
+    private final OrchestratorApprovalClient approvalClient;
 
-  @Override
-  public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    if (!ops.hasText(request.getApprovalId())) {
-      ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
-          .approvalType(CATCH_UP)
-          .actionType(CATCH_UP)
-          .targetType(CATCH_UP)
-          .targetId(request.getRequestId())
-          .payload(request)
-          .approvalReason(request.getReason())
-          .idempotencyKey(idempotencyKey)
-          .build();
-      String result = ops.submitApproval(approvalCtx);
-      ops.publishRefresh(tenantId);
-      return result;
-    }
-    ops.requireApprovedApproval(tenantId, request.getApprovalId(), CATCH_UP, request);
-    if (request.getRequestId() != null && !request.getRequestId().isBlank()) {
-      String result = approvePendingCatchUpRequest(request, idempotencyKey);
-      ops.publishRefresh(tenantId);
-      return result;
-    }
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("operationType", "CATCH_UP_APPROVAL");
-    params.put("approvalMode", "MANUAL_APPROVAL");
-    params.put("catchUpApproved", true);
-    params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH));
-    params.put("scheduledAt", request.getScheduledAt());
-    String sanitizedJobCode =
-        ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH);
-    if (ops.hasText(request.getBatchDayCalendarCode())) {
-      String calendarCode = ConsoleTextSanitizer.safeInput(
-          request.getBatchDayCalendarCode(), CALENDAR_CODE_MAX_LENGTH);
-      params.put("batchDayCatchUp", true);
-      params.put("batchDayCalendarCode", calendarCode);
-      params.put("batchDayBizDate", request.getBizDate());
-      params.put("jobCode", sanitizedJobCode);
-    }
-    Long managedWorkflowId = resolveManagedWorkflowId(tenantId, request.getJobCode());
-    ConsoleLaunchCommand launchCommand = new ConsoleLaunchCommand(
-        tenantId,
-        sanitizedJobCode,
-        managedWorkflowId,
-        request.getBizDate(),
-        TriggerType.CATCH_UP,
-        params,
-        idempotencyKey);
-    String result = ops.delegateLaunch(launchCommand);
-    ops.publishRefresh(tenantId);
-    return result;
-  }
-
-  @Override
-  @Transactional(propagation = Propagation.NEVER)
-  public ConsoleBatchDayCatchUpResponse catchUpBatchDay(
-      String bizDate, BatchDayCatchUpRequest request, String idempotencyKey) {
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    if (!Texts.hasText(idempotencyKey)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
-    }
-    String calendarCode =
-        ConsoleTextSanitizer.safeInput(request.getCalendarCode(), CALENDAR_CODE_MAX_LENGTH);
-    LocalDate parsedBizDate = ops.parseBizDate(bizDate);
-    String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
-    List<String> requested = sanitizedRequestedJobCodes(request.getJobCodes());
-    String requestJson =
-        JsonUtils.toJson(new BatchRequestIdentity(bizDate, calendarCode, requested, safeReason));
-    BatchDayCatchUpOperation existing = operationStore.find(tenantId, idempotencyKey, requestJson);
-    if (EmptyChecks.isNotNull(existing)) {
-      return completedResponse(existing);
-    }
-    ActiveCalendarRow calendar =
-        businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
-    if (EmptyChecks.isNull(calendar)) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.business_calendar.not_found");
-    }
-    String catchUpPolicy = calendar.catchUpPolicy();
-    CatchUpPolicyType policyType = CatchUpPolicyType.fromCode(catchUpPolicy);
-    if (policyType == CatchUpPolicyType.NONE) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day.catch_up_disabled");
-    }
-    List<String> jobCodes = EmptyChecks.isNull(requested)
-        ? resolveJobCodes(tenantId, calendarCode, parsedBizDate, null)
-        : requested;
-    Map<String, Long> workflowTargets = new LinkedHashMap<>();
-    for (String jobCode : jobCodes) {
-      workflowTargets.put(jobCode, resolveManagedWorkflowId(tenantId, jobCode));
-    }
-    List<FrozenTarget> targets = new ArrayList<>();
-    List<BatchDayCatchUpProgress.Item> pending = new ArrayList<>();
-    for (String jobCode : jobCodes) {
-      String itemIdempotencyKey = idempotencyKey + ":" + jobCode;
-      if (policyType == CatchUpPolicyType.AUTO
-          && itemIdempotencyKey.length() > AUTO_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH) {
-        itemIdempotencyKey = shortenItemKey(idempotencyKey, jobCode, "batchday-auto-");
-      }
-      ApprovalSubmitCommand approval = null;
-      if (policyType != CatchUpPolicyType.AUTO) {
-        ConsoleCatchUpApprovalRequest approvalRequest = new ConsoleCatchUpApprovalRequest();
-        approvalRequest.setTenantId(tenantId);
-        approvalRequest.setJobCode(jobCode);
-        approvalRequest.setBizDate(bizDate);
-        approvalRequest.setBatchDayCalendarCode(calendarCode);
-        approvalRequest.setReason(safeReason);
-        if (itemIdempotencyKey.length() > APPROVAL_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH) {
-          itemIdempotencyKey = shortenItemKey(idempotencyKey, jobCode, "batchday-");
+    @Override
+    public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        if (!ops.hasText(request.getApprovalId())) {
+            ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
+                    .approvalType(CATCH_UP)
+                    .actionType(CATCH_UP)
+                    .targetType(CATCH_UP)
+                    .targetId(request.getRequestId())
+                    .payload(request)
+                    .approvalReason(request.getReason())
+                    .idempotencyKey(idempotencyKey)
+                    .build();
+            String result = ops.submitApproval(approvalCtx);
+            ops.publishRefresh(tenantId);
+            return result;
         }
-        String requester = ConsoleTextSanitizer.safeInput(
-            requestMetadataResolver.current().operatorId(), REQUESTER_ID_MAX_LENGTH);
-        approval = ApprovalSubmitCommand.builder()
-            .tenantId(tenantId)
-            .approvalType(CATCH_UP)
-            .actionType(CATCH_UP)
-            .targetType(CATCH_UP)
-            .payloadJson(JsonUtils.toJson(approvalRequest))
-            .requesterId(requester)
-            .approvalReason(safeReason)
-            .idempotencyKey(itemIdempotencyKey)
-            .build();
-      }
-      targets.add(
-          new FrozenTarget(jobCode, itemIdempotencyKey, workflowTargets.get(jobCode), approval));
-      pending.add(BatchDayCatchUpProgress.Item.pending(jobCode, itemIdempotencyKey));
-    }
-    FrozenBatch snapshot = new FrozenBatch(bizDate, calendarCode, catchUpPolicy, targets);
-    BatchDayCatchUpOperation operation =
-        operationStore.prepare(new BatchDayCatchUpOperationStore.Prepare(
-            tenantId,
-            idempotencyKey,
-            requestJson,
-            JsonUtils.toJson(snapshot),
-            JsonUtils.toJson(pending)));
-    if (!"PREPARED".equals(operation.operationStatus())) {
-      return completedResponse(operation);
-    }
-    FrozenBatch frozen = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
-    operation = submitFrozenTargets(tenantId, operation, frozen, safeReason);
-    operation = operationStore.complete(tenantId, operation.requestKeyHash(), operation.revision());
-    ops.publishRefresh(tenantId);
-    return completedResponse(operation);
-  }
-
-  private BatchDayCatchUpOperation submitFrozenTargets(
-      String tenantId, BatchDayCatchUpOperation operation, FrozenBatch frozen, String safeReason) {
-    for (FrozenTarget target : frozen.targets()) {
-      operation = operationStore.startItem(
-          tenantId, operation.requestKeyHash(), operation.revision(), target.sourceKey());
-      String referenceNo;
-      try {
-        referenceNo = submitFrozenTarget(tenantId, frozen, target, safeReason);
-      } catch (RuntimeException failure) {
-        operationStore.markItemUnknown(
-            tenantId, operation.requestKeyHash(), operation.revision(), target.sourceKey());
-        throw failure;
-      }
-      operation = operationStore.acceptItem(
-          tenantId,
-          operation.requestKeyHash(),
-          operation.revision(),
-          target.sourceKey(),
-          referenceNo);
-    }
-    return operation;
-  }
-
-  private List<String> sanitizedRequestedJobCodes(List<String> jobCodes) {
-    if (EmptyChecks.isEmpty(jobCodes)) {
-      return null;
-    }
-    return jobCodes.stream()
-        .filter(ops::hasText)
-        .map(code -> ConsoleTextSanitizer.safeInput(code, JOB_CODE_MAX_LENGTH))
-        .distinct()
-        .toList();
-  }
-
-  @Override
-  @Transactional(propagation = Propagation.NEVER)
-  public ConsoleBatchDayCatchUpResponse continueBatchDay(String tenantId, String requestKey) {
-    String resolvedTenant = ops.resolveTenant(tenantId);
-    BatchDayCatchUpOperation operation =
-        operationStore.findByRequestKey(resolvedTenant, requestKey);
-    if (EmptyChecks.isNull(operation)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
-    }
-    if ("COMPLETE".equals(operation.operationStatus())) {
-      return completedResponse(operation);
-    }
-    if (!"RUNNING".equals(operation.operationStatus())
-        && !"PREPARED".equals(operation.operationStatus())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
-    }
-    List<BatchDayCatchUpProgress.Item> items = operationStore.matchingItems(operation);
-    if (items.stream()
-        .anyMatch(item -> item.status() == BatchDayCatchUpProgress.ItemStatus.UNKNOWN
-            || item.status() == BatchDayCatchUpProgress.ItemStatus.IN_FLIGHT)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
-    }
-    FrozenBatch batch = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
-    BatchRequestIdentity identity =
-        JsonUtils.fromJsonStrict(operation.requestJson(), BatchRequestIdentity.class);
-    boolean invalidSnapshotIdentity = EmptyChecks.isNull(batch)
-        || EmptyChecks.isNull(identity)
-        || EmptyChecks.isNull(batch.targets())
-        || !Objects.equals(batch.bizDate(), identity.bizDate())
-        || !Objects.equals(batch.calendarCode(), identity.calendarCode());
-    if (invalidSnapshotIdentity
-        || (!CatchUpPolicyType.AUTO.code().equals(batch.catchUpPolicy())
-            && !CatchUpPolicyType.MANUAL_APPROVAL.code().equals(batch.catchUpPolicy()))) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
-    }
-    validatePendingTargets(operation, items, batch, identity);
-    for (int index = 0; index < items.size(); index++) {
-      if (items.get(index).status() != BatchDayCatchUpProgress.ItemStatus.PENDING) continue;
-      FrozenTarget target = batch.targets().get(index);
-      operation = operationStore.startItem(
-          resolvedTenant, operation.requestKeyHash(), operation.revision(), target.sourceKey());
-      String referenceNo;
-      try {
-        referenceNo = CatchUpPolicyType.AUTO.code().equals(batch.catchUpPolicy())
-            ? submitFrozenTarget(resolvedTenant, batch, target, identity.reason())
-            : approvalClient.submitApproval(target.approval());
-      } catch (RuntimeException failure) {
-        operationStore.markItemUnknown(
-            resolvedTenant, operation.requestKeyHash(), operation.revision(), target.sourceKey());
-        throw failure;
-      }
-      operation = operationStore.acceptItem(
-          resolvedTenant,
-          operation.requestKeyHash(),
-          operation.revision(),
-          target.sourceKey(),
-          referenceNo);
-    }
-    operation =
-        operationStore.complete(resolvedTenant, operation.requestKeyHash(), operation.revision());
-    ops.publishRefresh(resolvedTenant);
-    return completedResponse(operation);
-  }
-
-  private void validatePendingTargets(
-      BatchDayCatchUpOperation operation,
-      List<BatchDayCatchUpProgress.Item> items,
-      FrozenBatch batch,
-      BatchRequestIdentity identity) {
-    // 先校验所有待发项目，避免中途发现冻结信息损坏造成新一轮部分提交。
-    for (int index = 0; index < items.size(); index++) {
-      BatchDayCatchUpProgress.Item item = items.get(index);
-      if (item.status() != BatchDayCatchUpProgress.ItemStatus.PENDING) continue;
-      FrozenTarget target = batch.targets().get(index);
-      if (EmptyChecks.isNull(target.workflowDefinitionId()) || target.workflowDefinitionId() <= 0) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
-      }
-      if (CatchUpPolicyType.MANUAL_APPROVAL.code().equals(batch.catchUpPolicy())) {
-        ApprovalSubmitCommand command =
-            BatchDayCatchUpReconciliation.frozenApproval(operation, target.sourceKey());
-        JsonNode payload = JsonUtils.fromJsonStrict(command.payloadJson(), JsonNode.class);
-        String payloadReason =
-            payload.path("reason").isNull() || payload.path("reason").isMissingNode()
-                ? null
-                : payload.path("reason").asText();
-        if (!Objects.equals(identity.reason(), command.approvalReason())
-            || !Objects.equals(identity.reason(), payloadReason)) {
-          throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+        ops.requireApprovedApproval(tenantId, request.getApprovalId(), CATCH_UP, request);
+        if (request.getRequestId() != null && !request.getRequestId().isBlank()) {
+            String result = approvePendingCatchUpRequest(request, idempotencyKey);
+            ops.publishRefresh(tenantId);
+            return result;
         }
-      }
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("operationType", "CATCH_UP_APPROVAL");
+        params.put("approvalMode", "MANUAL_APPROVAL");
+        params.put("catchUpApproved", true);
+        params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH));
+        params.put("scheduledAt", request.getScheduledAt());
+        String sanitizedJobCode = ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH);
+        if (ops.hasText(request.getBatchDayCalendarCode())) {
+            String calendarCode =
+                    ConsoleTextSanitizer.safeInput(request.getBatchDayCalendarCode(), CALENDAR_CODE_MAX_LENGTH);
+            params.put("batchDayCatchUp", true);
+            params.put("batchDayCalendarCode", calendarCode);
+            params.put("batchDayBizDate", request.getBizDate());
+            params.put("jobCode", sanitizedJobCode);
+        }
+        Long managedWorkflowId = resolveManagedWorkflowId(tenantId, request.getJobCode());
+        ConsoleLaunchCommand launchCommand = new ConsoleLaunchCommand(
+                tenantId,
+                sanitizedJobCode,
+                managedWorkflowId,
+                request.getBizDate(),
+                TriggerType.CATCH_UP,
+                params,
+                idempotencyKey);
+        String result = ops.delegateLaunch(launchCommand);
+        ops.publishRefresh(tenantId);
+        return result;
     }
-  }
 
-  private String submitFrozenTarget(
-      String tenantId, FrozenBatch batch, FrozenTarget target, String reason) {
-    if (CatchUpPolicyType.AUTO.code().equals(batch.catchUpPolicy())) {
-      ConsoleLaunchCommand command = BatchDayCatchUpAutoCommand.builder()
-          .tenantId(tenantId)
-          .jobCode(target.jobCode())
-          .workflowId(target.workflowDefinitionId())
-          .bizDate(batch.bizDate())
-          .calendarCode(batch.calendarCode())
-          .reason(reason)
-          .sourceKey(target.sourceKey())
-          .build()
-          .toLaunchCommand();
-      return ops.delegateLaunch(command);
+    @Override
+    @Transactional(propagation = Propagation.NEVER)
+    public ConsoleBatchDayCatchUpResponse catchUpBatchDay(
+            String bizDate, BatchDayCatchUpRequest request, String idempotencyKey) {
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        if (!Texts.hasText(idempotencyKey)) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+        }
+        String calendarCode = ConsoleTextSanitizer.safeInput(request.getCalendarCode(), CALENDAR_CODE_MAX_LENGTH);
+        LocalDate parsedBizDate = ops.parseBizDate(bizDate);
+        String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
+        List<String> requested = sanitizedRequestedJobCodes(request.getJobCodes());
+        String requestJson = JsonUtils.toJson(new BatchRequestIdentity(bizDate, calendarCode, requested, safeReason));
+        BatchDayCatchUpOperation existing = operationStore.find(tenantId, idempotencyKey, requestJson);
+        if (EmptyChecks.isNotNull(existing)) {
+            return completedResponse(existing);
+        }
+        ActiveCalendarRow calendar = businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
+        if (EmptyChecks.isNull(calendar)) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.business_calendar.not_found");
+        }
+        String catchUpPolicy = calendar.catchUpPolicy();
+        CatchUpPolicyType policyType = CatchUpPolicyType.fromCode(catchUpPolicy);
+        if (policyType == CatchUpPolicyType.NONE) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day.catch_up_disabled");
+        }
+        List<String> jobCodes = EmptyChecks.isNull(requested)
+                ? resolveJobCodes(tenantId, calendarCode, parsedBizDate, null)
+                : requested;
+        Map<String, Long> workflowTargets = new LinkedHashMap<>();
+        for (String jobCode : jobCodes) {
+            workflowTargets.put(jobCode, resolveManagedWorkflowId(tenantId, jobCode));
+        }
+        List<FrozenTarget> targets = new ArrayList<>();
+        List<BatchDayCatchUpProgress.Item> pending = new ArrayList<>();
+        for (String jobCode : jobCodes) {
+            String itemIdempotencyKey = idempotencyKey + ":" + jobCode;
+            if (policyType == CatchUpPolicyType.AUTO
+                    && itemIdempotencyKey.length() > AUTO_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH) {
+                itemIdempotencyKey = shortenItemKey(idempotencyKey, jobCode, "batchday-auto-");
+            }
+            ApprovalSubmitCommand approval = null;
+            if (policyType != CatchUpPolicyType.AUTO) {
+                ConsoleCatchUpApprovalRequest approvalRequest = new ConsoleCatchUpApprovalRequest();
+                approvalRequest.setTenantId(tenantId);
+                approvalRequest.setJobCode(jobCode);
+                approvalRequest.setBizDate(bizDate);
+                approvalRequest.setBatchDayCalendarCode(calendarCode);
+                approvalRequest.setReason(safeReason);
+                if (itemIdempotencyKey.length() > APPROVAL_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH) {
+                    itemIdempotencyKey = shortenItemKey(idempotencyKey, jobCode, "batchday-");
+                }
+                String requester = ConsoleTextSanitizer.safeInput(
+                        requestMetadataResolver.current().operatorId(), REQUESTER_ID_MAX_LENGTH);
+                approval = ApprovalSubmitCommand.builder()
+                        .tenantId(tenantId)
+                        .approvalType(CATCH_UP)
+                        .actionType(CATCH_UP)
+                        .targetType(CATCH_UP)
+                        .payloadJson(JsonUtils.toJson(approvalRequest))
+                        .requesterId(requester)
+                        .approvalReason(safeReason)
+                        .idempotencyKey(itemIdempotencyKey)
+                        .build();
+            }
+            targets.add(new FrozenTarget(jobCode, itemIdempotencyKey, workflowTargets.get(jobCode), approval));
+            pending.add(BatchDayCatchUpProgress.Item.pending(jobCode, itemIdempotencyKey));
+        }
+        FrozenBatch snapshot = new FrozenBatch(bizDate, calendarCode, catchUpPolicy, targets);
+        BatchDayCatchUpOperation operation = operationStore.prepare(new BatchDayCatchUpOperationStore.Prepare(
+                tenantId, idempotencyKey, requestJson, JsonUtils.toJson(snapshot), JsonUtils.toJson(pending)));
+        if (!"PREPARED".equals(operation.operationStatus())) {
+            return completedResponse(operation);
+        }
+        FrozenBatch frozen = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
+        operation = submitFrozenTargets(tenantId, operation, frozen, safeReason);
+        operation = operationStore.complete(tenantId, operation.requestKeyHash(), operation.revision());
+        ops.publishRefresh(tenantId);
+        return completedResponse(operation);
     }
-    ConsoleCatchUpApprovalRequest approvalRequest = JsonUtils.fromJsonStrict(
-        target.approval().payloadJson(), ConsoleCatchUpApprovalRequest.class);
-    return approveCatchUp(approvalRequest, target.sourceKey());
-  }
 
-  private ConsoleBatchDayCatchUpResponse completedResponse(BatchDayCatchUpOperation operation) {
-    if (!"COMPLETE".equals(operation.operationStatus())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+    private BatchDayCatchUpOperation submitFrozenTargets(
+            String tenantId, BatchDayCatchUpOperation operation, FrozenBatch frozen, String safeReason) {
+        for (FrozenTarget target : frozen.targets()) {
+            operation = operationStore.startItem(
+                    tenantId, operation.requestKeyHash(), operation.revision(), target.sourceKey());
+            String referenceNo;
+            try {
+                referenceNo = submitFrozenTarget(tenantId, frozen, target, safeReason);
+            } catch (RuntimeException failure) {
+                operationStore.markItemUnknown(
+                        tenantId, operation.requestKeyHash(), operation.revision(), target.sourceKey());
+                throw failure;
+            }
+            operation = operationStore.acceptItem(
+                    tenantId, operation.requestKeyHash(), operation.revision(), target.sourceKey(), referenceNo);
+        }
+        return operation;
     }
-    FrozenBatch batch = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
-    BatchDayCatchUpProgress.Item[] items =
-        JsonUtils.fromJsonStrict(operation.itemsJson(), BatchDayCatchUpProgress.Item[].class);
-    boolean auto = CatchUpPolicyType.AUTO.code().equals(batch.catchUpPolicy());
-    List<ConsoleBatchDayCatchUpItemResponse> result = new ArrayList<>();
-    for (BatchDayCatchUpProgress.Item item : items) {
-      result.add(new ConsoleBatchDayCatchUpItemResponse(
-          item.jobCode(),
-          auto ? "LAUNCHED" : "APPROVAL_CREATED",
-          item.referenceNo(),
-          TriggerType.CATCH_UP.code(),
-          auto ? "LAUNCHED" : "PENDING"));
+
+    private List<String> sanitizedRequestedJobCodes(List<String> jobCodes) {
+        if (EmptyChecks.isEmpty(jobCodes)) {
+            return null;
+        }
+        return jobCodes.stream()
+                .filter(ops::hasText)
+                .map(code -> ConsoleTextSanitizer.safeInput(code, JOB_CODE_MAX_LENGTH))
+                .distinct()
+                .toList();
     }
-    return new ConsoleBatchDayCatchUpResponse(
-        operation.tenantId(), batch.calendarCode(), batch.bizDate(), batch.catchUpPolicy(), result);
-  }
 
-  @Override
-  public BatchDayCatchUpRequestStatusResponse batchDayCatchUpStatus(
-      String tenantId, String requestKey) {
-    String resolvedTenant = ops.resolveTenant(tenantId);
-    BatchDayCatchUpOperation operation =
-        operationStore.findByRequestKey(resolvedTenant, requestKey);
-    if (EmptyChecks.isNull(operation)) {
-      return new BatchDayCatchUpRequestStatusResponse(
-          false, resolvedTenant, null, null, null, null, List.of());
+    @Override
+    @Transactional(propagation = Propagation.NEVER)
+    public ConsoleBatchDayCatchUpResponse continueBatchDay(String tenantId, String requestKey) {
+        String resolvedTenant = ops.resolveTenant(tenantId);
+        BatchDayCatchUpOperation operation = operationStore.findByRequestKey(resolvedTenant, requestKey);
+        if (EmptyChecks.isNull(operation)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+        }
+        if ("COMPLETE".equals(operation.operationStatus())) {
+            return completedResponse(operation);
+        }
+        if (!"RUNNING".equals(operation.operationStatus()) && !"PREPARED".equals(operation.operationStatus())) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+        }
+        List<BatchDayCatchUpProgress.Item> items = operationStore.matchingItems(operation);
+        if (items.stream()
+                .anyMatch(item -> item.status() == BatchDayCatchUpProgress.ItemStatus.UNKNOWN
+                        || item.status() == BatchDayCatchUpProgress.ItemStatus.IN_FLIGHT)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+        }
+        FrozenBatch batch = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
+        BatchRequestIdentity identity = JsonUtils.fromJsonStrict(operation.requestJson(), BatchRequestIdentity.class);
+        boolean invalidSnapshotIdentity = EmptyChecks.isNull(batch)
+                || EmptyChecks.isNull(identity)
+                || EmptyChecks.isNull(batch.targets())
+                || !Objects.equals(batch.bizDate(), identity.bizDate())
+                || !Objects.equals(batch.calendarCode(), identity.calendarCode());
+        if (invalidSnapshotIdentity
+                || (!CatchUpPolicyType.AUTO.code().equals(batch.catchUpPolicy())
+                        && !CatchUpPolicyType.MANUAL_APPROVAL.code().equals(batch.catchUpPolicy()))) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+        }
+        validatePendingTargets(operation, items, batch, identity);
+        for (int index = 0; index < items.size(); index++) {
+            if (items.get(index).status() != BatchDayCatchUpProgress.ItemStatus.PENDING) continue;
+            FrozenTarget target = batch.targets().get(index);
+            operation = operationStore.startItem(
+                    resolvedTenant, operation.requestKeyHash(), operation.revision(), target.sourceKey());
+            String referenceNo;
+            try {
+                referenceNo = CatchUpPolicyType.AUTO.code().equals(batch.catchUpPolicy())
+                        ? submitFrozenTarget(resolvedTenant, batch, target, identity.reason())
+                        : approvalClient.submitApproval(target.approval());
+            } catch (RuntimeException failure) {
+                operationStore.markItemUnknown(
+                        resolvedTenant, operation.requestKeyHash(), operation.revision(), target.sourceKey());
+                throw failure;
+            }
+            operation = operationStore.acceptItem(
+                    resolvedTenant, operation.requestKeyHash(), operation.revision(), target.sourceKey(), referenceNo);
+        }
+        operation = operationStore.complete(resolvedTenant, operation.requestKeyHash(), operation.revision());
+        ops.publishRefresh(resolvedTenant);
+        return completedResponse(operation);
     }
-    FrozenBatch batch = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
-    List<BatchDayCatchUpRequestStatusResponse.Item> items =
-        operationStore.matchingItems(operation).stream()
-            .map(item -> new BatchDayCatchUpRequestStatusResponse.Item(
-                item.jobCode(), item.status().name(), item.referenceNo()))
-            .toList();
-    return new BatchDayCatchUpRequestStatusResponse(
-        true,
-        resolvedTenant,
-        batch.bizDate(),
-        batch.calendarCode(),
-        batch.catchUpPolicy(),
-        operation.operationStatus(),
-        items);
-  }
 
-  private record BatchRequestIdentity(
-      String bizDate, String calendarCode, List<String> jobCodes, String reason) {}
-
-  private record FrozenBatch(
-      String bizDate, String calendarCode, String catchUpPolicy, List<FrozenTarget> targets) {}
-
-  private record FrozenTarget(
-      String jobCode,
-      String sourceKey,
-      Long workflowDefinitionId,
-      ApprovalSubmitCommand approval) {}
-
-  private String shortenItemKey(String idempotencyKey, String jobCode, String prefix) {
-    // 长度前缀避免不同请求和作业组合产生相同输入。
-    String source = idempotencyKey.length() + ":" + idempotencyKey + jobCode;
-    try {
-      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] hash = digest.digest(source.getBytes(StandardCharsets.UTF_8));
-      return prefix + HexFormat.of().formatHex(hash);
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException(e);
+    private void validatePendingTargets(
+            BatchDayCatchUpOperation operation,
+            List<BatchDayCatchUpProgress.Item> items,
+            FrozenBatch batch,
+            BatchRequestIdentity identity) {
+        // 先校验所有待发项目，避免中途发现冻结信息损坏造成新一轮部分提交。
+        for (int index = 0; index < items.size(); index++) {
+            BatchDayCatchUpProgress.Item item = items.get(index);
+            if (item.status() != BatchDayCatchUpProgress.ItemStatus.PENDING) continue;
+            FrozenTarget target = batch.targets().get(index);
+            if (EmptyChecks.isNull(target.workflowDefinitionId()) || target.workflowDefinitionId() <= 0) {
+                throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+            }
+            if (CatchUpPolicyType.MANUAL_APPROVAL.code().equals(batch.catchUpPolicy())) {
+                ApprovalSubmitCommand command =
+                        BatchDayCatchUpReconciliation.frozenApproval(operation, target.sourceKey());
+                JsonNode payload = JsonUtils.fromJsonStrict(command.payloadJson(), JsonNode.class);
+                String payloadReason = payload.path("reason").isNull()
+                                || payload.path("reason").isMissingNode()
+                        ? null
+                        : payload.path("reason").asText();
+                if (!Objects.equals(identity.reason(), command.approvalReason())
+                        || !Objects.equals(identity.reason(), payloadReason)) {
+                    throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+                }
+            }
+        }
     }
-  }
 
-  private String approvePendingCatchUpRequest(
-      ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
-    String tenantId = ops.resolveTenant(request.getTenantId());
-    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    // P0-1(2026-05-16):同 ConsoleJobOpsSupport.delegateLaunch — 走带 X-Internal-Secret 的 client
-    RestClient restClient = triggerInternalRestClient.client();
-    RestClient.RequestBodySpec requestBody = restClient
-        .post()
-        .uri("/api/triggers/catch-up/approve")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId());
-    String safeRequestId =
-        ConsoleTextSanitizer.safeInput(request.getRequestId(), REQUEST_ID_MAX_LENGTH);
-    String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
-    CatchUpApprovalPayload payload =
-        new CatchUpApprovalPayload(tenantId, safeRequestId, safeReason);
-    CommonResponse<LaunchResponse> response = requestBody
-        .body(payload)
-        .retrieve()
-        .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
-    if (response == null || response.data() == null) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
+    private String submitFrozenTarget(String tenantId, FrozenBatch batch, FrozenTarget target, String reason) {
+        if (CatchUpPolicyType.AUTO.code().equals(batch.catchUpPolicy())) {
+            ConsoleLaunchCommand command = BatchDayCatchUpAutoCommand.builder()
+                    .tenantId(tenantId)
+                    .jobCode(target.jobCode())
+                    .workflowId(target.workflowDefinitionId())
+                    .bizDate(batch.bizDate())
+                    .calendarCode(batch.calendarCode())
+                    .reason(reason)
+                    .sourceKey(target.sourceKey())
+                    .build()
+                    .toLaunchCommand();
+            return ops.delegateLaunch(command);
+        }
+        ConsoleCatchUpApprovalRequest approvalRequest =
+                JsonUtils.fromJsonStrict(target.approval().payloadJson(), ConsoleCatchUpApprovalRequest.class);
+        return approveCatchUp(approvalRequest, target.sourceKey());
     }
-    return response.data().instanceNo();
-  }
 
-  private List<String> resolveJobCodes(
-      String tenantId, String calendarCode, LocalDate bizDate, List<String> requestedJobCodes) {
-    if (requestedJobCodes != null && !requestedJobCodes.isEmpty()) {
-      return requestedJobCodes.stream()
-          .filter(ops::hasText)
-          .map(code -> ConsoleTextSanitizer.safeInput(code, JOB_CODE_MAX_LENGTH))
-          .distinct()
-          .toList();
+    private ConsoleBatchDayCatchUpResponse completedResponse(BatchDayCatchUpOperation operation) {
+        if (!"COMPLETE".equals(operation.operationStatus())) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+        }
+        FrozenBatch batch = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
+        BatchDayCatchUpProgress.Item[] items =
+                JsonUtils.fromJsonStrict(operation.itemsJson(), BatchDayCatchUpProgress.Item[].class);
+        boolean auto = CatchUpPolicyType.AUTO.code().equals(batch.catchUpPolicy());
+        List<ConsoleBatchDayCatchUpItemResponse> result = new ArrayList<>();
+        for (BatchDayCatchUpProgress.Item item : items) {
+            result.add(new ConsoleBatchDayCatchUpItemResponse(
+                    item.jobCode(),
+                    auto ? "LAUNCHED" : "APPROVAL_CREATED",
+                    item.referenceNo(),
+                    TriggerType.CATCH_UP.code(),
+                    auto ? "LAUNCHED" : "PENDING"));
+        }
+        return new ConsoleBatchDayCatchUpResponse(
+                operation.tenantId(), batch.calendarCode(), batch.bizDate(), batch.catchUpPolicy(), result);
     }
-    return batchDayMapper.selectFailedJobCodes(tenantId, calendarCode, bizDate);
-  }
 
-  private Long resolveManagedWorkflowId(String tenantId, String jobCode) {
-    JobDefinitionView job = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-    if (EmptyChecks.isNull(job)) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
+    @Override
+    public BatchDayCatchUpRequestStatusResponse batchDayCatchUpStatus(String tenantId, String requestKey) {
+        String resolvedTenant = ops.resolveTenant(tenantId);
+        BatchDayCatchUpOperation operation = operationStore.findByRequestKey(resolvedTenant, requestKey);
+        if (EmptyChecks.isNull(operation)) {
+            return new BatchDayCatchUpRequestStatusResponse(false, resolvedTenant, null, null, null, null, List.of());
+        }
+        FrozenBatch batch = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
+        List<BatchDayCatchUpRequestStatusResponse.Item> items = operationStore.matchingItems(operation).stream()
+                .map(item -> new BatchDayCatchUpRequestStatusResponse.Item(
+                        item.jobCode(), item.status().name(), item.referenceNo()))
+                .toList();
+        return new BatchDayCatchUpRequestStatusResponse(
+                true,
+                resolvedTenant,
+                batch.bizDate(),
+                batch.calendarCode(),
+                batch.catchUpPolicy(),
+                operation.operationStatus(),
+                items);
     }
-    if (Boolean.FALSE.equals(job.getEnabled())) {
-      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.job.definition_disabled");
-    }
-    Long workflowDefinitionId = job.getDefaultWorkflowDefinitionId();
-    if (!managedJobWorkflowReference.isEnabledSingleJobWorkflow(
-        tenantId, workflowDefinitionId, job.getId())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.single_job_link_missing");
-    }
-    return workflowDefinitionId;
-  }
 
-  private record CatchUpApprovalPayload(String tenantId, String requestId, String reason) {}
+    private record BatchRequestIdentity(String bizDate, String calendarCode, List<String> jobCodes, String reason) {}
+
+    private record FrozenBatch(String bizDate, String calendarCode, String catchUpPolicy, List<FrozenTarget> targets) {}
+
+    private record FrozenTarget(
+            String jobCode, String sourceKey, Long workflowDefinitionId, ApprovalSubmitCommand approval) {}
+
+    private String shortenItemKey(String idempotencyKey, String jobCode, String prefix) {
+        // 长度前缀避免不同请求和作业组合产生相同输入。
+        String source = idempotencyKey.length() + ":" + idempotencyKey + jobCode;
+        try {
+            MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+            byte[] hash = digest.digest(source.getBytes(StandardCharsets.UTF_8));
+            return prefix + HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private String approvePendingCatchUpRequest(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
+        String tenantId = ops.resolveTenant(request.getTenantId());
+        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+        // P0-1(2026-05-16):同 ConsoleJobOpsSupport.delegateLaunch — 走带 X-Internal-Secret 的 client
+        RestClient restClient = triggerInternalRestClient.client();
+        RestClient.RequestBodySpec requestBody = restClient
+                .post()
+                .uri("/api/triggers/catch-up/approve")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId());
+        String safeRequestId = ConsoleTextSanitizer.safeInput(request.getRequestId(), REQUEST_ID_MAX_LENGTH);
+        String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
+        CatchUpApprovalPayload payload = new CatchUpApprovalPayload(tenantId, safeRequestId, safeReason);
+        CommonResponse<LaunchResponse> response = requestBody
+                .body(payload)
+                .retrieve()
+                .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
+        if (response == null || response.data() == null) {
+            throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
+        }
+        return response.data().instanceNo();
+    }
+
+    private List<String> resolveJobCodes(
+            String tenantId, String calendarCode, LocalDate bizDate, List<String> requestedJobCodes) {
+        if (requestedJobCodes != null && !requestedJobCodes.isEmpty()) {
+            return requestedJobCodes.stream()
+                    .filter(ops::hasText)
+                    .map(code -> ConsoleTextSanitizer.safeInput(code, JOB_CODE_MAX_LENGTH))
+                    .distinct()
+                    .toList();
+        }
+        return batchDayMapper.selectFailedJobCodes(tenantId, calendarCode, bizDate);
+    }
+
+    private Long resolveManagedWorkflowId(String tenantId, String jobCode) {
+        JobDefinitionView job = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+        if (EmptyChecks.isNull(job)) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
+        }
+        if (Boolean.FALSE.equals(job.getEnabled())) {
+            throw BizException.of(ResultCode.VALIDATION_ERROR, "error.job.definition_disabled");
+        }
+        Long workflowDefinitionId = job.getDefaultWorkflowDefinitionId();
+        if (!managedJobWorkflowReference.isEnabledSingleJobWorkflow(tenantId, workflowDefinitionId, job.getId())) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.single_job_link_missing");
+        }
+        return workflowDefinitionId;
+    }
+
+    private record CatchUpApprovalPayload(String tenantId, String requestId, String reason) {}
 }

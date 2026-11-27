@@ -6,5 +6,5 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
 /** 外部交付依赖健康状态的统一调度准入。 */
 public interface DownstreamAdmissionGuard {
 
-  ResourceCheck check(ResourceSchedulingRequest request);
+    ResourceCheck check(ResourceSchedulingRequest request);
 }

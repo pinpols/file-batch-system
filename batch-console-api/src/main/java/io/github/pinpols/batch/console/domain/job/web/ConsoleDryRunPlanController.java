@@ -35,18 +35,17 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
 public class ConsoleDryRunPlanController {
 
-  private final ConsoleOrchestratorPort orchestratorProxy;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestratorProxy;
+    private final ConsoleResponseFactory responseFactory;
 
-  @PostMapping("/plan")
-  public CommonResponse<ConsoleDryRunPlanResponse> plan(
-      @Valid @RequestBody DryRunPlanRequest request) {
-    // R6 P0-2 加固：解析当前主体的 tenantId 后强制覆盖 body 里的 tenantId；
-    // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，不再让"客户端任传 tenantId"成立。
-    CommonResponse<ConsoleDryRunPlanResponse> resp = orchestratorProxy.dryRunPlan(request);
-    // J1 bugfix 2026-06-04:orchestrator 返 CommonResponse<DryRunPlanResult> envelope;
-    // 直接 success(resp) 会让 FE 见到 {success:true, data:{success:true, data:{...}}} 嵌套,
-    // ADR-026 e2e integration-adr-features:18 据此误判 success=false。透传 envelope.data。
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @PostMapping("/plan")
+    public CommonResponse<ConsoleDryRunPlanResponse> plan(@Valid @RequestBody DryRunPlanRequest request) {
+        // R6 P0-2 加固：解析当前主体的 tenantId 后强制覆盖 body 里的 tenantId；
+        // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，不再让"客户端任传 tenantId"成立。
+        CommonResponse<ConsoleDryRunPlanResponse> resp = orchestratorProxy.dryRunPlan(request);
+        // J1 bugfix 2026-06-04:orchestrator 返 CommonResponse<DryRunPlanResult> envelope;
+        // 直接 success(resp) 会让 FE 见到 {success:true, data:{success:true, data:{...}}} 嵌套,
+        // ADR-026 e2e integration-adr-features:18 据此误判 success=false。透传 envelope.data。
+        return responseFactory.forwardOrchestrator(resp);
+    }
 }

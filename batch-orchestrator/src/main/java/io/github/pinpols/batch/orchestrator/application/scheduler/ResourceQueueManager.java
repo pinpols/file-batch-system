@@ -9,5 +9,5 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
  */
 public interface ResourceQueueManager {
 
-  ResourceQueueEntity resolveQueue(ResourceSchedulingRequest request);
+    ResourceQueueEntity resolveQueue(ResourceSchedulingRequest request);
 }

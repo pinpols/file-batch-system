@@ -24,12 +24,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleSdkCatalogController {
 
-  private final ConsoleSdkCatalogService catalogService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleSdkCatalogService catalogService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** GET /api/console/sdk/catalog — SDK 开发者门户目录(协议版本 / 各语言 / 共享常量 / 文档)。 */
-  @GetMapping("/catalog")
-  public CommonResponse<SdkCatalog> catalog() {
-    return responseFactory.success(catalogService.catalog());
-  }
+    /** GET /api/console/sdk/catalog — SDK 开发者门户目录(协议版本 / 各语言 / 共享常量 / 文档)。 */
+    @GetMapping("/catalog")
+    public CommonResponse<SdkCatalog> catalog() {
+        return responseFactory.success(catalogService.catalog());
+    }
 }

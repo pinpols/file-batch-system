@@ -28,83 +28,82 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("Workflow 插入与全量更新 SQL 的调度开关列与参数绑定")
 class WorkflowDefinitionMapperXmlTest {
 
-  @Mock
-  private PreparedStatement statement;
+    @Mock
+    private PreparedStatement statement;
 
-  @ParameterizedTest
-  @NullSource
-  @ValueSource(booleans = {true, false})
-  @DisplayName("显式开关绑定到调度列,缺省值保留普通创建的启用语义")
-  void shouldBindScheduleSwitch_whenInsertingWorkflow(Boolean scheduleEnabled) throws Exception {
-    Configuration configuration = mapperConfiguration();
-    WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
-    entity.setTenantId("tenant-a");
-    entity.setWorkflowCode("WF_INSERT");
-    entity.setScheduleEnabled(scheduleEnabled);
-    MappedStatement mapped =
-        configuration.getMappedStatement(WorkflowDefinitionMapper.class.getName() + ".insert");
-    BoundSql bound = mapped.getBoundSql(entity);
-    Matcher insert = Pattern.compile(
-            "insert into batch\\.workflow_definition\\s*\\((.*?)\\)\\s*values\\s*\\((.*?)\\)",
-            Pattern.DOTALL)
-        .matcher(bound.getSql());
-    assertThat(insert.find()).isTrue();
-    List<String> columns =
-        Arrays.stream(insert.group(1).split(",")).map(String::trim).toList();
-    List<String> values =
-        Arrays.stream(insert.group(2).split(",")).map(String::trim).toList();
-    assertThat(values).hasSameSizeAs(columns);
-    int scheduleColumn = columns.indexOf("schedule_enabled");
-    assertThat(scheduleColumn).isNotNegative();
-    if (scheduleEnabled == null) {
-      assertThat(values.get(scheduleColumn)).isEqualTo("true");
-    } else {
-      assertThat(values.get(scheduleColumn)).isEqualTo("?");
-      int parameterIndex = (int)
-          values.subList(0, scheduleColumn + 1).stream().filter("?"::equals).count();
-      new DefaultParameterHandler(mapped, entity, bound).setParameters(statement);
-      verify(statement).setBoolean(parameterIndex, scheduleEnabled);
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(booleans = {true, false})
+    @DisplayName("显式开关绑定到调度列,缺省值保留普通创建的启用语义")
+    void shouldBindScheduleSwitch_whenInsertingWorkflow(Boolean scheduleEnabled) throws Exception {
+        Configuration configuration = mapperConfiguration();
+        WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
+        entity.setTenantId("tenant-a");
+        entity.setWorkflowCode("WF_INSERT");
+        entity.setScheduleEnabled(scheduleEnabled);
+        MappedStatement mapped = configuration.getMappedStatement(WorkflowDefinitionMapper.class.getName() + ".insert");
+        BoundSql bound = mapped.getBoundSql(entity);
+        Matcher insert = Pattern.compile(
+                        "insert into batch\\.workflow_definition\\s*\\((.*?)\\)\\s*values\\s*\\((.*?)\\)",
+                        Pattern.DOTALL)
+                .matcher(bound.getSql());
+        assertThat(insert.find()).isTrue();
+        List<String> columns =
+                Arrays.stream(insert.group(1).split(",")).map(String::trim).toList();
+        List<String> values =
+                Arrays.stream(insert.group(2).split(",")).map(String::trim).toList();
+        assertThat(values).hasSameSizeAs(columns);
+        int scheduleColumn = columns.indexOf("schedule_enabled");
+        assertThat(scheduleColumn).isNotNegative();
+        if (scheduleEnabled == null) {
+            assertThat(values.get(scheduleColumn)).isEqualTo("true");
+        } else {
+            assertThat(values.get(scheduleColumn)).isEqualTo("?");
+            int parameterIndex = (int) values.subList(0, scheduleColumn + 1).stream()
+                    .filter("?"::equals)
+                    .count();
+            new DefaultParameterHandler(mapped, entity, bound).setParameters(statement);
+            verify(statement).setBoolean(parameterIndex, scheduleEnabled);
+        }
     }
-  }
 
-  @ParameterizedTest
-  @NullSource
-  @ValueSource(booleans = {true, false})
-  @DisplayName("全量更新只在参数显式给出时写定时开关列")
-  void shouldWriteScheduleSwitchOnlyWhenProvided_whenUpdatingWorkflow(Boolean scheduleEnabled)
-      throws Exception {
-    Configuration configuration = mapperConfiguration();
-    WorkflowDefinitionVersionUpdateParam param = WorkflowDefinitionVersionUpdateParam.builder()
-        .tenantId("tenant-a")
-        .id(1L)
-        .expectedVersion(2)
-        .workflowName("WF_UPDATE")
-        .workflowType("DAG")
-        .enabled(true)
-        .scheduleEnabled(scheduleEnabled)
-        .scheduleType("CRON")
-        .scheduleExpr("0 0 1 * * ?")
-        .timezone("UTC")
-        .triggerMode("SCHEDULED")
-        .build();
-    MappedStatement mapped = configuration.getMappedStatement(
-        WorkflowDefinitionMapper.class.getName() + ".updateAndBumpVersion");
-    String sql = mapped.getBoundSql(param).getSql();
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(booleans = {true, false})
+    @DisplayName("全量更新只在参数显式给出时写定时开关列")
+    void shouldWriteScheduleSwitchOnlyWhenProvided_whenUpdatingWorkflow(Boolean scheduleEnabled) throws Exception {
+        Configuration configuration = mapperConfiguration();
+        WorkflowDefinitionVersionUpdateParam param = WorkflowDefinitionVersionUpdateParam.builder()
+                .tenantId("tenant-a")
+                .id(1L)
+                .expectedVersion(2)
+                .workflowName("WF_UPDATE")
+                .workflowType("DAG")
+                .enabled(true)
+                .scheduleEnabled(scheduleEnabled)
+                .scheduleType("CRON")
+                .scheduleExpr("0 0 1 * * ?")
+                .timezone("UTC")
+                .triggerMode("SCHEDULED")
+                .build();
+        MappedStatement mapped =
+                configuration.getMappedStatement(WorkflowDefinitionMapper.class.getName() + ".updateAndBumpVersion");
+        String sql = mapped.getBoundSql(param).getSql();
 
-    if (scheduleEnabled == null) {
-      assertThat(sql).doesNotContain("schedule_enabled");
-    } else {
-      assertThat(sql).contains("schedule_enabled = ?");
+        if (scheduleEnabled == null) {
+            assertThat(sql).doesNotContain("schedule_enabled");
+        } else {
+            assertThat(sql).contains("schedule_enabled = ?");
+        }
     }
-  }
 
-  private Configuration mapperConfiguration() throws Exception {
-    Configuration configuration = new Configuration();
-    String resource = "mapper/WorkflowDefinitionMapper.xml";
-    try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
-      assertThat(input).isNotNull();
-      new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+    private Configuration mapperConfiguration() throws Exception {
+        Configuration configuration = new Configuration();
+        String resource = "mapper/WorkflowDefinitionMapper.xml";
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
+            assertThat(input).isNotNull();
+            new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+        }
+        return configuration;
     }
-    return configuration;
-  }
 }

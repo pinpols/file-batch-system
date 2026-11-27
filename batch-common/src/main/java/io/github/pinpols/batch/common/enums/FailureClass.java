@@ -28,33 +28,32 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum FailureClass implements DictEnum {
-  INFRASTRUCTURE("INFRASTRUCTURE", "基础设施异常 — 自动重试候选"),
-  DATA_QUALITY("DATA_QUALITY", "数据质量异常 — 业务方介入"),
-  BUSINESS_RULE("BUSINESS_RULE", "业务规则异常 — 跳过或人工裁决"),
-  CONFIG("CONFIG", "配置异常 — ops 修配置后 RERUN"),
-  UPSTREAM_DELAY("UPSTREAM_DELAY", "上游延迟 — 等待 / WAITING_DEPENDENCY"),
-  TIMEOUT("TIMEOUT", "超时 — 上下文相关"),
-  UNKNOWN("UNKNOWN", "未分类 — 需要 ops 人工判定");
+    INFRASTRUCTURE("INFRASTRUCTURE", "基础设施异常 — 自动重试候选"),
+    DATA_QUALITY("DATA_QUALITY", "数据质量异常 — 业务方介入"),
+    BUSINESS_RULE("BUSINESS_RULE", "业务规则异常 — 跳过或人工裁决"),
+    CONFIG("CONFIG", "配置异常 — ops 修配置后 RERUN"),
+    UPSTREAM_DELAY("UPSTREAM_DELAY", "上游延迟 — 等待 / WAITING_DEPENDENCY"),
+    TIMEOUT("TIMEOUT", "超时 — 上下文相关"),
+    UNKNOWN("UNKNOWN", "未分类 — 需要 ops 人工判定");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 
-  /** 空白回落 UNKNOWN; 未知 code 抛异常, 避免静默捕获并抑制。 */
-  public static FailureClass fromCode(String code) {
-    if (code == null || code.isBlank()) {
-      return UNKNOWN;
+    /** 空白回落 UNKNOWN; 未知 code 抛异常, 避免静默捕获并抑制。 */
+    public static FailureClass fromCode(String code) {
+        if (code == null || code.isBlank()) {
+            return UNKNOWN;
+        }
+        FailureClass match = DictEnum.fromCode(FailureClass.class, code);
+        if (match == null) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.enum.unknown_failure_class_code", code);
+        }
+        return match;
     }
-    FailureClass match = DictEnum.fromCode(FailureClass.class, code);
-    if (match == null) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.enum.unknown_failure_class_code", code);
-    }
-    return match;
-  }
 
-  /** 安全变体: 空白 / 未知 code 都返回 UNKNOWN（worker 上报路径用，避免反序列化抛异常）。 */
-  public static FailureClass fromCodeOrUnknown(String code) {
-    FailureClass match = DictEnum.fromCode(FailureClass.class, code);
-    return match != null ? match : UNKNOWN;
-  }
+    /** 安全变体: 空白 / 未知 code 都返回 UNKNOWN（worker 上报路径用，避免反序列化抛异常）。 */
+    public static FailureClass fromCodeOrUnknown(String code) {
+        FailureClass match = DictEnum.fromCode(FailureClass.class, code);
+        return match != null ? match : UNKNOWN;
+    }
 }

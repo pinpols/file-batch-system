@@ -18,12 +18,12 @@ import org.springframework.core.annotation.AliasFor;
 @Target(ElementType.TYPE)
 public @interface E2eSpringBootTest {
 
-  @AliasFor(annotation = SpringBootTest.class, attribute = "classes")
-  Class<?>[] classes() default {};
+    @AliasFor(annotation = SpringBootTest.class, attribute = "classes")
+    Class<?>[] classes() default {};
 
-  @AliasFor(annotation = SpringBootTest.class, attribute = "webEnvironment")
-  SpringBootTest.WebEnvironment webEnvironment() default SpringBootTest.WebEnvironment.MOCK;
+    @AliasFor(annotation = SpringBootTest.class, attribute = "webEnvironment")
+    SpringBootTest.WebEnvironment webEnvironment() default SpringBootTest.WebEnvironment.MOCK;
 
-  @AliasFor(annotation = SpringBootTest.class, attribute = "properties")
-  String[] properties() default {};
+    @AliasFor(annotation = SpringBootTest.class, attribute = "properties")
+    String[] properties() default {};
 }

@@ -14,20 +14,20 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class CompensationTransactionExecutor {
 
-  private final TransactionTemplate required;
-  private final TransactionTemplate requiresNew;
+    private final TransactionTemplate required;
+    private final TransactionTemplate requiresNew;
 
-  public CompensationTransactionExecutor(PlatformTransactionManager transactionManager) {
-    required = new TransactionTemplate(transactionManager);
-    requiresNew = new TransactionTemplate(transactionManager);
-    requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-  }
+    public CompensationTransactionExecutor(PlatformTransactionManager transactionManager) {
+        required = new TransactionTemplate(transactionManager);
+        requiresNew = new TransactionTemplate(transactionManager);
+        requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
 
-  <T> T required(Supplier<T> action) {
-    return required.execute(status -> action.get());
-  }
+    <T> T required(Supplier<T> action) {
+        return required.execute(status -> action.get());
+    }
 
-  void requiresNew(Runnable action) {
-    requiresNew.executeWithoutResult(status -> action.run());
-  }
+    void requiresNew(Runnable action) {
+        requiresNew.executeWithoutResult(status -> action.run());
+    }
 }

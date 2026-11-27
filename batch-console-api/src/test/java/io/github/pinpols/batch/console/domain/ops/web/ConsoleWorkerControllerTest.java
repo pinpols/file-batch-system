@@ -32,71 +32,68 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleWorkerControllerTest {
 
-  @Mock
-  private ConsoleWorkerApplicationService applicationService;
+    @Mock
+    private ConsoleWorkerApplicationService applicationService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleWorkerController(applicationService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWorkerController(applicationService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("幂等缺失:未携带幂等键时返回参数错误, 且不调用业务服务")
-  void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/workers/w1/drain").contentType(APPLICATION_JSON).content("""
+    @Test
+    @DisplayName("幂等缺失:未携带幂等键时返回参数错误, 且不调用业务服务")
+    void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
+        mockMvc.perform(post("/api/console/workers/w1/drain")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
 
-    verifyNoInteractions(applicationService);
-  }
+        verifyNoInteractions(applicationService);
+    }
 
-  @Test
-  @DisplayName("排空成功:返回成功响应并回填排空后状态")
-  void shouldDrainAndReturnCommonResponseOnSuccess() throws Exception {
-    when(applicationService.drain(anyString(), any(), anyString()))
-        .thenReturn(ConsoleWorkerRegistryResponse.builder()
-            .id(1L)
-            .tenantId("t1")
-            .workerCode("w1")
-            .workerGroup("group-a")
-            .status("DRAINING")
-            .heartbeatAt(BatchDateTimeSupport.utcNow())
-            .currentLoad(0)
-            .taskCapabilities(List.of())
-            .build());
+    @Test
+    @DisplayName("排空成功:返回成功响应并回填排空后状态")
+    void shouldDrainAndReturnCommonResponseOnSuccess() throws Exception {
+        when(applicationService.drain(anyString(), any(), anyString()))
+                .thenReturn(ConsoleWorkerRegistryResponse.builder()
+                        .id(1L)
+                        .tenantId("t1")
+                        .workerCode("w1")
+                        .workerGroup("group-a")
+                        .status("DRAINING")
+                        .heartbeatAt(BatchDateTimeSupport.utcNow())
+                        .currentLoad(0)
+                        .taskCapabilities(List.of())
+                        .build());
 
-    mockMvc
-        .perform(post("/api/console/workers/w1/drain")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/workers/w1/drain")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.status").value("DRAINING"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.status").value("DRAINING"));
+    }
 }

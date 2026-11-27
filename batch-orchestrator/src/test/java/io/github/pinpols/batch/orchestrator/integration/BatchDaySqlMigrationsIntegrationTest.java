@@ -24,162 +24,159 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("批次日相关数据库迁移 - 校验空库全量迁移,旧库升级路径与重复执行幂等性")
 class BatchDaySqlMigrationsIntegrationTest {
 
-  @Container
-  @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      TestPostgresContainers.create("batch_day_sql_guard");
+    @Container
+    @SuppressWarnings("resource")
+    private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create("batch_day_sql_guard");
 
-  @Test
-  @DisplayName("空库全量迁移后批次日实例表,业务日历新增列与乐观锁列齐备且唯一约束生效")
-  void emptyDb_migration_createsBatchDayInstanceAndBusinessCalendarColumns() {
-    final String insertBatchDayInstanceSql = """
+    @Test
+    @DisplayName("空库全量迁移后批次日实例表,业务日历新增列与乐观锁列齐备且唯一约束生效")
+    void emptyDb_migration_createsBatchDayInstanceAndBusinessCalendarColumns() {
+        final String insertBatchDayInstanceSql = """
             insert into batch.batch_day_instance(
               tenant_id, calendar_code, biz_date, day_status
             ) values ('t1', 'CAL', date '2026-03-27', 'NOT_REAL')
             """;
 
-    resetDb();
+        resetDb();
 
-    flywayConfiguration().load().migrate();
+        flywayConfiguration().load().migrate();
 
-    JdbcTemplate jdbc = jdbc();
-    try {
-      assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
-          .isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "late_arrival_tolerance_min"))
-          .isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
-          .isTrue();
+        JdbcTemplate jdbc = jdbc();
+        try {
+            assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
+            assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
+                    .isTrue();
+            assertThat(columnExists(jdbc, "batch", "business_calendar", "late_arrival_tolerance_min"))
+                    .isTrue();
+            assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
+                    .isTrue();
 
-      assertThat(
-              uniqueConstraintExists(jdbc, "batch", "batch_day_instance", "uk_batch_day_instance"))
-          .isTrue();
-      // V32：乐观锁 version 列
-      assertThat(columnExists(jdbc, "batch", "job_instance", "version")).isTrue();
-      assertThat(columnExists(jdbc, "batch", "job_partition", "version")).isTrue();
-      assertThat(columnExists(jdbc, "batch", "job_task", "version")).isTrue();
+            assertThat(uniqueConstraintExists(jdbc, "batch", "batch_day_instance", "uk_batch_day_instance"))
+                    .isTrue();
+            // V32：乐观锁 version 列
+            assertThat(columnExists(jdbc, "batch", "job_instance", "version")).isTrue();
+            assertThat(columnExists(jdbc, "batch", "job_partition", "version")).isTrue();
+            assertThat(columnExists(jdbc, "batch", "job_task", "version")).isTrue();
 
-      // sanity check：day_status check constraint 至少可用（非法值应失败）
-      try {
-        jdbc.update(insertBatchDayInstanceSql);
-        assertThat(true)
-            .as("invalid day_status should fail by check constraint")
-            .isFalse();
-      } catch (Exception expected) {
-        // ok: constraint violation
-      }
-    } catch (Exception expected) {
-      // ok: 期待约束异常
-    } finally {
-      closeJdbc(jdbc);
+            // sanity check：day_status check constraint 至少可用（非法值应失败）
+            try {
+                jdbc.update(insertBatchDayInstanceSql);
+                assertThat(true)
+                        .as("invalid day_status should fail by check constraint")
+                        .isFalse();
+            } catch (Exception expected) {
+                // ok: constraint violation
+            }
+        } catch (Exception expected) {
+            // ok: 期待约束异常
+        } finally {
+            closeJdbc(jdbc);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("旧库先停在早期版本时新结构缺失,补跑全量迁移后补齐且重复迁移不追加已应用记录")
-  void existingDb_upgradeFromBeforeV31_appliesV31AndIsIdempotent() {
-    resetDb();
+    @Test
+    @DisplayName("旧库先停在早期版本时新结构缺失,补跑全量迁移后补齐且重复迁移不追加已应用记录")
+    void existingDb_upgradeFromBeforeV31_appliesV31AndIsIdempotent() {
+        resetDb();
 
-    // 先模拟已有库：只跑到 V29（target 设成 30 时等价于“<=29”，不要求 V30 脚本存在）
-    Flyway configured = flywayConfiguration()
-        // 飞行目标必须存在真实迁移版本；用 V29 作为 V31 之前的“已升级到尽可能多”
-        .target("29")
-        .load();
-    configured.migrate();
+        // 先模拟已有库：只跑到 V29（target 设成 30 时等价于“<=29”，不要求 V30 脚本存在）
+        Flyway configured = flywayConfiguration()
+                // 飞行目标必须存在真实迁移版本；用 V29 作为 V31 之前的“已升级到尽可能多”
+                .target("29")
+                .load();
+        configured.migrate();
 
-    JdbcTemplate jdbc = jdbc();
-    try {
-      assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isFalse();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
-          .isFalse();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "late_arrival_tolerance_min"))
-          .isFalse();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
-          .isFalse();
+        JdbcTemplate jdbc = jdbc();
+        try {
+            assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isFalse();
+            assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
+                    .isFalse();
+            assertThat(columnExists(jdbc, "batch", "business_calendar", "late_arrival_tolerance_min"))
+                    .isFalse();
+            assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
+                    .isFalse();
 
-      // 再全量升级到最新版（补齐 V31/V32...）
-      flywayConfiguration().load().migrate();
+            // 再全量升级到最新版（补齐 V31/V32...）
+            flywayConfiguration().load().migrate();
 
-      assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
-          .isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "late_arrival_tolerance_min"))
-          .isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
-          .isTrue();
-      assertThat(columnExists(jdbc, "batch", "job_instance", "version")).isTrue();
-      assertThat(columnExists(jdbc, "batch", "job_partition", "version")).isTrue();
-      assertThat(columnExists(jdbc, "batch", "job_task", "version")).isTrue();
+            assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
+            assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
+                    .isTrue();
+            assertThat(columnExists(jdbc, "batch", "business_calendar", "late_arrival_tolerance_min"))
+                    .isTrue();
+            assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
+                    .isTrue();
+            assertThat(columnExists(jdbc, "batch", "job_instance", "version")).isTrue();
+            assertThat(columnExists(jdbc, "batch", "job_partition", "version")).isTrue();
+            assertThat(columnExists(jdbc, "batch", "job_task", "version")).isTrue();
 
-      // 幂等性：重复 migrate，不应改变 flyway_schema_history 的 applied 行数
-      Flyway fullFlyway = flywayConfiguration().load();
-      long historyBefore = flywayHistoryCount(jdbc);
-      fullFlyway.migrate();
-      long historyAfter = flywayHistoryCount(jdbc);
-      assertThat(historyAfter).isEqualTo(historyBefore);
-    } finally {
-      closeJdbc(jdbc);
+            // 幂等性：重复 migrate，不应改变 flyway_schema_history 的 applied 行数
+            Flyway fullFlyway = flywayConfiguration().load();
+            long historyBefore = flywayHistoryCount(jdbc);
+            fullFlyway.migrate();
+            long historyAfter = flywayHistoryCount(jdbc);
+            assertThat(historyAfter).isEqualTo(historyBefore);
+        } finally {
+            closeJdbc(jdbc);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("迁移连续执行两次时第二次得到的已应用版本集合与首次一致")
-  void flywayMigrate_isIdempotent_secondRunSameAppliedSet() {
-    resetDb();
+    @Test
+    @DisplayName("迁移连续执行两次时第二次得到的已应用版本集合与首次一致")
+    void flywayMigrate_isIdempotent_secondRunSameAppliedSet() {
+        resetDb();
 
-    Flyway flyway = flywayConfiguration().load();
+        Flyway flyway = flywayConfiguration().load();
 
-    flyway.migrate();
-    List<String> applied1 = Arrays.stream(flyway.info().applied())
-        .filter(Objects::nonNull)
-        .map(MigrationInfo::getVersion)
-        .filter(Objects::nonNull)
-        .map(Object::toString)
-        .toList();
+        flyway.migrate();
+        List<String> applied1 = Arrays.stream(flyway.info().applied())
+                .filter(Objects::nonNull)
+                .map(MigrationInfo::getVersion)
+                .filter(Objects::nonNull)
+                .map(Object::toString)
+                .toList();
 
-    flyway.migrate();
-    List<String> applied2 = Arrays.stream(flyway.info().applied())
-        .filter(Objects::nonNull)
-        .map(MigrationInfo::getVersion)
-        .filter(Objects::nonNull)
-        .map(Object::toString)
-        .toList();
+        flyway.migrate();
+        List<String> applied2 = Arrays.stream(flyway.info().applied())
+                .filter(Objects::nonNull)
+                .map(MigrationInfo::getVersion)
+                .filter(Objects::nonNull)
+                .map(Object::toString)
+                .toList();
 
-    assertThat(applied2).containsExactlyInAnyOrderElementsOf(applied1);
-  }
-
-  private static JdbcTemplate jdbc() {
-    SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
-        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
-    return new JdbcTemplate(dataSource);
-  }
-
-  private static void closeJdbc(JdbcTemplate jdbc) {
-    if (jdbc == null) {
-      return;
+        assertThat(applied2).containsExactlyInAnyOrderElementsOf(applied1);
     }
-    // JdbcTemplate 没有直接暴露 destroy，这里通过底层 DataSource 释放连接
-    if (jdbc.getDataSource() instanceof SingleConnectionDataSource s) {
-      s.destroy();
-    }
-  }
 
-  private static boolean tableExists(JdbcTemplate jdbc, String schema, String table) {
-    final String selectCountSql = """
+    private static JdbcTemplate jdbc() {
+        SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
+        return new JdbcTemplate(dataSource);
+    }
+
+    private static void closeJdbc(JdbcTemplate jdbc) {
+        if (jdbc == null) {
+            return;
+        }
+        // JdbcTemplate 没有直接暴露 destroy，这里通过底层 DataSource 释放连接
+        if (jdbc.getDataSource() instanceof SingleConnectionDataSource s) {
+            s.destroy();
+        }
+    }
+
+    private static boolean tableExists(JdbcTemplate jdbc, String schema, String table) {
+        final String selectCountSql = """
             select count(*)
             from information_schema.tables
             where table_schema = ?
               and table_name = ?
             """;
 
-    Long cnt = jdbc.queryForObject(selectCountSql, Long.class, schema, table);
-    return cnt != null && cnt > 0;
-  }
+        Long cnt = jdbc.queryForObject(selectCountSql, Long.class, schema, table);
+        return cnt != null && cnt > 0;
+    }
 
-  private static boolean columnExists(
-      JdbcTemplate jdbc, String schema, String table, String column) {
-    final String selectCountSql = """
+    private static boolean columnExists(JdbcTemplate jdbc, String schema, String table, String column) {
+        final String selectCountSql = """
             select count(*)
             from information_schema.columns
             where table_schema = ?
@@ -187,13 +184,13 @@ class BatchDaySqlMigrationsIntegrationTest {
               and column_name = ?
             """;
 
-    Long cnt = jdbc.queryForObject(selectCountSql, Long.class, schema, table, column);
-    return cnt != null && cnt > 0;
-  }
+        Long cnt = jdbc.queryForObject(selectCountSql, Long.class, schema, table, column);
+        return cnt != null && cnt > 0;
+    }
 
-  private static boolean uniqueConstraintExists(
-      JdbcTemplate jdbc, String schema, String table, String constraintName) {
-    final String selectCountSql = """
+    private static boolean uniqueConstraintExists(
+            JdbcTemplate jdbc, String schema, String table, String constraintName) {
+        final String selectCountSql = """
             select count(*)
             from information_schema.table_constraints tc
             where tc.table_schema = ?
@@ -202,29 +199,29 @@ class BatchDaySqlMigrationsIntegrationTest {
               and tc.constraint_type in ('UNIQUE', 'PRIMARY KEY')
             """;
 
-    Long cnt = jdbc.queryForObject(selectCountSql, Long.class, schema, table, constraintName);
-    return cnt != null && cnt > 0;
-  }
+        Long cnt = jdbc.queryForObject(selectCountSql, Long.class, schema, table, constraintName);
+        return cnt != null && cnt > 0;
+    }
 
-  private static void resetDb() {
-    Flyway resetFlyway = flywayConfiguration().cleanDisabled(false).load();
-    resetFlyway.clean();
-  }
+    private static void resetDb() {
+        Flyway resetFlyway = flywayConfiguration().cleanDisabled(false).load();
+        resetFlyway.clean();
+    }
 
-  private static FluentConfiguration flywayConfiguration() {
-    return Flyway.configure()
-        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz", "archive")
-        .defaultSchema("batch")
-        .locations("classpath:db/migration")
-        .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));
-  }
+    private static FluentConfiguration flywayConfiguration() {
+        return Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .schemas("batch", "quartz", "archive")
+                .defaultSchema("batch")
+                .locations("classpath:db/migration")
+                .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));
+    }
 
-  private static long flywayHistoryCount(JdbcTemplate jdbc) {
-    final String selectCountSql = """
+    private static long flywayHistoryCount(JdbcTemplate jdbc) {
+        final String selectCountSql = """
         select count(*) from batch.flyway_schema_history
     """;
 
-    return jdbc.queryForObject(selectCountSql, Long.class);
-  }
+        return jdbc.queryForObject(selectCountSql, Long.class);
+    }
 }

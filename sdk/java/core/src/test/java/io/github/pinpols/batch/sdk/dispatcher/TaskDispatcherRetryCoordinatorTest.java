@@ -23,63 +23,60 @@ import org.slf4j.LoggerFactory;
 @DisplayName("TaskDispatcher 认领重试协调 — 鉴权失败判致命,冲突视为同伴持有")
 class TaskDispatcherRetryCoordinatorTest {
 
-  private PlatformHttpClient httpClient;
-  private TaskDispatcherRetryCoordinator coordinator;
+    private PlatformHttpClient httpClient;
+    private TaskDispatcherRetryCoordinator coordinator;
 
-  @BeforeEach
-  void setUp() {
-    httpClient = mock(PlatformHttpClient.class);
-    coordinator = new TaskDispatcherRetryCoordinator(
-        config(),
-        httpClient,
-        ThrottledLogger.create(
-            LoggerFactory.getLogger(TaskDispatcherRetryCoordinatorTest.class),
-            Duration.ofSeconds(1)));
-  }
+    @BeforeEach
+    void setUp() {
+        httpClient = mock(PlatformHttpClient.class);
+        coordinator = new TaskDispatcherRetryCoordinator(
+                config(),
+                httpClient,
+                ThrottledLogger.create(
+                        LoggerFactory.getLogger(TaskDispatcherRetryCoordinatorTest.class), Duration.ofSeconds(1)));
+    }
 
-  @Test
-  @DisplayName("认领遇到鉴权失败时标记致命并停止后续认领")
-  void shouldMarkFatal_whenClaimAuthenticationFails() throws Exception {
-    when(httpClient.claim(anyLong(), anyString(), any()))
-        .thenThrow(new PlatformHttpException(401, "unauthorized"));
+    @Test
+    @DisplayName("认领遇到鉴权失败时标记致命并停止后续认领")
+    void shouldMarkFatal_whenClaimAuthenticationFails() throws Exception {
+        when(httpClient.claim(anyLong(), anyString(), any())).thenThrow(new PlatformHttpException(401, "unauthorized"));
 
-    TaskDispatcherRetryCoordinator.ClaimResult result =
-        coordinator.claimWithRetry(message(), "claim-key", Map.of());
+        TaskDispatcherRetryCoordinator.ClaimResult result =
+                coordinator.claimWithRetry(message(), "claim-key", Map.of());
 
-    assertThat(result.claimed()).isFalse();
-    assertThat(coordinator.isFatal()).isTrue();
-    verify(httpClient, times(1)).claim(anyLong(), anyString(), any());
-  }
+        assertThat(result.claimed()).isFalse();
+        assertThat(coordinator.isFatal()).isTrue();
+        verify(httpClient, times(1)).claim(anyLong(), anyString(), any());
+    }
 
-  @Test
-  @DisplayName("认领冲突视为同伴已持有任务,不标记致命且只尝试一次")
-  void shouldTreatAsPeerOwnership_whenClaimConflict() throws Exception {
-    when(httpClient.claim(anyLong(), anyString(), any()))
-        .thenThrow(new PlatformHttpException(409, "already claimed"));
+    @Test
+    @DisplayName("认领冲突视为同伴已持有任务,不标记致命且只尝试一次")
+    void shouldTreatAsPeerOwnership_whenClaimConflict() throws Exception {
+        when(httpClient.claim(anyLong(), anyString(), any()))
+                .thenThrow(new PlatformHttpException(409, "already claimed"));
 
-    TaskDispatcherRetryCoordinator.ClaimResult result =
-        coordinator.claimWithRetry(message(), "claim-key", Map.of());
+        TaskDispatcherRetryCoordinator.ClaimResult result =
+                coordinator.claimWithRetry(message(), "claim-key", Map.of());
 
-    assertThat(result.claimed()).isFalse();
-    assertThat(coordinator.isFatal()).isFalse();
-    verify(httpClient, times(1)).claim(anyLong(), anyString(), any());
-  }
+        assertThat(result.claimed()).isFalse();
+        assertThat(coordinator.isFatal()).isFalse();
+        verify(httpClient, times(1)).claim(anyLong(), anyString(), any());
+    }
 
-  private static BatchPlatformClientConfig config() {
-    return BatchPlatformClientConfig.builder()
-        .baseUrl("http://localhost:0")
-        .tenantId("tenant-a")
-        .workerCode("worker-a")
-        .kafkaBootstrap("localhost:9092")
-        .kafkaTopicPattern("batch.task.*")
-        .kafkaGroupId("worker-a")
-        .claimMax5xxRetries(0)
-        .claimRetryBaseDelay(Duration.ZERO)
-        .build();
-  }
+    private static BatchPlatformClientConfig config() {
+        return BatchPlatformClientConfig.builder()
+                .baseUrl("http://localhost:0")
+                .tenantId("tenant-a")
+                .workerCode("worker-a")
+                .kafkaBootstrap("localhost:9092")
+                .kafkaTopicPattern("batch.task.*")
+                .kafkaGroupId("worker-a")
+                .claimMax5xxRetries(0)
+                .claimRetryBaseDelay(Duration.ZERO)
+                .build();
+    }
 
-  private static TaskDispatchMessage message() {
-    return new TaskDispatchMessage(
-        7L, "tenant-a", "job-a", "IMPORT", "instance-a", Map.of(), Map.of());
-  }
+    private static TaskDispatchMessage message() {
+        return new TaskDispatchMessage(7L, "tenant-a", "job-a", "IMPORT", "instance-a", Map.of(), Map.of());
+    }
 }

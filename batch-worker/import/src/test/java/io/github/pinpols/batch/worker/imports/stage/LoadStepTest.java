@@ -55,401 +55,396 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("导入加载阶段单测:流式分批,演练估算,插件配置错误与暂存文件清理语义")
 class LoadStepTest {
 
-  @Mock
-  private PlatformFileRecordRepository runtimeRepository;
+    @Mock
+    private PlatformFileRecordRepository runtimeRepository;
 
-  @Mock
-  private ImportLoadPlugin plugin;
+    @Mock
+    private ImportLoadPlugin plugin;
 
-  @Mock
-  private TaskExecutionClient taskExecutionClient;
+    @Mock
+    private TaskExecutionClient taskExecutionClient;
 
-  private ImportLoadPluginRegistry registry;
-  private ImportWorkerConfiguration workerConfig;
-  private ObjectMapper objectMapper;
-  private LoadStep loadStep;
+    private ImportLoadPluginRegistry registry;
+    private ImportWorkerConfiguration workerConfig;
+    private ObjectMapper objectMapper;
+    private LoadStep loadStep;
 
-  @TempDir
-  Path tempDir;
+    @TempDir
+    Path tempDir;
 
-  private final List<Path> tempPaths = new ArrayList<>();
+    private final List<Path> tempPaths = new ArrayList<>();
 
-  @BeforeEach
-  void setUp() {
-    when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
-    // 共享 LOAD fixture 的插件声明可安全重放;纯校验和 dry-run 用例不会触达该声明。
-    lenient()
-        .when(plugin.idempotencyCapability())
-        .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
-    registry = new ImportLoadPluginRegistry(List.of(plugin));
-    workerConfig = new ImportWorkerConfiguration(
-        "wc",
-        "wt",
-        "tenant",
-        5_000L,
-        "topic",
-        "cg",
-        List.of(),
-        new FileProcessing(true, 1000, 1000, 2),
-        Boolean.FALSE);
-    objectMapper = new ObjectMapper();
-    loadStep = new LoadStep(
-        registry,
-        runtimeRepository,
-        workerConfig,
-        objectMapper,
-        disabledCheckpoint(),
-        null,
-        new PipelineStageProgressRegistry(),
-        taskExecutionClient);
-  }
-
-  @Test
-  @DisplayName("回放能力按冻结模板选择 LOAD 插件并传递完整模板配置")
-  void replayCapability_usesFrozenLoadTargetAndTemplateConfig() {
-    Map<String, Object> frozenTemplateConfig = Map.of(
-        "load_target_ref",
-        WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED,
-        "table_name",
-        "customer_account");
-    ReplayCapabilityDeclaration expected =
-        ReplayCapabilityDeclaration.unknown(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
-    when(plugin.replayCapability(frozenTemplateConfig)).thenReturn(expected);
-
-    ReplayCapabilityDeclaration actual = loadStep.replayCapability(frozenTemplateConfig);
-
-    assertThat(actual).isEqualTo(expected);
-    verify(plugin).replayCapability(frozenTemplateConfig);
-  }
-
-  @AfterEach
-  void cleanup() throws Exception {
-    for (Path p : tempPaths) {
-      Files.deleteIfExists(p);
+    @BeforeEach
+    void setUp() {
+        when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
+        // 共享 LOAD fixture 的插件声明可安全重放;纯校验和 dry-run 用例不会触达该声明。
+        lenient()
+                .when(plugin.idempotencyCapability())
+                .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
+        registry = new ImportLoadPluginRegistry(List.of(plugin));
+        workerConfig = new ImportWorkerConfiguration(
+                "wc",
+                "wt",
+                "tenant",
+                5_000L,
+                "topic",
+                "cg",
+                List.of(),
+                new FileProcessing(true, 1000, 1000, 2),
+                Boolean.FALSE);
+        objectMapper = new ObjectMapper();
+        loadStep = new LoadStep(
+                registry,
+                runtimeRepository,
+                workerConfig,
+                objectMapper,
+                disabledCheckpoint(),
+                null,
+                new PipelineStageProgressRegistry(),
+                taskExecutionClient);
     }
-  }
 
-  /**
-   * 本类测的是**非续跑** LOAD 行为(positionStore=null)。checkpoint 默认值已在 P0 翻 true,故这些用例必须 显式关闭,否则会走续跑路径 +
-   * 触发幂等前置校验。续跑路径由 {@code LoadStepCheckpoint*Test} 专门覆盖。
-   */
-  private static WorkerCheckpointProperties disabledCheckpoint() {
-    WorkerCheckpointProperties props = new WorkerCheckpointProperties();
-    props.setEnabled(false);
-    return props;
-  }
+    @Test
+    @DisplayName("回放能力按冻结模板选择 LOAD 插件并传递完整模板配置")
+    void replayCapability_usesFrozenLoadTargetAndTemplateConfig() {
+        Map<String, Object> frozenTemplateConfig =
+                Map.of("load_target_ref", WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED, "table_name", "customer_account");
+        ReplayCapabilityDeclaration expected =
+                ReplayCapabilityDeclaration.unknown(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
+        when(plugin.replayCapability(frozenTemplateConfig)).thenReturn(expected);
 
-  // ── stage() ──
+        ReplayCapabilityDeclaration actual = loadStep.replayCapability(frozenTemplateConfig);
 
-  @Test
-  @DisplayName("访问阶段属性时返回加载阶段标识")
-  void shouldReturnLoadStage() {
-    assertThat(loadStep.stage()).isEqualTo(ImportStage.LOAD);
-  }
-
-  @Test
-  @DisplayName("上下文为空时失败,返回上下文缺失错误码")
-  void shouldFail_whenContextIsNull() {
-    ImportStageResult result = loadStep.execute(null);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONTEXT_MISSING");
-  }
-
-  // ── streaming happy path ──
-
-  @Test
-  @DisplayName("流式加载按块分批写出,成功后清理暂存文件并推进文件状态")
-  void shouldStreamingLoad_andCleanupValidatedFile_whenSuccess() throws Exception {
-    Path validated = writeNdjson(List.of(row("C001"), row("C002"), row("C003")));
-    Path parsed = writeNdjson(List.of(row("C001")));
-
-    ImportJobContext ctx = streamingContext(validated, parsed);
-    when(plugin.loadChunk(any(), any())).thenAnswer(inv -> ((List<?>) inv.getArgument(1)).size());
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    // 3 rows / chunkSize=2 → 2 次 flush
-    verify(plugin, times(2)).loadChunk(any(ImportLoadContext.class), any());
-    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 3L);
-    assertThat(ctx.getAttributes()).containsEntry("successCount", 3L);
-    verify(runtimeRepository).updateFileStatus(eq(99L), eq(FileStatus.LOADED.code()), any());
-    // M-5: 成功路径删暂存文件
-    assertThat(Files.exists(validated)).isFalse();
-    assertThat(Files.exists(parsed)).isFalse();
-  }
-
-  @Test
-  @DisplayName("插件抛异常时加载失败,且保留暂存文件便于排查")
-  void shouldKeepValidatedFile_whenPluginThrows() throws Exception {
-    Path validated = writeNdjson(List.of(row("C001"), row("C002")));
-    ImportJobContext ctx = streamingContext(validated, null);
-    when(plugin.loadChunk(any(), any())).thenThrow(new RuntimeException("kaboom"));
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_LOAD_FAILED");
-    // M-5: 失败时保留暂存文件
-    assertThat(Files.exists(validated)).isTrue();
-  }
-
-  @Test
-  @DisplayName("插件抛配置异常时返回配置非法错误码")
-  void shouldReturnConfigInvalid_whenWorkerConfigExceptionRaised() throws Exception {
-    Path validated = writeNdjson(List.of(row("C001")));
-    ImportJobContext ctx = streamingContext(validated, null);
-    when(plugin.loadChunk(any(), any())).thenThrow(new WorkerConfigException("bad cfg"));
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONFIG_INVALID");
-  }
-
-  @Test
-  @DisplayName("记录全部被跳过时直接标记加载完成,不再调用插件")
-  void shouldShortCircuit_whenAllRecordsSkipped() throws Exception {
-    // skippedCount > 0 且 validated 文件为空 → 直接 markLoaded(0)，不调 plugin
-    Path validated = Files.createTempFile("validated-", ".ndjson");
-    tempPaths.add(validated);
-    ImportJobContext ctx = streamingContext(validated, null);
-    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 5L);
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 0L);
-    verify(plugin, never()).loadChunk(any(), any());
-    verify(runtimeRepository).updateFileStatus(eq(99L), eq(FileStatus.LOADED.code()), any());
-  }
-
-  @Test
-  @DisplayName("声明了暂存路径但文件不存在时,返回无载荷失败")
-  void shouldFailNoPayload_whenValidatedPathSetButFileMissing() {
-    ImportJobContext ctx = streamingContext(tempDir.resolve("ghost.ndjson"), null);
-    // streaming path: validated 文件不存在 → IMPORT_LOAD_NO_PAYLOAD(ADR-038 P3 legacy 已下线)
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
-  }
-
-  @Test
-  @DisplayName("未声明暂存路径时返回无载荷失败")
-  void shouldFailNoPayload_whenValidatedPathMissing() {
-    ImportJobContext ctx = baseContext();
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
-  }
-
-  @Test
-  @DisplayName("部分记录跳过且暂存路径缺失时不能将其当作全部跳过")
-  void shouldFailWhenSkippedRecordsAndValidatedPathMissing() throws Exception {
-    ImportJobContext ctx = baseContext();
-    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
-    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
-    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
-    verify(plugin, never()).loadChunk(any(), any());
-  }
-
-  @Test
-  @DisplayName("部分记录跳过且暂存文件丢失时不能标记加载成功")
-  void shouldFailWhenSkippedRecordsAndValidatedFileMissing() throws Exception {
-    ImportJobContext ctx = streamingContext(tempDir.resolve("lost.ndjson"), null);
-    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
-    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
-    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
-    verify(plugin, never()).loadChunk(any(), any());
-  }
-
-  @Test
-  @DisplayName("校验记录大于零但暂存文件为空时不能标记全部跳过")
-  void shouldFailWhenValidatedFileIsEmptyButValidRecordsExist() throws Exception {
-    Path validated = Files.createTempFile("validated-", ".ndjson");
-    tempPaths.add(validated);
-    ImportJobContext ctx = streamingContext(validated, null);
-    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
-    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
-    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
-    verify(plugin, never()).loadChunk(any(), any());
-  }
-
-  @Test
-  @DisplayName("无跳过记录且校验记录大于零时空暂存文件不能成功")
-  void shouldFailWhenValidatedFileIsEmptyWithoutSkippedRecords() throws Exception {
-    Path validated = Files.createTempFile("validated-", ".ndjson");
-    tempPaths.add(validated);
-    ImportJobContext ctx = streamingContext(validated, null);
-    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
-    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
-    verify(plugin, never()).loadChunk(any(), any());
-  }
-
-  // ── dry-run ──
-
-  @Test
-  @DisplayName("演练模式按暂存文件行数估算加载数,不调用插件或更新正式文件状态")
-  void shouldDryRun_estimateLoadedCountFromValidatedFile() throws Exception {
-    Path validated = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
-    ImportJobContext ctx = streamingContext(validated, null);
-    ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 3L);
-    verify(plugin, never()).loadChunk(any(), any());
-    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
-  }
-
-  @Test
-  @DisplayName("演练模式且暂存文件缺失时,加载数计为零")
-  void shouldDryRun_returnZero_whenValidatedPathMissing() {
-    ImportJobContext ctx = baseContext();
-    ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 0L);
-  }
-
-  // ── plugin resolution ──
-
-  @Test
-  @DisplayName("模板配置指定加载目标时,调用对应插件而非默认插件")
-  void shouldUseLoadTargetRefFromTemplateConfig() throws Exception {
-    ImportLoadPlugin custom = mock(ImportLoadPlugin.class);
-    when(custom.id()).thenReturn("custom_plugin");
-    when(custom.idempotencyCapability())
-        .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
-    when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
-    registry = new ImportLoadPluginRegistry(List.of(plugin, custom));
-    loadStep = new LoadStep(
-        registry,
-        runtimeRepository,
-        workerConfig,
-        objectMapper,
-        disabledCheckpoint(),
-        null,
-        new PipelineStageProgressRegistry(),
-        taskExecutionClient);
-
-    Path validated = writeNdjson(List.of(row("C1")));
-    ImportJobContext ctx = streamingContext(validated, null);
-    ctx.getAttributes()
-        .put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("load_target_ref", "custom_plugin"));
-
-    when(custom.loadChunk(any(), any())).thenReturn(1);
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    verify(custom).loadChunk(any(), any());
-    verify(plugin, never()).loadChunk(any(), any());
-  }
-
-  @Test
-  @DisplayName("加载上下文从导入载荷继承批次,业务类型与模板编码")
-  void shouldBuildLoadContext_withImportPayloadFields() throws Exception {
-    Path validated = writeNdjson(List.of(row("C1")));
-    ImportJobContext ctx = streamingContext(validated, null);
-    ImportPayload payload = mock(ImportPayload.class);
-    when(payload.batchNo()).thenReturn("BATCH-42");
-    when(payload.bizType()).thenReturn("CUST");
-    when(payload.templateCode()).thenReturn("T1");
-    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
-    when(plugin.loadChunk(any(), any())).thenReturn(1);
-
-    loadStep.execute(ctx);
-
-    ArgumentCaptor<ImportLoadContext> captor = ArgumentCaptor.forClass(ImportLoadContext.class);
-    verify(plugin).loadChunk(captor.capture(), any());
-    ImportLoadContext loadCtx = captor.getValue();
-    assertThat(loadCtx.batchNo()).isEqualTo("BATCH-42");
-    assertThat(loadCtx.bizType()).isEqualTo("CUST");
-    assertThat(loadCtx.templateCode()).isEqualTo("T1");
-  }
-
-  @Test
-  @DisplayName("存在文件记录时,加载上下文取其中的源文件名")
-  void shouldUseFileRecordFileName_whenAvailable() throws Exception {
-    Path validated = writeNdjson(List.of(row("C1")));
-    ImportJobContext ctx = streamingContext(validated, null);
-    ctx.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, Map.of("file_name", "src.csv"));
-    when(plugin.loadChunk(any(), any())).thenReturn(1);
-
-    loadStep.execute(ctx);
-
-    ArgumentCaptor<ImportLoadContext> captor = ArgumentCaptor.forClass(ImportLoadContext.class);
-    verify(plugin).loadChunk(captor.capture(), any());
-    assertThat(captor.getValue().sourceFileName()).isEqualTo("src.csv");
-  }
-
-  // ── helpers ──
-
-  private ImportJobContext baseContext() {
-    ImportJobContext ctx = new ImportJobContext();
-    ctx.setTenantId("tenant-A");
-    ctx.setJobCode("JOB");
-    ctx.setBizDate("2026-05-24");
-    ctx.setWorkerId("w1");
-    ctx.setFileId("99");
-    Map<String, Object> attrs = new HashMap<>();
-    attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
-    ctx.setAttributes(attrs);
-    return ctx;
-  }
-
-  private ImportJobContext streamingContext(Path validated, Path parsed) {
-    ImportJobContext ctx = baseContext();
-    ctx.getAttributes().put(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH, validated.toString());
-    if (parsed != null) {
-      ctx.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, parsed.toString());
+        assertThat(actual).isEqualTo(expected);
+        verify(plugin).replayCapability(frozenTemplateConfig);
     }
-    return ctx;
-  }
 
-  private Path writeNdjson(List<Map<String, Object>> rows) throws Exception {
-    Path file = Files.createTempFile("validated-", ".ndjson");
-    tempPaths.add(file);
-    StringBuilder sb = new StringBuilder();
-    for (Map<String, Object> row : rows) {
-      sb.append(objectMapper.writeValueAsString(row)).append('\n');
+    @AfterEach
+    void cleanup() throws Exception {
+        for (Path p : tempPaths) {
+            Files.deleteIfExists(p);
+        }
     }
-    Files.writeString(file, sb.toString(), StandardCharsets.UTF_8);
-    return file;
-  }
 
-  private Map<String, Object> row(String cust) {
-    Map<String, Object> m = new HashMap<>();
-    m.put("customerNo", cust);
-    m.put("customerName", "name-" + cust);
-    return m;
-  }
+    /**
+     * 本类测的是**非续跑** LOAD 行为(positionStore=null)。checkpoint 默认值已在 P0 翻 true,故这些用例必须 显式关闭,否则会走续跑路径 +
+     * 触发幂等前置校验。续跑路径由 {@code LoadStepCheckpoint*Test} 专门覆盖。
+     */
+    private static WorkerCheckpointProperties disabledCheckpoint() {
+        WorkerCheckpointProperties props = new WorkerCheckpointProperties();
+        props.setEnabled(false);
+        return props;
+    }
+
+    // ── stage() ──
+
+    @Test
+    @DisplayName("访问阶段属性时返回加载阶段标识")
+    void shouldReturnLoadStage() {
+        assertThat(loadStep.stage()).isEqualTo(ImportStage.LOAD);
+    }
+
+    @Test
+    @DisplayName("上下文为空时失败,返回上下文缺失错误码")
+    void shouldFail_whenContextIsNull() {
+        ImportStageResult result = loadStep.execute(null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONTEXT_MISSING");
+    }
+
+    // ── streaming happy path ──
+
+    @Test
+    @DisplayName("流式加载按块分批写出,成功后清理暂存文件并推进文件状态")
+    void shouldStreamingLoad_andCleanupValidatedFile_whenSuccess() throws Exception {
+        Path validated = writeNdjson(List.of(row("C001"), row("C002"), row("C003")));
+        Path parsed = writeNdjson(List.of(row("C001")));
+
+        ImportJobContext ctx = streamingContext(validated, parsed);
+        when(plugin.loadChunk(any(), any())).thenAnswer(inv -> ((List<?>) inv.getArgument(1)).size());
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isTrue();
+        // 3 rows / chunkSize=2 → 2 次 flush
+        verify(plugin, times(2)).loadChunk(any(ImportLoadContext.class), any());
+        assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 3L);
+        assertThat(ctx.getAttributes()).containsEntry("successCount", 3L);
+        verify(runtimeRepository).updateFileStatus(eq(99L), eq(FileStatus.LOADED.code()), any());
+        // M-5: 成功路径删暂存文件
+        assertThat(Files.exists(validated)).isFalse();
+        assertThat(Files.exists(parsed)).isFalse();
+    }
+
+    @Test
+    @DisplayName("插件抛异常时加载失败,且保留暂存文件便于排查")
+    void shouldKeepValidatedFile_whenPluginThrows() throws Exception {
+        Path validated = writeNdjson(List.of(row("C001"), row("C002")));
+        ImportJobContext ctx = streamingContext(validated, null);
+        when(plugin.loadChunk(any(), any())).thenThrow(new RuntimeException("kaboom"));
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_LOAD_FAILED");
+        // M-5: 失败时保留暂存文件
+        assertThat(Files.exists(validated)).isTrue();
+    }
+
+    @Test
+    @DisplayName("插件抛配置异常时返回配置非法错误码")
+    void shouldReturnConfigInvalid_whenWorkerConfigExceptionRaised() throws Exception {
+        Path validated = writeNdjson(List.of(row("C001")));
+        ImportJobContext ctx = streamingContext(validated, null);
+        when(plugin.loadChunk(any(), any())).thenThrow(new WorkerConfigException("bad cfg"));
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONFIG_INVALID");
+    }
+
+    @Test
+    @DisplayName("记录全部被跳过时直接标记加载完成,不再调用插件")
+    void shouldShortCircuit_whenAllRecordsSkipped() throws Exception {
+        // skippedCount > 0 且 validated 文件为空 → 直接 markLoaded(0)，不调 plugin
+        Path validated = Files.createTempFile("validated-", ".ndjson");
+        tempPaths.add(validated);
+        ImportJobContext ctx = streamingContext(validated, null);
+        ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 5L);
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isTrue();
+        assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 0L);
+        verify(plugin, never()).loadChunk(any(), any());
+        verify(runtimeRepository).updateFileStatus(eq(99L), eq(FileStatus.LOADED.code()), any());
+    }
+
+    @Test
+    @DisplayName("声明了暂存路径但文件不存在时,返回无载荷失败")
+    void shouldFailNoPayload_whenValidatedPathSetButFileMissing() {
+        ImportJobContext ctx = streamingContext(tempDir.resolve("ghost.ndjson"), null);
+        // streaming path: validated 文件不存在 → IMPORT_LOAD_NO_PAYLOAD(ADR-038 P3 legacy 已下线)
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+    }
+
+    @Test
+    @DisplayName("未声明暂存路径时返回无载荷失败")
+    void shouldFailNoPayload_whenValidatedPathMissing() {
+        ImportJobContext ctx = baseContext();
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+    }
+
+    @Test
+    @DisplayName("部分记录跳过且暂存路径缺失时不能将其当作全部跳过")
+    void shouldFailWhenSkippedRecordsAndValidatedPathMissing() throws Exception {
+        ImportJobContext ctx = baseContext();
+        ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
+        ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+        verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+        verify(plugin, never()).loadChunk(any(), any());
+    }
+
+    @Test
+    @DisplayName("部分记录跳过且暂存文件丢失时不能标记加载成功")
+    void shouldFailWhenSkippedRecordsAndValidatedFileMissing() throws Exception {
+        ImportJobContext ctx = streamingContext(tempDir.resolve("lost.ndjson"), null);
+        ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
+        ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+        verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+        verify(plugin, never()).loadChunk(any(), any());
+    }
+
+    @Test
+    @DisplayName("校验记录大于零但暂存文件为空时不能标记全部跳过")
+    void shouldFailWhenValidatedFileIsEmptyButValidRecordsExist() throws Exception {
+        Path validated = Files.createTempFile("validated-", ".ndjson");
+        tempPaths.add(validated);
+        ImportJobContext ctx = streamingContext(validated, null);
+        ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
+        ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+        verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+        verify(plugin, never()).loadChunk(any(), any());
+    }
+
+    @Test
+    @DisplayName("无跳过记录且校验记录大于零时空暂存文件不能成功")
+    void shouldFailWhenValidatedFileIsEmptyWithoutSkippedRecords() throws Exception {
+        Path validated = Files.createTempFile("validated-", ".ndjson");
+        tempPaths.add(validated);
+        ImportJobContext ctx = streamingContext(validated, null);
+        ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+        verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+        verify(plugin, never()).loadChunk(any(), any());
+    }
+
+    // ── dry-run ──
+
+    @Test
+    @DisplayName("演练模式按暂存文件行数估算加载数,不调用插件或更新正式文件状态")
+    void shouldDryRun_estimateLoadedCountFromValidatedFile() throws Exception {
+        Path validated = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
+        ImportJobContext ctx = streamingContext(validated, null);
+        ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isTrue();
+        assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 3L);
+        verify(plugin, never()).loadChunk(any(), any());
+        verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("演练模式且暂存文件缺失时,加载数计为零")
+    void shouldDryRun_returnZero_whenValidatedPathMissing() {
+        ImportJobContext ctx = baseContext();
+        ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isTrue();
+        assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 0L);
+    }
+
+    // ── plugin resolution ──
+
+    @Test
+    @DisplayName("模板配置指定加载目标时,调用对应插件而非默认插件")
+    void shouldUseLoadTargetRefFromTemplateConfig() throws Exception {
+        ImportLoadPlugin custom = mock(ImportLoadPlugin.class);
+        when(custom.id()).thenReturn("custom_plugin");
+        when(custom.idempotencyCapability()).thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
+        when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
+        registry = new ImportLoadPluginRegistry(List.of(plugin, custom));
+        loadStep = new LoadStep(
+                registry,
+                runtimeRepository,
+                workerConfig,
+                objectMapper,
+                disabledCheckpoint(),
+                null,
+                new PipelineStageProgressRegistry(),
+                taskExecutionClient);
+
+        Path validated = writeNdjson(List.of(row("C1")));
+        ImportJobContext ctx = streamingContext(validated, null);
+        ctx.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("load_target_ref", "custom_plugin"));
+
+        when(custom.loadChunk(any(), any())).thenReturn(1);
+
+        ImportStageResult result = loadStep.execute(ctx);
+
+        assertThat(result.success()).isTrue();
+        verify(custom).loadChunk(any(), any());
+        verify(plugin, never()).loadChunk(any(), any());
+    }
+
+    @Test
+    @DisplayName("加载上下文从导入载荷继承批次,业务类型与模板编码")
+    void shouldBuildLoadContext_withImportPayloadFields() throws Exception {
+        Path validated = writeNdjson(List.of(row("C1")));
+        ImportJobContext ctx = streamingContext(validated, null);
+        ImportPayload payload = mock(ImportPayload.class);
+        when(payload.batchNo()).thenReturn("BATCH-42");
+        when(payload.bizType()).thenReturn("CUST");
+        when(payload.templateCode()).thenReturn("T1");
+        ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
+        when(plugin.loadChunk(any(), any())).thenReturn(1);
+
+        loadStep.execute(ctx);
+
+        ArgumentCaptor<ImportLoadContext> captor = ArgumentCaptor.forClass(ImportLoadContext.class);
+        verify(plugin).loadChunk(captor.capture(), any());
+        ImportLoadContext loadCtx = captor.getValue();
+        assertThat(loadCtx.batchNo()).isEqualTo("BATCH-42");
+        assertThat(loadCtx.bizType()).isEqualTo("CUST");
+        assertThat(loadCtx.templateCode()).isEqualTo("T1");
+    }
+
+    @Test
+    @DisplayName("存在文件记录时,加载上下文取其中的源文件名")
+    void shouldUseFileRecordFileName_whenAvailable() throws Exception {
+        Path validated = writeNdjson(List.of(row("C1")));
+        ImportJobContext ctx = streamingContext(validated, null);
+        ctx.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, Map.of("file_name", "src.csv"));
+        when(plugin.loadChunk(any(), any())).thenReturn(1);
+
+        loadStep.execute(ctx);
+
+        ArgumentCaptor<ImportLoadContext> captor = ArgumentCaptor.forClass(ImportLoadContext.class);
+        verify(plugin).loadChunk(captor.capture(), any());
+        assertThat(captor.getValue().sourceFileName()).isEqualTo("src.csv");
+    }
+
+    // ── helpers ──
+
+    private ImportJobContext baseContext() {
+        ImportJobContext ctx = new ImportJobContext();
+        ctx.setTenantId("tenant-A");
+        ctx.setJobCode("JOB");
+        ctx.setBizDate("2026-05-24");
+        ctx.setWorkerId("w1");
+        ctx.setFileId("99");
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
+        ctx.setAttributes(attrs);
+        return ctx;
+    }
+
+    private ImportJobContext streamingContext(Path validated, Path parsed) {
+        ImportJobContext ctx = baseContext();
+        ctx.getAttributes().put(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH, validated.toString());
+        if (parsed != null) {
+            ctx.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, parsed.toString());
+        }
+        return ctx;
+    }
+
+    private Path writeNdjson(List<Map<String, Object>> rows) throws Exception {
+        Path file = Files.createTempFile("validated-", ".ndjson");
+        tempPaths.add(file);
+        StringBuilder sb = new StringBuilder();
+        for (Map<String, Object> row : rows) {
+            sb.append(objectMapper.writeValueAsString(row)).append('\n');
+        }
+        Files.writeString(file, sb.toString(), StandardCharsets.UTF_8);
+        return file;
+    }
+
+    private Map<String, Object> row(String cust) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("customerNo", cust);
+        m.put("customerName", "name-" + cust);
+        return m;
+    }
 }

@@ -23,20 +23,20 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AlertEscalationScheduler {
 
-  private final AlertEventService alertEventService;
-  private final AlertEscalationProperties properties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final AlertEventService alertEventService;
+    private final AlertEscalationProperties properties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.alert.escalation.poll-interval-millis:60000}")
-  @SchedulerLock(name = "alert_escalation_sweep", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
-  public void sweep() {
-    if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.alert.escalation.poll-interval-millis:60000}")
+    @SchedulerLock(name = "alert_escalation_sweep", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
+    public void sweep() {
+        if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
+            return;
+        }
+        int escalated = alertEventService.escalateOverdue(
+                properties.getSlaMinutes(), properties.getMaxTier(), properties.getBatchLimit());
+        if (escalated > 0) {
+            log.warn("Alert escalation sweep raised {} overdue alert(s) by one tier", escalated);
+        }
     }
-    int escalated = alertEventService.escalateOverdue(
-        properties.getSlaMinutes(), properties.getMaxTier(), properties.getBatchLimit());
-    if (escalated > 0) {
-      log.warn("Alert escalation sweep raised {} overdue alert(s) by one tier", escalated);
-    }
-  }
 }

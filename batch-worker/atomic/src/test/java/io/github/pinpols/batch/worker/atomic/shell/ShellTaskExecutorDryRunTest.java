@@ -27,100 +27,100 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 @ExtendWith(OutputCaptureExtension.class)
 class ShellTaskExecutorDryRunTest {
 
-  @TempDir
-  Path tempDir;
+    @TempDir
+    Path tempDir;
 
-  private ShellExecutorProperties props;
-  private ShellTaskExecutor executor;
+    private ShellExecutorProperties props;
+    private ShellTaskExecutor executor;
 
-  @BeforeEach
-  void setUp() {
-    props = new ShellExecutorProperties();
-    props.setEnabled(true);
-    props.setWorkdirBase(tempDir.resolve("workdirs"));
-    props.setDefaultTimeout(Duration.ofSeconds(10));
-    props.setAllowedEnvKeys(Set.of("FOO"));
-    executor = new ShellTaskExecutor(props);
-  }
+    @BeforeEach
+    void setUp() {
+        props = new ShellExecutorProperties();
+        props.setEnabled(true);
+        props.setWorkdirBase(tempDir.resolve("workdirs"));
+        props.setDefaultTimeout(Duration.ofSeconds(10));
+        props.setAllowedEnvKeys(Set.of("FOO"));
+        executor = new ShellTaskExecutor(props);
+    }
 
-  @Test
-  @DisplayName("dry-run 上下文下应返回计划动作, 不启动进程, 不创建工作目录且环境变量取值不外泄")
-  void shouldShortCircuit_whenDryRun_andNotForkProcessOrCreateWorkdir() {
-    // 准备:用一个绝对不存在的命令,如果真 fork 一定 fail
-    TaskContext ctx = new TaskContext(
-        "t1",
-        "job-1",
-        "ti-1",
-        "w-1",
-        Map.of(
-            "command", "/definitely/not/here/should-not-be-forked",
-            "args", List.of("--flag"),
-            "env", Map.of("FOO", "secret-value")),
-        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
+    @Test
+    @DisplayName("dry-run 上下文下应返回计划动作, 不启动进程, 不创建工作目录且环境变量取值不外泄")
+    void shouldShortCircuit_whenDryRun_andNotForkProcessOrCreateWorkdir() {
+        // 准备:用一个绝对不存在的命令,如果真 fork 一定 fail
+        TaskContext ctx = new TaskContext(
+                "t1",
+                "job-1",
+                "ti-1",
+                "w-1",
+                Map.of(
+                        "command", "/definitely/not/here/should-not-be-forked",
+                        "args", List.of("--flag"),
+                        "env", Map.of("FOO", "secret-value")),
+                Map.of(PipelineRuntimeKeys.DRY_RUN, true));
 
-    // 执行
-    TaskResult result = executor.execute(ctx);
+        // 执行
+        TaskResult result = executor.execute(ctx);
 
-    // 断言
-    assertThat(result.success()).isTrue();
-    assertThat(result.message()).startsWith("dry-run:");
-    assertThat(result.output())
-        .containsEntry(PipelineRuntimeKeys.DRY_RUN, true)
-        .containsEntry("plannedAction", "shell")
-        .containsEntry("command", "/definitely/not/here/should-not-be-forked")
-        .containsEntry("args", List.of("--flag"))
-        .containsEntry("envKeys", List.of("FOO"))
-        .containsKey("timeoutSeconds");
-    // env value 不能进 output(防泄密)
-    assertThat(result.output().values()).noneMatch(v -> "secret-value".equals(String.valueOf(v)));
-    // workdir 没有被创建
-    assertThat(Files.exists(props.getWorkdirBase())).isFalse();
-  }
+        // 断言
+        assertThat(result.success()).isTrue();
+        assertThat(result.message()).startsWith("dry-run:");
+        assertThat(result.output())
+                .containsEntry(PipelineRuntimeKeys.DRY_RUN, true)
+                .containsEntry("plannedAction", "shell")
+                .containsEntry("command", "/definitely/not/here/should-not-be-forked")
+                .containsEntry("args", List.of("--flag"))
+                .containsEntry("envKeys", List.of("FOO"))
+                .containsKey("timeoutSeconds");
+        // env value 不能进 output(防泄密)
+        assertThat(result.output().values()).noneMatch(v -> "secret-value".equals(String.valueOf(v)));
+        // workdir 没有被创建
+        assertThat(Files.exists(props.getWorkdirBase())).isFalse();
+    }
 
-  @Test
-  @DisplayName("参数列表含内联令牌时即使 dry-run 也拒绝执行且不泄漏")
-  void shouldRejectCredentialInPlannedArguments(CapturedOutput output) {
-    TaskContext ctx = new TaskContext(
-        "t1",
-        "job-1",
-        "ti-1",
-        "w-1",
-        Map.of(
-            "command",
-            "/definitely/not/here/should-not-be-forked",
-            "args",
-            List.of("--token=probe-secret", "--mode=summary")),
-        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
+    @Test
+    @DisplayName("参数列表含内联令牌时即使 dry-run 也拒绝执行且不泄漏")
+    void shouldRejectCredentialInPlannedArguments(CapturedOutput output) {
+        TaskContext ctx = new TaskContext(
+                "t1",
+                "job-1",
+                "ti-1",
+                "w-1",
+                Map.of(
+                        "command",
+                        "/definitely/not/here/should-not-be-forked",
+                        "args",
+                        List.of("--token=probe-secret", "--mode=summary")),
+                Map.of(PipelineRuntimeKeys.DRY_RUN, true));
 
-    TaskResult result = executor.execute(ctx);
+        TaskResult result = executor.execute(ctx);
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.output()).containsEntry("error_code", "SECURITY_REJECTED");
-    assertThat(result.message()).doesNotContain("probe-secret");
-    assertThat(output.getOut()).doesNotContain("probe-secret");
-    assertThat(Files.exists(props.getWorkdirBase())).isFalse();
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.output()).containsEntry("error_code", "SECURITY_REJECTED");
+        assertThat(result.message()).doesNotContain("probe-secret");
+        assertThat(output.getOut()).doesNotContain("probe-secret");
+        assertThat(Files.exists(props.getWorkdirBase())).isFalse();
+    }
 
-  @Test
-  @DisplayName("带令牌查询参数的 Shell 实参先拒入，不由字符校验回显原值")
-  void shouldRejectCredentialBeforeArgumentRegex(CapturedOutput output) {
-    TaskContext ctx = new TaskContext(
-        "t1",
-        "job-1",
-        "ti-1",
-        "w-1",
-        Map.of(
-            "command",
-            "/definitely/not/here/should-not-be-forked",
-            "args",
-            List.of("https://example.com?token=probe-secret")),
-        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
+    @Test
+    @DisplayName("带令牌查询参数的 Shell 实参先拒入，不由字符校验回显原值")
+    void shouldRejectCredentialBeforeArgumentRegex(CapturedOutput output) {
+        TaskContext ctx = new TaskContext(
+                "t1",
+                "job-1",
+                "ti-1",
+                "w-1",
+                Map.of(
+                        "command",
+                        "/definitely/not/here/should-not-be-forked",
+                        "args",
+                        List.of("https://example.com?token=probe-secret")),
+                Map.of(PipelineRuntimeKeys.DRY_RUN, true));
 
-    TaskResult result = executor.execute(ctx);
+        TaskResult result = executor.execute(ctx);
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.output()).containsEntry("error_code", "SECURITY_REJECTED");
-    assertThat(result.message()).doesNotContain("probe-secret");
-    assertThat(output.getOut()).doesNotContain("probe-secret");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.output()).containsEntry("error_code", "SECURITY_REJECTED");
+        assertThat(result.message()).doesNotContain("probe-secret");
+        assertThat(output.getOut()).doesNotContain("probe-secret");
+    }
 }

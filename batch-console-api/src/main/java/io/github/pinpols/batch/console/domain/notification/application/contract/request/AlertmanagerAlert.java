@@ -11,21 +11,21 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record AlertmanagerAlert(
-    String status,
-    Map<String, String> labels,
-    Map<String, String> annotations,
-    String startsAt,
-    String endsAt,
-    String generatorURL,
-    String fingerprint) {
+        String status,
+        Map<String, String> labels,
+        Map<String, String> annotations,
+        String startsAt,
+        String endsAt,
+        String generatorURL,
+        String fingerprint) {
 
-  /** 从 labels 取值,空安全。 */
-  public String label(String key) {
-    return labels == null ? null : labels.get(key);
-  }
+    /** 从 labels 取值,空安全。 */
+    public String label(String key) {
+        return labels == null ? null : labels.get(key);
+    }
 
-  /** 从 annotations 取值,空安全。 */
-  public String annotation(String key) {
-    return annotations == null ? null : annotations.get(key);
-  }
+    /** 从 annotations 取值,空安全。 */
+    public String annotation(String key) {
+        return annotations == null ? null : annotations.get(key);
+    }
 }

@@ -29,42 +29,41 @@ import org.springframework.web.client.RestClient;
 @Component
 public class OrchestratorSecretPreflightCheck {
 
-  private final RestClient orchestratorRestClient;
-  private final BatchSecurityProperties securityProperties;
+    private final RestClient orchestratorRestClient;
+    private final BatchSecurityProperties securityProperties;
 
-  public OrchestratorSecretPreflightCheck(
-      RestClient orchestratorRestClient, BatchSecurityProperties securityProperties) {
-    this.orchestratorRestClient = orchestratorRestClient;
-    this.securityProperties = securityProperties;
-  }
+    public OrchestratorSecretPreflightCheck(
+            RestClient orchestratorRestClient, BatchSecurityProperties securityProperties) {
+        this.orchestratorRestClient = orchestratorRestClient;
+        this.securityProperties = securityProperties;
+    }
 
-  @EventListener(ApplicationReadyEvent.class)
-  public void runPreflight() {
-    if (securityProperties.isBypassMode()) {
-      log.info("OrchestratorSecretPreflightCheck skipped: bypass-mode=true");
-      return;
+    @EventListener(ApplicationReadyEvent.class)
+    public void runPreflight() {
+        if (securityProperties.isBypassMode()) {
+            log.info("OrchestratorSecretPreflightCheck skipped: bypass-mode=true");
+            return;
+        }
+        try {
+            HttpStatusCode status = orchestratorRestClient
+                    .get()
+                    .uri("/internal/orchestrator/drain/status")
+                    .retrieve()
+                    .toBodilessEntity()
+                    .getStatusCode();
+            log.info("orchestrator preflight ok: status={} — internal-secret alignment confirmed", status);
+        } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden authErr) {
+            log.error(
+                    "orchestrator preflight FAILED (auth): status={} — batch.security.internal-secret"
+                            + " likely mismatched between trigger and orchestrator; trigger dispatch will"
+                            + " keep failing with 401 until fixed",
+                    authErr.getStatusCode());
+        } catch (RuntimeException connErr) {
+            String causeSummary = SwallowedExceptionLogger.summary(connErr);
+            log.warn(
+                    "orchestrator preflight failed (non-auth): cause={} — orchestrator may still be"
+                            + " warming up; will not block trigger startup",
+                    causeSummary);
+        }
     }
-    try {
-      HttpStatusCode status = orchestratorRestClient
-          .get()
-          .uri("/internal/orchestrator/drain/status")
-          .retrieve()
-          .toBodilessEntity()
-          .getStatusCode();
-      log.info(
-          "orchestrator preflight ok: status={} — internal-secret alignment confirmed", status);
-    } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden authErr) {
-      log.error(
-          "orchestrator preflight FAILED (auth): status={} — batch.security.internal-secret"
-              + " likely mismatched between trigger and orchestrator; trigger dispatch will"
-              + " keep failing with 401 until fixed",
-          authErr.getStatusCode());
-    } catch (RuntimeException connErr) {
-      String causeSummary = SwallowedExceptionLogger.summary(connErr);
-      log.warn(
-          "orchestrator preflight failed (non-auth): cause={} — orchestrator may still be"
-              + " warming up; will not block trigger startup",
-          causeSummary);
-    }
-  }
 }

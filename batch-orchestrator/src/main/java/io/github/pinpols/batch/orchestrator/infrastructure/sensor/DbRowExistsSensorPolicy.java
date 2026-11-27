@@ -50,113 +50,107 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ConditionalOnProperty(prefix = "batch.datasource.business", name = "url")
 public class DbRowExistsSensorPolicy implements SensorPolicy {
 
-  private static final String SENSOR_TYPE = "DB_ROW_EXISTS";
-  private static final String SENSOR_SPEC_INVALID = "error.workflow.sensor_spec_invalid";
+    private static final String SENSOR_TYPE = "DB_ROW_EXISTS";
+    private static final String SENSOR_SPEC_INVALID = "error.workflow.sensor_spec_invalid";
 
-  private final NamedParameterJdbcTemplate jdbc;
-  private final DataSource dataSource;
-  private final SensorProperties props;
-  private final ObjectMapper objectMapper;
-  private final TransactionTemplate transactionTemplate;
+    private final NamedParameterJdbcTemplate jdbc;
+    private final DataSource dataSource;
+    private final SensorProperties props;
+    private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
 
-  public DbRowExistsSensorPolicy(
-      @Qualifier("orchestratorBusinessDataSource") DataSource dataSource,
-      SensorProperties props,
-      ObjectMapper objectMapper,
-      @Qualifier("workflowSensorBusinessTransactionTemplate")
-          TransactionTemplate transactionTemplate) {
-    this.jdbc = new NamedParameterJdbcTemplate(dataSource);
-    this.dataSource = dataSource;
-    this.props = props;
-    this.objectMapper = objectMapper;
-    this.transactionTemplate = transactionTemplate;
-  }
-
-  @Override
-  public SensorType type() {
-    return SensorType.DB_ROW_EXISTS;
-  }
-
-  @Override
-  public SensorProbeResult probe(SensorContext ctx) {
-    Map<String, Object> spec = ctx.sensorSpec();
-    String schema = SensorSpecs.string(spec, "schema");
-    String sql = SensorSpecs.string(spec, "sql");
-    if (!Texts.hasText(schema) || !Texts.hasText(sql)) {
-      return SensorProbeResult.error(
-          SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE, "schema/sql required"));
-    }
-    if (!props.getDbAllowedSchemas().contains(schema.toLowerCase(Locale.ROOT))) {
-      return SensorProbeResult.error(
-          SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE, "schema not in allowlist: " + schema));
-    }
-    try {
-      SensorSqlValidator.validate(sql, props.getDbAllowedSchemas());
-    } catch (IllegalArgumentException e) {
-      return sensorFailure(SENSOR_SPEC_INVALID, e);
+    public DbRowExistsSensorPolicy(
+            @Qualifier("orchestratorBusinessDataSource") DataSource dataSource,
+            SensorProperties props,
+            ObjectMapper objectMapper,
+            @Qualifier("workflowSensorBusinessTransactionTemplate") TransactionTemplate transactionTemplate) {
+        this.jdbc = new NamedParameterJdbcTemplate(dataSource);
+        this.dataSource = dataSource;
+        this.props = props;
+        this.objectMapper = objectMapper;
+        this.transactionTemplate = transactionTemplate;
     }
 
-    Map<String, Object> params = resolveParams(spec, ctx);
-
-    try {
-      return transactionTemplate.execute(status -> probeRowsInTransaction(sql, params));
-    } catch (Exception e) {
-      log.warn(
-          "DB_ROW_EXISTS probe error tenant={} err={}",
-          ctx.tenantId(),
-          SwallowedExceptionLogger.summary(e));
-      return sensorFailure("error.workflow.sensor_probe_failed", e);
+    @Override
+    public SensorType type() {
+        return SensorType.DB_ROW_EXISTS;
     }
-  }
 
-  private SensorProbeResult probeRowsInTransaction(String sql, Map<String, Object> params) {
-    RlsTenantSessionSupport.applyIfPresent(dataSource);
-    List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
-    if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
-      return SensorProbeResult.notYet();
-    }
-    Map<String, Object> output = new LinkedHashMap<>();
-    output.put("rowFound", true);
-    Map<String, Object> firstRow = rows.get(0);
-    String firstRowJson = writeJson(firstRow);
-    output.put("firstRowJson", firstRowJson);
-    return SensorProbeResult.matched(output);
-  }
+    @Override
+    public SensorProbeResult probe(SensorContext ctx) {
+        Map<String, Object> spec = ctx.sensorSpec();
+        String schema = SensorSpecs.string(spec, "schema");
+        String sql = SensorSpecs.string(spec, "sql");
+        if (!Texts.hasText(schema) || !Texts.hasText(sql)) {
+            return SensorProbeResult.error(SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE, "schema/sql required"));
+        }
+        if (!props.getDbAllowedSchemas().contains(schema.toLowerCase(Locale.ROOT))) {
+            return SensorProbeResult.error(
+                    SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE, "schema not in allowlist: " + schema));
+        }
+        try {
+            SensorSqlValidator.validate(sql, props.getDbAllowedSchemas());
+        } catch (IllegalArgumentException e) {
+            return sensorFailure(SENSOR_SPEC_INVALID, e);
+        }
 
-  private static SensorProbeResult sensorFailure(String errorCode, Exception error) {
-    String errorDetail =
-        Objects.requireNonNullElse(error.getMessage(), error.getClass().getSimpleName());
-    List<String> messageArguments = List.of(SENSOR_TYPE, errorDetail);
-    return SensorProbeResult.error(errorCode, messageArguments);
-  }
+        Map<String, Object> params = resolveParams(spec, ctx);
 
-  /** 处理 {@code $.workflowRun.<key>} 占位符；非占位值原样透传。 */
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> resolveParams(Map<String, Object> spec, SensorContext ctx) {
-    Object raw = spec.get("params");
-    if (!(raw instanceof Map)) {
-      return Map.of();
+        try {
+            return transactionTemplate.execute(status -> probeRowsInTransaction(sql, params));
+        } catch (Exception e) {
+            log.warn("DB_ROW_EXISTS probe error tenant={} err={}", ctx.tenantId(), SwallowedExceptionLogger.summary(e));
+            return sensorFailure("error.workflow.sensor_probe_failed", e);
+        }
     }
-    Map<String, Object> result = new LinkedHashMap<>();
-    Map<String, Object> vars =
-        EmptyChecks.isNull(ctx.workflowRunVars()) ? Map.of() : ctx.workflowRunVars();
-    for (Map.Entry<String, Object> entry : ((Map<String, Object>) raw).entrySet()) {
-      Object v = entry.getValue();
-      if (v instanceof String s && s.startsWith("$.workflowRun.")) {
-        String key = s.substring("$.workflowRun.".length());
-        result.put(entry.getKey(), vars.get(key));
-      } else {
-        result.put(entry.getKey(), v);
-      }
-    }
-    return result;
-  }
 
-  private String writeJson(Map<String, Object> row) {
-    try {
-      return objectMapper.writeValueAsString(row);
-    } catch (JsonProcessingException e) {
-      return row.toString();
+    private SensorProbeResult probeRowsInTransaction(String sql, Map<String, Object> params) {
+        RlsTenantSessionSupport.applyIfPresent(dataSource);
+        List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
+        if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
+            return SensorProbeResult.notYet();
+        }
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("rowFound", true);
+        Map<String, Object> firstRow = rows.get(0);
+        String firstRowJson = writeJson(firstRow);
+        output.put("firstRowJson", firstRowJson);
+        return SensorProbeResult.matched(output);
     }
-  }
+
+    private static SensorProbeResult sensorFailure(String errorCode, Exception error) {
+        String errorDetail =
+                Objects.requireNonNullElse(error.getMessage(), error.getClass().getSimpleName());
+        List<String> messageArguments = List.of(SENSOR_TYPE, errorDetail);
+        return SensorProbeResult.error(errorCode, messageArguments);
+    }
+
+    /** 处理 {@code $.workflowRun.<key>} 占位符；非占位值原样透传。 */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resolveParams(Map<String, Object> spec, SensorContext ctx) {
+        Object raw = spec.get("params");
+        if (!(raw instanceof Map)) {
+            return Map.of();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        Map<String, Object> vars = EmptyChecks.isNull(ctx.workflowRunVars()) ? Map.of() : ctx.workflowRunVars();
+        for (Map.Entry<String, Object> entry : ((Map<String, Object>) raw).entrySet()) {
+            Object v = entry.getValue();
+            if (v instanceof String s && s.startsWith("$.workflowRun.")) {
+                String key = s.substring("$.workflowRun.".length());
+                result.put(entry.getKey(), vars.get(key));
+            } else {
+                result.put(entry.getKey(), v);
+            }
+        }
+        return result;
+    }
+
+    private String writeJson(Map<String, Object> row) {
+        try {
+            return objectMapper.writeValueAsString(row);
+        } catch (JsonProcessingException e) {
+            return row.toString();
+        }
+    }
 }

@@ -8,16 +8,16 @@ import lombok.Setter;
 @Getter
 @Builder
 public class BusinessCalendarInsertParam {
-  @Setter
-  private Long id;
+    @Setter
+    private Long id;
 
-  private final String tenantId;
-  private final String calendarCode;
-  private final String calendarName;
-  private final String timezone;
-  private final String holidayRollRule;
-  private final String catchUpPolicy;
-  private final Integer catchUpMaxDays;
-  private final Boolean enabled;
-  private final String description;
+    private final String tenantId;
+    private final String calendarCode;
+    private final String calendarName;
+    private final String timezone;
+    private final String holidayRollRule;
+    private final String catchUpPolicy;
+    private final Integer catchUpMaxDays;
+    private final Boolean enabled;
+    private final String description;
 }

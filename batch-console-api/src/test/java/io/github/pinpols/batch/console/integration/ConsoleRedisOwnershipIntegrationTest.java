@@ -21,99 +21,102 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 /** 使用真实 Redis 兼容服务验证 Lua 的 owner 校验和预览 CAS，不启动整套应用。 */
 @DisplayName("Redis 占位归属: 陈旧持有者不能改写,并发预览更新只有一个赢家")
 class ConsoleRedisOwnershipIntegrationTest {
-  @Test
-  @DisplayName("部署命名空间隔离模板 key,SCAN 清理只删除本部署匹配的物理 key")
-  void shouldScanAndDeleteOnlyMatchingKeysFromCurrentNamespace() {
-    try (var redis = TestValkeyContainers.create()) {
-      redis.start();
-      var connectionFactory = new LettuceConnectionFactory(
-          redis.getHost(), redis.getMappedPort(TestValkeyContainers.REDIS_PORT));
-      connectionFactory.afterPropertiesSet();
-      try {
-        BatchRedisNamespace namespace = new BatchRedisNamespace("console-isolation-test");
-        StringRedisTemplate template = namespacedTemplate(connectionFactory, namespace);
-        StringRedisTemplate otherTemplate =
-            namespacedTemplate(connectionFactory, new BatchRedisNamespace("other-deployment"));
-        StringRedisTemplate rawTemplate = new StringRedisTemplate(connectionFactory);
-        rawTemplate.afterPropertiesSet();
+    @Test
+    @DisplayName("部署命名空间隔离模板 key,SCAN 清理只删除本部署匹配的物理 key")
+    void shouldScanAndDeleteOnlyMatchingKeysFromCurrentNamespace() {
+        try (var redis = TestValkeyContainers.create()) {
+            redis.start();
+            var connectionFactory =
+                    new LettuceConnectionFactory(redis.getHost(), redis.getMappedPort(TestValkeyContainers.REDIS_PORT));
+            connectionFactory.afterPropertiesSet();
+            try {
+                BatchRedisNamespace namespace = new BatchRedisNamespace("console-isolation-test");
+                StringRedisTemplate template = namespacedTemplate(connectionFactory, namespace);
+                StringRedisTemplate otherTemplate =
+                        namespacedTemplate(connectionFactory, new BatchRedisNamespace("other-deployment"));
+                StringRedisTemplate rawTemplate = new StringRedisTemplate(connectionFactory);
+                rawTemplate.afterPropertiesSet();
 
-        template.opsForValue().set("cleanup:match:first", "first", Duration.ofMinutes(1));
-        template.opsForValue().set("cleanup:match:second", "second", Duration.ofMinutes(1));
-        template.opsForValue().set("cleanup:keep", "keep", Duration.ofMinutes(1));
-        otherTemplate.opsForValue().set("cleanup:match:other", "other", Duration.ofMinutes(1));
+                template.opsForValue().set("cleanup:match:first", "first", Duration.ofMinutes(1));
+                template.opsForValue().set("cleanup:match:second", "second", Duration.ofMinutes(1));
+                template.opsForValue().set("cleanup:keep", "keep", Duration.ofMinutes(1));
+                otherTemplate.opsForValue().set("cleanup:match:other", "other", Duration.ofMinutes(1));
 
-        long deleted =
-            RedisKeyUtils.scanAndDeleteOrThrow(template, "cleanup:match:*", 1, namespace);
+                long deleted = RedisKeyUtils.scanAndDeleteOrThrow(template, "cleanup:match:*", 1, namespace);
 
-        assertThat(deleted).isEqualTo(2);
-        assertThat(template.opsForValue().get("cleanup:match:first")).isNull();
-        assertThat(template.opsForValue().get("cleanup:match:second")).isNull();
-        assertThat(template.opsForValue().get("cleanup:keep")).isEqualTo("keep");
-        assertThat(otherTemplate.opsForValue().get("cleanup:match:other")).isEqualTo("other");
-        assertThat(rawTemplate.keys("console-isolation-test:cleanup:match:*")).isEmpty();
-      } finally {
-        connectionFactory.destroy();
-      }
-    }
-  }
-
-  @Test
-  @DisplayName("占位归属校验: 过期持有者改写被拒,并发替换只有一个请求成功")
-  void shouldRejectStaleOwnersAndLetOnlyOneConcurrentPreviewWin_whenReplacing() throws Exception {
-    try (var redis = TestValkeyContainers.create()) {
-      redis.start();
-      var connectionFactory = new LettuceConnectionFactory(
-          redis.getHost(), redis.getMappedPort(TestValkeyContainers.REDIS_PORT));
-      connectionFactory.afterPropertiesSet();
-      try {
-        var template = new StringRedisTemplate(connectionFactory);
-        var idempotency = new RedisConsoleIdempotencyStore(template);
-        Duration ttl = Duration.ofMinutes(1);
-        assertThat(idempotency.setIfAbsent("lease", "owner-a", ttl)).isTrue();
-        assertThat(idempotency.compareAndSet("lease", "owner-a", "owner-a", ttl))
-            .isTrue();
-        template.delete("lease"); // 确定性模拟原占位过期，然后由新请求取得占位。
-        assertThat(idempotency.setIfAbsent("lease", "owner-b", ttl)).isTrue();
-        assertThat(idempotency.deleteIfValue("lease", "owner-a")).isFalse();
-        assertThat(idempotency.compareAndSet("lease", "owner-a", "DONE", ttl)).isFalse();
-        assertThat(idempotency.get("lease")).isEqualTo("owner-b");
-        assertThat(idempotency.compareAndSet("lease", "owner-b", "DONE", ttl)).isTrue();
-
-        var previews = new ConsoleUserBatchProvisioningStore(template);
-        previews.savePreview("preview", "snapshot-1", ttl);
-        var barrier = new CyclicBarrier(2);
-        var pool = Executors.newFixedThreadPool(2);
-        try {
-          var first = pool.submit(() -> {
-            barrier.await(3, TimeUnit.SECONDS);
-            return previews.replacePreview("preview", "snapshot-1", "snapshot-a", ttl);
-          });
-          var second = pool.submit(() -> {
-            barrier.await(3, TimeUnit.SECONDS);
-            return previews.replacePreview("preview", "snapshot-1", "snapshot-b", ttl);
-          });
-          assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
-              .containsExactlyInAnyOrder(true, false);
-          String winner = previews.loadPreview("preview");
-          previews.deletePreview("preview", "snapshot-1");
-          assertThat(previews.loadPreview("preview")).isEqualTo(winner);
-          previews.deletePreview("preview", winner);
-          assertThat(previews.loadPreview("preview")).isNull();
-        } finally {
-          pool.shutdownNow();
-          assertThat(pool.awaitTermination(3, TimeUnit.SECONDS)).isTrue();
+                assertThat(deleted).isEqualTo(2);
+                assertThat(template.opsForValue().get("cleanup:match:first")).isNull();
+                assertThat(template.opsForValue().get("cleanup:match:second")).isNull();
+                assertThat(template.opsForValue().get("cleanup:keep")).isEqualTo("keep");
+                assertThat(otherTemplate.opsForValue().get("cleanup:match:other"))
+                        .isEqualTo("other");
+                assertThat(rawTemplate.keys("console-isolation-test:cleanup:match:*"))
+                        .isEmpty();
+            } finally {
+                connectionFactory.destroy();
+            }
         }
-      } finally {
-        connectionFactory.destroy();
-      }
     }
-  }
 
-  private static StringRedisTemplate namespacedTemplate(
-      LettuceConnectionFactory connectionFactory, BatchRedisNamespace namespace) {
-    StringRedisTemplate template = new StringRedisTemplate(connectionFactory);
-    template.setKeySerializer(new BatchRedisNamespaceSerializer(namespace));
-    template.afterPropertiesSet();
-    return template;
-  }
+    @Test
+    @DisplayName("占位归属校验: 过期持有者改写被拒,并发替换只有一个请求成功")
+    void shouldRejectStaleOwnersAndLetOnlyOneConcurrentPreviewWin_whenReplacing() throws Exception {
+        try (var redis = TestValkeyContainers.create()) {
+            redis.start();
+            var connectionFactory =
+                    new LettuceConnectionFactory(redis.getHost(), redis.getMappedPort(TestValkeyContainers.REDIS_PORT));
+            connectionFactory.afterPropertiesSet();
+            try {
+                var template = new StringRedisTemplate(connectionFactory);
+                var idempotency = new RedisConsoleIdempotencyStore(template);
+                Duration ttl = Duration.ofMinutes(1);
+                assertThat(idempotency.setIfAbsent("lease", "owner-a", ttl)).isTrue();
+                assertThat(idempotency.compareAndSet("lease", "owner-a", "owner-a", ttl))
+                        .isTrue();
+                template.delete("lease"); // 确定性模拟原占位过期，然后由新请求取得占位。
+                assertThat(idempotency.setIfAbsent("lease", "owner-b", ttl)).isTrue();
+                assertThat(idempotency.deleteIfValue("lease", "owner-a")).isFalse();
+                assertThat(idempotency.compareAndSet("lease", "owner-a", "DONE", ttl))
+                        .isFalse();
+                assertThat(idempotency.get("lease")).isEqualTo("owner-b");
+                assertThat(idempotency.compareAndSet("lease", "owner-b", "DONE", ttl))
+                        .isTrue();
+
+                var previews = new ConsoleUserBatchProvisioningStore(template);
+                previews.savePreview("preview", "snapshot-1", ttl);
+                var barrier = new CyclicBarrier(2);
+                var pool = Executors.newFixedThreadPool(2);
+                try {
+                    var first = pool.submit(() -> {
+                        barrier.await(3, TimeUnit.SECONDS);
+                        return previews.replacePreview("preview", "snapshot-1", "snapshot-a", ttl);
+                    });
+                    var second = pool.submit(() -> {
+                        barrier.await(3, TimeUnit.SECONDS);
+                        return previews.replacePreview("preview", "snapshot-1", "snapshot-b", ttl);
+                    });
+                    assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
+                            .containsExactlyInAnyOrder(true, false);
+                    String winner = previews.loadPreview("preview");
+                    previews.deletePreview("preview", "snapshot-1");
+                    assertThat(previews.loadPreview("preview")).isEqualTo(winner);
+                    previews.deletePreview("preview", winner);
+                    assertThat(previews.loadPreview("preview")).isNull();
+                } finally {
+                    pool.shutdownNow();
+                    assertThat(pool.awaitTermination(3, TimeUnit.SECONDS)).isTrue();
+                }
+            } finally {
+                connectionFactory.destroy();
+            }
+        }
+    }
+
+    private static StringRedisTemplate namespacedTemplate(
+            LettuceConnectionFactory connectionFactory, BatchRedisNamespace namespace) {
+        StringRedisTemplate template = new StringRedisTemplate(connectionFactory);
+        template.setKeySerializer(new BatchRedisNamespaceSerializer(namespace));
+        template.afterPropertiesSet();
+        return template;
+    }
 }

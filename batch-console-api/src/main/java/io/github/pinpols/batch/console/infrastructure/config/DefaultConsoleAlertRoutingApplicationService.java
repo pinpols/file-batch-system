@@ -23,162 +23,152 @@ import org.springframework.stereotype.Service;
 /** {@link ConsoleAlertRoutingApplicationService} 的默认实现。 */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleAlertRoutingApplicationService
-    implements ConsoleAlertRoutingApplicationService {
+public class DefaultConsoleAlertRoutingApplicationService implements ConsoleAlertRoutingApplicationService {
 
-  /** 请求未指定时的 group_interval 秒数（5 分钟）。 */
-  private static final int DEFAULT_GROUP_INTERVAL_SECONDS = 300;
+    /** 请求未指定时的 group_interval 秒数（5 分钟）。 */
+    private static final int DEFAULT_GROUP_INTERVAL_SECONDS = 300;
 
-  /** 请求未指定时的 repeat_interval 秒数（1 小时）。 */
-  private static final int DEFAULT_REPEAT_INTERVAL_SECONDS = 3600;
+    /** 请求未指定时的 repeat_interval 秒数（1 小时）。 */
+    private static final int DEFAULT_REPEAT_INTERVAL_SECONDS = 3600;
 
-  private final AlertRoutingConfigMapper alertRoutingConfigMapper;
-  private final ConsoleTenantGuard tenantGuard;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final AlertRoutingConfigMapper alertRoutingConfigMapper;
+    private final ConsoleTenantGuard tenantGuard;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  @Override
-  public PageResponse<ConsoleAlertRoutingResponse> list(AlertRoutingQueryRequest request) {
-    String resolved = tenantGuard.resolveTenant(request.getTenantId());
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    AlertRoutingConfigCountQuery alertRoutingConfigCountQuery =
-        AlertRoutingConfigCountQuery.builder()
-            .tenantId(resolved)
-            .keyword(request.getKeyword())
-            .routeCode(request.getRouteCode())
-            .team(request.getTeam())
-            .severity(request.getSeverity())
-            .enabled(request.getEnabled())
-            .build();
-    long total = alertRoutingConfigMapper.countByQuery(alertRoutingConfigCountQuery);
-    AlertRoutingConfigQuery alertRoutingConfigQuery = AlertRoutingConfigQuery.builder()
-        .tenantId(resolved)
-        .keyword(request.getKeyword())
-        .routeCode(request.getRouteCode())
-        .team(request.getTeam())
-        .severity(request.getSeverity())
-        .enabled(request.getEnabled())
-        .pageRequest(pageRequest)
-        .build();
-    List<AlertRoutingConfigRow> items =
-        alertRoutingConfigMapper.selectByQuery(alertRoutingConfigQuery);
-    long responseTotal = total;
-    int responsePageNo = pageRequest.pageNo();
-    int responsePageSize = pageRequest.pageSize();
-    List<ConsoleAlertRoutingResponse> responses =
-        items.stream().map(ConsoleAlertRoutingResponse::from).toList();
-    return new PageResponse<>(responseTotal, responsePageNo, responsePageSize, responses);
-  }
+    @Override
+    public PageResponse<ConsoleAlertRoutingResponse> list(AlertRoutingQueryRequest request) {
+        String resolved = tenantGuard.resolveTenant(request.getTenantId());
+        PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+        AlertRoutingConfigCountQuery alertRoutingConfigCountQuery = AlertRoutingConfigCountQuery.builder()
+                .tenantId(resolved)
+                .keyword(request.getKeyword())
+                .routeCode(request.getRouteCode())
+                .team(request.getTeam())
+                .severity(request.getSeverity())
+                .enabled(request.getEnabled())
+                .build();
+        long total = alertRoutingConfigMapper.countByQuery(alertRoutingConfigCountQuery);
+        AlertRoutingConfigQuery alertRoutingConfigQuery = AlertRoutingConfigQuery.builder()
+                .tenantId(resolved)
+                .keyword(request.getKeyword())
+                .routeCode(request.getRouteCode())
+                .team(request.getTeam())
+                .severity(request.getSeverity())
+                .enabled(request.getEnabled())
+                .pageRequest(pageRequest)
+                .build();
+        List<AlertRoutingConfigRow> items = alertRoutingConfigMapper.selectByQuery(alertRoutingConfigQuery);
+        long responseTotal = total;
+        int responsePageNo = pageRequest.pageNo();
+        int responsePageSize = pageRequest.pageSize();
+        List<ConsoleAlertRoutingResponse> responses =
+                items.stream().map(ConsoleAlertRoutingResponse::from).toList();
+        return new PageResponse<>(responseTotal, responsePageNo, responsePageSize, responses);
+    }
 
-  @Override
-  public ConsoleAlertRoutingResponse create(AlertRoutingSaveRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    AlertRoutingConfigRow existing =
-        alertRoutingConfigMapper.selectByUniqueKey(tenantId, request.getRouteCode());
-    if (existing != null) {
-      throw BizException.of(
-          ResultCode.CONFLICT,
-          ResultCode.CONFLICT.detailKey(),
-          "route code already exists: " + request.getRouteCode());
+    @Override
+    public ConsoleAlertRoutingResponse create(AlertRoutingSaveRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        AlertRoutingConfigRow existing = alertRoutingConfigMapper.selectByUniqueKey(tenantId, request.getRouteCode());
+        if (existing != null) {
+            throw BizException.of(
+                    ResultCode.CONFLICT,
+                    ResultCode.CONFLICT.detailKey(),
+                    "route code already exists: " + request.getRouteCode());
+        }
+        AlertRoutingConfigUpsertParam param = toParam(null, tenantId, request);
+        alertRoutingConfigMapper.upsertAlertRoutingConfig(param);
+        AlertRoutingConfigRow createdRoute = alertRoutingConfigMapper.selectByUniqueKey(tenantId, param.getRouteCode());
+        return ConsoleAlertRoutingResponse.from(createdRoute);
     }
-    AlertRoutingConfigUpsertParam param = toParam(null, tenantId, request);
-    alertRoutingConfigMapper.upsertAlertRoutingConfig(param);
-    AlertRoutingConfigRow createdRoute =
-        alertRoutingConfigMapper.selectByUniqueKey(tenantId, param.getRouteCode());
-    return ConsoleAlertRoutingResponse.from(createdRoute);
-  }
 
-  @Override
-  public ConsoleAlertRoutingResponse update(Long id, AlertRoutingSaveRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    AlertRoutingConfigRow selectedRoute = alertRoutingConfigMapper.selectById(tenantId, id);
-    AlertRoutingConfigRow existing = Guard.requireFound(selectedRoute, "alert routing not found");
-    String existingRouteCode = existing.routeCode();
-    if (!existingRouteCode.equals(request.getRouteCode())) {
-      AlertRoutingConfigRow duplicate =
-          alertRoutingConfigMapper.selectByUniqueKey(tenantId, request.getRouteCode());
-      if (duplicate != null) {
-        throw BizException.of(
-            ResultCode.CONFLICT,
-            ResultCode.CONFLICT.detailKey(),
-            "route code already exists: " + request.getRouteCode());
-      }
+    @Override
+    public ConsoleAlertRoutingResponse update(Long id, AlertRoutingSaveRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        AlertRoutingConfigRow selectedRoute = alertRoutingConfigMapper.selectById(tenantId, id);
+        AlertRoutingConfigRow existing = Guard.requireFound(selectedRoute, "alert routing not found");
+        String existingRouteCode = existing.routeCode();
+        if (!existingRouteCode.equals(request.getRouteCode())) {
+            AlertRoutingConfigRow duplicate =
+                    alertRoutingConfigMapper.selectByUniqueKey(tenantId, request.getRouteCode());
+            if (duplicate != null) {
+                throw BizException.of(
+                        ResultCode.CONFLICT,
+                        ResultCode.CONFLICT.detailKey(),
+                        "route code already exists: " + request.getRouteCode());
+            }
+        }
+        AlertRoutingConfigUpsertParam param = toParam(id, tenantId, request);
+        // PATCH 语义:request 没传的字段保留 existing 值,避免 NOT NULL 违反 (BE-ISSUE-6)
+        mergeWithExisting(param, request, existing);
+        alertRoutingConfigMapper.updateById(param);
+        AlertRoutingConfigRow updatedRoute = alertRoutingConfigMapper.selectById(tenantId, id);
+        return ConsoleAlertRoutingResponse.from(updatedRoute);
     }
-    AlertRoutingConfigUpsertParam param = toParam(id, tenantId, request);
-    // PATCH 语义:request 没传的字段保留 existing 值,避免 NOT NULL 违反 (BE-ISSUE-6)
-    mergeWithExisting(param, request, existing);
-    alertRoutingConfigMapper.updateById(param);
-    AlertRoutingConfigRow updatedRoute = alertRoutingConfigMapper.selectById(tenantId, id);
-    return ConsoleAlertRoutingResponse.from(updatedRoute);
-  }
 
-  private static void mergeWithExisting(
-      AlertRoutingConfigUpsertParam param,
-      AlertRoutingSaveRequest request,
-      AlertRoutingConfigRow existing) {
-    if (request.getRouteName() == null) {
-      param.setRouteName(existing.routeName());
+    private static void mergeWithExisting(
+            AlertRoutingConfigUpsertParam param, AlertRoutingSaveRequest request, AlertRoutingConfigRow existing) {
+        if (request.getRouteName() == null) {
+            param.setRouteName(existing.routeName());
+        }
+        if (request.getTeam() == null) {
+            param.setTeam(existing.team());
+        }
+        if (request.getAlertGroup() == null) {
+            param.setAlertGroup(existing.alertGroup());
+        }
+        if (request.getSeverity() == null) {
+            param.setSeverity(existing.severity());
+        }
+        if (request.getReceiver() == null) {
+            param.setReceiver(existing.receiver());
+        }
+        if (request.getGroupBy() == null) {
+            param.setGroupBy(existing.groupBy());
+        }
+        if (request.getDescription() == null) {
+            param.setDescription(existing.description());
+        }
     }
-    if (request.getTeam() == null) {
-      param.setTeam(existing.team());
-    }
-    if (request.getAlertGroup() == null) {
-      param.setAlertGroup(existing.alertGroup());
-    }
-    if (request.getSeverity() == null) {
-      param.setSeverity(existing.severity());
-    }
-    if (request.getReceiver() == null) {
-      param.setReceiver(existing.receiver());
-    }
-    if (request.getGroupBy() == null) {
-      param.setGroupBy(existing.groupBy());
-    }
-    if (request.getDescription() == null) {
-      param.setDescription(existing.description());
-    }
-  }
 
-  @Override
-  public void toggle(Long id, String tenantId, Boolean enabled) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    int rows = alertRoutingConfigMapper.toggleEnabled(resolved, id, enabled);
-    if (rows == 0) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.alert.routing_not_found");
+    @Override
+    public void toggle(Long id, String tenantId, Boolean enabled) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        int rows = alertRoutingConfigMapper.toggleEnabled(resolved, id, enabled);
+        if (rows == 0) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.alert.routing_not_found");
+        }
     }
-  }
 
-  private AlertRoutingConfigUpsertParam toParam(
-      Long id, String tenantId, AlertRoutingSaveRequest request) {
-    String operator = requestMetadataResolver.current().operatorId();
-    if (operator == null || operator.isBlank()) {
-      operator = "system";
+    private AlertRoutingConfigUpsertParam toParam(Long id, String tenantId, AlertRoutingSaveRequest request) {
+        String operator = requestMetadataResolver.current().operatorId();
+        if (operator == null || operator.isBlank()) {
+            operator = "system";
+        }
+        AlertRoutingConfigUpsertParam param = new AlertRoutingConfigUpsertParam();
+        param.setId(id);
+        param.setTenantId(tenantId);
+        param.setRouteCode(request.getRouteCode());
+        param.setRouteName(request.getRouteName());
+        param.setTeam(request.getTeam());
+        param.setAlertGroup(request.getAlertGroup());
+        param.setSeverity(request.getSeverity());
+        param.setReceiver(request.getReceiver());
+        param.setGroupBy(request.getGroupBy());
+        Integer groupWaitSeconds = defaultInt(request.getGroupWaitSeconds(), 0);
+        param.setGroupWaitSeconds(groupWaitSeconds);
+        Integer groupIntervalSeconds = defaultInt(request.getGroupIntervalSeconds(), DEFAULT_GROUP_INTERVAL_SECONDS);
+        param.setGroupIntervalSeconds(groupIntervalSeconds);
+        Integer repeatIntervalSeconds = defaultInt(request.getRepeatIntervalSeconds(), DEFAULT_REPEAT_INTERVAL_SECONDS);
+        param.setRepeatIntervalSeconds(repeatIntervalSeconds);
+        param.setEnabled(request.getEnabled() == null || request.getEnabled());
+        param.setDescription(request.getDescription());
+        param.setCreatedBy(operator);
+        param.setUpdatedBy(operator);
+        return param;
     }
-    AlertRoutingConfigUpsertParam param = new AlertRoutingConfigUpsertParam();
-    param.setId(id);
-    param.setTenantId(tenantId);
-    param.setRouteCode(request.getRouteCode());
-    param.setRouteName(request.getRouteName());
-    param.setTeam(request.getTeam());
-    param.setAlertGroup(request.getAlertGroup());
-    param.setSeverity(request.getSeverity());
-    param.setReceiver(request.getReceiver());
-    param.setGroupBy(request.getGroupBy());
-    Integer groupWaitSeconds = defaultInt(request.getGroupWaitSeconds(), 0);
-    param.setGroupWaitSeconds(groupWaitSeconds);
-    Integer groupIntervalSeconds =
-        defaultInt(request.getGroupIntervalSeconds(), DEFAULT_GROUP_INTERVAL_SECONDS);
-    param.setGroupIntervalSeconds(groupIntervalSeconds);
-    Integer repeatIntervalSeconds =
-        defaultInt(request.getRepeatIntervalSeconds(), DEFAULT_REPEAT_INTERVAL_SECONDS);
-    param.setRepeatIntervalSeconds(repeatIntervalSeconds);
-    param.setEnabled(request.getEnabled() == null || request.getEnabled());
-    param.setDescription(request.getDescription());
-    param.setCreatedBy(operator);
-    param.setUpdatedBy(operator);
-    return param;
-  }
 
-  private static Integer defaultInt(Integer value, int fallback) {
-    return value != null ? value : fallback;
-  }
+    private static Integer defaultInt(Integer value, int fallback) {
+        return value != null ? value : fallback;
+    }
 }

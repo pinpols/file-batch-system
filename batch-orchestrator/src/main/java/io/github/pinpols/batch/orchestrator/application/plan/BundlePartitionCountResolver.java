@@ -21,16 +21,15 @@ import org.springframework.stereotype.Component;
 @Order(0)
 public class BundlePartitionCountResolver implements PartitionCountResolver {
 
-  @Override
-  public int resolve(
-      JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
-    if (jobDefinition == null) {
-      return 0;
+    @Override
+    public int resolve(JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+        if (jobDefinition == null) {
+            return 0;
+        }
+        JobType bundleType = DictEnum.fromCode(JobType.class, jobDefinition.jobType());
+        if (bundleType == null || !bundleType.isBundle()) {
+            return 0;
+        }
+        return BundlePlanParams.extract(params, bundleType).size();
     }
-    JobType bundleType = DictEnum.fromCode(JobType.class, jobDefinition.jobType());
-    if (bundleType == null || !bundleType.isBundle()) {
-      return 0;
-    }
-    return BundlePlanParams.extract(params, bundleType).size();
-  }
 }

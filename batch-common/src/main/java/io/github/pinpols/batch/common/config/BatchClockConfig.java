@@ -13,41 +13,40 @@ import org.springframework.context.annotation.Configuration;
 /** 提供统一 UTC 时钟，避免业务逻辑直接依赖系统默认时区。 */
 public class BatchClockConfig {
 
-  private static final String TESTING_CLOCK_OFFSET_PROPERTY = "batch.testing.clock-offset";
-  private static final Pattern TESTING_OFFSET_PATTERN = Pattern.compile("^([+-]?\\d+)([smhd])$");
+    private static final String TESTING_CLOCK_OFFSET_PROPERTY = "batch.testing.clock-offset";
+    private static final Pattern TESTING_OFFSET_PATTERN = Pattern.compile("^([+-]?\\d+)([smhd])$");
 
-  /**
-   * 技术时间统一使用 UTC Clock。
-   *
-   * <p>业务时区不在 Clock 里表达，而是在 BatchTimezoneProvider / BatchTimeSupport 中表达。
-   */
-  @Bean
-  public Clock batchClock() {
-    Clock systemClock = Clock.systemUTC();
-    String rawOffset = System.getProperty(TESTING_CLOCK_OFFSET_PROPERTY);
-    if (EmptyChecks.isBlank(rawOffset)) {
-      return systemClock;
+    /**
+     * 技术时间统一使用 UTC Clock。
+     *
+     * <p>业务时区不在 Clock 里表达，而是在 BatchTimezoneProvider / BatchTimeSupport 中表达。
+     */
+    @Bean
+    public Clock batchClock() {
+        Clock systemClock = Clock.systemUTC();
+        String rawOffset = System.getProperty(TESTING_CLOCK_OFFSET_PROPERTY);
+        if (EmptyChecks.isBlank(rawOffset)) {
+            return systemClock;
+        }
+        Duration testingOffset = parseTestingOffset(rawOffset);
+        return Clock.offset(systemClock, testingOffset);
     }
-    Duration testingOffset = parseTestingOffset(rawOffset);
-    return Clock.offset(systemClock, testingOffset);
-  }
 
-  private static Duration parseTestingOffset(String rawOffset) {
-    String trimmedOffset = rawOffset.trim();
-    String normalizedOffset = trimmedOffset.toLowerCase(Locale.ROOT);
-    Matcher matcher = TESTING_OFFSET_PATTERN.matcher(normalizedOffset);
-    if (!matcher.matches()) {
-      throw new IllegalArgumentException("Invalid " + TESTING_CLOCK_OFFSET_PROPERTY
-          + ": expected [+|-]<number><s|m|h|d>, got " + rawOffset);
+    private static Duration parseTestingOffset(String rawOffset) {
+        String trimmedOffset = rawOffset.trim();
+        String normalizedOffset = trimmedOffset.toLowerCase(Locale.ROOT);
+        Matcher matcher = TESTING_OFFSET_PATTERN.matcher(normalizedOffset);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException(
+                    "Invalid " + TESTING_CLOCK_OFFSET_PROPERTY + ": expected [+|-]<number><s|m|h|d>, got " + rawOffset);
+        }
+        long amount = Long.parseLong(matcher.group(1));
+        return switch (matcher.group(2)) {
+            case "s" -> Duration.ofSeconds(amount);
+            case "m" -> Duration.ofMinutes(amount);
+            case "h" -> Duration.ofHours(amount);
+            case "d" -> Duration.ofDays(amount);
+            default -> throw new IllegalArgumentException("Unsupported clock offset unit: " + matcher.group(2));
+        };
     }
-    long amount = Long.parseLong(matcher.group(1));
-    return switch (matcher.group(2)) {
-      case "s" -> Duration.ofSeconds(amount);
-      case "m" -> Duration.ofMinutes(amount);
-      case "h" -> Duration.ofHours(amount);
-      case "d" -> Duration.ofDays(amount);
-      default ->
-        throw new IllegalArgumentException("Unsupported clock offset unit: " + matcher.group(2));
-    };
-  }
 }

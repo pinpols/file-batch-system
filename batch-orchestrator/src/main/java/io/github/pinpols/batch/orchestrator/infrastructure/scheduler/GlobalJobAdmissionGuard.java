@@ -16,26 +16,26 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 class GlobalJobAdmissionGuard implements GlobalJobAdmission {
 
-  private final JobInstanceMapper jobInstanceMapper;
-  private final BatchOrchestratorGovernanceProperties governance;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final BatchOrchestratorGovernanceProperties governance;
 
-  @Override
-  public boolean hasCapacity() {
-    if (!hasHardCap()) {
-      return true;
+    @Override
+    public boolean hasCapacity() {
+        if (!hasHardCap()) {
+            return true;
+        }
+        jobInstanceMapper.acquireGlobalJobAdmissionLock();
+        return hasObservedCapacity();
     }
-    jobInstanceMapper.acquireGlobalJobAdmissionLock();
-    return hasObservedCapacity();
-  }
 
-  /** WAITING 候选排序只读快照；真正释放前必须在事务内再次调用 {@link #hasCapacity()}。 */
-  @Override
-  public boolean hasObservedCapacity() {
-    long cap = governance.resourceScheduler().getGlobalMaxRunningJobs();
-    return cap <= 0 || jobInstanceMapper.countActiveAll() < cap;
-  }
+    /** WAITING 候选排序只读快照；真正释放前必须在事务内再次调用 {@link #hasCapacity()}。 */
+    @Override
+    public boolean hasObservedCapacity() {
+        long cap = governance.resourceScheduler().getGlobalMaxRunningJobs();
+        return cap <= 0 || jobInstanceMapper.countActiveAll() < cap;
+    }
 
-  private boolean hasHardCap() {
-    return governance.resourceScheduler().getGlobalMaxRunningJobs() > 0;
-  }
+    private boolean hasHardCap() {
+        return governance.resourceScheduler().getGlobalMaxRunningJobs() > 0;
+    }
 }

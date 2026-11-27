@@ -64,595 +64,567 @@ import org.springframework.stereotype.Component;
 @Component
 public class ParseStep implements ImportStageStep {
 
-  private static final String ERROR_CODE_PARSE_FAILED = "IMPORT_PARSE_FAILED";
+    private static final String ERROR_CODE_PARSE_FAILED = "IMPORT_PARSE_FAILED";
 
-  private static final String KEY_PARSED_COUNT = PipelineRuntimeKeys.IMPORT_PARSED_COUNT;
+    private static final String KEY_PARSED_COUNT = PipelineRuntimeKeys.IMPORT_PARSED_COUNT;
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
+    private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  private final PlatformFileRecordRepository fileRecords;
-  private final ParseSupport support;
-  private final Map<String, FormatParser> parsers;
-  private final FormatParser defaultParser;
+    private final PlatformFileRecordRepository fileRecords;
+    private final ParseSupport support;
+    private final Map<String, FormatParser> parsers;
+    private final FormatParser defaultParser;
 
-  public ParseStep(
-      ObjectMapper objectMapper,
-      PlatformFileRecordRepository fileRecords,
-      ImportRecordGovernanceService recordGovernanceService) {
-    this(objectMapper, fileRecords, recordGovernanceService, new WorkerImportPayloadProperties());
-  }
-
-  @Autowired
-  public ParseStep(
-      ObjectMapper objectMapper,
-      PlatformFileRecordRepository fileRecords,
-      ImportRecordGovernanceService recordGovernanceService,
-      WorkerImportPayloadProperties payloadProperties) {
-    this.fileRecords = fileRecords;
-    this.support = new ParseSupport(objectMapper, recordGovernanceService);
-    ExcelFormatParser excelParser = new ExcelFormatParser(support, payloadProperties);
-    JsonFormatParser jsonParser = new JsonFormatParser(support);
-    XmlFormatParser xmlParser = new XmlFormatParser(support);
-    FixedWidthFormatParser fixedWidthParser = new FixedWidthFormatParser(support);
-    DelimitedFormatParser delimitedParser = new DelimitedFormatParser(support);
-    this.parsers = Map.of(
-        FileTemplateFormat.EXCEL.code(),
-        excelParser,
-        FileTemplateFormat.JSON.code(),
-        jsonParser,
-        FileTemplateFormat.XML.code(),
-        xmlParser,
-        FileTemplateFormat.FIXED_WIDTH.code(),
-        fixedWidthParser,
-        FileTemplateFormat.DELIMITED.code(),
-        delimitedParser);
-    this.defaultParser = delimitedParser;
-  }
-
-  @Override
-  public ImportStage stage() {
-    return ImportStage.PARSE;
-  }
-
-  @Override
-  public ImportStageResult execute(ImportJobContext context) {
-    if (context == null) {
-      return ImportStageResult.failure(
-          stage(), ERROR_CODE_PARSE_FAILED, "import parse context is required");
+    public ParseStep(
+            ObjectMapper objectMapper,
+            PlatformFileRecordRepository fileRecords,
+            ImportRecordGovernanceService recordGovernanceService) {
+        this(objectMapper, fileRecords, recordGovernanceService, new WorkerImportPayloadProperties());
     }
-    Path stagingFile = null;
-    Path spoolFile = resolveSpoolPath(context);
-    Map<String, Object> attrs = context.getAttributes();
-    try {
-      Object normalizedPayloadValue = attrs.getOrDefault(
-          PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, context.getRawPayload());
-      String payloadText = String.valueOf(normalizedPayloadValue);
-      payloadText = peelTrailerControlRecord(context, payloadText, attrs);
-      ImportPayload importPayload =
-          attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload
-              ? payload
-              : null;
-      stagingFile = ImportStageSupport.createStagingFile(context, "parsed");
-      long totalCount = parsePayloads(
-          context,
-          payloadText,
-          importPayload,
-          attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG),
-          stagingFile);
-      // 默认按行 mod 切片:partitionCount > 1 且未关闭时,流式过滤 staging 文件,只保留属于本 partition 的行。
-      // (lineNo 0-based;partitionNo 1-based;条件 lineNo % count == partitionNo - 1)
-      // totalCount = 文件原始行数(全部 partition 视角);parsedCount = 本 partition 实际处理的行数
-      long partitionedCount = applyPartitionFilter(
-          context, stagingFile, totalCount, attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
-      attrs.put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, stagingFile.toString());
-      // 切片时 parsedCount 应反映本 partition 视角(下游 LoadStep 用它做 audit + step output);
-      // 不切片时维持原有 support.numberValue(...) 值回退,保持与历史行为一致。
-      Object existingParsedCount = attrs.get(KEY_PARSED_COUNT);
-      long parsedCountValue = partitionedCount != totalCount
-          ? partitionedCount
-          : support.numberValue(existingParsedCount);
-      attrs.put(KEY_PARSED_COUNT, parsedCountValue);
-      attrs.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, totalCount);
-      if (totalCount == 0
-          && support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)) == 0) {
-        ImportStageSupport.deleteQuietly(stagingFile);
-        return ImportStageResult.failure(
-            stage(),
-            "IMPORT_PARSE_EMPTY",
-            "error.import.parse.empty",
-            new Object[0],
-            "no records parsed",
-            ERROR_OBJECT_MAPPER);
-      }
-      if (!support.withinThreshold(context)) {
-        support.markThresholdExceeded(context);
-        ImportStageSupport.deleteQuietly(stagingFile);
-        return ImportStageResult.failure(
-            stage(),
-            "IMPORT_SKIP_THRESHOLD_EXCEEDED",
-            "error.import.skip_threshold_exceeded",
-            new Object[0],
-            "skip threshold exceeded",
-            ERROR_OBJECT_MAPPER);
-      }
-      Number parsedCount = support.numberValue(attrs.get(KEY_PARSED_COUNT));
-      Number skippedCount =
-          support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
-      long badRecordCount = badRecordCount(context);
-      ImportStageSupport.updateFileStatusRecoverAware(
-          fileRecords,
-          context,
-          FileStatus.PARSED.code(),
-          Map.of(
-              KEY_PARSED_COUNT,
-              parsedCount,
-              PipelineRuntimeKeys.IMPORT_TOTAL_COUNT,
-              totalCount,
-              PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
-              skippedCount,
-              "badRecordCount",
-              badRecordCount,
-              PipelineRuntimeKeys.PARSED_RECORDS_PATH,
-              stagingFile.toString()));
-      return ImportStageResult.success(stage());
-    } catch (BizException biz) {
-      // 业务级 fail-fast(Excel 表头缺列 / sheet 名找不到 / 二进制 .xls 不支持 等):
-      // 保留 i18n key + args,转 BUSINESS_ERROR 让 orchestrator retry/dead-letter 政策接管;
-      // 不当 infra 异常吞成 error.import.parse.failed 丢失本地化消息。
-      if (stagingFile != null) {
-        ImportStageSupport.deleteQuietly(stagingFile);
-      }
-      String tid = context == null ? null : context.getTenantId();
-      Object fid =
-          context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
-      log.warn(
-          "parse stage business error: tenantId={}, fileId={}, key={}",
-          tid,
-          fid,
-          SwallowedExceptionLogger.summary(biz));
-      return ImportStageResult.failure(stage(), ERROR_CODE_PARSE_FAILED, biz, ERROR_OBJECT_MAPPER);
-    } catch (Exception ex) {
-      if (stagingFile != null) {
-        ImportStageSupport.deleteQuietly(stagingFile);
-      }
-      // 解析失败多为输入数据问题(畸形行/格式错),message 已表达根因;ERROR 只留一行,完整堆栈降 DEBUG,
-      // 避免大量输入级失败产生日志噪音。失败已封装进 ImportStageResult + 死信,不丢信息。
-      String tid = context == null ? null : context.getTenantId();
-      Object fid =
-          context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
-      log.error(
-          "parse stage failed: tenantId={}, fileId={}, message={}",
-          tid,
-          fid,
-          SwallowedExceptionLogger.summary(ex));
-      log.debug("parse stage failed stack: tenantId={}, fileId={}", tid, fid, ex);
-      ImportStage failureStage = stage();
-      String localizedMessageArgument = ex.getMessage();
-      String fallbackMessage = ex.getMessage();
-      return ImportStageResult.failure(
-          failureStage,
-          ERROR_CODE_PARSE_FAILED,
-          "error.import.parse.failed",
-          new Object[] {localizedMessageArgument},
-          fallbackMessage,
-          ERROR_OBJECT_MAPPER);
-    } finally {
-      // spool 临时文件生命周期结束于 PARSE：下游 VALIDATE / LOAD 只消费 parsed records staging file。
-      if (spoolFile != null) {
-        ImportStageSupport.deleteQuietly(spoolFile);
-        if (context != null) {
-          context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH);
-          context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET);
+
+    @Autowired
+    public ParseStep(
+            ObjectMapper objectMapper,
+            PlatformFileRecordRepository fileRecords,
+            ImportRecordGovernanceService recordGovernanceService,
+            WorkerImportPayloadProperties payloadProperties) {
+        this.fileRecords = fileRecords;
+        this.support = new ParseSupport(objectMapper, recordGovernanceService);
+        ExcelFormatParser excelParser = new ExcelFormatParser(support, payloadProperties);
+        JsonFormatParser jsonParser = new JsonFormatParser(support);
+        XmlFormatParser xmlParser = new XmlFormatParser(support);
+        FixedWidthFormatParser fixedWidthParser = new FixedWidthFormatParser(support);
+        DelimitedFormatParser delimitedParser = new DelimitedFormatParser(support);
+        this.parsers = Map.of(
+                FileTemplateFormat.EXCEL.code(),
+                excelParser,
+                FileTemplateFormat.JSON.code(),
+                jsonParser,
+                FileTemplateFormat.XML.code(),
+                xmlParser,
+                FileTemplateFormat.FIXED_WIDTH.code(),
+                fixedWidthParser,
+                FileTemplateFormat.DELIMITED.code(),
+                delimitedParser);
+        this.defaultParser = delimitedParser;
+    }
+
+    @Override
+    public ImportStage stage() {
+        return ImportStage.PARSE;
+    }
+
+    @Override
+    public ImportStageResult execute(ImportJobContext context) {
+        if (context == null) {
+            return ImportStageResult.failure(stage(), ERROR_CODE_PARSE_FAILED, "import parse context is required");
         }
-      }
-    }
-  }
-
-  // ADR-041 Phase1.1:opt-in 剥离 trailer 控制记录(末行)。仅 trailer_template.present=true 生效,
-  // 只支持 in-memory 文本路径(spool 落盘 / 二进制 payload 跳过并告警)。trailer 是结构性末行(非数据行),
-  // present=true 时一律剥离;声明笔数 / 控制总额 stash 进 attributes 交 VALIDATE 的 controlRecordCheck 对账。默认关闭。
-  private String peelTrailerControlRecord(
-      ImportJobContext context, String payloadText, Map<String, Object> attrs) {
-    Map<String, Object> trailerTemplate =
-        trailerTemplate(attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
-    if (!TrailerControlRecord.isPresentEnabled(trailerTemplate)) {
-      return payloadText;
-    }
-    if (resolveSpoolPath(context) != null
-        || attrs.get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD) != null) {
-      throw new IllegalArgumentException(
-          "trailer control record is not supported for spool/binary payload");
-    }
-    if (!Texts.hasText(payloadText)) {
-      return payloadText;
-    }
-    String body = payloadText;
-    while (body.endsWith("\n") || body.endsWith("\r")) {
-      body = body.substring(0, body.length() - 1);
-    }
-    int idx = Math.max(body.lastIndexOf('\n'), body.lastIndexOf('\r'));
-    String trailerLine = body.substring(idx + 1);
-    TrailerControlRecord trailer = TrailerControlRecord.parse(trailerLine, trailerTemplate);
-    if (!isValidTrailer(trailer, trailerTemplate, trailerLine)) {
-      throw new IllegalArgumentException(
-          "trailer_template.present=true but last line is not a valid trailer control record");
-    }
-    if (trailer.declaredRecordCount() != null) {
-      attrs.put(TrailerControlRecord.ATTR_DECLARED_RECORD_COUNT, trailer.declaredRecordCount());
-    }
-    if (trailer.declaredControlTotal() != null) {
-      attrs.put(TrailerControlRecord.ATTR_DECLARED_CONTROL_TOTAL, trailer.declaredControlTotal());
-    }
-    return idx < 0 ? "" : body.substring(0, idx);
-  }
-
-  private boolean isValidTrailer(
-      TrailerControlRecord trailer, Map<String, Object> trailerTemplate, String trailerLine) {
-    if (!recordTypeMatches(trailerTemplate, trailerLine)) {
-      return false;
-    }
-    boolean expectsCount = hasConfiguredIndex(trailerTemplate, "recordCountIndex");
-    boolean expectsTotal = hasConfiguredIndex(trailerTemplate, "controlTotalIndex");
-    if (!expectsCount && !expectsTotal) {
-      return trailer.isPresent();
-    }
-    return (!expectsCount || trailer.declaredRecordCount() != null)
-        && (!expectsTotal || trailer.declaredControlTotal() != null);
-  }
-
-  private boolean recordTypeMatches(Map<String, Object> template, String trailerLine) {
-    if (template == null) { // empty-check: allow - Sonar S2259
-      return true;
-    }
-    Object marker = template.get("recordType");
-    if (marker == null) {
-      marker = template.get("record_type");
-    }
-    String expected = null;
-    if (marker != null) { // empty-check: allow - Sonar S2259
-      String rawMarker = String.valueOf(marker);
-      expected = rawMarker.trim();
-    }
-    if (expected == null || expected.isBlank()) { // empty-check: allow - Sonar S2259
-      return true;
-    }
-    String delimiter = strOr(template.get("delimiter"), ",");
-    String[] fields = trailerLine.split(Pattern.quote(delimiter), -1);
-    int index = intOr(template.get("recordTypeIndex"), 0);
-    if (index < 0 || index >= fields.length) {
-      return false;
-    }
-    return expected.equals(fields[index].trim());
-  }
-
-  private boolean hasConfiguredIndex(Map<String, Object> template, String key) {
-    Object value = template == null ? null : template.get(key);
-    if (value == null) {
-      return false;
-    }
-    if (value instanceof Number number) {
-      return number.intValue() >= 0;
-    }
-    try {
-      String rawIndex = String.valueOf(value);
-      String indexText = rawIndex.trim();
-      int parsedIndex = Integer.parseInt(indexText);
-      return parsedIndex >= 0;
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
-      return false;
-    }
-  }
-
-  private String strOr(Object value, String fallback) {
-    if (value == null) {
-      return fallback;
-    }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    return Texts.hasText(text) ? text : fallback;
-  }
-
-  private int intOr(Object value, int fallback) {
-    if (value instanceof Number number) {
-      return number.intValue();
-    }
-    try {
-      if (EmptyChecks.isNull(value)) {
-        return fallback;
-      }
-      String rawText = String.valueOf(value);
-      String text = rawText.trim();
-      return Integer.parseInt(text);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
-      return fallback;
-    }
-  }
-
-  private Map<String, Object> trailerTemplate(Object templateConfig) {
-    if (templateConfig instanceof Map<?, ?> tc) {
-      Object raw = tc.get("trailer_template");
-      if (raw == null) {
-        raw = tc.get("trailerTemplate");
-      }
-      if (raw instanceof Map<?, ?> templateMap) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        templateMap.forEach((key, value) -> result.put(String.valueOf(key), value));
-        return result;
-      }
-      String jsonText = jsonText(raw);
-      if (Texts.hasText(jsonText)) {
+        Path stagingFile = null;
+        Path spoolFile = resolveSpoolPath(context);
+        Map<String, Object> attrs = context.getAttributes();
         try {
-          return support.objectMapper().readValue(jsonText, new TypeReference<>() {});
-        } catch (Exception ignored) {
-          SwallowedExceptionLogger.warn(ParseStep.class, "catch:Exception", ignored);
-          return Map.of();
+            Object normalizedPayloadValue =
+                    attrs.getOrDefault(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, context.getRawPayload());
+            String payloadText = String.valueOf(normalizedPayloadValue);
+            payloadText = peelTrailerControlRecord(context, payloadText, attrs);
+            ImportPayload importPayload =
+                    attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload ? payload : null;
+            stagingFile = ImportStageSupport.createStagingFile(context, "parsed");
+            long totalCount = parsePayloads(
+                    context, payloadText, importPayload, attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG), stagingFile);
+            // 默认按行 mod 切片:partitionCount > 1 且未关闭时,流式过滤 staging 文件,只保留属于本 partition 的行。
+            // (lineNo 0-based;partitionNo 1-based;条件 lineNo % count == partitionNo - 1)
+            // totalCount = 文件原始行数(全部 partition 视角);parsedCount = 本 partition 实际处理的行数
+            long partitionedCount = applyPartitionFilter(
+                    context, stagingFile, totalCount, attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+            attrs.put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, stagingFile.toString());
+            // 切片时 parsedCount 应反映本 partition 视角(下游 LoadStep 用它做 audit + step output);
+            // 不切片时维持原有 support.numberValue(...) 值回退,保持与历史行为一致。
+            Object existingParsedCount = attrs.get(KEY_PARSED_COUNT);
+            long parsedCountValue =
+                    partitionedCount != totalCount ? partitionedCount : support.numberValue(existingParsedCount);
+            attrs.put(KEY_PARSED_COUNT, parsedCountValue);
+            attrs.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, totalCount);
+            if (totalCount == 0 && support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)) == 0) {
+                ImportStageSupport.deleteQuietly(stagingFile);
+                return ImportStageResult.failure(
+                        stage(),
+                        "IMPORT_PARSE_EMPTY",
+                        "error.import.parse.empty",
+                        new Object[0],
+                        "no records parsed",
+                        ERROR_OBJECT_MAPPER);
+            }
+            if (!support.withinThreshold(context)) {
+                support.markThresholdExceeded(context);
+                ImportStageSupport.deleteQuietly(stagingFile);
+                return ImportStageResult.failure(
+                        stage(),
+                        "IMPORT_SKIP_THRESHOLD_EXCEEDED",
+                        "error.import.skip_threshold_exceeded",
+                        new Object[0],
+                        "skip threshold exceeded",
+                        ERROR_OBJECT_MAPPER);
+            }
+            Number parsedCount = support.numberValue(attrs.get(KEY_PARSED_COUNT));
+            Number skippedCount = support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
+            long badRecordCount = badRecordCount(context);
+            ImportStageSupport.updateFileStatusRecoverAware(
+                    fileRecords,
+                    context,
+                    FileStatus.PARSED.code(),
+                    Map.of(
+                            KEY_PARSED_COUNT,
+                            parsedCount,
+                            PipelineRuntimeKeys.IMPORT_TOTAL_COUNT,
+                            totalCount,
+                            PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
+                            skippedCount,
+                            "badRecordCount",
+                            badRecordCount,
+                            PipelineRuntimeKeys.PARSED_RECORDS_PATH,
+                            stagingFile.toString()));
+            return ImportStageResult.success(stage());
+        } catch (BizException biz) {
+            // 业务级 fail-fast(Excel 表头缺列 / sheet 名找不到 / 二进制 .xls 不支持 等):
+            // 保留 i18n key + args,转 BUSINESS_ERROR 让 orchestrator retry/dead-letter 政策接管;
+            // 不当 infra 异常吞成 error.import.parse.failed 丢失本地化消息。
+            if (stagingFile != null) {
+                ImportStageSupport.deleteQuietly(stagingFile);
+            }
+            String tid = context == null ? null : context.getTenantId();
+            Object fid = context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
+            log.warn(
+                    "parse stage business error: tenantId={}, fileId={}, key={}",
+                    tid,
+                    fid,
+                    SwallowedExceptionLogger.summary(biz));
+            return ImportStageResult.failure(stage(), ERROR_CODE_PARSE_FAILED, biz, ERROR_OBJECT_MAPPER);
+        } catch (Exception ex) {
+            if (stagingFile != null) {
+                ImportStageSupport.deleteQuietly(stagingFile);
+            }
+            // 解析失败多为输入数据问题(畸形行/格式错),message 已表达根因;ERROR 只留一行,完整堆栈降 DEBUG,
+            // 避免大量输入级失败产生日志噪音。失败已封装进 ImportStageResult + 死信,不丢信息。
+            String tid = context == null ? null : context.getTenantId();
+            Object fid = context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
+            log.error(
+                    "parse stage failed: tenantId={}, fileId={}, message={}",
+                    tid,
+                    fid,
+                    SwallowedExceptionLogger.summary(ex));
+            log.debug("parse stage failed stack: tenantId={}, fileId={}", tid, fid, ex);
+            ImportStage failureStage = stage();
+            String localizedMessageArgument = ex.getMessage();
+            String fallbackMessage = ex.getMessage();
+            return ImportStageResult.failure(
+                    failureStage,
+                    ERROR_CODE_PARSE_FAILED,
+                    "error.import.parse.failed",
+                    new Object[] {localizedMessageArgument},
+                    fallbackMessage,
+                    ERROR_OBJECT_MAPPER);
+        } finally {
+            // spool 临时文件生命周期结束于 PARSE：下游 VALIDATE / LOAD 只消费 parsed records staging file。
+            if (spoolFile != null) {
+                ImportStageSupport.deleteQuietly(spoolFile);
+                if (context != null) {
+                    context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH);
+                    context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET);
+                }
+            }
         }
-      }
     }
-    return Map.of();
-  }
 
-  private String jsonText(Object raw) {
-    if (raw instanceof String text) {
-      return text;
+    // ADR-041 Phase1.1:opt-in 剥离 trailer 控制记录(末行)。仅 trailer_template.present=true 生效,
+    // 只支持 in-memory 文本路径(spool 落盘 / 二进制 payload 跳过并告警)。trailer 是结构性末行(非数据行),
+    // present=true 时一律剥离;声明笔数 / 控制总额 stash 进 attributes 交 VALIDATE 的 controlRecordCheck 对账。默认关闭。
+    private String peelTrailerControlRecord(ImportJobContext context, String payloadText, Map<String, Object> attrs) {
+        Map<String, Object> trailerTemplate = trailerTemplate(attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+        if (!TrailerControlRecord.isPresentEnabled(trailerTemplate)) {
+            return payloadText;
+        }
+        if (resolveSpoolPath(context) != null || attrs.get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD) != null) {
+            throw new IllegalArgumentException("trailer control record is not supported for spool/binary payload");
+        }
+        if (!Texts.hasText(payloadText)) {
+            return payloadText;
+        }
+        String body = payloadText;
+        while (body.endsWith("\n") || body.endsWith("\r")) {
+            body = body.substring(0, body.length() - 1);
+        }
+        int idx = Math.max(body.lastIndexOf('\n'), body.lastIndexOf('\r'));
+        String trailerLine = body.substring(idx + 1);
+        TrailerControlRecord trailer = TrailerControlRecord.parse(trailerLine, trailerTemplate);
+        if (!isValidTrailer(trailer, trailerTemplate, trailerLine)) {
+            throw new IllegalArgumentException(
+                    "trailer_template.present=true but last line is not a valid trailer control record");
+        }
+        if (trailer.declaredRecordCount() != null) {
+            attrs.put(TrailerControlRecord.ATTR_DECLARED_RECORD_COUNT, trailer.declaredRecordCount());
+        }
+        if (trailer.declaredControlTotal() != null) {
+            attrs.put(TrailerControlRecord.ATTR_DECLARED_CONTROL_TOTAL, trailer.declaredControlTotal());
+        }
+        return idx < 0 ? "" : body.substring(0, idx);
     }
-    return PostgresqlJsonbTexts.tryExtract(raw);
-  }
 
-  private long parsePayloads(
-      ImportJobContext context,
-      String payloadText,
-      ImportPayload importPayload,
-      Object templateConfig,
-      Path stagingFile)
-      throws Exception {
-    boolean preserveLogicalRow = preserveLogicalRow(templateConfig);
-    Object binary = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
-    try (BufferedWriter writer = Files.newBufferedWriter(
-        stagingFile,
-        StandardCharsets.UTF_8,
-        StandardOpenOption.CREATE,
-        StandardOpenOption.TRUNCATE_EXISTING,
-        StandardOpenOption.WRITE)) {
-      if (binary instanceof byte[] binaryBytes && binaryBytes.length > 0) {
-        String format = resolveFormat(importPayload, templateConfig, "");
+    private boolean isValidTrailer(
+            TrailerControlRecord trailer, Map<String, Object> trailerTemplate, String trailerLine) {
+        if (!recordTypeMatches(trailerTemplate, trailerLine)) {
+            return false;
+        }
+        boolean expectsCount = hasConfiguredIndex(trailerTemplate, "recordCountIndex");
+        boolean expectsTotal = hasConfiguredIndex(trailerTemplate, "controlTotalIndex");
+        if (!expectsCount && !expectsTotal) {
+            return trailer.isPresent();
+        }
+        return (!expectsCount || trailer.declaredRecordCount() != null)
+                && (!expectsTotal || trailer.declaredControlTotal() != null);
+    }
+
+    private boolean recordTypeMatches(Map<String, Object> template, String trailerLine) {
+        if (template == null) { // empty-check: allow - Sonar S2259
+            return true;
+        }
+        Object marker = template.get("recordType");
+        if (marker == null) {
+            marker = template.get("record_type");
+        }
+        String expected = null;
+        if (marker != null) { // empty-check: allow - Sonar S2259
+            String rawMarker = String.valueOf(marker);
+            expected = rawMarker.trim();
+        }
+        if (expected == null || expected.isBlank()) { // empty-check: allow - Sonar S2259
+            return true;
+        }
+        String delimiter = strOr(template.get("delimiter"), ",");
+        String[] fields = trailerLine.split(Pattern.quote(delimiter), -1);
+        int index = intOr(template.get("recordTypeIndex"), 0);
+        if (index < 0 || index >= fields.length) {
+            return false;
+        }
+        return expected.equals(fields[index].trim());
+    }
+
+    private boolean hasConfiguredIndex(Map<String, Object> template, String key) {
+        Object value = template == null ? null : template.get(key);
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof Number number) {
+            return number.intValue() >= 0;
+        }
+        try {
+            String rawIndex = String.valueOf(value);
+            String indexText = rawIndex.trim();
+            int parsedIndex = Integer.parseInt(indexText);
+            return parsedIndex >= 0;
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
+            return false;
+        }
+    }
+
+    private String strOr(Object value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        return Texts.hasText(text) ? text : fallback;
+    }
+
+    private int intOr(Object value, int fallback) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            if (EmptyChecks.isNull(value)) {
+                return fallback;
+            }
+            String rawText = String.valueOf(value);
+            String text = rawText.trim();
+            return Integer.parseInt(text);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
+            return fallback;
+        }
+    }
+
+    private Map<String, Object> trailerTemplate(Object templateConfig) {
+        if (templateConfig instanceof Map<?, ?> tc) {
+            Object raw = tc.get("trailer_template");
+            if (raw == null) {
+                raw = tc.get("trailerTemplate");
+            }
+            if (raw instanceof Map<?, ?> templateMap) {
+                Map<String, Object> result = new LinkedHashMap<>();
+                templateMap.forEach((key, value) -> result.put(String.valueOf(key), value));
+                return result;
+            }
+            String jsonText = jsonText(raw);
+            if (Texts.hasText(jsonText)) {
+                try {
+                    return support.objectMapper().readValue(jsonText, new TypeReference<>() {});
+                } catch (Exception ignored) {
+                    SwallowedExceptionLogger.warn(ParseStep.class, "catch:Exception", ignored);
+                    return Map.of();
+                }
+            }
+        }
+        return Map.of();
+    }
+
+    private String jsonText(Object raw) {
+        if (raw instanceof String text) {
+            return text;
+        }
+        return PostgresqlJsonbTexts.tryExtract(raw);
+    }
+
+    private long parsePayloads(
+            ImportJobContext context,
+            String payloadText,
+            ImportPayload importPayload,
+            Object templateConfig,
+            Path stagingFile)
+            throws Exception {
+        boolean preserveLogicalRow = preserveLogicalRow(templateConfig);
+        Object binary = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+        try (BufferedWriter writer = Files.newBufferedWriter(
+                stagingFile,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE)) {
+            if (binary instanceof byte[] binaryBytes && binaryBytes.length > 0) {
+                String format = resolveFormat(importPayload, templateConfig, "");
+                if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
+                    FormatParseRequest request = FormatParseRequest.fromBinary(
+                            binaryBytes, importPayload, templateConfig, preserveLogicalRow);
+                    FormatParser parser = parsers.get(FileTemplateFormat.EXCEL.code());
+                    return parser.parse(context, request, writer);
+                }
+                Charset cs = resolvePayloadTextCharset(importPayload, templateConfig);
+                String asText = new String(binaryBytes, cs);
+                return dispatchFormat(context, asText, importPayload, templateConfig, preserveLogicalRow, writer);
+            }
+            return dispatchFormat(context, payloadText, importPayload, templateConfig, preserveLogicalRow, writer);
+        }
+    }
+
+    private long dispatchFormat(
+            ImportJobContext context,
+            String payloadText,
+            ImportPayload importPayload,
+            Object templateConfig,
+            boolean preserveLogicalRow,
+            BufferedWriter writer)
+            throws Exception {
+        Path spoolPath = resolveSpoolPath(context);
+        Charset spoolCharset = resolveSpoolCharset(context);
+        String format = !EmptyChecks.isNull(spoolPath)
+                ? resolveFormat(importPayload, templateConfig, "")
+                : resolveFormat(importPayload, templateConfig, payloadText);
         if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
-          FormatParseRequest request = FormatParseRequest.fromBinary(
-              binaryBytes, importPayload, templateConfig, preserveLogicalRow);
-          FormatParser parser = parsers.get(FileTemplateFormat.EXCEL.code());
-          return parser.parse(context, request, writer);
+            byte[] bytes = payloadText == null ? new byte[0] : payloadText.getBytes(StandardCharsets.UTF_8);
+            FormatParseRequest request =
+                    FormatParseRequest.fromBinary(bytes, importPayload, templateConfig, preserveLogicalRow);
+            FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
+            return parser.parse(context, request, writer);
         }
-        Charset cs = resolvePayloadTextCharset(importPayload, templateConfig);
-        String asText = new String(binaryBytes, cs);
-        return dispatchFormat(
-            context, asText, importPayload, templateConfig, preserveLogicalRow, writer);
-      }
-      return dispatchFormat(
-          context, payloadText, importPayload, templateConfig, preserveLogicalRow, writer);
+        FormatParseRequest request = EmptyChecks.isNull(spoolPath)
+                ? FormatParseRequest.fromText(payloadText, importPayload, templateConfig, preserveLogicalRow)
+                : FormatParseRequest.fromSpool(
+                        importPayload, templateConfig, preserveLogicalRow, spoolPath, spoolCharset);
+        FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
+        return parser.parse(context, request, writer);
     }
-  }
 
-  private long dispatchFormat(
-      ImportJobContext context,
-      String payloadText,
-      ImportPayload importPayload,
-      Object templateConfig,
-      boolean preserveLogicalRow,
-      BufferedWriter writer)
-      throws Exception {
-    Path spoolPath = resolveSpoolPath(context);
-    Charset spoolCharset = resolveSpoolCharset(context);
-    String format = !EmptyChecks.isNull(spoolPath)
-        ? resolveFormat(importPayload, templateConfig, "")
-        : resolveFormat(importPayload, templateConfig, payloadText);
-    if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
-      byte[] bytes =
-          payloadText == null ? new byte[0] : payloadText.getBytes(StandardCharsets.UTF_8);
-      FormatParseRequest request =
-          FormatParseRequest.fromBinary(bytes, importPayload, templateConfig, preserveLogicalRow);
-      FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
-      return parser.parse(context, request, writer);
-    }
-    FormatParseRequest request = EmptyChecks.isNull(spoolPath)
-        ? FormatParseRequest.fromText(
-            payloadText, importPayload, templateConfig, preserveLogicalRow)
-        : FormatParseRequest.fromSpool(
-            importPayload, templateConfig, preserveLogicalRow, spoolPath, spoolCharset);
-    FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
-    return parser.parse(context, request, writer);
-  }
-
-  private static Path resolveSpoolPath(ImportJobContext context) {
-    Object v = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH);
-    if (v instanceof Path p) {
-      return p;
-    }
-    if (v instanceof String s && !s.isEmpty()) {
-      return Path.of(s);
-    }
-    return null;
-  }
-
-  private static Charset resolveSpoolCharset(ImportJobContext context) {
-    Object v = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET);
-    if (v instanceof Charset cs) {
-      return cs;
-    }
-    if (v instanceof String s && !s.isEmpty()) {
-      return EncodingUtils.resolve(s);
-    }
-    return null;
-  }
-
-  private String resolveFormat(
-      ImportPayload importPayload, Object templateConfigObject, String payloadText) {
-    if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
-      return importPayload.fileFormatType();
-    }
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object value = templateConfig.get("file_format_type");
-      if (value != null && Texts.hasText(String.valueOf(value))) {
-        return String.valueOf(value);
-      }
-    }
-    if (Texts.hasText(payloadText)) {
-      String trim = payloadText.trim();
-      if (trim.startsWith("{") || trim.startsWith("[")) {
-        return FileTemplateFormat.JSON.code();
-      }
-    }
-    return FileTemplateFormat.DELIMITED.code();
-  }
-
-  private Charset resolvePayloadTextCharset(
-      ImportPayload importPayload, Object templateConfigObject) {
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object charset = templateConfig.get("charset");
-      if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        String charsetName = String.valueOf(charset);
-        return EncodingUtils.resolve(charsetName);
-      }
-    }
-    if (importPayload != null && Texts.hasText(importPayload.charset())) {
-      return EncodingUtils.resolve(importPayload.charset());
-    }
-    return StandardCharsets.UTF_8;
-  }
-
-  private boolean preserveLogicalRow(Object templateConfigObject) {
-    if (!(templateConfigObject instanceof Map<?, ?> templateConfig)) {
-      return false;
-    }
-    Object direct = templateConfig.get("load_target_ref");
-    if (direct == null) {
-      direct = templateConfig.get("loadTargetRef");
-    }
-    if (EmptyChecks.isNotNull(direct)) {
-      String rawLoadTarget = String.valueOf(direct);
-      String loadTarget = rawLoadTarget.trim();
-      if (WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED.equalsIgnoreCase(loadTarget)) {
-        return true;
-      }
-    }
-    if (templateConfig.get("jdbc_mapped_import") != null
-        || templateConfig.get("jdbcMappedImport") != null) {
-      return true;
-    }
-    Map<String, Object> querySchema =
-        support.readJsonObject(templateConfig.get("query_param_schema"));
-    return querySchema.get("jdbcMappedImport") instanceof Map<?, ?>;
-  }
-
-  private long badRecordCount(ImportJobContext context) {
-    Object value = context.getAttributes().get("badRecords");
-    if (value instanceof List<?> list) {
-      return list.size();
-    }
-    return 0L;
-  }
-
-  /**
-   * 按 PARTITION_NO / PARTITION_COUNT 流式过滤 staging 文件,只保留本 partition 应处理的行。
-   *
-   * <p>开关:{@code template_config.partition_aware_parse=false} 关闭(默认开)。partitionCount &le; 1 / 缺
-   * PARTITION_NO 等任意条件不满足时直通,与历史行为等价。
-   *
-   * @return 过滤后实际保留的行数;不需过滤时直接返回 {@code totalCount}
-   */
-  private long applyPartitionFilter(
-      ImportJobContext context, Path stagingFile, long totalCount, Object templateConfig)
-      throws Exception {
-    // 文件束已经按来源文件分区，再对每个独立文件取模会漏掉其他分区不会读取的记录。
-    if (EmptyChecks.isNotNull(
-        context.getAttributes().get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))) {
-      return totalCount;
-    }
-    Integer partitionNo = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
-    Integer partitionCount =
-        intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
-    boolean inputIsNotPartitioned = EmptyChecks.isNull(partitionNo)
-        || EmptyChecks.isNull(partitionCount)
-        || partitionCount <= 1;
-    if (inputIsNotPartitioned) {
-      return totalCount;
-    }
-    // range-slice 优化:PREPROCESS 已用对象存储 range GET 只下本片字节(行边界对齐),staging 已只含本片记录。
-    // 此时再做 line-mod 过滤会二次切分丢数据,直接跳过(staging 全量即本片)。
-    if (Boolean.TRUE.equals(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_PRESLICED))) {
-      return totalCount;
-    }
-    if (templateConfig instanceof Map<?, ?> tc) {
-      Object switchVal = tc.get("partition_aware_parse");
-      if (switchVal == null) {
-        switchVal = tc.get("partitionAwareParse");
-      }
-      if (EmptyChecks.isNotNull(switchVal)) {
-        String rawSwitchValue = String.valueOf(switchVal);
-        String partitionAwareParse = rawSwitchValue.trim();
-        if ("false".equalsIgnoreCase(partitionAwareParse)) {
-          return totalCount;
+    private static Path resolveSpoolPath(ImportJobContext context) {
+        Object v = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH);
+        if (v instanceof Path p) {
+            return p;
         }
-      }
-    }
-    if (partitionNo < 1 || partitionNo > partitionCount) {
-      log.warn(
-          "skip partition filter: partitionNo={} outside [1,{}], tenantId={}, fileId={}",
-          partitionNo,
-          partitionCount,
-          context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-      return totalCount;
-    }
-    Path filtered = ImportStageSupport.createStagingFile(context, "parsed-p" + partitionNo);
-    long lineNo = 0;
-    long kept = 0;
-    int targetMod = partitionNo - 1;
-    try (BufferedReader reader = Files.newBufferedReader(stagingFile, StandardCharsets.UTF_8);
-        BufferedWriter writer = Files.newBufferedWriter(
-            filtered,
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
-      String line;
-      while ((line = reader.readLine()) != null) {
-        if (lineNo % partitionCount == targetMod) {
-          writer.write(line);
-          writer.newLine();
-          kept++;
+        if (v instanceof String s && !s.isEmpty()) {
+            return Path.of(s);
         }
-        lineNo++;
-      }
+        return null;
     }
-    Files.move(filtered, stagingFile, StandardCopyOption.REPLACE_EXISTING);
-    log.info(
-        "partition filter applied: tenantId={}, fileId={}, partition={}/{}, kept={}/{}",
-        context.getTenantId(),
-        context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-        partitionNo,
-        partitionCount,
-        kept,
-        totalCount);
-    return kept;
-  }
 
-  private static Integer intOrNull(Object value) {
-    if (value == null) {
-      return null;
+    private static Charset resolveSpoolCharset(ImportJobContext context) {
+        Object v = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET);
+        if (v instanceof Charset cs) {
+            return cs;
+        }
+        if (v instanceof String s && !s.isEmpty()) {
+            return EncodingUtils.resolve(s);
+        }
+        return null;
     }
-    if (value instanceof Number n) {
-      return n.intValue();
-    }
-    try {
-      String rawText = String.valueOf(value);
-      String text = rawText.trim();
-      return Integer.parseInt(text);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
 
-      return null;
+    private String resolveFormat(ImportPayload importPayload, Object templateConfigObject, String payloadText) {
+        if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
+            return importPayload.fileFormatType();
+        }
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object value = templateConfig.get("file_format_type");
+            if (value != null && Texts.hasText(String.valueOf(value))) {
+                return String.valueOf(value);
+            }
+        }
+        if (Texts.hasText(payloadText)) {
+            String trim = payloadText.trim();
+            if (trim.startsWith("{") || trim.startsWith("[")) {
+                return FileTemplateFormat.JSON.code();
+            }
+        }
+        return FileTemplateFormat.DELIMITED.code();
     }
-  }
+
+    private Charset resolvePayloadTextCharset(ImportPayload importPayload, Object templateConfigObject) {
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object charset = templateConfig.get("charset");
+            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+                String charsetName = String.valueOf(charset);
+                return EncodingUtils.resolve(charsetName);
+            }
+        }
+        if (importPayload != null && Texts.hasText(importPayload.charset())) {
+            return EncodingUtils.resolve(importPayload.charset());
+        }
+        return StandardCharsets.UTF_8;
+    }
+
+    private boolean preserveLogicalRow(Object templateConfigObject) {
+        if (!(templateConfigObject instanceof Map<?, ?> templateConfig)) {
+            return false;
+        }
+        Object direct = templateConfig.get("load_target_ref");
+        if (direct == null) {
+            direct = templateConfig.get("loadTargetRef");
+        }
+        if (EmptyChecks.isNotNull(direct)) {
+            String rawLoadTarget = String.valueOf(direct);
+            String loadTarget = rawLoadTarget.trim();
+            if (WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED.equalsIgnoreCase(loadTarget)) {
+                return true;
+            }
+        }
+        if (templateConfig.get("jdbc_mapped_import") != null || templateConfig.get("jdbcMappedImport") != null) {
+            return true;
+        }
+        Map<String, Object> querySchema = support.readJsonObject(templateConfig.get("query_param_schema"));
+        return querySchema.get("jdbcMappedImport") instanceof Map<?, ?>;
+    }
+
+    private long badRecordCount(ImportJobContext context) {
+        Object value = context.getAttributes().get("badRecords");
+        if (value instanceof List<?> list) {
+            return list.size();
+        }
+        return 0L;
+    }
+
+    /**
+     * 按 PARTITION_NO / PARTITION_COUNT 流式过滤 staging 文件,只保留本 partition 应处理的行。
+     *
+     * <p>开关:{@code template_config.partition_aware_parse=false} 关闭(默认开)。partitionCount &le; 1 / 缺
+     * PARTITION_NO 等任意条件不满足时直通,与历史行为等价。
+     *
+     * @return 过滤后实际保留的行数;不需过滤时直接返回 {@code totalCount}
+     */
+    private long applyPartitionFilter(
+            ImportJobContext context, Path stagingFile, long totalCount, Object templateConfig) throws Exception {
+        // 文件束已经按来源文件分区，再对每个独立文件取模会漏掉其他分区不会读取的记录。
+        if (EmptyChecks.isNotNull(context.getAttributes().get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))) {
+            return totalCount;
+        }
+        Integer partitionNo = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
+        Integer partitionCount = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+        boolean inputIsNotPartitioned =
+                EmptyChecks.isNull(partitionNo) || EmptyChecks.isNull(partitionCount) || partitionCount <= 1;
+        if (inputIsNotPartitioned) {
+            return totalCount;
+        }
+        // range-slice 优化:PREPROCESS 已用对象存储 range GET 只下本片字节(行边界对齐),staging 已只含本片记录。
+        // 此时再做 line-mod 过滤会二次切分丢数据,直接跳过(staging 全量即本片)。
+        if (Boolean.TRUE.equals(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_PRESLICED))) {
+            return totalCount;
+        }
+        if (templateConfig instanceof Map<?, ?> tc) {
+            Object switchVal = tc.get("partition_aware_parse");
+            if (switchVal == null) {
+                switchVal = tc.get("partitionAwareParse");
+            }
+            if (EmptyChecks.isNotNull(switchVal)) {
+                String rawSwitchValue = String.valueOf(switchVal);
+                String partitionAwareParse = rawSwitchValue.trim();
+                if ("false".equalsIgnoreCase(partitionAwareParse)) {
+                    return totalCount;
+                }
+            }
+        }
+        if (partitionNo < 1 || partitionNo > partitionCount) {
+            log.warn(
+                    "skip partition filter: partitionNo={} outside [1,{}], tenantId={}, fileId={}",
+                    partitionNo,
+                    partitionCount,
+                    context.getTenantId(),
+                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+            return totalCount;
+        }
+        Path filtered = ImportStageSupport.createStagingFile(context, "parsed-p" + partitionNo);
+        long lineNo = 0;
+        long kept = 0;
+        int targetMod = partitionNo - 1;
+        try (BufferedReader reader = Files.newBufferedReader(stagingFile, StandardCharsets.UTF_8);
+                BufferedWriter writer = Files.newBufferedWriter(
+                        filtered,
+                        StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE,
+                        StandardOpenOption.TRUNCATE_EXISTING,
+                        StandardOpenOption.WRITE)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (lineNo % partitionCount == targetMod) {
+                    writer.write(line);
+                    writer.newLine();
+                    kept++;
+                }
+                lineNo++;
+            }
+        }
+        Files.move(filtered, stagingFile, StandardCopyOption.REPLACE_EXISTING);
+        log.info(
+                "partition filter applied: tenantId={}, fileId={}, partition={}/{}, kept={}/{}",
+                context.getTenantId(),
+                context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                partitionNo,
+                partitionCount,
+                kept,
+                totalCount);
+        return kept;
+    }
+
+    private static Integer intOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            String rawText = String.valueOf(value);
+            String text = rawText.trim();
+            return Integer.parseInt(text);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
+
+            return null;
+        }
+    }
 }

@@ -21,20 +21,20 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.console.read-replica")
 public class ConsoleReadReplicaProperties {
 
-  /** 读写分离总开关；关闭时守护不校验从库端点与密码。 */
-  private boolean enabled = false;
+    /** 读写分离总开关；关闭时守护不校验从库端点与密码。 */
+    private boolean enabled = false;
 
-  /** 主库连接凭据（只读取密码用于生产弱口令校验）。 */
-  private Credentials primary = new Credentials();
+    /** 主库连接凭据（只读取密码用于生产弱口令校验）。 */
+    private Credentials primary = new Credentials();
 
-  /** 从库连接凭据（只读取密码用于生产弱口令校验）。 */
-  private Credentials replica = new Credentials();
+    /** 从库连接凭据（只读取密码用于生产弱口令校验）。 */
+    private Credentials replica = new Credentials();
 
-  /** 连接凭据只读视图。 */
-  @Data
-  public static class Credentials {
+    /** 连接凭据只读视图。 */
+    @Data
+    public static class Credentials {
 
-    /** 连接密码；未配置时为 {@code null}，守护据此跳过校验。 */
-    private String password;
-  }
+        /** 连接密码；未配置时为 {@code null}，守护据此跳过校验。 */
+        private String password;
+    }
 }

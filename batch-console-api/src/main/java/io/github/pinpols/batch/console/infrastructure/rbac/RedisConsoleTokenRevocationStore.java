@@ -11,18 +11,18 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisConsoleTokenRevocationStore implements ConsoleTokenRevocationStore {
 
-  private static final String REVOKED_KEY_PREFIX = "console:revoked:jti:";
+    private static final String REVOKED_KEY_PREFIX = "console:revoked:jti:";
 
-  private final StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-  @Override
-  public boolean isRevoked(String jti) {
-    Boolean revoked = redisTemplate.hasKey(REVOKED_KEY_PREFIX + jti);
-    return Boolean.TRUE.equals(revoked);
-  }
+    @Override
+    public boolean isRevoked(String jti) {
+        Boolean revoked = redisTemplate.hasKey(REVOKED_KEY_PREFIX + jti);
+        return Boolean.TRUE.equals(revoked);
+    }
 
-  @Override
-  public void revoke(String jti, Duration ttl) {
-    redisTemplate.opsForValue().set(REVOKED_KEY_PREFIX + jti, "1", ttl);
-  }
+    @Override
+    public void revoke(String jti, Duration ttl) {
+        redisTemplate.opsForValue().set(REVOKED_KEY_PREFIX + jti, "1", ttl);
+    }
 }

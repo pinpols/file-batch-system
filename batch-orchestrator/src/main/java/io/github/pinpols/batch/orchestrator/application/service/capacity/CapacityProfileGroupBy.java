@@ -5,23 +5,23 @@ import io.github.pinpols.batch.common.exception.BizException;
 
 /** P2 cost profile 聚合维度。只做容量画像，不承载账单或成本分摊语义。 */
 public enum CapacityProfileGroupBy {
-  TENANT,
-  JOB,
-  WORKER;
+    TENANT,
+    JOB,
+    WORKER;
 
-  public static CapacityProfileGroupBy fromNullable(String raw) {
-    if (raw == null || raw.isBlank()) {
-      return TENANT;
+    public static CapacityProfileGroupBy fromNullable(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return TENANT;
+        }
+        try {
+            String trimmedGroupBy = raw.trim();
+            String normalizedGroupBy = trimmedGroupBy.toUpperCase();
+            return CapacityProfileGroupBy.valueOf(normalizedGroupBy);
+        } catch (IllegalArgumentException ex) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "groupBy must be one of TENANT, JOB, WORKER");
+        }
     }
-    try {
-      String trimmedGroupBy = raw.trim();
-      String normalizedGroupBy = trimmedGroupBy.toUpperCase();
-      return CapacityProfileGroupBy.valueOf(normalizedGroupBy);
-    } catch (IllegalArgumentException ex) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "groupBy must be one of TENANT, JOB, WORKER");
-    }
-  }
 }

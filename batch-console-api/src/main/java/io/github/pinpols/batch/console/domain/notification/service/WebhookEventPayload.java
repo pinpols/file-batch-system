@@ -9,9 +9,4 @@ import java.time.Instant;
  * WebhookDeliveryRelay} 重投时反序列化复用同一份 body / 同一份 stream 头。
  */
 public record WebhookEventPayload(
-    String tenantId,
-    String eventType,
-    String stream,
-    String cursor,
-    Instant emittedAt,
-    Object data) {}
+        String tenantId, String eventType, String stream, String cursor, Instant emittedAt, Object data) {}

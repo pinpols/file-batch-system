@@ -27,256 +27,248 @@ import org.springframework.stereotype.Component;
 @Component
 public class TriggerApiAdmissionGuard {
 
-  private final TriggerRuntimeProperties properties;
-  private final ReentrantLock admissionLock = new ReentrantLock(true);
-  private final ArrayDeque<AdmissionWaiter> waitQueue = new ArrayDeque<>();
-  private final Counter rejectedCounter;
-  private final Counter queueFullRejectedCounter;
-  private final Counter queueTimeoutRejectedCounter;
-  private final Counter interruptedRejectedCounter;
-  private int activeRequests;
-  private int adaptiveLimit;
+    private final TriggerRuntimeProperties properties;
+    private final ReentrantLock admissionLock = new ReentrantLock(true);
+    private final ArrayDeque<AdmissionWaiter> waitQueue = new ArrayDeque<>();
+    private final Counter rejectedCounter;
+    private final Counter queueFullRejectedCounter;
+    private final Counter queueTimeoutRejectedCounter;
+    private final Counter interruptedRejectedCounter;
+    private int activeRequests;
+    private int adaptiveLimit;
 
-  @Autowired
-  public TriggerApiAdmissionGuard(
-      TriggerRuntimeProperties properties, MeterRegistry meterRegistry) {
-    this.properties = properties;
-    this.adaptiveLimit = configuredMaxConcurrency();
-    this.rejectedCounter = Counter.builder("batch.trigger.api_launch.admission.rejected")
-        .description("Manual trigger launch requests rejected by the local admission guard")
-        .register(meterRegistry);
-    this.queueFullRejectedCounter = Counter.builder(
-            "batch.trigger.api_launch.admission.queue_full_rejected")
-        .description("Manual trigger launch requests rejected because the local queue is full")
-        .register(meterRegistry);
-    this.queueTimeoutRejectedCounter = Counter.builder(
-            "batch.trigger.api_launch.admission.queue_timeout_rejected")
-        .description("Manual trigger launch requests rejected after local queue wait expires")
-        .register(meterRegistry);
-    this.interruptedRejectedCounter = Counter.builder(
-            "batch.trigger.api_launch.admission.interrupted_rejected")
-        .description(
-            "Manual trigger launch requests rejected after their waiting thread is interrupted")
-        .register(meterRegistry);
-    Gauge.builder(
-            "batch.trigger.api_launch.admission.active", this, TriggerApiAdmissionGuard::active)
-        .description("Manual trigger launch requests currently inside the local admission guard")
-        .register(meterRegistry);
-    Gauge.builder(
-            "batch.trigger.api_launch.admission.limit",
-            this,
-            TriggerApiAdmissionGuard::effectiveConcurrencyForMetrics)
-        .description(
-            "Effective local trigger launch admission limit after optional AIMD adjustment")
-        .register(meterRegistry);
-    Gauge.builder(
-            "batch.trigger.api_launch.admission.queued", this, TriggerApiAdmissionGuard::queued)
-        .description("Manual trigger launch requests waiting for a local admission permit")
-        .register(meterRegistry);
-  }
-
-  /** 仅供不启动 Spring 容器的单元测试构造，生产始终使用带 MeterRegistry 的构造器。 */
-  public TriggerApiAdmissionGuard(TriggerRuntimeProperties properties) {
-    this.properties = properties;
-    this.adaptiveLimit = configuredMaxConcurrency();
-    this.rejectedCounter = null;
-    this.queueFullRejectedCounter = null;
-    this.queueTimeoutRejectedCounter = null;
-    this.interruptedRejectedCounter = null;
-  }
-
-  public <T> T execute(Supplier<T> action) {
-    acquire();
-    long startedNanos = System.nanoTime();
-    try {
-      return action.get();
-    } finally {
-      release(System.nanoTime() - startedNanos);
+    @Autowired
+    public TriggerApiAdmissionGuard(TriggerRuntimeProperties properties, MeterRegistry meterRegistry) {
+        this.properties = properties;
+        this.adaptiveLimit = configuredMaxConcurrency();
+        this.rejectedCounter = Counter.builder("batch.trigger.api_launch.admission.rejected")
+                .description("Manual trigger launch requests rejected by the local admission guard")
+                .register(meterRegistry);
+        this.queueFullRejectedCounter = Counter.builder("batch.trigger.api_launch.admission.queue_full_rejected")
+                .description("Manual trigger launch requests rejected because the local queue is full")
+                .register(meterRegistry);
+        this.queueTimeoutRejectedCounter = Counter.builder("batch.trigger.api_launch.admission.queue_timeout_rejected")
+                .description("Manual trigger launch requests rejected after local queue wait expires")
+                .register(meterRegistry);
+        this.interruptedRejectedCounter = Counter.builder("batch.trigger.api_launch.admission.interrupted_rejected")
+                .description("Manual trigger launch requests rejected after their waiting thread is interrupted")
+                .register(meterRegistry);
+        Gauge.builder("batch.trigger.api_launch.admission.active", this, TriggerApiAdmissionGuard::active)
+                .description("Manual trigger launch requests currently inside the local admission guard")
+                .register(meterRegistry);
+        Gauge.builder(
+                        "batch.trigger.api_launch.admission.limit",
+                        this,
+                        TriggerApiAdmissionGuard::effectiveConcurrencyForMetrics)
+                .description("Effective local trigger launch admission limit after optional AIMD adjustment")
+                .register(meterRegistry);
+        Gauge.builder("batch.trigger.api_launch.admission.queued", this, TriggerApiAdmissionGuard::queued)
+                .description("Manual trigger launch requests waiting for a local admission permit")
+                .register(meterRegistry);
     }
-  }
 
-  private void acquire() {
-    admissionLock.lock();
-    try {
-      if (takePermitWhenIdle()) {
-        return;
-      }
-      if (waitQueue.size() >= properties.getApiLaunchQueueCapacity()) {
-        reject(RejectionReason.QUEUE_FULL);
-      }
-      waitForPermit();
-    } finally {
-      admissionLock.unlock();
+    /** 仅供不启动 Spring 容器的单元测试构造，生产始终使用带 MeterRegistry 的构造器。 */
+    public TriggerApiAdmissionGuard(TriggerRuntimeProperties properties) {
+        this.properties = properties;
+        this.adaptiveLimit = configuredMaxConcurrency();
+        this.rejectedCounter = null;
+        this.queueFullRejectedCounter = null;
+        this.queueTimeoutRejectedCounter = null;
+        this.interruptedRejectedCounter = null;
     }
-  }
 
-  /**
-   * 只有队列为空时才能直接占用许可。否则后到的请求会在先到请求被唤醒前抢走刚释放的名额。
-   */
-  private boolean takePermitWhenIdle() {
-    if (activeRequests < effectiveLimit() && EmptyChecks.isEmpty(waitQueue)) {
-      activeRequests++;
-      return true;
-    }
-    return false;
-  }
-
-  private void waitForPermit() {
-    AdmissionWaiter waiter = new AdmissionWaiter(admissionLock.newCondition());
-    waitQueue.addLast(waiter);
-    long remainingNanos = TimeUnit.MILLISECONDS.toNanos(properties.getApiLaunchQueueWaitMillis());
-    try {
-      while (!waiter.granted) {
-        if (remainingNanos <= 0L) {
-          reject(RejectionReason.QUEUE_TIMEOUT);
-        }
+    public <T> T execute(Supplier<T> action) {
+        acquire();
         long startedNanos = System.nanoTime();
         try {
-          waiter.condition.awaitNanos(remainingNanos);
-        } catch (InterruptedException exception) {
-          Thread.currentThread().interrupt();
-          if (!waiter.granted) {
-            reject(RejectionReason.INTERRUPTED);
-          }
+            return action.get();
+        } finally {
+            release(System.nanoTime() - startedNanos);
         }
-        remainingNanos -= System.nanoTime() - startedNanos;
-      }
-    } finally {
-      if (!waiter.granted) {
-        waitQueue.remove(waiter);
-      }
     }
-  }
 
-  private void release(long elapsedNanos) {
-    admissionLock.lock();
-    try {
-      activeRequests--;
-      adjustAdaptiveLimit(elapsedNanos);
-      grantQueuedPermits();
-    } finally {
-      admissionLock.unlock();
+    private void acquire() {
+        admissionLock.lock();
+        try {
+            if (takePermitWhenIdle()) {
+                return;
+            }
+            if (waitQueue.size() >= properties.getApiLaunchQueueCapacity()) {
+                reject(RejectionReason.QUEUE_FULL);
+            }
+            waitForPermit();
+        } finally {
+            admissionLock.unlock();
+        }
     }
-  }
 
-  /** 按入队顺序把当前空闲许可发给队头，直到并发上限或队列耗尽。 */
-  private void grantQueuedPermits() {
-    while (activeRequests < effectiveLimit() && EmptyChecks.isNotEmpty(waitQueue)) {
-      AdmissionWaiter waiter = waitQueue.removeFirst();
-      waiter.granted = true;
-      activeRequests++;
-      waiter.condition.signal();
+    /**
+     * 只有队列为空时才能直接占用许可。否则后到的请求会在先到请求被唤醒前抢走刚释放的名额。
+     */
+    private boolean takePermitWhenIdle() {
+        if (activeRequests < effectiveLimit() && EmptyChecks.isEmpty(waitQueue)) {
+            activeRequests++;
+            return true;
+        }
+        return false;
     }
-  }
 
-  private void reject(RejectionReason reason) {
-    if (rejectedCounter != null) {
-      rejectedCounter.increment();
-      switch (reason) {
-        case QUEUE_FULL -> queueFullRejectedCounter.increment();
-        case QUEUE_TIMEOUT -> queueTimeoutRejectedCounter.increment();
-        case INTERRUPTED -> interruptedRejectedCounter.increment();
-      }
+    private void waitForPermit() {
+        AdmissionWaiter waiter = new AdmissionWaiter(admissionLock.newCondition());
+        waitQueue.addLast(waiter);
+        long remainingNanos = TimeUnit.MILLISECONDS.toNanos(properties.getApiLaunchQueueWaitMillis());
+        try {
+            while (!waiter.granted) {
+                if (remainingNanos <= 0L) {
+                    reject(RejectionReason.QUEUE_TIMEOUT);
+                }
+                long startedNanos = System.nanoTime();
+                try {
+                    waiter.condition.awaitNanos(remainingNanos);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    if (!waiter.granted) {
+                        reject(RejectionReason.INTERRUPTED);
+                    }
+                }
+                remainingNanos -= System.nanoTime() - startedNanos;
+            }
+        } finally {
+            if (!waiter.granted) {
+                waitQueue.remove(waiter);
+            }
+        }
     }
-    throw BizException.of(
-        ResultCode.RATE_LIMITED,
-        ResultCode.RATE_LIMITED.detailKey(),
-        "trigger launch admission capacity reached");
-  }
 
-  private int effectiveLimit() {
-    int configuredMax = configuredMaxConcurrency();
-    if (!properties.isApiLaunchAdaptiveEnabled()) {
-      adaptiveLimit = configuredMax;
-      return configuredMax;
+    private void release(long elapsedNanos) {
+        admissionLock.lock();
+        try {
+            activeRequests--;
+            adjustAdaptiveLimit(elapsedNanos);
+            grantQueuedPermits();
+        } finally {
+            admissionLock.unlock();
+        }
     }
-    int requestedMinimum = properties.getApiLaunchMinConcurrency();
-    int minimumConcurrency = Math.max(1, requestedMinimum);
-    int configuredMin = Math.min(configuredMax, minimumConcurrency);
-    int limitAtConfiguredMaximum = Math.min(configuredMax, adaptiveLimit);
-    adaptiveLimit = Math.max(configuredMin, limitAtConfiguredMaximum);
-    return adaptiveLimit;
-  }
 
-  private void adjustAdaptiveLimit(long elapsedNanos) {
-    if (!properties.isApiLaunchAdaptiveEnabled()) {
-      return;
+    /** 按入队顺序把当前空闲许可发给队头，直到并发上限或队列耗尽。 */
+    private void grantQueuedPermits() {
+        while (activeRequests < effectiveLimit() && EmptyChecks.isNotEmpty(waitQueue)) {
+            AdmissionWaiter waiter = waitQueue.removeFirst();
+            waiter.granted = true;
+            activeRequests++;
+            waiter.condition.signal();
+        }
     }
-    int configuredMax = configuredMaxConcurrency();
-    int requestedMinimum = properties.getApiLaunchMinConcurrency();
-    int minimumConcurrency = Math.max(1, requestedMinimum);
-    int configuredMin = Math.min(configuredMax, minimumConcurrency);
-    long slowThresholdMillis = Math.max(1L, properties.getApiLaunchSlowRequestThresholdMillis());
-    long slowThresholdNanos = TimeUnit.MILLISECONDS.toNanos(slowThresholdMillis);
-    if (elapsedNanos >= slowThresholdNanos) {
-      int halvedLimitAtLeastOne = Math.max(1, adaptiveLimit / 2);
-      adaptiveLimit = Math.max(configuredMin, halvedLimitAtLeastOne);
-    } else {
-      adaptiveLimit = Math.min(configuredMax, adaptiveLimit + 1);
+
+    private void reject(RejectionReason reason) {
+        if (rejectedCounter != null) {
+            rejectedCounter.increment();
+            switch (reason) {
+                case QUEUE_FULL -> queueFullRejectedCounter.increment();
+                case QUEUE_TIMEOUT -> queueTimeoutRejectedCounter.increment();
+                case INTERRUPTED -> interruptedRejectedCounter.increment();
+            }
+        }
+        throw BizException.of(
+                ResultCode.RATE_LIMITED,
+                ResultCode.RATE_LIMITED.detailKey(),
+                "trigger launch admission capacity reached");
     }
-  }
 
-  private int configuredMaxConcurrency() {
-    return Math.max(1, properties.getApiLaunchMaxConcurrency());
-  }
-
-  int effectiveConcurrencyForTest() {
-    admissionLock.lock();
-    try {
-      return effectiveLimit();
-    } finally {
-      admissionLock.unlock();
+    private int effectiveLimit() {
+        int configuredMax = configuredMaxConcurrency();
+        if (!properties.isApiLaunchAdaptiveEnabled()) {
+            adaptiveLimit = configuredMax;
+            return configuredMax;
+        }
+        int requestedMinimum = properties.getApiLaunchMinConcurrency();
+        int minimumConcurrency = Math.max(1, requestedMinimum);
+        int configuredMin = Math.min(configuredMax, minimumConcurrency);
+        int limitAtConfiguredMaximum = Math.min(configuredMax, adaptiveLimit);
+        adaptiveLimit = Math.max(configuredMin, limitAtConfiguredMaximum);
+        return adaptiveLimit;
     }
-  }
 
-  int queuedForTest() {
-    admissionLock.lock();
-    try {
-      return waitQueue.size();
-    } finally {
-      admissionLock.unlock();
+    private void adjustAdaptiveLimit(long elapsedNanos) {
+        if (!properties.isApiLaunchAdaptiveEnabled()) {
+            return;
+        }
+        int configuredMax = configuredMaxConcurrency();
+        int requestedMinimum = properties.getApiLaunchMinConcurrency();
+        int minimumConcurrency = Math.max(1, requestedMinimum);
+        int configuredMin = Math.min(configuredMax, minimumConcurrency);
+        long slowThresholdMillis = Math.max(1L, properties.getApiLaunchSlowRequestThresholdMillis());
+        long slowThresholdNanos = TimeUnit.MILLISECONDS.toNanos(slowThresholdMillis);
+        if (elapsedNanos >= slowThresholdNanos) {
+            int halvedLimitAtLeastOne = Math.max(1, adaptiveLimit / 2);
+            adaptiveLimit = Math.max(configuredMin, halvedLimitAtLeastOne);
+        } else {
+            adaptiveLimit = Math.min(configuredMax, adaptiveLimit + 1);
+        }
     }
-  }
 
-  private int active() {
-    admissionLock.lock();
-    try {
-      return activeRequests;
-    } finally {
-      admissionLock.unlock();
+    private int configuredMaxConcurrency() {
+        return Math.max(1, properties.getApiLaunchMaxConcurrency());
     }
-  }
 
-  private int queued() {
-    admissionLock.lock();
-    try {
-      return waitQueue.size();
-    } finally {
-      admissionLock.unlock();
+    int effectiveConcurrencyForTest() {
+        admissionLock.lock();
+        try {
+            return effectiveLimit();
+        } finally {
+            admissionLock.unlock();
+        }
     }
-  }
 
-  private int effectiveConcurrencyForMetrics() {
-    admissionLock.lock();
-    try {
-      return effectiveLimit();
-    } finally {
-      admissionLock.unlock();
+    int queuedForTest() {
+        admissionLock.lock();
+        try {
+            return waitQueue.size();
+        } finally {
+            admissionLock.unlock();
+        }
     }
-  }
 
-  private enum RejectionReason {
-    QUEUE_FULL,
-    QUEUE_TIMEOUT,
-    INTERRUPTED
-  }
-
-  private static final class AdmissionWaiter {
-    private final Condition condition;
-    private boolean granted;
-
-    private AdmissionWaiter(Condition condition) {
-      this.condition = condition;
+    private int active() {
+        admissionLock.lock();
+        try {
+            return activeRequests;
+        } finally {
+            admissionLock.unlock();
+        }
     }
-  }
+
+    private int queued() {
+        admissionLock.lock();
+        try {
+            return waitQueue.size();
+        } finally {
+            admissionLock.unlock();
+        }
+    }
+
+    private int effectiveConcurrencyForMetrics() {
+        admissionLock.lock();
+        try {
+            return effectiveLimit();
+        } finally {
+            admissionLock.unlock();
+        }
+    }
+
+    private enum RejectionReason {
+        QUEUE_FULL,
+        QUEUE_TIMEOUT,
+        INTERRUPTED
+    }
+
+    private static final class AdmissionWaiter {
+        private final Condition condition;
+        private boolean granted;
+
+        private AdmissionWaiter(Condition condition) {
+            this.condition = condition;
+        }
+    }
 }

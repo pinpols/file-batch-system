@@ -35,90 +35,84 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleApiKeyControllerTest {
 
-  @Mock
-  private ConsoleApiKeyService apiKeyService;
+    @Mock
+    private ConsoleApiKeyService apiKeyService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleApiKeyController(apiKeyService, responseFactory, requestMetadataResolver))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleApiKeyController(apiKeyService, responseFactory, requestMetadataResolver))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("按租户查询访问密钥列表并返回名称与前缀")
-  void shouldListApiKeys() throws Exception {
-    ApiKeyEntity entity = new ApiKeyEntity();
-    entity.setId(1L);
-    entity.setTenantId("t1");
-    entity.setKeyName("my-key");
-    entity.setKeyPrefix("bk_abcde");
-    entity.setEnabled(true);
-    when(apiKeyService.list("t1")).thenReturn(List.of(entity));
+    @Test
+    @DisplayName("按租户查询访问密钥列表并返回名称与前缀")
+    void shouldListApiKeys() throws Exception {
+        ApiKeyEntity entity = new ApiKeyEntity();
+        entity.setId(1L);
+        entity.setTenantId("t1");
+        entity.setKeyName("my-key");
+        entity.setKeyPrefix("bk_abcde");
+        entity.setEnabled(true);
+        when(apiKeyService.list("t1")).thenReturn(List.of(entity));
 
-    mockMvc
-        .perform(get("/api/console/api-keys").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].keyName").value("my-key"))
-        .andExpect(jsonPath("$.data[0].keyPrefix").value("bk_abcde"));
-  }
+        mockMvc.perform(get("/api/console/api-keys").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].keyName").value("my-key"))
+                .andExpect(jsonPath("$.data[0].keyPrefix").value("bk_abcde"));
+    }
 
-  @Test
-  @DisplayName("创建访问密钥返回名称与一次性明文密钥")
-  void shouldCreateApiKey() throws Exception {
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
-    ApiKeyEntity entity = new ApiKeyEntity();
-    entity.setId(1L);
-    entity.setKeyName("my-key");
-    entity.setKeyPrefix("bk_abcde");
-    entity.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z"));
-    when(apiKeyService.create(anyString(), anyString(), any(), any(), anyString()))
-        .thenReturn(new ConsoleApiKeyService.CreateResult(entity, "bk_raw_secret_key"));
+    @Test
+    @DisplayName("创建访问密钥返回名称与一次性明文密钥")
+    void shouldCreateApiKey() throws Exception {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+        ApiKeyEntity entity = new ApiKeyEntity();
+        entity.setId(1L);
+        entity.setKeyName("my-key");
+        entity.setKeyPrefix("bk_abcde");
+        entity.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z"));
+        when(apiKeyService.create(anyString(), anyString(), any(), any(), anyString()))
+                .thenReturn(new ConsoleApiKeyService.CreateResult(entity, "bk_raw_secret_key"));
 
-    mockMvc
-        .perform(post("/api/console/api-keys")
-            .param("tenantId", "t1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/api-keys")
+                        .param("tenantId", "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {"keyName":"my-key","scopes":"read,write"}
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.keyName").value("my-key"))
-        .andExpect(jsonPath("$.data.rawKey").value("bk_raw_secret_key"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.keyName").value("my-key"))
+                .andExpect(jsonPath("$.data.rawKey").value("bk_raw_secret_key"));
+    }
 
-  @Test
-  @DisplayName("吊销访问密钥按租户与操作人记录")
-  void shouldRevokeApiKey() throws Exception {
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
-    mockMvc
-        .perform(delete("/api/console/api-keys/1").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+    @Test
+    @DisplayName("吊销访问密钥按租户与操作人记录")
+    void shouldRevokeApiKey() throws Exception {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+        mockMvc.perform(delete("/api/console/api-keys/1").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(apiKeyService).revoke("t1", 1L, "operator-1");
-  }
+        verify(apiKeyService).revoke("t1", 1L, "operator-1");
+    }
 }

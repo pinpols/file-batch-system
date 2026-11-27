@@ -12,93 +12,90 @@ import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowRunMapper {
 
-  int insert(@Param("run") WorkflowRunEntity entity);
+    int insert(@Param("run") WorkflowRunEntity entity);
 
-  /**
-   * 按活跃槽位插入根运行；该槽位已被占用时返回零，其他唯一键、外键及检查约束异常继续向调用方传播。
-   *
-   * <p>ADR-050：槽位由准入方按定义级上限逐个尝试，唯一索引是并发下的最终裁决，不依赖事务快照。
-   */
-  int insertIfActiveSlotFree(@Param("run") WorkflowRunEntity entity);
+    /**
+     * 按活跃槽位插入根运行；该槽位已被占用时返回零，其他唯一键、外键及检查约束异常继续向调用方传播。
+     *
+     * <p>ADR-050：槽位由准入方按定义级上限逐个尝试，唯一索引是并发下的最终裁决，不依赖事务快照。
+     */
+    int insertIfActiveSlotFree(@Param("run") WorkflowRunEntity entity);
 
-  /**
-   * 在一次往返中尝试插入事务快照内第一个空槽。返回零时仍需逐槽复查，覆盖快照之后的槽位释放。
-   */
-  int insertAtFirstVisibleFreeSlot(
-      @Param("run") WorkflowRunEntity entity, @Param("maxActiveRuns") int maxActiveRuns);
+    /**
+     * 在一次往返中尝试插入事务快照内第一个空槽。返回零时仍需逐槽复查，覆盖快照之后的槽位释放。
+     */
+    int insertAtFirstVisibleFreeSlot(@Param("run") WorkflowRunEntity entity, @Param("maxActiveRuns") int maxActiveRuns);
 
-  /**
-   * PAUSED → RUNNING 时在同一语句内选择同组首个空槽。返回零表示槽位已满或前态已变化；并发抢占同一槽位时由
-   * {@code uk_workflow_run_active_slot} 抛出唯一键冲突，由调用方在保存点内有限重试。
-   */
-  int resumeIntoFreeSlot(WorkflowRunResumeSlotParam parameters);
+    /**
+     * PAUSED → RUNNING 时在同一语句内选择同组首个空槽。返回零表示槽位已满或前态已变化；并发抢占同一槽位时由
+     * {@code uk_workflow_run_active_slot} 抛出唯一键冲突，由调用方在保存点内有限重试。
+     */
+    int resumeIntoFreeSlot(WorkflowRunResumeSlotParam parameters);
 
-  WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  WorkflowRunEntity selectByTenantAndIdForUpdate(
-      @Param("tenantId") String tenantId, @Param("id") Long id);
+    WorkflowRunEntity selectByTenantAndIdForUpdate(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  WorkflowRunEntity selectByTenantAndTriggerRequestId(
-      @Param("tenantId") String tenantId, @Param("triggerRequestId") Long triggerRequestId);
+    WorkflowRunEntity selectByTenantAndTriggerRequestId(
+            @Param("tenantId") String tenantId, @Param("triggerRequestId") Long triggerRequestId);
 
-  WorkflowRunEntity selectActiveByTenantWorkflowBizDate(
-      WorkflowRunActiveByTenantWorkflowBizDateQuery parameters);
+    WorkflowRunEntity selectActiveByTenantWorkflowBizDate(WorkflowRunActiveByTenantWorkflowBizDateQuery parameters);
 
-  /** ADR-018 reconciler：跨租户扫 WAITING_DEPENDENCY 时按 id 直查（id 全局唯一 BIGSERIAL）。 */
-  WorkflowRunEntity selectByIdAnyTenant(@Param("id") Long id);
+    /** ADR-018 reconciler：跨租户扫 WAITING_DEPENDENCY 时按 id 直查（id 全局唯一 BIGSERIAL）。 */
+    WorkflowRunEntity selectByIdAnyTenant(@Param("id") Long id);
 
-  WorkflowRunEntity selectByRelatedJobInstanceId(
-      @Param("tenantId") String tenantId, @Param("relatedJobInstanceId") Long relatedJobInstanceId);
+    WorkflowRunEntity selectByRelatedJobInstanceId(
+            @Param("tenantId") String tenantId, @Param("relatedJobInstanceId") Long relatedJobInstanceId);
 
-  /** 通过 JOB 节点显式执行关联解析其所属的直接 Workflow 运行。 */
-  WorkflowRunEntity selectByNodeJobInstanceId(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    /** 通过 JOB 节点显式执行关联解析其所属的直接 Workflow 运行。 */
+    WorkflowRunEntity selectByNodeJobInstanceId(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  /** 查找捕获指定 Job 版本的最新不可变 Workflow 执行快照。 */
-  WorkflowRunEntity selectLatestJobDefinitionSnapshot(
-      @Param("tenantId") String tenantId,
-      @Param("jobDefinitionId") Long jobDefinitionId,
-      @Param("jobCode") String jobCode,
-      @Param("jobDefinitionVersion") Integer jobDefinitionVersion);
+    /** 查找捕获指定 Job 版本的最新不可变 Workflow 执行快照。 */
+    WorkflowRunEntity selectLatestJobDefinitionSnapshot(
+            @Param("tenantId") String tenantId,
+            @Param("jobDefinitionId") Long jobDefinitionId,
+            @Param("jobCode") String jobCode,
+            @Param("jobDefinitionVersion") Integer jobDefinitionVersion);
 
-  List<WorkflowRunEntity> selectByQuery(WorkflowRunQuery query);
+    List<WorkflowRunEntity> selectByQuery(WorkflowRunQuery query);
 
-  /**
-   * 更新 workflow_run 状态/当前节点/完成时间。
-   *
-   * <p>{@link UpdateWorkflowRunStatusParam#getExpectedStatuses()} 非空时附加 {@code and run_status in
-   * (...)} 守护，命中 0 行说明前态不在期望集（cancel/terminate 与 task outcome 抢占等）；调用方按返回行数判定是否冲突。
-   */
-  int updateStatus(UpdateWorkflowRunStatusParam param);
+    /**
+     * 更新 workflow_run 状态/当前节点/完成时间。
+     *
+     * <p>{@link UpdateWorkflowRunStatusParam#getExpectedStatuses()} 非空时附加 {@code and run_status in
+     * (...)} 守护，命中 0 行说明前态不在期望集（cancel/terminate 与 task outcome 抢占等）；调用方按返回行数判定是否冲突。
+     */
+    int updateStatus(UpdateWorkflowRunStatusParam param);
 
-  int markRunning(WorkflowRunMarkRunningParam parameters);
+    int markRunning(WorkflowRunMarkRunningParam parameters);
 
-  /** P3-3 archive: 选出终结态、finished_at 早于 cutoff 的 workflow_run id（带 limit 防长事务）。 */
-  List<Long> selectArchivableIds(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
+    /** P3-3 archive: 选出终结态、finished_at 早于 cutoff 的 workflow_run id（带 limit 防长事务）。 */
+    List<Long> selectArchivableIds(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
-  /**
-   * 选 RUNNING 中且 {@code updated_at} 早于 {@code stuckBefore} 的 workflow_run（疑似 stuck，等下游
-   * 推进信号永远没回来）。配合 {@link WorkflowNodeRunMapper#selectByWorkflowRunId} 判定是否所有 node 已终态后做回退
-   * finalize。详见 {@code WorkflowRunStuckReconciler}。
-   */
-  List<WorkflowRunEntity> selectStuckRunningCandidates(
-      @Param("stuckBefore") Instant stuckBefore, @Param("limit") int limit);
+    /**
+     * 选 RUNNING 中且 {@code updated_at} 早于 {@code stuckBefore} 的 workflow_run（疑似 stuck，等下游
+     * 推进信号永远没回来）。配合 {@link WorkflowNodeRunMapper#selectByWorkflowRunId} 判定是否所有 node 已终态后做回退
+     * finalize。详见 {@code WorkflowRunStuckReconciler}。
+     */
+    List<WorkflowRunEntity> selectStuckRunningCandidates(
+            @Param("stuckBefore") Instant stuckBefore, @Param("limit") int limit);
 
-  /** P3-3 archive: 按 id 列表删除 workflow_node_run（FK 子表），返回删除行数。 */
-  int deleteNodeRunsByWorkflowRunIds(@Param("ids") List<Long> workflowRunIds);
+    /** P3-3 archive: 按 id 列表删除 workflow_node_run（FK 子表），返回删除行数。 */
+    int deleteNodeRunsByWorkflowRunIds(@Param("ids") List<Long> workflowRunIds);
 
-  /** P3-3 archive: 按 id 列表删除 workflow_run，返回删除行数。 */
-  int deleteByIds(@Param("ids") List<Long> ids);
+    /** P3-3 archive: 按 id 列表删除 workflow_run，返回删除行数。 */
+    int deleteByIds(@Param("ids") List<Long> ids);
 
-  /**
-   * A3 fix: 把 workflow_run 行 insert 到 archive.workflow_run_archive(insert-before-delete 保数据 不丢)。on
-   * conflict do nothing 防重放幂等。
-   */
-  int archiveWorkflowRunsByIds(@Param("ids") List<Long> ids);
+    /**
+     * A3 fix: 把 workflow_run 行 insert 到 archive.workflow_run_archive(insert-before-delete 保数据 不丢)。on
+     * conflict do nothing 防重放幂等。
+     */
+    int archiveWorkflowRunsByIds(@Param("ids") List<Long> ids);
 
-  /** A3 fix: 把 workflow_node_run 子行 insert 到 archive.workflow_node_run_archive。 */
-  int archiveWorkflowNodeRunsByWorkflowRunIds(@Param("ids") List<Long> workflowRunIds);
+    /** A3 fix: 把 workflow_node_run 子行 insert 到 archive.workflow_node_run_archive。 */
+    int archiveWorkflowNodeRunsByWorkflowRunIds(@Param("ids") List<Long> workflowRunIds);
 
-  /** 复制后核对根及节点的完整行，非零表示缺失或冲突冷记录，禁止删除热数据。 */
-  long countArchiveCopyMismatches(@Param("ids") List<Long> workflowRunIds);
+    /** 复制后核对根及节点的完整行，非零表示缺失或冲突冷记录，禁止删除热数据。 */
+    long countArchiveCopyMismatches(@Param("ids") List<Long> workflowRunIds);
 }

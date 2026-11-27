@@ -10,13 +10,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ImportInternalSecurityConfiguration {
 
-  @Bean
-  public FilterRegistrationBean<ImportInternalAuthFilter> importInternalAuthFilter(
-      BatchSecurityProperties securityProperties) {
-    FilterRegistrationBean<ImportInternalAuthFilter> registration = new FilterRegistrationBean<>();
-    registration.setFilter(new ImportInternalAuthFilter(securityProperties));
-    registration.addUrlPatterns("/internal/*");
-    registration.setOrder(1);
-    return registration;
-  }
+    @Bean
+    public FilterRegistrationBean<ImportInternalAuthFilter> importInternalAuthFilter(
+            BatchSecurityProperties securityProperties) {
+        FilterRegistrationBean<ImportInternalAuthFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new ImportInternalAuthFilter(securityProperties));
+        registration.addUrlPatterns("/internal/*");
+        registration.setOrder(1);
+        return registration;
+    }
 }

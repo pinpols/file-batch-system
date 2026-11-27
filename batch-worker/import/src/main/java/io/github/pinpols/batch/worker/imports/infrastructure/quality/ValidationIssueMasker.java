@@ -22,88 +22,85 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ValidationIssueMasker {
 
-  private final BatchSecurityProperties batchSecurityProperties;
+    private final BatchSecurityProperties batchSecurityProperties;
 
-  public ValidationOutcome maskOutcome(ValidationSession session) {
-    boolean logMask = logMaskingEnabled(session) && !batchSecurityProperties.isBypassMode();
-    String ruleSet = maskingRuleSet(session);
-    Map<Long, ValidationIssue> maskedRecordIssues =
-        maskRecordIssues(session.recordIssues(), logMask, ruleSet);
-    List<ValidationIssue> maskedDatasetIssues =
-        maskDatasetIssues(session.datasetIssues(), logMask, ruleSet);
-    List<String> appliedChecks = List.copyOf(session.appliedChecks());
-    return new ValidationOutcome(maskedRecordIssues, maskedDatasetIssues, appliedChecks);
-  }
+    public ValidationOutcome maskOutcome(ValidationSession session) {
+        boolean logMask = logMaskingEnabled(session) && !batchSecurityProperties.isBypassMode();
+        String ruleSet = maskingRuleSet(session);
+        Map<Long, ValidationIssue> maskedRecordIssues = maskRecordIssues(session.recordIssues(), logMask, ruleSet);
+        List<ValidationIssue> maskedDatasetIssues = maskDatasetIssues(session.datasetIssues(), logMask, ruleSet);
+        List<String> appliedChecks = List.copyOf(session.appliedChecks());
+        return new ValidationOutcome(maskedRecordIssues, maskedDatasetIssues, appliedChecks);
+    }
 
-  private boolean logMaskingEnabled(ValidationSession session) {
-    Object cfg = session.context() == null
-        ? null
-        : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (!(cfg instanceof Map<?, ?> map)) {
-      return false;
+    private boolean logMaskingEnabled(ValidationSession session) {
+        Object cfg = session.context() == null
+                ? null
+                : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (!(cfg instanceof Map<?, ?> map)) {
+            return false;
+        }
+        Object flag = map.get("log_masking_enabled");
+        if (Boolean.TRUE.equals(flag)) {
+            return true;
+        }
+        String flagText = String.valueOf(flag);
+        return "true".equalsIgnoreCase(flagText);
     }
-    Object flag = map.get("log_masking_enabled");
-    if (Boolean.TRUE.equals(flag)) {
-      return true;
-    }
-    String flagText = String.valueOf(flag);
-    return "true".equalsIgnoreCase(flagText);
-  }
 
-  private String maskingRuleSet(ValidationSession session) {
-    Object cfg = session.context() == null
-        ? null
-        : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (!(cfg instanceof Map<?, ?> map)) {
-      return null;
+    private String maskingRuleSet(ValidationSession session) {
+        Object cfg = session.context() == null
+                ? null
+                : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (!(cfg instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object rule = map.get("masking_rule_set");
+        return rule == null ? null : String.valueOf(rule);
     }
-    Object rule = map.get("masking_rule_set");
-    return rule == null ? null : String.valueOf(rule);
-  }
 
-  private Map<Long, ValidationIssue> maskRecordIssues(
-      Map<Long, ValidationIssue> issues, boolean mask, String ruleSet) {
-    boolean issueMaskingIsNotApplicable = !mask || EmptyChecks.isEmpty(issues);
-    if (issueMaskingIsNotApplicable) {
-      return new LinkedHashMap<>(issues == null ? Map.of() : issues);
+    private Map<Long, ValidationIssue> maskRecordIssues(
+            Map<Long, ValidationIssue> issues, boolean mask, String ruleSet) {
+        boolean issueMaskingIsNotApplicable = !mask || EmptyChecks.isEmpty(issues);
+        if (issueMaskingIsNotApplicable) {
+            return new LinkedHashMap<>(issues == null ? Map.of() : issues);
+        }
+        return issues.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> maskedIssue(entry.getValue(), ruleSet),
+                        (previous, next) -> next,
+                        LinkedHashMap::new));
     }
-    return issues.entrySet().stream()
-        .collect(Collectors.toMap(
-            Map.Entry::getKey,
-            entry -> maskedIssue(entry.getValue(), ruleSet),
-            (previous, next) -> next,
-            LinkedHashMap::new));
-  }
 
-  private List<ValidationIssue> maskDatasetIssues(
-      List<ValidationIssue> issues, boolean mask, String ruleSet) {
-    boolean issueMaskingIsNotApplicable = !mask || EmptyChecks.isEmpty(issues);
-    if (issueMaskingIsNotApplicable) {
-      return new ArrayList<>(issues == null ? List.of() : issues);
+    private List<ValidationIssue> maskDatasetIssues(List<ValidationIssue> issues, boolean mask, String ruleSet) {
+        boolean issueMaskingIsNotApplicable = !mask || EmptyChecks.isEmpty(issues);
+        if (issueMaskingIsNotApplicable) {
+            return new ArrayList<>(issues == null ? List.of() : issues);
+        }
+        return issues.stream().map(issue -> maskedIssue(issue, ruleSet)).toList();
     }
-    return issues.stream().map(issue -> maskedIssue(issue, ruleSet)).toList();
-  }
 
-  private ValidationIssue maskedIssue(ValidationIssue issue, String ruleSet) {
-    Long recordNo = issue.recordNo();
-    String errorCode = issue.errorCode();
-    String maskedErrorMessage = ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet);
-    Object maskedRawRecord = maskIssueRaw(issue.rawRecord(), ruleSet);
-    return new ValidationIssue(recordNo, errorCode, maskedErrorMessage, maskedRawRecord);
-  }
+    private ValidationIssue maskedIssue(ValidationIssue issue, String ruleSet) {
+        Long recordNo = issue.recordNo();
+        String errorCode = issue.errorCode();
+        String maskedErrorMessage = ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet);
+        Object maskedRawRecord = maskIssueRaw(issue.rawRecord(), ruleSet);
+        return new ValidationIssue(recordNo, errorCode, maskedErrorMessage, maskedRawRecord);
+    }
 
-  private Object maskIssueRaw(Object raw, String ruleSet) {
-    if (raw == null) {
-      return null;
+    private Object maskIssueRaw(Object raw, String ruleSet) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof String text) {
+            return ContentMaskingUtils.maskPlainText(text, ruleSet);
+        }
+        String serializedRawRecord = JsonUtils.toJson(raw);
+        String masked = ContentMaskingUtils.maskPlainText(serializedRawRecord, ruleSet);
+        if (serializedRawRecord.startsWith("{") || serializedRawRecord.startsWith("[")) {
+            return JsonUtils.fromJson(masked, Object.class);
+        }
+        return masked;
     }
-    if (raw instanceof String text) {
-      return ContentMaskingUtils.maskPlainText(text, ruleSet);
-    }
-    String serializedRawRecord = JsonUtils.toJson(raw);
-    String masked = ContentMaskingUtils.maskPlainText(serializedRawRecord, ruleSet);
-    if (serializedRawRecord.startsWith("{") || serializedRawRecord.startsWith("[")) {
-      return JsonUtils.fromJson(masked, Object.class);
-    }
-    return masked;
-  }
 }

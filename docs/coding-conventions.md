@@ -5,8 +5,9 @@
 ## 0. Java 格式化工具
 
 Java 源码统一由根目录 `pom.xml` 中的 Spotless 执行 **Palantir Java Format 2.92.0**，采用
-Google 风格兼容模式和 120 列布局。CI、Git Hook 和本地命令必须使用 Spotless，不以 IDE 的
-个人格式化配置作为项目规范。
+**Palantir 风格：120 列宽、4 空格缩进**（与 Spring Boot / IntelliJ 默认一致；此前的
+`GOOGLE` 兼容模式实际是 100 列 / 2 空格，已统一迁移）。CI、Git Hook 和本地命令必须使用
+Spotless，不以 IDE 的个人格式化配置作为项目规范。
 
 ```bash
 make spotless       # 检查

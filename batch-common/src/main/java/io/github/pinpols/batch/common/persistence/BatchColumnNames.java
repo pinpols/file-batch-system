@@ -14,23 +14,23 @@ package io.github.pinpols.batch.common.persistence;
  */
 public final class BatchColumnNames {
 
-  // ── 多租隔离 ─────────────────────────────────────────────────────
-  public static final String TENANT_ID = "tenant_id";
+    // ── 多租隔离 ─────────────────────────────────────────────────────
+    public static final String TENANT_ID = "tenant_id";
 
-  // ── 审计字段(AuditFieldsInterceptor 自动填,query 路径 SELECT 用) ─
-  public static final String CREATED_AT = "created_at";
-  public static final String UPDATED_AT = "updated_at";
-  public static final String CREATED_BY = "created_by";
-  public static final String UPDATED_BY = "updated_by";
+    // ── 审计字段(AuditFieldsInterceptor 自动填,query 路径 SELECT 用) ─
+    public static final String CREATED_AT = "created_at";
+    public static final String UPDATED_AT = "updated_at";
+    public static final String CREATED_BY = "created_by";
+    public static final String UPDATED_BY = "updated_by";
 
-  // ── 软删除(opt-in,详见 docs/coding-conventions.md §9.6) ─────────
-  public static final String IS_DELETED = "is_deleted";
+    // ── 软删除(opt-in,详见 docs/coding-conventions.md §9.6) ─────────
+    public static final String IS_DELETED = "is_deleted";
 
-  // ── 业务通用字段 ─────────────────────────────────────────────────
-  public static final String ID = "id";
-  public static final String USERNAME = "username";
-  public static final String ENABLED = "enabled";
-  public static final String VERSION = "version";
+    // ── 业务通用字段 ─────────────────────────────────────────────────
+    public static final String ID = "id";
+    public static final String USERNAME = "username";
+    public static final String ENABLED = "enabled";
+    public static final String VERSION = "version";
 
-  private BatchColumnNames() {}
+    private BatchColumnNames() {}
 }

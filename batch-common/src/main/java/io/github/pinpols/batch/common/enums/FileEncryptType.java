@@ -8,11 +8,11 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum FileEncryptType implements DictEnum {
-  NONE("NONE", "无加密"),
-  AES("AES", "AES"),
-  PGP("PGP", "PGP"),
-  CUSTOM("CUSTOM", "自定义");
+    NONE("NONE", "无加密"),
+    AES("AES", "AES"),
+    PGP("PGP", "PGP"),
+    CUSTOM("CUSTOM", "自定义");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

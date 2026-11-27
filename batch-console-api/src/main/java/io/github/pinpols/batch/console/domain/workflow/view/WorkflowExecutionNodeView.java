@@ -12,22 +12,22 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WorkflowExecutionNodeView {
-  private Long id;
-  private String nodeCode;
-  private String nodeStatus;
-  private Integer runSeq;
-  private Long jobInstanceId;
-  private String jobInstanceStatus;
-  private String errorCode;
-  private String skipReasonCode;
-  private Instant startedAt;
-  private Instant finishedAt;
-  private Integer expectedPartitions;
-  private Integer successPartitions;
-  private Integer failedPartitions;
-  private Integer cancelledPartitions;
-  private Integer terminatedPartitions;
-  private Long createdTasks;
-  private Long finishedTasks;
-  private String activeSteps;
+    private Long id;
+    private String nodeCode;
+    private String nodeStatus;
+    private Integer runSeq;
+    private Long jobInstanceId;
+    private String jobInstanceStatus;
+    private String errorCode;
+    private String skipReasonCode;
+    private Instant startedAt;
+    private Instant finishedAt;
+    private Integer expectedPartitions;
+    private Integer successPartitions;
+    private Integer failedPartitions;
+    private Integer cancelledPartitions;
+    private Integer terminatedPartitions;
+    private Long createdTasks;
+    private Long finishedTasks;
+    private String activeSteps;
 }

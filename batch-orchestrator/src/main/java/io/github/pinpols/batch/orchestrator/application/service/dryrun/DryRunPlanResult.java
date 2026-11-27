@@ -17,16 +17,15 @@ import lombok.Builder;
  */
 @Builder
 public record DryRunPlanResult(
-    DryRunLevel level, boolean success, List<DryRunFinding> findings, Map<String, Object> summary) {
+        DryRunLevel level, boolean success, List<DryRunFinding> findings, Map<String, Object> summary) {
 
-  public static DryRunPlanResult of(
-      DryRunLevel level, List<DryRunFinding> findings, Map<String, Object> summary) {
-    boolean ok = findings.stream().noneMatch(f -> f.severity() == DryRunFinding.Severity.ERROR);
-    return DryRunPlanResult.builder()
-        .level(level)
-        .success(ok)
-        .findings(findings)
-        .summary(summary)
-        .build();
-  }
+    public static DryRunPlanResult of(DryRunLevel level, List<DryRunFinding> findings, Map<String, Object> summary) {
+        boolean ok = findings.stream().noneMatch(f -> f.severity() == DryRunFinding.Severity.ERROR);
+        return DryRunPlanResult.builder()
+                .level(level)
+                .success(ok)
+                .findings(findings)
+                .summary(summary)
+                .build();
+    }
 }

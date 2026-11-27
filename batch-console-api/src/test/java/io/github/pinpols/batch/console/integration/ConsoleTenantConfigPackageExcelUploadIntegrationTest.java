@@ -58,1438 +58,1405 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
 
 @SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.console.security.rate-limit.expensive-op-user-limit-per-minute=1000")
+        classes = BatchConsoleApiApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.console.security.rate-limit.expensive-op-user-limit-per-minute=1000")
 @DisplayName("租户配置包 Excel 上传: 解析成功并回显各工作表命中行数")
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String EXCEL_CONTENT_TYPE =
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private static final String EXCEL_CONTENT_TYPE =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-  @LocalServerPort
-  private int port;
+    @LocalServerPort
+    private int port;
 
-  private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
-  private final StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-  private final ConsoleTenantConfigInitApplicationService tenantConfigInitService;
+    private final ConsoleTenantConfigInitApplicationService tenantConfigInitService;
 
-  ConsoleTenantConfigPackageExcelUploadIntegrationTest(
-      JdbcTemplate jdbcTemplate,
-      StringRedisTemplate redisTemplate,
-      ConsoleTenantConfigInitApplicationService tenantConfigInitService) {
-    this.jdbcTemplate = jdbcTemplate;
-    this.redisTemplate = redisTemplate;
-    this.tenantConfigInitService = tenantConfigInitService;
-  }
-
-  @BeforeEach
-  void ensureApplyTenantCalendarFixtures() {
-    TestTenantCalendarFixtures.ensureDefaultCalendar(
-        jdbcTemplate,
-        "excel-upload-ta",
-        "tenant-admin-apply",
-        "excel-session-owner-it",
-        "channel-export-security-it",
-        "legacy-monitoring-policy-it",
-        "config-apply-rollback-it",
-        "config-version-conflict-it");
-  }
-
-  @Test
-  @DisplayName("定长映射字段名:真实上传预览拒绝数字，合法映射可应用并落库")
-  void shouldRejectNumericFixedWidthTargetAndApplyValidMapping() throws Exception {
-    String suffix = UUID.randomUUID().toString().replace("-", "");
-    String badCode = "fix_bad_" + suffix;
-    byte[] invalidWorkbook = fixedWidthTemplateWorkbook(badCode, "12");
-    HttpResponse<String> badPreviewResponse = previewWorkbookAsRole(
-        invalidWorkbook, "fixed-bad-" + suffix, "ROLE_ADMIN", "excel-upload-ta");
-    assertThat(badPreviewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    JsonNode badPreview = new ObjectMapper().readTree(badPreviewResponse.body()).path("data");
-    assertThat(badPreview.path("invalidRows").asInt()).isEqualTo(1);
-    HttpResponse<String> badApply = postApply(
-        badPreview.path("uploadToken").asText(),
-        badPreview.path("previewToken").asText(),
-        "fixed-bad-apply-" + suffix);
-    assertThat(badApply.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    String countSql =
-        "select count(*) from batch.file_template_config where tenant_id = ? and template_code = ?";
-    assertThat(jdbcTemplate.queryForObject(countSql, Integer.class, "excel-upload-ta", badCode))
-        .isZero();
-
-    String goodCode = "fix_good_" + suffix;
-    byte[] validWorkbook = fixedWidthTemplateWorkbook(goodCode, "\"name\"");
-    HttpResponse<String> goodPreviewResponse = previewWorkbookAsRole(
-        validWorkbook, "fixed-good-" + suffix, "ROLE_ADMIN", "excel-upload-ta");
-    assertThat(goodPreviewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    JsonNode goodPreview =
-        new ObjectMapper().readTree(goodPreviewResponse.body()).path("data");
-    assertThat(goodPreview.path("invalidRows").asInt()).isZero();
-    HttpResponse<String> goodApply = postApply(
-        goodPreview.path("uploadToken").asText(),
-        goodPreview.path("previewToken").asText(),
-        "fixed-good-apply-" + suffix);
-    assertThat(goodApply.statusCode()).isEqualTo(HttpStatus.OK.value());
-    String targetSql =
-        "select field_mappings -> 0 ->> 'target' from batch.file_template_config where tenant_id = ? and template_code = ?";
-    assertThat(jdbcTemplate.queryForObject(targetSql, String.class, "excel-upload-ta", goodCode))
-        .isEqualTo("name");
-  }
-
-  private static byte[] fixedWidthTemplateWorkbook(String code, String targetJson)
-      throws Exception {
-    try (XSSFWorkbook workbook =
-            new XSSFWorkbook(new ByteArrayInputStream(tenantPackageWorkbook(true)));
-        ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-      Row template =
-          workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET).getRow(1);
-      List<String> columns = ConfigPackageExcelSchema.FileTemplate.COLUMNS;
-      template.getCell(columns.indexOf("template_code")).setCellValue(code);
-      template.getCell(columns.indexOf("file_format_type")).setCellValue("FIXED_WIDTH");
-      template
-          .getCell(columns.indexOf("field_mappings"))
-          .setCellValue("[{\"start\":0,\"length\":4,\"target\":" + targetJson + "}]");
-      workbook.write(output);
-      return output.toByteArray();
-    }
-  }
-
-  @Test
-  @DisplayName("上传租户配置包: 返回成功,并回显文件通道与文件模板各命中一行")
-  void shouldUploadMultipartTenantPackageWorkbookIncludingFileSheets() throws Exception {
-    byte[] workbook = tenantPackageWorkbook(true);
-    String boundary = "excel-upload-it-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-it")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-    assertThat(response.body()).contains("\"code\":\"SUCCESS\"");
-    assertThat(response.body()).contains("\"fileName\":\"tenant-package.xlsx\"");
-    assertThat(response.body()).contains("\"fileChannelRows\":1");
-    assertThat(response.body()).contains("\"fileTemplateRows\":1");
-    assertThat(response.body()).contains("\"jobRows\":0");
-    assertThat(response.body()).contains("\"workflowEdgeRows\":0");
-  }
-
-  @Test
-  @DisplayName("拒绝已退役的租户 Pipeline 配置工作表")
-  void shouldRejectRetiredTenantPipelineSheets() throws Exception {
-    byte[] workbookBytes;
-    try (XSSFWorkbook workbook =
-        new XSSFWorkbook(new ByteArrayInputStream(tenantPackageWorkbook(true)))) {
-      Sheet pipeline = workbook.createSheet(ConfigPackageExcelValidator.PIPELINE_SHEET);
-      pipeline.createRow(0).createCell(0).setCellValue("job_code");
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
-    }
-    String boundary = "excel-retired-pipeline-sheet-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-retired-pipeline")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body())
-        .contains("unsupported excel sheet: " + ConfigPackageExcelValidator.PIPELINE_SHEET);
-  }
-
-  @Test
-  @DisplayName("拒绝包含公式单元格的配置包")
-  void shouldRejectWorkbookContainingFormulaCells() throws Exception {
-    byte[] workbookBytes = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      Sheet channels = workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
-      Row header = channels.getRow(0);
-      Row firstChannel = channels.getRow(1);
-      firstChannel
-          .getCell(columnIndex(header, "channel_name"))
-          .setCellFormula("\"Calculated channel name\"");
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
-    }
-    String boundary = "excel-formula-it-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-formula-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body()).contains("formula cells are not allowed");
-  }
-
-  @Test
-  @DisplayName("拒绝包含外部工作簿链接的配置包")
-  void shouldRejectWorkbookContainingExternalLinks() throws Exception {
-    byte[] workbookBytes;
-    try (XSSFWorkbook workbook = new XSSFWorkbook();
-        XSSFWorkbook linkedWorkbook = new XSSFWorkbook()) {
-      linkedWorkbook.createSheet("ExternalData");
-      workbook.createSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
-      workbook.linkExternalWorkbook("external-data.xlsx", linkedWorkbook);
-      assertThat(workbook
-              .getPackagePart()
-              .getRelationshipsByType(XSSFRelation.EXTERNAL_LINKS.getRelation())
-              .iterator()
-              .hasNext())
-          .isTrue();
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
-    }
-    String boundary = "excel-external-link-it-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-external-link-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body()).contains("external links and macros are not allowed");
-  }
-
-  @Test
-  @DisplayName("拒绝宏启用工作簿扩展名")
-  void shouldRejectMacroEnabledWorkbookExtension() throws Exception {
-    String boundary = "excel-macro-it-boundary";
-    byte[] requestBody = multipartBody(
-        boundary, tenantPackageWorkbook(true), "excel-upload-ta", "tenant-package.xlsm");
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-macro-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(requestBody))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-  }
-
-  @Test
-  @DisplayName("即使扩展名为 xlsx 也拒绝含 VBA 项目关系的工作簿")
-  void shouldRejectVbaProjectHiddenBehindXlsxExtension() throws Exception {
-    String boundary = "excel-hidden-vba-it-boundary";
-    byte[] workbookWithVba = withVbaProjectRelationship(tenantPackageWorkbook(true));
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-hidden-vba-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(
-            multipartBody(boundary, workbookWithVba, "excel-upload-ta", "tenant-package.xlsx")))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body()).contains("external links and macros are not allowed");
-  }
-
-  @Test
-  @DisplayName("损坏工作簿返回通用错误,不回显解析器内部信息")
-  void shouldNotExposeWorkbookParserDetailsForMalformedUpload() throws Exception {
-    byte[] malformedWorkbook = {
-      0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04
-    };
-    String boundary = "excel-malformed-workbook-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-malformed-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, malformedWorkbook)))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body()).contains("failed to read excel workbook");
-    assertThat(response.body()).doesNotContain("ZipException", "java.io");
-  }
-
-  @Test
-  @DisplayName("拒绝超出配置包最大行号的工作簿")
-  void shouldRejectWorkbookExceedingMaximumRowIndex() throws Exception {
-    byte[] workbookBytes;
-    try (XSSFWorkbook workbook =
-        new XSSFWorkbook(new ByteArrayInputStream(tenantPackageWorkbook(true)))) {
-      workbook
-          .getSheet(ConfigPackageExcelValidator.JOB_SHEET)
-          .createRow(ConfigPackageWorkbookLimits.MAX_ROW_INDEX + 1)
-          .createCell(0)
-          .setCellValue("out of range");
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
+    ConsoleTenantConfigPackageExcelUploadIntegrationTest(
+            JdbcTemplate jdbcTemplate,
+            StringRedisTemplate redisTemplate,
+            ConsoleTenantConfigInitApplicationService tenantConfigInitService) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.redisTemplate = redisTemplate;
+        this.tenantConfigInitService = tenantConfigInitService;
     }
 
-    String boundary = "excel-row-limit-it-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-row-limit-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body()).contains("maximum row index");
-  }
-
-  @Test
-  @DisplayName("拒绝解压后超过 POI 条目上限的工作簿")
-  void shouldRejectWorkbookWithOversizedInflatedZipEntry() throws Exception {
-    byte[] workbookBytes = workbookWithOversizedSharedStringsEntry();
-    assertThat(workbookBytes.length).isLessThan(1024 * 1024);
-
-    String boundary = "excel-zip-entry-limit-it-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-zip-entry-limit-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body()).contains("failed to read excel workbook");
-    assertThat(response.body()).doesNotContain("Zip bomb detected", "ZipSecureFile");
-  }
-
-  @Test
-  @DisplayName("拒绝配置 Sheet 中未识别的表头，避免字段拼写错误被静默忽略")
-  void shouldRejectWorkbookContainingUnknownHeader() throws Exception {
-    byte[] workbookBytes = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      Sheet channels = workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
-      Row header = channels.getRow(0);
-      header.createCell(header.getLastCellNum()).setCellValue("channel_nam");
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
+    @BeforeEach
+    void ensureApplyTenantCalendarFixtures() {
+        TestTenantCalendarFixtures.ensureDefaultCalendar(
+                jdbcTemplate,
+                "excel-upload-ta",
+                "tenant-admin-apply",
+                "excel-session-owner-it",
+                "channel-export-security-it",
+                "legacy-monitoring-policy-it",
+                "config-apply-rollback-it",
+                "config-version-conflict-it");
     }
-    String boundary = "excel-unknown-header-it-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-unknown-header-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
-        .build();
 
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    @Test
+    @DisplayName("定长映射字段名:真实上传预览拒绝数字，合法映射可应用并落库")
+    void shouldRejectNumericFixedWidthTargetAndApplyValidMapping() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String badCode = "fix_bad_" + suffix;
+        byte[] invalidWorkbook = fixedWidthTemplateWorkbook(badCode, "12");
+        HttpResponse<String> badPreviewResponse =
+                previewWorkbookAsRole(invalidWorkbook, "fixed-bad-" + suffix, "ROLE_ADMIN", "excel-upload-ta");
+        assertThat(badPreviewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        JsonNode badPreview =
+                new ObjectMapper().readTree(badPreviewResponse.body()).path("data");
+        assertThat(badPreview.path("invalidRows").asInt()).isEqualTo(1);
+        HttpResponse<String> badApply = postApply(
+                badPreview.path("uploadToken").asText(),
+                badPreview.path("previewToken").asText(),
+                "fixed-bad-apply-" + suffix);
+        assertThat(badApply.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        String countSql = "select count(*) from batch.file_template_config where tenant_id = ? and template_code = ?";
+        assertThat(jdbcTemplate.queryForObject(countSql, Integer.class, "excel-upload-ta", badCode))
+                .isZero();
 
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body()).contains("unsupported headers", "channel_nam");
-  }
-
-  @Test
-  @DisplayName("拒绝配置包中的未知工作表，避免用户误以为数据已导入")
-  void shouldRejectWorkbookContainingUnknownSheet() throws Exception {
-    byte[] workbookBytes = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      workbook.createSheet("tenant_notes").createRow(0).createCell(0).setCellValue("notes");
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
+        String goodCode = "fix_good_" + suffix;
+        byte[] validWorkbook = fixedWidthTemplateWorkbook(goodCode, "\"name\"");
+        HttpResponse<String> goodPreviewResponse =
+                previewWorkbookAsRole(validWorkbook, "fixed-good-" + suffix, "ROLE_ADMIN", "excel-upload-ta");
+        assertThat(goodPreviewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        JsonNode goodPreview =
+                new ObjectMapper().readTree(goodPreviewResponse.body()).path("data");
+        assertThat(goodPreview.path("invalidRows").asInt()).isZero();
+        HttpResponse<String> goodApply = postApply(
+                goodPreview.path("uploadToken").asText(),
+                goodPreview.path("previewToken").asText(),
+                "fixed-good-apply-" + suffix);
+        assertThat(goodApply.statusCode()).isEqualTo(HttpStatus.OK.value());
+        String targetSql =
+                "select field_mappings -> 0 ->> 'target' from batch.file_template_config where tenant_id = ? and template_code = ?";
+        assertThat(jdbcTemplate.queryForObject(targetSql, String.class, "excel-upload-ta", goodCode))
+                .isEqualTo("name");
     }
-    String boundary = "excel-unknown-sheet-it-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-unknown-sheet-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
-        .build();
 
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body()).contains("unsupported excel sheet", "tenant_notes");
-  }
-
-  @Test
-  @DisplayName("拒绝配置 Sheet 中重复表头，避免后列覆盖前列")
-  void shouldRejectWorkbookContainingDuplicateHeader() throws Exception {
-    byte[] workbookBytes = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      Sheet channels = workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
-      Row header = channels.getRow(0);
-      header.createCell(header.getLastCellNum()).setCellValue("channel_code");
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
+    private static byte[] fixedWidthTemplateWorkbook(String code, String targetJson) throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(tenantPackageWorkbook(true)));
+                ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Row template = workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET)
+                    .getRow(1);
+            List<String> columns = ConfigPackageExcelSchema.FileTemplate.COLUMNS;
+            template.getCell(columns.indexOf("template_code")).setCellValue(code);
+            template.getCell(columns.indexOf("file_format_type")).setCellValue("FIXED_WIDTH");
+            template.getCell(columns.indexOf("field_mappings"))
+                    .setCellValue("[{\"start\":0,\"length\":4,\"target\":" + targetJson + "}]");
+            workbook.write(output);
+            return output.toByteArray();
+        }
     }
-    String boundary = "excel-duplicate-header-it-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(
-            CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-duplicate-header-reject")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
-        .build();
 
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    @Test
+    @DisplayName("上传租户配置包: 返回成功,并回显文件通道与文件模板各命中一行")
+    void shouldUploadMultipartTenantPackageWorkbookIncludingFileSheets() throws Exception {
+        byte[] workbook = tenantPackageWorkbook(true);
+        String boundary = "excel-upload-it-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-it")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
+                .build();
 
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(response.body()).contains("duplicate headers", "channel_code");
-  }
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
 
-  @Test
-  @DisplayName("配置包会话绑定上传账号和权限范围")
-  void shouldRestrictUploadSessionToUploaderAndPermissionScope() throws Exception {
-    String tenantId = "excel-session-owner-it";
-    String boundary = "excel-session-owner-boundary";
-    HttpRequest uploadRequest = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-session-owner")
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .header("X-Console-User", "package-owner")
-        .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(
-            multipartBody(boundary, tenantPackageWorkbook(true), tenantId)))
-        .build();
-    HttpResponse<String> uploadResponse =
-        HttpClient.newHttpClient().send(uploadRequest, HttpResponse.BodyHandlers.ofString());
-    assertThat(uploadResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    String token = new ObjectMapper()
-        .readTree(uploadResponse.body())
-        .path("data")
-        .path("uploadToken")
-        .asText();
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+        assertThat(response.body()).contains("\"code\":\"SUCCESS\"");
+        assertThat(response.body()).contains("\"fileName\":\"tenant-package.xlsx\"");
+        assertThat(response.body()).contains("\"fileChannelRows\":1");
+        assertThat(response.body()).contains("\"fileTemplateRows\":1");
+        assertThat(response.body()).contains("\"jobRows\":0");
+        assertThat(response.body()).contains("\"workflowEdgeRows\":0");
+    }
 
-    HttpResponse<String> otherUserPreview =
-        previewTokenAs(token, tenantId, "another-user", "ROLE_TENANT_ADMIN");
-    assertThat(otherUserPreview.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
-    assertPreviewTokenUnchanged(token, "");
+    @Test
+    @DisplayName("拒绝已退役的租户 Pipeline 配置工作表")
+    void shouldRejectRetiredTenantPipelineSheets() throws Exception {
+        byte[] workbookBytes;
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(tenantPackageWorkbook(true)))) {
+            Sheet pipeline = workbook.createSheet(ConfigPackageExcelValidator.PIPELINE_SHEET);
+            pipeline.createRow(0).createCell(0).setCellValue("job_code");
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+        String boundary = "excel-retired-pipeline-sheet-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-retired-pipeline")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
+                .build();
 
-    HttpResponse<String> changedScopePreview =
-        previewTokenAs(token, tenantId, "package-owner", "ROLE_ADMIN");
-    assertThat(changedScopePreview.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
-    assertPreviewTokenUnchanged(token, "");
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
 
-    HttpResponse<String> ownerPreview =
-        previewTokenAs(token, tenantId, "package-owner", "ROLE_TENANT_ADMIN");
-    assertThat(ownerPreview.statusCode()).isEqualTo(HttpStatus.OK.value());
-    assertThat(ownerPreview.body()).contains("\"code\":\"SUCCESS\"");
-  }
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("unsupported excel sheet: " + ConfigPackageExcelValidator.PIPELINE_SHEET);
+    }
 
-  private void assertPreviewTokenUnchanged(String uploadToken, String expected) {
-    String key = "batch:console:tenant-config-upload:" + uploadToken;
-    assertThat(redisTemplate.<String, String>opsForHash().get(key, "preview_token"))
-        .isEqualTo(expected);
-  }
+    @Test
+    @DisplayName("拒绝包含公式单元格的配置包")
+    void shouldRejectWorkbookContainingFormulaCells() throws Exception {
+        byte[] workbookBytes = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            Sheet channels = workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
+            Row header = channels.getRow(0);
+            Row firstChannel = channels.getRow(1);
+            firstChannel.getCell(columnIndex(header, "channel_name")).setCellFormula("\"Calculated channel name\"");
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+        String boundary = "excel-formula-it-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-formula-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
+                .build();
 
-  @Test
-  @DisplayName("租户配置包导出不含通道密码且同租户回导保留数据库凭据")
-  void shouldExcludeChannelCredentialsFromExportAndPreserveThemOnMerge() throws Exception {
-    final String insertFileChannelConfigSql = """
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("formula cells are not allowed");
+    }
+
+    @Test
+    @DisplayName("拒绝包含外部工作簿链接的配置包")
+    void shouldRejectWorkbookContainingExternalLinks() throws Exception {
+        byte[] workbookBytes;
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+                XSSFWorkbook linkedWorkbook = new XSSFWorkbook()) {
+            linkedWorkbook.createSheet("ExternalData");
+            workbook.createSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
+            workbook.linkExternalWorkbook("external-data.xlsx", linkedWorkbook);
+            assertThat(workbook.getPackagePart()
+                            .getRelationshipsByType(XSSFRelation.EXTERNAL_LINKS.getRelation())
+                            .iterator()
+                            .hasNext())
+                    .isTrue();
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+        String boundary = "excel-external-link-it-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-external-link-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("external links and macros are not allowed");
+    }
+
+    @Test
+    @DisplayName("拒绝宏启用工作簿扩展名")
+    void shouldRejectMacroEnabledWorkbookExtension() throws Exception {
+        String boundary = "excel-macro-it-boundary";
+        byte[] requestBody =
+                multipartBody(boundary, tenantPackageWorkbook(true), "excel-upload-ta", "tenant-package.xlsm");
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-macro-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(requestBody))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+    }
+
+    @Test
+    @DisplayName("即使扩展名为 xlsx 也拒绝含 VBA 项目关系的工作簿")
+    void shouldRejectVbaProjectHiddenBehindXlsxExtension() throws Exception {
+        String boundary = "excel-hidden-vba-it-boundary";
+        byte[] workbookWithVba = withVbaProjectRelationship(tenantPackageWorkbook(true));
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-hidden-vba-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(
+                        multipartBody(boundary, workbookWithVba, "excel-upload-ta", "tenant-package.xlsx")))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("external links and macros are not allowed");
+    }
+
+    @Test
+    @DisplayName("损坏工作簿返回通用错误,不回显解析器内部信息")
+    void shouldNotExposeWorkbookParserDetailsForMalformedUpload() throws Exception {
+        byte[] malformedWorkbook = {0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04};
+        String boundary = "excel-malformed-workbook-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-malformed-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, malformedWorkbook)))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("failed to read excel workbook");
+        assertThat(response.body()).doesNotContain("ZipException", "java.io");
+    }
+
+    @Test
+    @DisplayName("拒绝超出配置包最大行号的工作簿")
+    void shouldRejectWorkbookExceedingMaximumRowIndex() throws Exception {
+        byte[] workbookBytes;
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(tenantPackageWorkbook(true)))) {
+            workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET)
+                    .createRow(ConfigPackageWorkbookLimits.MAX_ROW_INDEX + 1)
+                    .createCell(0)
+                    .setCellValue("out of range");
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+
+        String boundary = "excel-row-limit-it-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-row-limit-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("maximum row index");
+    }
+
+    @Test
+    @DisplayName("拒绝解压后超过 POI 条目上限的工作簿")
+    void shouldRejectWorkbookWithOversizedInflatedZipEntry() throws Exception {
+        byte[] workbookBytes = workbookWithOversizedSharedStringsEntry();
+        assertThat(workbookBytes.length).isLessThan(1024 * 1024);
+
+        String boundary = "excel-zip-entry-limit-it-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-zip-entry-limit-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("failed to read excel workbook");
+        assertThat(response.body()).doesNotContain("Zip bomb detected", "ZipSecureFile");
+    }
+
+    @Test
+    @DisplayName("拒绝配置 Sheet 中未识别的表头，避免字段拼写错误被静默忽略")
+    void shouldRejectWorkbookContainingUnknownHeader() throws Exception {
+        byte[] workbookBytes = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            Sheet channels = workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
+            Row header = channels.getRow(0);
+            header.createCell(header.getLastCellNum()).setCellValue("channel_nam");
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+        String boundary = "excel-unknown-header-it-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-unknown-header-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("unsupported headers", "channel_nam");
+    }
+
+    @Test
+    @DisplayName("拒绝配置包中的未知工作表，避免用户误以为数据已导入")
+    void shouldRejectWorkbookContainingUnknownSheet() throws Exception {
+        byte[] workbookBytes = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            workbook.createSheet("tenant_notes").createRow(0).createCell(0).setCellValue("notes");
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+        String boundary = "excel-unknown-sheet-it-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-unknown-sheet-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("unsupported excel sheet", "tenant_notes");
+    }
+
+    @Test
+    @DisplayName("拒绝配置 Sheet 中重复表头，避免后列覆盖前列")
+    void shouldRejectWorkbookContainingDuplicateHeader() throws Exception {
+        byte[] workbookBytes = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            Sheet channels = workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
+            Row header = channels.getRow(0);
+            header.createCell(header.getLastCellNum()).setCellValue("channel_code");
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+        String boundary = "excel-duplicate-header-it-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-duplicate-header-reject")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.body()).contains("duplicate headers", "channel_code");
+    }
+
+    @Test
+    @DisplayName("配置包会话绑定上传账号和权限范围")
+    void shouldRestrictUploadSessionToUploaderAndPermissionScope() throws Exception {
+        String tenantId = "excel-session-owner-it";
+        String boundary = "excel-session-owner-boundary";
+        HttpRequest uploadRequest = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-session-owner")
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header("X-Console-User", "package-owner")
+                .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(
+                        multipartBody(boundary, tenantPackageWorkbook(true), tenantId)))
+                .build();
+        HttpResponse<String> uploadResponse =
+                HttpClient.newHttpClient().send(uploadRequest, HttpResponse.BodyHandlers.ofString());
+        assertThat(uploadResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        String token = new ObjectMapper()
+                .readTree(uploadResponse.body())
+                .path("data")
+                .path("uploadToken")
+                .asText();
+
+        HttpResponse<String> otherUserPreview = previewTokenAs(token, tenantId, "another-user", "ROLE_TENANT_ADMIN");
+        assertThat(otherUserPreview.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        assertPreviewTokenUnchanged(token, "");
+
+        HttpResponse<String> changedScopePreview = previewTokenAs(token, tenantId, "package-owner", "ROLE_ADMIN");
+        assertThat(changedScopePreview.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        assertPreviewTokenUnchanged(token, "");
+
+        HttpResponse<String> ownerPreview = previewTokenAs(token, tenantId, "package-owner", "ROLE_TENANT_ADMIN");
+        assertThat(ownerPreview.statusCode()).isEqualTo(HttpStatus.OK.value());
+        assertThat(ownerPreview.body()).contains("\"code\":\"SUCCESS\"");
+    }
+
+    private void assertPreviewTokenUnchanged(String uploadToken, String expected) {
+        String key = "batch:console:tenant-config-upload:" + uploadToken;
+        assertThat(redisTemplate.<String, String>opsForHash().get(key, "preview_token"))
+                .isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("租户配置包导出不含通道密码且同租户回导保留数据库凭据")
+    void shouldExcludeChannelCredentialsFromExportAndPreserveThemOnMerge() throws Exception {
+        final String insertFileChannelConfigSql = """
         insert into batch.file_channel_config (tenant_id, channel_code, channel_name, channel_type,\s\
         target_endpoint, auth_type, config_json, receipt_policy, timeout_seconds, enabled)\s\
         values (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)\
         """;
-    final String insertResourceQueueSql = """
+        final String insertResourceQueueSql = """
         insert into batch.resource_queue (tenant_id, queue_code, queue_name, queue_type, worker_group,\s\
         resource_tag) values (?, ?, ?, 'IMPORT', 'PLATFORM_IMPORT_POOL', 'sensitive-capacity-tag')\
         """;
-    final String insertJobDefinitionSql = """
+        final String insertJobDefinitionSql = """
         insert into batch.job_definition (tenant_id, job_code, job_name, job_type, schedule_type, timezone,\s\
         queue_code, worker_group, default_params)\s\
         values (?, ?, ?, 'IMPORT', 'MANUAL', 'Asia/Shanghai', ?, ?, ?::jsonb)\
         """;
-    final String selectConfigJsonSql = """
+        final String selectConfigJsonSql = """
         select config_json::text from batch.file_channel_config where tenant_id = ? and channel_code = ?\
         """;
-    final String selectTargetEndpointSql = """
+        final String selectTargetEndpointSql = """
         select target_endpoint from batch.file_channel_config where tenant_id = ? and channel_code = ?\
         """;
-    final String selectQueueCodeSql = """
+        final String selectQueueCodeSql = """
         select queue_code || ':' || worker_group from batch.job_definition where tenant_id = ? and job_code = ?\
         """;
-    final String selectDefaultParamsSql = """
+        final String selectDefaultParamsSql = """
         select default_params ->> 'password' from batch.job_definition where tenant_id = ? and job_code = ?\
         """;
 
-    String tenantId = "channel-export-security-it";
-    String channelCode = "SFTP_EXPORT_SECRET";
-    String jobCode = "JOB_ROUTE_EXPORT_SECRET";
-    String queueCode = "PLATFORM_ROUTE_EXPORT_SECRET";
-    String secretConfig = "{\"sftp_host\":\"sftp.example.com\",\"sftp_user\":\"batch\","
-        + "\"sftp_password\":\"plain-text-secret\"}";
-    jdbcTemplate.update(
-        insertFileChannelConfigSql,
-        tenantId,
-        channelCode,
-        "SFTP export security",
-        "SFTP",
-        "sftp://operator:embedded-password@sftp.example.com/inbox?token=embedded-token",
-        "PASSWORD",
-        secretConfig,
-        "NONE",
-        30,
-        true);
-    jdbcTemplate.update(
-        insertResourceQueueSql, tenantId, queueCode, "Platform route export security");
-    jdbcTemplate.update(
-        insertJobDefinitionSql,
-        tenantId,
-        jobCode,
-        "Platform route export security",
-        queueCode,
-        "PLATFORM_IMPORT_POOL",
-        "{\"password\":\"job-embedded-secret\",\"region\":\"west\"}");
+        String tenantId = "channel-export-security-it";
+        String channelCode = "SFTP_EXPORT_SECRET";
+        String jobCode = "JOB_ROUTE_EXPORT_SECRET";
+        String queueCode = "PLATFORM_ROUTE_EXPORT_SECRET";
+        String secretConfig = "{\"sftp_host\":\"sftp.example.com\",\"sftp_user\":\"batch\","
+                + "\"sftp_password\":\"plain-text-secret\"}";
+        jdbcTemplate.update(
+                insertFileChannelConfigSql,
+                tenantId,
+                channelCode,
+                "SFTP export security",
+                "SFTP",
+                "sftp://operator:embedded-password@sftp.example.com/inbox?token=embedded-token",
+                "PASSWORD",
+                secretConfig,
+                "NONE",
+                30,
+                true);
+        jdbcTemplate.update(insertResourceQueueSql, tenantId, queueCode, "Platform route export security");
+        jdbcTemplate.update(
+                insertJobDefinitionSql,
+                tenantId,
+                jobCode,
+                "Platform route export security",
+                queueCode,
+                "PLATFORM_IMPORT_POOL",
+                "{\"password\":\"job-embedded-secret\",\"region\":\"west\"}");
 
-    HttpRequest exportRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
-            + "/api/console/config/tenant-package/excel/export?tenantId=" + tenantId))
-        .timeout(Duration.ofSeconds(60))
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
-        .GET()
-        .build();
-    HttpResponse<byte[]> exportResponse =
-        HttpClient.newHttpClient().send(exportRequest, HttpResponse.BodyHandlers.ofByteArray());
-
-    assertThat(exportResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    byte[] exportedWorkbook = exportResponse.body();
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(exportedWorkbook))) {
-      Sheet queues = workbook.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET);
-      assertThat(queues.getPhysicalNumberOfRows()).isEqualTo(1);
-
-      Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
-      Row jobHeader = jobs.getRow(0);
-      Row job = rowForValue(jobs, columnIndex(jobHeader, "job_code"), jobCode);
-      assertThat(job.getCell(columnIndex(jobHeader, "queue_code")).toString()).isBlank();
-      assertThat(job.getCell(columnIndex(jobHeader, "worker_group")).toString()).isBlank();
-      assertThat(job.getCell(columnIndex(jobHeader, "default_params")).toString())
-          .contains("\"password\":\"****\"")
-          .doesNotContain("job-embedded-secret");
-
-      Sheet channels = workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
-      Row header = channels.getRow(0);
-      Row channel = rowForValue(channels, columnIndex(header, "channel_code"), channelCode);
-      assertThat(channel.getCell(columnIndex(header, "config_json")).toString()).isBlank();
-      assertThat(channel.getCell(columnIndex(header, "target_endpoint")).toString())
-          .isBlank();
-    }
-
-    HttpResponse<String> applyResponse = applyWorkbookAsRole(
-        exportedWorkbook, "channel-export-roundtrip", "ROLE_TENANT_ADMIN", tenantId);
-
-    assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    String persistedConfig =
-        jdbcTemplate.queryForObject(selectConfigJsonSql, String.class, tenantId, channelCode);
-    ObjectMapper mapper = new ObjectMapper();
-    assertThat(mapper.readTree(persistedConfig)).isEqualTo(mapper.readTree(secretConfig));
-    String persistedEndpoint =
-        jdbcTemplate.queryForObject(selectTargetEndpointSql, String.class, tenantId, channelCode);
-    assertThat(persistedEndpoint)
-        .isEqualTo("sftp://operator:embedded-password@sftp.example.com/inbox?token=embedded-token");
-    String selectedQueueCode =
-        jdbcTemplate.queryForObject(selectQueueCodeSql, String.class, tenantId, jobCode);
-    assertThat(selectedQueueCode).isEqualTo(queueCode + ":PLATFORM_IMPORT_POOL");
-    String selectedDefaultParams =
-        jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, tenantId, jobCode);
-    assertThat(selectedDefaultParams).isEqualTo("job-embedded-secret");
-
-    HttpRequest adminExportRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
-            + "/api/console/config/tenant-package/excel/export?tenantId=" + tenantId))
-        .timeout(Duration.ofSeconds(60))
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .header("X-Console-Roles", "ROLE_ADMIN")
-        .GET()
-        .build();
-    HttpResponse<byte[]> adminExportResponse = HttpClient.newHttpClient()
-        .send(adminExportRequest, HttpResponse.BodyHandlers.ofByteArray());
-    assertThat(adminExportResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    try (XSSFWorkbook workbook =
-        new XSSFWorkbook(new ByteArrayInputStream(adminExportResponse.body()))) {
-      Sheet queues = workbook.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET);
-      Row queueHeader = queues.getRow(0);
-      Row queue = rowForValue(queues, columnIndex(queueHeader, "queue_code"), queueCode);
-      assertThat(queue).isNotNull();
-      Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
-      Row jobHeader = jobs.getRow(0);
-      Row job = rowForValue(jobs, columnIndex(jobHeader, "job_code"), jobCode);
-      assertThat(job.getCell(columnIndex(jobHeader, "queue_code")).toString()).isEqualTo(queueCode);
-      assertThat(job.getCell(columnIndex(jobHeader, "worker_group")).toString())
-          .isEqualTo("PLATFORM_IMPORT_POOL");
-    }
-  }
-
-  @Test
-  @DisplayName("上传缺少新增监控策略 sheet 的旧配置包: 保留兼容导入")
-  void shouldAcceptLegacyWorkbookMissingJobMonitoringPolicySheet() throws Exception {
-    byte[] workbook = tenantPackageWorkbook(false);
-    String boundary = "excel-upload-missing-monitoring-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(
-            CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-missing-monitoring")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-    assertThat(response.body()).contains("\"code\":\"SUCCESS\"");
-    assertThat(response.body()).contains("\"fileChannelRows\":1");
-    assertThat(response.body()).contains("\"fileTemplateRows\":1");
-  }
-
-  @Test
-  @DisplayName("真实 HTTP 场景模板下载: IMPORT+EXPORT 保留必需配置列且不暴露平台资源列")
-  void shouldDownloadFocusedWorkbookWithImportAndExportColumns() throws Exception {
-    HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port
-            + "/api/console/config/tenant-package/excel/scenario-template"
-            + "?scenarios=IMPORT&scenarios=EXPORT"))
-        .timeout(Duration.ofSeconds(60))
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "excel-upload-ta")
-        .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
-        .GET()
-        .build();
-
-    HttpResponse<byte[]> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofByteArray());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-    assertThat(response.headers().firstValue("Content-Disposition").orElse(""))
-        .contains("tenant-config-package-export-import.xlsx");
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(response.body()))) {
-      assertThat(workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET)).isNotNull();
-      assertThat(workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET))
-          .isNotNull();
-      assertThat(workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
-      assertThat(workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
-      assertThat(workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET)).isNull();
-      assertThat(workbook.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
-          .isNull();
-
-      assertHeaderColumns(
-          workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
-          Set.of("job_code", "job_name", "job_type", "schedule_type", "default_params"));
-      assertHeaderColumns(
-          workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET),
-          Set.of(
-              "template_code",
-              "file_format_type",
-              "charset",
-              "target_charset",
-              "delimiter",
-              "header_rows",
-              "query_param_schema",
-              "default_query_sql"));
-    }
-  }
-
-  @Test
-  @DisplayName("场景化示例工作簿可直接上传预览，且不依赖资源队列与监控阈值 sheet")
-  void shouldUploadScenarioWorkbookGeneratedByTemplateEndpointContract() throws Exception {
-    StaticMessageSource messages = new StaticMessageSource();
-    messages.setUseCodeAsDefaultMessage(true);
-    ConfigPackageExcelWorkbookWriter writer =
-        new ConfigPackageExcelWorkbookWriter(messages, List.of("IMPORT"));
-    byte[] workbook =
-        writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets("IMPORT"));
-    String boundary = "excel-upload-scenario-boundary";
-    HttpRequest request = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-scenario")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
-        .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-    assertThat(response.body()).contains("\"code\":\"SUCCESS\"");
-    assertThat(response.body()).contains("\"jobRows\":1");
-    assertThat(response.body()).contains("\"fileTemplateRows\":1");
-    assertThat(response.body()).contains("\"pipelineRows\":0");
-    assertThat(response.body()).contains("\"pipelineStepRows\":0");
-    assertThat(response.body()).contains("\"resourceQueueRows\":0");
-
-    JsonNode uploadResponse = new ObjectMapper().readTree(response.body());
-    String uploadToken = uploadResponse.path("data").path("uploadToken").asText();
-    HttpResponse<String> previewResponse = HttpClient.newHttpClient()
-        .send(
-            HttpRequest.newBuilder(URI.create("http://localhost:" + port
-                    + "/api/console/config/tenant-package/excel/preview/" + uploadToken))
+        HttpRequest exportRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/console/config/tenant-package/excel/export?tenantId=" + tenantId))
                 .timeout(Duration.ofSeconds(60))
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
                 .GET()
-                .build(),
-            HttpResponse.BodyHandlers.ofString());
+                .build();
+        HttpResponse<byte[]> exportResponse =
+                HttpClient.newHttpClient().send(exportRequest, HttpResponse.BodyHandlers.ofByteArray());
 
-    assertThat(previewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    JsonNode preview = new ObjectMapper().readTree(previewResponse.body());
-    assertThat(preview.path("code").asText()).isEqualTo("SUCCESS");
-    assertThat(preview.path("data").path("invalidRows").asInt())
-        .as("Scenario template validation issues: %s", preview.path("data").path("issues"))
-        .isZero();
-    assertThat(preview.path("data").path("issues")).isEmpty();
-    String previewToken = preview.path("data").path("previewToken").asText();
-    assertThat(previewToken).isNotBlank();
+        assertThat(exportResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        byte[] exportedWorkbook = exportResponse.body();
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(exportedWorkbook))) {
+            Sheet queues = workbook.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET);
+            assertThat(queues.getPhysicalNumberOfRows()).isEqualTo(1);
 
-    HttpResponse<String> refreshedPreviewResponse = HttpClient.newHttpClient()
-        .send(
-            HttpRequest.newBuilder(URI.create("http://localhost:" + port
-                    + "/api/console/config/tenant-package/excel/preview/" + uploadToken))
+            Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+            Row jobHeader = jobs.getRow(0);
+            Row job = rowForValue(jobs, columnIndex(jobHeader, "job_code"), jobCode);
+            assertThat(job.getCell(columnIndex(jobHeader, "queue_code")).toString())
+                    .isBlank();
+            assertThat(job.getCell(columnIndex(jobHeader, "worker_group")).toString())
+                    .isBlank();
+            assertThat(job.getCell(columnIndex(jobHeader, "default_params")).toString())
+                    .contains("\"password\":\"****\"")
+                    .doesNotContain("job-embedded-secret");
+
+            Sheet channels = workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET);
+            Row header = channels.getRow(0);
+            Row channel = rowForValue(channels, columnIndex(header, "channel_code"), channelCode);
+            assertThat(channel.getCell(columnIndex(header, "config_json")).toString())
+                    .isBlank();
+            assertThat(channel.getCell(columnIndex(header, "target_endpoint")).toString())
+                    .isBlank();
+        }
+
+        HttpResponse<String> applyResponse =
+                applyWorkbookAsRole(exportedWorkbook, "channel-export-roundtrip", "ROLE_TENANT_ADMIN", tenantId);
+
+        assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        String persistedConfig = jdbcTemplate.queryForObject(selectConfigJsonSql, String.class, tenantId, channelCode);
+        ObjectMapper mapper = new ObjectMapper();
+        assertThat(mapper.readTree(persistedConfig)).isEqualTo(mapper.readTree(secretConfig));
+        String persistedEndpoint =
+                jdbcTemplate.queryForObject(selectTargetEndpointSql, String.class, tenantId, channelCode);
+        assertThat(persistedEndpoint)
+                .isEqualTo("sftp://operator:embedded-password@sftp.example.com/inbox?token=embedded-token");
+        String selectedQueueCode = jdbcTemplate.queryForObject(selectQueueCodeSql, String.class, tenantId, jobCode);
+        assertThat(selectedQueueCode).isEqualTo(queueCode + ":PLATFORM_IMPORT_POOL");
+        String selectedDefaultParams =
+                jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, tenantId, jobCode);
+        assertThat(selectedDefaultParams).isEqualTo("job-embedded-secret");
+
+        HttpRequest adminExportRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/console/config/tenant-package/excel/export?tenantId=" + tenantId))
                 .timeout(Duration.ofSeconds(60))
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header("X-Console-Roles", "ROLE_ADMIN")
                 .GET()
-                .build(),
-            HttpResponse.BodyHandlers.ofString());
-    String refreshedPreviewToken = new ObjectMapper()
-        .readTree(refreshedPreviewResponse.body())
-        .path("data")
-        .path("previewToken")
-        .asText();
-    assertThat(refreshedPreviewToken).isNotBlank().isNotEqualTo(previewToken);
-
-    HttpResponse<String> staleApplyResponse =
-        postApply(uploadToken, previewToken, "idem-stale-preview");
-    assertThat(staleApplyResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
-
-    HttpResponse<String> applyResponse =
-        postApply(uploadToken, refreshedPreviewToken, "idem-excel-apply-scenario");
-
-    assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    JsonNode applied = new ObjectMapper().readTree(applyResponse.body());
-    assertThat(applied.path("code").asText()).isEqualTo("SUCCESS");
-    // 同类前序用例可能已应用过同一场景工作簿（编码固定）；幂等 apply 时表现为 updated 而非 inserted。
-    JsonNode applyData = applied.path("data");
-    int jobsApplied =
-        applyData.path("jobInserted").asInt() + applyData.path("jobUpdated").asInt();
-    int templatesApplied = applyData.path("fileTemplateInserted").asInt()
-        + applyData.path("fileTemplateUpdated").asInt();
-    assertThat(jobsApplied).isEqualTo(1);
-    assertThat(templatesApplied).isEqualTo(1);
-    assertThat(applyData.has("pipelineInserted")).isFalse();
-    assertThat(applyData.has("pipelineUpdated")).isFalse();
-  }
-
-  @Test
-  @DisplayName("跨工作表引用错误计入预览无效行数")
-  void shouldCountCrossSheetReferenceErrorsAsInvalidRowsInPreview() throws Exception {
-    String missingJobCode = "MISSING_" + UUID.randomUUID().toString().replace("-", "");
-    byte[] workbookBytes = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
-      appendDataRow(
-          jobs,
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          row(
-              "tenant_id", "excel-upload-ta",
-              "job_code", "JOB_IMPORT_REFERENCE_CHECK",
-              "job_name", "Reference check",
-              "job_type", "IMPORT",
-              "schedule_type", "MANUAL",
-              "depends_on_job_code", missingJobCode,
-              "param_schema", "{}",
-              "default_params", "{}",
-              "enabled", "true"));
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
+                .build();
+        HttpResponse<byte[]> adminExportResponse =
+                HttpClient.newHttpClient().send(adminExportRequest, HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(adminExportResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(adminExportResponse.body()))) {
+            Sheet queues = workbook.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET);
+            Row queueHeader = queues.getRow(0);
+            Row queue = rowForValue(queues, columnIndex(queueHeader, "queue_code"), queueCode);
+            assertThat(queue).isNotNull();
+            Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+            Row jobHeader = jobs.getRow(0);
+            Row job = rowForValue(jobs, columnIndex(jobHeader, "job_code"), jobCode);
+            assertThat(job.getCell(columnIndex(jobHeader, "queue_code")).toString())
+                    .isEqualTo(queueCode);
+            assertThat(job.getCell(columnIndex(jobHeader, "worker_group")).toString())
+                    .isEqualTo("PLATFORM_IMPORT_POOL");
+        }
     }
 
-    HttpResponse<String> response = previewWorkbookAsRole(
-        workbookBytes, "cross-sheet-reference-preview", "ROLE_ADMIN", "excel-upload-ta");
+    @Test
+    @DisplayName("上传缺少新增监控策略 sheet 的旧配置包: 保留兼容导入")
+    void shouldAcceptLegacyWorkbookMissingJobMonitoringPolicySheet() throws Exception {
+        byte[] workbook = tenantPackageWorkbook(false);
+        String boundary = "excel-upload-missing-monitoring-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-missing-monitoring")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
+                .build();
 
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-    JsonNode preview = new ObjectMapper().readTree(response.body()).path("data");
-    assertThat(preview.path("invalidRows").asInt())
-        .as("cross-sheet reference must be blocking: %s", preview)
-        .isEqualTo(1);
-    assertThat(preview.path("validRows").asInt())
-        .isEqualTo(preview.path("totalRows").asInt() - 1);
-    JsonNode jobStats = null;
-    for (JsonNode sheet : preview.path("sheets")) {
-      if ("job_definition".equals(sheet.path("sheetName").asText())) {
-        jobStats = sheet;
-        break;
-      }
-    }
-    assertThat(jobStats).isNotNull();
-    assertThat(jobStats.path("invalidRows").asInt()).isEqualTo(1);
-    assertThat(preview.path("issues").toString()).contains(missingJobCode);
-  }
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
 
-  @Test
-  @DisplayName("配置包预览拒绝成环的作业依赖")
-  void shouldRejectCyclicJobDependenciesInPreview() throws Exception {
-    String firstJobCode = "JOB_CYCLE_A_" + UUID.randomUUID().toString().replace("-", "");
-    String secondJobCode = "JOB_CYCLE_B_" + UUID.randomUUID().toString().replace("-", "");
-    byte[] workbookBytes = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
-      appendDataRow(
-          jobs,
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          row(
-              "tenant_id", "excel-upload-ta",
-              "job_code", firstJobCode,
-              "job_name", "Cycle first",
-              "job_type", "IMPORT",
-              "schedule_type", "MANUAL",
-              "depends_on_job_codes", secondJobCode,
-              "param_schema", "{}",
-              "default_params", "{}",
-              "enabled", "true"));
-      appendDataRow(
-          jobs,
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          row(
-              "tenant_id", "excel-upload-ta",
-              "job_code", secondJobCode,
-              "job_name", "Cycle second",
-              "job_type", "IMPORT",
-              "schedule_type", "MANUAL",
-              "depends_on_job_codes", firstJobCode,
-              "param_schema", "{}",
-              "default_params", "{}",
-              "enabled", "true"));
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+        assertThat(response.body()).contains("\"code\":\"SUCCESS\"");
+        assertThat(response.body()).contains("\"fileChannelRows\":1");
+        assertThat(response.body()).contains("\"fileTemplateRows\":1");
     }
 
-    HttpResponse<String> response = previewWorkbookAsRole(
-        workbookBytes, "cyclic-job-dependency-preview", "ROLE_ADMIN", "excel-upload-ta");
+    @Test
+    @DisplayName("真实 HTTP 场景模板下载: IMPORT+EXPORT 保留必需配置列且不暴露平台资源列")
+    void shouldDownloadFocusedWorkbookWithImportAndExportColumns() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/console/config/tenant-package/excel/scenario-template"
+                        + "?scenarios=IMPORT&scenarios=EXPORT"))
+                .timeout(Duration.ofSeconds(60))
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "excel-upload-ta")
+                .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+                .GET()
+                .build();
 
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-    JsonNode preview = new ObjectMapper().readTree(response.body()).path("data");
-    assertThat(preview.path("invalidRows").asInt())
-        .as("cyclic dependency graph must be blocking: %s", preview)
-        .isGreaterThan(0);
-    assertThat(preview.path("issues").toString()).contains("job dependency graph contains a cycle");
-  }
+        HttpResponse<byte[]> response =
+                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofByteArray());
 
-  @Test
-  @DisplayName("Apply依赖图预检与并发图变更串行且失败回滚整包")
-  void shouldRevalidateJobDependenciesAfterConcurrentGraphChangeAndRollbackPackage()
-      throws Exception {
-    final String selectPgAdvisoryXactLockSql = """
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+        assertThat(response.headers().firstValue("Content-Disposition").orElse(""))
+                .contains("tenant-config-package-export-import.xlsx");
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(response.body()))) {
+            assertThat(workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET)).isNotNull();
+            assertThat(workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET))
+                    .isNotNull();
+            assertThat(workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET))
+                    .isNull();
+            assertThat(workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET))
+                    .isNull();
+            assertThat(workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET))
+                    .isNull();
+            assertThat(workbook.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
+                    .isNull();
+
+            assertHeaderColumns(
+                    workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
+                    Set.of("job_code", "job_name", "job_type", "schedule_type", "default_params"));
+            assertHeaderColumns(
+                    workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET),
+                    Set.of(
+                            "template_code",
+                            "file_format_type",
+                            "charset",
+                            "target_charset",
+                            "delimiter",
+                            "header_rows",
+                            "query_param_schema",
+                            "default_query_sql"));
+        }
+    }
+
+    @Test
+    @DisplayName("场景化示例工作簿可直接上传预览，且不依赖资源队列与监控阈值 sheet")
+    void shouldUploadScenarioWorkbookGeneratedByTemplateEndpointContract() throws Exception {
+        StaticMessageSource messages = new StaticMessageSource();
+        messages.setUseCodeAsDefaultMessage(true);
+        ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(messages, List.of("IMPORT"));
+        byte[] workbook = writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets("IMPORT"));
+        String boundary = "excel-upload-scenario-boundary";
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-scenario")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+        assertThat(response.body()).contains("\"code\":\"SUCCESS\"");
+        assertThat(response.body()).contains("\"jobRows\":1");
+        assertThat(response.body()).contains("\"fileTemplateRows\":1");
+        assertThat(response.body()).contains("\"pipelineRows\":0");
+        assertThat(response.body()).contains("\"pipelineStepRows\":0");
+        assertThat(response.body()).contains("\"resourceQueueRows\":0");
+
+        JsonNode uploadResponse = new ObjectMapper().readTree(response.body());
+        String uploadToken = uploadResponse.path("data").path("uploadToken").asText();
+        HttpResponse<String> previewResponse = HttpClient.newHttpClient()
+                .send(
+                        HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                                        + "/api/console/config/tenant-package/excel/preview/" + uploadToken))
+                                .timeout(Duration.ofSeconds(60))
+                                .GET()
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString());
+
+        assertThat(previewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        JsonNode preview = new ObjectMapper().readTree(previewResponse.body());
+        assertThat(preview.path("code").asText()).isEqualTo("SUCCESS");
+        assertThat(preview.path("data").path("invalidRows").asInt())
+                .as(
+                        "Scenario template validation issues: %s",
+                        preview.path("data").path("issues"))
+                .isZero();
+        assertThat(preview.path("data").path("issues")).isEmpty();
+        String previewToken = preview.path("data").path("previewToken").asText();
+        assertThat(previewToken).isNotBlank();
+
+        HttpResponse<String> refreshedPreviewResponse = HttpClient.newHttpClient()
+                .send(
+                        HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                                        + "/api/console/config/tenant-package/excel/preview/" + uploadToken))
+                                .timeout(Duration.ofSeconds(60))
+                                .GET()
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString());
+        String refreshedPreviewToken = new ObjectMapper()
+                .readTree(refreshedPreviewResponse.body())
+                .path("data")
+                .path("previewToken")
+                .asText();
+        assertThat(refreshedPreviewToken).isNotBlank().isNotEqualTo(previewToken);
+
+        HttpResponse<String> staleApplyResponse = postApply(uploadToken, previewToken, "idem-stale-preview");
+        assertThat(staleApplyResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
+
+        HttpResponse<String> applyResponse = postApply(uploadToken, refreshedPreviewToken, "idem-excel-apply-scenario");
+
+        assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        JsonNode applied = new ObjectMapper().readTree(applyResponse.body());
+        assertThat(applied.path("code").asText()).isEqualTo("SUCCESS");
+        // 同类前序用例可能已应用过同一场景工作簿（编码固定）；幂等 apply 时表现为 updated 而非 inserted。
+        JsonNode applyData = applied.path("data");
+        int jobsApplied = applyData.path("jobInserted").asInt()
+                + applyData.path("jobUpdated").asInt();
+        int templatesApplied = applyData.path("fileTemplateInserted").asInt()
+                + applyData.path("fileTemplateUpdated").asInt();
+        assertThat(jobsApplied).isEqualTo(1);
+        assertThat(templatesApplied).isEqualTo(1);
+        assertThat(applyData.has("pipelineInserted")).isFalse();
+        assertThat(applyData.has("pipelineUpdated")).isFalse();
+    }
+
+    @Test
+    @DisplayName("跨工作表引用错误计入预览无效行数")
+    void shouldCountCrossSheetReferenceErrorsAsInvalidRowsInPreview() throws Exception {
+        String missingJobCode = "MISSING_" + UUID.randomUUID().toString().replace("-", "");
+        byte[] workbookBytes = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+            appendDataRow(
+                    jobs,
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    row(
+                            "tenant_id", "excel-upload-ta",
+                            "job_code", "JOB_IMPORT_REFERENCE_CHECK",
+                            "job_name", "Reference check",
+                            "job_type", "IMPORT",
+                            "schedule_type", "MANUAL",
+                            "depends_on_job_code", missingJobCode,
+                            "param_schema", "{}",
+                            "default_params", "{}",
+                            "enabled", "true"));
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+
+        HttpResponse<String> response =
+                previewWorkbookAsRole(workbookBytes, "cross-sheet-reference-preview", "ROLE_ADMIN", "excel-upload-ta");
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+        JsonNode preview = new ObjectMapper().readTree(response.body()).path("data");
+        assertThat(preview.path("invalidRows").asInt())
+                .as("cross-sheet reference must be blocking: %s", preview)
+                .isEqualTo(1);
+        assertThat(preview.path("validRows").asInt())
+                .isEqualTo(preview.path("totalRows").asInt() - 1);
+        JsonNode jobStats = null;
+        for (JsonNode sheet : preview.path("sheets")) {
+            if ("job_definition".equals(sheet.path("sheetName").asText())) {
+                jobStats = sheet;
+                break;
+            }
+        }
+        assertThat(jobStats).isNotNull();
+        assertThat(jobStats.path("invalidRows").asInt()).isEqualTo(1);
+        assertThat(preview.path("issues").toString()).contains(missingJobCode);
+    }
+
+    @Test
+    @DisplayName("配置包预览拒绝成环的作业依赖")
+    void shouldRejectCyclicJobDependenciesInPreview() throws Exception {
+        String firstJobCode = "JOB_CYCLE_A_" + UUID.randomUUID().toString().replace("-", "");
+        String secondJobCode = "JOB_CYCLE_B_" + UUID.randomUUID().toString().replace("-", "");
+        byte[] workbookBytes = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+            appendDataRow(
+                    jobs,
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    row(
+                            "tenant_id", "excel-upload-ta",
+                            "job_code", firstJobCode,
+                            "job_name", "Cycle first",
+                            "job_type", "IMPORT",
+                            "schedule_type", "MANUAL",
+                            "depends_on_job_codes", secondJobCode,
+                            "param_schema", "{}",
+                            "default_params", "{}",
+                            "enabled", "true"));
+            appendDataRow(
+                    jobs,
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    row(
+                            "tenant_id", "excel-upload-ta",
+                            "job_code", secondJobCode,
+                            "job_name", "Cycle second",
+                            "job_type", "IMPORT",
+                            "schedule_type", "MANUAL",
+                            "depends_on_job_codes", firstJobCode,
+                            "param_schema", "{}",
+                            "default_params", "{}",
+                            "enabled", "true"));
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+
+        HttpResponse<String> response =
+                previewWorkbookAsRole(workbookBytes, "cyclic-job-dependency-preview", "ROLE_ADMIN", "excel-upload-ta");
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+        JsonNode preview = new ObjectMapper().readTree(response.body()).path("data");
+        assertThat(preview.path("invalidRows").asInt())
+                .as("cyclic dependency graph must be blocking: %s", preview)
+                .isGreaterThan(0);
+        assertThat(preview.path("issues").toString()).contains("job dependency graph contains a cycle");
+    }
+
+    @Test
+    @DisplayName("Apply依赖图预检与并发图变更串行且失败回滚整包")
+    void shouldRevalidateJobDependenciesAfterConcurrentGraphChangeAndRollbackPackage() throws Exception {
+        final String selectPgAdvisoryXactLockSql = """
             select pg_advisory_xact_lock(hashtextextended('batch.job_dependency:' || ?, 0))\
             """;
-    final String insertJobDependencySql = """
+        final String insertJobDependencySql = """
             insert into batch.job_dependency (tenant_id, downstream_job_code, upstream_job_code,\s\
             dependency_order, readiness_mode, biz_date_alignment)\s\
             values (?, ?, ?, 0, 'EFFECTIVE_RESULT', 'SAME_DAY')\
             """;
 
-    final String selectCountSql = """
+        final String selectCountSql = """
             select count(*) from batch.file_channel_config where tenant_id = ?
         """;
-    final String selectCountSql2 = """
+        final String selectCountSql2 = """
       select count(*) from batch.job_dependency where tenant_id = ?
   """;
-    final String selectCountSql3 = """
+        final String selectCountSql3 = """
       select count(*) from batch.job_dependency where tenant_id = ? and downstream_job_code = ?\s\
       and upstream_job_code = ?\
       """;
 
-    String tenantId = "excel-dependency-race-" + UUID.randomUUID().toString().substring(0, 8);
-    String downstream = "JOB_RACE_DOWNSTREAM_" + UUID.randomUUID().toString().replace("-", "");
-    String upstream = "JOB_RACE_UPSTREAM_" + UUID.randomUUID().toString().replace("-", "");
-    insertManualJob(tenantId, downstream);
-    insertManualJob(tenantId, upstream);
+        String tenantId =
+                "excel-dependency-race-" + UUID.randomUUID().toString().substring(0, 8);
+        String downstream =
+                "JOB_RACE_DOWNSTREAM_" + UUID.randomUUID().toString().replace("-", "");
+        String upstream = "JOB_RACE_UPSTREAM_" + UUID.randomUUID().toString().replace("-", "");
+        insertManualJob(tenantId, downstream);
+        insertManualJob(tenantId, upstream);
 
-    byte[] workbookBytes = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      appendDataRow(
-          workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          row(
-              "tenant_id", tenantId,
-              "job_code", downstream,
-              "job_name", "Dependency race downstream",
-              "job_type", "IMPORT",
-              "schedule_type", "MANUAL",
-              "depends_on_job_codes", upstream,
-              "param_schema", "{}",
-              "default_params", "{}",
-              "enabled", "true"));
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
-    }
-    workbookBytes = workbookForTenant(workbookBytes, tenantId);
-    HttpResponse<String> previewResponse = previewWorkbookAsRole(
-        workbookBytes, "dependency-race-preview-" + tenantId, "ROLE_ADMIN", tenantId);
-    JsonNode preview = new ObjectMapper().readTree(previewResponse.body()).path("data");
-    assertThat(preview.path("invalidRows").asInt()).isZero();
-    String uploadToken = preview.path("uploadToken").asText();
-    String previewToken = preview.path("previewToken").asText();
-    int channelCountBefore = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
-
-    CountDownLatch graphLocked = new CountDownLatch(1);
-    CountDownLatch releaseGraphLock = new CountDownLatch(1);
-    try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-      var concurrentWriter = executor.submit(() -> {
-        try (var connection = jdbcTemplate.getDataSource().getConnection()) {
-          connection.setAutoCommit(false);
-          try (var lock = connection.prepareStatement(selectPgAdvisoryXactLockSql)) {
-            lock.setString(1, tenantId);
-            lock.execute();
-          }
-          try (var insert = connection.prepareStatement(insertJobDependencySql)) {
-            insert.setString(1, tenantId);
-            insert.setString(2, upstream);
-            insert.setString(3, downstream);
-            insert.executeUpdate();
-          }
-          graphLocked.countDown();
-          if (!releaseGraphLock.await(10, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("timed out waiting to release dependency graph lock");
-          }
-          connection.commit();
-          return null;
-        } catch (Exception exception) {
-          throw new RuntimeException(exception);
+        byte[] workbookBytes = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            appendDataRow(
+                    workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    row(
+                            "tenant_id", tenantId,
+                            "job_code", downstream,
+                            "job_name", "Dependency race downstream",
+                            "job_type", "IMPORT",
+                            "schedule_type", "MANUAL",
+                            "depends_on_job_codes", upstream,
+                            "param_schema", "{}",
+                            "default_params", "{}",
+                            "enabled", "true"));
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
         }
-      });
-      assertThat(graphLocked.await(10, TimeUnit.SECONDS)).isTrue();
+        workbookBytes = workbookForTenant(workbookBytes, tenantId);
+        HttpResponse<String> previewResponse =
+                previewWorkbookAsRole(workbookBytes, "dependency-race-preview-" + tenantId, "ROLE_ADMIN", tenantId);
+        JsonNode preview = new ObjectMapper().readTree(previewResponse.body()).path("data");
+        assertThat(preview.path("invalidRows").asInt()).isZero();
+        String uploadToken = preview.path("uploadToken").asText();
+        String previewToken = preview.path("previewToken").asText();
+        int channelCountBefore = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
 
-      var applyRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
-              + "/api/console/config/tenant-package/excel/apply/" + uploadToken))
-          .timeout(Duration.ofSeconds(60))
-          .header("Content-Type", "application/json")
-          .header("Accept-Language", "en")
-          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-race-" + tenantId)
-          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-          .header("X-Console-Roles", "ROLE_ADMIN")
-          .POST(HttpRequest.BodyPublishers.ofString(
-              "{\"previewToken\":\"" + previewToken + "\"}", StandardCharsets.UTF_8))
-          .build();
-      var applyFuture = executor.submit(() ->
-          HttpClient.newHttpClient().send(applyRequest, HttpResponse.BodyHandlers.ofString()));
-      try {
-        awaitDependencyGraphLockWait();
-        assertThat(applyFuture.isDone()).isFalse();
-      } finally {
-        releaseGraphLock.countDown();
-      }
-      concurrentWriter.get(10, TimeUnit.SECONDS);
-      HttpResponse<String> applyResponse = applyFuture.get(30, TimeUnit.SECONDS);
+        CountDownLatch graphLocked = new CountDownLatch(1);
+        CountDownLatch releaseGraphLock = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            var concurrentWriter = executor.submit(() -> {
+                try (var connection = jdbcTemplate.getDataSource().getConnection()) {
+                    connection.setAutoCommit(false);
+                    try (var lock = connection.prepareStatement(selectPgAdvisoryXactLockSql)) {
+                        lock.setString(1, tenantId);
+                        lock.execute();
+                    }
+                    try (var insert = connection.prepareStatement(insertJobDependencySql)) {
+                        insert.setString(1, tenantId);
+                        insert.setString(2, upstream);
+                        insert.setString(3, downstream);
+                        insert.executeUpdate();
+                    }
+                    graphLocked.countDown();
+                    if (!releaseGraphLock.await(10, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("timed out waiting to release dependency graph lock");
+                    }
+                    connection.commit();
+                    return null;
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+            });
+            assertThat(graphLocked.await(10, TimeUnit.SECONDS)).isTrue();
 
-      assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-      JsonNode result = new ObjectMapper().readTree(applyResponse.body());
-      assertThat(result.path("code").asText()).isEqualTo("INVALID_ARGUMENT");
-      assertThat(result.path("message").asText()).isEqualTo("excel contains invalid rows");
+            var applyRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                            + "/api/console/config/tenant-package/excel/apply/" + uploadToken))
+                    .timeout(Duration.ofSeconds(60))
+                    .header("Content-Type", "application/json")
+                    .header("Accept-Language", "en")
+                    .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-race-" + tenantId)
+                    .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                    .header("X-Console-Roles", "ROLE_ADMIN")
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            "{\"previewToken\":\"" + previewToken + "\"}", StandardCharsets.UTF_8))
+                    .build();
+            var applyFuture = executor.submit(
+                    () -> HttpClient.newHttpClient().send(applyRequest, HttpResponse.BodyHandlers.ofString()));
+            try {
+                awaitDependencyGraphLockWait();
+                assertThat(applyFuture.isDone()).isFalse();
+            } finally {
+                releaseGraphLock.countDown();
+            }
+            concurrentWriter.get(10, TimeUnit.SECONDS);
+            HttpResponse<String> applyResponse = applyFuture.get(30, TimeUnit.SECONDS);
+
+            assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+            JsonNode result = new ObjectMapper().readTree(applyResponse.body());
+            assertThat(result.path("code").asText()).isEqualTo("INVALID_ARGUMENT");
+            assertThat(result.path("message").asText()).isEqualTo("excel contains invalid rows");
+        }
+
+        Integer selectedJobDependencyCount = jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
+        assertThat(selectedJobDependencyCount).isEqualTo(1);
+        Integer selectedJobDependencyCountRead2 =
+                jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId, upstream, downstream);
+        assertThat(selectedJobDependencyCountRead2).isEqualTo(1);
+        Integer selectedFileChannelConfigCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+        assertThat(selectedFileChannelConfigCount).isEqualTo(channelCountBefore);
     }
 
-    Integer selectedJobDependencyCount =
-        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
-    assertThat(selectedJobDependencyCount).isEqualTo(1);
-    Integer selectedJobDependencyCountRead2 =
-        jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId, upstream, downstream);
-    assertThat(selectedJobDependencyCountRead2).isEqualTo(1);
-    Integer selectedFileChannelConfigCount =
-        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
-    assertThat(selectedFileChannelConfigCount).isEqualTo(channelCountBefore);
-  }
-
-  private void insertManualJob(String tenantId, String jobCode) {
-    final String insertJobDefinitionSql = """
+    private void insertManualJob(String tenantId, String jobCode) {
+        final String insertJobDefinitionSql = """
         insert into batch.job_definition (tenant_id, job_code, job_name, job_type, schedule_type, timezone,\s\
         default_params) values (?, ?, ?, 'IMPORT', 'MANUAL', 'Asia/Shanghai', '{}'::jsonb)\
         """;
 
-    jdbcTemplate.update(insertJobDefinitionSql, tenantId, jobCode, jobCode);
-  }
+        jdbcTemplate.update(insertJobDefinitionSql, tenantId, jobCode, jobCode);
+    }
 
-  private void awaitDependencyGraphLockWait() throws InterruptedException {
-    final String selectCountSql = """
+    private void awaitDependencyGraphLockWait() throws InterruptedException {
+        final String selectCountSql = """
         select count(*) from pg_locks l join pg_stat_activity a using (pid) where l.locktype = 'advisory'\s\
         and not l.granted and a.state = 'active' and a.query ilike '%%pg_advisory_xact_lock%%'\
         """;
 
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-    while (System.nanoTime() < deadline) {
-      Integer waiters = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
-      if (waiters != null && waiters > 0) {
-        return;
-      }
-      Thread.sleep(25);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            Integer waiters = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
+            if (waiters != null && waiters > 0) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("Excel Apply did not wait for the tenant dependency graph lock");
     }
-    throw new AssertionError("Excel Apply did not wait for the tenant dependency graph lock");
-  }
 
-  @Test
-  @DisplayName("配置包可导入多上游依赖并按配置顺序持久化")
-  void shouldApplyMultipleJobDependenciesFromPackage() throws Exception {
-    final String selectUpstreamJobCodeSql = """
+    @Test
+    @DisplayName("配置包可导入多上游依赖并按配置顺序持久化")
+    void shouldApplyMultipleJobDependenciesFromPackage() throws Exception {
+        final String selectUpstreamJobCodeSql = """
         select upstream_job_code from batch.job_dependency where tenant_id = ? and downstream_job_code = ?\s\
         order by dependency_order\
         """;
-    final String selectBizDateAlignmentSql = """
+        final String selectBizDateAlignmentSql = """
         select biz_date_alignment from batch.job_dependency where tenant_id = ? and downstream_job_code = ?\s\
         order by dependency_order\
         """;
 
-    String suffix = UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
-    String downstream = "JOB_DOWNSTREAM_" + suffix;
-    String upstreamOne = "JOB_UPSTREAM_A_" + suffix;
-    String upstreamTwo = "JOB_UPSTREAM_B_" + suffix;
-    byte[] workbookBytes = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
-      appendDataRow(
-          jobs,
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          row(
-              "tenant_id", "excel-upload-ta",
-              "job_code", downstream,
-              "job_name", "Downstream",
-              "job_type", "IMPORT",
-              "schedule_type", "CRON",
-              "schedule_expr", "0 0 2 * * ?",
-              "depends_on_job_codes", upstreamOne + "," + upstreamTwo,
-              "depends_on_biz_date_alignments", "SAME_DAY,PREVIOUS_BIZ_DAY",
-              "param_schema", "{}",
-              "default_params", "{}",
-              "enabled", "true"));
-      appendDataRow(
-          jobs,
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          row(
-              "tenant_id", "excel-upload-ta",
-              "job_code", upstreamOne,
-              "job_name", "Upstream A",
-              "job_type", "IMPORT",
-              "schedule_type", "MANUAL",
-              "param_schema", "{}",
-              "default_params", "{}",
-              "enabled", "true"));
-      appendDataRow(
-          jobs,
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          row(
-              "tenant_id", "excel-upload-ta",
-              "job_code", upstreamTwo,
-              "job_name", "Upstream B",
-              "job_type", "IMPORT",
-              "schedule_type", "MANUAL",
-              "param_schema", "{}",
-              "default_params", "{}",
-              "enabled", "true"));
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
+        String suffix = UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
+        String downstream = "JOB_DOWNSTREAM_" + suffix;
+        String upstreamOne = "JOB_UPSTREAM_A_" + suffix;
+        String upstreamTwo = "JOB_UPSTREAM_B_" + suffix;
+        byte[] workbookBytes = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+            appendDataRow(
+                    jobs,
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    row(
+                            "tenant_id", "excel-upload-ta",
+                            "job_code", downstream,
+                            "job_name", "Downstream",
+                            "job_type", "IMPORT",
+                            "schedule_type", "CRON",
+                            "schedule_expr", "0 0 2 * * ?",
+                            "depends_on_job_codes", upstreamOne + "," + upstreamTwo,
+                            "depends_on_biz_date_alignments", "SAME_DAY,PREVIOUS_BIZ_DAY",
+                            "param_schema", "{}",
+                            "default_params", "{}",
+                            "enabled", "true"));
+            appendDataRow(
+                    jobs,
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    row(
+                            "tenant_id", "excel-upload-ta",
+                            "job_code", upstreamOne,
+                            "job_name", "Upstream A",
+                            "job_type", "IMPORT",
+                            "schedule_type", "MANUAL",
+                            "param_schema", "{}",
+                            "default_params", "{}",
+                            "enabled", "true"));
+            appendDataRow(
+                    jobs,
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    row(
+                            "tenant_id", "excel-upload-ta",
+                            "job_code", upstreamTwo,
+                            "job_name", "Upstream B",
+                            "job_type", "IMPORT",
+                            "schedule_type", "MANUAL",
+                            "param_schema", "{}",
+                            "default_params", "{}",
+                            "enabled", "true"));
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
+        }
+
+        HttpResponse<String> previewResponse = previewWorkbookAsRole(
+                workbookBytes,
+                "multi-dependency-package-" + suffix.toLowerCase(Locale.ROOT),
+                "ROLE_ADMIN",
+                "excel-upload-ta");
+        JsonNode preview = new ObjectMapper().readTree(previewResponse.body()).path("data");
+        assertThat(preview.path("invalidRows").asInt())
+                .as("multi-dependency package preview: %s", preview)
+                .isZero();
+        HttpResponse<String> applyResponse = postApply(
+                preview.path("uploadToken").asText(),
+                preview.path("previewToken").asText(),
+                "idem-multi-dependency-" + suffix.toLowerCase(Locale.ROOT));
+        assertThat(applyResponse.statusCode())
+                .as("multi-dependency package apply response: %s", applyResponse.body())
+                .isEqualTo(HttpStatus.OK.value());
+        List<String> selectedUpstreamJobCodeValues =
+                jdbcTemplate.queryForList(selectUpstreamJobCodeSql, String.class, "excel-upload-ta", downstream);
+        assertThat(selectedUpstreamJobCodeValues).containsExactly(upstreamOne, upstreamTwo);
+        List<String> selectedBizDateAlignmentValues =
+                jdbcTemplate.queryForList(selectBizDateAlignmentSql, String.class, "excel-upload-ta", downstream);
+        assertThat(selectedBizDateAlignmentValues).containsExactly("SAME_DAY", "PREVIOUS_BIZ_DAY");
     }
 
-    HttpResponse<String> previewResponse = previewWorkbookAsRole(
-        workbookBytes,
-        "multi-dependency-package-" + suffix.toLowerCase(Locale.ROOT),
-        "ROLE_ADMIN",
-        "excel-upload-ta");
-    JsonNode preview = new ObjectMapper().readTree(previewResponse.body()).path("data");
-    assertThat(preview.path("invalidRows").asInt())
-        .as("multi-dependency package preview: %s", preview)
-        .isZero();
-    HttpResponse<String> applyResponse = postApply(
-        preview.path("uploadToken").asText(),
-        preview.path("previewToken").asText(),
-        "idem-multi-dependency-" + suffix.toLowerCase(Locale.ROOT));
-    assertThat(applyResponse.statusCode())
-        .as("multi-dependency package apply response: %s", applyResponse.body())
-        .isEqualTo(HttpStatus.OK.value());
-    List<String> selectedUpstreamJobCodeValues = jdbcTemplate.queryForList(
-        selectUpstreamJobCodeSql, String.class, "excel-upload-ta", downstream);
-    assertThat(selectedUpstreamJobCodeValues).containsExactly(upstreamOne, upstreamTwo);
-    List<String> selectedBizDateAlignmentValues = jdbcTemplate.queryForList(
-        selectBizDateAlignmentSql, String.class, "excel-upload-ta", downstream);
-    assertThat(selectedBizDateAlignmentValues).containsExactly("SAME_DAY", "PREVIOUS_BIZ_DAY");
-  }
-
-  @Test
-  @DisplayName("配置引用大小写规范化后仍可导出并通过回导预览")
-  void shouldNormalizeConfigReferencesAndPreserveExportRoundTrip() throws Exception {
-    final String selectDefaultParamsSql = """
+    @Test
+    @DisplayName("配置引用大小写规范化后仍可导出并通过回导预览")
+    void shouldNormalizeConfigReferencesAndPreserveExportRoundTrip() throws Exception {
+        final String selectDefaultParamsSql = """
         select default_params->>'templateCode' from batch.job_definition where tenant_id = ? and job_code = ?\
         """;
-    final String selectParamSchemaSql = """
+        final String selectParamSchemaSql = """
         select param_schema->>'template_code' from batch.job_definition where tenant_id = ? and job_code = ?\
         """;
 
-    String jobCode = "JOB_REF_NORMALIZE_" + UUID.randomUUID().toString().replace("-", "");
-    byte[] workbookBytes = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      appendDataRow(
-          workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          row(
-              "tenant_id", "excel-upload-ta",
-              "job_code", jobCode,
-              "job_name", "Reference normalization",
-              "job_type", "IMPORT",
-              "schedule_type", "MANUAL",
-              "default_params", "{\"templateCode\":\"EXCEL_UPLOAD_TEMPLATE\"}",
-              "param_schema", "{\"template_code\":\"EXCEL_UPLOAD_TEMPLATE\"}",
-              "enabled", "true"));
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      workbook.write(output);
-      workbookBytes = output.toByteArray();
-    }
-
-    HttpResponse<String> applyResponse = applyWorkbookAsRole(
-        workbookBytes, "normalize-config-references", "ROLE_ADMIN", "excel-upload-ta");
-    assertThat(applyResponse.statusCode())
-        .as("configuration package apply response: %s", applyResponse.body())
-        .isEqualTo(HttpStatus.OK.value());
-    String selectedDefaultParams = jdbcTemplate.queryForObject(
-        selectDefaultParamsSql, String.class, "excel-upload-ta", jobCode);
-    assertThat(selectedDefaultParams).isEqualTo("excel_upload_template");
-    String selectedParamSchema =
-        jdbcTemplate.queryForObject(selectParamSchemaSql, String.class, "excel-upload-ta", jobCode);
-    assertThat(selectedParamSchema).isEqualTo("excel_upload_template");
-
-    HttpRequest exportRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
-            + "/api/console/config/tenant-package/excel/export?tenantId=excel-upload-ta"))
-        .timeout(Duration.ofSeconds(60))
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "excel-upload-ta")
-        .header("X-Console-Roles", "ROLE_ADMIN")
-        .GET()
-        .build();
-    HttpResponse<byte[]> exportResponse =
-        HttpClient.newHttpClient().send(exportRequest, HttpResponse.BodyHandlers.ofByteArray());
-    assertThat(exportResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-
-    HttpResponse<String> previewResponse = previewWorkbookAsRole(
-        exportResponse.body(),
-        "normalize-config-references-roundtrip",
-        "ROLE_ADMIN",
-        "excel-upload-ta");
-    assertThat(previewResponse.statusCode())
-        .as("exported configuration package preview: %s", previewResponse.body())
-        .isEqualTo(HttpStatus.OK.value());
-    JsonNode preview = new ObjectMapper().readTree(previewResponse.body()).path("data");
-    assertThat(preview.path("invalidRows").asInt()).isZero();
-    assertThat(preview.path("issues")).isEmpty();
-  }
-
-  @Test
-  @DisplayName("单场景、组合场景及 ALL 兼容模板均可生成、上传并通过预览")
-  void shouldPreviewEveryScenarioTemplateAndLegacyAllTemplate() throws Exception {
-    List<List<String>> scenarioSelections = List.of(
-        List.of("IMPORT"),
-        List.of("EXPORT"),
-        List.of("PROCESS"),
-        List.of("DISPATCH"),
-        List.of("ATOMIC"),
-        List.of("WORKFLOW"),
-        List.of("SCHEDULE"),
-        List.of("IMPORT", "EXPORT"),
-        List.of("ALL"));
-    for (List<String> selectedScenarios : scenarioSelections) {
-      String scenario = String.join("+", selectedScenarios);
-      String scenarioQuery = selectedScenarios.stream()
-          .map(value -> "scenarios=" + value)
-          .collect(Collectors.joining("&"));
-      HttpResponse<byte[]> templateResponse = HttpClient.newHttpClient()
-          .send(
-              HttpRequest.newBuilder(URI.create("http://localhost:" + port
-                      + "/api/console/config/tenant-package/excel/sample-template?"
-                      + scenarioQuery))
-                  .timeout(Duration.ofSeconds(60))
-                  .GET()
-                  .build(),
-              HttpResponse.BodyHandlers.ofByteArray());
-      assertThat(templateResponse.statusCode())
-          .as("template download for %s", scenario)
-          .isEqualTo(HttpStatus.OK.value());
-      assertScenarioTemplateSheets(templateResponse.body(), selectedScenarios);
-
-      String boundary = "excel-upload-scenario-" + scenario.toLowerCase();
-      HttpResponse<String> uploadResponse = HttpClient.newHttpClient()
-          .send(
-              HttpRequest.newBuilder(URI.create("http://localhost:" + port
-                      + "/api/console/config/tenant-package/excel/upload"))
-                  .timeout(Duration.ofSeconds(60))
-                  .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                  .header(
-                      CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
-                      "idem-excel-scenario-matrix-" + scenario.toLowerCase())
-                  .POST(HttpRequest.BodyPublishers.ofByteArray(
-                      multipartBody(boundary, templateResponse.body())))
-                  .build(),
-              HttpResponse.BodyHandlers.ofString());
-      assertThat(uploadResponse.statusCode())
-          .as("upload for %s", scenario)
-          .isEqualTo(HttpStatus.OK.value());
-      JsonNode upload = new ObjectMapper().readTree(uploadResponse.body());
-      assertThat(upload.path("code").asText())
-          .as("upload result for %s", scenario)
-          .isEqualTo("SUCCESS");
-      String token = upload.path("data").path("uploadToken").asText();
-      assertThat(token).as("upload token for %s", scenario).isNotBlank();
-
-      HttpResponse<String> previewResponse = HttpClient.newHttpClient()
-          .send(
-              HttpRequest.newBuilder(URI.create("http://localhost:" + port
-                      + "/api/console/config/tenant-package/excel/preview/" + token))
-                  .timeout(Duration.ofSeconds(60))
-                  .GET()
-                  .build(),
-              HttpResponse.BodyHandlers.ofString());
-      assertThat(previewResponse.statusCode())
-          .as("preview for %s", scenario)
-          .isEqualTo(HttpStatus.OK.value());
-      JsonNode preview = new ObjectMapper().readTree(previewResponse.body());
-      assertThat(preview.path("code").asText())
-          .as("preview result for %s", scenario)
-          .isEqualTo("SUCCESS");
-      assertThat(preview.path("data").path("invalidRows").asInt())
-          .as(
-              "preview validation issues for %s: %s",
-              scenario, preview.path("data").path("issues"))
-          .isZero();
-    }
-  }
-
-  private static void assertScenarioTemplateSheets(byte[] workbookBytes, List<String> scenarios)
-      throws Exception {
-    Set<String> sheets = new LinkedHashSet<>();
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      for (Sheet sheet : workbook) {
-        sheets.add(sheet.getSheetName());
-      }
-
-      ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(new StaticMessageSource());
-      for (ConfigPackageSheetSpecs.SheetDef expectedSheet : specs.project(scenarios).stream()
-          .filter(sheet -> !ConfigPackageExcelValidator.PIPELINE_SHEET.equals(sheet.name()))
-          .filter(sheet -> !ConfigPackageExcelValidator.STEP_SHEET.equals(sheet.name()))
-          .toList()) {
-        Sheet actualSheet = workbook.getSheet(expectedSheet.name());
-        assertThat(actualSheet).as("projected sheet %s", expectedSheet.name()).isNotNull();
-
-        Row header = actualSheet.getRow(0);
-        assertThat(header).as("header row for %s", expectedSheet.name()).isNotNull();
-        List<String> actualColumns = new ArrayList<>();
-        for (int columnIndex = 0; columnIndex < header.getLastCellNum(); columnIndex++) {
-          actualColumns.add(header.getCell(columnIndex).getStringCellValue());
+        String jobCode = "JOB_REF_NORMALIZE_" + UUID.randomUUID().toString().replace("-", "");
+        byte[] workbookBytes = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            appendDataRow(
+                    workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    row(
+                            "tenant_id", "excel-upload-ta",
+                            "job_code", jobCode,
+                            "job_name", "Reference normalization",
+                            "job_type", "IMPORT",
+                            "schedule_type", "MANUAL",
+                            "default_params", "{\"templateCode\":\"EXCEL_UPLOAD_TEMPLATE\"}",
+                            "param_schema", "{\"template_code\":\"EXCEL_UPLOAD_TEMPLATE\"}",
+                            "enabled", "true"));
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            workbookBytes = output.toByteArray();
         }
-        assertThat(actualColumns)
-            .as("complete ordered columns for %s in scenarios %s", expectedSheet.name(), scenarios)
-            .containsExactlyElementsOf(expectedSheet.columns());
-      }
+
+        HttpResponse<String> applyResponse =
+                applyWorkbookAsRole(workbookBytes, "normalize-config-references", "ROLE_ADMIN", "excel-upload-ta");
+        assertThat(applyResponse.statusCode())
+                .as("configuration package apply response: %s", applyResponse.body())
+                .isEqualTo(HttpStatus.OK.value());
+        String selectedDefaultParams =
+                jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, "excel-upload-ta", jobCode);
+        assertThat(selectedDefaultParams).isEqualTo("excel_upload_template");
+        String selectedParamSchema =
+                jdbcTemplate.queryForObject(selectParamSchemaSql, String.class, "excel-upload-ta", jobCode);
+        assertThat(selectedParamSchema).isEqualTo("excel_upload_template");
+
+        HttpRequest exportRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/console/config/tenant-package/excel/export?tenantId=excel-upload-ta"))
+                .timeout(Duration.ofSeconds(60))
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "excel-upload-ta")
+                .header("X-Console-Roles", "ROLE_ADMIN")
+                .GET()
+                .build();
+        HttpResponse<byte[]> exportResponse =
+                HttpClient.newHttpClient().send(exportRequest, HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(exportResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+
+        HttpResponse<String> previewResponse = previewWorkbookAsRole(
+                exportResponse.body(), "normalize-config-references-roundtrip", "ROLE_ADMIN", "excel-upload-ta");
+        assertThat(previewResponse.statusCode())
+                .as("exported configuration package preview: %s", previewResponse.body())
+                .isEqualTo(HttpStatus.OK.value());
+        JsonNode preview = new ObjectMapper().readTree(previewResponse.body()).path("data");
+        assertThat(preview.path("invalidRows").asInt()).isZero();
+        assertThat(preview.path("issues")).isEmpty();
     }
 
-    assertThat(sheets).contains("job_definition", "字段说明");
-    if (scenarios.contains("ALL")) {
-      assertThat(sheets)
-          .contains(
-              ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET,
-              ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
-              ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
-              ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
-              ConfigPackageExcelValidator.CHANNEL_SHEET,
-              ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-              ConfigPackageExcelValidator.WF_DEF_SHEET,
-              ConfigPackageExcelValidator.WF_NODE_SHEET,
-              ConfigPackageExcelValidator.WF_EDGE_SHEET);
-      return;
-    }
+    @Test
+    @DisplayName("单场景、组合场景及 ALL 兼容模板均可生成、上传并通过预览")
+    void shouldPreviewEveryScenarioTemplateAndLegacyAllTemplate() throws Exception {
+        List<List<String>> scenarioSelections = List.of(
+                List.of("IMPORT"),
+                List.of("EXPORT"),
+                List.of("PROCESS"),
+                List.of("DISPATCH"),
+                List.of("ATOMIC"),
+                List.of("WORKFLOW"),
+                List.of("SCHEDULE"),
+                List.of("IMPORT", "EXPORT"),
+                List.of("ALL"));
+        for (List<String> selectedScenarios : scenarioSelections) {
+            String scenario = String.join("+", selectedScenarios);
+            String scenarioQuery = selectedScenarios.stream()
+                    .map(value -> "scenarios=" + value)
+                    .collect(Collectors.joining("&"));
+            HttpResponse<byte[]> templateResponse = HttpClient.newHttpClient()
+                    .send(
+                            HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                                            + "/api/console/config/tenant-package/excel/sample-template?"
+                                            + scenarioQuery))
+                                    .timeout(Duration.ofSeconds(60))
+                                    .GET()
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofByteArray());
+            assertThat(templateResponse.statusCode())
+                    .as("template download for %s", scenario)
+                    .isEqualTo(HttpStatus.OK.value());
+            assertScenarioTemplateSheets(templateResponse.body(), selectedScenarios);
 
-    if (scenarios.contains("IMPORT") || scenarios.contains("EXPORT")) {
-      assertThat(sheets).contains(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
-    }
-    if (scenarios.contains("PROCESS") || scenarios.contains("DISPATCH")) {
-      assertThat(sheets)
-          .doesNotContain(
-              ConfigPackageExcelValidator.PIPELINE_SHEET, ConfigPackageExcelValidator.STEP_SHEET);
-    }
-    if (scenarios.contains("DISPATCH")) {
-      assertThat(sheets).contains(ConfigPackageExcelValidator.CHANNEL_SHEET);
-    }
-    if (scenarios.contains("WORKFLOW")) {
-      assertThat(sheets)
-          .contains(
-              ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-              ConfigPackageExcelValidator.CHANNEL_SHEET,
-              ConfigPackageExcelValidator.WF_DEF_SHEET,
-              ConfigPackageExcelValidator.WF_NODE_SHEET,
-              ConfigPackageExcelValidator.WF_EDGE_SHEET);
-    }
-    if (scenarios.contains("SCHEDULE")) {
-      assertThat(sheets)
-          .contains(
-              ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
-              ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
-              ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
-    }
-    if (scenarios.contains("ATOMIC")) {
-      assertThat(sheets)
-          .doesNotContain(
-              ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-              ConfigPackageExcelValidator.PIPELINE_SHEET,
-              ConfigPackageExcelValidator.CHANNEL_SHEET,
-              ConfigPackageExcelValidator.WF_DEF_SHEET);
-    }
-    assertThat(sheets).doesNotContain(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET);
-    if (!scenarios.contains("SCHEDULE")) {
-      assertThat(sheets).doesNotContain(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
-    }
-  }
+            String boundary = "excel-upload-scenario-" + scenario.toLowerCase();
+            HttpResponse<String> uploadResponse = HttpClient.newHttpClient()
+                    .send(
+                            HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                                            + "/api/console/config/tenant-package/excel/upload"))
+                                    .timeout(Duration.ofSeconds(60))
+                                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                                    .header(
+                                            CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
+                                            "idem-excel-scenario-matrix-" + scenario.toLowerCase())
+                                    .POST(HttpRequest.BodyPublishers.ofByteArray(
+                                            multipartBody(boundary, templateResponse.body())))
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofString());
+            assertThat(uploadResponse.statusCode())
+                    .as("upload for %s", scenario)
+                    .isEqualTo(HttpStatus.OK.value());
+            JsonNode upload = new ObjectMapper().readTree(uploadResponse.body());
+            assertThat(upload.path("code").asText())
+                    .as("upload result for %s", scenario)
+                    .isEqualTo("SUCCESS");
+            String token = upload.path("data").path("uploadToken").asText();
+            assertThat(token).as("upload token for %s", scenario).isNotBlank();
 
-  @Test
-  @DisplayName("方向与格式场景模板通过真实 HTTP 返回匹配的列和下拉选项")
-  void shouldReturnFocusedFileTemplateForEverySupportedFormat() throws Exception {
-    Map<String, List<String>> expectedColumns = Map.ofEntries(
-        Map.entry("IMPORT_DELIMITED", List.of("delimiter", "quote_char", "validation_rule_set")),
-        Map.entry("IMPORT_FIXED_WIDTH", List.of("record_length", "validation_rule_set")),
-        Map.entry("IMPORT_EXCEL", List.of("header_rows", "validation_rule_set")),
-        Map.entry("IMPORT_XML", List.of("charset", "validation_rule_set")),
-        Map.entry("IMPORT_JSON", List.of("validation_rule_set")),
-        Map.entry("EXPORT_DELIMITED", List.of("delimiter", "default_query_sql")),
-        Map.entry("EXPORT_FIXED_WIDTH", List.of("record_length", "default_query_sql")),
-        Map.entry("EXPORT_EXCEL", List.of("header_rows", "default_query_sql")),
-        Map.entry("EXPORT_JSON", List.of("default_query_sql", "query_param_schema")));
-    Map<String, List<String>> excludedColumns = Map.ofEntries(
-        Map.entry("IMPORT_DELIMITED", List.of("record_length", "default_query_sql")),
-        Map.entry("IMPORT_FIXED_WIDTH", List.of("delimiter", "quote_char", "default_query_sql")),
-        Map.entry("IMPORT_EXCEL", List.of("charset", "delimiter", "record_length")),
-        Map.entry(
-            "IMPORT_XML",
-            List.of("delimiter", "record_length", "header_rows", "default_query_sql")),
-        Map.entry("IMPORT_JSON", List.of("delimiter", "record_length", "header_rows")),
-        Map.entry("EXPORT_DELIMITED", List.of("record_length", "validation_rule_set")),
-        Map.entry("EXPORT_FIXED_WIDTH", List.of("delimiter", "quote_char", "validation_rule_set")),
-        Map.entry("EXPORT_EXCEL", List.of("charset", "delimiter", "record_length")),
-        Map.entry("EXPORT_JSON", List.of("delimiter", "record_length", "validation_rule_set")));
-
-    for (Map.Entry<String, List<String>> scenario : expectedColumns.entrySet()) {
-      HttpResponse<byte[]> response = HttpClient.newHttpClient()
-          .send(
-              HttpRequest.newBuilder(URI.create("http://localhost:" + port
-                      + "/api/console/config/tenant-package/excel/scenario-template?scenarios="
-                      + scenario.getKey()))
-                  .timeout(Duration.ofSeconds(60))
-                  .GET()
-                  .build(),
-              HttpResponse.BodyHandlers.ofByteArray());
-
-      assertThat(response.statusCode())
-          .as("blank template download for %s", scenario.getKey())
-          .isEqualTo(HttpStatus.OK.value());
-      try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(response.body()))) {
-        Sheet sheet = workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
-        assertThat(sheet).as("file template sheet for %s", scenario.getKey()).isNotNull();
-        List<String> headers = new ArrayList<>();
-        Row header = sheet.getRow(0);
-        for (int column = 0; column < header.getLastCellNum(); column++) {
-          headers.add(header.getCell(column).getStringCellValue());
+            HttpResponse<String> previewResponse = HttpClient.newHttpClient()
+                    .send(
+                            HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                                            + "/api/console/config/tenant-package/excel/preview/" + token))
+                                    .timeout(Duration.ofSeconds(60))
+                                    .GET()
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofString());
+            assertThat(previewResponse.statusCode())
+                    .as("preview for %s", scenario)
+                    .isEqualTo(HttpStatus.OK.value());
+            JsonNode preview = new ObjectMapper().readTree(previewResponse.body());
+            assertThat(preview.path("code").asText())
+                    .as("preview result for %s", scenario)
+                    .isEqualTo("SUCCESS");
+            assertThat(preview.path("data").path("invalidRows").asInt())
+                    .as(
+                            "preview validation issues for %s: %s",
+                            scenario, preview.path("data").path("issues"))
+                    .isZero();
         }
-        assertThat(headers).containsAll(scenario.getValue());
-        assertThat(headers)
-            .as("projected columns for %s", scenario.getKey())
-            .doesNotContainAnyElementsOf(excludedColumns.get(scenario.getKey()));
-
-        int formatColumn = headers.indexOf("file_format_type");
-        DataValidation formatValidation = sheet.getDataValidations().stream()
-            .filter(validation ->
-                validation.getRegions().getCellRangeAddress(0).getFirstColumn() == formatColumn)
-            .findFirst()
-            .orElseThrow();
-        assertThat(formatValidation.getValidationConstraint().getExplicitListValues())
-            .containsExactly(scenario.getKey().substring(scenario.getKey().indexOf('_') + 1));
-
-        int typeColumn = headers.indexOf("template_type");
-        DataValidation typeValidation = sheet.getDataValidations().stream()
-            .filter(validation ->
-                validation.getRegions().getCellRangeAddress(0).getFirstColumn() == typeColumn)
-            .findFirst()
-            .orElseThrow();
-        assertThat(typeValidation.getValidationConstraint().getExplicitListValues())
-            .containsExactly(scenario.getKey().startsWith("IMPORT") ? "IMPORT" : "EXPORT");
-      }
     }
-  }
 
-  @Test
-  @DisplayName("租户管理员可通过真实 HTTP 链路应用不含平台资源的业务场景包")
-  void shouldAllowTenantAdminToApplyBusinessScenarioPackage() throws Exception {
-    HttpResponse<String> response = applyWorkbookAsRole(
-        importScenarioWorkbook(false),
-        "tenant-admin-business-apply",
-        "ROLE_TENANT_ADMIN",
-        "tenant-admin-apply");
+    private static void assertScenarioTemplateSheets(byte[] workbookBytes, List<String> scenarios) throws Exception {
+        Set<String> sheets = new LinkedHashSet<>();
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            for (Sheet sheet : workbook) {
+                sheets.add(sheet.getSheetName());
+            }
 
-    assertThat(response.statusCode())
-        .as("apply response: %s", response.body())
-        .isEqualTo(HttpStatus.OK.value());
-    assertThat(new ObjectMapper().readTree(response.body()).path("code").asText())
-        .isEqualTo("SUCCESS");
-  }
+            ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(new StaticMessageSource());
+            for (ConfigPackageSheetSpecs.SheetDef expectedSheet : specs.project(scenarios).stream()
+                    .filter(sheet -> !ConfigPackageExcelValidator.PIPELINE_SHEET.equals(sheet.name()))
+                    .filter(sheet -> !ConfigPackageExcelValidator.STEP_SHEET.equals(sheet.name()))
+                    .toList()) {
+                Sheet actualSheet = workbook.getSheet(expectedSheet.name());
+                assertThat(actualSheet)
+                        .as("projected sheet %s", expectedSheet.name())
+                        .isNotNull();
 
-  @Test
-  @DisplayName("配置包中段写入失败时整包事务回滚前序实体")
-  void shouldRollbackAllConfigurationWritesWhenApplyStepFails() throws Exception {
-    final String selectCountSql = """
+                Row header = actualSheet.getRow(0);
+                assertThat(header).as("header row for %s", expectedSheet.name()).isNotNull();
+                List<String> actualColumns = new ArrayList<>();
+                for (int columnIndex = 0; columnIndex < header.getLastCellNum(); columnIndex++) {
+                    actualColumns.add(header.getCell(columnIndex).getStringCellValue());
+                }
+                assertThat(actualColumns)
+                        .as("complete ordered columns for %s in scenarios %s", expectedSheet.name(), scenarios)
+                        .containsExactlyElementsOf(expectedSheet.columns());
+            }
+        }
+
+        assertThat(sheets).contains("job_definition", "字段说明");
+        if (scenarios.contains("ALL")) {
+            assertThat(sheets)
+                    .contains(
+                            ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET,
+                            ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
+                            ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
+                            ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
+                            ConfigPackageExcelValidator.CHANNEL_SHEET,
+                            ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+                            ConfigPackageExcelValidator.WF_DEF_SHEET,
+                            ConfigPackageExcelValidator.WF_NODE_SHEET,
+                            ConfigPackageExcelValidator.WF_EDGE_SHEET);
+            return;
+        }
+
+        if (scenarios.contains("IMPORT") || scenarios.contains("EXPORT")) {
+            assertThat(sheets).contains(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
+        }
+        if (scenarios.contains("PROCESS") || scenarios.contains("DISPATCH")) {
+            assertThat(sheets)
+                    .doesNotContain(ConfigPackageExcelValidator.PIPELINE_SHEET, ConfigPackageExcelValidator.STEP_SHEET);
+        }
+        if (scenarios.contains("DISPATCH")) {
+            assertThat(sheets).contains(ConfigPackageExcelValidator.CHANNEL_SHEET);
+        }
+        if (scenarios.contains("WORKFLOW")) {
+            assertThat(sheets)
+                    .contains(
+                            ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+                            ConfigPackageExcelValidator.CHANNEL_SHEET,
+                            ConfigPackageExcelValidator.WF_DEF_SHEET,
+                            ConfigPackageExcelValidator.WF_NODE_SHEET,
+                            ConfigPackageExcelValidator.WF_EDGE_SHEET);
+        }
+        if (scenarios.contains("SCHEDULE")) {
+            assertThat(sheets)
+                    .contains(
+                            ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
+                            ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
+                            ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
+        }
+        if (scenarios.contains("ATOMIC")) {
+            assertThat(sheets)
+                    .doesNotContain(
+                            ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+                            ConfigPackageExcelValidator.PIPELINE_SHEET,
+                            ConfigPackageExcelValidator.CHANNEL_SHEET,
+                            ConfigPackageExcelValidator.WF_DEF_SHEET);
+        }
+        assertThat(sheets).doesNotContain(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET);
+        if (!scenarios.contains("SCHEDULE")) {
+            assertThat(sheets).doesNotContain(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
+        }
+    }
+
+    @Test
+    @DisplayName("方向与格式场景模板通过真实 HTTP 返回匹配的列和下拉选项")
+    void shouldReturnFocusedFileTemplateForEverySupportedFormat() throws Exception {
+        Map<String, List<String>> expectedColumns = Map.ofEntries(
+                Map.entry("IMPORT_DELIMITED", List.of("delimiter", "quote_char", "validation_rule_set")),
+                Map.entry("IMPORT_FIXED_WIDTH", List.of("record_length", "validation_rule_set")),
+                Map.entry("IMPORT_EXCEL", List.of("header_rows", "validation_rule_set")),
+                Map.entry("IMPORT_XML", List.of("charset", "validation_rule_set")),
+                Map.entry("IMPORT_JSON", List.of("validation_rule_set")),
+                Map.entry("EXPORT_DELIMITED", List.of("delimiter", "default_query_sql")),
+                Map.entry("EXPORT_FIXED_WIDTH", List.of("record_length", "default_query_sql")),
+                Map.entry("EXPORT_EXCEL", List.of("header_rows", "default_query_sql")),
+                Map.entry("EXPORT_JSON", List.of("default_query_sql", "query_param_schema")));
+        Map<String, List<String>> excludedColumns = Map.ofEntries(
+                Map.entry("IMPORT_DELIMITED", List.of("record_length", "default_query_sql")),
+                Map.entry("IMPORT_FIXED_WIDTH", List.of("delimiter", "quote_char", "default_query_sql")),
+                Map.entry("IMPORT_EXCEL", List.of("charset", "delimiter", "record_length")),
+                Map.entry("IMPORT_XML", List.of("delimiter", "record_length", "header_rows", "default_query_sql")),
+                Map.entry("IMPORT_JSON", List.of("delimiter", "record_length", "header_rows")),
+                Map.entry("EXPORT_DELIMITED", List.of("record_length", "validation_rule_set")),
+                Map.entry("EXPORT_FIXED_WIDTH", List.of("delimiter", "quote_char", "validation_rule_set")),
+                Map.entry("EXPORT_EXCEL", List.of("charset", "delimiter", "record_length")),
+                Map.entry("EXPORT_JSON", List.of("delimiter", "record_length", "validation_rule_set")));
+
+        for (Map.Entry<String, List<String>> scenario : expectedColumns.entrySet()) {
+            HttpResponse<byte[]> response = HttpClient.newHttpClient()
+                    .send(
+                            HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                                            + "/api/console/config/tenant-package/excel/scenario-template?scenarios="
+                                            + scenario.getKey()))
+                                    .timeout(Duration.ofSeconds(60))
+                                    .GET()
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofByteArray());
+
+            assertThat(response.statusCode())
+                    .as("blank template download for %s", scenario.getKey())
+                    .isEqualTo(HttpStatus.OK.value());
+            try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(response.body()))) {
+                Sheet sheet = workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
+                assertThat(sheet)
+                        .as("file template sheet for %s", scenario.getKey())
+                        .isNotNull();
+                List<String> headers = new ArrayList<>();
+                Row header = sheet.getRow(0);
+                for (int column = 0; column < header.getLastCellNum(); column++) {
+                    headers.add(header.getCell(column).getStringCellValue());
+                }
+                assertThat(headers).containsAll(scenario.getValue());
+                assertThat(headers)
+                        .as("projected columns for %s", scenario.getKey())
+                        .doesNotContainAnyElementsOf(excludedColumns.get(scenario.getKey()));
+
+                int formatColumn = headers.indexOf("file_format_type");
+                DataValidation formatValidation = sheet.getDataValidations().stream()
+                        .filter(validation ->
+                                validation.getRegions().getCellRangeAddress(0).getFirstColumn() == formatColumn)
+                        .findFirst()
+                        .orElseThrow();
+                assertThat(formatValidation.getValidationConstraint().getExplicitListValues())
+                        .containsExactly(
+                                scenario.getKey().substring(scenario.getKey().indexOf('_') + 1));
+
+                int typeColumn = headers.indexOf("template_type");
+                DataValidation typeValidation = sheet.getDataValidations().stream()
+                        .filter(validation ->
+                                validation.getRegions().getCellRangeAddress(0).getFirstColumn() == typeColumn)
+                        .findFirst()
+                        .orElseThrow();
+                assertThat(typeValidation.getValidationConstraint().getExplicitListValues())
+                        .containsExactly(scenario.getKey().startsWith("IMPORT") ? "IMPORT" : "EXPORT");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("租户管理员可通过真实 HTTP 链路应用不含平台资源的业务场景包")
+    void shouldAllowTenantAdminToApplyBusinessScenarioPackage() throws Exception {
+        HttpResponse<String> response = applyWorkbookAsRole(
+                importScenarioWorkbook(false),
+                "tenant-admin-business-apply",
+                "ROLE_TENANT_ADMIN",
+                "tenant-admin-apply");
+
+        assertThat(response.statusCode())
+                .as("apply response: %s", response.body())
+                .isEqualTo(HttpStatus.OK.value());
+        assertThat(new ObjectMapper().readTree(response.body()).path("code").asText())
+                .isEqualTo("SUCCESS");
+    }
+
+    @Test
+    @DisplayName("配置包中段写入失败时整包事务回滚前序实体")
+    void shouldRollbackAllConfigurationWritesWhenApplyStepFails() throws Exception {
+        final String selectCountSql = """
       select count(*) from batch.job_definition where tenant_id = ?
   """;
-    final String selectCountSql2 = """
+        final String selectCountSql2 = """
       select count(*) from batch.file_template_config where tenant_id = ?
   """;
-    final String selectCountSql3 = """
+        final String selectCountSql3 = """
       select count(*) from batch.file_channel_config where tenant_id = ?
   """;
 
-    String tenantId = "config-apply-rollback-it";
-    String suffix = UUID.randomUUID().toString().replace("-", "");
-    String functionName = "test_fail_config_apply_" + suffix;
-    String triggerName = "test_fail_config_apply_" + suffix;
-    final String createFunctionSql = """
+        String tenantId = "config-apply-rollback-it";
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String functionName = "test_fail_config_apply_" + suffix;
+        String triggerName = "test_fail_config_apply_" + suffix;
+        final String createFunctionSql = """
         CREATE FUNCTION public.%s() RETURNS trigger
         LANGUAGE plpgsql AS $$
         BEGIN
@@ -1500,161 +1467,156 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         END
         $$
         """.formatted(functionName, tenantId);
-    jdbcTemplate.execute(createFunctionSql);
-    final String createTriggerSql = """
+        jdbcTemplate.execute(createFunctionSql);
+        final String createTriggerSql = """
         CREATE TRIGGER %s BEFORE INSERT OR UPDATE ON batch.job_definition
         FOR EACH ROW EXECUTE FUNCTION public.%s()
         """.formatted(triggerName, functionName);
-    jdbcTemplate.execute(createTriggerSql);
+        jdbcTemplate.execute(createTriggerSql);
 
-    try {
-      HttpResponse<String> response = applyWorkbookAsRole(
-          workbookForTenant(importScenarioWorkbook(false), tenantId),
-          "apply-failure-" + suffix,
-          "ROLE_ADMIN",
-          tenantId);
+        try {
+            HttpResponse<String> response = applyWorkbookAsRole(
+                    workbookForTenant(importScenarioWorkbook(false), tenantId),
+                    "apply-failure-" + suffix,
+                    "ROLE_ADMIN",
+                    tenantId);
 
-      assertThat(response.statusCode()).isGreaterThanOrEqualTo(400);
-      Integer selectedJobDefinitionCount =
-          jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
-      assertThat(selectedJobDefinitionCount).isZero();
-      Integer selectedFileTemplateConfigCount =
-          jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
-      assertThat(selectedFileTemplateConfigCount).isZero();
-      Integer selectedFileChannelConfigCount =
-          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
-      assertThat(selectedFileChannelConfigCount).isZero();
-    } finally {
-      final String dropTriggerSql =
-          "DROP TRIGGER IF EXISTS %s ON batch.job_definition".formatted(triggerName);
-      jdbcTemplate.execute(dropTriggerSql);
-      final String dropFunctionSql = """
+            assertThat(response.statusCode()).isGreaterThanOrEqualTo(400);
+            Integer selectedJobDefinitionCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+            assertThat(selectedJobDefinitionCount).isZero();
+            Integer selectedFileTemplateConfigCount =
+                    jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
+            assertThat(selectedFileTemplateConfigCount).isZero();
+            Integer selectedFileChannelConfigCount =
+                    jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+            assertThat(selectedFileChannelConfigCount).isZero();
+        } finally {
+            final String dropTriggerSql = "DROP TRIGGER IF EXISTS %s ON batch.job_definition".formatted(triggerName);
+            jdbcTemplate.execute(dropTriggerSql);
+            final String dropFunctionSql = """
           DROP FUNCTION IF EXISTS public.%s()
       """.formatted(functionName);
-      jdbcTemplate.execute(dropFunctionSql);
+            jdbcTemplate.execute(dropFunctionSql);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("调度场景精简监控列更新业务 SLA 且保留平台运行阈值")
-  void shouldPreservePlatformMonitoringValues_whenApplyingScheduleScenarioSheet() throws Exception {
-    final String selectPrioritySql = """
+    @Test
+    @DisplayName("调度场景精简监控列更新业务 SLA 且保留平台运行阈值")
+    void shouldPreservePlatformMonitoringValues_whenApplyingScheduleScenarioSheet() throws Exception {
+        final String selectPrioritySql = """
         select priority from batch.job_definition where tenant_id = ? and job_code = ?
     """;
-    final String updateJobDefinitionSql = """
+        final String updateJobDefinitionSql = """
         update batch.job_definition set schedule_type = 'CRON', schedule_expr = '0 0 2 * * ?'\s\
         where tenant_id = ? and job_code = ?\
         """;
-    final String updateJobMonitoringPolicySql = """
+        final String updateJobMonitoringPolicySql = """
           update batch.job_monitoring_policy
           set soft_runtime_seconds = 2400, soft_runtime_severity = 'ERROR',
               start_grace_seconds = 600, start_grace_severity = 'ERROR'
           where tenant_id = ? and job_definition_id =
               (select id from batch.job_definition where tenant_id = ? and job_code = ?)
           """;
-    final String selectSoftRuntimeSecondsSql = """
+        final String selectSoftRuntimeSecondsSql = """
         select soft_runtime_seconds, soft_runtime_severity, start_grace_seconds, start_grace_severity,\s\
         completion_deadline_local_time, completion_deadline_day_offset from batch.job_monitoring_policy mp\s\
         join batch.job_definition jd on jd.id = mp.job_definition_id where mp.tenant_id = ? and jd.job_code = ?\
         """;
 
-    String tenantId = "excel-upload-ta";
-    String jobCode = "JOB_IMPORT_CUSTOMER";
-    applyWorkbook(importScenarioWorkbook(false), "schedule-policy-seed");
-    Integer selectedPriority =
-        jdbcTemplate.queryForObject(selectPrioritySql, Integer.class, tenantId, jobCode);
-    // 同类前序用例可能已建立该作业，seed apply 幂等；此处只要求作业存在，并在稀疏合并后校验优先级未被改写。
-    assertThat(selectedPriority).isNotNull();
-    jdbcTemplate.update(updateJobDefinitionSql, tenantId, jobCode);
-    jdbcTemplate.update(updateJobMonitoringPolicySql, tenantId, tenantId, jobCode);
+        String tenantId = "excel-upload-ta";
+        String jobCode = "JOB_IMPORT_CUSTOMER";
+        applyWorkbook(importScenarioWorkbook(false), "schedule-policy-seed");
+        Integer selectedPriority = jdbcTemplate.queryForObject(selectPrioritySql, Integer.class, tenantId, jobCode);
+        // 同类前序用例可能已建立该作业，seed apply 幂等；此处只要求作业存在，并在稀疏合并后校验优先级未被改写。
+        assertThat(selectedPriority).isNotNull();
+        jdbcTemplate.update(updateJobDefinitionSql, tenantId, jobCode);
+        jdbcTemplate.update(updateJobMonitoringPolicySql, tenantId, tenantId, jobCode);
 
-    HttpResponse<String> response = applyWorkbookAsRole(
-        schedulePolicyWorkbook(), "schedule-policy-sparse-merge", "ROLE_TENANT_ADMIN", tenantId);
+        HttpResponse<String> response = applyWorkbookAsRole(
+                schedulePolicyWorkbook(), "schedule-policy-sparse-merge", "ROLE_TENANT_ADMIN", tenantId);
 
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-    JsonNode applyResult = new ObjectMapper().readTree(response.body()).path("data");
-    assertThat(applyResult.path("jobMonitoringPoliciesApplied").intValue()).isEqualTo(1);
-    assertThat(applyResult.path("workflowMonitoringPoliciesApplied").isInt()).isTrue();
-    assertThat(applyResult.path("workflowMonitoringPoliciesApplied").intValue()).isZero();
-    List<String> otherCounts = List.of(
-        "resourceQueueInserted",
-        "resourceQueueUpdated",
-        "businessCalendarInserted",
-        "businessCalendarUpdated",
-        "batchWindowInserted",
-        "batchWindowUpdated",
-        "jobInserted",
-        "jobUpdated",
-        "channelInserted",
-        "channelUpdated",
-        "fileTemplateInserted",
-        "fileTemplateUpdated",
-        "workflowInserted",
-        "workflowUpdated");
-    for (String field : otherCounts) {
-      assertThat(applyResult.path(field).isInt()).as(field).isTrue();
-      assertThat(applyResult.path(field).intValue()).as(field).isZero();
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+        JsonNode applyResult = new ObjectMapper().readTree(response.body()).path("data");
+        assertThat(applyResult.path("jobMonitoringPoliciesApplied").intValue()).isEqualTo(1);
+        assertThat(applyResult.path("workflowMonitoringPoliciesApplied").isInt())
+                .isTrue();
+        assertThat(applyResult.path("workflowMonitoringPoliciesApplied").intValue())
+                .isZero();
+        List<String> otherCounts = List.of(
+                "resourceQueueInserted",
+                "resourceQueueUpdated",
+                "businessCalendarInserted",
+                "businessCalendarUpdated",
+                "batchWindowInserted",
+                "batchWindowUpdated",
+                "jobInserted",
+                "jobUpdated",
+                "channelInserted",
+                "channelUpdated",
+                "fileTemplateInserted",
+                "fileTemplateUpdated",
+                "workflowInserted",
+                "workflowUpdated");
+        for (String field : otherCounts) {
+            assertThat(applyResult.path(field).isInt()).as(field).isTrue();
+            assertThat(applyResult.path(field).intValue()).as(field).isZero();
+        }
+        Map<String, Object> policy = jdbcTemplate.queryForMap(selectSoftRuntimeSecondsSql, tenantId, jobCode);
+        assertThat(policy)
+                .containsEntry("soft_runtime_seconds", 2400)
+                .containsEntry("soft_runtime_severity", "ERROR")
+                .containsEntry("start_grace_seconds", 600)
+                .containsEntry("start_grace_severity", "ERROR");
+        assertThat(((Number) policy.get("completion_deadline_day_offset")).intValue())
+                .isEqualTo(1);
+        assertThat(policy.get("completion_deadline_local_time").toString()).isEqualTo("04:00:00");
     }
-    Map<String, Object> policy =
-        jdbcTemplate.queryForMap(selectSoftRuntimeSecondsSql, tenantId, jobCode);
-    assertThat(policy)
-        .containsEntry("soft_runtime_seconds", 2400)
-        .containsEntry("soft_runtime_severity", "ERROR")
-        .containsEntry("start_grace_seconds", 600)
-        .containsEntry("start_grace_severity", "ERROR");
-    assertThat(((Number) policy.get("completion_deadline_day_offset")).intValue())
-        .isEqualTo(1);
-    assertThat(policy.get("completion_deadline_local_time").toString()).isEqualTo("04:00:00");
-  }
 
-  @Test
-  @DisplayName("仅导入工作流监控策略时写入指定版本并保留其他版本")
-  void shouldApplyWorkflowMonitoringPolicyToExistingDefinitionOverHttp() throws Exception {
-    String tenantId = "workflow-policy-" + UUID.randomUUID().toString().substring(0, 8);
-    String workflowCode = "WF_CUSTOMER_EOD";
-    byte[] seedWorkbook = workbookForTenant(workflowScenarioWorkbook(false, true), tenantId);
-    HttpResponse<String> seed = applyWorkbookAsRole(
-        seedWorkbook, "workflow-policy-seed-" + tenantId, "ROLE_ADMIN", tenantId);
-    assertThat(seed.statusCode()).as("创建测试工作流: %s", seed.body()).isEqualTo(200);
-    assertThat(new ObjectMapper().readTree(seed.body()).path("code").asText()).isEqualTo("SUCCESS");
+    @Test
+    @DisplayName("仅导入工作流监控策略时写入指定版本并保留其他版本")
+    void shouldApplyWorkflowMonitoringPolicyToExistingDefinitionOverHttp() throws Exception {
+        String tenantId = "workflow-policy-" + UUID.randomUUID().toString().substring(0, 8);
+        String workflowCode = "WF_CUSTOMER_EOD";
+        byte[] seedWorkbook = workbookForTenant(workflowScenarioWorkbook(false, true), tenantId);
+        HttpResponse<String> seed =
+                applyWorkbookAsRole(seedWorkbook, "workflow-policy-seed-" + tenantId, "ROLE_ADMIN", tenantId);
+        assertThat(seed.statusCode()).as("创建测试工作流: %s", seed.body()).isEqualTo(200);
+        assertThat(new ObjectMapper().readTree(seed.body()).path("code").asText())
+                .isEqualTo("SUCCESS");
 
-    String insertVersionSql = """
+        String insertVersionSql = """
         insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, version)
         values (?, ?, 'Version 2', 2) returning id
         """;
-    Long otherVersionId =
-        jdbcTemplate.queryForObject(insertVersionSql, Long.class, tenantId, workflowCode);
-    String insertOtherPolicySql = """
+        Long otherVersionId = jdbcTemplate.queryForObject(insertVersionSql, Long.class, tenantId, workflowCode);
+        String insertOtherPolicySql = """
         insert into batch.workflow_monitoring_policy
           (tenant_id, workflow_definition_id, soft_runtime_seconds, soft_runtime_severity,
            start_grace_seconds, start_grace_severity, completion_deadline_local_time,
            completion_deadline_day_offset, completion_deadline_severity)
         values (?, ?, 321, 'WARN', 45, 'ERROR', '02:15', 0, 'CRITICAL')
         """;
-    jdbcTemplate.update(insertOtherPolicySql, tenantId, otherVersionId);
+        jdbcTemplate.update(insertOtherPolicySql, tenantId, otherVersionId);
 
-    HttpResponse<String> response = applyWorkbookAsRole(
-        workflowPolicyWorkbook(),
-        "workflow-policy-only-" + tenantId,
-        "ROLE_TENANT_ADMIN",
-        tenantId);
-    assertThat(response.statusCode()).as("导入工作流策略: %s", response.body()).isEqualTo(200);
-    JsonNode payload = new ObjectMapper().readTree(response.body());
-    assertThat(payload.path("code").asText()).isEqualTo("SUCCESS");
-    JsonNode counts = payload.path("data");
-    for (String field : List.of(
-        "workflowMonitoringPoliciesApplied",
-        "jobMonitoringPoliciesApplied",
-        "workflowInserted",
-        "workflowUpdated")) {
-      assertThat(counts.path(field).isInt()).as(field).isTrue();
-    }
-    assertThat(counts.path("workflowMonitoringPoliciesApplied").asInt()).isEqualTo(1);
-    assertThat(counts.path("jobMonitoringPoliciesApplied").asInt()).isZero();
-    assertThat(counts.path("workflowInserted").asInt()).isZero();
-    assertThat(counts.path("workflowUpdated").asInt()).isZero();
+        HttpResponse<String> response = applyWorkbookAsRole(
+                workflowPolicyWorkbook(), "workflow-policy-only-" + tenantId, "ROLE_TENANT_ADMIN", tenantId);
+        assertThat(response.statusCode()).as("导入工作流策略: %s", response.body()).isEqualTo(200);
+        JsonNode payload = new ObjectMapper().readTree(response.body());
+        assertThat(payload.path("code").asText()).isEqualTo("SUCCESS");
+        JsonNode counts = payload.path("data");
+        for (String field : List.of(
+                "workflowMonitoringPoliciesApplied",
+                "jobMonitoringPoliciesApplied",
+                "workflowInserted",
+                "workflowUpdated")) {
+            assertThat(counts.path(field).isInt()).as(field).isTrue();
+        }
+        assertThat(counts.path("workflowMonitoringPoliciesApplied").asInt()).isEqualTo(1);
+        assertThat(counts.path("jobMonitoringPoliciesApplied").asInt()).isZero();
+        assertThat(counts.path("workflowInserted").asInt()).isZero();
+        assertThat(counts.path("workflowUpdated").asInt()).isZero();
 
-    String selectPolicySql = """
+        String selectPolicySql = """
         select policy.soft_runtime_seconds, policy.soft_runtime_severity,
                policy.start_grace_seconds, policy.start_grace_severity,
                policy.completion_deadline_local_time, policy.completion_deadline_day_offset,
@@ -1664,38 +1626,36 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
           on definition.tenant_id = policy.tenant_id and definition.id = policy.workflow_definition_id
         where policy.tenant_id = ? and definition.workflow_code = ? and definition.version = ?
         """;
-    Map<String, Object> policy =
-        jdbcTemplate.queryForMap(selectPolicySql, tenantId, workflowCode, 1);
-    assertThat(policy)
-        .containsEntry("version", 1)
-        .containsEntry("soft_runtime_seconds", 600)
-        .containsEntry("soft_runtime_severity", "ERROR")
-        .containsEntry("start_grace_seconds", 120)
-        .containsEntry("start_grace_severity", "CRITICAL")
-        .containsEntry("completion_deadline_day_offset", 1)
-        .containsEntry("completion_deadline_severity", "WARN");
-    assertThat(policy.get("completion_deadline_local_time").toString()).isEqualTo("04:30:00");
-    Map<String, Object> otherPolicy =
-        jdbcTemplate.queryForMap(selectPolicySql, tenantId, workflowCode, 2);
-    assertThat(otherPolicy)
-        .containsEntry("version", 2)
-        .containsEntry("soft_runtime_seconds", 321)
-        .containsEntry("soft_runtime_severity", "WARN")
-        .containsEntry("start_grace_seconds", 45)
-        .containsEntry("start_grace_severity", "ERROR")
-        .containsEntry("completion_deadline_day_offset", 0)
-        .containsEntry("completion_deadline_severity", "CRITICAL");
-    assertThat(otherPolicy.get("completion_deadline_local_time").toString()).isEqualTo("02:15:00");
-  }
+        Map<String, Object> policy = jdbcTemplate.queryForMap(selectPolicySql, tenantId, workflowCode, 1);
+        assertThat(policy)
+                .containsEntry("version", 1)
+                .containsEntry("soft_runtime_seconds", 600)
+                .containsEntry("soft_runtime_severity", "ERROR")
+                .containsEntry("start_grace_seconds", 120)
+                .containsEntry("start_grace_severity", "CRITICAL")
+                .containsEntry("completion_deadline_day_offset", 1)
+                .containsEntry("completion_deadline_severity", "WARN");
+        assertThat(policy.get("completion_deadline_local_time").toString()).isEqualTo("04:30:00");
+        Map<String, Object> otherPolicy = jdbcTemplate.queryForMap(selectPolicySql, tenantId, workflowCode, 2);
+        assertThat(otherPolicy)
+                .containsEntry("version", 2)
+                .containsEntry("soft_runtime_seconds", 321)
+                .containsEntry("soft_runtime_severity", "WARN")
+                .containsEntry("start_grace_seconds", 45)
+                .containsEntry("start_grace_severity", "ERROR")
+                .containsEntry("completion_deadline_day_offset", 0)
+                .containsEntry("completion_deadline_severity", "CRITICAL");
+        assertThat(otherPolicy.get("completion_deadline_local_time").toString()).isEqualTo("02:15:00");
+    }
 
-  @Test
-  @DisplayName("旧配置包省略监控策略 Sheet 时不清除现有策略")
-  void shouldPreserveMonitoringPolicyWhenLegacyWorkbookOmitsSheet() throws Exception {
-    final String updateJobDefinitionSql = """
+    @Test
+    @DisplayName("旧配置包省略监控策略 Sheet 时不清除现有策略")
+    void shouldPreserveMonitoringPolicyWhenLegacyWorkbookOmitsSheet() throws Exception {
+        final String updateJobDefinitionSql = """
         update batch.job_definition set schedule_type = 'CRON', schedule_expr = '0 0 2 * * ?'\s\
         where tenant_id = ? and job_code = ?\
         """;
-    final String updateJobMonitoringPolicySql = """
+        final String updateJobMonitoringPolicySql = """
           update batch.job_monitoring_policy
           set soft_runtime_seconds = 2400, soft_runtime_severity = 'ERROR',
               start_grace_seconds = 600, start_grace_severity = 'ERROR',
@@ -1703,1369 +1663,1319 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
           where tenant_id = ? and job_definition_id =
               (select id from batch.job_definition where tenant_id = ? and job_code = ?)
           """;
-    final String selectSoftRuntimeSecondsSql = """
+        final String selectSoftRuntimeSecondsSql = """
         select soft_runtime_seconds, soft_runtime_severity, start_grace_seconds, start_grace_severity,\s\
         completion_deadline_local_time, completion_deadline_day_offset from batch.job_monitoring_policy mp\s\
         join batch.job_definition jd on jd.id = mp.job_definition_id where mp.tenant_id = ? and jd.job_code = ?\
         """;
 
-    String tenantId = "legacy-monitoring-policy-it";
-    String jobCode = "JOB_IMPORT_CUSTOMER";
-    applyWorkbookAsRole(
-        workbookForTenant(importScenarioWorkbook(false), tenantId),
-        "legacy-monitoring-policy-seed",
-        "ROLE_ADMIN",
-        tenantId);
-    jdbcTemplate.update(updateJobDefinitionSql, tenantId, jobCode);
-    jdbcTemplate.update(updateJobMonitoringPolicySql, tenantId, tenantId, jobCode);
+        String tenantId = "legacy-monitoring-policy-it";
+        String jobCode = "JOB_IMPORT_CUSTOMER";
+        applyWorkbookAsRole(
+                workbookForTenant(importScenarioWorkbook(false), tenantId),
+                "legacy-monitoring-policy-seed",
+                "ROLE_ADMIN",
+                tenantId);
+        jdbcTemplate.update(updateJobDefinitionSql, tenantId, jobCode);
+        jdbcTemplate.update(updateJobMonitoringPolicySql, tenantId, tenantId, jobCode);
 
-    HttpResponse<String> response = applyWorkbookAsRole(
-        jobOnlyWorkbookWithoutMonitoringPolicy(),
-        "legacy-monitoring-policy-omitted",
-        "ROLE_TENANT_ADMIN",
-        tenantId);
+        HttpResponse<String> response = applyWorkbookAsRole(
+                jobOnlyWorkbookWithoutMonitoringPolicy(),
+                "legacy-monitoring-policy-omitted",
+                "ROLE_TENANT_ADMIN",
+                tenantId);
 
-    assertThat(response.statusCode())
-        .as("apply response: %s", response.body())
-        .isEqualTo(HttpStatus.OK.value());
-    Map<String, Object> policy =
-        jdbcTemplate.queryForMap(selectSoftRuntimeSecondsSql, tenantId, jobCode);
-    assertThat(policy)
-        .containsEntry("soft_runtime_seconds", 2400)
-        .containsEntry("soft_runtime_severity", "ERROR")
-        .containsEntry("start_grace_seconds", 600)
-        .containsEntry("start_grace_severity", "ERROR")
-        .containsEntry("completion_deadline_day_offset", 1);
-    assertThat(policy.get("completion_deadline_local_time").toString()).isEqualTo("04:00:00");
-  }
+        assertThat(response.statusCode())
+                .as("apply response: %s", response.body())
+                .isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> policy = jdbcTemplate.queryForMap(selectSoftRuntimeSecondsSql, tenantId, jobCode);
+        assertThat(policy)
+                .containsEntry("soft_runtime_seconds", 2400)
+                .containsEntry("soft_runtime_severity", "ERROR")
+                .containsEntry("start_grace_seconds", 600)
+                .containsEntry("start_grace_severity", "ERROR")
+                .containsEntry("completion_deadline_day_offset", 1);
+        assertThat(policy.get("completion_deadline_local_time").toString()).isEqualTo("04:00:00");
+    }
 
-  @Test
-  @DisplayName("预览后租户配置被其他入口修改时拒绝整包 Apply")
-  void shouldRejectApplyWhenTenantConfigurationChangesAfterPreview() throws Exception {
-    final String insertResourceQueueSql = """
+    @Test
+    @DisplayName("预览后租户配置被其他入口修改时拒绝整包 Apply")
+    void shouldRejectApplyWhenTenantConfigurationChangesAfterPreview() throws Exception {
+        final String insertResourceQueueSql = """
         insert into batch.resource_queue (tenant_id, queue_code, queue_name, queue_type)\s\
         values (?, ?, ?, 'IMPORT')\
         """;
-    final String selectCountSql = """
+        final String selectCountSql = """
         select count(*) from batch.file_channel_config where tenant_id = ?\s\
         and channel_code = 'excel_upload_local'\
         """;
 
-    String tenantId = "config-version-conflict-it";
-    String keySuffix = "config-version-conflict";
-    String boundary = "excel-upload-" + keySuffix;
-    byte[] workbook = workbookForTenant(tenantPackageWorkbook(false), tenantId);
-    HttpRequest uploadRequest = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + keySuffix)
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .header("X-Console-Roles", "ROLE_ADMIN")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook, tenantId)))
-        .build();
-    HttpResponse<String> uploadResponse =
-        HttpClient.newHttpClient().send(uploadRequest, HttpResponse.BodyHandlers.ofString());
-    assertThat(uploadResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    String uploadToken = new ObjectMapper()
-        .readTree(uploadResponse.body())
-        .path("data")
-        .path("uploadToken")
-        .asText();
-    HttpRequest previewRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
-            + "/api/console/config/tenant-package/excel/preview/" + uploadToken))
-        .timeout(Duration.ofSeconds(60))
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .header("X-Console-Roles", "ROLE_ADMIN")
-        .GET()
-        .build();
-    HttpResponse<String> previewResponse =
-        HttpClient.newHttpClient().send(previewRequest, HttpResponse.BodyHandlers.ofString());
-    assertThat(previewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    String previewToken = new ObjectMapper()
-        .readTree(previewResponse.body())
-        .path("data")
-        .path("previewToken")
-        .asText();
+        String tenantId = "config-version-conflict-it";
+        String keySuffix = "config-version-conflict";
+        String boundary = "excel-upload-" + keySuffix;
+        byte[] workbook = workbookForTenant(tenantPackageWorkbook(false), tenantId);
+        HttpRequest uploadRequest = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + keySuffix)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header("X-Console-Roles", "ROLE_ADMIN")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook, tenantId)))
+                .build();
+        HttpResponse<String> uploadResponse =
+                HttpClient.newHttpClient().send(uploadRequest, HttpResponse.BodyHandlers.ofString());
+        assertThat(uploadResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        String uploadToken = new ObjectMapper()
+                .readTree(uploadResponse.body())
+                .path("data")
+                .path("uploadToken")
+                .asText();
+        HttpRequest previewRequest = HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + port + "/api/console/config/tenant-package/excel/preview/" + uploadToken))
+                .timeout(Duration.ofSeconds(60))
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header("X-Console-Roles", "ROLE_ADMIN")
+                .GET()
+                .build();
+        HttpResponse<String> previewResponse =
+                HttpClient.newHttpClient().send(previewRequest, HttpResponse.BodyHandlers.ofString());
+        assertThat(previewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        String previewToken = new ObjectMapper()
+                .readTree(previewResponse.body())
+                .path("data")
+                .path("previewToken")
+                .asText();
 
-    jdbcTemplate.update(
-        insertResourceQueueSql, tenantId, "CONCURRENT_QUEUE", "Concurrent config write");
+        jdbcTemplate.update(insertResourceQueueSql, tenantId, "CONCURRENT_QUEUE", "Concurrent config write");
 
-    HttpRequest applyRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
-            + "/api/console/config/tenant-package/excel/apply/" + uploadToken))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "application/json")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-apply-" + keySuffix)
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .header("X-Console-Roles", "ROLE_ADMIN")
-        .POST(HttpRequest.BodyPublishers.ofString(
-            "{\"previewToken\":\"" + previewToken + "\"}", StandardCharsets.UTF_8))
-        .build();
-    HttpResponse<String> applyResponse =
-        HttpClient.newHttpClient().send(applyRequest, HttpResponse.BodyHandlers.ofString());
+        HttpRequest applyRequest = HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + port + "/api/console/config/tenant-package/excel/apply/" + uploadToken))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "application/json")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-apply-" + keySuffix)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header("X-Console-Roles", "ROLE_ADMIN")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "{\"previewToken\":\"" + previewToken + "\"}", StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<String> applyResponse =
+                HttpClient.newHttpClient().send(applyRequest, HttpResponse.BodyHandlers.ofString());
 
-    assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
-    assertThat(new ObjectMapper().readTree(applyResponse.body()).path("code").asText())
-        .isEqualTo("STATE_CONFLICT");
-    Integer selectedFileChannelConfigCount =
-        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
-    assertThat(selectedFileChannelConfigCount).isZero();
-  }
+        assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
+        assertThat(new ObjectMapper()
+                        .readTree(applyResponse.body())
+                        .path("code")
+                        .asText())
+                .isEqualTo("STATE_CONFLICT");
+        Integer selectedFileChannelConfigCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+        assertThat(selectedFileChannelConfigCount).isZero();
+    }
 
-  @Test
-  @DisplayName("配置版本函数只允许应用数据库角色执行")
-  void shouldRestrictConfigurationRevisionFunctionsToApplicationRole() {
-    final String selectCountSql = """
+    @Test
+    @DisplayName("配置版本函数只允许应用数据库角色执行")
+    void shouldRestrictConfigurationRevisionFunctionsToApplicationRole() {
+        final String selectCountSql = """
       select count(*) from pg_proc p cross\s\
       join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl\s\
       where p.oid in ('batch.current_tenant_configuration_revision(text)'::regprocedure,\s\
       'batch.lock_tenant_configuration_revision(text)'::regprocedure) and acl.grantee = 0\s\
       and acl.privilege_type = 'EXECUTE'\
       """;
-    final String selectHasFunctionPrivilegeSql = """
+        final String selectHasFunctionPrivilegeSql = """
       select has_function_privilege(current_user, 'batch.current_tenant_configuration_revision(text)',\s\
       'EXECUTE')\
       """;
-    final String selectHasFunctionPrivilegeSql2 = """
+        final String selectHasFunctionPrivilegeSql2 = """
       select has_function_privilege(current_user, 'batch.lock_tenant_configuration_revision(text)', 'EXECUTE')\
       """;
 
-    Integer publicExecuteGrants = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
-    Boolean applicationCanReadRevision =
-        jdbcTemplate.queryForObject(selectHasFunctionPrivilegeSql, Boolean.class);
-    Boolean applicationCanLockRevision =
-        jdbcTemplate.queryForObject(selectHasFunctionPrivilegeSql2, Boolean.class);
+        Integer publicExecuteGrants = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
+        Boolean applicationCanReadRevision = jdbcTemplate.queryForObject(selectHasFunctionPrivilegeSql, Boolean.class);
+        Boolean applicationCanLockRevision = jdbcTemplate.queryForObject(selectHasFunctionPrivilegeSql2, Boolean.class);
 
-    assertThat(publicExecuteGrants).isZero();
-    assertThat(applicationCanReadRevision).isTrue();
-    assertThat(applicationCanLockRevision).isTrue();
-  }
+        assertThat(publicExecuteGrants).isZero();
+        assertThat(applicationCanReadRevision).isTrue();
+        assertThat(applicationCanLockRevision).isTrue();
+    }
 
-  @Test
-  @DisplayName("MERGE 更新禁用日历并保留日历和窗口的空白可选字段")
-  void shouldMergeCalendarAndWindowWithoutResettingBlankOptionalFields() throws Exception {
-    final String selectCalendarNameSql = """
+    @Test
+    @DisplayName("MERGE 更新禁用日历并保留日历和窗口的空白可选字段")
+    void shouldMergeCalendarAndWindowWithoutResettingBlankOptionalFields() throws Exception {
+        final String selectCalendarNameSql = """
         select calendar_name, timezone, holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled,\s\
         description from batch.business_calendar where tenant_id = ? and calendar_code = ?\
         """;
-    final String selectCountSql = """
+        final String selectCountSql = """
         select count(*) from batch.calendar_holiday h join batch.business_calendar c on c.id = h.calendar_id\s\
         where c.tenant_id = ? and c.calendar_code = ? and h.day_type = 'HOLIDAY'\
         """;
-    final String selectWindowNameSql = """
+        final String selectWindowNameSql = """
         select window_name, timezone, start_time::text, end_time::text, end_strategy, out_of_window_action,\s\
         allow_cross_day, enabled, description from batch.batch_window where tenant_id = ? and window_code = ?\
         """;
 
-    String tenantId = "excel-upload-ta";
-    HttpResponse<String> initialPreview = previewWorkbookAsRole(
-        calendarAndWindowWorkbook(false),
-        "calendar-window-merge-initial-preview",
-        "ROLE_TENANT_ADMIN",
-        tenantId);
-    assertThat(initialPreview.statusCode())
-        .as("initial preview: %s", initialPreview.body())
-        .isEqualTo(HttpStatus.OK.value());
-    assertThat(new ObjectMapper()
-            .readTree(initialPreview.body())
-            .path("data")
-            .path("invalidRows")
-            .asInt())
-        .as("initial validation issues: %s", initialPreview.body())
-        .isZero();
-    HttpResponse<String> initialApply = applyWorkbookAsRole(
-        calendarAndWindowWorkbook(false),
-        "calendar-window-merge-initial",
-        "ROLE_TENANT_ADMIN",
-        tenantId);
-    assertThat(initialApply.statusCode())
-        .as("initial apply: %s", initialApply.body())
-        .isEqualTo(HttpStatus.OK.value());
-    assertThat(initialApply.body()).contains("\"businessCalendarInserted\":1");
+        String tenantId = "excel-upload-ta";
+        HttpResponse<String> initialPreview = previewWorkbookAsRole(
+                calendarAndWindowWorkbook(false),
+                "calendar-window-merge-initial-preview",
+                "ROLE_TENANT_ADMIN",
+                tenantId);
+        assertThat(initialPreview.statusCode())
+                .as("initial preview: %s", initialPreview.body())
+                .isEqualTo(HttpStatus.OK.value());
+        assertThat(new ObjectMapper()
+                        .readTree(initialPreview.body())
+                        .path("data")
+                        .path("invalidRows")
+                        .asInt())
+                .as("initial validation issues: %s", initialPreview.body())
+                .isZero();
+        HttpResponse<String> initialApply = applyWorkbookAsRole(
+                calendarAndWindowWorkbook(false), "calendar-window-merge-initial", "ROLE_TENANT_ADMIN", tenantId);
+        assertThat(initialApply.statusCode())
+                .as("initial apply: %s", initialApply.body())
+                .isEqualTo(HttpStatus.OK.value());
+        assertThat(initialApply.body()).contains("\"businessCalendarInserted\":1");
 
-    HttpResponse<String> sparsePreview = previewWorkbookAsRole(
-        calendarAndWindowWorkbook(true),
-        "calendar-window-merge-sparse-preview",
-        "ROLE_TENANT_ADMIN",
-        tenantId);
-    assertThat(sparsePreview.statusCode())
-        .as("sparse preview: %s", sparsePreview.body())
-        .isEqualTo(HttpStatus.OK.value());
-    assertThat(new ObjectMapper()
-            .readTree(sparsePreview.body())
-            .path("data")
-            .path("invalidRows")
-            .asInt())
-        .as("sparse validation issues: %s", sparsePreview.body())
-        .isZero();
+        HttpResponse<String> sparsePreview = previewWorkbookAsRole(
+                calendarAndWindowWorkbook(true), "calendar-window-merge-sparse-preview", "ROLE_TENANT_ADMIN", tenantId);
+        assertThat(sparsePreview.statusCode())
+                .as("sparse preview: %s", sparsePreview.body())
+                .isEqualTo(HttpStatus.OK.value());
+        assertThat(new ObjectMapper()
+                        .readTree(sparsePreview.body())
+                        .path("data")
+                        .path("invalidRows")
+                        .asInt())
+                .as("sparse validation issues: %s", sparsePreview.body())
+                .isZero();
 
-    HttpResponse<String> response = applyWorkbookAsRole(
-        calendarAndWindowWorkbook(true),
-        "calendar-window-merge-sparse",
-        "ROLE_TENANT_ADMIN",
-        tenantId);
+        HttpResponse<String> response = applyWorkbookAsRole(
+                calendarAndWindowWorkbook(true), "calendar-window-merge-sparse", "ROLE_TENANT_ADMIN", tenantId);
 
-    assertThat(response.statusCode())
-        .as("apply response: %s", response.body())
-        .isEqualTo(HttpStatus.OK.value());
-    Map<String, Object> calendar =
-        jdbcTemplate.queryForMap(selectCalendarNameSql, tenantId, "cal_merge");
-    assertThat(calendar)
-        .containsEntry("calendar_name", "Updated calendar")
-        .containsEntry("timezone", "America/New_York")
-        .containsEntry("holiday_roll_rule", "NEXT_WORKDAY")
-        .containsEntry("catch_up_policy", "AUTO")
-        .containsEntry("catch_up_max_days", 5)
-        .containsEntry("enabled", false)
-        .containsEntry("description", "Keep calendar settings");
-    Integer selectedCalendarHolidayCount =
-        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, "cal_merge");
-    assertThat(selectedCalendarHolidayCount).isEqualTo(2);
+        assertThat(response.statusCode())
+                .as("apply response: %s", response.body())
+                .isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> calendar = jdbcTemplate.queryForMap(selectCalendarNameSql, tenantId, "cal_merge");
+        assertThat(calendar)
+                .containsEntry("calendar_name", "Updated calendar")
+                .containsEntry("timezone", "America/New_York")
+                .containsEntry("holiday_roll_rule", "NEXT_WORKDAY")
+                .containsEntry("catch_up_policy", "AUTO")
+                .containsEntry("catch_up_max_days", 5)
+                .containsEntry("enabled", false)
+                .containsEntry("description", "Keep calendar settings");
+        Integer selectedCalendarHolidayCount =
+                jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, "cal_merge");
+        assertThat(selectedCalendarHolidayCount).isEqualTo(2);
 
-    Map<String, Object> window =
-        jdbcTemplate.queryForMap(selectWindowNameSql, tenantId, "window_merge");
-    assertThat(window)
-        .containsEntry("window_name", "Updated window")
-        .containsEntry("timezone", "America/New_York")
-        .containsEntry("start_time", "02:00:00")
-        .containsEntry("end_time", "22:00:00")
-        .containsEntry("end_strategy", "STOP")
-        .containsEntry("out_of_window_action", "FAIL")
-        .containsEntry("allow_cross_day", true)
-        .containsEntry("enabled", false)
-        .containsEntry("description", "Keep window settings");
-  }
+        Map<String, Object> window = jdbcTemplate.queryForMap(selectWindowNameSql, tenantId, "window_merge");
+        assertThat(window)
+                .containsEntry("window_name", "Updated window")
+                .containsEntry("timezone", "America/New_York")
+                .containsEntry("start_time", "02:00:00")
+                .containsEntry("end_time", "22:00:00")
+                .containsEntry("end_strategy", "STOP")
+                .containsEntry("out_of_window_action", "FAIL")
+                .containsEntry("allow_cross_day", true)
+                .containsEntry("enabled", false)
+                .containsEntry("description", "Keep window settings");
+    }
 
-  @Test
-  @DisplayName("租户管理员应用含资源队列的旧全量包时服务端拒绝且不静默忽略")
-  void shouldRejectTenantAdminApplyingLegacyPackageWithPlatformResources() throws Exception {
-    StaticMessageSource messages = new StaticMessageSource();
-    messages.setUseCodeAsDefaultMessage(true);
-    ConfigPackageExcelWorkbookWriter writer =
-        new ConfigPackageExcelWorkbookWriter(messages, List.of("ALL"));
-    byte[] workbook =
-        writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets("ALL"));
+    @Test
+    @DisplayName("租户管理员应用含资源队列的旧全量包时服务端拒绝且不静默忽略")
+    void shouldRejectTenantAdminApplyingLegacyPackageWithPlatformResources() throws Exception {
+        StaticMessageSource messages = new StaticMessageSource();
+        messages.setUseCodeAsDefaultMessage(true);
+        ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(messages, List.of("ALL"));
+        byte[] workbook = writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets("ALL"));
 
-    HttpResponse<String> response = applyWorkbookAsRole(
-        workbook,
-        "tenant-admin-platform-resource-rejected",
-        "ROLE_TENANT_ADMIN",
-        "tenant-admin-apply");
+        HttpResponse<String> response = applyWorkbookAsRole(
+                workbook, "tenant-admin-platform-resource-rejected", "ROLE_TENANT_ADMIN", "tenant-admin-apply");
 
-    assertThat(response.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
-    assertThat(new ObjectMapper().readTree(response.body()).path("code").asText())
-        .isEqualTo("FORBIDDEN");
-  }
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        assertThat(new ObjectMapper().readTree(response.body()).path("code").asText())
+                .isEqualTo("FORBIDDEN");
+    }
 
-  @Test
-  @DisplayName("MERGE 保留作业和文件模板的空白选填值")
-  void shouldPreserveExistingValuesWhenOptionalFieldsAreOmitted() throws Exception {
-    final String updateJobDefinitionSql = """
+    @Test
+    @DisplayName("MERGE 保留作业和文件模板的空白选填值")
+    void shouldPreserveExistingValuesWhenOptionalFieldsAreOmitted() throws Exception {
+        final String updateJobDefinitionSql = """
         update batch.job_definition set priority = 8 where tenant_id = ? and job_code = ?
     """;
-    final String selectDescriptionSql = """
+        final String selectDescriptionSql = """
       select description from batch.job_definition where tenant_id = ? and job_code = ?
   """;
-    final String selectDefaultParamsSql = """
+        final String selectDefaultParamsSql = """
       select default_params::text from batch.job_definition where tenant_id = ? and job_code = ?
   """;
-    final String selectTenantIdSql = """
+        final String selectTenantIdSql = """
       select tenant_id, template_code, version, description from batch.file_template_config\s\
       where template_code like 'tpl_import_%%' order by tenant_id, template_code, version\
       """;
-    final String selectDescriptionSql2 = """
+        final String selectDescriptionSql2 = """
       select description from batch.file_template_config where tenant_id = ? and template_code = ?
   """;
-    final String selectPrioritySql = """
+        final String selectPrioritySql = """
         select priority from batch.job_definition where tenant_id = ? and job_code = ?
     """;
 
-    byte[] initialWorkbook = importScenarioWorkbook(false);
-    applyWorkbook(initialWorkbook, "merge-initial");
+        byte[] initialWorkbook = importScenarioWorkbook(false);
+        applyWorkbook(initialWorkbook, "merge-initial");
 
-    String jobCode = "JOB_IMPORT_CUSTOMER";
-    String tenantId = "excel-upload-ta";
-    jdbcTemplate.update(updateJobDefinitionSql, tenantId, jobCode);
-    String originalDescription =
-        jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, jobCode);
-    String originalParams =
-        jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, tenantId, jobCode);
-    List<Map<String, Object>> fileTemplateRows = jdbcTemplate.queryForList(selectTenantIdSql);
-    assertThat(fileTemplateRows)
-        .as("file templates persisted by the initial scenario import")
-        .isNotEmpty();
-    String templateDescription = jdbcTemplate.queryForObject(
-        selectDescriptionSql2, String.class, tenantId, "tpl_import_customer");
-    byte[] mergeWorkbook = importScenarioWorkbook(true);
-    applyWorkbook(mergeWorkbook, "merge-omitted-values");
+        String jobCode = "JOB_IMPORT_CUSTOMER";
+        String tenantId = "excel-upload-ta";
+        jdbcTemplate.update(updateJobDefinitionSql, tenantId, jobCode);
+        String originalDescription = jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, jobCode);
+        String originalParams = jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, tenantId, jobCode);
+        List<Map<String, Object>> fileTemplateRows = jdbcTemplate.queryForList(selectTenantIdSql);
+        assertThat(fileTemplateRows)
+                .as("file templates persisted by the initial scenario import")
+                .isNotEmpty();
+        String templateDescription =
+                jdbcTemplate.queryForObject(selectDescriptionSql2, String.class, tenantId, "tpl_import_customer");
+        byte[] mergeWorkbook = importScenarioWorkbook(true);
+        applyWorkbook(mergeWorkbook, "merge-omitted-values");
 
-    String selectedDescription =
-        jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, jobCode);
-    assertThat(selectedDescription).isEqualTo(originalDescription);
-    String selectedDefaultParams =
-        jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, tenantId, jobCode);
-    assertThat(selectedDefaultParams).isEqualTo(originalParams);
-    Integer selectedPriority =
-        jdbcTemplate.queryForObject(selectPrioritySql, Integer.class, tenantId, jobCode);
-    assertThat(selectedPriority).isEqualTo(8);
-    String selectedDescriptionRead2 = jdbcTemplate.queryForObject(
-        selectDescriptionSql2, String.class, tenantId, "tpl_import_customer");
-    assertThat(selectedDescriptionRead2).isEqualTo(templateDescription);
-  }
+        String selectedDescription = jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, jobCode);
+        assertThat(selectedDescription).isEqualTo(originalDescription);
+        String selectedDefaultParams =
+                jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, tenantId, jobCode);
+        assertThat(selectedDefaultParams).isEqualTo(originalParams);
+        Integer selectedPriority = jdbcTemplate.queryForObject(selectPrioritySql, Integer.class, tenantId, jobCode);
+        assertThat(selectedPriority).isEqualTo(8);
+        String selectedDescriptionRead2 =
+                jdbcTemplate.queryForObject(selectDescriptionSql2, String.class, tenantId, "tpl_import_customer");
+        assertThat(selectedDescriptionRead2).isEqualTo(templateDescription);
+    }
 
-  @Test
-  @DisplayName("Workflow 配置包 MERGE 保留可空字段且不删除省略的节点和边")
-  void shouldPreserveWorkflowValuesAndOmittedNodesAndEdgesDuringMerge() throws Exception {
-    final String selectCalendarCodeSql = """
+    @Test
+    @DisplayName("Workflow 配置包 MERGE 保留可空字段且不删除省略的节点和边")
+    void shouldPreserveWorkflowValuesAndOmittedNodesAndEdgesDuringMerge() throws Exception {
+        final String selectCalendarCodeSql = """
         select calendar_code from batch.workflow_definition where tenant_id = ? and workflow_code = ?\s\
         and version = 1\
         """;
-    final String selectWorkflowCodeSql = """
+        final String selectWorkflowCodeSql = """
       select workflow_code, version, calendar_code, schedule_enabled from batch.workflow_definition\s\
       where tenant_id = ? and workflow_code = ?\
       """;
-    final String selectDescriptionSql = """
+        final String selectDescriptionSql = """
       select description from batch.workflow_definition where tenant_id = ? and workflow_code = ?\s\
       and version = 1\
       """;
-    final String selectNodeNameSql = """
+        final String selectNodeNameSql = """
       select node_name from batch.workflow_node wn\s\
       join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
       and wd.workflow_code = ? and wd.version = 1 and wn.node_code = 'START'\
       """;
-    final String selectDescriptionSql2 = """
+        final String selectDescriptionSql2 = """
       select description from batch.workflow_definition where tenant_id = ? and workflow_code = ?\s\
       and version = 2\
       """;
-    final String selectNodeNameSql2 = """
+        final String selectNodeNameSql2 = """
       select node_name from batch.workflow_node wn\s\
       join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
       and wd.workflow_code = ? and wd.version = 2 and wn.node_code = 'START'\
       """;
-    final String selectCountSql = """
+        final String selectCountSql = """
       select count(*) from batch.workflow_node wn\s\
       join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
       and wd.workflow_code = ? and wd.version = 2\
       """;
-    final String selectCountSql2 = """
+        final String selectCountSql2 = """
       select count(*) from batch.workflow_edge we\s\
       join batch.workflow_definition wd on wd.id = we.workflow_definition_id where wd.tenant_id = ?\s\
       and wd.workflow_code = ? and wd.version = 2\
       """;
 
-    byte[] initialWorkbook = workflowScenarioWorkbook(false);
-    HttpResponse<String> initialPreview = previewWorkbookAsRole(
-        initialWorkbook, "workflow-merge-initial-preview", "ROLE_ADMIN", "excel-upload-ta");
-    assertThat(initialPreview.body())
-        .as("workflow configuration validation preview")
-        .contains("\"invalidRows\":0")
-        .contains("\"issues\":[]");
-    assertSuccessfulApplyAsPlatformAdmin(initialWorkbook, "workflow-merge-initial");
+        byte[] initialWorkbook = workflowScenarioWorkbook(false);
+        HttpResponse<String> initialPreview = previewWorkbookAsRole(
+                initialWorkbook, "workflow-merge-initial-preview", "ROLE_ADMIN", "excel-upload-ta");
+        assertThat(initialPreview.body())
+                .as("workflow configuration validation preview")
+                .contains("\"invalidRows\":0")
+                .contains("\"issues\":[]");
+        assertSuccessfulApplyAsPlatformAdmin(initialWorkbook, "workflow-merge-initial");
 
-    String tenantId = "excel-upload-ta";
-    String workflowCode = "WF_CUSTOMER_EOD";
-    String selectedCalendarCode =
-        jdbcTemplate.queryForObject(selectCalendarCodeSql, String.class, tenantId, workflowCode);
-    List<Map<String, Object>> selectedWorkflowCode =
-        jdbcTemplate.queryForList(selectWorkflowCodeSql, tenantId, workflowCode);
-    assertThat(selectedCalendarCode)
-        .as("workflow rows after config package apply: %s", selectedWorkflowCode)
-        .isEqualTo("default_calendar");
-    String originalDescription =
-        jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, workflowCode);
-    String originalNodeName =
-        jdbcTemplate.queryForObject(selectNodeNameSql, String.class, tenantId, workflowCode);
+        String tenantId = "excel-upload-ta";
+        String workflowCode = "WF_CUSTOMER_EOD";
+        String selectedCalendarCode =
+                jdbcTemplate.queryForObject(selectCalendarCodeSql, String.class, tenantId, workflowCode);
+        List<Map<String, Object>> selectedWorkflowCode =
+                jdbcTemplate.queryForList(selectWorkflowCodeSql, tenantId, workflowCode);
+        assertThat(selectedCalendarCode)
+                .as("workflow rows after config package apply: %s", selectedWorkflowCode)
+                .isEqualTo("default_calendar");
+        String originalDescription =
+                jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, workflowCode);
+        String originalNodeName = jdbcTemplate.queryForObject(selectNodeNameSql, String.class, tenantId, workflowCode);
 
-    byte[] sparseWorkbook = workflowScenarioWorkbook(true);
-    HttpResponse<String> sparsePreview = previewWorkbookAsRole(
-        sparseWorkbook, "workflow-merge-sparse-preview", "ROLE_ADMIN", tenantId);
-    assertThat(sparsePreview.body())
-        .as("sparse workflow configuration validation preview")
-        .contains("\"invalidRows\":0")
-        .contains("\"issues\":[]");
-    assertSuccessfulApplyAsPlatformAdmin(sparseWorkbook, "workflow-merge-sparse");
+        byte[] sparseWorkbook = workflowScenarioWorkbook(true);
+        HttpResponse<String> sparsePreview =
+                previewWorkbookAsRole(sparseWorkbook, "workflow-merge-sparse-preview", "ROLE_ADMIN", tenantId);
+        assertThat(sparsePreview.body())
+                .as("sparse workflow configuration validation preview")
+                .contains("\"invalidRows\":0")
+                .contains("\"issues\":[]");
+        assertSuccessfulApplyAsPlatformAdmin(sparseWorkbook, "workflow-merge-sparse");
 
-    String selectedDescription =
-        jdbcTemplate.queryForObject(selectDescriptionSql2, String.class, tenantId, workflowCode);
-    assertThat(selectedDescription).isEqualTo(originalDescription);
-    String selectedNodeName =
-        jdbcTemplate.queryForObject(selectNodeNameSql2, String.class, tenantId, workflowCode);
-    assertThat(selectedNodeName).isEqualTo(originalNodeName);
-    Integer selectedWorkflowNodeCount =
-        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workflowCode);
-    assertThat(selectedWorkflowNodeCount).isEqualTo(4);
-    Integer selectedWorkflowEdgeCount =
-        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId, workflowCode);
-    assertThat(selectedWorkflowEdgeCount).isEqualTo(4);
-  }
+        String selectedDescription =
+                jdbcTemplate.queryForObject(selectDescriptionSql2, String.class, tenantId, workflowCode);
+        assertThat(selectedDescription).isEqualTo(originalDescription);
+        String selectedNodeName = jdbcTemplate.queryForObject(selectNodeNameSql2, String.class, tenantId, workflowCode);
+        assertThat(selectedNodeName).isEqualTo(originalNodeName);
+        Integer selectedWorkflowNodeCount =
+                jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workflowCode);
+        assertThat(selectedWorkflowNodeCount).isEqualTo(4);
+        Integer selectedWorkflowEdgeCount =
+                jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId, workflowCode);
+        assertThat(selectedWorkflowEdgeCount).isEqualTo(4);
+    }
 
-  @Test
-  @DisplayName("空租户首次导入配置包时先创建日历再导入引用该日历的 Workflow")
-  void shouldApplyWorkflowCalendarReferenceForTenantWithoutExistingConfiguration()
-      throws Exception {
-    final String selectCountSql = """
+    @Test
+    @DisplayName("空租户首次导入配置包时先创建日历再导入引用该日历的 Workflow")
+    void shouldApplyWorkflowCalendarReferenceForTenantWithoutExistingConfiguration() throws Exception {
+        final String selectCountSql = """
             select count(*) from batch.business_calendar where tenant_id = ?
         """;
-    final String selectCountSql2 = """
+        final String selectCountSql2 = """
       select count(*) from batch.workflow_definition where tenant_id = ?
   """;
-    final String selectCalendarCodeSql = """
+        final String selectCalendarCodeSql = """
             select calendar_code from batch.business_calendar where tenant_id = ?\s\
             and calendar_code = 'default_calendar'\
             """;
-    final String selectCalendarCodeSql2 = """
+        final String selectCalendarCodeSql2 = """
       select calendar_code from batch.workflow_definition where tenant_id = ?\s\
       and workflow_code = 'WF_CUSTOMER_EOD' and version = 1\
       """;
-    final String selectCountSql3 = """
+        final String selectCountSql3 = """
       select count(*) from batch.workflow_node wn\s\
       join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
       and wd.workflow_code = 'WF_CUSTOMER_EOD'\
       """;
-    final String selectCountSql4 = """
+        final String selectCountSql4 = """
       select count(*) from batch.workflow_edge we\s\
       join batch.workflow_definition wd on wd.id = we.workflow_definition_id where wd.tenant_id = ?\s\
       and wd.workflow_code = 'WF_CUSTOMER_EOD'\
       """;
 
-    String tenantId = "excel-workflow-empty-" + UUID.randomUUID().toString().substring(0, 8);
-    Integer selectedBusinessCalendarCount =
-        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
-    assertThat(selectedBusinessCalendarCount).isZero();
-    Integer selectedWorkflowDefinitionCount =
-        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
-    assertThat(selectedWorkflowDefinitionCount).isZero();
+        String tenantId = "excel-workflow-empty-" + UUID.randomUUID().toString().substring(0, 8);
+        Integer selectedBusinessCalendarCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+        assertThat(selectedBusinessCalendarCount).isZero();
+        Integer selectedWorkflowDefinitionCount = jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
+        assertThat(selectedWorkflowDefinitionCount).isZero();
 
-    byte[] workbook = workbookForTenant(workflowScenarioWorkbook(false, true), tenantId);
-    HttpResponse<String> preview = previewWorkbookAsRole(
-        workbook, "workflow-empty-tenant-preview-" + tenantId, "ROLE_ADMIN", tenantId);
-    assertThat(preview.body())
-        .as("first-import package preview")
-        .contains("\"invalidRows\":0")
-        .contains("\"issues\":[]");
+        byte[] workbook = workbookForTenant(workflowScenarioWorkbook(false, true), tenantId);
+        HttpResponse<String> preview =
+                previewWorkbookAsRole(workbook, "workflow-empty-tenant-preview-" + tenantId, "ROLE_ADMIN", tenantId);
+        assertThat(preview.body())
+                .as("first-import package preview")
+                .contains("\"invalidRows\":0")
+                .contains("\"issues\":[]");
 
-    HttpResponse<String> apply = applyWorkbookAsRole(
-        workbook, "workflow-empty-tenant-apply-" + tenantId, "ROLE_ADMIN", tenantId);
-    assertThat(apply.statusCode())
-        .as("configuration package apply response: %s", apply.body())
-        .isEqualTo(HttpStatus.OK.value());
-    assertThat(new ObjectMapper().readTree(apply.body()).path("code").asText())
-        .isEqualTo("SUCCESS");
+        HttpResponse<String> apply =
+                applyWorkbookAsRole(workbook, "workflow-empty-tenant-apply-" + tenantId, "ROLE_ADMIN", tenantId);
+        assertThat(apply.statusCode())
+                .as("configuration package apply response: %s", apply.body())
+                .isEqualTo(HttpStatus.OK.value());
+        assertThat(new ObjectMapper().readTree(apply.body()).path("code").asText())
+                .isEqualTo("SUCCESS");
 
-    String selectedCalendarCode =
-        jdbcTemplate.queryForObject(selectCalendarCodeSql, String.class, tenantId);
-    assertThat(selectedCalendarCode).isEqualTo("default_calendar");
-    String selectedCalendarCodeRead2 =
-        jdbcTemplate.queryForObject(selectCalendarCodeSql2, String.class, tenantId);
-    assertThat(selectedCalendarCodeRead2).isEqualTo("default_calendar");
-    Integer selectedWorkflowNodeCount =
-        jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
-    assertThat(selectedWorkflowNodeCount).isEqualTo(4);
-    Integer selectedWorkflowEdgeCount =
-        jdbcTemplate.queryForObject(selectCountSql4, Integer.class, tenantId);
-    assertThat(selectedWorkflowEdgeCount).isEqualTo(3);
-  }
+        String selectedCalendarCode = jdbcTemplate.queryForObject(selectCalendarCodeSql, String.class, tenantId);
+        assertThat(selectedCalendarCode).isEqualTo("default_calendar");
+        String selectedCalendarCodeRead2 = jdbcTemplate.queryForObject(selectCalendarCodeSql2, String.class, tenantId);
+        assertThat(selectedCalendarCodeRead2).isEqualTo("default_calendar");
+        Integer selectedWorkflowNodeCount = jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+        assertThat(selectedWorkflowNodeCount).isEqualTo(4);
+        Integer selectedWorkflowEdgeCount = jdbcTemplate.queryForObject(selectCountSql4, Integer.class, tenantId);
+        assertThat(selectedWorkflowEdgeCount).isEqualTo(3);
+    }
 
-  @Test
-  @DisplayName("全新数据库完整配置包导入后可复制至空租户")
-  void shouldImportCompleteBusinessPackageAndCopyItToEmptyTenant() throws Exception {
-    final String selectCountSql = """
+    @Test
+    @DisplayName("全新数据库完整配置包导入后可复制至空租户")
+    void shouldImportCompleteBusinessPackageAndCopyItToEmptyTenant() throws Exception {
+        final String selectCountSql = """
       select count(*) from batch.workflow_node wn\s\
       join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
       and wd.workflow_code = 'WF_CUSTOMER_EOD'\
       """;
-    final String selectCountSql2 = """
+        final String selectCountSql2 = """
       select count(*) from batch.workflow_edge we\s\
       join batch.workflow_definition wd on wd.id = we.workflow_definition_id where wd.tenant_id = ?\s\
       and wd.workflow_code = 'WF_CUSTOMER_EOD'\
       """;
-    final String selectBizDateSql = """
+        final String selectBizDateSql = """
         select h.biz_date::text from batch.calendar_holiday h\s\
         join batch.business_calendar c on c.id = h.calendar_id where c.tenant_id = ?\s\
         and c.calendar_code = 'default_calendar' order by h.biz_date\
         """;
-    final String selectTargetEndpointSql = """
+        final String selectTargetEndpointSql = """
         select target_endpoint, config_json::text as config_json from batch.file_channel_config\s\
         where tenant_id = ? and channel_code = ?\
         """;
-    final String selectPolicyCodeSql = """
+        final String selectPolicyCodeSql = """
         select policy_code, max_running_jobs_per_tenant, fair_share_weight from batch.tenant_quota_policy\s\
         where tenant_id = ?\
         """;
-    final String selectRouteCodeSql = """
+        final String selectRouteCodeSql = """
         select route_code, receiver, group_wait_seconds from batch.alert_routing_config where tenant_id = ?\s\
         and route_code = ?\
         """;
 
-    String tenantId = "excel-package-empty-" + UUID.randomUUID().toString().substring(0, 8);
-    String copyTargetTenantId =
-        "excel-copy-empty-" + UUID.randomUUID().toString().substring(0, 8);
-    for (String table : List.of(
-        "resource_queue",
-        "business_calendar",
-        "batch_window",
-        "job_definition",
-        "file_channel_config",
-        "file_template_config",
-        "workflow_definition")) {
-      final String selectCountSql3 = """
+        String tenantId = "excel-package-empty-" + UUID.randomUUID().toString().substring(0, 8);
+        String copyTargetTenantId =
+                "excel-copy-empty-" + UUID.randomUUID().toString().substring(0, 8);
+        for (String table : List.of(
+                "resource_queue",
+                "business_calendar",
+                "batch_window",
+                "job_definition",
+                "file_channel_config",
+                "file_template_config",
+                "workflow_definition")) {
+            final String selectCountSql3 = """
                 select count(*) from batch.%s where tenant_id = ?\
                 """.formatted(table);
-      Integer selectedCount = jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
-      assertThat(selectedCount).as("fresh tenant row count for %s", table).isZero();
-    }
-
-    byte[] workbook = workbookForTenant(completeBusinessPackageWorkbook(), tenantId);
-    HttpResponse<String> preview = previewWorkbookAsRole(
-        workbook, "complete-package-preview-" + tenantId, "ROLE_ADMIN", tenantId);
-    assertThat(preview.body())
-        .as("complete package preview for empty tenant")
-        .contains("\"invalidRows\":0")
-        .contains("\"issues\":[]");
-
-    HttpResponse<String> apply =
-        applyWorkbookAsRole(workbook, "complete-package-apply-" + tenantId, "ROLE_ADMIN", tenantId);
-    assertThat(apply.statusCode())
-        .as("complete package apply response: %s", apply.body())
-        .isEqualTo(HttpStatus.OK.value());
-    assertThat(new ObjectMapper().readTree(apply.body()).path("code").asText())
-        .isEqualTo("SUCCESS");
-
-    for (String table : List.of(
-        "resource_queue",
-        "business_calendar",
-        "batch_window",
-        "job_definition",
-        "file_channel_config",
-        "file_template_config",
-        "workflow_definition")) {
-      final String selectCountSql3 = """
-                select count(*) from batch.%s where tenant_id = ?\
-                """.formatted(table);
-      Integer selectedCountRead2 =
-          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
-      assertThat(selectedCountRead2)
-          .as("imported tenant row count for %s", table)
-          .isPositive();
-    }
-    Integer selectedWorkflowNodeCount =
-        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
-    assertThat(selectedWorkflowNodeCount).isEqualTo(4);
-    Integer selectedWorkflowEdgeCount =
-        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
-    assertThat(selectedWorkflowEdgeCount).isEqualTo(3);
-
-    TenantQuotaPolicySpec quotaPolicy = new TenantQuotaPolicySpec();
-    quotaPolicy.setPolicyCode("COPY_DEFAULT");
-    quotaPolicy.setMaxRunningJobsPerTenant(20);
-    quotaPolicy.setMaxPartitionsPerTenant(200);
-    quotaPolicy.setMaxQpsPerTenant(50);
-    quotaPolicy.setFairShareWeight(3);
-    quotaPolicy.setEnabled(true);
-    quotaPolicy.setDescription("copy regression quota policy");
-    AlertRoutingSpec alertRouting = new AlertRoutingSpec();
-    alertRouting.setRouteCode("COPY_OPERATIONS");
-    alertRouting.setRouteName("Operations alerts");
-    alertRouting.setTeam("operations");
-    alertRouting.setAlertGroup("workflow");
-    alertRouting.setSeverity("ERROR");
-    alertRouting.setReceiver("ops@example.invalid");
-    alertRouting.setGroupBy("tenant,workflow");
-    alertRouting.setGroupWaitSeconds(30);
-    alertRouting.setGroupIntervalSeconds(300);
-    alertRouting.setRepeatIntervalSeconds(1800);
-    alertRouting.setEnabled(true);
-    alertRouting.setDescription("copy regression alert route");
-    TenantConfigBatchInitRequest supplementalConfig = new TenantConfigBatchInitRequest();
-    supplementalConfig.setTargetTenantIds(List.of(tenantId));
-    supplementalConfig.setStrict(true);
-    supplementalConfig.setQuotaPolicies(List.of(quotaPolicy));
-    supplementalConfig.setAlertRoutings(List.of(alertRouting));
-    assertThat(tenantConfigInitService
-            .batchInit(supplementalConfig, "integration-test", "r19-supplemental-config")
-            .successTenants())
-        .isOne();
-
-    for (String table : List.of(
-        "resource_queue",
-        "business_calendar",
-        "batch_window",
-        "job_definition",
-        "file_channel_config",
-        "file_template_config",
-        "workflow_definition",
-        "tenant_quota_policy",
-        "alert_routing_config")) {
-      final String selectCountSql3 = """
-                select count(*) from batch.%s where tenant_id = ?\
-                """.formatted(table);
-      Integer selectedCountRead3 =
-          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, copyTargetTenantId);
-      assertThat(selectedCountRead3)
-          .as("empty copy target row count for %s", table)
-          .isZero();
-    }
-
-    String copyBody = new ObjectMapper()
-        .writeValueAsString(Map.of(
-            "sourceTenantId",
-            tenantId,
-            "targetTenantIds",
-            List.of(copyTargetTenantId),
-            "mode",
-            "UPSERT",
-            "dryRun",
-            false));
-    HttpResponse<String> copy = HttpClient.newHttpClient()
-        .send(
-            HttpRequest.newBuilder(
-                    URI.create("http://localhost:" + port + "/api/console/config/tenant-copy"))
-                .timeout(Duration.ofSeconds(60))
-                .header("Content-Type", "application/json")
-                .header(
-                    CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
-                    "complete-package-copy-" + copyTargetTenantId)
-                .header("X-Console-Roles", "ROLE_ADMIN")
-                .POST(HttpRequest.BodyPublishers.ofString(copyBody, StandardCharsets.UTF_8))
-                .build(),
-            HttpResponse.BodyHandlers.ofString());
-    assertThat(copy.statusCode())
-        .as("empty tenant config copy response: %s", copy.body())
-        .isEqualTo(HttpStatus.OK.value());
-    JsonNode copyResponse = new ObjectMapper().readTree(copy.body());
-    assertThat(copyResponse.path("code").asText()).isEqualTo("SUCCESS");
-    assertThat(copyResponse.path("data").path("successTenants").asInt()).isEqualTo(1);
-    assertThat(copyResponse.path("data").path("failureTenants").asInt()).isZero();
-    for (String table : List.of(
-        "resource_queue",
-        "business_calendar",
-        "batch_window",
-        "job_definition",
-        "file_channel_config",
-        "file_template_config",
-        "workflow_definition",
-        "tenant_quota_policy",
-        "alert_routing_config")) {
-      final String selectCountSql3 = """
-                select count(*) from batch.%s where tenant_id = ?\
-                """.formatted(table);
-      Integer selectedCountRead4 =
-          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, copyTargetTenantId);
-      Integer selectedCount2 =
-          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
-      assertThat(selectedCountRead4)
-          .as("copied tenant row count for %s", table)
-          .isEqualTo(selectedCount2);
-    }
-    Integer selectedWorkflowNodeCountRead2 =
-        jdbcTemplate.queryForObject(selectCountSql, Integer.class, copyTargetTenantId);
-    assertThat(selectedWorkflowNodeCountRead2).isEqualTo(4);
-    Integer selectedWorkflowEdgeCountRead2 =
-        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, copyTargetTenantId);
-    assertThat(selectedWorkflowEdgeCountRead2).isEqualTo(3);
-    List<String> selectedBizDateValues =
-        jdbcTemplate.queryForList(selectBizDateSql, String.class, copyTargetTenantId);
-    assertThat(selectedBizDateValues).containsExactly("2026-01-01");
-    Map<String, Object> copiedChannel =
-        jdbcTemplate.queryForMap(selectTargetEndpointSql, copyTargetTenantId, "demo-sftp");
-    assertThat(copiedChannel)
-        .containsEntry("target_endpoint", null)
-        .containsEntry("config_json", "{}");
-    Map<String, Object> selectedPolicyCodeRow =
-        jdbcTemplate.queryForMap(selectPolicyCodeSql, copyTargetTenantId);
-    assertThat(selectedPolicyCodeRow)
-        .containsEntry("policy_code", "copy_default")
-        .containsEntry("max_running_jobs_per_tenant", 20)
-        .containsEntry("fair_share_weight", 3);
-    Map<String, Object> selectedRouteCodeRow =
-        jdbcTemplate.queryForMap(selectRouteCodeSql, copyTargetTenantId, "copy_operations");
-    assertThat(selectedRouteCodeRow)
-        .containsEntry("route_code", "copy_operations")
-        .containsEntry("receiver", "ops@example.invalid")
-        .containsEntry("group_wait_seconds", 30);
-  }
-
-  private static byte[] completeBusinessPackageWorkbook() throws Exception {
-    StaticMessageSource messages = new StaticMessageSource();
-    messages.setUseCodeAsDefaultMessage(true);
-    List<String> scenarios =
-        List.of("IMPORT", "EXPORT", "PROCESS", "DISPATCH", "ATOMIC", "WORKFLOW", "SCHEDULE");
-    List<List<Map<String, Object>>> sheets = ConfigPackageSampleDataFactory.sampleSheets(scenarios);
-    // 租户 Pipeline 工作表已退役（SHEET_COUNT=10 中不再包含）；
-    // 当前布局 7=workflow_definition、8=workflow_node、9=workflow_edge。
-    for (Map<String, Object> node : sheets.get(8)) {
-      if ("JOB".equals(node.get("node_type"))) {
-        node.put("node_type", "TASK");
-        node.put("related_job_code", null);
-      }
-    }
-    return new ConfigPackageExcelWorkbookWriter(messages, List.of("ALL"))
-        .buildExportWorkbook(sheets);
-  }
-
-  private static byte[] workflowScenarioWorkbook(boolean sparseUpdate) throws Exception {
-    return workflowScenarioWorkbook(sparseUpdate, false);
-  }
-
-  private static byte[] workflowScenarioWorkbook(boolean sparseUpdate, boolean includeCalendar)
-      throws Exception {
-    StaticMessageSource messages = new StaticMessageSource();
-    messages.setUseCodeAsDefaultMessage(true);
-    ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(
-        messages, includeCalendar ? List.of("WORKFLOW", "SCHEDULE") : List.of("WORKFLOW"));
-    List<List<Map<String, Object>>> sheets =
-        ConfigPackageSampleDataFactory.sampleSheets("WORKFLOW");
-    Map<String, Object> defaultCalendar = new LinkedHashMap<>(sheets.get(1).getFirst());
-    sheets.get(7).getFirst().put("calendar_code", "default-calendar");
-    for (int index = 0; index < 7; index++) {
-      sheets.get(index).clear();
-    }
-    if (includeCalendar) {
-      sheets.get(1).add(defaultCalendar);
-    }
-    if (sparseUpdate) {
-      sheets.get(8).removeIf(row -> !List.of("START", "END").contains(row.get("node_code")));
-    }
-    if (sparseUpdate) {
-      sheets.get(9).clear();
-      sheets
-          .get(9)
-          .add(new LinkedHashMap<>(Map.of(
-              "workflow_code", "WF_CUSTOMER_EOD",
-              "workflow_version", "1",
-              "from_node_code", "START",
-              "to_node_code", "END",
-              "edge_type", "SUCCESS",
-              "condition_expr", "",
-              "enabled", "true")));
-    }
-    byte[] workbookBytes = writer.buildExportWorkbook(sheets);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      Sheet definitions = workbook.getSheet(ConfigPackageExcelValidator.WF_DEF_SHEET);
-      Row definitionHeader = definitions.getRow(0);
-      Row definitionData = definitions.getRow(1);
-      Sheet nodes = workbook.getSheet(ConfigPackageExcelValidator.WF_NODE_SHEET);
-      Row nodeHeader = nodes.getRow(0);
-      int nodeTypeColumn = columnIndex(nodeHeader, "node_type");
-      int relatedJobColumn = columnIndex(nodeHeader, "related_job_code");
-      for (int rowIndex = 1; rowIndex <= nodes.getLastRowNum(); rowIndex++) {
-        Row node = nodes.getRow(rowIndex);
-        if (node == null || node.getCell(columnIndex(nodeHeader, "node_code")) == null) {
-          continue;
+            Integer selectedCount = jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+            assertThat(selectedCount).as("fresh tenant row count for %s", table).isZero();
         }
-        String nodeCode = node.getCell(columnIndex(nodeHeader, "node_code")).getStringCellValue();
-        if ("NODE_IMPORT".equals(nodeCode) || "NODE_EXPORT".equals(nodeCode)) {
-          node.getCell(nodeTypeColumn).setCellValue("TASK");
-          node.getCell(relatedJobColumn).setBlank();
+
+        byte[] workbook = workbookForTenant(completeBusinessPackageWorkbook(), tenantId);
+        HttpResponse<String> preview =
+                previewWorkbookAsRole(workbook, "complete-package-preview-" + tenantId, "ROLE_ADMIN", tenantId);
+        assertThat(preview.body())
+                .as("complete package preview for empty tenant")
+                .contains("\"invalidRows\":0")
+                .contains("\"issues\":[]");
+
+        HttpResponse<String> apply =
+                applyWorkbookAsRole(workbook, "complete-package-apply-" + tenantId, "ROLE_ADMIN", tenantId);
+        assertThat(apply.statusCode())
+                .as("complete package apply response: %s", apply.body())
+                .isEqualTo(HttpStatus.OK.value());
+        assertThat(new ObjectMapper().readTree(apply.body()).path("code").asText())
+                .isEqualTo("SUCCESS");
+
+        for (String table : List.of(
+                "resource_queue",
+                "business_calendar",
+                "batch_window",
+                "job_definition",
+                "file_channel_config",
+                "file_template_config",
+                "workflow_definition")) {
+            final String selectCountSql3 = """
+                select count(*) from batch.%s where tenant_id = ?\
+                """.formatted(table);
+            Integer selectedCountRead2 = jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+            assertThat(selectedCountRead2)
+                    .as("imported tenant row count for %s", table)
+                    .isPositive();
         }
-      }
-      Row startNode = rowForValue(nodes, columnIndex(nodeHeader, "node_code"), "START");
-      if (sparseUpdate) {
-        definitionData.getCell(columnIndex(definitionHeader, "description")).setBlank();
-      } else {
-        definitionData
-            .getCell(columnIndex(definitionHeader, "description"))
-            .setCellValue("Workflow MERGE description");
-        startNode
-            .getCell(columnIndex(nodeHeader, "node_name"))
-            .setCellValue("Workflow MERGE start node");
-      }
-      if (!sparseUpdate) {
-        assertThat(definitionData
-                .getCell(columnIndex(definitionHeader, "calendar_code"))
-                .getStringCellValue())
-            .isEqualTo("default-calendar");
-      }
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      workbook.write(out);
-      return out.toByteArray();
-    }
-  }
+        Integer selectedWorkflowNodeCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+        assertThat(selectedWorkflowNodeCount).isEqualTo(4);
+        Integer selectedWorkflowEdgeCount = jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
+        assertThat(selectedWorkflowEdgeCount).isEqualTo(3);
 
-  private byte[] importScenarioWorkbook(boolean omitOptionalValuesAndSteps) throws Exception {
-    StaticMessageSource messages = new StaticMessageSource();
-    messages.setUseCodeAsDefaultMessage(true);
-    ConfigPackageExcelWorkbookWriter writer =
-        new ConfigPackageExcelWorkbookWriter(messages, List.of("IMPORT"));
-    byte[] workbookBytes =
-        writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets("IMPORT"));
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
-      Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
-      Row jobHeader = jobs.getRow(0);
-      Row jobData = jobs.getRow(1);
-      Sheet fileTemplates = workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
-      Row fileTemplateHeader = fileTemplates.getRow(0);
-      Row fileTemplateData = fileTemplates.getRow(1);
-      if (omitOptionalValuesAndSteps) {
-        jobData.getCell(columnIndex(jobHeader, "description")).setBlank();
-        jobData.getCell(columnIndex(jobHeader, "default_params")).setBlank();
-        fileTemplateData.getCell(columnIndex(fileTemplateHeader, "description")).setBlank();
-      } else {
-        jobData
-            .getCell(columnIndex(jobHeader, "description"))
-            .setCellValue("MERGE value that must survive a blank update");
-        fileTemplateData
-            .getCell(columnIndex(fileTemplateHeader, "description"))
-            .setCellValue("MERGE file template description");
-      }
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      workbook.write(out);
-      return out.toByteArray();
-    }
-  }
+        TenantQuotaPolicySpec quotaPolicy = new TenantQuotaPolicySpec();
+        quotaPolicy.setPolicyCode("COPY_DEFAULT");
+        quotaPolicy.setMaxRunningJobsPerTenant(20);
+        quotaPolicy.setMaxPartitionsPerTenant(200);
+        quotaPolicy.setMaxQpsPerTenant(50);
+        quotaPolicy.setFairShareWeight(3);
+        quotaPolicy.setEnabled(true);
+        quotaPolicy.setDescription("copy regression quota policy");
+        AlertRoutingSpec alertRouting = new AlertRoutingSpec();
+        alertRouting.setRouteCode("COPY_OPERATIONS");
+        alertRouting.setRouteName("Operations alerts");
+        alertRouting.setTeam("operations");
+        alertRouting.setAlertGroup("workflow");
+        alertRouting.setSeverity("ERROR");
+        alertRouting.setReceiver("ops@example.invalid");
+        alertRouting.setGroupBy("tenant,workflow");
+        alertRouting.setGroupWaitSeconds(30);
+        alertRouting.setGroupIntervalSeconds(300);
+        alertRouting.setRepeatIntervalSeconds(1800);
+        alertRouting.setEnabled(true);
+        alertRouting.setDescription("copy regression alert route");
+        TenantConfigBatchInitRequest supplementalConfig = new TenantConfigBatchInitRequest();
+        supplementalConfig.setTargetTenantIds(List.of(tenantId));
+        supplementalConfig.setStrict(true);
+        supplementalConfig.setQuotaPolicies(List.of(quotaPolicy));
+        supplementalConfig.setAlertRoutings(List.of(alertRouting));
+        assertThat(tenantConfigInitService
+                        .batchInit(supplementalConfig, "integration-test", "r19-supplemental-config")
+                        .successTenants())
+                .isOne();
 
-  private static byte[] schedulePolicyWorkbook() throws Exception {
-    try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
-          List.of(
-              "job_code",
-              "completion_deadline_local_time",
-              "completion_deadline_day_offset",
-              "dependency_completion_window_seconds",
-              "completion_deadline_severity"),
-          List.of(row(
-              "job_code", "JOB_IMPORT_CUSTOMER",
-              "completion_deadline_local_time", "04:00",
-              "completion_deadline_day_offset", "1",
-              "dependency_completion_window_seconds", "0",
-              "completion_deadline_severity", "WARN")));
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      workbook.write(out);
-      return out.toByteArray();
-    }
-  }
-
-  private static byte[] workflowPolicyWorkbook() throws Exception {
-    try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.WORKFLOW_MONITORING_POLICY_SHEET,
-          List.of(
-              "workflow_code",
-              "workflow_version",
-              "soft_runtime_seconds",
-              "soft_runtime_severity",
-              "start_grace_seconds",
-              "start_grace_severity",
-              "completion_deadline_local_time",
-              "completion_deadline_day_offset",
-              "completion_deadline_severity"),
-          List.of(row(
-              "workflow_code", "WF_CUSTOMER_EOD",
-              "workflow_version", "1",
-              "soft_runtime_seconds", "600",
-              "soft_runtime_severity", "ERROR",
-              "start_grace_seconds", "120",
-              "start_grace_severity", "CRITICAL",
-              "completion_deadline_local_time", "04:30",
-              "completion_deadline_day_offset", "1",
-              "completion_deadline_severity", "WARN")));
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      workbook.write(out);
-      return out.toByteArray();
-    }
-  }
-
-  private static byte[] jobOnlyWorkbookWithoutMonitoringPolicy() throws Exception {
-    try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.JOB_SHEET,
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          List.of());
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      workbook.write(out);
-      return out.toByteArray();
-    }
-  }
-
-  private static byte[] workbookForTenant(byte[] source, String tenantId) throws Exception {
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(source))) {
-      for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
-        Sheet sheet = workbook.getSheetAt(sheetIndex);
-        Row header = sheet.getRow(0);
-        if (header == null) {
-          continue;
+        for (String table : List.of(
+                "resource_queue",
+                "business_calendar",
+                "batch_window",
+                "job_definition",
+                "file_channel_config",
+                "file_template_config",
+                "workflow_definition",
+                "tenant_quota_policy",
+                "alert_routing_config")) {
+            final String selectCountSql3 = """
+                select count(*) from batch.%s where tenant_id = ?\
+                """.formatted(table);
+            Integer selectedCountRead3 =
+                    jdbcTemplate.queryForObject(selectCountSql3, Integer.class, copyTargetTenantId);
+            assertThat(selectedCountRead3)
+                    .as("empty copy target row count for %s", table)
+                    .isZero();
         }
-        int tenantColumn = -1;
+
+        String copyBody = new ObjectMapper()
+                .writeValueAsString(Map.of(
+                        "sourceTenantId",
+                        tenantId,
+                        "targetTenantIds",
+                        List.of(copyTargetTenantId),
+                        "mode",
+                        "UPSERT",
+                        "dryRun",
+                        false));
+        HttpResponse<String> copy = HttpClient.newHttpClient()
+                .send(
+                        HttpRequest.newBuilder(
+                                        URI.create("http://localhost:" + port + "/api/console/config/tenant-copy"))
+                                .timeout(Duration.ofSeconds(60))
+                                .header("Content-Type", "application/json")
+                                .header(
+                                        CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
+                                        "complete-package-copy-" + copyTargetTenantId)
+                                .header("X-Console-Roles", "ROLE_ADMIN")
+                                .POST(HttpRequest.BodyPublishers.ofString(copyBody, StandardCharsets.UTF_8))
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString());
+        assertThat(copy.statusCode())
+                .as("empty tenant config copy response: %s", copy.body())
+                .isEqualTo(HttpStatus.OK.value());
+        JsonNode copyResponse = new ObjectMapper().readTree(copy.body());
+        assertThat(copyResponse.path("code").asText()).isEqualTo("SUCCESS");
+        assertThat(copyResponse.path("data").path("successTenants").asInt()).isEqualTo(1);
+        assertThat(copyResponse.path("data").path("failureTenants").asInt()).isZero();
+        for (String table : List.of(
+                "resource_queue",
+                "business_calendar",
+                "batch_window",
+                "job_definition",
+                "file_channel_config",
+                "file_template_config",
+                "workflow_definition",
+                "tenant_quota_policy",
+                "alert_routing_config")) {
+            final String selectCountSql3 = """
+                select count(*) from batch.%s where tenant_id = ?\
+                """.formatted(table);
+            Integer selectedCountRead4 =
+                    jdbcTemplate.queryForObject(selectCountSql3, Integer.class, copyTargetTenantId);
+            Integer selectedCount2 = jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+            assertThat(selectedCountRead4)
+                    .as("copied tenant row count for %s", table)
+                    .isEqualTo(selectedCount2);
+        }
+        Integer selectedWorkflowNodeCountRead2 =
+                jdbcTemplate.queryForObject(selectCountSql, Integer.class, copyTargetTenantId);
+        assertThat(selectedWorkflowNodeCountRead2).isEqualTo(4);
+        Integer selectedWorkflowEdgeCountRead2 =
+                jdbcTemplate.queryForObject(selectCountSql2, Integer.class, copyTargetTenantId);
+        assertThat(selectedWorkflowEdgeCountRead2).isEqualTo(3);
+        List<String> selectedBizDateValues =
+                jdbcTemplate.queryForList(selectBizDateSql, String.class, copyTargetTenantId);
+        assertThat(selectedBizDateValues).containsExactly("2026-01-01");
+        Map<String, Object> copiedChannel =
+                jdbcTemplate.queryForMap(selectTargetEndpointSql, copyTargetTenantId, "demo-sftp");
+        assertThat(copiedChannel).containsEntry("target_endpoint", null).containsEntry("config_json", "{}");
+        Map<String, Object> selectedPolicyCodeRow = jdbcTemplate.queryForMap(selectPolicyCodeSql, copyTargetTenantId);
+        assertThat(selectedPolicyCodeRow)
+                .containsEntry("policy_code", "copy_default")
+                .containsEntry("max_running_jobs_per_tenant", 20)
+                .containsEntry("fair_share_weight", 3);
+        Map<String, Object> selectedRouteCodeRow =
+                jdbcTemplate.queryForMap(selectRouteCodeSql, copyTargetTenantId, "copy_operations");
+        assertThat(selectedRouteCodeRow)
+                .containsEntry("route_code", "copy_operations")
+                .containsEntry("receiver", "ops@example.invalid")
+                .containsEntry("group_wait_seconds", 30);
+    }
+
+    private static byte[] completeBusinessPackageWorkbook() throws Exception {
+        StaticMessageSource messages = new StaticMessageSource();
+        messages.setUseCodeAsDefaultMessage(true);
+        List<String> scenarios = List.of("IMPORT", "EXPORT", "PROCESS", "DISPATCH", "ATOMIC", "WORKFLOW", "SCHEDULE");
+        List<List<Map<String, Object>>> sheets = ConfigPackageSampleDataFactory.sampleSheets(scenarios);
+        // 租户 Pipeline 工作表已退役（SHEET_COUNT=10 中不再包含）；
+        // 当前布局 7=workflow_definition、8=workflow_node、9=workflow_edge。
+        for (Map<String, Object> node : sheets.get(8)) {
+            if ("JOB".equals(node.get("node_type"))) {
+                node.put("node_type", "TASK");
+                node.put("related_job_code", null);
+            }
+        }
+        return new ConfigPackageExcelWorkbookWriter(messages, List.of("ALL")).buildExportWorkbook(sheets);
+    }
+
+    private static byte[] workflowScenarioWorkbook(boolean sparseUpdate) throws Exception {
+        return workflowScenarioWorkbook(sparseUpdate, false);
+    }
+
+    private static byte[] workflowScenarioWorkbook(boolean sparseUpdate, boolean includeCalendar) throws Exception {
+        StaticMessageSource messages = new StaticMessageSource();
+        messages.setUseCodeAsDefaultMessage(true);
+        ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(
+                messages, includeCalendar ? List.of("WORKFLOW", "SCHEDULE") : List.of("WORKFLOW"));
+        List<List<Map<String, Object>>> sheets = ConfigPackageSampleDataFactory.sampleSheets("WORKFLOW");
+        Map<String, Object> defaultCalendar = new LinkedHashMap<>(sheets.get(1).getFirst());
+        sheets.get(7).getFirst().put("calendar_code", "default-calendar");
+        for (int index = 0; index < 7; index++) {
+            sheets.get(index).clear();
+        }
+        if (includeCalendar) {
+            sheets.get(1).add(defaultCalendar);
+        }
+        if (sparseUpdate) {
+            sheets.get(8).removeIf(row -> !List.of("START", "END").contains(row.get("node_code")));
+        }
+        if (sparseUpdate) {
+            sheets.get(9).clear();
+            sheets.get(9)
+                    .add(new LinkedHashMap<>(Map.of(
+                            "workflow_code", "WF_CUSTOMER_EOD",
+                            "workflow_version", "1",
+                            "from_node_code", "START",
+                            "to_node_code", "END",
+                            "edge_type", "SUCCESS",
+                            "condition_expr", "",
+                            "enabled", "true")));
+        }
+        byte[] workbookBytes = writer.buildExportWorkbook(sheets);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            Sheet definitions = workbook.getSheet(ConfigPackageExcelValidator.WF_DEF_SHEET);
+            Row definitionHeader = definitions.getRow(0);
+            Row definitionData = definitions.getRow(1);
+            Sheet nodes = workbook.getSheet(ConfigPackageExcelValidator.WF_NODE_SHEET);
+            Row nodeHeader = nodes.getRow(0);
+            int nodeTypeColumn = columnIndex(nodeHeader, "node_type");
+            int relatedJobColumn = columnIndex(nodeHeader, "related_job_code");
+            for (int rowIndex = 1; rowIndex <= nodes.getLastRowNum(); rowIndex++) {
+                Row node = nodes.getRow(rowIndex);
+                if (node == null || node.getCell(columnIndex(nodeHeader, "node_code")) == null) {
+                    continue;
+                }
+                String nodeCode =
+                        node.getCell(columnIndex(nodeHeader, "node_code")).getStringCellValue();
+                if ("NODE_IMPORT".equals(nodeCode) || "NODE_EXPORT".equals(nodeCode)) {
+                    node.getCell(nodeTypeColumn).setCellValue("TASK");
+                    node.getCell(relatedJobColumn).setBlank();
+                }
+            }
+            Row startNode = rowForValue(nodes, columnIndex(nodeHeader, "node_code"), "START");
+            if (sparseUpdate) {
+                definitionData
+                        .getCell(columnIndex(definitionHeader, "description"))
+                        .setBlank();
+            } else {
+                definitionData
+                        .getCell(columnIndex(definitionHeader, "description"))
+                        .setCellValue("Workflow MERGE description");
+                startNode.getCell(columnIndex(nodeHeader, "node_name")).setCellValue("Workflow MERGE start node");
+            }
+            if (!sparseUpdate) {
+                assertThat(definitionData
+                                .getCell(columnIndex(definitionHeader, "calendar_code"))
+                                .getStringCellValue())
+                        .isEqualTo("default-calendar");
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private byte[] importScenarioWorkbook(boolean omitOptionalValuesAndSteps) throws Exception {
+        StaticMessageSource messages = new StaticMessageSource();
+        messages.setUseCodeAsDefaultMessage(true);
+        ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(messages, List.of("IMPORT"));
+        byte[] workbookBytes = writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets("IMPORT"));
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+            Row jobHeader = jobs.getRow(0);
+            Row jobData = jobs.getRow(1);
+            Sheet fileTemplates = workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
+            Row fileTemplateHeader = fileTemplates.getRow(0);
+            Row fileTemplateData = fileTemplates.getRow(1);
+            if (omitOptionalValuesAndSteps) {
+                jobData.getCell(columnIndex(jobHeader, "description")).setBlank();
+                jobData.getCell(columnIndex(jobHeader, "default_params")).setBlank();
+                fileTemplateData
+                        .getCell(columnIndex(fileTemplateHeader, "description"))
+                        .setBlank();
+            } else {
+                jobData.getCell(columnIndex(jobHeader, "description"))
+                        .setCellValue("MERGE value that must survive a blank update");
+                fileTemplateData
+                        .getCell(columnIndex(fileTemplateHeader, "description"))
+                        .setCellValue("MERGE file template description");
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private static byte[] schedulePolicyWorkbook() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
+                    List.of(
+                            "job_code",
+                            "completion_deadline_local_time",
+                            "completion_deadline_day_offset",
+                            "dependency_completion_window_seconds",
+                            "completion_deadline_severity"),
+                    List.of(row(
+                            "job_code", "JOB_IMPORT_CUSTOMER",
+                            "completion_deadline_local_time", "04:00",
+                            "completion_deadline_day_offset", "1",
+                            "dependency_completion_window_seconds", "0",
+                            "completion_deadline_severity", "WARN")));
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private static byte[] workflowPolicyWorkbook() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.WORKFLOW_MONITORING_POLICY_SHEET,
+                    List.of(
+                            "workflow_code",
+                            "workflow_version",
+                            "soft_runtime_seconds",
+                            "soft_runtime_severity",
+                            "start_grace_seconds",
+                            "start_grace_severity",
+                            "completion_deadline_local_time",
+                            "completion_deadline_day_offset",
+                            "completion_deadline_severity"),
+                    List.of(row(
+                            "workflow_code", "WF_CUSTOMER_EOD",
+                            "workflow_version", "1",
+                            "soft_runtime_seconds", "600",
+                            "soft_runtime_severity", "ERROR",
+                            "start_grace_seconds", "120",
+                            "start_grace_severity", "CRITICAL",
+                            "completion_deadline_local_time", "04:30",
+                            "completion_deadline_day_offset", "1",
+                            "completion_deadline_severity", "WARN")));
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private static byte[] jobOnlyWorkbookWithoutMonitoringPolicy() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.JOB_SHEET,
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    List.of());
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private static byte[] workbookForTenant(byte[] source, String tenantId) throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(source))) {
+            for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
+                Sheet sheet = workbook.getSheetAt(sheetIndex);
+                Row header = sheet.getRow(0);
+                if (header == null) {
+                    continue;
+                }
+                int tenantColumn = -1;
+                for (int cellIndex = 0; cellIndex < header.getLastCellNum(); cellIndex++) {
+                    if (header.getCell(cellIndex) != null
+                            && "tenant_id".equals(header.getCell(cellIndex).getStringCellValue())) {
+                        tenantColumn = cellIndex;
+                        break;
+                    }
+                }
+                if (tenantColumn < 0) {
+                    continue;
+                }
+                for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                    Row row = sheet.getRow(rowIndex);
+                    if (row != null && row.getCell(tenantColumn) != null) {
+                        row.getCell(tenantColumn).setCellValue(tenantId);
+                    }
+                }
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private static byte[] calendarAndWindowWorkbook(boolean sparseUpdate) throws Exception {
+        byte[] base = tenantPackageWorkbook(true);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(base))) {
+            Map<String, String> calendar = row(
+                    "tenant_id", "excel-upload-ta",
+                    "calendar_code", "CAL_MERGE",
+                    "calendar_name", sparseUpdate ? "Updated calendar" : "Initial calendar",
+                    "timezone", "America/New_York",
+                    "holidays", sparseUpdate ? "2026-02-02" : "2026-01-01",
+                    "holiday_roll_rule", sparseUpdate ? "" : "NEXT_WORKDAY",
+                    "catch_up_policy", sparseUpdate ? "" : "AUTO",
+                    "catch_up_max_days", sparseUpdate ? "" : "5",
+                    "enabled", sparseUpdate ? "" : "false",
+                    "description", sparseUpdate ? "" : "Keep calendar settings");
+            appendDataRow(
+                    workbook.getSheet(ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET),
+                    ConfigPackageExcelSchema.BusinessCalendar.COLUMNS,
+                    calendar);
+
+            Map<String, String> window = row(
+                    "tenant_id", "excel-upload-ta",
+                    "window_code", "WINDOW_MERGE",
+                    "window_name", sparseUpdate ? "Updated window" : "Initial window",
+                    "timezone", "America/New_York",
+                    "start_time", sparseUpdate ? "02:00" : "01:00",
+                    "end_time", sparseUpdate ? "22:00" : "21:00",
+                    "end_strategy", sparseUpdate ? "" : "STOP",
+                    "out_of_window_action", sparseUpdate ? "" : "FAIL",
+                    "allow_cross_day", sparseUpdate ? "" : "true",
+                    "enabled", sparseUpdate ? "" : "false",
+                    "description", sparseUpdate ? "" : "Keep window settings");
+            appendDataRow(
+                    workbook.getSheet(ConfigPackageExcelValidator.BATCH_WINDOW_SHEET),
+                    ConfigPackageExcelSchema.BatchWindow.COLUMNS,
+                    window);
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private static void appendDataRow(Sheet sheet, List<String> columns, Map<String, String> values) {
+        Row row = sheet.createRow(sheet.getLastRowNum() + 1);
+        for (int index = 0; index < columns.size(); index++) {
+            row.createCell(index).setCellValue(values.getOrDefault(columns.get(index), ""));
+        }
+    }
+
+    private static int columnIndex(Row header, String columnName) {
         for (int cellIndex = 0; cellIndex < header.getLastCellNum(); cellIndex++) {
-          if (header.getCell(cellIndex) != null
-              && "tenant_id".equals(header.getCell(cellIndex).getStringCellValue())) {
-            tenantColumn = cellIndex;
-            break;
-          }
+            if (columnName.equals(header.getCell(cellIndex).getStringCellValue())) {
+                return cellIndex;
+            }
         }
-        if (tenantColumn < 0) {
-          continue;
+        throw new IllegalArgumentException("Missing workbook column: " + columnName);
+    }
+
+    private static void assertHeaderColumns(Sheet sheet, Set<String> expectedColumns) {
+        Row header = sheet.getRow(0);
+        assertThat(header).as("header row for %s", sheet.getSheetName()).isNotNull();
+        Set<String> actualColumns = new LinkedHashSet<>();
+        for (int index = 0; index < header.getLastCellNum(); index++) {
+            actualColumns.add(header.getCell(index).getStringCellValue());
         }
+        assertThat(actualColumns).as("columns for %s", sheet.getSheetName()).containsAll(expectedColumns);
+    }
+
+    private static Row rowForValue(Sheet sheet, int columnIndex, String value) {
         for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-          Row row = sheet.getRow(rowIndex);
-          if (row != null && row.getCell(tenantColumn) != null) {
-            row.getCell(tenantColumn).setCellValue(tenantId);
-          }
+            Row row = sheet.getRow(rowIndex);
+            if (row != null && value.equals(row.getCell(columnIndex).getStringCellValue())) {
+                return row;
+            }
         }
-      }
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      workbook.write(out);
-      return out.toByteArray();
+        throw new IllegalArgumentException("Missing workbook row for: " + value);
     }
-  }
 
-  private static byte[] calendarAndWindowWorkbook(boolean sparseUpdate) throws Exception {
-    byte[] base = tenantPackageWorkbook(true);
-    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(base))) {
-      Map<String, String> calendar = row(
-          "tenant_id", "excel-upload-ta",
-          "calendar_code", "CAL_MERGE",
-          "calendar_name", sparseUpdate ? "Updated calendar" : "Initial calendar",
-          "timezone", "America/New_York",
-          "holidays", sparseUpdate ? "2026-02-02" : "2026-01-01",
-          "holiday_roll_rule", sparseUpdate ? "" : "NEXT_WORKDAY",
-          "catch_up_policy", sparseUpdate ? "" : "AUTO",
-          "catch_up_max_days", sparseUpdate ? "" : "5",
-          "enabled", sparseUpdate ? "" : "false",
-          "description", sparseUpdate ? "" : "Keep calendar settings");
-      appendDataRow(
-          workbook.getSheet(ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET),
-          ConfigPackageExcelSchema.BusinessCalendar.COLUMNS,
-          calendar);
-
-      Map<String, String> window = row(
-          "tenant_id", "excel-upload-ta",
-          "window_code", "WINDOW_MERGE",
-          "window_name", sparseUpdate ? "Updated window" : "Initial window",
-          "timezone", "America/New_York",
-          "start_time", sparseUpdate ? "02:00" : "01:00",
-          "end_time", sparseUpdate ? "22:00" : "21:00",
-          "end_strategy", sparseUpdate ? "" : "STOP",
-          "out_of_window_action", sparseUpdate ? "" : "FAIL",
-          "allow_cross_day", sparseUpdate ? "" : "true",
-          "enabled", sparseUpdate ? "" : "false",
-          "description", sparseUpdate ? "" : "Keep window settings");
-      appendDataRow(
-          workbook.getSheet(ConfigPackageExcelValidator.BATCH_WINDOW_SHEET),
-          ConfigPackageExcelSchema.BatchWindow.COLUMNS,
-          window);
-
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      workbook.write(out);
-      return out.toByteArray();
+    private void applyWorkbook(byte[] workbook, String keySuffix) throws Exception {
+        HttpResponse<String> applyResponse = applyWorkbookAsRole(workbook, keySuffix, null);
+        assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        assertThat(new ObjectMapper()
+                        .readTree(applyResponse.body())
+                        .path("code")
+                        .asText())
+                .isEqualTo("SUCCESS");
     }
-  }
 
-  private static void appendDataRow(Sheet sheet, List<String> columns, Map<String, String> values) {
-    Row row = sheet.createRow(sheet.getLastRowNum() + 1);
-    for (int index = 0; index < columns.size(); index++) {
-      row.createCell(index).setCellValue(values.getOrDefault(columns.get(index), ""));
+    private void assertSuccessfulApplyAsPlatformAdmin(byte[] workbook, String keySuffix) throws Exception {
+        HttpResponse<String> response = applyWorkbookAsRole(workbook, keySuffix, "ROLE_ADMIN");
+        assertThat(response.statusCode())
+                .as("configuration apply response: %s", response.body())
+                .isEqualTo(HttpStatus.OK.value());
+        assertThat(new ObjectMapper().readTree(response.body()).path("code").asText())
+                .isEqualTo("SUCCESS");
     }
-  }
 
-  private static int columnIndex(Row header, String columnName) {
-    for (int cellIndex = 0; cellIndex < header.getLastCellNum(); cellIndex++) {
-      if (columnName.equals(header.getCell(cellIndex).getStringCellValue())) {
-        return cellIndex;
-      }
+    private HttpResponse<String> applyWorkbookAsRole(byte[] workbook, String keySuffix, String role) throws Exception {
+        return applyWorkbookAsRole(workbook, keySuffix, role, "excel-upload-ta");
     }
-    throw new IllegalArgumentException("Missing workbook column: " + columnName);
-  }
 
-  private static void assertHeaderColumns(Sheet sheet, Set<String> expectedColumns) {
-    Row header = sheet.getRow(0);
-    assertThat(header).as("header row for %s", sheet.getSheetName()).isNotNull();
-    Set<String> actualColumns = new LinkedHashSet<>();
-    for (int index = 0; index < header.getLastCellNum(); index++) {
-      actualColumns.add(header.getCell(index).getStringCellValue());
-    }
-    assertThat(actualColumns)
-        .as("columns for %s", sheet.getSheetName())
-        .containsAll(expectedColumns);
-  }
+    private HttpResponse<String> applyWorkbookAsRole(byte[] workbook, String keySuffix, String role, String tenantId)
+            throws Exception {
+        String boundary = "excel-upload-" + keySuffix;
+        HttpRequest.Builder uploadRequest = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + keySuffix)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook, tenantId)));
+        if (role != null) {
+            uploadRequest.header("X-Console-Roles", role);
+        }
+        HttpResponse<String> uploadResponse =
+                HttpClient.newHttpClient().send(uploadRequest.build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(uploadResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        JsonNode upload = new ObjectMapper().readTree(uploadResponse.body());
+        String token = upload.path("data").path("uploadToken").asText();
+        assertThat(token).isNotBlank();
 
-  private static Row rowForValue(Sheet sheet, int columnIndex, String value) {
-    for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-      Row row = sheet.getRow(rowIndex);
-      if (row != null && value.equals(row.getCell(columnIndex).getStringCellValue())) {
-        return row;
-      }
-    }
-    throw new IllegalArgumentException("Missing workbook row for: " + value);
-  }
+        HttpRequest.Builder previewRequest = HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + port + "/api/console/config/tenant-package/excel/preview/" + token))
+                .timeout(Duration.ofSeconds(60))
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .GET();
+        if (role != null) {
+            previewRequest.header("X-Console-Roles", role);
+        }
+        HttpResponse<String> previewResponse =
+                HttpClient.newHttpClient().send(previewRequest.build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(previewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        String previewToken = new ObjectMapper()
+                .readTree(previewResponse.body())
+                .path("data")
+                .path("previewToken")
+                .asText();
+        assertThat(previewToken).isNotBlank();
 
-  private void applyWorkbook(byte[] workbook, String keySuffix) throws Exception {
-    HttpResponse<String> applyResponse = applyWorkbookAsRole(workbook, keySuffix, null);
-    assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    assertThat(new ObjectMapper().readTree(applyResponse.body()).path("code").asText())
-        .isEqualTo("SUCCESS");
-  }
-
-  private void assertSuccessfulApplyAsPlatformAdmin(byte[] workbook, String keySuffix)
-      throws Exception {
-    HttpResponse<String> response = applyWorkbookAsRole(workbook, keySuffix, "ROLE_ADMIN");
-    assertThat(response.statusCode())
-        .as("configuration apply response: %s", response.body())
-        .isEqualTo(HttpStatus.OK.value());
-    assertThat(new ObjectMapper().readTree(response.body()).path("code").asText())
-        .isEqualTo("SUCCESS");
-  }
-
-  private HttpResponse<String> applyWorkbookAsRole(byte[] workbook, String keySuffix, String role)
-      throws Exception {
-    return applyWorkbookAsRole(workbook, keySuffix, role, "excel-upload-ta");
-  }
-
-  private HttpResponse<String> applyWorkbookAsRole(
-      byte[] workbook, String keySuffix, String role, String tenantId) throws Exception {
-    String boundary = "excel-upload-" + keySuffix;
-    HttpRequest.Builder uploadRequest = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + keySuffix)
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook, tenantId)));
-    if (role != null) {
-      uploadRequest.header("X-Console-Roles", role);
-    }
-    HttpResponse<String> uploadResponse = HttpClient.newHttpClient()
-        .send(uploadRequest.build(), HttpResponse.BodyHandlers.ofString());
-    assertThat(uploadResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    JsonNode upload = new ObjectMapper().readTree(uploadResponse.body());
-    String token = upload.path("data").path("uploadToken").asText();
-    assertThat(token).isNotBlank();
-
-    HttpRequest.Builder previewRequest = HttpRequest.newBuilder(URI.create("http://localhost:"
-            + port + "/api/console/config/tenant-package/excel/preview/" + token))
-        .timeout(Duration.ofSeconds(60))
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .GET();
-    if (role != null) {
-      previewRequest.header("X-Console-Roles", role);
-    }
-    HttpResponse<String> previewResponse = HttpClient.newHttpClient()
-        .send(previewRequest.build(), HttpResponse.BodyHandlers.ofString());
-    assertThat(previewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    String previewToken = new ObjectMapper()
-        .readTree(previewResponse.body())
-        .path("data")
-        .path("previewToken")
-        .asText();
-    assertThat(previewToken).isNotBlank();
-
-    HttpRequest.Builder applyRequest = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/apply/" + token))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "application/json")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-apply-" + keySuffix)
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .POST(HttpRequest.BodyPublishers.ofString(
-            "{\"previewToken\":\"" + previewToken + "\"}", StandardCharsets.UTF_8));
-    if (role != null) {
-      applyRequest.header("X-Console-Roles", role);
-    }
-    return HttpClient.newHttpClient()
-        .send(applyRequest.build(), HttpResponse.BodyHandlers.ofString());
-  }
-
-  private HttpResponse<String> postApply(
-      String uploadToken, String previewToken, String idempotencyKey) throws Exception {
-    return HttpClient.newHttpClient()
-        .send(
-            HttpRequest.newBuilder(URI.create("http://localhost:" + port
-                    + "/api/console/config/tenant-package/excel/apply/" + uploadToken))
+        HttpRequest.Builder applyRequest = HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + port + "/api/console/config/tenant-package/excel/apply/" + token))
                 .timeout(Duration.ofSeconds(60))
                 .header("Content-Type", "application/json")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "excel-upload-ta")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-apply-" + keySuffix)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
                 .POST(HttpRequest.BodyPublishers.ofString(
-                    "{\"previewToken\":\"" + previewToken + "\"}", StandardCharsets.UTF_8))
-                .build(),
-            HttpResponse.BodyHandlers.ofString());
-  }
-
-  private HttpResponse<String> previewWorkbookAsRole(
-      byte[] workbook, String keySuffix, String role, String tenantId) throws Exception {
-    String boundary = "excel-upload-" + keySuffix;
-    HttpRequest uploadRequest = HttpRequest.newBuilder(URI.create(
-            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-        .timeout(Duration.ofSeconds(60))
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + keySuffix)
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .header("X-Console-Roles", role)
-        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook, tenantId)))
-        .build();
-    HttpResponse<String> uploadResponse =
-        HttpClient.newHttpClient().send(uploadRequest, HttpResponse.BodyHandlers.ofString());
-    assertThat(uploadResponse.statusCode())
-        .as("upload response: %s", uploadResponse.body())
-        .isEqualTo(HttpStatus.OK.value());
-    String token = new ObjectMapper()
-        .readTree(uploadResponse.body())
-        .path("data")
-        .path("uploadToken")
-        .asText();
-    HttpRequest previewRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
-            + "/api/console/config/tenant-package/excel/preview/" + token))
-        .timeout(Duration.ofSeconds(60))
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .header("X-Console-Roles", role)
-        .GET()
-        .build();
-    return HttpClient.newHttpClient().send(previewRequest, HttpResponse.BodyHandlers.ofString());
-  }
-
-  private HttpResponse<String> previewTokenAs(
-      String token, String tenantId, String user, String role) throws Exception {
-    HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port
-            + "/api/console/config/tenant-package/excel/preview/" + token))
-        .timeout(Duration.ofSeconds(60))
-        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-        .header("X-Console-User", user)
-        .header("X-Console-Roles", role)
-        .GET()
-        .build();
-    return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-  }
-
-  private static byte[] multipartBody(String boundary, byte[] workbook) throws Exception {
-    return multipartBody(boundary, workbook, "excel-upload-ta");
-  }
-
-  private static byte[] withVbaProjectRelationship(byte[] workbookBytes) throws Exception {
-    ByteArrayOutputStream output = new ByteArrayOutputStream();
-    try (ZipInputStream input = new ZipInputStream(new ByteArrayInputStream(workbookBytes));
-        ZipOutputStream zip = new ZipOutputStream(output)) {
-      ZipEntry entry;
-      while ((entry = input.getNextEntry()) != null) {
-        byte[] content = input.readAllBytes();
-        if (entry.getName().equals("xl/_rels/workbook.xml.rels")) {
-          String relationships = new String(content, StandardCharsets.UTF_8);
-          relationships = relationships.replace(
-              "</Relationships>",
-              "<Relationship Id=\"rIdVba\""
-                  + " Type=\"http://schemas.microsoft.com/office/2006/relationships/vbaProject\""
-                  + " Target=\"vbaProject.bin\"/></Relationships>");
-          content = relationships.getBytes(StandardCharsets.UTF_8);
-        } else if (entry.getName().equals("[Content_Types].xml")) {
-          String contentTypes = new String(content, StandardCharsets.UTF_8);
-          contentTypes = contentTypes.replace(
-              "</Types>",
-              "<Override PartName=\"/xl/vbaProject.bin\""
-                  + " ContentType=\"application/vnd.ms-office.vbaProject\"/></Types>");
-          content = contentTypes.getBytes(StandardCharsets.UTF_8);
+                        "{\"previewToken\":\"" + previewToken + "\"}", StandardCharsets.UTF_8));
+        if (role != null) {
+            applyRequest.header("X-Console-Roles", role);
         }
-        zip.putNextEntry(new ZipEntry(entry.getName()));
-        zip.write(content);
-        zip.closeEntry();
-      }
-      zip.putNextEntry(new ZipEntry("xl/vbaProject.bin"));
-      zip.write(new byte[] {0x01, 0x02, 0x03});
-      zip.closeEntry();
+        return HttpClient.newHttpClient().send(applyRequest.build(), HttpResponse.BodyHandlers.ofString());
     }
-    return output.toByteArray();
-  }
 
-  private static byte[] multipartBody(String boundary, byte[] workbook, String tenantId)
-      throws Exception {
-    return multipartBody(boundary, workbook, tenantId, "tenant-package.xlsx");
-  }
+    private HttpResponse<String> postApply(String uploadToken, String previewToken, String idempotencyKey)
+            throws Exception {
+        return HttpClient.newHttpClient()
+                .send(
+                        HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                                        + "/api/console/config/tenant-package/excel/apply/" + uploadToken))
+                                .timeout(Duration.ofSeconds(60))
+                                .header("Content-Type", "application/json")
+                                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "excel-upload-ta")
+                                .POST(HttpRequest.BodyPublishers.ofString(
+                                        "{\"previewToken\":\"" + previewToken + "\"}", StandardCharsets.UTF_8))
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString());
+    }
 
-  private static byte[] multipartBody(
-      String boundary, byte[] workbook, String tenantId, String fileName) throws Exception {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    writePart(out, boundary, "tenantId", null, null, tenantId.getBytes(StandardCharsets.UTF_8));
-    writePart(out, boundary, "file", fileName, EXCEL_CONTENT_TYPE, workbook);
-    out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
-    return out.toByteArray();
-  }
+    private HttpResponse<String> previewWorkbookAsRole(byte[] workbook, String keySuffix, String role, String tenantId)
+            throws Exception {
+        String boundary = "excel-upload-" + keySuffix;
+        HttpRequest uploadRequest = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + keySuffix)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header("X-Console-Roles", role)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook, tenantId)))
+                .build();
+        HttpResponse<String> uploadResponse =
+                HttpClient.newHttpClient().send(uploadRequest, HttpResponse.BodyHandlers.ofString());
+        assertThat(uploadResponse.statusCode())
+                .as("upload response: %s", uploadResponse.body())
+                .isEqualTo(HttpStatus.OK.value());
+        String token = new ObjectMapper()
+                .readTree(uploadResponse.body())
+                .path("data")
+                .path("uploadToken")
+                .asText();
+        HttpRequest previewRequest = HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + port + "/api/console/config/tenant-package/excel/preview/" + token))
+                .timeout(Duration.ofSeconds(60))
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header("X-Console-Roles", role)
+                .GET()
+                .build();
+        return HttpClient.newHttpClient().send(previewRequest, HttpResponse.BodyHandlers.ofString());
+    }
 
-  private static byte[] workbookWithOversizedSharedStringsEntry() throws Exception {
-    byte[] baseWorkbook = tenantPackageWorkbook(true);
-    ByteArrayOutputStream output = new ByteArrayOutputStream();
-    byte[] chunk = "x".repeat(64 * 1024).getBytes(StandardCharsets.UTF_8);
-    boolean replaced = false;
-    try (ZipInputStream input = new ZipInputStream(new ByteArrayInputStream(baseWorkbook));
-        ZipOutputStream zip = new ZipOutputStream(output)) {
-      ZipEntry entry;
-      while ((entry = input.getNextEntry()) != null) {
-        if ("xl/sharedStrings.xml".equals(entry.getName())) {
-          replaced = true;
-          zip.putNextEntry(new ZipEntry(entry.getName()));
-          zip.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-              .concat("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">")
-              .concat("<si><t>")
-              .getBytes(StandardCharsets.UTF_8));
-          for (int index = 0; index <= 1024; index++) {
-            zip.write(chunk);
-          }
-          zip.write("</t></si></sst>".getBytes(StandardCharsets.UTF_8));
-          zip.closeEntry();
-        } else {
-          zip.putNextEntry(new ZipEntry(entry.getName()));
-          input.transferTo(zip);
-          zip.closeEntry();
+    private HttpResponse<String> previewTokenAs(String token, String tenantId, String user, String role)
+            throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + port + "/api/console/config/tenant-package/excel/preview/" + token))
+                .timeout(Duration.ofSeconds(60))
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header("X-Console-User", user)
+                .header("X-Console-Roles", role)
+                .GET()
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static byte[] multipartBody(String boundary, byte[] workbook) throws Exception {
+        return multipartBody(boundary, workbook, "excel-upload-ta");
+    }
+
+    private static byte[] withVbaProjectRelationship(byte[] workbookBytes) throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipInputStream input = new ZipInputStream(new ByteArrayInputStream(workbookBytes));
+                ZipOutputStream zip = new ZipOutputStream(output)) {
+            ZipEntry entry;
+            while ((entry = input.getNextEntry()) != null) {
+                byte[] content = input.readAllBytes();
+                if (entry.getName().equals("xl/_rels/workbook.xml.rels")) {
+                    String relationships = new String(content, StandardCharsets.UTF_8);
+                    relationships = relationships.replace(
+                            "</Relationships>",
+                            "<Relationship Id=\"rIdVba\""
+                                    + " Type=\"http://schemas.microsoft.com/office/2006/relationships/vbaProject\""
+                                    + " Target=\"vbaProject.bin\"/></Relationships>");
+                    content = relationships.getBytes(StandardCharsets.UTF_8);
+                } else if (entry.getName().equals("[Content_Types].xml")) {
+                    String contentTypes = new String(content, StandardCharsets.UTF_8);
+                    contentTypes = contentTypes.replace(
+                            "</Types>",
+                            "<Override PartName=\"/xl/vbaProject.bin\""
+                                    + " ContentType=\"application/vnd.ms-office.vbaProject\"/></Types>");
+                    content = contentTypes.getBytes(StandardCharsets.UTF_8);
+                }
+                zip.putNextEntry(new ZipEntry(entry.getName()));
+                zip.write(content);
+                zip.closeEntry();
+            }
+            zip.putNextEntry(new ZipEntry("xl/vbaProject.bin"));
+            zip.write(new byte[] {0x01, 0x02, 0x03});
+            zip.closeEntry();
         }
-        input.closeEntry();
-      }
+        return output.toByteArray();
     }
-    assertThat(replaced).isTrue();
-    return output.toByteArray();
-  }
 
-  private static void writePart(
-      ByteArrayOutputStream out,
-      String boundary,
-      String name,
-      String filename,
-      String contentType,
-      byte[] content)
-      throws Exception {
-    out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
-    out.write(
-        ("Content-Disposition: form-data; name=\"" + name + "\"").getBytes(StandardCharsets.UTF_8));
-    if (filename != null) {
-      out.write(("; filename=\"" + filename + "\"").getBytes(StandardCharsets.UTF_8));
+    private static byte[] multipartBody(String boundary, byte[] workbook, String tenantId) throws Exception {
+        return multipartBody(boundary, workbook, tenantId, "tenant-package.xlsx");
     }
-    out.write("\r\n".getBytes(StandardCharsets.UTF_8));
-    if (contentType != null) {
-      out.write(("Content-Type: " + contentType + "\r\n").getBytes(StandardCharsets.UTF_8));
-    }
-    out.write("\r\n".getBytes(StandardCharsets.UTF_8));
-    out.write(content);
-    out.write("\r\n".getBytes(StandardCharsets.UTF_8));
-  }
 
-  static byte[] tenantPackageWorkbook(boolean includeMonitoringPolicySheet) {
-    try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET,
-          ConfigPackageExcelSchema.ResourceQueue.COLUMNS,
-          List.of());
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
-          ConfigPackageExcelSchema.BusinessCalendar.COLUMNS,
-          List.of());
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
-          ConfigPackageExcelSchema.BatchWindow.COLUMNS,
-          List.of());
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.JOB_SHEET,
-          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
-          List.of());
-      if (includeMonitoringPolicySheet) {
-        sheet(
-            workbook,
-            ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
-            ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS,
-            List.of());
-      }
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.CHANNEL_SHEET,
-          ConfigPackageExcelSchema.FileChannel.COLUMNS,
-          List.of(row(
-              "tenant_id", "excel-upload-ta",
-              "channel_code", "excel_upload_local",
-              "channel_name", "Excel Upload Local",
-              "channel_type", "LOCAL",
-              "target_endpoint", "/tmp/excel-upload",
-              "auth_type", "NONE",
-              "config_json", "",
-              "receipt_policy", "NONE",
-              "timeout_seconds", "30",
-              "enabled", "true")));
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-          ConfigPackageExcelSchema.FileTemplate.COLUMNS,
-          List.of(row(
-              "tenant_id", "excel-upload-ta",
-              "template_code", "EXCEL_UPLOAD_TEMPLATE",
-              "template_name", "Excel Upload Template",
-              "template_type", "IMPORT",
-              "biz_type", "SETTLEMENT",
-              "file_format_type", "DELIMITED",
-              "charset", "UTF-8",
-              "target_charset", "UTF-8",
-              "with_bom", "false",
-              "line_separator", "\\n",
-              "delimiter", ",",
-              "quote_char", "\"",
-              "escape_char", "\\",
-              "record_length", "",
-              "header_rows", "1",
-              "footer_rows", "0",
-              "checksum_type", "NONE",
-              "compress_type", "NONE",
-              "encrypt_type", "NONE",
-              "field_mappings", "[]",
-              "validation_rule_set", "{}",
-              "query_param_schema", "{}",
-              "streaming_enabled", "false",
-              "page_size", "1000",
-              "fetch_size", "1000",
-              "chunk_size", "1000",
-              "preview_masking_enabled", "false",
-              "error_line_masking_enabled", "false",
-              "log_masking_enabled", "false",
-              "content_encryption_enabled", "false",
-              "download_requires_approval", "false",
-              "enabled", "true",
-              "version", "1")));
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.WF_DEF_SHEET,
-          ConfigPackageExcelSchema.WorkflowDefinition.COLUMNS,
-          List.of());
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.WF_NODE_SHEET,
-          ConfigPackageExcelSchema.WorkflowNode.COLUMNS,
-          List.of());
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.WF_EDGE_SHEET,
-          ConfigPackageExcelSchema.WorkflowEdge.COLUMNS,
-          List.of());
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      workbook.write(out);
-      return out.toByteArray();
-    } catch (Exception e) {
-      throw new IllegalStateException("failed to build tenant package workbook", e);
+    private static byte[] multipartBody(String boundary, byte[] workbook, String tenantId, String fileName)
+            throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writePart(out, boundary, "tenantId", null, null, tenantId.getBytes(StandardCharsets.UTF_8));
+        writePart(out, boundary, "file", fileName, EXCEL_CONTENT_TYPE, workbook);
+        out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        return out.toByteArray();
     }
-  }
 
-  private static void sheet(
-      XSSFWorkbook workbook,
-      String sheetName,
-      List<String> columns,
-      List<Map<String, String>> rows) {
-    Sheet sheet = workbook.createSheet(sheetName);
-    Row header = sheet.createRow(0);
-    for (int i = 0; i < columns.size(); i++) {
-      header.createCell(i).setCellValue(columns.get(i));
+    private static byte[] workbookWithOversizedSharedStringsEntry() throws Exception {
+        byte[] baseWorkbook = tenantPackageWorkbook(true);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] chunk = "x".repeat(64 * 1024).getBytes(StandardCharsets.UTF_8);
+        boolean replaced = false;
+        try (ZipInputStream input = new ZipInputStream(new ByteArrayInputStream(baseWorkbook));
+                ZipOutputStream zip = new ZipOutputStream(output)) {
+            ZipEntry entry;
+            while ((entry = input.getNextEntry()) != null) {
+                if ("xl/sharedStrings.xml".equals(entry.getName())) {
+                    replaced = true;
+                    zip.putNextEntry(new ZipEntry(entry.getName()));
+                    zip.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                            .concat("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">")
+                            .concat("<si><t>")
+                            .getBytes(StandardCharsets.UTF_8));
+                    for (int index = 0; index <= 1024; index++) {
+                        zip.write(chunk);
+                    }
+                    zip.write("</t></si></sst>".getBytes(StandardCharsets.UTF_8));
+                    zip.closeEntry();
+                } else {
+                    zip.putNextEntry(new ZipEntry(entry.getName()));
+                    input.transferTo(zip);
+                    zip.closeEntry();
+                }
+                input.closeEntry();
+            }
+        }
+        assertThat(replaced).isTrue();
+        return output.toByteArray();
     }
-    for (int r = 0; r < rows.size(); r++) {
-      Row row = sheet.createRow(r + 1);
-      Map<String, String> values = rows.get(r);
-      for (int c = 0; c < columns.size(); c++) {
-        row.createCell(c).setCellValue(values.getOrDefault(columns.get(c), ""));
-      }
-    }
-  }
 
-  private static Map<String, String> row(String... values) {
-    Map<String, String> row = new LinkedHashMap<>();
-    for (int i = 0; i < values.length; i += 2) {
-      row.put(values[i], values[i + 1]);
+    private static void writePart(
+            ByteArrayOutputStream out,
+            String boundary,
+            String name,
+            String filename,
+            String contentType,
+            byte[] content)
+            throws Exception {
+        out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        out.write(("Content-Disposition: form-data; name=\"" + name + "\"").getBytes(StandardCharsets.UTF_8));
+        if (filename != null) {
+            out.write(("; filename=\"" + filename + "\"").getBytes(StandardCharsets.UTF_8));
+        }
+        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+        if (contentType != null) {
+            out.write(("Content-Type: " + contentType + "\r\n").getBytes(StandardCharsets.UTF_8));
+        }
+        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+        out.write(content);
+        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
     }
-    return row;
-  }
+
+    static byte[] tenantPackageWorkbook(boolean includeMonitoringPolicySheet) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET,
+                    ConfigPackageExcelSchema.ResourceQueue.COLUMNS,
+                    List.of());
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
+                    ConfigPackageExcelSchema.BusinessCalendar.COLUMNS,
+                    List.of());
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
+                    ConfigPackageExcelSchema.BatchWindow.COLUMNS,
+                    List.of());
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.JOB_SHEET,
+                    ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+                    List.of());
+            if (includeMonitoringPolicySheet) {
+                sheet(
+                        workbook,
+                        ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
+                        ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS,
+                        List.of());
+            }
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.CHANNEL_SHEET,
+                    ConfigPackageExcelSchema.FileChannel.COLUMNS,
+                    List.of(row(
+                            "tenant_id", "excel-upload-ta",
+                            "channel_code", "excel_upload_local",
+                            "channel_name", "Excel Upload Local",
+                            "channel_type", "LOCAL",
+                            "target_endpoint", "/tmp/excel-upload",
+                            "auth_type", "NONE",
+                            "config_json", "",
+                            "receipt_policy", "NONE",
+                            "timeout_seconds", "30",
+                            "enabled", "true")));
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+                    ConfigPackageExcelSchema.FileTemplate.COLUMNS,
+                    List.of(row(
+                            "tenant_id", "excel-upload-ta",
+                            "template_code", "EXCEL_UPLOAD_TEMPLATE",
+                            "template_name", "Excel Upload Template",
+                            "template_type", "IMPORT",
+                            "biz_type", "SETTLEMENT",
+                            "file_format_type", "DELIMITED",
+                            "charset", "UTF-8",
+                            "target_charset", "UTF-8",
+                            "with_bom", "false",
+                            "line_separator", "\\n",
+                            "delimiter", ",",
+                            "quote_char", "\"",
+                            "escape_char", "\\",
+                            "record_length", "",
+                            "header_rows", "1",
+                            "footer_rows", "0",
+                            "checksum_type", "NONE",
+                            "compress_type", "NONE",
+                            "encrypt_type", "NONE",
+                            "field_mappings", "[]",
+                            "validation_rule_set", "{}",
+                            "query_param_schema", "{}",
+                            "streaming_enabled", "false",
+                            "page_size", "1000",
+                            "fetch_size", "1000",
+                            "chunk_size", "1000",
+                            "preview_masking_enabled", "false",
+                            "error_line_masking_enabled", "false",
+                            "log_masking_enabled", "false",
+                            "content_encryption_enabled", "false",
+                            "download_requires_approval", "false",
+                            "enabled", "true",
+                            "version", "1")));
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.WF_DEF_SHEET,
+                    ConfigPackageExcelSchema.WorkflowDefinition.COLUMNS,
+                    List.of());
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.WF_NODE_SHEET,
+                    ConfigPackageExcelSchema.WorkflowNode.COLUMNS,
+                    List.of());
+            sheet(
+                    workbook,
+                    ConfigPackageExcelValidator.WF_EDGE_SHEET,
+                    ConfigPackageExcelSchema.WorkflowEdge.COLUMNS,
+                    List.of());
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new IllegalStateException("failed to build tenant package workbook", e);
+        }
+    }
+
+    private static void sheet(
+            XSSFWorkbook workbook, String sheetName, List<String> columns, List<Map<String, String>> rows) {
+        Sheet sheet = workbook.createSheet(sheetName);
+        Row header = sheet.createRow(0);
+        for (int i = 0; i < columns.size(); i++) {
+            header.createCell(i).setCellValue(columns.get(i));
+        }
+        for (int r = 0; r < rows.size(); r++) {
+            Row row = sheet.createRow(r + 1);
+            Map<String, String> values = rows.get(r);
+            for (int c = 0; c < columns.size(); c++) {
+                row.createCell(c).setCellValue(values.getOrDefault(columns.get(c), ""));
+            }
+        }
+    }
+
+    private static Map<String, String> row(String... values) {
+        Map<String, String> row = new LinkedHashMap<>();
+        for (int i = 0; i < values.length; i += 2) {
+            row.put(values[i], values[i + 1]);
+        }
+        return row;
+    }
 }

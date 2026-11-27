@@ -13,6 +13,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.console")
 public class ConsoleInstanceIdProperties {
 
-  /** 实例标识；空时由调用方生成随机 UUID 并告警。 */
-  private String instanceId = "";
+    /** 实例标识；空时由调用方生成随机 UUID 并告警。 */
+    private String instanceId = "";
 }

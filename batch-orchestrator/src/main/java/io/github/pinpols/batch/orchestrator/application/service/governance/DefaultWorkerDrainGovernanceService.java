@@ -39,165 +39,156 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanceService {
 
-  private final WorkerRegistryMapper workerRegistryMapper;
-  private final JobTaskMapper jobTaskMapper;
-  private final RetryGovernanceService retryGovernanceService;
-  private final WorkerDrainProperties workerDrainProperties;
+    private final WorkerRegistryMapper workerRegistryMapper;
+    private final JobTaskMapper jobTaskMapper;
+    private final RetryGovernanceService retryGovernanceService;
+    private final WorkerDrainProperties workerDrainProperties;
 
-  @Override
-  @Transactional
-  public WorkerRegistryEntity startDrain(
-      String tenantId, String workerCode, Integer timeoutSeconds) {
-    validateTenant(tenantId);
-    Guard.requireText(workerCode, "workerCode is required");
-    WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
-    if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
+    @Override
+    @Transactional
+    public WorkerRegistryEntity startDrain(String tenantId, String workerCode, Integer timeoutSeconds) {
+        validateTenant(tenantId);
+        Guard.requireText(workerCode, "workerCode is required");
+        WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
+        if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
+        }
+        int seconds = timeoutSeconds != null && timeoutSeconds > 0
+                ? timeoutSeconds
+                : workerDrainProperties.getDefaultTimeoutSeconds();
+        int updated = workerRegistryMapper.startDrainIfCurrent(tenantId, workerCode, registry.status(), seconds);
+        rejectConcurrentUpdate(updated);
+        return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     }
-    int seconds = timeoutSeconds != null && timeoutSeconds > 0
-        ? timeoutSeconds
-        : workerDrainProperties.getDefaultTimeoutSeconds();
-    int updated =
-        workerRegistryMapper.startDrainIfCurrent(tenantId, workerCode, registry.status(), seconds);
-    rejectConcurrentUpdate(updated);
-    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-  }
 
-  @Override
-  public WorkerRegistryEntity forceOffline(String tenantId, String workerCode) {
-    // 不声明外层事务：reclaimTask 为 REQUIRES_NEW，持外层连接会再借同池连接，小池下相互等待到借用超时。
-    validateTenant(tenantId);
-    requireRegistry(tenantId, workerCode);
-    takeoverTasks(tenantId, workerCode);
-    return markDecommissioned(tenantId, workerCode);
-  }
-
-  @Override
-  public WorkerRegistryEntity takeover(String tenantId, String workerCode) {
-    validateTenant(tenantId);
-    WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
-    if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
+    @Override
+    public WorkerRegistryEntity forceOffline(String tenantId, String workerCode) {
+        // 不声明外层事务：reclaimTask 为 REQUIRES_NEW，持外层连接会再借同池连接，小池下相互等待到借用超时。
+        validateTenant(tenantId);
+        requireRegistry(tenantId, workerCode);
+        takeoverTasks(tenantId, workerCode);
+        return markDecommissioned(tenantId, workerCode);
     }
-    takeoverTasks(tenantId, workerCode);
-    return markDecommissioned(tenantId, workerCode);
-  }
 
-  @Override
-  @Transactional
-  public WorkerRegistryEntity warmup(String tenantId, String workerCode) {
-    validateTenant(tenantId);
-    WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
-    String current = registry.status();
-    if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(current)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
+    @Override
+    public WorkerRegistryEntity takeover(String tenantId, String workerCode) {
+        validateTenant(tenantId);
+        WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
+        if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
+        }
+        takeoverTasks(tenantId, workerCode);
+        return markDecommissioned(tenantId, workerCode);
     }
-    if (WorkerRegistryStatus.DRAINING.code().equals(current)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.draining");
-    }
-    if (WorkerRegistryStatus.ONLINE.code().equals(current)) {
-      return registry;
-    }
-    int updated = workerRegistryMapper.warmupIfOffline(tenantId, workerCode);
-    rejectConcurrentUpdate(updated);
-    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-  }
 
-  @Override
-  @Transactional
-  public WorkerRegistryEntity resume(String tenantId, String workerCode) {
-    validateTenant(tenantId);
-    Guard.requireText(workerCode, "workerCode is required");
-    WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
-    String current = registry.status();
-    if (WorkerRegistryStatus.ONLINE.code().equals(current)) {
-      return registry;
+    @Override
+    @Transactional
+    public WorkerRegistryEntity warmup(String tenantId, String workerCode) {
+        validateTenant(tenantId);
+        WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
+        String current = registry.status();
+        if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(current)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
+        }
+        if (WorkerRegistryStatus.DRAINING.code().equals(current)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.draining");
+        }
+        if (WorkerRegistryStatus.ONLINE.code().equals(current)) {
+            return registry;
+        }
+        int updated = workerRegistryMapper.warmupIfOffline(tenantId, workerCode);
+        rejectConcurrentUpdate(updated);
+        return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     }
-    if (!isResumable(current)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.resume_unsupported", current);
+
+    @Override
+    @Transactional
+    public WorkerRegistryEntity resume(String tenantId, String workerCode) {
+        validateTenant(tenantId);
+        Guard.requireText(workerCode, "workerCode is required");
+        WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
+        String current = registry.status();
+        if (WorkerRegistryStatus.ONLINE.code().equals(current)) {
+            return registry;
+        }
+        if (!isResumable(current)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.resume_unsupported", current);
+        }
+        if (WorkerRegistryStatus.DRAINING.code().equals(current)
+                && EmptyChecks.isNotEmpty(jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode))) {
+            // 还有在途任务：保持排空语义，等它跑完（或由 takeover 接管）后再恢复。
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.drain_in_progress");
+        }
+        int updated = workerRegistryMapper.warmupTransition(
+                tenantId, workerCode, current, WorkerRegistryStatus.ONLINE.code());
+        rejectConcurrentUpdate(updated);
+        return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     }
-    if (WorkerRegistryStatus.DRAINING.code().equals(current)
-        && EmptyChecks.isNotEmpty(
-            jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode))) {
-      // 还有在途任务：保持排空语义，等它跑完（或由 takeover 接管）后再恢复。
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.drain_in_progress");
+
+    private static boolean isResumable(String status) {
+        return WorkerRegistryStatus.DRAINING.code().equals(status)
+                || WorkerRegistryStatus.DECOMMISSIONED.code().equals(status)
+                || WorkerRegistryStatus.OFFLINE.code().equals(status);
     }
-    int updated = workerRegistryMapper.warmupTransition(
-        tenantId, workerCode, current, WorkerRegistryStatus.ONLINE.code());
-    rejectConcurrentUpdate(updated);
-    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-  }
 
-  private static boolean isResumable(String status) {
-    return WorkerRegistryStatus.DRAINING.code().equals(status)
-        || WorkerRegistryStatus.DECOMMISSIONED.code().equals(status)
-        || WorkerRegistryStatus.OFFLINE.code().equals(status);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode) {
-    validateTenant(tenantId);
-    Guard.requireText(workerCode, "workerCode is required");
-    return jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode);
-  }
-
-  @Override
-  public void takeoverAfterDrainTimeout(String tenantId, String workerCode) {
-    if (!Texts.hasText(tenantId) || !Texts.hasText(workerCode)) {
-      return;
+    @Override
+    @Transactional(readOnly = true)
+    public List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode) {
+        validateTenant(tenantId);
+        Guard.requireText(workerCode, "workerCode is required");
+        return jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode);
     }
-    WorkerRegistryEntity registry =
-        workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-    if (registry == null || !WorkerRegistryStatus.DRAINING.code().equals(registry.status())) {
-      return;
+
+    @Override
+    public void takeoverAfterDrainTimeout(String tenantId, String workerCode) {
+        if (!Texts.hasText(tenantId) || !Texts.hasText(workerCode)) {
+            return;
+        }
+        WorkerRegistryEntity registry = workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+        if (registry == null || !WorkerRegistryStatus.DRAINING.code().equals(registry.status())) {
+            return;
+        }
+        log.warn("drain deadline exceeded, taking over tasks: tenantId={}, workerCode={}", tenantId, workerCode);
+        takeoverTasks(tenantId, workerCode);
+        markDecommissioned(tenantId, workerCode);
     }
-    log.warn(
-        "drain deadline exceeded, taking over tasks: tenantId={}, workerCode={}",
-        tenantId,
-        workerCode);
-    takeoverTasks(tenantId, workerCode);
-    markDecommissioned(tenantId, workerCode);
-  }
 
-  private void takeoverTasks(String tenantId, String workerCode) {
-    List<JobTaskEntity> tasks = jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode);
-    for (JobTaskEntity task : tasks) {
-      if (task == null || task.getId() == null) {
-        continue;
-      }
-      try {
-        Long reclaimTaskId = task.getId();
-        String reclaimEventKey =
-            OutboxEventKeyGenerator.forReclaim(tenantId, task.getId(), workerCode);
-        retryGovernanceService.reclaimTask(tenantId, reclaimTaskId, reclaimEventKey);
-      } catch (RuntimeException ex) {
-        Long taskId = task.getId();
-        String causeSummary = SwallowedExceptionLogger.summary(ex);
-        log.warn("drain takeover failed for taskId={}: {}", taskId, causeSummary);
-      }
+    private void takeoverTasks(String tenantId, String workerCode) {
+        List<JobTaskEntity> tasks = jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode);
+        for (JobTaskEntity task : tasks) {
+            if (task == null || task.getId() == null) {
+                continue;
+            }
+            try {
+                Long reclaimTaskId = task.getId();
+                String reclaimEventKey = OutboxEventKeyGenerator.forReclaim(tenantId, task.getId(), workerCode);
+                retryGovernanceService.reclaimTask(tenantId, reclaimTaskId, reclaimEventKey);
+            } catch (RuntimeException ex) {
+                Long taskId = task.getId();
+                String causeSummary = SwallowedExceptionLogger.summary(ex);
+                log.warn("drain takeover failed for taskId={}: {}", taskId, causeSummary);
+            }
+        }
     }
-  }
 
-  private WorkerRegistryEntity markDecommissioned(String tenantId, String workerCode) {
-    requireRegistry(tenantId, workerCode);
-    workerRegistryMapper.markDecommissioned(tenantId, workerCode);
-    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-  }
-
-  private WorkerRegistryEntity requireRegistry(String tenantId, String workerCode) {
-    WorkerRegistryEntity loadedWorker =
-        workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-    return Guard.requireFound(loadedWorker, "worker not registered");
-  }
-
-  private void validateTenant(String tenantId) {
-    Guard.requireText(tenantId, "tenantId is required");
-  }
-
-  private void rejectConcurrentUpdate(int updated) {
-    if (updated == 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
+    private WorkerRegistryEntity markDecommissioned(String tenantId, String workerCode) {
+        requireRegistry(tenantId, workerCode);
+        workerRegistryMapper.markDecommissioned(tenantId, workerCode);
+        return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     }
-  }
+
+    private WorkerRegistryEntity requireRegistry(String tenantId, String workerCode) {
+        WorkerRegistryEntity loadedWorker = workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+        return Guard.requireFound(loadedWorker, "worker not registered");
+    }
+
+    private void validateTenant(String tenantId) {
+        Guard.requireText(tenantId, "tenantId is required");
+    }
+
+    private void rejectConcurrentUpdate(int updated) {
+        if (updated == 0) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
+        }
+    }
 }

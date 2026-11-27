@@ -7,13 +7,13 @@ import lombok.Data;
 @Data
 public class FileRecordView {
 
-  private Long id;
-  private String tenantId;
-  private String bizType;
-  private String fileName;
-  private String fileStatus;
-  private LocalDate bizDate;
-  private String traceId;
-  private Instant createdAt;
-  private Instant updatedAt;
+    private Long id;
+    private String tenantId;
+    private String bizType;
+    private String fileName;
+    private String fileStatus;
+    private LocalDate bizDate;
+    private String traceId;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

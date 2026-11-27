@@ -5,13 +5,13 @@ import java.time.LocalDate;
 
 final class ConsoleSqlDateSupport {
 
-  private ConsoleSqlDateSupport() {}
+    private ConsoleSqlDateSupport() {}
 
-  static boolean isSqlDate(Object value) {
-    return value instanceof Date;
-  }
+    static boolean isSqlDate(Object value) {
+        return value instanceof Date;
+    }
 
-  static LocalDate toLocalDate(Object value) {
-    return ((Date) value).toLocalDate();
-  }
+    static LocalDate toLocalDate(Object value) {
+        return ((Date) value).toLocalDate();
+    }
 }

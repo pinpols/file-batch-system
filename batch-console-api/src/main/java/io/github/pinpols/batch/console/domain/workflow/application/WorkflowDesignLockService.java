@@ -30,121 +30,121 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class WorkflowDesignLockService {
 
-  /** 锁 TTL 5 分钟。 */
-  public static final Duration LOCK_TTL = Duration.ofMinutes(5);
+    /** 锁 TTL 5 分钟。 */
+    public static final Duration LOCK_TTL = Duration.ofMinutes(5);
 
-  private static final String KEY_PREFIX = "wf-design-lock:";
+    private static final String KEY_PREFIX = "wf-design-lock:";
 
-  private static final long RESULT_NOT_OWNER = -1L;
-  private static final long RESULT_ABSENT = 0L;
+    private static final long RESULT_NOT_OWNER = -1L;
+    private static final long RESULT_ABSENT = 0L;
 
-  private final DesignLockStore designLockStore;
-  private final ObjectMapper objectMapper;
-  private Clock clock;
+    private final DesignLockStore designLockStore;
+    private final ObjectMapper objectMapper;
+    private Clock clock;
 
-  public WorkflowDesignLockService(DesignLockStore designLockStore, ObjectMapper objectMapper) {
-    this.designLockStore = designLockStore;
-    this.objectMapper = objectMapper;
-    this.clock = Clock.systemUTC();
-  }
-
-  /** 测试构造:允许注入 fixed Clock 验证 expiresAt。仅可见 package-private。 */
-  static WorkflowDesignLockService withClock(
-      DesignLockStore designLockStore, ObjectMapper objectMapper, Clock clock) {
-    WorkflowDesignLockService svc = new WorkflowDesignLockService(designLockStore, objectMapper);
-    svc.setClock(clock);
-    return svc;
-  }
-
-  private void setClock(Clock clock) {
-    this.clock = clock;
-  }
-
-  /** 申请锁:SETNX 成功 → 返回当前持锁信息;别人持锁 → 抛 CONFLICT 带 lockedBy。 */
-  public LockHolder acquire(String tenantId, Long definitionId, String userId) {
-    String key = buildKey(tenantId, definitionId);
-    Instant expiresAt = Instant.now(clock).plus(LOCK_TTL);
-    LockHolder holder = new LockHolder(userId, expiresAt);
-    String payload = serialize(holder);
-    Boolean ok = designLockStore.acquire(key, payload, LOCK_TTL);
-    if (Boolean.TRUE.equals(ok)) {
-      return holder;
+    public WorkflowDesignLockService(DesignLockStore designLockStore, ObjectMapper objectMapper) {
+        this.designLockStore = designLockStore;
+        this.objectMapper = objectMapper;
+        this.clock = Clock.systemUTC();
     }
-    // 已被别人持锁 → 把现持锁信息塞给 FE 用于提示
-    LockHolder current = readCurrent(key);
-    throw BizException.of(
-        ResultCode.CONFLICT,
-        "error.workflow_design_lock.held_by_other",
-        current != null ? current.lockedBy() : "unknown");
-  }
 
-  /** 释放锁:必须持锁人调用;非持锁人调用 → FORBIDDEN(防误删别人锁)。GET+校验+DEL 由 Lua 原子完成。 */
-  public void release(String tenantId, Long definitionId, String userId) {
-    String key = buildKey(tenantId, definitionId);
-    Long result = designLockStore.release(key, userId);
-    if (result != null && result == RESULT_NOT_OWNER) {
-      throw BizException.of(
-          ResultCode.FORBIDDEN, "error.workflow_design_lock.not_owner", currentOwnerOrUnknown(key));
+    /** 测试构造:允许注入 fixed Clock 验证 expiresAt。仅可见 package-private。 */
+    static WorkflowDesignLockService withClock(
+            DesignLockStore designLockStore, ObjectMapper objectMapper, Clock clock) {
+        WorkflowDesignLockService svc = new WorkflowDesignLockService(designLockStore, objectMapper);
+        svc.setClock(clock);
+        return svc;
     }
-    // 0(无锁,幂等) / 1(已删) 均视为成功
-  }
 
-  /** 续期 5 分钟:必须持锁人调用;锁不存在(过期) → CONFLICT 提示重新申请。GET+校验+SET 由 Lua 原子完成。 */
-  public LockHolder renew(String tenantId, Long definitionId, String userId) {
-    String key = buildKey(tenantId, definitionId);
-    Instant expiresAt = Instant.now(clock).plus(LOCK_TTL);
-    LockHolder renewed = new LockHolder(userId, expiresAt);
-    Long result = designLockStore.renew(key, userId, serialize(renewed), LOCK_TTL.toMillis());
-    long code = result == null ? RESULT_ABSENT : result;
-    if (code == RESULT_ABSENT) {
-      throw BizException.of(ResultCode.CONFLICT, "error.workflow_design_lock.expired");
+    private void setClock(Clock clock) {
+        this.clock = clock;
     }
-    if (code == RESULT_NOT_OWNER) {
-      throw BizException.of(
-          ResultCode.FORBIDDEN, "error.workflow_design_lock.not_owner", currentOwnerOrUnknown(key));
+
+    /** 申请锁:SETNX 成功 → 返回当前持锁信息;别人持锁 → 抛 CONFLICT 带 lockedBy。 */
+    public LockHolder acquire(String tenantId, Long definitionId, String userId) {
+        String key = buildKey(tenantId, definitionId);
+        Instant expiresAt = Instant.now(clock).plus(LOCK_TTL);
+        LockHolder holder = new LockHolder(userId, expiresAt);
+        String payload = serialize(holder);
+        Boolean ok = designLockStore.acquire(key, payload, LOCK_TTL);
+        if (Boolean.TRUE.equals(ok)) {
+            return holder;
+        }
+        // 已被别人持锁 → 把现持锁信息塞给 FE 用于提示
+        LockHolder current = readCurrent(key);
+        throw BizException.of(
+                ResultCode.CONFLICT,
+                "error.workflow_design_lock.held_by_other",
+                current != null ? current.lockedBy() : "unknown");
     }
-    return renewed;
-  }
 
-  /** 仅用于 FORBIDDEN 错误消息展示当前持锁人(best-effort);为空返回 "unknown"。 */
-  private String currentOwnerOrUnknown(String key) {
-    LockHolder current = readCurrent(key);
-    return current != null ? current.lockedBy() : "unknown";
-  }
-
-  /** 读当前锁状态(供 fullUpdate 校验持锁人是否当前 user)。null 表示无锁。 */
-  public LockHolder currentHolder(String tenantId, Long definitionId) {
-    return readCurrent(buildKey(tenantId, definitionId));
-  }
-
-  private LockHolder readCurrent(String key) {
-    String raw = designLockStore.get(key);
-    if (raw == null) {
-      return null;
+    /** 释放锁:必须持锁人调用;非持锁人调用 → FORBIDDEN(防误删别人锁)。GET+校验+DEL 由 Lua 原子完成。 */
+    public void release(String tenantId, Long definitionId, String userId) {
+        String key = buildKey(tenantId, definitionId);
+        Long result = designLockStore.release(key, userId);
+        if (result != null && result == RESULT_NOT_OWNER) {
+            throw BizException.of(
+                    ResultCode.FORBIDDEN, "error.workflow_design_lock.not_owner", currentOwnerOrUnknown(key));
+        }
+        // 0(无锁,幂等) / 1(已删) 均视为成功
     }
-    try {
-      return objectMapper.readValue(raw, LockHolder.class);
-    } catch (JsonProcessingException ex) {
-      SwallowedExceptionLogger.info(WorkflowDesignLockService.class, "lock-value-parse-failed", ex);
-      // 损坏的 value 视同无锁,让调用方按申请流程继续
-      return null;
+
+    /** 续期 5 分钟:必须持锁人调用;锁不存在(过期) → CONFLICT 提示重新申请。GET+校验+SET 由 Lua 原子完成。 */
+    public LockHolder renew(String tenantId, Long definitionId, String userId) {
+        String key = buildKey(tenantId, definitionId);
+        Instant expiresAt = Instant.now(clock).plus(LOCK_TTL);
+        LockHolder renewed = new LockHolder(userId, expiresAt);
+        Long result = designLockStore.renew(key, userId, serialize(renewed), LOCK_TTL.toMillis());
+        long code = result == null ? RESULT_ABSENT : result;
+        if (code == RESULT_ABSENT) {
+            throw BizException.of(ResultCode.CONFLICT, "error.workflow_design_lock.expired");
+        }
+        if (code == RESULT_NOT_OWNER) {
+            throw BizException.of(
+                    ResultCode.FORBIDDEN, "error.workflow_design_lock.not_owner", currentOwnerOrUnknown(key));
+        }
+        return renewed;
     }
-  }
 
-  private String serialize(LockHolder holder) {
-    try {
-      return objectMapper.writeValueAsString(holder);
-    } catch (JsonProcessingException ex) {
-      // 内置 record 序列化不应失败;真出错走系统异常
-      throw BizException.of(
-          ResultCode.SYSTEM_ERROR, "error.workflow_design_lock.serialize_failed", ex.getMessage());
+    /** 仅用于 FORBIDDEN 错误消息展示当前持锁人(best-effort);为空返回 "unknown"。 */
+    private String currentOwnerOrUnknown(String key) {
+        LockHolder current = readCurrent(key);
+        return current != null ? current.lockedBy() : "unknown";
     }
-  }
 
-  private static String buildKey(String tenantId, Long definitionId) {
-    return KEY_PREFIX + tenantId + ":" + definitionId;
-  }
+    /** 读当前锁状态(供 fullUpdate 校验持锁人是否当前 user)。null 表示无锁。 */
+    public LockHolder currentHolder(String tenantId, Long definitionId) {
+        return readCurrent(buildKey(tenantId, definitionId));
+    }
 
-  /** 锁持有信息载体(JSON 序列化)。 */
-  public record LockHolder(String lockedBy, Instant expiresAt) {}
+    private LockHolder readCurrent(String key) {
+        String raw = designLockStore.get(key);
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(raw, LockHolder.class);
+        } catch (JsonProcessingException ex) {
+            SwallowedExceptionLogger.info(WorkflowDesignLockService.class, "lock-value-parse-failed", ex);
+            // 损坏的 value 视同无锁,让调用方按申请流程继续
+            return null;
+        }
+    }
+
+    private String serialize(LockHolder holder) {
+        try {
+            return objectMapper.writeValueAsString(holder);
+        } catch (JsonProcessingException ex) {
+            // 内置 record 序列化不应失败;真出错走系统异常
+            throw BizException.of(
+                    ResultCode.SYSTEM_ERROR, "error.workflow_design_lock.serialize_failed", ex.getMessage());
+        }
+    }
+
+    private static String buildKey(String tenantId, Long definitionId) {
+        return KEY_PREFIX + tenantId + ":" + definitionId;
+    }
+
+    /** 锁持有信息载体(JSON 序列化)。 */
+    public record LockHolder(String lockedBy, Instant expiresAt) {}
 }

@@ -9,34 +9,34 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ImportPayload(
-    String fileCode,
-    String fileName,
-    String originalFileName,
-    String bizType,
-    String fileFormatType,
-    String charset,
-    String targetCharset,
-    String checksumType,
-    String checksumValue,
-    String sourceType,
-    String sourceRef,
-    String storageType,
-    String storagePath,
-    String storageBucket,
-    String templateCode,
-    String batchNo,
-    String content,
-    String contentBase64,
-    String delimiter,
-    Integer headerRows,
-    Integer footerRows,
-    Boolean withHeader,
-    Map<String, Object> metadata) {
+        String fileCode,
+        String fileName,
+        String originalFileName,
+        String bizType,
+        String fileFormatType,
+        String charset,
+        String targetCharset,
+        String checksumType,
+        String checksumValue,
+        String sourceType,
+        String sourceRef,
+        String storageType,
+        String storagePath,
+        String storageBucket,
+        String templateCode,
+        String batchNo,
+        String content,
+        String contentBase64,
+        String delimiter,
+        Integer headerRows,
+        Integer footerRows,
+        Boolean withHeader,
+        Map<String, Object> metadata) {
 
-  /** 无可解析载荷时使用的兼容占位，避免调用侧暴露整组无业务语义的 {@code null}。 */
-  public static ImportPayload empty() {
-    return new ImportPayload(
-        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-        null, null, null, null, null, null, null, Map.of());
-  }
+    /** 无可解析载荷时使用的兼容占位，避免调用侧暴露整组无业务语义的 {@code null}。 */
+    public static ImportPayload empty() {
+        return new ImportPayload(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, Map.of());
+    }
 }

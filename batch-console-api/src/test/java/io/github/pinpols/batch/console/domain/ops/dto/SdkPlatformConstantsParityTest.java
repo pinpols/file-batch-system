@@ -23,37 +23,37 @@ import org.junit.jupiter.api.Test;
 @DisplayName("SDK 平台常量镜像校验:受支持版本集合须与共享基准文件对齐, 当前主版本取最低支持版本")
 class SdkPlatformConstantsParityTest {
 
-  private static Path repoRoot() {
-    for (Path p = Paths.get("").toAbsolutePath(); p != null; p = p.getParent()) {
-      if (Files.isDirectory(p.resolve("docs/api"))) {
-        return p;
-      }
+    private static Path repoRoot() {
+        for (Path p = Paths.get("").toAbsolutePath(); p != null; p = p.getParent()) {
+            if (Files.isDirectory(p.resolve("docs/api"))) {
+                return p;
+            }
+        }
+        return Paths.get("").toAbsolutePath();
     }
-    return Paths.get("").toAbsolutePath();
-  }
 
-  private static JsonNode loadYaml() throws IOException {
-    Path yaml = repoRoot().resolve("docs/api/sdk-shared-constants.yaml");
-    return new YAMLMapper().readTree(Files.readString(yaml));
-  }
+    private static JsonNode loadYaml() throws IOException {
+        Path yaml = repoRoot().resolve("docs/api/sdk-shared-constants.yaml");
+        return new YAMLMapper().readTree(Files.readString(yaml));
+    }
 
-  @Test
-  @DisplayName("版本对齐:常量声明的受支持版本与基准文件逐一相等, 新增删除或改值都会失败")
-  void shouldMirrorSchemaVersions_whenComparedWithSharedYaml() throws IOException {
-    JsonNode yamlVersions = loadYaml().get("schema_versions_supported");
-    List<String> fromYaml = new ArrayList<>();
-    yamlVersions.forEach(n -> fromYaml.add(n.asText()));
+    @Test
+    @DisplayName("版本对齐:常量声明的受支持版本与基准文件逐一相等, 新增删除或改值都会失败")
+    void shouldMirrorSchemaVersions_whenComparedWithSharedYaml() throws IOException {
+        JsonNode yamlVersions = loadYaml().get("schema_versions_supported");
+        List<String> fromYaml = new ArrayList<>();
+        yamlVersions.forEach(n -> fromYaml.add(n.asText()));
 
-    assertThat(SdkPlatformConstants.SCHEMA_VERSIONS_SUPPORTED)
-        .as("SdkPlatformConstants.SCHEMA_VERSIONS_SUPPORTED 必须 == sdk-shared-constants.yaml")
-        .containsExactlyElementsOf(fromYaml);
-  }
+        assertThat(SdkPlatformConstants.SCHEMA_VERSIONS_SUPPORTED)
+                .as("SdkPlatformConstants.SCHEMA_VERSIONS_SUPPORTED 必须 == sdk-shared-constants.yaml")
+                .containsExactlyElementsOf(fromYaml);
+    }
 
-  @Test
-  @DisplayName("主版本下界:当前 SDK 主版本为支持集合中的最低项, 且集合包含首个版本")
-  void shouldKeepCurrentSdkMajorAsLowest_whenVersionsSupportedSorted() {
-    // 平台当前 SDK 主版本应是支持集合里最低的 major(v1, v2 → 1);若 YAML/常量漂移,此断言锚定假设。
-    assertThat(SdkPlatformConstants.CURRENT_SDK_MAJOR).isEqualTo(1);
-    assertThat(SdkPlatformConstants.SCHEMA_VERSIONS_SUPPORTED).contains("v1");
-  }
+    @Test
+    @DisplayName("主版本下界:当前 SDK 主版本为支持集合中的最低项, 且集合包含首个版本")
+    void shouldKeepCurrentSdkMajorAsLowest_whenVersionsSupportedSorted() {
+        // 平台当前 SDK 主版本应是支持集合里最低的 major(v1, v2 → 1);若 YAML/常量漂移,此断言锚定假设。
+        assertThat(SdkPlatformConstants.CURRENT_SDK_MAJOR).isEqualTo(1);
+        assertThat(SdkPlatformConstants.SCHEMA_VERSIONS_SUPPORTED).contains("v1");
+    }
 }

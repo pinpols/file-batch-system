@@ -16,49 +16,46 @@ import org.springframework.context.MessageSource;
 @DisplayName("字典枚举 label 本地化: 消息 key 为空回退硬编码 label，非空走 MessageSource")
 class ConsoleMetaLabelLocalizationTest {
 
-  private static DictEnum item(String messageKey, String label) {
-    return new DictEnum() {
-      @Override
-      public String code() {
-        return "CODE";
-      }
+    private static DictEnum item(String messageKey, String label) {
+        return new DictEnum() {
+            @Override
+            public String code() {
+                return "CODE";
+            }
 
-      @Override
-      public String label() {
-        return label;
-      }
+            @Override
+            public String label() {
+                return label;
+            }
 
-      @Override
-      public String messageKey() {
-        return messageKey;
-      }
-    };
-  }
+            @Override
+            public String messageKey() {
+                return messageKey;
+            }
+        };
+    }
 
-  @Test
-  @DisplayName("消息 key 为 null 时直接返回硬编码 label，不查询 MessageSource")
-  void returns_fallback_label_when_message_key_is_null() {
-    MessageSource messageSource = mock(MessageSource.class);
+    @Test
+    @DisplayName("消息 key 为 null 时直接返回硬编码 label，不查询 MessageSource")
+    void returns_fallback_label_when_message_key_is_null() {
+        MessageSource messageSource = mock(MessageSource.class);
 
-    String label =
-        ConsoleMetaQueryService.localizedLabel(item(null, "中文标签"), messageSource, Locale.ENGLISH);
+        String label = ConsoleMetaQueryService.localizedLabel(item(null, "中文标签"), messageSource, Locale.ENGLISH);
 
-    assertThat(label).isEqualTo("中文标签");
-    verifyNoInteractions(messageSource);
-  }
+        assertThat(label).isEqualTo("中文标签");
+        verifyNoInteractions(messageSource);
+    }
 
-  @Test
-  @DisplayName("消息 key 非空时按 Locale 取翻译值，缺失时由 MessageSource 回退到硬编码 label")
-  void resolves_translated_label_when_message_key_present() {
-    MessageSource messageSource = mock(MessageSource.class);
-    when(messageSource.getMessage("dict.X.Y", null, "中文标签", Locale.ENGLISH))
-        .thenReturn("English label");
+    @Test
+    @DisplayName("消息 key 非空时按 Locale 取翻译值，缺失时由 MessageSource 回退到硬编码 label")
+    void resolves_translated_label_when_message_key_present() {
+        MessageSource messageSource = mock(MessageSource.class);
+        when(messageSource.getMessage("dict.X.Y", null, "中文标签", Locale.ENGLISH)).thenReturn("English label");
 
-    String label = ConsoleMetaQueryService.localizedLabel(
-        item("dict.X.Y", "中文标签"), messageSource, Locale.ENGLISH);
+        String label = ConsoleMetaQueryService.localizedLabel(item("dict.X.Y", "中文标签"), messageSource, Locale.ENGLISH);
 
-    assertThat(label).isEqualTo("English label");
-    verify(messageSource).getMessage("dict.X.Y", null, "中文标签", Locale.ENGLISH);
-    verify(messageSource, never()).getMessage("dict.X.Y", null, Locale.ENGLISH);
-  }
+        assertThat(label).isEqualTo("English label");
+        verify(messageSource).getMessage("dict.X.Y", null, "中文标签", Locale.ENGLISH);
+        verify(messageSource, never()).getMessage("dict.X.Y", null, Locale.ENGLISH);
+    }
 }

@@ -39,87 +39,81 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * claim/report HTTP 往返,有效吞吐很低(~1 task/10s 级),与生产无关。 生产吞吐/SLO 基准用 load-tests 的 {@code
  * SpiTaskDispatchSimulation}(Gatling,打真实部署)。
  */
-@E2eSpringBootTest(
-    classes = E2eAtomicApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@E2eSpringBootTest(classes = E2eAtomicApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @E2eBusinessSchema
 @DisplayName("原子任务负载端到端:单类型原子任务高并发突发投放,压真实派发与执行链路,验证并发下不丢任务,全部收敛到终态成功并记录吞吐")
 class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
 
-  private static final Logger log = LoggerFactory.getLogger(AtomicTaskLoadE2eIT.class);
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
-  private static final int TASK_COUNT = 15;
+    private static final Logger log = LoggerFactory.getLogger(AtomicTaskLoadE2eIT.class);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final int TASK_COUNT = 15;
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+    @Autowired
+    private WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Test
-  @DisplayName("并发突发投放 15 个原子任务:验证全部走到终态成功,成功数恰好等于投放数,无丢任务与长期停滞")
-  void shouldProcessEveryTaskToSuccess_whenConcurrentBurstDispatched() {
-    List<String> dedupKeys = new ArrayList<>(TASK_COUNT);
+    @Test
+    @DisplayName("并发突发投放 15 个原子任务:验证全部走到终态成功,成功数恰好等于投放数,无丢任务与长期停滞")
+    void shouldProcessEveryTaskToSuccess_whenConcurrentBurstDispatched() {
+        List<String> dedupKeys = new ArrayList<>(TASK_COUNT);
 
-    long launchStart = System.nanoTime();
-    for (int i = 0; i < TASK_COUNT; i++) {
-      LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
-      dedupKeys.add(seed.dedupKey());
+        long launchStart = System.nanoTime();
+        for (int i = 0; i < TASK_COUNT; i++) {
+            LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                    jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
+            dedupKeys.add(seed.dedupKey());
 
-      Map<String, Object> params = new LinkedHashMap<>();
-      params.put("taskType", "sql");
-      params.put("sql", "SELECT 1");
+            Map<String, Object> params = new LinkedHashMap<>();
+            params.put("taskType", "sql");
+            params.put("sql", "SELECT 1");
 
-      launchService.launch(new LaunchRequest(
-          TENANT,
-          seed.workflowDefinitionId(),
-          BIZ_DATE,
-          TriggerType.API,
-          seed.requestId(),
-          "e2e-tr-atomic-load-" + i,
-          params));
+            launchService.launch(new LaunchRequest(
+                    TENANT,
+                    seed.workflowDefinitionId(),
+                    BIZ_DATE,
+                    TriggerType.API,
+                    seed.requestId(),
+                    "e2e-tr-atomic-load-" + i,
+                    params));
+        }
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
+        log.info("[spi-load] launched {} tasks in {} ms", TASK_COUNT, (System.nanoTime() - launchStart) / 1_000_000);
+
+        long drainStart = System.nanoTime();
+        await().atMost(Duration.ofSeconds(300))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> assertThat(succeededCount(dedupKeys)).isEqualTo(TASK_COUNT));
+
+        long drainMillis = (System.nanoTime() - drainStart) / 1_000_000;
+        double throughput = TASK_COUNT * 1000.0 / Math.max(1, drainMillis);
+        log.info(
+                "[spi-load] {} tasks reached SUCCESS in {} ms (~{} tasks/s)",
+                TASK_COUNT,
+                drainMillis,
+                String.format("%.1f", throughput));
+
+        // 无丢任务:终态成功数恰好 == 投放数
+        assertThat(succeededCount(dedupKeys)).isEqualTo(TASK_COUNT);
     }
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
-    log.info(
-        "[spi-load] launched {} tasks in {} ms",
-        TASK_COUNT,
-        (System.nanoTime() - launchStart) / 1_000_000);
 
-    long drainStart = System.nanoTime();
-    await()
-        .atMost(Duration.ofSeconds(300))
-        .pollInterval(Duration.ofMillis(500))
-        .untilAsserted(() -> assertThat(succeededCount(dedupKeys)).isEqualTo(TASK_COUNT));
-
-    long drainMillis = (System.nanoTime() - drainStart) / 1_000_000;
-    double throughput = TASK_COUNT * 1000.0 / Math.max(1, drainMillis);
-    log.info(
-        "[spi-load] {} tasks reached SUCCESS in {} ms (~{} tasks/s)",
-        TASK_COUNT,
-        drainMillis,
-        String.format("%.1f", throughput));
-
-    // 无丢任务:终态成功数恰好 == 投放数
-    assertThat(succeededCount(dedupKeys)).isEqualTo(TASK_COUNT);
-  }
-
-  private int succeededCount(List<String> dedupKeys) {
-    String inClause = String.join(",", Collections.nCopies(dedupKeys.size(), "?"));
-    Object[] args = new Object[dedupKeys.size() + 1];
-    args[0] = TENANT;
-    for (int i = 0; i < dedupKeys.size(); i++) {
-      args[i + 1] = dedupKeys.get(i);
-    }
-    final String selectCountSql = """
+    private int succeededCount(List<String> dedupKeys) {
+        String inClause = String.join(",", Collections.nCopies(dedupKeys.size(), "?"));
+        Object[] args = new Object[dedupKeys.size() + 1];
+        args[0] = TENANT;
+        for (int i = 0; i < dedupKeys.size(); i++) {
+            args[i + 1] = dedupKeys.get(i);
+        }
+        final String selectCountSql = """
         select count(*) from batch.job_task t join batch.job_instance ji on ji.id = t.job_instance_id\s\
         where ji.tenant_id = ? and ji.dedup_key in (%s) and t.task_status = 'SUCCESS'\
         """.formatted(inClause);
-    Integer n = jdbcTemplate.queryForObject(selectCountSql, Integer.class, args);
-    return n == null ? 0 : n;
-  }
+        Integer n = jdbcTemplate.queryForObject(selectCountSql, Integer.class, args);
+        return n == null ? 0 : n;
+    }
 }

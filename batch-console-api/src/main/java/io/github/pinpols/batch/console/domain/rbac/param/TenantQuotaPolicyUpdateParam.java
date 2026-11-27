@@ -11,12 +11,12 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class TenantQuotaPolicyUpdateParam {
 
-  private String tenantId;
-  private Long id;
-  private Integer maxRunningJobsPerTenant;
-  private Integer maxPartitionsPerTenant;
-  private Integer maxQpsPerTenant;
-  private Integer fairShareWeight;
-  private Boolean enabled;
-  private String description;
+    private String tenantId;
+    private Long id;
+    private Integer maxRunningJobsPerTenant;
+    private Integer maxPartitionsPerTenant;
+    private Integer maxQpsPerTenant;
+    private Integer fairShareWeight;
+    private Boolean enabled;
+    private String description;
 }

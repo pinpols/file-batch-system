@@ -14,79 +14,79 @@ import java.util.Set;
  */
 class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
 
-  /**
-   * 已知 ROLE_ADMIN 跨租运维查询 / dashboard 聚合的 mapper 白名单。新写 mapper **严禁追加** — 应改成无条件租户过滤(典型业务路径)或拆出独立的
-   * admin 全局方法。
-   */
-  @Override
-  protected List<String> knownConditionalTenantMappers() {
-    return List.of(
-        // 跨租 retry / outbox 重试观察台 — admin 全局查
-        "EventDeliveryLogMapper",
-        "EventOutboxRetryMapper",
-        "RetryScheduleMapper",
-        "OutboxEventMapper",
-        // 跨租 batch-day 等待视图 — admin 全局排查
-        "BatchDayWaitingLaunchMapper",
-        // 跨租文件治理聚合
-        "FileGovernanceMapper");
-  }
+    /**
+     * 已知 ROLE_ADMIN 跨租运维查询 / dashboard 聚合的 mapper 白名单。新写 mapper **严禁追加** — 应改成无条件租户过滤(典型业务路径)或拆出独立的
+     * admin 全局方法。
+     */
+    @Override
+    protected List<String> knownConditionalTenantMappers() {
+        return List.of(
+                // 跨租 retry / outbox 重试观察台 — admin 全局查
+                "EventDeliveryLogMapper",
+                "EventOutboxRetryMapper",
+                "RetryScheduleMapper",
+                "OutboxEventMapper",
+                // 跨租 batch-day 等待视图 — admin 全局排查
+                "BatchDayWaitingLaunchMapper",
+                // 跨租文件治理聚合
+                "FileGovernanceMapper");
+    }
 
-  @Override
-  protected Set<String> tenantExemptTables() {
-    Set<String> tables = new HashSet<>(super.tenantExemptTables());
-    // V363 全局扫描单例仅保存分片水位和版本，不含租户业务数据，也没有 tenant_id。
-    tables.add("waiting_partition_scan_cursor");
-    // V383 对账游标按共享存储和前缀维护跨租户扫描进度，没有 tenant_id。
-    tables.add("file_governance_reconcile_cursor");
-    return Set.copyOf(tables);
-  }
+    @Override
+    protected Set<String> tenantExemptTables() {
+        Set<String> tables = new HashSet<>(super.tenantExemptTables());
+        // V363 全局扫描单例仅保存分片水位和版本，不含租户业务数据，也没有 tenant_id。
+        tables.add("waiting_partition_scan_cursor");
+        // V383 对账游标按共享存储和前缀维护跨租户扫描进度，没有 tenant_id。
+        tables.add("file_governance_reconcile_cursor");
+        return Set.copyOf(tables);
+    }
 
-  /**
-   * batch.* UPDATE/DELETE 缺 tenant_id 谓词的语句级豁免(表带 tenant_id 列,但隔离不在本条 SQL 的 WHERE)。每条注明 by-design
-   * 依据。红线:新写 业务/用户可达的 batch.* 写严禁往此追加,必须带 tenant_id 谓词。
-   */
-  @Override
-  protected Set<String> knownTenantlessBatchWriteStatements() {
-    return Set.of(
-        // 认证路径:按刚认证通过的 key 自身 id 更新(只能触及自己那把 key,非 IDOR)
-        "ApiKeyAuthMapper#touchLastUsedAt",
-        "ApiKeyAuthMapper#upgradeHashIfLegacy",
-        // replay/quota 内部乐观锁状态机:按全局 id + version CAS,非用户可达
-        "BatchDayReplayEntryMapper#updateStatus",
-        "QuotaRuntimeStateMapper#updateWithCas",
-        // 跨租后台 reaper:按状态/时间全表扫僵尸行,加 tenant 谓词会破坏(by-design 跨租)
-        "CompensationCommandMapper#markStaleRunningFailed",
-        "OutboxEventMapper#resetStalePublishing",
-        // worker heartbeat reaper 按最后心跳全局扫描过期注册行,不得受当前租户上下文限制。
-        "WorkerRegistryMapper#updateStaleHeartbeatsStatus",
-        "WorkerRegistryMapper#markStaleHeartbeatsOffline",
-        // 发件箱发布器状态机:发布器全局轮询、按全局行 id 推进,无 tenant 上下文(by-design 系统组件)
-        "OutboxEventMapper#deleteByIds",
-        "OutboxEventMapper#deleteEventDeliveryLogsByOutboxIds",
-        "OutboxEventMapper#deleteEventOutboxRetriesByOutboxIds",
-        // worker 自更新:worker 按自己的注册 id 改
-        "WorkerRegistryMapper#updateById",
-        // 归档/保留级联:按预选 job_instance id 集删除运行态子行(内部维护任务,id 集即隔离边界)
-        "SuccessInstanceArchiveMapper#nullifyParentInstanceIdByParentIds",
-        "SuccessInstanceArchiveMapper#deleteJobInstancesByIds",
-        "SuccessInstanceArchiveMapper#nullifyPipelineInstanceFileIdByInstanceIds",
-        "SuccessInstanceArchiveMapper#deletePipelineInstancesByInstanceIds",
-        "SuccessInstanceArchiveMapper#deleteJobPartitionsByInstanceIds",
-        "SuccessInstanceArchiveMapper#deleteJobStepInstancesByInstanceIds",
-        "SuccessInstanceArchiveMapper#deleteJobTasksByInstanceIds",
-        "SuccessInstanceArchiveMapper#deleteJobExecutionLogsByInstanceIds",
-        "SuccessInstanceArchiveMapper#deleteCompensationCommandsByInstanceIds",
-        "SuccessInstanceArchiveMapper#deleteWorkflowRunsByInstanceIds",
-        // 告警 claim 按已预选的全局 job_instance id 集清理，仅内部归档维护任务可调用。
-        "SuccessInstanceArchiveMapper#deleteJobMonitoringAlertClaimsByInstanceIds",
-        // file_dispatch_record 有 tenant_id 列,但归档按预选实例 id 集级联删派单明细(id 集即隔离边界)
-        "SuccessInstanceArchiveMapper#deleteFileDispatchRecordsByInstanceIds",
-        // 全局过期凭证维护任务按 expires_at 有界清理，不承载租户可达的数据操作。
-        "BatchDayReplayPreviewTokenMapper#deleteExpired",
-        // 定义子表级联删除:按父 workflow_definition_id / ids 删(父定义已按 tenant 校验)
-        "WorkflowEdgeMapper#deleteByWorkflowDefinitionId",
-        "WorkflowNodeMapper#deleteByWorkflowDefinitionId",
-        "WorkflowRunMapper#deleteByIds");
-  }
+    /**
+     * batch.* UPDATE/DELETE 缺 tenant_id 谓词的语句级豁免(表带 tenant_id 列,但隔离不在本条 SQL 的 WHERE)。每条注明 by-design
+     * 依据。红线:新写 业务/用户可达的 batch.* 写严禁往此追加,必须带 tenant_id 谓词。
+     */
+    @Override
+    protected Set<String> knownTenantlessBatchWriteStatements() {
+        return Set.of(
+                // 认证路径:按刚认证通过的 key 自身 id 更新(只能触及自己那把 key,非 IDOR)
+                "ApiKeyAuthMapper#touchLastUsedAt",
+                "ApiKeyAuthMapper#upgradeHashIfLegacy",
+                // replay/quota 内部乐观锁状态机:按全局 id + version CAS,非用户可达
+                "BatchDayReplayEntryMapper#updateStatus",
+                "QuotaRuntimeStateMapper#updateWithCas",
+                // 跨租后台 reaper:按状态/时间全表扫僵尸行,加 tenant 谓词会破坏(by-design 跨租)
+                "CompensationCommandMapper#markStaleRunningFailed",
+                "OutboxEventMapper#resetStalePublishing",
+                // worker heartbeat reaper 按最后心跳全局扫描过期注册行,不得受当前租户上下文限制。
+                "WorkerRegistryMapper#updateStaleHeartbeatsStatus",
+                "WorkerRegistryMapper#markStaleHeartbeatsOffline",
+                // 发件箱发布器状态机:发布器全局轮询、按全局行 id 推进,无 tenant 上下文(by-design 系统组件)
+                "OutboxEventMapper#deleteByIds",
+                "OutboxEventMapper#deleteEventDeliveryLogsByOutboxIds",
+                "OutboxEventMapper#deleteEventOutboxRetriesByOutboxIds",
+                // worker 自更新:worker 按自己的注册 id 改
+                "WorkerRegistryMapper#updateById",
+                // 归档/保留级联:按预选 job_instance id 集删除运行态子行(内部维护任务,id 集即隔离边界)
+                "SuccessInstanceArchiveMapper#nullifyParentInstanceIdByParentIds",
+                "SuccessInstanceArchiveMapper#deleteJobInstancesByIds",
+                "SuccessInstanceArchiveMapper#nullifyPipelineInstanceFileIdByInstanceIds",
+                "SuccessInstanceArchiveMapper#deletePipelineInstancesByInstanceIds",
+                "SuccessInstanceArchiveMapper#deleteJobPartitionsByInstanceIds",
+                "SuccessInstanceArchiveMapper#deleteJobStepInstancesByInstanceIds",
+                "SuccessInstanceArchiveMapper#deleteJobTasksByInstanceIds",
+                "SuccessInstanceArchiveMapper#deleteJobExecutionLogsByInstanceIds",
+                "SuccessInstanceArchiveMapper#deleteCompensationCommandsByInstanceIds",
+                "SuccessInstanceArchiveMapper#deleteWorkflowRunsByInstanceIds",
+                // 告警 claim 按已预选的全局 job_instance id 集清理，仅内部归档维护任务可调用。
+                "SuccessInstanceArchiveMapper#deleteJobMonitoringAlertClaimsByInstanceIds",
+                // file_dispatch_record 有 tenant_id 列,但归档按预选实例 id 集级联删派单明细(id 集即隔离边界)
+                "SuccessInstanceArchiveMapper#deleteFileDispatchRecordsByInstanceIds",
+                // 全局过期凭证维护任务按 expires_at 有界清理，不承载租户可达的数据操作。
+                "BatchDayReplayPreviewTokenMapper#deleteExpired",
+                // 定义子表级联删除:按父 workflow_definition_id / ids 删(父定义已按 tenant 校验)
+                "WorkflowEdgeMapper#deleteByWorkflowDefinitionId",
+                "WorkflowNodeMapper#deleteByWorkflowDefinitionId",
+                "WorkflowRunMapper#deleteByIds");
+    }
 }

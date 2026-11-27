@@ -49,61 +49,59 @@ import org.springframework.test.context.jdbc.Sql;
  * JVM/数据库，后端守卫（Stateful Backend Guard）首启记录 filesystem baseline，无需外部 cutover。
  */
 @E2eSpringBootTest(
-    classes = E2eExportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.export.worker-type=EXPORT")
+        classes = E2eExportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.export.worker-type=EXPORT")
 @E2eBusinessSchema
 @Sql(
-    scripts = {
-      E2eTestSql.EXPORT_TEMPLATE_SEED,
-    })
+        scripts = {
+            E2eTestSql.EXPORT_TEMPLATE_SEED,
+        })
 @EnabledIfSystemProperty(named = "batch.test.storage.backend", matches = "filesystem")
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("本地文件后端的导出主链路:任务成功终态后产物落盘位置、磁盘直读、抽象接口读取与预签名令牌三路结果一致")
 class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
-  private static final String ACCOUNTING_PERIOD =
-      BIZ_DATE.format(DateTimeFormatter.ofPattern("yyyyMM"));
-  private static final String BATCH_NO = "E2E-SET-FS-1";
-  private static final String SETTLEMENT_NO = "E2E-FS-SET-001";
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String ACCOUNTING_PERIOD = BIZ_DATE.format(DateTimeFormatter.ofPattern("yyyyMM"));
+    private static final String BATCH_NO = "E2E-SET-FS-1";
+    private static final String SETTLEMENT_NO = "E2E-FS-SET-001";
 
-  private final WorkflowRunLaunchService launchService;
-  private final JdbcTemplate jdbcTemplate;
-  private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
-  private final BatchObjectStore objectStore;
-  private final S3StorageProperties s3Properties;
-  private final FilesystemStorageProperties filesystemProperties;
-  private final DataSource businessDataSource;
+    private final WorkflowRunLaunchService launchService;
+    private final JdbcTemplate jdbcTemplate;
+    private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    private final BatchObjectStore objectStore;
+    private final S3StorageProperties s3Properties;
+    private final FilesystemStorageProperties filesystemProperties;
+    private final DataSource businessDataSource;
 
-  FilesystemBackendPipelineE2eIT(
-      WorkflowRunLaunchService launchService,
-      JdbcTemplate jdbcTemplate,
-      E2eOutboxPublishSupport e2eOutboxPublishSupport,
-      BatchObjectStore objectStore,
-      S3StorageProperties s3Properties,
-      FilesystemStorageProperties filesystemProperties,
-      @Qualifier("exportBusinessDataSource") DataSource businessDataSource) {
-    this.launchService = launchService;
-    this.jdbcTemplate = jdbcTemplate;
-    this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
-    this.objectStore = objectStore;
-    this.s3Properties = s3Properties;
-    this.filesystemProperties = filesystemProperties;
-    this.businessDataSource = businessDataSource;
-  }
+    FilesystemBackendPipelineE2eIT(
+            WorkflowRunLaunchService launchService,
+            JdbcTemplate jdbcTemplate,
+            E2eOutboxPublishSupport e2eOutboxPublishSupport,
+            BatchObjectStore objectStore,
+            S3StorageProperties s3Properties,
+            FilesystemStorageProperties filesystemProperties,
+            @Qualifier("exportBusinessDataSource") DataSource businessDataSource) {
+        this.launchService = launchService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
+        this.objectStore = objectStore;
+        this.s3Properties = s3Properties;
+        this.filesystemProperties = filesystemProperties;
+        this.businessDataSource = businessDataSource;
+    }
 
-  @Test
-  @DisplayName("本地文件后端导出任务到达成功终态,产物落在根目录对应桶与键下,磁盘直读、抽象接口读取与预签名令牌校验结果一致")
-  void shouldReadExportedArtifactViaDiskStoreAndPresignToken_whenFilesystemBackendSelected()
-      throws Exception {
-    final String selectTaskStatusSql = """
+    @Test
+    @DisplayName("本地文件后端导出任务到达成功终态,产物落在根目录对应桶与键下,磁盘直读、抽象接口读取与预签名令牌校验结果一致")
+    void shouldReadExportedArtifactViaDiskStoreAndPresignToken_whenFilesystemBackendSelected() throws Exception {
+        final String selectTaskStatusSql = """
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
                       """;
-    final String selectStoragePathSql = """
+        final String selectStoragePathSql = """
             select fr.storage_path, fr.file_status, fr.file_size_bytes
             from batch.file_record fr
             join batch.job_instance ji on ji.tenant_id = fr.tenant_id
@@ -113,124 +111,116 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
             limit 1
             """;
 
-    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    seedSettlementData(businessJdbc);
+        JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+        seedSettlementData(businessJdbc);
 
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API, BIZ_DATE);
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API, BIZ_DATE);
 
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("batchNo", BATCH_NO);
-    params.put("templateCode", "EXP-SETTLEMENT-JSON");
-    params.put("bizDate", BIZ_DATE.toString());
-    params.put("bizType", "SETTLEMENT");
-    params.put("fileCode", "e2e-fs-export-file");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("batchNo", BATCH_NO);
+        params.put("templateCode", "EXP-SETTLEMENT-JSON");
+        params.put("bizDate", BIZ_DATE.toString());
+        params.put("bizType", "SETTLEMENT");
+        params.put("fileCode", "e2e-fs-export-file");
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-fs-export",
-        params));
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-fs-export",
+                params));
 
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(
-              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
-          assertThat(status).isEqualTo("SUCCESS");
-        });
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    String status =
+                            jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+                    assertThat(status).isEqualTo("SUCCESS");
+                });
 
-    Map<String, Object> fileRecord =
-        jdbcTemplate.queryForMap(selectStoragePathSql, TENANT, seed.dedupKey());
-    assertThat(fileRecord.get("storage_path")).isInstanceOf(String.class);
-    String storagePath = (String) fileRecord.get("storage_path");
-    assertThat(storagePath).as("export: file_record.storage_path must be set").isNotBlank();
+        Map<String, Object> fileRecord = jdbcTemplate.queryForMap(selectStoragePathSql, TENANT, seed.dedupKey());
+        assertThat(fileRecord.get("storage_path")).isInstanceOf(String.class);
+        String storagePath = (String) fileRecord.get("storage_path");
+        assertThat(storagePath)
+                .as("export: file_record.storage_path must be set")
+                .isNotBlank();
 
-    String bucket = s3Properties.getBucket();
-    String key = storagePath.startsWith(bucket + "/")
-        ? storagePath.substring(bucket.length() + 1)
-        : storagePath;
+        String bucket = s3Properties.getBucket();
+        String key = storagePath.startsWith(bucket + "/") ? storagePath.substring(bucket.length() + 1) : storagePath;
 
-    // 1) 磁盘直读：产物落在 filesystem 根目录 root/<bucket>/<key>
-    Path onDisk = filesystemRoot().resolve(bucket).resolve(key);
-    assertThat(Files.isRegularFile(onDisk))
-        .as("export: artifact must exist on filesystem root: %s", onDisk)
-        .isTrue();
-    assertThat(fileRecord.get("file_size_bytes")).isInstanceOf(Number.class);
-    long registeredBytes = ((Number) fileRecord.get("file_size_bytes")).longValue();
-    assertThat(registeredBytes).as("登记大小应与磁盘实际字节数一致").isEqualTo(Files.size(onDisk));
-    String diskContent = Files.readString(onDisk, StandardCharsets.UTF_8);
-    assertThat(diskContent)
-        .as("export: artifact content must contain settlement record")
-        .contains(SETTLEMENT_NO);
+        // 1) 磁盘直读：产物落在 filesystem 根目录 root/<bucket>/<key>
+        Path onDisk = filesystemRoot().resolve(bucket).resolve(key);
+        assertThat(Files.isRegularFile(onDisk))
+                .as("export: artifact must exist on filesystem root: %s", onDisk)
+                .isTrue();
+        assertThat(fileRecord.get("file_size_bytes")).isInstanceOf(Number.class);
+        long registeredBytes = ((Number) fileRecord.get("file_size_bytes")).longValue();
+        assertThat(registeredBytes).as("登记大小应与磁盘实际字节数一致").isEqualTo(Files.size(onDisk));
+        String diskContent = Files.readString(onDisk, StandardCharsets.UTF_8);
+        assertThat(diskContent)
+                .as("export: artifact content must contain settlement record")
+                .contains(SETTLEMENT_NO);
 
-    // 2) 抽象接口读取：BatchObjectStore.get 与磁盘内容一致
-    String storeContent;
-    try (InputStream in = objectStore.get(bucket, key)) {
-      storeContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        // 2) 抽象接口读取：BatchObjectStore.get 与磁盘内容一致
+        String storeContent;
+        try (InputStream in = objectStore.get(bucket, key)) {
+            storeContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        assertThat(storeContent).isEqualTo(diskContent);
+
+        // 3) presign：FS 后端返回 HMAC 能力令牌 URL，校验签名与过期参数
+        String presignUrl = objectStore.presign(bucket, key, Duration.ofMinutes(5));
+        Map<String, String> query = parseQuery(presignUrl);
+        assertThat(query.get("b")).isEqualTo(bucket);
+        assertThat(URLDecoder.decode(query.get("k"), StandardCharsets.UTF_8)).isEqualTo(key);
+        long expEpochSec = Long.parseLong(query.get("e"));
+        String signature = query.get("s");
+        assertThat(FilesystemPresignTokens.verify(
+                        bucket, key, expEpochSec, signature, filesystemProperties.getPresignSecret()))
+                .as("export: fs presign token must verify with configured secret")
+                .isTrue();
     }
-    assertThat(storeContent).isEqualTo(diskContent);
 
-    // 3) presign：FS 后端返回 HMAC 能力令牌 URL，校验签名与过期参数
-    String presignUrl = objectStore.presign(bucket, key, Duration.ofMinutes(5));
-    Map<String, String> query = parseQuery(presignUrl);
-    assertThat(query.get("b")).isEqualTo(bucket);
-    assertThat(URLDecoder.decode(query.get("k"), StandardCharsets.UTF_8)).isEqualTo(key);
-    long expEpochSec = Long.parseLong(query.get("e"));
-    String signature = query.get("s");
-    assertThat(FilesystemPresignTokens.verify(
-            bucket, key, expEpochSec, signature, filesystemProperties.getPresignSecret()))
-        .as("export: fs presign token must verify with configured secret")
-        .isTrue();
-  }
-
-  private void seedSettlementData(JdbcTemplate businessJdbc) {
-    final String insertSettlementBatchSql = """
+    private void seedSettlementData(JdbcTemplate businessJdbc) {
+        final String insertSettlementBatchSql = """
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, ?, ?, 'READY', 1, 0, 'CNY')
             returning id
             """;
-    final String insertSettlementDetailSql = """
+        final String insertSettlementDetailSql = """
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values (?, ?, ?, ?, ?, ?, 10.00, 1.00, 9.00, 'CNY', 'READY')
         """;
 
-    Long batchId = businessJdbc.queryForObject(
-        insertSettlementBatchSql, Long.class, TENANT, BATCH_NO, BIZ_DATE, ACCOUNTING_PERIOD);
-    assertThat(batchId).isNotNull();
+        Long batchId = businessJdbc.queryForObject(
+                insertSettlementBatchSql, Long.class, TENANT, BATCH_NO, BIZ_DATE, ACCOUNTING_PERIOD);
+        assertThat(batchId).isNotNull();
 
-    businessJdbc.update(
-        insertSettlementDetailSql,
-        TENANT,
-        batchId,
-        SETTLEMENT_NO,
-        "C-FS-1",
-        BIZ_DATE,
-        ACCOUNTING_PERIOD);
-  }
+        businessJdbc.update(
+                insertSettlementDetailSql, TENANT, batchId, SETTLEMENT_NO, "C-FS-1", BIZ_DATE, ACCOUNTING_PERIOD);
+    }
 
-  private static Map<String, String> parseQuery(String url) {
-    int q = url.indexOf('?');
-    Map<String, String> params = new LinkedHashMap<>();
-    if (q < 0) {
-      return params;
+    private static Map<String, String> parseQuery(String url) {
+        int q = url.indexOf('?');
+        Map<String, String> params = new LinkedHashMap<>();
+        if (q < 0) {
+            return params;
+        }
+        for (String pair : url.substring(q + 1).split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0) {
+                params.put(pair.substring(0, eq), pair.substring(eq + 1));
+            }
+        }
+        return params;
     }
-    for (String pair : url.substring(q + 1).split("&")) {
-      int eq = pair.indexOf('=');
-      if (eq > 0) {
-        params.put(pair.substring(0, eq), pair.substring(eq + 1));
-      }
-    }
-    return params;
-  }
 }

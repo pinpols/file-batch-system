@@ -17,76 +17,76 @@ import java.util.UUID;
  */
 public final class IdGenerator {
 
-  private IdGenerator() {}
+    private IdGenerator() {}
 
-  public static String newTraceId() {
-    String otel = OtelTraceContext.currentTraceIdOrNull();
-    if (otel != null) {
-      return otel;
+    public static String newTraceId() {
+        String otel = OtelTraceContext.currentTraceIdOrNull();
+        if (otel != null) {
+            return otel;
+        }
+        UUID uuid = UUID.randomUUID();
+        String uuidText = uuid.toString();
+        return uuidText.replace("-", "");
     }
-    UUID uuid = UUID.randomUUID();
-    String uuidText = uuid.toString();
-    return uuidText.replace("-", "");
-  }
 
-  /** ADR-014:每个分区的 CLAIM invocation id(绝不从 OTel 桥接而来 —— 独立的 stale-worker 守护)。 */
-  public static String newInvocationId() {
-    UUID uuid = UUID.randomUUID();
-    String uuidText = uuid.toString();
-    return uuidText.replace("-", "");
-  }
-
-  public static String newBusinessNo(String prefix) {
-    return prefix + "-" + compactUtcNow() + "-" + shortRandomSuffix();
-  }
-
-  /**
-   * 批量场景:同一事务/同一批次内生成 N 个业务号,共享 timestamp,每个编号使用独立随机后缀。
-   *
-   * <p>典型用法:partition 拆分时同事务内 N 个分片号 → 日志聚合 + DB 排序紧凑。
-   *
-   * @param prefix 业务号前缀
-   * @param count 数量,必须 ≥ 1
-   * @return 长度 {@code count} 的不可变 List,顺序与下标一致
-   */
-  public static List<String> newBusinessNoBatch(String prefix, int count) {
-    if (count <= 0) {
-      throw new IllegalArgumentException("newBusinessNoBatch count must be >= 1, got " + count);
+    /** ADR-014:每个分区的 CLAIM invocation id(绝不从 OTel 桥接而来 —— 独立的 stale-worker 守护)。 */
+    public static String newInvocationId() {
+        UUID uuid = UUID.randomUUID();
+        String uuidText = uuid.toString();
+        return uuidText.replace("-", "");
     }
-    String ts = compactUtcNow();
-    List<String> ids = new ArrayList<>(count);
-    for (int i = 0; i < count; i++) {
-      ids.add(prefix + "-" + ts + "-" + shortRandomSuffix());
+
+    public static String newBusinessNo(String prefix) {
+        return prefix + "-" + compactUtcNow() + "-" + shortRandomSuffix();
     }
-    return List.copyOf(ids);
-  }
 
-  /**
-   * 统一幂等键(Idempotency-Key)生成 — Controller 不必手写。
-   *
-   * <p>格式 {@code idem-<32-hex-uuid>};接 HTTP Header {@code Idempotency-Key} / RFC draft 风格,
-   * 长度可控,前缀便于日志检索 + grep。
-   */
-  public static String newIdempotencyKey() {
-    UUID uuid = UUID.randomUUID();
-    String uuidText = uuid.toString();
-    String compactUuid = uuidText.replace("-", "");
-    return "idem-" + compactUuid;
-  }
+    /**
+     * 批量场景:同一事务/同一批次内生成 N 个业务号,共享 timestamp,每个编号使用独立随机后缀。
+     *
+     * <p>典型用法:partition 拆分时同事务内 N 个分片号 → 日志聚合 + DB 排序紧凑。
+     *
+     * @param prefix 业务号前缀
+     * @param count 数量,必须 ≥ 1
+     * @return 长度 {@code count} 的不可变 List,顺序与下标一致
+     */
+    public static List<String> newBusinessNoBatch(String prefix, int count) {
+        if (count <= 0) {
+            throw new IllegalArgumentException("newBusinessNoBatch count must be >= 1, got " + count);
+        }
+        String ts = compactUtcNow();
+        List<String> ids = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            ids.add(prefix + "-" + ts + "-" + shortRandomSuffix());
+        }
+        return List.copyOf(ids);
+    }
 
-  private static final DateTimeFormatter COMPACT_UTC =
-      DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
+    /**
+     * 统一幂等键(Idempotency-Key)生成 — Controller 不必手写。
+     *
+     * <p>格式 {@code idem-<32-hex-uuid>};接 HTTP Header {@code Idempotency-Key} / RFC draft 风格,
+     * 长度可控,前缀便于日志检索 + grep。
+     */
+    public static String newIdempotencyKey() {
+        UUID uuid = UUID.randomUUID();
+        String uuidText = uuid.toString();
+        String compactUuid = uuidText.replace("-", "");
+        return "idem-" + compactUuid;
+    }
 
-  /** {@code yyyyMMddTHHmmssZ} — 一次 format,免 ISO_INSTANT 再 replace 的字符串遍历开销。 */
-  private static String compactUtcNow() {
-    return COMPACT_UTC.format(BatchDateTimeSupport.utcNow());
-  }
+    private static final DateTimeFormatter COMPACT_UTC =
+            DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
 
-  /** 16 位 16 进制随机后缀。 */
-  private static String shortRandomSuffix() {
-    UUID uuid = UUID.randomUUID();
-    String uuidText = uuid.toString();
-    String compactUuid = uuidText.replace("-", "");
-    return compactUuid.substring(0, 16);
-  }
+    /** {@code yyyyMMddTHHmmssZ} — 一次 format,免 ISO_INSTANT 再 replace 的字符串遍历开销。 */
+    private static String compactUtcNow() {
+        return COMPACT_UTC.format(BatchDateTimeSupport.utcNow());
+    }
+
+    /** 16 位 16 进制随机后缀。 */
+    private static String shortRandomSuffix() {
+        UUID uuid = UUID.randomUUID();
+        String uuidText = uuid.toString();
+        String compactUuid = uuidText.replace("-", "");
+        return compactUuid.substring(0, 16);
+    }
 }

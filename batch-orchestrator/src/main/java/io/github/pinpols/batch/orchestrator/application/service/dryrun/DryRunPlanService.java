@@ -15,5 +15,5 @@ package io.github.pinpols.batch.orchestrator.application.service.dryrun;
  */
 public interface DryRunPlanService {
 
-  DryRunPlanResult plan(DryRunPlanRequest request);
+    DryRunPlanResult plan(DryRunPlanRequest request);
 }

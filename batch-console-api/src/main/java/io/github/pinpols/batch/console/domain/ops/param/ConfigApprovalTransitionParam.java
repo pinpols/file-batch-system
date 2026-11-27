@@ -7,36 +7,32 @@ import lombok.Getter;
 @Getter
 public final class ConfigApprovalTransitionParam {
 
-  private final String tenantId;
-  private final Long id;
-  private final String reviewedBy;
-  private final String reviewComment;
-  private final String expectedStatus;
-  private final String targetStatus;
+    private final String tenantId;
+    private final Long id;
+    private final String reviewedBy;
+    private final String reviewComment;
+    private final String expectedStatus;
+    private final String targetStatus;
 
-  private ConfigApprovalTransitionParam(
-      String tenantId,
-      Long id,
-      String reviewedBy,
-      String reviewComment,
-      ApprovalCommandStatus targetStatus) {
-    this.tenantId = tenantId;
-    this.id = id;
-    this.reviewedBy = reviewedBy;
-    this.reviewComment = reviewComment;
-    this.expectedStatus = ApprovalCommandStatus.PENDING.code();
-    this.targetStatus = targetStatus.code();
-  }
+    private ConfigApprovalTransitionParam(
+            String tenantId, Long id, String reviewedBy, String reviewComment, ApprovalCommandStatus targetStatus) {
+        this.tenantId = tenantId;
+        this.id = id;
+        this.reviewedBy = reviewedBy;
+        this.reviewComment = reviewComment;
+        this.expectedStatus = ApprovalCommandStatus.PENDING.code();
+        this.targetStatus = targetStatus.code();
+    }
 
-  public static ConfigApprovalTransitionParam approved(
-      String tenantId, Long id, String reviewedBy, String reviewComment) {
-    return new ConfigApprovalTransitionParam(
-        tenantId, id, reviewedBy, reviewComment, ApprovalCommandStatus.APPROVED);
-  }
+    public static ConfigApprovalTransitionParam approved(
+            String tenantId, Long id, String reviewedBy, String reviewComment) {
+        return new ConfigApprovalTransitionParam(
+                tenantId, id, reviewedBy, reviewComment, ApprovalCommandStatus.APPROVED);
+    }
 
-  public static ConfigApprovalTransitionParam rejected(
-      String tenantId, Long id, String reviewedBy, String reviewComment) {
-    return new ConfigApprovalTransitionParam(
-        tenantId, id, reviewedBy, reviewComment, ApprovalCommandStatus.REJECTED);
-  }
+    public static ConfigApprovalTransitionParam rejected(
+            String tenantId, Long id, String reviewedBy, String reviewComment) {
+        return new ConfigApprovalTransitionParam(
+                tenantId, id, reviewedBy, reviewComment, ApprovalCommandStatus.REJECTED);
+    }
 }

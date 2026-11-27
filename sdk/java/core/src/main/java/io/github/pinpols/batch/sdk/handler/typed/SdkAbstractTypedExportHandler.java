@@ -31,115 +31,111 @@ import java.util.stream.Stream;
  */
 // S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，收窄会破坏租户编译兼容性。
 @SuppressWarnings("java:S112")
-public abstract class SdkAbstractTypedExportHandler<I, O, R>
-    extends SdkAbstractTypedRowStreamHandler<I, O, R> {
+public abstract class SdkAbstractTypedExportHandler<I, O, R> extends SdkAbstractTypedRowStreamHandler<I, O, R> {
 
-  protected SdkAbstractTypedExportHandler() {
-    super(SdkTypedParameters.defaultObjectMapper(), SdkAbstractTypedExportHandler.class);
-  }
-
-  protected SdkAbstractTypedExportHandler(ObjectMapper objectMapper) {
-    super(objectMapper, SdkAbstractTypedExportHandler.class);
-  }
-
-  /** 打开输出端(创建文件 / 开 S3 multipart / 开 writer)。默认 no-op。 */
-  protected void openSink(I input, SdkTaskContext ctx) throws Exception {
-    // 无操作
-  }
-
-  /** 构造查询(从强类型入参拼 SQL / 过滤条件)。 */
-  protected abstract String buildQuery(I input, SdkTaskContext ctx) throws Exception;
-
-  /** 按 query 流式读租户表行。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} 在读完或异常时都释放。 */
-  protected abstract Stream<R> streamRows(I input, SdkTaskContext ctx, String query)
-      throws Exception;
-
-  /** 单行格式化写出(写一行到 sink)。 */
-  protected abstract void formatRow(I input, SdkTaskContext ctx, R row) throws Exception;
-
-  /** 收尾(flush / close / upload);返 null 则走 summarize / 计数器回退。 */
-  protected SdkTaskResult writeOut(I input, SdkTaskContext ctx, SdkRowResult counts)
-      throws Exception {
-    return null;
-  }
-
-  /** ADR-037 决策二 — 每攒多少行 {@code commit} 一次(断点保存 + 限流上报 + 取消检查)。默认 1000;Export 逐行写出,按行数攒批提交。 */
-  protected int commitIntervalRows() {
-    return 1000;
-  }
-
-  /**
-   * ADR-037 决策一 — 计算当前<b>断点坐标</b>(已写出到的最后一行业务键)。默认返回空 Map。要断点续跑的租户应 override:返回最近写出行的排序键 / 主键,与
-   * {@link #buildQuery} 的范围条件同坐标系。
-   */
-  protected Map<String, Object> breakPosition(I input, R lastRow) {
-    return emptyBreakPosition();
-  }
-
-  /** 汇总成业务结果 {@code O};默认返 null。 */
-  protected O summarize(I input, SdkRowResult counts) {
-    return null;
-  }
-
-  @Override
-  protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
-    I input;
-    try {
-      input = parseInput(ctx);
-    } catch (IllegalArgumentException ex) {
-      return SdkTaskResult.fail(
-          "invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
+    protected SdkAbstractTypedExportHandler() {
+        super(SdkTypedParameters.defaultObjectMapper(), SdkAbstractTypedExportHandler.class);
     }
-    SdkRowResult counts = new SdkRowResult();
-    Optional<SdkTaskResult> resumed =
-        restoreCheckpoint(ctx, counts, "export already completed (resumed checkpoint), skipped");
-    if (resumed.isPresent()) {
-      return resumed.get();
+
+    protected SdkAbstractTypedExportHandler(ObjectMapper objectMapper) {
+        super(objectMapper, SdkAbstractTypedExportHandler.class);
     }
-    try {
-      openSink(input, ctx);
-      String q = buildQuery(input, ctx);
-      int interval = Math.max(1, commitIntervalRows());
-      long sinceCommit = 0;
-      R lastRow = null;
-      try (Stream<R> rows = streamRows(input, ctx, q)) {
-        Iterator<R> it = rows.iterator();
-        while (it.hasNext()) {
-          R row = it.next();
-          formatRow(input, ctx, row);
-          counts.incSuccess();
-          lastRow = row;
-          if (++sinceCommit >= interval) {
-            // ADR-037 决策二 + 三:断点保存 + 限流上报三合一;提交后命中取消则安全点抛停止。
-            ctx.commitCoordinator().recordBatch(sinceCommit, 0);
-            Map<String, Object> batchBreakPosition = breakPosition(input, row);
-            ctx.commit(batchBreakPosition);
-            sinceCommit = 0;
-          }
+
+    /** 打开输出端(创建文件 / 开 S3 multipart / 开 writer)。默认 no-op。 */
+    protected void openSink(I input, SdkTaskContext ctx) throws Exception {
+        // 无操作
+    }
+
+    /** 构造查询(从强类型入参拼 SQL / 过滤条件)。 */
+    protected abstract String buildQuery(I input, SdkTaskContext ctx) throws Exception;
+
+    /** 按 query 流式读租户表行。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} 在读完或异常时都释放。 */
+    protected abstract Stream<R> streamRows(I input, SdkTaskContext ctx, String query) throws Exception;
+
+    /** 单行格式化写出(写一行到 sink)。 */
+    protected abstract void formatRow(I input, SdkTaskContext ctx, R row) throws Exception;
+
+    /** 收尾(flush / close / upload);返 null 则走 summarize / 计数器回退。 */
+    protected SdkTaskResult writeOut(I input, SdkTaskContext ctx, SdkRowResult counts) throws Exception {
+        return null;
+    }
+
+    /** ADR-037 决策二 — 每攒多少行 {@code commit} 一次(断点保存 + 限流上报 + 取消检查)。默认 1000;Export 逐行写出,按行数攒批提交。 */
+    protected int commitIntervalRows() {
+        return 1000;
+    }
+
+    /**
+     * ADR-037 决策一 — 计算当前<b>断点坐标</b>(已写出到的最后一行业务键)。默认返回空 Map。要断点续跑的租户应 override:返回最近写出行的排序键 / 主键,与
+     * {@link #buildQuery} 的范围条件同坐标系。
+     */
+    protected Map<String, Object> breakPosition(I input, R lastRow) {
+        return emptyBreakPosition();
+    }
+
+    /** 汇总成业务结果 {@code O};默认返 null。 */
+    protected O summarize(I input, SdkRowResult counts) {
+        return null;
+    }
+
+    @Override
+    protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
+        I input;
+        try {
+            input = parseInput(ctx);
+        } catch (IllegalArgumentException ex) {
+            return SdkTaskResult.fail("invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
         }
-      }
-      if (sinceCommit > 0) {
-        ctx.commitCoordinator().recordBatch(sinceCommit, 0);
-        Map<String, Object> batchBreakPosition = breakPosition(input, lastRow);
-        ctx.commit(batchBreakPosition);
-      }
-      SdkCommitCoordinator commitCoordinator = ctx.commitCoordinator();
-      Map<String, Object> completedBreakPosition = breakPosition(input, lastRow);
-      commitCoordinator.markCompleted(completedBreakPosition);
-      SdkTaskResult explicit = writeOut(input, ctx, counts);
-      if (explicit != null) {
-        return explicit;
-      }
-      return result(input, counts, "exported " + counts.success() + " rows");
-    } catch (SdkTaskStoppedException stopped) {
-      throw stopped; // 决策三:协作取消穿透到模板顶层,业务不得吞。
-    } catch (Exception e) {
-      return SdkTaskResult.fail(e);
+        SdkRowResult counts = new SdkRowResult();
+        Optional<SdkTaskResult> resumed =
+                restoreCheckpoint(ctx, counts, "export already completed (resumed checkpoint), skipped");
+        if (resumed.isPresent()) {
+            return resumed.get();
+        }
+        try {
+            openSink(input, ctx);
+            String q = buildQuery(input, ctx);
+            int interval = Math.max(1, commitIntervalRows());
+            long sinceCommit = 0;
+            R lastRow = null;
+            try (Stream<R> rows = streamRows(input, ctx, q)) {
+                Iterator<R> it = rows.iterator();
+                while (it.hasNext()) {
+                    R row = it.next();
+                    formatRow(input, ctx, row);
+                    counts.incSuccess();
+                    lastRow = row;
+                    if (++sinceCommit >= interval) {
+                        // ADR-037 决策二 + 三:断点保存 + 限流上报三合一;提交后命中取消则安全点抛停止。
+                        ctx.commitCoordinator().recordBatch(sinceCommit, 0);
+                        Map<String, Object> batchBreakPosition = breakPosition(input, row);
+                        ctx.commit(batchBreakPosition);
+                        sinceCommit = 0;
+                    }
+                }
+            }
+            if (sinceCommit > 0) {
+                ctx.commitCoordinator().recordBatch(sinceCommit, 0);
+                Map<String, Object> batchBreakPosition = breakPosition(input, lastRow);
+                ctx.commit(batchBreakPosition);
+            }
+            SdkCommitCoordinator commitCoordinator = ctx.commitCoordinator();
+            Map<String, Object> completedBreakPosition = breakPosition(input, lastRow);
+            commitCoordinator.markCompleted(completedBreakPosition);
+            SdkTaskResult explicit = writeOut(input, ctx, counts);
+            if (explicit != null) {
+                return explicit;
+            }
+            return result(input, counts, "exported " + counts.success() + " rows");
+        } catch (SdkTaskStoppedException stopped) {
+            throw stopped; // 决策三:协作取消穿透到模板顶层,业务不得吞。
+        } catch (Exception e) {
+            return SdkTaskResult.fail(e);
+        }
     }
-  }
 
-  private SdkTaskResult result(I input, SdkRowResult counts, String defaultMessage) {
-    O output = summarize(input, counts);
-    return result(input, counts, defaultMessage, output);
-  }
+    private SdkTaskResult result(I input, SdkRowResult counts, String defaultMessage) {
+        O output = summarize(input, counts);
+        return result(input, counts, defaultMessage, output);
+    }
 }

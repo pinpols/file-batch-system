@@ -12,10 +12,10 @@ import io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedFormat;
  * @param fetchSize JDBC 游标流式 fetchSize(配合关闭 autoCommit 做服务端游标,默认 1000)
  */
 public record QueryExportConfig(
-    String taskType, String query, DelimitedFormat format, String outputPathParam, int fetchSize) {
+        String taskType, String query, DelimitedFormat format, String outputPathParam, int fetchSize) {
 
-  /** 默认:逗号 CSV 写表头、输出路径参数键 {@code outputPath}、fetchSize=1000。 */
-  public static QueryExportConfig defaults(String taskType, String query) {
-    return new QueryExportConfig(taskType, query, DelimitedFormat.defaults(), "outputPath", 1000);
-  }
+    /** 默认:逗号 CSV 写表头、输出路径参数键 {@code outputPath}、fetchSize=1000。 */
+    public static QueryExportConfig defaults(String taskType, String query) {
+        return new QueryExportConfig(taskType, query, DelimitedFormat.defaults(), "outputPath", 1000);
+    }
 }

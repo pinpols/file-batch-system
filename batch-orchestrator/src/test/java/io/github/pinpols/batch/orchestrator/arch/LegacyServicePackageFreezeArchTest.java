@@ -18,47 +18,47 @@ import org.junit.jupiter.api.Test;
 @DisplayName("架构守护:旧 orchestrator.service 包只保留冻结清单内的存量类")
 class LegacyServicePackageFreezeArchTest {
 
-  private static final String LEGACY_PACKAGE = "io.github.pinpols.batch.orchestrator.service";
+    private static final String LEGACY_PACKAGE = "io.github.pinpols.batch.orchestrator.service";
 
-  private static final Set<String> FROZEN_CLASSES = Set.of(
-      "BatchDayAlertDetails",
-      "BatchDayGateService",
-      "BatchDayOperateCommand",
-      "BatchDayOperationService",
-      "BatchDayTimePolicyResolver",
-      "CutoffScheduleResolver",
-      "DefaultLaunchService",
-      "DefaultLaunchValidationService",
-      "DefaultWorkerRegistryService",
-      "DispatchChannelSelection",
-      "DispatchChannelSnapshotService",
-      "DispatchSecretSnapshotResolver",
-      "FileTemplateSnapshotService",
-      "JobDependencyWaitingLaunchService",
-      "LaunchBatchDayService",
-      "LaunchParamResolver",
-      "LaunchRequestIdentityGuard",
-      "LaunchService",
-      "LaunchValidationService",
-      "WorkerRegistryServerService",
-      "failure.FailureClassifier");
+    private static final Set<String> FROZEN_CLASSES = Set.of(
+            "BatchDayAlertDetails",
+            "BatchDayGateService",
+            "BatchDayOperateCommand",
+            "BatchDayOperationService",
+            "BatchDayTimePolicyResolver",
+            "CutoffScheduleResolver",
+            "DefaultLaunchService",
+            "DefaultLaunchValidationService",
+            "DefaultWorkerRegistryService",
+            "DispatchChannelSelection",
+            "DispatchChannelSnapshotService",
+            "DispatchSecretSnapshotResolver",
+            "FileTemplateSnapshotService",
+            "JobDependencyWaitingLaunchService",
+            "LaunchBatchDayService",
+            "LaunchParamResolver",
+            "LaunchRequestIdentityGuard",
+            "LaunchService",
+            "LaunchValidationService",
+            "WorkerRegistryServerService",
+            "failure.FailureClassifier");
 
-  private static final JavaClasses CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-      .importPackages(LEGACY_PACKAGE);
+    private static final JavaClasses CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages(LEGACY_PACKAGE);
 
-  @Test
-  @DisplayName("旧 service 包内的顶层类均在冻结清单内,已迁出的类同步移出清单")
-  void shouldOnlyContainFrozenClasses_whenInLegacyServicePackage() {
-    Set<String> actual = new TreeSet<>();
-    for (JavaClass javaClass : CLASSES) {
-      if (javaClass.isTopLevelClass()) {
-        actual.add(javaClass.getName().substring(LEGACY_PACKAGE.length() + 1));
-      }
+    @Test
+    @DisplayName("旧 service 包内的顶层类均在冻结清单内,已迁出的类同步移出清单")
+    void shouldOnlyContainFrozenClasses_whenInLegacyServicePackage() {
+        Set<String> actual = new TreeSet<>();
+        for (JavaClass javaClass : CLASSES) {
+            if (javaClass.isTopLevelClass()) {
+                actual.add(javaClass.getName().substring(LEGACY_PACKAGE.length() + 1));
+            }
+        }
+
+        assertThat(actual)
+                .as("新服务放入 application.service.<ctx>;迁出旧类时同步删除 FROZEN_CLASSES 条目")
+                .containsExactlyInAnyOrderElementsOf(FROZEN_CLASSES);
     }
-
-    assertThat(actual)
-        .as("新服务放入 application.service.<ctx>;迁出旧类时同步删除 FROZEN_CLASSES 条目")
-        .containsExactlyInAnyOrderElementsOf(FROZEN_CLASSES);
-  }
 }

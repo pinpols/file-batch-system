@@ -13,56 +13,56 @@ import org.junit.jupiter.api.Test;
 @DisplayName("节点分区进度计算器: 归属当前节点的分区统计口径")
 class NodePartitionProgressCalculatorTest {
 
-  @Test
-  @DisplayName("只统计归属当前节点的分区, 汇总成功与失败数量并判定全部完成")
-  void shouldCountOnlyPartitions_whenAssignedToCurrentNode() {
-    NodePartitionProgressCalculator.Result result = NodePartitionProgressCalculator.calculate(
-        List.of(
-            new PartitionStatusRef(1L, PartitionStatus.SUCCESS.code()),
-            new PartitionStatusRef(2L, PartitionStatus.FAILED.code()),
-            new PartitionStatusRef(3L, PartitionStatus.SUCCESS.code())),
-        List.of(
-            new NodePartitionAssignment(1L, "LOAD"),
-            new NodePartitionAssignment(2L, "LOAD"),
-            new NodePartitionAssignment(3L, "TRANSFORM")),
-        "LOAD",
-        null);
+    @Test
+    @DisplayName("只统计归属当前节点的分区, 汇总成功与失败数量并判定全部完成")
+    void shouldCountOnlyPartitions_whenAssignedToCurrentNode() {
+        NodePartitionProgressCalculator.Result result = NodePartitionProgressCalculator.calculate(
+                List.of(
+                        new PartitionStatusRef(1L, PartitionStatus.SUCCESS.code()),
+                        new PartitionStatusRef(2L, PartitionStatus.FAILED.code()),
+                        new PartitionStatusRef(3L, PartitionStatus.SUCCESS.code())),
+                List.of(
+                        new NodePartitionAssignment(1L, "LOAD"),
+                        new NodePartitionAssignment(2L, "LOAD"),
+                        new NodePartitionAssignment(3L, "TRANSFORM")),
+                "LOAD",
+                null);
 
-    assertThat(result.partitionCount()).isEqualTo(2);
-    assertThat(result.successCount()).isEqualTo(1);
-    assertThat(result.failedCount()).isEqualTo(1);
-    assertThat(result.partitionIds()).containsExactly(1L, 2L);
-    assertThat(result.allFinished()).isTrue();
-  }
+        assertThat(result.partitionCount()).isEqualTo(2);
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.failedCount()).isEqualTo(1);
+        assertThat(result.partitionIds()).containsExactly(1L, 2L);
+        assertThat(result.allFinished()).isTrue();
+    }
 
-  @Test
-  @DisplayName("归属信息缺失时按唯一的活跃节点统计分区进度")
-  void shouldUseSingleActiveNode_whenAssignmentInfoMissing() {
-    WorkflowRunEntity workflowRun = new WorkflowRunEntity();
-    workflowRun.setCurrentNodeCode("LOAD");
+    @Test
+    @DisplayName("归属信息缺失时按唯一的活跃节点统计分区进度")
+    void shouldUseSingleActiveNode_whenAssignmentInfoMissing() {
+        WorkflowRunEntity workflowRun = new WorkflowRunEntity();
+        workflowRun.setCurrentNodeCode("LOAD");
 
-    NodePartitionProgressCalculator.Result result = NodePartitionProgressCalculator.calculate(
-        List.of(new PartitionStatusRef(1L, PartitionStatus.SUCCESS.code())),
-        List.of(new NodePartitionAssignment(1L, null)),
-        "LOAD",
-        workflowRun);
+        NodePartitionProgressCalculator.Result result = NodePartitionProgressCalculator.calculate(
+                List.of(new PartitionStatusRef(1L, PartitionStatus.SUCCESS.code())),
+                List.of(new NodePartitionAssignment(1L, null)),
+                "LOAD",
+                workflowRun);
 
-    assertThat(result.partitionCount()).isEqualTo(1);
-    assertThat(result.successCount()).isEqualTo(1);
-    assertThat(result.allFinished()).isTrue();
-  }
+        assertThat(result.partitionCount()).isEqualTo(1);
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.allFinished()).isTrue();
+    }
 
-  @Test
-  @DisplayName("取消分区是节点终态失败, 不能让工作流节点永久等待")
-  void shouldTreatCancelledPartitionAsFinishedFailure() {
-    NodePartitionProgressCalculator.Result result = NodePartitionProgressCalculator.calculate(
-        List.of(new PartitionStatusRef(1L, PartitionStatus.CANCELLED.code())),
-        List.of(new NodePartitionAssignment(1L, "LOAD")),
-        "LOAD",
-        null);
+    @Test
+    @DisplayName("取消分区是节点终态失败, 不能让工作流节点永久等待")
+    void shouldTreatCancelledPartitionAsFinishedFailure() {
+        NodePartitionProgressCalculator.Result result = NodePartitionProgressCalculator.calculate(
+                List.of(new PartitionStatusRef(1L, PartitionStatus.CANCELLED.code())),
+                List.of(new NodePartitionAssignment(1L, "LOAD")),
+                "LOAD",
+                null);
 
-    assertThat(result.cancelledCount()).isEqualTo(1);
-    assertThat(result.unsuccessfulCount()).isEqualTo(1);
-    assertThat(result.allFinished()).isTrue();
-  }
+        assertThat(result.cancelledCount()).isEqualTo(1);
+        assertThat(result.unsuccessfulCount()).isEqualTo(1);
+        assertThat(result.allFinished()).isTrue();
+    }
 }

@@ -40,102 +40,96 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleDashboardControllerTest {
 
-  @Mock
-  private ConsoleDashboardQueryService service;
+    @Mock
+    private ConsoleDashboardQueryService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleDashboardController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleDashboardController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("作业统计:未传天数参数时默认统计近 7 天,并返回总数与每日趋势")
-  void shouldDefaultToSevenDays_whenJobStatsDaysAbsent() throws Exception {
-    when(service.jobStats("ta", 7))
-        .thenReturn(new JobStatsView(
-            Map.of("SUCCESS", 8L, "FAILED", 2L),
-            10L,
-            List.of(new DayStatusCountView(LocalDate.of(2026, 5, 20), "SUCCESS", 8L))));
-    mockMvc
-        .perform(get("/api/console/dashboard/job-stats").param("tenantId", "ta"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.total").value(10))
-        .andExpect(jsonPath("$.data.byStatus.SUCCESS").value(8))
-        .andExpect(jsonPath("$.data.dailyTrend[0].status").value("SUCCESS"));
-    verify(service).jobStats("ta", 7);
-  }
+    @Test
+    @DisplayName("作业统计:未传天数参数时默认统计近 7 天,并返回总数与每日趋势")
+    void shouldDefaultToSevenDays_whenJobStatsDaysAbsent() throws Exception {
+        when(service.jobStats("ta", 7))
+                .thenReturn(new JobStatsView(
+                        Map.of("SUCCESS", 8L, "FAILED", 2L),
+                        10L,
+                        List.of(new DayStatusCountView(LocalDate.of(2026, 5, 20), "SUCCESS", 8L))));
+        mockMvc.perform(get("/api/console/dashboard/job-stats").param("tenantId", "ta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(10))
+                .andExpect(jsonPath("$.data.byStatus.SUCCESS").value(8))
+                .andExpect(jsonPath("$.data.dailyTrend[0].status").value("SUCCESS"));
+        verify(service).jobStats("ta", 7);
+    }
 
-  @Test
-  @DisplayName("触发统计:按请求传入的天数统计,并返回触发类型分布")
-  void shouldUseCustomDays_whenTriggerStatsDaysGiven() throws Exception {
-    when(service.triggerStats("ta", 30))
-        .thenReturn(new TriggerStatsView(
-            List.of(new TypeCountView("CRON", 100L)),
-            List.of(new DayCountView(LocalDate.of(2026, 5, 20), 100L))));
-    mockMvc
-        .perform(
-            get("/api/console/dashboard/trigger-stats").param("tenantId", "ta").param("days", "30"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.byTriggerType[0].type").value("CRON"))
-        .andExpect(jsonPath("$.data.byTriggerType[0].count").value(100));
-    verify(service).triggerStats("ta", 30);
-  }
+    @Test
+    @DisplayName("触发统计:按请求传入的天数统计,并返回触发类型分布")
+    void shouldUseCustomDays_whenTriggerStatsDaysGiven() throws Exception {
+        when(service.triggerStats("ta", 30))
+                .thenReturn(new TriggerStatsView(
+                        List.of(new TypeCountView("CRON", 100L)),
+                        List.of(new DayCountView(LocalDate.of(2026, 5, 20), 100L))));
+        mockMvc.perform(get("/api/console/dashboard/trigger-stats")
+                        .param("tenantId", "ta")
+                        .param("days", "30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.byTriggerType[0].type").value("CRON"))
+                .andExpect(jsonPath("$.data.byTriggerType[0].count").value(100));
+        verify(service).triggerStats("ta", 30);
+    }
 
-  @Test
-  @DisplayName("Worker 负载:按租户返回在线状态、分组统计与活跃分区")
-  void shouldReturnWorkerLoad_whenTenantGiven() throws Exception {
-    when(service.workerLoad("ta"))
-        .thenReturn(new WorkerLoadView(
-            List.of(new StatusCountView("ONLINE", 3L)),
-            List.of(new WorkerGroupStatusCountView("default", "ONLINE", 3L)),
-            List.of(new ActivePartitionView("w-1", 5L))));
-    mockMvc
-        .perform(get("/api/console/dashboard/worker-load").param("tenantId", "ta"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.byStatus[0].status").value("ONLINE"))
-        .andExpect(jsonPath("$.data.activePartitionsByWorker[0].workerCode").value("w-1"));
-  }
+    @Test
+    @DisplayName("Worker 负载:按租户返回在线状态、分组统计与活跃分区")
+    void shouldReturnWorkerLoad_whenTenantGiven() throws Exception {
+        when(service.workerLoad("ta"))
+                .thenReturn(new WorkerLoadView(
+                        List.of(new StatusCountView("ONLINE", 3L)),
+                        List.of(new WorkerGroupStatusCountView("default", "ONLINE", 3L)),
+                        List.of(new ActivePartitionView("w-1", 5L))));
+        mockMvc.perform(get("/api/console/dashboard/worker-load").param("tenantId", "ta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.byStatus[0].status").value("ONLINE"))
+                .andExpect(jsonPath("$.data.activePartitionsByWorker[0].workerCode")
+                        .value("w-1"));
+    }
 
-  @Test
-  @DisplayName("执行进度:按作业编码与业务日期查询,并返回进度百分比")
-  void shouldRequireJobCodeAndBizDate_whenQueryingExecutionProgress() throws Exception {
-    when(service.executionProgress("ta", "JOB_A", "2026-05-20"))
-        .thenReturn(List.of(new ExecutionProgressView(
-            9L, "JOB_A", "INS-9", "RUNNING", 4, 2, 0, null, null, 2, 50L)));
-    mockMvc
-        .perform(get("/api/console/dashboard/execution-progress")
-            .param("tenantId", "ta")
-            .param("jobCode", "JOB_A")
-            .param("bizDate", "2026-05-20"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].instanceStatus").value("RUNNING"))
-        .andExpect(jsonPath("$.data[0].progressPercent").value(50));
-    verify(service).executionProgress("ta", "JOB_A", "2026-05-20");
-  }
+    @Test
+    @DisplayName("执行进度:按作业编码与业务日期查询,并返回进度百分比")
+    void shouldRequireJobCodeAndBizDate_whenQueryingExecutionProgress() throws Exception {
+        when(service.executionProgress("ta", "JOB_A", "2026-05-20"))
+                .thenReturn(List.of(
+                        new ExecutionProgressView(9L, "JOB_A", "INS-9", "RUNNING", 4, 2, 0, null, null, 2, 50L)));
+        mockMvc.perform(get("/api/console/dashboard/execution-progress")
+                        .param("tenantId", "ta")
+                        .param("jobCode", "JOB_A")
+                        .param("bizDate", "2026-05-20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].instanceStatus").value("RUNNING"))
+                .andExpect(jsonPath("$.data[0].progressPercent").value(50));
+        verify(service).executionProgress("ta", "JOB_A", "2026-05-20");
+    }
 
-  @Test
-  @DisplayName("租户用量:未传天数参数时默认统计近 30 天,并返回作业定义数")
-  void shouldDefaultToThirtyDays_whenTenantUsageDaysAbsent() throws Exception {
-    when(service.tenantUsage("ta", 30))
-        .thenReturn(new TenantUsageView("ta", 12L, 0L, 0L, 0L, 0L, 0L, 30));
-    mockMvc
-        .perform(get("/api/console/dashboard/tenant-usage").param("tenantId", "ta"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.jobDefinitions").value(12))
-        .andExpect(jsonPath("$.data.periodDays").value(30));
-    verify(service).tenantUsage("ta", 30);
-  }
+    @Test
+    @DisplayName("租户用量:未传天数参数时默认统计近 30 天,并返回作业定义数")
+    void shouldDefaultToThirtyDays_whenTenantUsageDaysAbsent() throws Exception {
+        when(service.tenantUsage("ta", 30)).thenReturn(new TenantUsageView("ta", 12L, 0L, 0L, 0L, 0L, 0L, 30));
+        mockMvc.perform(get("/api/console/dashboard/tenant-usage").param("tenantId", "ta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.jobDefinitions").value(12))
+                .andExpect(jsonPath("$.data.periodDays").value(30));
+        verify(service).tenantUsage("ta", 30);
+    }
 }

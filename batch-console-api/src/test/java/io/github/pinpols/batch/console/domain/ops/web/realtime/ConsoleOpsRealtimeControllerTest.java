@@ -26,49 +26,46 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @ExtendWith(MockitoExtension.class)
 class ConsoleOpsRealtimeControllerTest {
 
-  @Mock
-  private ConsoleOpsSummaryRealtimePort summaryRealtimeStream;
+    @Mock
+    private ConsoleOpsSummaryRealtimePort summaryRealtimeStream;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(
-        new ConsoleResponseFactory(requestMetadataResolver));
+    @BeforeEach
+    void setUp() {
+        ConsoleApiExceptionHandler exceptionHandler =
+                ConsoleApiExceptionHandler.forStandaloneTest(new ConsoleResponseFactory(requestMetadataResolver));
 
-    when(summaryRealtimeStream.subscribe(anyString(), isNull(), anyBoolean()))
-        .thenReturn(new SseEmitter());
+        when(summaryRealtimeStream.subscribe(anyString(), isNull(), anyBoolean()))
+                .thenReturn(new SseEmitter());
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleOpsRealtimeController(summaryRealtimeStream))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleOpsRealtimeController(summaryRealtimeStream))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("事件流:订阅指定租户并默认开启首帧快照, 异步请求已启动")
-  void shouldExposeSummaryRealtimeStream() throws Exception {
-    mockMvc
-        .perform(get("/api/console/ops/summary/events").param("tenantId", "t1"))
-        .andExpect(request().asyncStarted())
-        .andReturn();
+    @Test
+    @DisplayName("事件流:订阅指定租户并默认开启首帧快照, 异步请求已启动")
+    void shouldExposeSummaryRealtimeStream() throws Exception {
+        mockMvc.perform(get("/api/console/ops/summary/events").param("tenantId", "t1"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-    verify(summaryRealtimeStream).subscribe("t1", null, true);
-  }
+        verify(summaryRealtimeStream).subscribe("t1", null, true);
+    }
 
-  @Test
-  @DisplayName("跳过首帧:请求参数关闭快照时按关闭值订阅")
-  void shouldAllowSkippingInitialSnapshot() throws Exception {
-    mockMvc
-        .perform(get("/api/console/ops/summary/events")
-            .param("tenantId", "t1")
-            .param("initialSnapshot", "false"))
-        .andExpect(request().asyncStarted())
-        .andReturn();
+    @Test
+    @DisplayName("跳过首帧:请求参数关闭快照时按关闭值订阅")
+    void shouldAllowSkippingInitialSnapshot() throws Exception {
+        mockMvc.perform(get("/api/console/ops/summary/events")
+                        .param("tenantId", "t1")
+                        .param("initialSnapshot", "false"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-    verify(summaryRealtimeStream).subscribe("t1", null, false);
-  }
+        verify(summaryRealtimeStream).subscribe("t1", null, false);
+    }
 }

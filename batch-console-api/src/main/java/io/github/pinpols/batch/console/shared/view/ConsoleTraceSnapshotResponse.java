@@ -14,17 +14,17 @@ import lombok.Builder;
 
 @Builder
 public record ConsoleTraceSnapshotResponse(
-    String traceId,
-    List<ConsoleJobInstanceResponse> jobInstances,
-    List<ConsoleWorkflowRunResponse> workflowRuns,
-    List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns,
-    List<ConsoleFileRecordResponse> files,
-    List<ConsoleFilePipelineResponse> filePipelines,
-    List<ConsoleAuditLogResponse> auditLogs,
-    List<ConsoleOperationAuditResponse> operationAudits,
-    List<ConsoleJobExecutionLogResponse> executionLogs,
-    List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
-    List<ConsoleAlertEventResponse> alerts,
-    List<ConsoleDeadLetterTaskResponse> deadLetters,
-    List<ConsoleTraceTimelineItem> timeline,
-    List<String> truncatedDomains) {}
+        String traceId,
+        List<ConsoleJobInstanceResponse> jobInstances,
+        List<ConsoleWorkflowRunResponse> workflowRuns,
+        List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns,
+        List<ConsoleFileRecordResponse> files,
+        List<ConsoleFilePipelineResponse> filePipelines,
+        List<ConsoleAuditLogResponse> auditLogs,
+        List<ConsoleOperationAuditResponse> operationAudits,
+        List<ConsoleJobExecutionLogResponse> executionLogs,
+        List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
+        List<ConsoleAlertEventResponse> alerts,
+        List<ConsoleDeadLetterTaskResponse> deadLetters,
+        List<ConsoleTraceTimelineItem> timeline,
+        List<String> truncatedDomains) {}

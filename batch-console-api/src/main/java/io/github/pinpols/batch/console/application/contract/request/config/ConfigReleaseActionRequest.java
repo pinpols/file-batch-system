@@ -6,9 +6,9 @@ import lombok.Data;
 @Data
 public class ConfigReleaseActionRequest {
 
-  private String tenantId;
-  private String reason;
+    private String tenantId;
+    private String reason;
 
-  @Positive
-  private Integer expectedVersionNo;
+    @Positive
+    private Integer expectedVersionNo;
 }

@@ -8,15 +8,15 @@ import java.time.Instant;
  * <p>reviewed_by / reviewed_at / review_comment / expired_at 在 PENDING 状态下可为空。
  */
 public record ConfigApprovalRow(
-    Long id,
-    String tenantId,
-    Long releaseId,
-    String approvalStatus,
-    String requestedBy,
-    Instant requestedAt,
-    String reviewedBy,
-    Instant reviewedAt,
-    String reviewComment,
-    Instant expiredAt,
-    Instant createdAt,
-    Instant updatedAt) {}
+        Long id,
+        String tenantId,
+        Long releaseId,
+        String approvalStatus,
+        String requestedBy,
+        Instant requestedAt,
+        String reviewedBy,
+        Instant reviewedAt,
+        String reviewComment,
+        Instant expiredAt,
+        Instant createdAt,
+        Instant updatedAt) {}

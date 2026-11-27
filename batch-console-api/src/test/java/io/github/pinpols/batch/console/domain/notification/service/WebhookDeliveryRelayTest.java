@@ -34,285 +34,280 @@ import org.springframework.context.support.StaticApplicationContext;
 @DisplayName("回调投递重试中继: 抢占, 退避与放弃判定的口径")
 class WebhookDeliveryRelayTest {
 
-  private ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
-  private ConsoleWebhookSubscriptionMapper subscriptionRepository;
-  private WebhookDispatcher dispatcher;
-  private SimpleMeterRegistry meterRegistry;
-  private LockingTaskExecutor lockExecutor;
-  private WebhookDeliveryRelay relay;
+    private ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
+    private ConsoleWebhookSubscriptionMapper subscriptionRepository;
+    private WebhookDispatcher dispatcher;
+    private SimpleMeterRegistry meterRegistry;
+    private LockingTaskExecutor lockExecutor;
+    private WebhookDeliveryRelay relay;
 
-  @BeforeEach
-  void setUp() throws Throwable {
-    deliveryLogRepository = mock(ConsoleWebhookDeliveryLogMapper.class);
-    subscriptionRepository = mock(ConsoleWebhookSubscriptionMapper.class);
-    dispatcher = mock(WebhookDispatcher.class);
-    meterRegistry = new SimpleMeterRegistry();
-    lockExecutor = mock(LockingTaskExecutor.class);
-    doAnswer(inv -> {
-          Runnable t = inv.getArgument(0);
-          t.run();
-          return null;
-        })
-        .when(lockExecutor)
-        .executeWithLock(any(Runnable.class), any());
-    // 用户在 e1de09db 等 refactor 把 WebhookDeliveryRelay 的 @Value 配置抽到 WebhookRelayProperties,
-    // 测试需要同步更新构造器调用以反映新签名
-    WebhookRelayProperties props = new WebhookRelayProperties();
-    relay = new WebhookDeliveryRelay(
-        deliveryLogRepository,
-        subscriptionRepository,
-        dispatcher,
-        lockExecutor,
-        meterRegistry,
-        props,
-        mock(TerminalNotificationDeliveryService.class),
-        mock(TerminalNotificationArchiveService.class));
-  }
+    @BeforeEach
+    void setUp() throws Throwable {
+        deliveryLogRepository = mock(ConsoleWebhookDeliveryLogMapper.class);
+        subscriptionRepository = mock(ConsoleWebhookSubscriptionMapper.class);
+        dispatcher = mock(WebhookDispatcher.class);
+        meterRegistry = new SimpleMeterRegistry();
+        lockExecutor = mock(LockingTaskExecutor.class);
+        doAnswer(inv -> {
+                    Runnable t = inv.getArgument(0);
+                    t.run();
+                    return null;
+                })
+                .when(lockExecutor)
+                .executeWithLock(any(Runnable.class), any());
+        // 用户在 e1de09db 等 refactor 把 WebhookDeliveryRelay 的 @Value 配置抽到 WebhookRelayProperties,
+        // 测试需要同步更新构造器调用以反映新签名
+        WebhookRelayProperties props = new WebhookRelayProperties();
+        relay = new WebhookDeliveryRelay(
+                deliveryLogRepository,
+                subscriptionRepository,
+                dispatcher,
+                lockExecutor,
+                meterRegistry,
+                props,
+                mock(TerminalNotificationDeliveryService.class),
+                mock(TerminalNotificationArchiveService.class));
+    }
 
-  @Test
-  @DisplayName("上下文关闭后不再取锁, 也不查询可重试记录")
-  void shouldSkipPollAfterContextClosedWithoutTakingLock() throws Throwable {
-    relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+    @Test
+    @DisplayName("上下文关闭后不再取锁, 也不查询可重试记录")
+    void shouldSkipPollAfterContextClosedWithoutTakingLock() throws Throwable {
+        relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
 
-    relay.poll();
+        relay.poll();
 
-    verify(lockExecutor, never()).executeWithLock(any(Runnable.class), any());
-    verify(deliveryLogRepository, never()).findEligibleRetries(any(), anyInt());
-  }
+        verify(lockExecutor, never()).executeWithLock(any(Runnable.class), any());
+        verify(deliveryLogRepository, never()).findEligibleRetries(any(), anyInt());
+    }
 
-  @Test
-  @DisplayName("取锁期间连接工厂正在停止时按关闭噪声降级, 不记为失败")
-  void shouldDowngradeRedisStoppingDuringShutdown() throws Throwable {
-    doAnswer(inv -> {
-          relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
-          throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
-        })
-        .when(lockExecutor)
-        .executeWithLock(any(Runnable.class), any());
+    @Test
+    @DisplayName("取锁期间连接工厂正在停止时按关闭噪声降级, 不记为失败")
+    void shouldDowngradeRedisStoppingDuringShutdown() throws Throwable {
+        doAnswer(inv -> {
+                    relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+                    throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
+                })
+                .when(lockExecutor)
+                .executeWithLock(any(Runnable.class), any());
 
-    relay.poll();
+        relay.poll();
 
-    verify(deliveryLogRepository, never()).findEligibleRetries(any(), anyInt());
-  }
+        verify(deliveryLogRepository, never()).findEligibleRetries(any(), anyInt());
+    }
 
-  @Test
-  @DisplayName("连接工厂已停止的异常, 被识别为生命周期噪声")
-  void shouldRecognizeRedisStoppedLifecycleNoise() {
-    assertThat(WebhookDeliveryRelay.isShutdownNoise(new IllegalStateException(
-            "LettuceConnectionFactory has been STOPPED. Use start() to initialize it")))
-        .isTrue();
-  }
+    @Test
+    @DisplayName("连接工厂已停止的异常, 被识别为生命周期噪声")
+    void shouldRecognizeRedisStoppedLifecycleNoise() {
+        assertThat(WebhookDeliveryRelay.isShutdownNoise(new IllegalStateException(
+                        "LettuceConnectionFactory has been STOPPED. Use start() to initialize it")))
+                .isTrue();
+    }
 
-  @Test
-  @DisplayName("没有可重试记录时, 既不抢占也不投递")
-  void shouldSkipPollWhenNoEligibleRows() {
-    when(deliveryLogRepository.findEligibleRetries(any(Instant.class), eq(50)))
-        .thenReturn(List.of());
+    @Test
+    @DisplayName("没有可重试记录时, 既不抢占也不投递")
+    void shouldSkipPollWhenNoEligibleRows() {
+        when(deliveryLogRepository.findEligibleRetries(any(Instant.class), eq(50)))
+                .thenReturn(List.of());
 
-    relay.poll();
+        relay.poll();
 
-    verify(deliveryLogRepository, never()).claimForRetry(anyLong());
-    verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
-  }
+        verify(deliveryLogRepository, never()).claimForRetry(anyLong());
+        verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
+    }
 
-  @Test
-  @DisplayName("投递成功时按尝试次数加一标记成功, 不写失败也不放弃")
-  void shouldMarkRetrySuccessWhenDeliveryReturns200() {
-    WebhookDeliveryLogEntity row = exhaustedRow(101L, 3);
-    WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
-    when(deliveryLogRepository.claimForRetry(101L)).thenReturn(1);
-    when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
-    when(dispatcher.attemptDelivery(eq(subscription), any(), eq(row.getPayloadJson())))
-        .thenReturn(WebhookDeliveryResult.ok());
+    @Test
+    @DisplayName("投递成功时按尝试次数加一标记成功, 不写失败也不放弃")
+    void shouldMarkRetrySuccessWhenDeliveryReturns200() {
+        WebhookDeliveryLogEntity row = exhaustedRow(101L, 3);
+        WebhookSubscriptionEntity subscription = enabledSubscription(7L);
+        when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+        when(deliveryLogRepository.claimForRetry(101L)).thenReturn(1);
+        when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
+        when(dispatcher.attemptDelivery(eq(subscription), any(), eq(row.getPayloadJson())))
+                .thenReturn(WebhookDeliveryResult.ok());
 
-    relay.poll();
+        relay.poll();
 
-    // attempt 应为原 row.attempt(3) + 1 = 4
-    verify(deliveryLogRepository).markRetrySuccess(101L, 4, null);
-    verify(deliveryLogRepository, never())
-        .markRetryFailure(
-            ArgumentMatchers.any(ConsoleWebhookDeliveryLogMarkRetryFailureParam.class));
-    verify(deliveryLogRepository, never()).markGiveUp(anyLong(), anyInt(), any(), anyString());
-  }
+        // attempt 应为原 row.attempt(3) + 1 = 4
+        verify(deliveryLogRepository).markRetrySuccess(101L, 4, null);
+        verify(deliveryLogRepository, never())
+                .markRetryFailure(ArgumentMatchers.any(ConsoleWebhookDeliveryLogMarkRetryFailureParam.class));
+        verify(deliveryLogRepository, never()).markGiveUp(anyLong(), anyInt(), any(), anyString());
+    }
 
-  @Test
-  @DisplayName("未达绝对上限的失败按退避记录重试, 放弃计数保持零")
-  void shouldMarkRetryFailureWithBackoffWhenBelowAbsoluteMax() {
-    WebhookDeliveryLogEntity row = exhaustedRow(102L, 3); // next attempt = 4, 还没到 max 8
-    WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
-    when(deliveryLogRepository.claimForRetry(102L)).thenReturn(1);
-    when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
-    when(dispatcher.attemptDelivery(eq(subscription), any(), eq(row.getPayloadJson())))
-        .thenReturn(WebhookDeliveryResult.failure(503, "service unavailable"));
+    @Test
+    @DisplayName("未达绝对上限的失败按退避记录重试, 放弃计数保持零")
+    void shouldMarkRetryFailureWithBackoffWhenBelowAbsoluteMax() {
+        WebhookDeliveryLogEntity row = exhaustedRow(102L, 3); // next attempt = 4, 还没到 max 8
+        WebhookSubscriptionEntity subscription = enabledSubscription(7L);
+        when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+        when(deliveryLogRepository.claimForRetry(102L)).thenReturn(1);
+        when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
+        when(dispatcher.attemptDelivery(eq(subscription), any(), eq(row.getPayloadJson())))
+                .thenReturn(WebhookDeliveryResult.failure(503, "service unavailable"));
 
-    relay.poll();
+        relay.poll();
 
-    verify(deliveryLogRepository)
-        .markRetryFailure(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.id(), 102L)
-            && Objects.equals(parameters.attempt(), 4)
-            && Objects.equals(parameters.httpStatus(), 503)
-            && Objects.equals(parameters.responseBody(), "service unavailable")
-            && parameters.nextRetryAt() != null));
-    verify(deliveryLogRepository, never()).markRetrySuccess(anyLong(), anyInt(), any());
-    verify(deliveryLogRepository, never()).markGiveUp(anyLong(), anyInt(), any(), anyString());
-    assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
-        .isZero();
-  }
+        verify(deliveryLogRepository)
+                .markRetryFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+                        && Objects.equals(parameters.id(), 102L)
+                        && Objects.equals(parameters.attempt(), 4)
+                        && Objects.equals(parameters.httpStatus(), 503)
+                        && Objects.equals(parameters.responseBody(), "service unavailable")
+                        && parameters.nextRetryAt() != null));
+        verify(deliveryLogRepository, never()).markRetrySuccess(anyLong(), anyInt(), any());
+        verify(deliveryLogRepository, never()).markGiveUp(anyLong(), anyInt(), any(), anyString());
+        assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
+                .isZero();
+    }
 
-  @Test
-  @DisplayName("达到绝对最大尝试次数时, 放弃该行并累加放弃计数")
-  void shouldMarkGiveUpAndIncrementCounterWhenAbsoluteMaxReached() {
-    // 当前 attempt=7,下一次 nextAttempt=8,正好达到绝对最大重试次数。
-    WebhookDeliveryLogEntity row = exhaustedRow(103L, 7);
-    WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
-    when(deliveryLogRepository.claimForRetry(103L)).thenReturn(1);
-    when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
-    when(dispatcher.attemptDelivery(eq(subscription), any(), eq(row.getPayloadJson())))
-        .thenReturn(WebhookDeliveryResult.failure(500, "internal error"));
+    @Test
+    @DisplayName("达到绝对最大尝试次数时, 放弃该行并累加放弃计数")
+    void shouldMarkGiveUpAndIncrementCounterWhenAbsoluteMaxReached() {
+        // 当前 attempt=7,下一次 nextAttempt=8,正好达到绝对最大重试次数。
+        WebhookDeliveryLogEntity row = exhaustedRow(103L, 7);
+        WebhookSubscriptionEntity subscription = enabledSubscription(7L);
+        when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+        when(deliveryLogRepository.claimForRetry(103L)).thenReturn(1);
+        when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
+        when(dispatcher.attemptDelivery(eq(subscription), any(), eq(row.getPayloadJson())))
+                .thenReturn(WebhookDeliveryResult.failure(500, "internal error"));
 
-    relay.poll();
+        relay.poll();
 
-    verify(deliveryLogRepository).markGiveUp(103L, 8, 500, "internal error");
-    assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
-        .isEqualTo(1.0);
-  }
+        verify(deliveryLogRepository).markGiveUp(103L, 8, 500, "internal error");
+        assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
+                .isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("订阅已停用时直接放弃并累加计数, 不尝试投递")
-  void shouldGiveUpWhenSubscriptionDisabled() {
-    WebhookDeliveryLogEntity row = exhaustedRow(104L, 3);
-    WebhookSubscriptionEntity disabled = enabledSubscription(7L);
-    disabled.setEnabled(false);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
-    when(deliveryLogRepository.claimForRetry(104L)).thenReturn(1);
-    when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(disabled));
+    @Test
+    @DisplayName("订阅已停用时直接放弃并累加计数, 不尝试投递")
+    void shouldGiveUpWhenSubscriptionDisabled() {
+        WebhookDeliveryLogEntity row = exhaustedRow(104L, 3);
+        WebhookSubscriptionEntity disabled = enabledSubscription(7L);
+        disabled.setEnabled(false);
+        when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+        when(deliveryLogRepository.claimForRetry(104L)).thenReturn(1);
+        when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(disabled));
 
-    relay.poll();
+        relay.poll();
 
-    verify(deliveryLogRepository)
-        .markGiveUp(eq(104L), eq(3), any(), eq("subscription disabled or deleted"));
-    verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
-    assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
-        .isEqualTo(1.0);
-  }
+        verify(deliveryLogRepository).markGiveUp(eq(104L), eq(3), any(), eq("subscription disabled or deleted"));
+        verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
+        assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
+                .isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("订阅已被删除时直接放弃并累加计数, 不尝试投递")
-  void shouldGiveUpWhenSubscriptionMissing() {
-    WebhookDeliveryLogEntity row = exhaustedRow(105L, 3);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
-    when(deliveryLogRepository.claimForRetry(105L)).thenReturn(1);
-    when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.empty());
+    @Test
+    @DisplayName("订阅已被删除时直接放弃并累加计数, 不尝试投递")
+    void shouldGiveUpWhenSubscriptionMissing() {
+        WebhookDeliveryLogEntity row = exhaustedRow(105L, 3);
+        when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+        when(deliveryLogRepository.claimForRetry(105L)).thenReturn(1);
+        when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.empty());
 
-    relay.poll();
+        relay.poll();
 
-    verify(deliveryLogRepository)
-        .markGiveUp(eq(105L), eq(3), any(), eq("subscription disabled or deleted"));
-    verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
-  }
+        verify(deliveryLogRepository).markGiveUp(eq(105L), eq(3), any(), eq("subscription disabled or deleted"));
+        verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
+    }
 
-  @Test
-  @DisplayName("抢占失败时跳过该行, 既不查订阅也不投递")
-  void shouldSkipRowWhenClaimLost() {
-    WebhookDeliveryLogEntity row = exhaustedRow(106L, 3);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
-    when(deliveryLogRepository.claimForRetry(106L)).thenReturn(0); // 抢占失败
+    @Test
+    @DisplayName("抢占失败时跳过该行, 既不查订阅也不投递")
+    void shouldSkipRowWhenClaimLost() {
+        WebhookDeliveryLogEntity row = exhaustedRow(106L, 3);
+        when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+        when(deliveryLogRepository.claimForRetry(106L)).thenReturn(0); // 抢占失败
 
-    relay.poll();
+        relay.poll();
 
-    verify(subscriptionRepository, never()).findByTenantAndId(anyString(), anyLong());
-    verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
-    verify(deliveryLogRepository, never()).markRetrySuccess(anyLong(), anyInt(), any());
-  }
+        verify(subscriptionRepository, never()).findByTenantAndId(anyString(), anyLong());
+        verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
+        verify(deliveryLogRepository, never()).markRetrySuccess(anyLong(), anyInt(), any());
+    }
 
-  @Test
-  @DisplayName("载荷反序列化失败时放弃该行, 原因指明载荷解析失败")
-  void shouldGiveUpOnPayloadDeserializationFailure() {
-    WebhookDeliveryLogEntity row = exhaustedRow(107L, 3);
-    row.setPayloadJson("{ this is not valid json"); // 故意坏掉
-    WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
-    when(deliveryLogRepository.claimForRetry(107L)).thenReturn(1);
-    when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
+    @Test
+    @DisplayName("载荷反序列化失败时放弃该行, 原因指明载荷解析失败")
+    void shouldGiveUpOnPayloadDeserializationFailure() {
+        WebhookDeliveryLogEntity row = exhaustedRow(107L, 3);
+        row.setPayloadJson("{ this is not valid json"); // 故意坏掉
+        WebhookSubscriptionEntity subscription = enabledSubscription(7L);
+        when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+        when(deliveryLogRepository.claimForRetry(107L)).thenReturn(1);
+        when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
 
-    relay.poll();
+        relay.poll();
 
-    verify(deliveryLogRepository)
-        .markGiveUp(
-            eq(107L), eq(3), any(), ArgumentMatchers.contains("payload deserialization failed"));
-    verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
-    assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
-        .isEqualTo(1.0);
-  }
+        verify(deliveryLogRepository)
+                .markGiveUp(eq(107L), eq(3), any(), ArgumentMatchers.contains("payload deserialization failed"));
+        verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
+        assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
+                .isEqualTo(1.0);
+    }
 
-  @Test
-  @DisplayName("退避秒数按指数增长, 并在上限处截断")
-  void shouldComputeBackoffWithExponentialCap() {
-    // nextAttempt 4 → 5min(基数), 5 → 10min, 6 → 20min, 7 → 30min(截断)
-    assertThat(relay.computeBackoffSeconds(4)).isEqualTo(5L * 60L);
-    assertThat(relay.computeBackoffSeconds(5)).isEqualTo(10L * 60L);
-    assertThat(relay.computeBackoffSeconds(6)).isEqualTo(20L * 60L);
-    assertThat(relay.computeBackoffSeconds(7)).isEqualTo(30L * 60L); // 40min capped to 30
-    assertThat(relay.computeBackoffSeconds(8)).isEqualTo(30L * 60L);
-  }
+    @Test
+    @DisplayName("退避秒数按指数增长, 并在上限处截断")
+    void shouldComputeBackoffWithExponentialCap() {
+        // nextAttempt 4 → 5min(基数), 5 → 10min, 6 → 20min, 7 → 30min(截断)
+        assertThat(relay.computeBackoffSeconds(4)).isEqualTo(5L * 60L);
+        assertThat(relay.computeBackoffSeconds(5)).isEqualTo(10L * 60L);
+        assertThat(relay.computeBackoffSeconds(6)).isEqualTo(20L * 60L);
+        assertThat(relay.computeBackoffSeconds(7)).isEqualTo(30L * 60L); // 40min capped to 30
+        assertThat(relay.computeBackoffSeconds(8)).isEqualTo(30L * 60L);
+    }
 
-  @Test
-  @DisplayName("单行投递抛异常时, 同批其余记录仍被处理")
-  void shouldContinueProcessingBatchOnSingleRowError() {
-    WebhookDeliveryLogEntity okRow = exhaustedRow(201L, 3);
-    WebhookDeliveryLogEntity badRow = exhaustedRow(202L, 3);
-    WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt()))
-        .thenReturn(List.of(badRow, okRow));
-    when(deliveryLogRepository.claimForRetry(202L)).thenReturn(1);
-    when(deliveryLogRepository.claimForRetry(201L)).thenReturn(1);
-    // 202 抛异常, 201 正常成功
-    when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
-    doAnswer(inv -> {
-          throw new RuntimeException("simulated dispatcher crash");
-        })
-        .when(dispatcher)
-        .attemptDelivery(eq(subscription), any(), eq(badRow.getPayloadJson()));
-    when(dispatcher.attemptDelivery(eq(subscription), any(), eq(okRow.getPayloadJson())))
-        .thenReturn(WebhookDeliveryResult.ok());
+    @Test
+    @DisplayName("单行投递抛异常时, 同批其余记录仍被处理")
+    void shouldContinueProcessingBatchOnSingleRowError() {
+        WebhookDeliveryLogEntity okRow = exhaustedRow(201L, 3);
+        WebhookDeliveryLogEntity badRow = exhaustedRow(202L, 3);
+        WebhookSubscriptionEntity subscription = enabledSubscription(7L);
+        when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(badRow, okRow));
+        when(deliveryLogRepository.claimForRetry(202L)).thenReturn(1);
+        when(deliveryLogRepository.claimForRetry(201L)).thenReturn(1);
+        // 202 抛异常, 201 正常成功
+        when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
+        doAnswer(inv -> {
+                    throw new RuntimeException("simulated dispatcher crash");
+                })
+                .when(dispatcher)
+                .attemptDelivery(eq(subscription), any(), eq(badRow.getPayloadJson()));
+        when(dispatcher.attemptDelivery(eq(subscription), any(), eq(okRow.getPayloadJson())))
+                .thenReturn(WebhookDeliveryResult.ok());
 
-    relay.poll();
+        relay.poll();
 
-    // 201 仍被处理
-    verify(deliveryLogRepository).markRetrySuccess(201L, 4, null);
-  }
+        // 201 仍被处理
+        verify(deliveryLogRepository).markRetrySuccess(201L, 4, null);
+    }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+    // ── helpers ────────────────────────────────────────────────────────────────
 
-  private WebhookDeliveryLogEntity exhaustedRow(long id, int attempt) {
-    WebhookDeliveryLogEntity row = new WebhookDeliveryLogEntity();
-    row.setId(id);
-    row.setTenantId("t1");
-    row.setSubscriptionId(7L);
-    row.setEventType("JOB_SUCCESS");
-    row.setPayloadJson("{\"tenantId\":\"t1\",\"eventType\":\"JOB_SUCCESS\",\"stream\":\"jobs\","
-        + "\"cursor\":\"c1\",\"emittedAt\":\"2026-04-30T10:00:00Z\",\"data\":{\"k\":\"v\"}}");
-    row.setHttpStatus(500);
-    row.setResponseBody("prior failure");
-    row.setDeliveryStatus("EXHAUSTED");
-    row.setAttempt(attempt);
-    row.setNextRetryAt(Instant.parse("2026-04-30T10:05:00Z"));
-    return row;
-  }
+    private WebhookDeliveryLogEntity exhaustedRow(long id, int attempt) {
+        WebhookDeliveryLogEntity row = new WebhookDeliveryLogEntity();
+        row.setId(id);
+        row.setTenantId("t1");
+        row.setSubscriptionId(7L);
+        row.setEventType("JOB_SUCCESS");
+        row.setPayloadJson("{\"tenantId\":\"t1\",\"eventType\":\"JOB_SUCCESS\",\"stream\":\"jobs\","
+                + "\"cursor\":\"c1\",\"emittedAt\":\"2026-04-30T10:00:00Z\",\"data\":{\"k\":\"v\"}}");
+        row.setHttpStatus(500);
+        row.setResponseBody("prior failure");
+        row.setDeliveryStatus("EXHAUSTED");
+        row.setAttempt(attempt);
+        row.setNextRetryAt(Instant.parse("2026-04-30T10:05:00Z"));
+        return row;
+    }
 
-  private WebhookSubscriptionEntity enabledSubscription(Long id) {
-    WebhookSubscriptionEntity sub = new WebhookSubscriptionEntity();
-    sub.setId(id);
-    sub.setTenantId("t1");
-    sub.setName("smoke");
-    sub.setCallbackUrl("https://example.com/wh");
-    sub.setEventTypes("*");
-    sub.setSecret("s");
-    sub.setEnabled(true);
-    return sub;
-  }
+    private WebhookSubscriptionEntity enabledSubscription(Long id) {
+        WebhookSubscriptionEntity sub = new WebhookSubscriptionEntity();
+        sub.setId(id);
+        sub.setTenantId("t1");
+        sub.setName("smoke");
+        sub.setCallbackUrl("https://example.com/wh");
+        sub.setEventTypes("*");
+        sub.setSecret("s");
+        sub.setEnabled(true);
+        return sub;
+    }
 }

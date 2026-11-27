@@ -8,12 +8,12 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 /** 批量窗口应用服务：管理批量执行窗口的 CRUD 及启停操作。 */
 public interface ConsoleBatchWindowApplicationService {
 
-  PageResponse<ConsoleBatchWindowResponse> list(
-      String tenantId, String windowCode, Boolean enabled, int pageNo, int pageSize);
+    PageResponse<ConsoleBatchWindowResponse> list(
+            String tenantId, String windowCode, Boolean enabled, int pageNo, int pageSize);
 
-  ConsoleBatchWindowResponse create(BatchWindowCreateRequest request);
+    ConsoleBatchWindowResponse create(BatchWindowCreateRequest request);
 
-  ConsoleBatchWindowResponse update(Long id, BatchWindowUpdateRequest request);
+    ConsoleBatchWindowResponse update(Long id, BatchWindowUpdateRequest request);
 
-  void toggle(Long id, String tenantId, Boolean enabled);
+    void toggle(Long id, String tenantId, Boolean enabled);
 }

@@ -26,59 +26,61 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @DisplayName("Redis 故障 → quota failure-mode 语义")
 class QuotaRedisFailureModeChaosIT extends AbstractChaosIntegrationTest {
 
-  private static final QuotaReservationRequest REQUEST = new QuotaReservationRequest(
-      new QuotaReservationOwner("t1", "TENANT", "chaos-owner"),
-      // SLIDING_WINDOW（runtime-managed）+ burst>0 → 强制走 Redis Lua 运行时判定，而非静态 allow
-      new QuotaReservationPolicy("SLIDING_WINDOW", 5, 2, 1),
-      0,
-      1,
-      new QuotaReservationReason("TEST", "chaos-it"));
+    private static final QuotaReservationRequest REQUEST = new QuotaReservationRequest(
+            new QuotaReservationOwner("t1", "TENANT", "chaos-owner"),
+            // SLIDING_WINDOW（runtime-managed）+ burst>0 → 强制走 Redis Lua 运行时判定，而非静态 allow
+            new QuotaReservationPolicy("SLIDING_WINDOW", 5, 2, 1),
+            0,
+            1,
+            new QuotaReservationReason("TEST", "chaos-it"));
 
-  @Test
-  @DisplayName("Redis 断 → FAIL_CLOSED 返回 QUOTA_BACKEND_UNAVAILABLE；FAIL_OPEN 放行")
-  void shouldRespectFailureMode_whenBackendDown() throws Exception {
-    LettuceConnectionFactory factory = newLettuceFactory();
-    try {
-      OrchestratorRedisSupport redis =
-          new OrchestratorRedisSupport(new StringRedisTemplate(factory), new ObjectMapper());
-      BatchTimezoneProvider timezoneProvider =
-          new BatchTimezoneProvider(new BatchTimezoneProperties());
-      RedisQuotaRuntimeStateService closed = new RedisQuotaRuntimeStateService(
-          redis, timezoneProvider, quotaProperties("FAIL_CLOSED"));
-      RedisQuotaRuntimeStateService open =
-          new RedisQuotaRuntimeStateService(redis, timezoneProvider, quotaProperties("FAIL_OPEN"));
+    @Test
+    @DisplayName("Redis 断 → FAIL_CLOSED 返回 QUOTA_BACKEND_UNAVAILABLE；FAIL_OPEN 放行")
+    void shouldRespectFailureMode_whenBackendDown() throws Exception {
+        LettuceConnectionFactory factory = newLettuceFactory();
+        try {
+            OrchestratorRedisSupport redis =
+                    new OrchestratorRedisSupport(new StringRedisTemplate(factory), new ObjectMapper());
+            BatchTimezoneProvider timezoneProvider = new BatchTimezoneProvider(new BatchTimezoneProperties());
+            RedisQuotaRuntimeStateService closed =
+                    new RedisQuotaRuntimeStateService(redis, timezoneProvider, quotaProperties("FAIL_CLOSED"));
+            RedisQuotaRuntimeStateService open =
+                    new RedisQuotaRuntimeStateService(redis, timezoneProvider, quotaProperties("FAIL_OPEN"));
 
-      // 健康路径：Redis 可用时两种模式都正常判定额度
-      assertThat(closed.evaluateAndReserve(REQUEST).allowed()).isTrue();
-      assertThat(open.evaluateAndReserve(REQUEST).allowed()).isTrue();
+            // 健康路径：Redis 可用时两种模式都正常判定额度
+            assertThat(closed.evaluateAndReserve(REQUEST).allowed()).isTrue();
+            assertThat(open.evaluateAndReserve(REQUEST).allowed()).isTrue();
 
-      withDown(ProxyTarget.REDIS, () -> {
-        ResourceCheck closedCheck = closed.evaluateAndReserve(REQUEST);
-        assertThat(closedCheck.allowed()).as("FAIL_CLOSED: Redis 故障时不能绕过租户配额").isFalse();
-        assertThat(closedCheck.reasonCode()).isEqualTo("QUOTA_BACKEND_UNAVAILABLE");
+            withDown(ProxyTarget.REDIS, () -> {
+                ResourceCheck closedCheck = closed.evaluateAndReserve(REQUEST);
+                assertThat(closedCheck.allowed())
+                        .as("FAIL_CLOSED: Redis 故障时不能绕过租户配额")
+                        .isFalse();
+                assertThat(closedCheck.reasonCode()).isEqualTo("QUOTA_BACKEND_UNAVAILABLE");
 
-        ResourceCheck openCheck = open.evaluateAndReserve(REQUEST);
-        assertThat(openCheck.allowed()).as("FAIL_OPEN: Redis 故障时放行（仅限本地兼容场景）").isTrue();
-      });
-    } finally {
-      factory.destroy();
+                ResourceCheck openCheck = open.evaluateAndReserve(REQUEST);
+                assertThat(openCheck.allowed())
+                        .as("FAIL_OPEN: Redis 故障时放行（仅限本地兼容场景）")
+                        .isTrue();
+            });
+        } finally {
+            factory.destroy();
+        }
     }
-  }
 
-  private static QuotaProperties quotaProperties(String failureMode) {
-    QuotaProperties properties = new QuotaProperties();
-    properties.getRedis().setFailureMode(failureMode);
-    return properties;
-  }
+    private static QuotaProperties quotaProperties(String failureMode) {
+        QuotaProperties properties = new QuotaProperties();
+        properties.getRedis().setFailureMode(failureMode);
+        return properties;
+    }
 
-  private LettuceConnectionFactory newLettuceFactory() {
-    RedisStandaloneConfiguration config =
-        new RedisStandaloneConfiguration(redisProxiedHost(), redisProxiedPort());
-    LettuceClientConfiguration client = LettuceClientConfiguration.builder()
-        .commandTimeout(Duration.ofSeconds(3))
-        .build();
-    LettuceConnectionFactory factory = new LettuceConnectionFactory(config, client);
-    factory.afterPropertiesSet();
-    return factory;
-  }
+    private LettuceConnectionFactory newLettuceFactory() {
+        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(redisProxiedHost(), redisProxiedPort());
+        LettuceClientConfiguration client = LettuceClientConfiguration.builder()
+                .commandTimeout(Duration.ofSeconds(3))
+                .build();
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(config, client);
+        factory.afterPropertiesSet();
+        return factory;
+    }
 }

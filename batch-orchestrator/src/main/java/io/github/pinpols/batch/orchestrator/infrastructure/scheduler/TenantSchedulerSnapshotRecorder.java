@@ -27,71 +27,68 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TenantSchedulerSnapshotRecorder {
 
-  private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
-  private final TenantSchedulerSnapshotService snapshotService;
-  private final TenantSchedulerSnapshotMapper snapshotMapper;
-  private final WorkerRegistryMapper workerRegistryMapper;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final SchedulerSnapshotProperties schedulerSnapshotProperties;
+    private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+    private final TenantSchedulerSnapshotService snapshotService;
+    private final TenantSchedulerSnapshotMapper snapshotMapper;
+    private final WorkerRegistryMapper workerRegistryMapper;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final SchedulerSnapshotProperties schedulerSnapshotProperties;
 
-  @Scheduled(fixedDelayString = "${batch.scheduler.snapshot-persist-ms:120000}")
-  @SchedulerLock(
-      name = "tenant_scheduler_snapshot",
-      lockAtMostFor = "PT5M",
-      lockAtLeastFor = "PT1M")
-  public void persist() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.scheduler.snapshot-persist-ms:120000}")
+    @SchedulerLock(name = "tenant_scheduler_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
+    public void persist() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!schedulerSnapshotProperties.isSnapshotPersistEnabled()) {
+            return;
+        }
+        List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();
+        if (tenantIds.isEmpty()) {
+            return;
+        }
+        // 一次 GROUP BY 查所有租户的 ONLINE worker 数,取代 N 次 countByTenantAndStatus
+        Map<String, Long> onlineByTenant = new HashMap<>();
+        for (TenantWorkerCountView row :
+                workerRegistryMapper.countByTenantsAndStatus(tenantIds, WorkerRegistryStatus.ONLINE.code())) {
+            onlineByTenant.put(row.tenantId(), row.cnt());
+        }
+        List<TenantSchedulerSnapshotEntity> rows = new ArrayList<>(tenantIds.size());
+        for (String tenantId : tenantIds) {
+            if (tenantId == null || tenantId.isBlank()) {
+                continue;
+            }
+            // RLS Phase B：buildLive 内部走 mapper 查 quota / partition 统计；必须在绑定的租户上下文里做。
+            SchedulerSnapshotResponse snap =
+                    RlsTenantContextHolder.runWithTenant(tenantId, () -> snapshotService.buildLive(tenantId));
+            if (snap.policies().isEmpty()) {
+                continue;
+            }
+            SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
+            long online = onlineByTenant.getOrDefault(tenantId, 0L);
+            String snapshotJson = JsonUtils.toJson(snap);
+            TenantSchedulerSnapshotEntity snapshot = TenantSchedulerSnapshotEntity.builder()
+                    .id(null)
+                    .tenantId(tenantId)
+                    .snapshotAt(snap.generatedAt())
+                    .fairShareGroup(p.fairShareGroup())
+                    .policyCode(p.policyCode())
+                    .activeJobs((int) Math.min(Integer.MAX_VALUE, p.activeJobs()))
+                    .activePartitions((int) Math.min(Integer.MAX_VALUE, p.activePartitions()))
+                    .maxJobsBase(p.maxRunningJobsPerTenant())
+                    .burstLimit(p.burstLimit())
+                    .effectiveJobCap(p.effectiveTenantJobCap())
+                    .groupActiveJobs((int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()))
+                    .groupMaxJobs(p.groupSharedMaxRunningJobs())
+                    .quotaResetPolicy(p.quotaResetPolicy())
+                    .onlineWorkers((int) Math.min(Integer.MAX_VALUE, online))
+                    .detailJson(JsonbString.of(snapshotJson))
+                    .build();
+            rows.add(snapshot);
+        }
+        if (!rows.isEmpty()) {
+            // 批量 INSERT:单条 SQL 多 VALUES,N 次 round-trip 降为 1 次
+            snapshotMapper.insertBatch(rows);
+        }
     }
-    if (!schedulerSnapshotProperties.isSnapshotPersistEnabled()) {
-      return;
-    }
-    List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();
-    if (tenantIds.isEmpty()) {
-      return;
-    }
-    // 一次 GROUP BY 查所有租户的 ONLINE worker 数,取代 N 次 countByTenantAndStatus
-    Map<String, Long> onlineByTenant = new HashMap<>();
-    for (TenantWorkerCountView row : workerRegistryMapper.countByTenantsAndStatus(
-        tenantIds, WorkerRegistryStatus.ONLINE.code())) {
-      onlineByTenant.put(row.tenantId(), row.cnt());
-    }
-    List<TenantSchedulerSnapshotEntity> rows = new ArrayList<>(tenantIds.size());
-    for (String tenantId : tenantIds) {
-      if (tenantId == null || tenantId.isBlank()) {
-        continue;
-      }
-      // RLS Phase B：buildLive 内部走 mapper 查 quota / partition 统计；必须在绑定的租户上下文里做。
-      SchedulerSnapshotResponse snap =
-          RlsTenantContextHolder.runWithTenant(tenantId, () -> snapshotService.buildLive(tenantId));
-      if (snap.policies().isEmpty()) {
-        continue;
-      }
-      SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
-      long online = onlineByTenant.getOrDefault(tenantId, 0L);
-      String snapshotJson = JsonUtils.toJson(snap);
-      TenantSchedulerSnapshotEntity snapshot = TenantSchedulerSnapshotEntity.builder()
-          .id(null)
-          .tenantId(tenantId)
-          .snapshotAt(snap.generatedAt())
-          .fairShareGroup(p.fairShareGroup())
-          .policyCode(p.policyCode())
-          .activeJobs((int) Math.min(Integer.MAX_VALUE, p.activeJobs()))
-          .activePartitions((int) Math.min(Integer.MAX_VALUE, p.activePartitions()))
-          .maxJobsBase(p.maxRunningJobsPerTenant())
-          .burstLimit(p.burstLimit())
-          .effectiveJobCap(p.effectiveTenantJobCap())
-          .groupActiveJobs((int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()))
-          .groupMaxJobs(p.groupSharedMaxRunningJobs())
-          .quotaResetPolicy(p.quotaResetPolicy())
-          .onlineWorkers((int) Math.min(Integer.MAX_VALUE, online))
-          .detailJson(JsonbString.of(snapshotJson))
-          .build();
-      rows.add(snapshot);
-    }
-    if (!rows.isEmpty()) {
-      // 批量 INSERT:单条 SQL 多 VALUES,N 次 round-trip 降为 1 次
-      snapshotMapper.insertBatch(rows);
-    }
-  }
 }

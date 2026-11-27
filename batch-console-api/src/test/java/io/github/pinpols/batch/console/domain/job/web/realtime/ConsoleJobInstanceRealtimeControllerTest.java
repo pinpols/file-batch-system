@@ -26,42 +26,40 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @ExtendWith(MockitoExtension.class)
 class ConsoleJobInstanceRealtimeControllerTest {
 
-  @Mock
-  private ConsoleRealtimeSubscriptionPort realtimeEventHub;
+    @Mock
+    private ConsoleRealtimeSubscriptionPort realtimeEventHub;
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(
-        new ConsoleResponseFactory(requestMetadataResolver));
+    @BeforeEach
+    void setUp() {
+        ConsoleApiExceptionHandler exceptionHandler =
+                ConsoleApiExceptionHandler.forStandaloneTest(new ConsoleResponseFactory(requestMetadataResolver));
 
-    when(tenantGuard.resolveTenant(anyString()))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-    when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
-        .thenReturn(new SseEmitter());
+        when(tenantGuard.resolveTenant(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
+                .thenReturn(new SseEmitter());
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleJobInstanceRealtimeController(realtimeEventHub, tenantGuard))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleJobInstanceRealtimeController(realtimeEventHub, tenantGuard))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("建立实例事件推送流, 按租户解析后委托订阅")
-  void shouldExposeJobInstanceRealtimeStream() throws Exception {
-    mockMvc
-        .perform(get("/api/console/stream/job-instances/events").param("tenantId", "t1"))
-        .andExpect(request().asyncStarted())
-        .andReturn();
+    @Test
+    @DisplayName("建立实例事件推送流, 按租户解析后委托订阅")
+    void shouldExposeJobInstanceRealtimeStream() throws Exception {
+        mockMvc.perform(get("/api/console/stream/job-instances/events").param("tenantId", "t1"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-    verify(tenantGuard).resolveTenant("t1");
-    verify(realtimeEventHub).subscribe("t1", "job-instances", null, null, null);
-  }
+        verify(tenantGuard).resolveTenant("t1");
+        verify(realtimeEventHub).subscribe("t1", "job-instances", null, null, null);
+    }
 }

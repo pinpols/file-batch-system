@@ -24,54 +24,53 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ReadinessWaitController {
 
-  private final ReadinessWaitService readinessWaitService;
+    private final ReadinessWaitService readinessWaitService;
 
-  @PostMapping
-  public ResponseEntity<HandoverResponse> handover(@RequestBody HandoverRequest request) {
-    boolean accepted = readinessWaitService.handover(new ReadinessWaitHandoverCommand(
-        request.tenantId(),
-        request.workflowDefinitionId(),
-        request.workflowCode(),
-        request.calendarCode(),
-        request.scheduleVersion(),
-        request.dependsOnJobCodes(),
-        request.bizDate(),
-        request.scheduledFireTime(),
-        request.deferredSince(),
-        request.deadline(),
-        request.traceId()));
-    return ResponseEntity.status(accepted ? HttpStatus.CREATED : HttpStatus.OK)
-        .body(new HandoverResponse(accepted));
-  }
+    @PostMapping
+    public ResponseEntity<HandoverResponse> handover(@RequestBody HandoverRequest request) {
+        boolean accepted = readinessWaitService.handover(new ReadinessWaitHandoverCommand(
+                request.tenantId(),
+                request.workflowDefinitionId(),
+                request.workflowCode(),
+                request.calendarCode(),
+                request.scheduleVersion(),
+                request.dependsOnJobCodes(),
+                request.bizDate(),
+                request.scheduledFireTime(),
+                request.deferredSince(),
+                request.deadline(),
+                request.traceId()));
+        return ResponseEntity.status(accepted ? HttpStatus.CREATED : HttpStatus.OK)
+                .body(new HandoverResponse(accepted));
+    }
 
-  @PostMapping("/close")
-  public ResponseEntity<CloseResponse> close(@RequestBody CloseRequest request) {
-    boolean cancelled = readinessWaitService.cancel(
-        request.tenantId(), request.workflowDefinitionId(), request.scheduledFireTime());
-    return ResponseEntity.ok(new CloseResponse(cancelled));
-  }
+    @PostMapping("/close")
+    public ResponseEntity<CloseResponse> close(@RequestBody CloseRequest request) {
+        boolean cancelled = readinessWaitService.cancel(
+                request.tenantId(), request.workflowDefinitionId(), request.scheduledFireTime());
+        return ResponseEntity.ok(new CloseResponse(cancelled));
+    }
 
-  /** 移交请求：原依赖、调度版本、业务日与等待窗口。 */
-  public record HandoverRequest(
-      String tenantId,
-      Long workflowDefinitionId,
-      String workflowCode,
-      String calendarCode,
-      Integer scheduleVersion,
-      List<String> dependsOnJobCodes,
-      LocalDate bizDate,
-      Instant scheduledFireTime,
-      Instant deferredSince,
-      Instant deadline,
-      String traceId) {}
+    /** 移交请求：原依赖、调度版本、业务日与等待窗口。 */
+    public record HandoverRequest(
+            String tenantId,
+            Long workflowDefinitionId,
+            String workflowCode,
+            String calendarCode,
+            Integer scheduleVersion,
+            List<String> dependsOnJobCodes,
+            LocalDate bizDate,
+            Instant scheduledFireTime,
+            Instant deferredSince,
+            Instant deadline,
+            String traceId) {}
 
-  /** 关闭请求：正常 fire 成功后取消等待。 */
-  public record CloseRequest(
-      String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {}
+    /** 关闭请求：正常 fire 成功后取消等待。 */
+    public record CloseRequest(String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {}
 
-  /** 移交结果。 */
-  public record HandoverResponse(boolean accepted) {}
+    /** 移交结果。 */
+    public record HandoverResponse(boolean accepted) {}
 
-  /** 关闭结果。 */
-  public record CloseResponse(boolean cancelled) {}
+    /** 关闭结果。 */
+    public record CloseResponse(boolean cancelled) {}
 }

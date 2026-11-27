@@ -17,24 +17,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleLineageEvidenceController {
 
-  private final ConsoleOrchestratorPort orchestratorProxy;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestratorProxy;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/result-versions/{id}")
-  public CommonResponse<LineageEvidenceResponse> byResultVersion(
-      @PathVariable("id") Long id,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    CommonResponse<LineageEvidenceResponse> resp =
-        orchestratorProxy.lineageByResultVersion(id, tenantId);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @GetMapping("/result-versions/{id}")
+    public CommonResponse<LineageEvidenceResponse> byResultVersion(
+            @PathVariable("id") Long id, @RequestParam(value = "tenantId", required = false) String tenantId) {
+        CommonResponse<LineageEvidenceResponse> resp = orchestratorProxy.lineageByResultVersion(id, tenantId);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 
-  @GetMapping("/effective")
-  public CommonResponse<LineageEvidenceResponse> byEffectiveBusinessKey(
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam("businessKey") String businessKey) {
-    CommonResponse<LineageEvidenceResponse> resp =
-        orchestratorProxy.lineageByEffective(tenantId, businessKey);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @GetMapping("/effective")
+    public CommonResponse<LineageEvidenceResponse> byEffectiveBusinessKey(
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam("businessKey") String businessKey) {
+        CommonResponse<LineageEvidenceResponse> resp = orchestratorProxy.lineageByEffective(tenantId, businessKey);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 }

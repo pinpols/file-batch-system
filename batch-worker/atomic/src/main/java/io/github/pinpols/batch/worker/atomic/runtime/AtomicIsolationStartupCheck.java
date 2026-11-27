@@ -52,97 +52,95 @@ import org.springframework.stereotype.Component;
 @Component
 public class AtomicIsolationStartupCheck {
 
-  static final String PROP_REQUIRE_ISOLATION = "batch.worker.atomic.require-isolation";
-  static final String PROP_ISOLATION_ACKNOWLEDGED = "batch.worker.atomic.isolation-acknowledged";
+    static final String PROP_REQUIRE_ISOLATION = "batch.worker.atomic.require-isolation";
+    static final String PROP_ISOLATION_ACKNOWLEDGED = "batch.worker.atomic.isolation-acknowledged";
 
-  private final ObjectProvider<ShellExecutorProperties> shellProps;
-  private final ObjectProvider<SqlExecutorProperties> sqlProps;
-  private final ObjectProvider<StoredProcExecutorProperties> storedProcProps;
-  private final ObjectProvider<HttpExecutorProperties> httpProps;
-  private final ObjectProvider<SparkSubmitExecutorProperties> sparkProps;
-  private final Environment environment;
+    private final ObjectProvider<ShellExecutorProperties> shellProps;
+    private final ObjectProvider<SqlExecutorProperties> sqlProps;
+    private final ObjectProvider<StoredProcExecutorProperties> storedProcProps;
+    private final ObjectProvider<HttpExecutorProperties> httpProps;
+    private final ObjectProvider<SparkSubmitExecutorProperties> sparkProps;
+    private final Environment environment;
 
-  public AtomicIsolationStartupCheck(
-      ObjectProvider<ShellExecutorProperties> shellProps,
-      ObjectProvider<SqlExecutorProperties> sqlProps,
-      ObjectProvider<StoredProcExecutorProperties> storedProcProps,
-      ObjectProvider<HttpExecutorProperties> httpProps,
-      ObjectProvider<SparkSubmitExecutorProperties> sparkProps,
-      Environment environment) {
-    this.shellProps = shellProps;
-    this.sqlProps = sqlProps;
-    this.storedProcProps = storedProcProps;
-    this.httpProps = httpProps;
-    this.sparkProps = sparkProps;
-    this.environment = environment;
-  }
-
-  @EventListener(ApplicationReadyEvent.class)
-  public void checkOnStartup() {
-    List<String> enabledDualUse = enabledDualUseExecutors();
-    if (enabledDualUse.isEmpty()) {
-      log.debug("SPI isolation check: no dual-use executor enabled, nothing to enforce");
-      return;
+    public AtomicIsolationStartupCheck(
+            ObjectProvider<ShellExecutorProperties> shellProps,
+            ObjectProvider<SqlExecutorProperties> sqlProps,
+            ObjectProvider<StoredProcExecutorProperties> storedProcProps,
+            ObjectProvider<HttpExecutorProperties> httpProps,
+            ObjectProvider<SparkSubmitExecutorProperties> sparkProps,
+            Environment environment) {
+        this.shellProps = shellProps;
+        this.sqlProps = sqlProps;
+        this.storedProcProps = storedProcProps;
+        this.httpProps = httpProps;
+        this.sparkProps = sparkProps;
+        this.environment = environment;
     }
 
-    log.warn(
-        "===== ADR-029 dual-use SPI executor(s) ENABLED: {} ===== "
-            + "This worker can run arbitrary commands/SQL/stored-procs. "
-            + "MINIMAL-PRIVILEGE deployment is REQUIRED: "
-            + "(1) use a dedicated low-privilege DB role - grant access only to platform claim/lease tables; never connect to business databases; "
-            + "(2) use a dedicated ServiceAccount - grant minimum IAM permissions; do not reuse the shared platform SA; "
-            + "(3) use an egress NetworkPolicy - default-deny egress, allowing only DNS/platform DB/Kafka/explicit SPI targets; "
-            + "(4) use a dedicated restricted secret - it must not contain business DB or MinIO credentials. "
-            + "Set {}=true after isolation is verified to silence the fail-fast gate.",
-        enabledDualUse,
-        PROP_ISOLATION_ACKNOWLEDGED);
+    @EventListener(ApplicationReadyEvent.class)
+    public void checkOnStartup() {
+        List<String> enabledDualUse = enabledDualUseExecutors();
+        if (enabledDualUse.isEmpty()) {
+            log.debug("SPI isolation check: no dual-use executor enabled, nothing to enforce");
+            return;
+        }
 
-    boolean requireIsolation =
-        environment.getProperty(PROP_REQUIRE_ISOLATION, Boolean.class, false);
-    boolean acknowledged =
-        environment.getProperty(PROP_ISOLATION_ACKNOWLEDGED, Boolean.class, false);
+        log.warn(
+                "===== ADR-029 dual-use SPI executor(s) ENABLED: {} ===== "
+                        + "This worker can run arbitrary commands/SQL/stored-procs. "
+                        + "MINIMAL-PRIVILEGE deployment is REQUIRED: "
+                        + "(1) use a dedicated low-privilege DB role - grant access only to platform claim/lease tables; never connect to business databases; "
+                        + "(2) use a dedicated ServiceAccount - grant minimum IAM permissions; do not reuse the shared platform SA; "
+                        + "(3) use an egress NetworkPolicy - default-deny egress, allowing only DNS/platform DB/Kafka/explicit SPI targets; "
+                        + "(4) use a dedicated restricted secret - it must not contain business DB or MinIO credentials. "
+                        + "Set {}=true after isolation is verified to silence the fail-fast gate.",
+                enabledDualUse,
+                PROP_ISOLATION_ACKNOWLEDGED);
 
-    if (requireIsolation && !acknowledged) {
-      throw new IllegalStateException("ADR-029 isolation gate: dual-use SPI executor(s) "
-          + enabledDualUse
-          + " enabled with "
-          + PROP_REQUIRE_ISOLATION
-          + "=true but "
-          + PROP_ISOLATION_ACKNOWLEDGED
-          + " not set. Refusing to start. Verify minimal-privilege deployment "
-          + "(dedicated low-priv DB role / dedicated ServiceAccount / egress NetworkPolicy / "
-          + "restricted secret) then set "
-          + PROP_ISOLATION_ACKNOWLEDGED
-          + "=true.");
-    }
-  }
+        boolean requireIsolation = environment.getProperty(PROP_REQUIRE_ISOLATION, Boolean.class, false);
+        boolean acknowledged = environment.getProperty(PROP_ISOLATION_ACKNOWLEDGED, Boolean.class, false);
 
-  /** dual-use(RCE 级)executor 列表:shell / sql / stored-proc。http 不算 dual-use(受域名白名单约束)。 */
-  private List<String> enabledDualUseExecutors() {
-    List<String> enabled = new ArrayList<>();
-    ShellExecutorProperties shell = shellProps.getIfAvailable();
-    if (shell != null && shell.isEnabled()) {
-      enabled.add("shell");
+        if (requireIsolation && !acknowledged) {
+            throw new IllegalStateException("ADR-029 isolation gate: dual-use SPI executor(s) "
+                    + enabledDualUse
+                    + " enabled with "
+                    + PROP_REQUIRE_ISOLATION
+                    + "=true but "
+                    + PROP_ISOLATION_ACKNOWLEDGED
+                    + " not set. Refusing to start. Verify minimal-privilege deployment "
+                    + "(dedicated low-priv DB role / dedicated ServiceAccount / egress NetworkPolicy / "
+                    + "restricted secret) then set "
+                    + PROP_ISOLATION_ACKNOWLEDGED
+                    + "=true.");
+        }
     }
-    SqlExecutorProperties sql = sqlProps.getIfAvailable();
-    if (sql != null && sql.isEnabled()) {
-      enabled.add("sql");
+
+    /** dual-use(RCE 级)executor 列表:shell / sql / stored-proc。http 不算 dual-use(受域名白名单约束)。 */
+    private List<String> enabledDualUseExecutors() {
+        List<String> enabled = new ArrayList<>();
+        ShellExecutorProperties shell = shellProps.getIfAvailable();
+        if (shell != null && shell.isEnabled()) {
+            enabled.add("shell");
+        }
+        SqlExecutorProperties sql = sqlProps.getIfAvailable();
+        if (sql != null && sql.isEnabled()) {
+            enabled.add("sql");
+        }
+        StoredProcExecutorProperties storedProc = storedProcProps.getIfAvailable();
+        if (storedProc != null && storedProc.isEnabled()) {
+            enabled.add("stored-proc");
+        }
+        // spark-submit 提交任意 jar/.py = 任意代码执行,危害等同 shell,归 dual-use RCE。
+        SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
+        if (spark != null && spark.isEnabled()) {
+            enabled.add("spark-submit");
+        }
+        // http executor 受出口域名白名单约束,不归为 dual-use RCE;仅在有它启用时也提示隔离,
+        // 但它本身不触发 fail-fast(仍计入 WARN 的整体上下文判断之外)。这里有意不加入 enabled。
+        HttpExecutorProperties http = httpProps.getIfAvailable();
+        if (http != null && http.isEnabled()) {
+            log.debug("SPI http executor enabled (egress-restricted, not gated as dual-use RCE)");
+        }
+        return enabled;
     }
-    StoredProcExecutorProperties storedProc = storedProcProps.getIfAvailable();
-    if (storedProc != null && storedProc.isEnabled()) {
-      enabled.add("stored-proc");
-    }
-    // spark-submit 提交任意 jar/.py = 任意代码执行,危害等同 shell,归 dual-use RCE。
-    SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
-    if (spark != null && spark.isEnabled()) {
-      enabled.add("spark-submit");
-    }
-    // http executor 受出口域名白名单约束,不归为 dual-use RCE;仅在有它启用时也提示隔离,
-    // 但它本身不触发 fail-fast(仍计入 WARN 的整体上下文判断之外)。这里有意不加入 enabled。
-    HttpExecutorProperties http = httpProps.getIfAvailable();
-    if (http != null && http.isEnabled()) {
-      log.debug("SPI http executor enabled (egress-restricted, not gated as dual-use RCE)");
-    }
-    return enabled;
-  }
 }

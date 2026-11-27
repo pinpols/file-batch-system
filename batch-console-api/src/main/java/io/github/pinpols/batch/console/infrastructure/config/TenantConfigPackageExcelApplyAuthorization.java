@@ -24,50 +24,45 @@ import org.springframework.stereotype.Component;
 @Component
 public class TenantConfigPackageExcelApplyAuthorization {
 
-  private static final Set<String> PLATFORM_MONITORING_FIELDS = Set.of(
-      COL_SOFT_RUNTIME_SECONDS,
-      COL_SOFT_RUNTIME_SEVERITY,
-      COL_START_GRACE_SECONDS,
-      COL_START_GRACE_SEVERITY);
+    private static final Set<String> PLATFORM_MONITORING_FIELDS = Set.of(
+            COL_SOFT_RUNTIME_SECONDS, COL_SOFT_RUNTIME_SEVERITY, COL_START_GRACE_SECONDS, COL_START_GRACE_SEVERITY);
 
-  public void assertAllowed(PackageValidationResult result) {
-    ConsolePrincipal principal = currentPrincipal();
-    Set<String> authorities = principal.authorities();
-    if (authorities.contains(ConsoleRoles.ADMIN)) {
-      return;
+    public void assertAllowed(PackageValidationResult result) {
+        ConsolePrincipal principal = currentPrincipal();
+        Set<String> authorities = principal.authorities();
+        if (authorities.contains(ConsoleRoles.ADMIN)) {
+            return;
+        }
+        if (!authorities.contains(ConsoleRoles.TENANT_ADMIN)) {
+            throw forbidden();
+        }
+        boolean packageContainsPlatformManagedFields = EmptyChecks.isNotEmpty(result.validResourceQueues())
+                || hasValues(result.validJobs(), Set.of(COL_QUEUE_CODE, COL_WORKER_GROUP))
+                || hasValues(result.validWfNodes(), Set.of(COL_WORKER_GROUP))
+                || hasValues(result.validJobMonitoringPolicies(), PLATFORM_MONITORING_FIELDS);
+        if (packageContainsPlatformManagedFields) {
+            throw BizException.of(ResultCode.FORBIDDEN, "error.config_package.platform_fields_forbidden");
+        }
     }
-    if (!authorities.contains(ConsoleRoles.TENANT_ADMIN)) {
-      throw forbidden();
+
+    public boolean canViewPlatformFields() {
+        return ConsoleRoles.hasGlobalRole(currentPrincipal().authorities());
     }
-    boolean packageContainsPlatformManagedFields =
-        EmptyChecks.isNotEmpty(result.validResourceQueues())
-            || hasValues(result.validJobs(), Set.of(COL_QUEUE_CODE, COL_WORKER_GROUP))
-            || hasValues(result.validWfNodes(), Set.of(COL_WORKER_GROUP))
-            || hasValues(result.validJobMonitoringPolicies(), PLATFORM_MONITORING_FIELDS);
-    if (packageContainsPlatformManagedFields) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.config_package.platform_fields_forbidden");
+
+    private static ConsolePrincipal currentPrincipal() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null // empty-check: allow - Sonar S2259
+                && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal;
+        }
+        throw forbidden();
     }
-  }
 
-  public boolean canViewPlatformFields() {
-    return ConsoleRoles.hasGlobalRole(currentPrincipal().authorities());
-  }
-
-  private static ConsolePrincipal currentPrincipal() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication != null // empty-check: allow - Sonar S2259
-        && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal;
+    private static boolean hasValues(List<Map<String, String>> rows, Set<String> fields) {
+        return rows.stream().anyMatch(row -> fields.stream().map(row::get).anyMatch(EmptyChecks::isNotEmpty));
     }
-    throw forbidden();
-  }
 
-  private static boolean hasValues(List<Map<String, String>> rows, Set<String> fields) {
-    return rows.stream()
-        .anyMatch(row -> fields.stream().map(row::get).anyMatch(EmptyChecks::isNotEmpty));
-  }
-
-  private static BizException forbidden() {
-    return BizException.of(ResultCode.FORBIDDEN, "error.config_package.apply_forbidden");
-  }
+    private static BizException forbidden() {
+        return BizException.of(ResultCode.FORBIDDEN, "error.config_package.apply_forbidden");
+    }
 }

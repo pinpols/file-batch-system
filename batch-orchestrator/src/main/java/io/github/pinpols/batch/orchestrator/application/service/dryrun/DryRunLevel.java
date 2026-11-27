@@ -19,10 +19,10 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum DryRunLevel implements DictEnum {
-  CONFIG_VALIDATE("CONFIG_VALIDATE", "配置校验"),
-  SCHEDULE_PLAN("SCHEDULE_PLAN", "调度计划"),
-  EXECUTION_PLAN("EXECUTION_PLAN", "执行计划");
+    CONFIG_VALIDATE("CONFIG_VALIDATE", "配置校验"),
+    SCHEDULE_PLAN("SCHEDULE_PLAN", "调度计划"),
+    EXECUTION_PLAN("EXECUTION_PLAN", "执行计划");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

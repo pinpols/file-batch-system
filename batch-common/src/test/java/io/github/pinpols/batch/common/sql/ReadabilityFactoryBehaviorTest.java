@@ -12,22 +12,21 @@ import org.junit.jupiter.api.Test;
 @DisplayName("可读性工厂行为:兼容占位与集合查询标量子句")
 class ReadabilityFactoryBehaviorTest {
 
-  @Test
-  @DisplayName("空配置工厂保留旧领取响应的全空兼容语义")
-  void shouldCreateEmptyEffectiveTaskConfig() {
-    EffectiveTaskConfig config = EffectiveTaskConfig.empty();
+    @Test
+    @DisplayName("空配置工厂保留旧领取响应的全空兼容语义")
+    void shouldCreateEmptyEffectiveTaskConfig() {
+        EffectiveTaskConfig config = EffectiveTaskConfig.empty();
 
-    assertThat(config.jobCode()).isNull();
-    assertThat(config.partitionInvocationId()).isNull();
-  }
+        assertThat(config.jobCode()).isNull();
+        assertThat(config.partitionInvocationId()).isNull();
+    }
 
-  @Test
-  @DisplayName("集合查询的排序与分页表达式继续参与禁用函数扫描")
-  void shouldInspectSetOperationScalarClauses() throws Exception {
-    Statement statement =
-        CCJSqlParserUtil.parse("select 1 union select 2 order by pg_sleep(1) limit 1 offset 1");
+    @Test
+    @DisplayName("集合查询的排序与分页表达式继续参与禁用函数扫描")
+    void shouldInspectSetOperationScalarClauses() throws Exception {
+        Statement statement = CCJSqlParserUtil.parse("select 1 union select 2 order by pg_sleep(1) limit 1 offset 1");
 
-    assertThat(SelectSqlAstValidator.findForbiddenFunctionCall(statement, List.of("pg_sleep")))
-        .isEqualTo("pg_sleep");
-  }
+        assertThat(SelectSqlAstValidator.findForbiddenFunctionCall(statement, List.of("pg_sleep")))
+                .isEqualTo("pg_sleep");
+    }
 }

@@ -34,51 +34,50 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleAtomicTaskConfigController {
 
-  private final ConsoleAtomicTaskConfigService configService;
-  private final TenantIdResolver tenantGuard;
-  private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleAtomicTaskConfigService configService;
+    private final TenantIdResolver tenantGuard;
+    private final ConsoleResponseFactory responseFactory;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  /** GET /api/console/ops/atomic-task-configs?taskType=sql — 列本租户 + taskType 下已保存的配置。 */
-  @GetMapping
-  public CommonResponse<List<AtomicTaskConfigResponse>> list(
-      @RequestParam("taskType") String taskType,
-      @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    List<AtomicTaskConfigEntity> taskConfigs = configService.listByTaskType(resolved, taskType);
-    List<AtomicTaskConfigResponse> responses =
-        taskConfigs.stream().map(AtomicTaskConfigResponse::from).toList();
-    return responseFactory.success(responses);
-  }
+    /** GET /api/console/ops/atomic-task-configs?taskType=sql — 列本租户 + taskType 下已保存的配置。 */
+    @GetMapping
+    public CommonResponse<List<AtomicTaskConfigResponse>> list(
+            @RequestParam("taskType") String taskType,
+            @RequestParam(value = "tenantId", required = false) String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        List<AtomicTaskConfigEntity> taskConfigs = configService.listByTaskType(resolved, taskType);
+        List<AtomicTaskConfigResponse> responses =
+                taskConfigs.stream().map(AtomicTaskConfigResponse::from).toList();
+        return responseFactory.success(responses);
+    }
 
-  /**
-   * POST /api/console/ops/atomic-task-configs — 创建一条 atomic 节点配置。
-   *
-   * <p>request body:{@code { tenantId?, taskType, name, parameters: {...} }}。 createdBy 由请求上下文
-   * operatorId 自动填充,不接受外部传入。
-   */
-  @PostMapping
-  public CommonResponse<AtomicTaskConfigResponse> create(@RequestBody CreateRequest request) {
-    String resolved = tenantGuard.resolveTenant(request.tenantId());
-    String operator = resolveOperator();
-    AtomicTaskConfigEntity created = configService.create(
-        resolved, request.taskType(), request.name(), request.parameters(), operator);
-    return responseFactory.success(AtomicTaskConfigResponse.from(created));
-  }
+    /**
+     * POST /api/console/ops/atomic-task-configs — 创建一条 atomic 节点配置。
+     *
+     * <p>request body:{@code { tenantId?, taskType, name, parameters: {...} }}。 createdBy 由请求上下文
+     * operatorId 自动填充,不接受外部传入。
+     */
+    @PostMapping
+    public CommonResponse<AtomicTaskConfigResponse> create(@RequestBody CreateRequest request) {
+        String resolved = tenantGuard.resolveTenant(request.tenantId());
+        String operator = resolveOperator();
+        AtomicTaskConfigEntity created =
+                configService.create(resolved, request.taskType(), request.name(), request.parameters(), operator);
+        return responseFactory.success(AtomicTaskConfigResponse.from(created));
+    }
 
-  private String resolveOperator() {
-    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    return metadata == null ? null : metadata.operatorId();
-  }
+    private String resolveOperator() {
+        ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+        return metadata == null ? null : metadata.operatorId();
+    }
 
-  /**
-   * 创建请求体。tenantId 为空 → 由租户作用域解析器回退(租户角色用 JWT,全局角色必传)。
-   *
-   * @param tenantId 可空,见上
-   * @param taskType 内置原子 taskType(sql / stored_proc / shell / http)
-   * @param name 同租户同 taskType 内唯一的配置名
-   * @param parameters 节点参数;key 必须落 schema,凭据字段被拒入
-   */
-  public record CreateRequest(
-      String tenantId, String taskType, String name, Map<String, Object> parameters) {}
+    /**
+     * 创建请求体。tenantId 为空 → 由租户作用域解析器回退(租户角色用 JWT,全局角色必传)。
+     *
+     * @param tenantId 可空,见上
+     * @param taskType 内置原子 taskType(sql / stored_proc / shell / http)
+     * @param name 同租户同 taskType 内唯一的配置名
+     * @param parameters 节点参数;key 必须落 schema,凭据字段被拒入
+     */
+    public record CreateRequest(String tenantId, String taskType, String name, Map<String, Object> parameters) {}
 }

@@ -7,9 +7,4 @@ package io.github.pinpols.batch.console.domain.ops.application.contract.response
  * 键 → 本 record 不加 {@code NON_NULL}，保持 wire 一致。
  */
 public record ConsoleForensicExportResponse(
-    String exportId,
-    String status,
-    String storagePath,
-    Long fileSizeBytes,
-    String sha256,
-    String downloadUrl) {}
+        String exportId, String status, String storagePath, Long fileSizeBytes, String sha256, String downloadUrl) {}

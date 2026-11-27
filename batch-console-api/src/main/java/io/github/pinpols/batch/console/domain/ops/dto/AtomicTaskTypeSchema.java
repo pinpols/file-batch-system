@@ -15,27 +15,27 @@ import java.util.List;
  * @param securityGates 平台安全闸(只读展示,租户改不了,需找平台管理员)
  */
 public record AtomicTaskTypeSchema(
-    String taskType,
-    String displayName,
-    boolean enabledByDefault,
-    List<ParamSpec> parameters,
-    List<SecurityGate> securityGates) {
+        String taskType,
+        String displayName,
+        boolean enabledByDefault,
+        List<ParamSpec> parameters,
+        List<SecurityGate> securityGates) {
 
-  /**
-   * 单个参数字段定义。
-   *
-   * @param name parameters map 的 key
-   * @param type 值类型(string / number / boolean / list / map)
-   * @param required 是否必填
-   * @param description 用途说明(FE 表单提示)
-   */
-  public record ParamSpec(String name, String type, boolean required, String description) {}
+    /**
+     * 单个参数字段定义。
+     *
+     * @param name parameters map 的 key
+     * @param type 值类型(string / number / boolean / list / map)
+     * @param required 是否必填
+     * @param description 用途说明(FE 表单提示)
+     */
+    public record ParamSpec(String name, String type, boolean required, String description) {}
 
-  /**
-   * 单个安全闸说明(只读)。
-   *
-   * @param field 后端属性名(如 {@code commandWhitelist})
-   * @param meaning 闸的作用
-   */
-  public record SecurityGate(String field, String meaning) {}
+    /**
+     * 单个安全闸说明(只读)。
+     *
+     * @param field 后端属性名(如 {@code commandWhitelist})
+     * @param meaning 闸的作用
+     */
+    public record SecurityGate(String field, String meaning) {}
 }

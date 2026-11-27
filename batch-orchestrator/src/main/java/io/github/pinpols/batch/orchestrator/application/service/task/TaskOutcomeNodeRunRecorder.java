@@ -24,111 +24,100 @@ import org.springframework.stereotype.Component;
 @Component
 final class TaskOutcomeNodeRunRecorder {
 
-  private final OrchestratorWorkflowMappers workflowMappers;
+    private final OrchestratorWorkflowMappers workflowMappers;
 
-  TaskOutcomeNodeRunRecorder(OrchestratorWorkflowMappers workflowMappers) {
-    this.workflowMappers = workflowMappers;
-  }
-
-  WorkflowNodeRunEntity recordReady(Long workflowRunId, String nodeCode, String nodeType) {
-    WorkflowNodeRunEntity entity =
-        newEntity(workflowRunId, nodeCode, nodeType, WorkflowNodeRunStatus.READY.code(), null);
-    return insertOrSelectLatest(entity);
-  }
-
-  WorkflowNodeRunEntity recordStart(
-      Long workflowRunId, String nodeCode, String nodeType, Instant startedAt) {
-    WorkflowNodeRunEntity entity = newEntity(
-        workflowRunId, nodeCode, nodeType, WorkflowNodeRunStatus.RUNNING.code(), startedAt);
-    return insertOrSelectLatest(entity);
-  }
-
-  WorkflowNodeRunEntity recordFinish(NodeRunFinishCommand command) {
-    WorkflowNodeRunEntity current = workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(
-        command.workflowRunId(), command.nodeCode());
-    if (EmptyChecks.isNull(current)) {
-      current = recordStart(
-          command.workflowRunId(), command.nodeCode(), command.nodeType(), command.startedAt());
+    TaskOutcomeNodeRunRecorder(OrchestratorWorkflowMappers workflowMappers) {
+        this.workflowMappers = workflowMappers;
     }
-    long duration = resolveDuration(command.startedAt(), command.finishedAt());
-    UpdateNodeRunStatusParam.UpdateNodeRunStatusParamBuilder updateStatusBuilder =
-        UpdateNodeRunStatusParam.builder().id(current.getId());
-    String nodeStatus = resolveStatus(command);
-    UpdateNodeRunStatusParam updateStatusParam = updateStatusBuilder
-        .nodeStatus(nodeStatus)
-        .errorCode(command.errorCode())
-        .errorMessage(command.errorMessage())
-        .errorKey(command.errorKey())
-        .errorArgs(command.errorArgs())
-        .durationMs(duration)
-        .finishedAt(command.finishedAt())
-        // 成功节点保存 worker 产出，失败节点不保留可能不完整的 output。
-        .output(command.success() ? command.outputJson() : null)
-        .build();
-    workflowMappers.workflowNodeRunMapper.updateStatus(updateStatusParam);
-    return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-        command.workflowRunId(), command.nodeCode());
-  }
 
-  Instant resolveStartedAt(
-      Long workflowRunId, String nodeCode, Instant workflowStartedAt, Instant finishedAt) {
-    WorkflowNodeRunEntity latestNodeRun =
-        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-            workflowRunId, nodeCode);
-    if (EmptyChecks.isNotNull(latestNodeRun)
-        && EmptyChecks.isNotNull(latestNodeRun.getStartedAt())) {
-      return latestNodeRun.getStartedAt();
+    WorkflowNodeRunEntity recordReady(Long workflowRunId, String nodeCode, String nodeType) {
+        WorkflowNodeRunEntity entity =
+                newEntity(workflowRunId, nodeCode, nodeType, WorkflowNodeRunStatus.READY.code(), null);
+        return insertOrSelectLatest(entity);
     }
-    return EmptyChecks.isNotNull(workflowStartedAt) ? workflowStartedAt : finishedAt;
-  }
 
-  private WorkflowNodeRunEntity insertOrSelectLatest(WorkflowNodeRunEntity entity) {
-    try {
-      workflowMappers.workflowNodeRunMapper.insert(entity);
-    } catch (DuplicateKeyException ignored) {
-      SwallowedExceptionLogger.info(
-          TaskOutcomeNodeRunRecorder.class, "catch:DuplicateKeyException", ignored);
-      return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-          entity.getWorkflowRunId(), entity.getNodeCode());
+    WorkflowNodeRunEntity recordStart(Long workflowRunId, String nodeCode, String nodeType, Instant startedAt) {
+        WorkflowNodeRunEntity entity =
+                newEntity(workflowRunId, nodeCode, nodeType, WorkflowNodeRunStatus.RUNNING.code(), startedAt);
+        return insertOrSelectLatest(entity);
     }
-    return entity;
-  }
 
-  private WorkflowNodeRunEntity newEntity(
-      Long workflowRunId, String nodeCode, String nodeType, String nodeStatus, Instant startedAt) {
-    WorkflowNodeRunEntity entity = new WorkflowNodeRunEntity();
-    entity.setWorkflowRunId(workflowRunId);
-    entity.setNodeCode(nodeCode);
-    entity.setNodeType(nodeType);
-    entity.setRunSeq(nextRunSeq(workflowRunId, nodeCode));
-    entity.setNodeStatus(nodeStatus);
-    entity.setRetryCount(0);
-    entity.setDurationMs(0L);
-    entity.setStartedAt(startedAt);
-    return entity;
-  }
-
-  private int nextRunSeq(Long workflowRunId, String nodeCode) {
-    WorkflowNodeRunEntity current =
-        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-            workflowRunId, nodeCode);
-    return EmptyChecks.isNull(current) || EmptyChecks.isNull(current.getRunSeq())
-        ? 1
-        : current.getRunSeq() + 1;
-  }
-
-  private String resolveStatus(NodeRunFinishCommand command) {
-    return command.success()
-        ? WorkflowNodeRunStatus.SUCCESS.code()
-        : WorkflowNodeRunStatus.FAILED.code();
-  }
-
-  private long resolveDuration(Instant startedAt, Instant finishedAt) {
-    if (EmptyChecks.isNull(startedAt) || EmptyChecks.isNull(finishedAt)) {
-      return 0L;
+    WorkflowNodeRunEntity recordFinish(NodeRunFinishCommand command) {
+        WorkflowNodeRunEntity current = workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(
+                command.workflowRunId(), command.nodeCode());
+        if (EmptyChecks.isNull(current)) {
+            current = recordStart(command.workflowRunId(), command.nodeCode(), command.nodeType(), command.startedAt());
+        }
+        long duration = resolveDuration(command.startedAt(), command.finishedAt());
+        UpdateNodeRunStatusParam.UpdateNodeRunStatusParamBuilder updateStatusBuilder =
+                UpdateNodeRunStatusParam.builder().id(current.getId());
+        String nodeStatus = resolveStatus(command);
+        UpdateNodeRunStatusParam updateStatusParam = updateStatusBuilder
+                .nodeStatus(nodeStatus)
+                .errorCode(command.errorCode())
+                .errorMessage(command.errorMessage())
+                .errorKey(command.errorKey())
+                .errorArgs(command.errorArgs())
+                .durationMs(duration)
+                .finishedAt(command.finishedAt())
+                // 成功节点保存 worker 产出，失败节点不保留可能不完整的 output。
+                .output(command.success() ? command.outputJson() : null)
+                .build();
+        workflowMappers.workflowNodeRunMapper.updateStatus(updateStatusParam);
+        return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+                command.workflowRunId(), command.nodeCode());
     }
-    Duration elapsed = Duration.between(startedAt, finishedAt);
-    long elapsedMillis = elapsed.toMillis();
-    return elapsedMillis;
-  }
+
+    Instant resolveStartedAt(Long workflowRunId, String nodeCode, Instant workflowStartedAt, Instant finishedAt) {
+        WorkflowNodeRunEntity latestNodeRun =
+                workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
+        if (EmptyChecks.isNotNull(latestNodeRun) && EmptyChecks.isNotNull(latestNodeRun.getStartedAt())) {
+            return latestNodeRun.getStartedAt();
+        }
+        return EmptyChecks.isNotNull(workflowStartedAt) ? workflowStartedAt : finishedAt;
+    }
+
+    private WorkflowNodeRunEntity insertOrSelectLatest(WorkflowNodeRunEntity entity) {
+        try {
+            workflowMappers.workflowNodeRunMapper.insert(entity);
+        } catch (DuplicateKeyException ignored) {
+            SwallowedExceptionLogger.info(TaskOutcomeNodeRunRecorder.class, "catch:DuplicateKeyException", ignored);
+            return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+                    entity.getWorkflowRunId(), entity.getNodeCode());
+        }
+        return entity;
+    }
+
+    private WorkflowNodeRunEntity newEntity(
+            Long workflowRunId, String nodeCode, String nodeType, String nodeStatus, Instant startedAt) {
+        WorkflowNodeRunEntity entity = new WorkflowNodeRunEntity();
+        entity.setWorkflowRunId(workflowRunId);
+        entity.setNodeCode(nodeCode);
+        entity.setNodeType(nodeType);
+        entity.setRunSeq(nextRunSeq(workflowRunId, nodeCode));
+        entity.setNodeStatus(nodeStatus);
+        entity.setRetryCount(0);
+        entity.setDurationMs(0L);
+        entity.setStartedAt(startedAt);
+        return entity;
+    }
+
+    private int nextRunSeq(Long workflowRunId, String nodeCode) {
+        WorkflowNodeRunEntity current =
+                workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
+        return EmptyChecks.isNull(current) || EmptyChecks.isNull(current.getRunSeq()) ? 1 : current.getRunSeq() + 1;
+    }
+
+    private String resolveStatus(NodeRunFinishCommand command) {
+        return command.success() ? WorkflowNodeRunStatus.SUCCESS.code() : WorkflowNodeRunStatus.FAILED.code();
+    }
+
+    private long resolveDuration(Instant startedAt, Instant finishedAt) {
+        if (EmptyChecks.isNull(startedAt) || EmptyChecks.isNull(finishedAt)) {
+            return 0L;
+        }
+        Duration elapsed = Duration.between(startedAt, finishedAt);
+        long elapsedMillis = elapsed.toMillis();
+        return elapsedMillis;
+    }
 }

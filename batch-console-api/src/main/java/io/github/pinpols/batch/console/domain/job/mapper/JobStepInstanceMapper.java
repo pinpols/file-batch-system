@@ -7,9 +7,9 @@ import org.apache.ibatis.annotations.Param;
 
 public interface JobStepInstanceMapper {
 
-  List<JobStepInstanceView> selectByQuery(JobStepInstanceQuery query);
+    List<JobStepInstanceView> selectByQuery(JobStepInstanceQuery query);
 
-  JobStepInstanceView selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    JobStepInstanceView selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  long countByQuery(JobStepInstanceQuery query);
+    long countByQuery(JobStepInstanceQuery query);
 }

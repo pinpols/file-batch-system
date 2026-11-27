@@ -9,22 +9,22 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = false)
 public class JobStepInstanceView extends AbstractLocalizedErrorEntity {
 
-  private Long id;
-  private String tenantId;
-  private Long jobInstanceId;
-  private Long jobPartitionId;
-  private Long jobTaskId;
-  private String stepCode;
-  private String stepType;
-  private String stepStatus;
-  private Integer retryCount;
-  private Long relatedFileId;
-  private String resultSummary;
-  private String errorCode;
+    private Long id;
+    private String tenantId;
+    private Long jobInstanceId;
+    private Long jobPartitionId;
+    private Long jobTaskId;
+    private String stepCode;
+    private String stepType;
+    private String stepStatus;
+    private Integer retryCount;
+    private Long relatedFileId;
+    private String resultSummary;
+    private String errorCode;
 
-  /** 缺口4:反查 pipeline_instance.related_job_instance_id 得到的 pipeline 观测入口 id(可空)。 */
-  private Long relatedPipelineInstanceId;
+    /** 缺口4:反查 pipeline_instance.related_job_instance_id 得到的 pipeline 观测入口 id(可空)。 */
+    private Long relatedPipelineInstanceId;
 
-  private Instant startedAt;
-  private Instant finishedAt;
+    private Instant startedAt;
+    private Instant finishedAt;
 }

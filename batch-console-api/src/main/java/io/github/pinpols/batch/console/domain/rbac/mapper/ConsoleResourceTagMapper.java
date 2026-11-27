@@ -12,50 +12,47 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ConsoleResourceTagMapper {
 
-  List<ResourceTagEntity> findByResource(
-      @Param("tenantId") String tenantId,
-      @Param("resourceType") String resourceType,
-      @Param("resourceCode") String resourceCode);
+    List<ResourceTagEntity> findByResource(
+            @Param("tenantId") String tenantId,
+            @Param("resourceType") String resourceType,
+            @Param("resourceCode") String resourceCode);
 
-  List<ResourceTagEntity> findByTagKey(
-      @Param("tenantId") String tenantId, @Param("tagKey") String tagKey);
+    List<ResourceTagEntity> findByTagKey(@Param("tenantId") String tenantId, @Param("tagKey") String tagKey);
 
-  List<ResourceTagEntity> findByTagKeyAndValue(
-      @Param("tenantId") String tenantId,
-      @Param("tagKey") String tagKey,
-      @Param("tagValue") String tagValue);
+    List<ResourceTagEntity> findByTagKeyAndValue(
+            @Param("tenantId") String tenantId, @Param("tagKey") String tagKey, @Param("tagValue") String tagValue);
 
-  List<String> findDistinctTagKeys(@Param("tenantId") String tenantId);
+    List<String> findDistinctTagKeys(@Param("tenantId") String tenantId);
 
-  Optional<ResourceTagEntity> findByResourceAndKey(
-      @Param("tenantId") String tenantId,
-      @Param("resourceType") String resourceType,
-      @Param("resourceCode") String resourceCode,
-      @Param("tagKey") String tagKey);
+    Optional<ResourceTagEntity> findByResourceAndKey(
+            @Param("tenantId") String tenantId,
+            @Param("resourceType") String resourceType,
+            @Param("resourceCode") String resourceCode,
+            @Param("tagKey") String tagKey);
 
-  /** 串行化标签关联与同一资源的删除或标识变更操作。 */
-  Long lockResourceTagIdentity(
-      @Param("tenantId") String tenantId,
-      @Param("resourceType") String resourceType,
-      @Param("resourceCode") String resourceCode);
+    /** 串行化标签关联与同一资源的删除或标识变更操作。 */
+    Long lockResourceTagIdentity(
+            @Param("tenantId") String tenantId,
+            @Param("resourceType") String resourceType,
+            @Param("resourceCode") String resourceCode);
 
-  /** 返回匹配的租户资源；多态目标不存在时返回 null。 */
-  Long selectResourceTagTarget(
-      @Param("tenantId") String tenantId,
-      @Param("resourceType") String resourceType,
-      @Param("resourceCode") String resourceCode);
+    /** 返回匹配的租户资源；多态目标不存在时返回 null。 */
+    Long selectResourceTagTarget(
+            @Param("tenantId") String tenantId,
+            @Param("resourceType") String resourceType,
+            @Param("resourceCode") String resourceCode);
 
-  /** Upsert：unique key 命中则更新 tag_value + created_by + created_at。 */
-  void upsert(ConsoleResourceTagUpsertParam parameters);
+    /** Upsert：unique key 命中则更新 tag_value + created_by + created_at。 */
+    void upsert(ConsoleResourceTagUpsertParam parameters);
 
-  void deleteByResourceAndKey(
-      @Param("tenantId") String tenantId,
-      @Param("resourceType") String resourceType,
-      @Param("resourceCode") String resourceCode,
-      @Param("tagKey") String tagKey);
+    void deleteByResourceAndKey(
+            @Param("tenantId") String tenantId,
+            @Param("resourceType") String resourceType,
+            @Param("resourceCode") String resourceCode,
+            @Param("tagKey") String tagKey);
 
-  void deleteAllByResource(
-      @Param("tenantId") String tenantId,
-      @Param("resourceType") String resourceType,
-      @Param("resourceCode") String resourceCode);
+    void deleteAllByResource(
+            @Param("tenantId") String tenantId,
+            @Param("resourceType") String resourceType,
+            @Param("resourceCode") String resourceCode);
 }

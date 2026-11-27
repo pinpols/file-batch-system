@@ -30,109 +30,109 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class OrchestratorGracefulShutdown
-    implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
+        implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
 
-  private final KafkaListenerEndpointRegistry listenerRegistry;
-  private final AtomicBoolean draining = new AtomicBoolean(false);
-  private volatile Instant drainingSince;
-  private volatile String reason;
+    private final KafkaListenerEndpointRegistry listenerRegistry;
+    private final AtomicBoolean draining = new AtomicBoolean(false);
+    private volatile Instant drainingSince;
+    private volatile String reason;
 
-  // R3-P1-1：可选依赖,经 ApplicationEventPublisherAware 框架回调注入(非 @Autowired field)。
-  // 容器内 Spring 调 setApplicationEventPublisher 注入;单测 new 该类时不调用 → 保持 null,
-  // 下方所有用法均已 null 守护。
-  private ApplicationEventPublisher eventPublisher;
+    // R3-P1-1：可选依赖,经 ApplicationEventPublisherAware 框架回调注入(非 @Autowired field)。
+    // 容器内 Spring 调 setApplicationEventPublisher 注入;单测 new 该类时不调用 → 保持 null,
+    // 下方所有用法均已 null 守护。
+    private ApplicationEventPublisher eventPublisher;
 
-  /** 对外稳定的 drain 状态契约。 */
-  public record DrainStatus(boolean draining, Instant drainingSince, String reason) {}
+    /** 对外稳定的 drain 状态契约。 */
+    public record DrainStatus(boolean draining, Instant drainingSince, String reason) {}
 
-  public OrchestratorGracefulShutdown(KafkaListenerEndpointRegistry listenerRegistry) {
-    this.listenerRegistry = listenerRegistry;
-  }
-
-  @Override
-  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
-    this.eventPublisher = applicationEventPublisher;
-  }
-
-  @Override
-  public void onApplicationEvent(ContextClosedEvent event) {
-    try {
-      startDraining("context-closed");
-    } catch (RuntimeException ex) {
-      // 上下文正在关闭时，即使 listener 尚未注册或 pause 失败，也不能阻止 Spring 继续关闭容器。
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.error(
-          "failed to pause trigger launch listener during shutdown; Spring will close it with the context: {}",
-          causeSummary,
-          ex);
-      beginDrainState("context-closed");
-      publishReadiness(ReadinessState.REFUSING_TRAFFIC);
+    public OrchestratorGracefulShutdown(KafkaListenerEndpointRegistry listenerRegistry) {
+        this.listenerRegistry = listenerRegistry;
     }
-  }
 
-  public synchronized void startDraining(String source) {
-    if (draining.get()) {
-      return;
+    @Override
+    public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+        this.eventPublisher = applicationEventPublisher;
     }
-    beginDrainState(source);
-    try {
-      triggerLaunchListener().pause();
-    } catch (RuntimeException ex) {
-      draining.set(false);
-      drainingSince = null;
-      reason = "drain-pause-failed";
-      throw ex;
+
+    @Override
+    public void onApplicationEvent(ContextClosedEvent event) {
+        try {
+            startDraining("context-closed");
+        } catch (RuntimeException ex) {
+            // 上下文正在关闭时，即使 listener 尚未注册或 pause 失败，也不能阻止 Spring 继续关闭容器。
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.error(
+                    "failed to pause trigger launch listener during shutdown; Spring will close it with the context: {}",
+                    causeSummary,
+                    ex);
+            beginDrainState("context-closed");
+            publishReadiness(ReadinessState.REFUSING_TRAFFIC);
+        }
     }
-    log.info("Orchestrator graceful shutdown initiated: draining=true, source={}", source);
-    // 状态先拒绝新 launch，再请求 Kafka pause；已进入 listener 的消息由消费端延迟重投。
-    publishReadiness(ReadinessState.REFUSING_TRAFFIC);
-  }
 
-  public synchronized void stopDraining(String source) {
-    if (!draining.get()) {
-      return;
+    public synchronized void startDraining(String source) {
+        if (draining.get()) {
+            return;
+        }
+        beginDrainState(source);
+        try {
+            triggerLaunchListener().pause();
+        } catch (RuntimeException ex) {
+            draining.set(false);
+            drainingSince = null;
+            reason = "drain-pause-failed";
+            throw ex;
+        }
+        log.info("Orchestrator graceful shutdown initiated: draining=true, source={}", source);
+        // 状态先拒绝新 launch，再请求 Kafka pause；已进入 listener 的消息由消费端延迟重投。
+        publishReadiness(ReadinessState.REFUSING_TRAFFIC);
     }
-    triggerLaunchListener().resume();
-    draining.set(false);
-    drainingSince = null;
-    reason = source;
-    log.info("Orchestrator drain cancelled: source={}", source);
-    publishReadiness(ReadinessState.ACCEPTING_TRAFFIC);
-  }
 
-  private MessageListenerContainer triggerLaunchListener() {
-    MessageListenerContainer listener = listenerRegistry.getListenerContainer(
-        OrchestratorKafkaConsumerConfiguration.TRIGGER_LAUNCH_LISTENER_ID);
-    if (EmptyChecks.isNull(listener)) {
-      throw new IllegalStateException("Trigger launch Kafka listener is not registered");
+    public synchronized void stopDraining(String source) {
+        if (!draining.get()) {
+            return;
+        }
+        triggerLaunchListener().resume();
+        draining.set(false);
+        drainingSince = null;
+        reason = source;
+        log.info("Orchestrator drain cancelled: source={}", source);
+        publishReadiness(ReadinessState.ACCEPTING_TRAFFIC);
     }
-    return listener;
-  }
 
-  private void beginDrainState(String source) {
-    drainingSince = BatchDateTimeSupport.utcNow();
-    reason = source;
-    draining.set(true);
-  }
-
-  private void publishReadiness(ReadinessState state) {
-    if (EmptyChecks.isNull(eventPublisher)) {
-      return;
+    private MessageListenerContainer triggerLaunchListener() {
+        MessageListenerContainer listener = listenerRegistry.getListenerContainer(
+                OrchestratorKafkaConsumerConfiguration.TRIGGER_LAUNCH_LISTENER_ID);
+        if (EmptyChecks.isNull(listener)) {
+            throw new IllegalStateException("Trigger launch Kafka listener is not registered");
+        }
+        return listener;
     }
-    try {
-      AvailabilityChangeEvent.publish(eventPublisher, this, state);
-    } catch (RuntimeException ex) {
-      ReadinessState failedState = state;
-      String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn("publish readiness state {} failed (non-fatal): {}", failedState, causeSummary);
+
+    private void beginDrainState(String source) {
+        drainingSince = BatchDateTimeSupport.utcNow();
+        reason = source;
+        draining.set(true);
     }
-  }
 
-  public boolean isDraining() {
-    return draining.get();
-  }
+    private void publishReadiness(ReadinessState state) {
+        if (EmptyChecks.isNull(eventPublisher)) {
+            return;
+        }
+        try {
+            AvailabilityChangeEvent.publish(eventPublisher, this, state);
+        } catch (RuntimeException ex) {
+            ReadinessState failedState = state;
+            String causeSummary = SwallowedExceptionLogger.summary(ex);
+            log.warn("publish readiness state {} failed (non-fatal): {}", failedState, causeSummary);
+        }
+    }
 
-  public DrainStatus status() {
-    return new DrainStatus(draining.get(), drainingSince, reason);
-  }
+    public boolean isDraining() {
+        return draining.get();
+    }
+
+    public DrainStatus status() {
+        return new DrainStatus(draining.get(), drainingSince, reason);
+    }
 }

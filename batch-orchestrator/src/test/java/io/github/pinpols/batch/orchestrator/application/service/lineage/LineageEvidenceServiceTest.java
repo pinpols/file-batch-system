@@ -31,231 +31,238 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class LineageEvidenceServiceTest {
 
-  @Mock
-  private ResultVersionMapper resultVersionMapper;
+    @Mock
+    private ResultVersionMapper resultVersionMapper;
 
-  @Mock
-  private ResultVersionQueryService resultVersionQueryService;
+    @Mock
+    private ResultVersionQueryService resultVersionQueryService;
 
-  @Mock
-  private LineageEvidenceMapper lineageEvidenceMapper;
+    @Mock
+    private LineageEvidenceMapper lineageEvidenceMapper;
 
-  private LineageEvidenceService service;
+    private LineageEvidenceService service;
 
-  @Test
-  @DisplayName("按结果版本收集时装配作业实例, 流水线, 文件与派发记录, 且无覆盖缺口")
-  void shouldAssembleHotTableChain_whenQueryingByResultVersion() {
-    ResultVersionEntity version = version(7L, "FILE_RECORD", "file_record:11");
-    when(resultVersionMapper.selectById("ta", 7L)).thenReturn(version);
-    when(lineageEvidenceMapper.selectJobInstance("ta", 101L))
-        .thenReturn(JobInstance.builder().id(101L).jobCode("daily").build());
-    when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L))
-        .thenReturn(List.of(PipelineInstance.builder().id(21L).fileId(11L).build()));
-    when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
-        .thenReturn(List.of(FileRecord.builder().id(11L).fileName("out.csv").build()));
-    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 11L))
-        .thenReturn(List.of(FileRecord.builder().id(11L).fileName("old.csv").build()));
-    when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
-        .thenReturn(List.of(DispatchRecord.builder()
-            .id(31L)
-            .receiptStatus(FileReceiptStatus.SUCCESS.code())
-            .build()));
+    @Test
+    @DisplayName("按结果版本收集时装配作业实例, 流水线, 文件与派发记录, 且无覆盖缺口")
+    void shouldAssembleHotTableChain_whenQueryingByResultVersion() {
+        ResultVersionEntity version = version(7L, "FILE_RECORD", "file_record:11");
+        when(resultVersionMapper.selectById("ta", 7L)).thenReturn(version);
+        when(lineageEvidenceMapper.selectJobInstance("ta", 101L))
+                .thenReturn(JobInstance.builder().id(101L).jobCode("daily").build());
+        when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L))
+                .thenReturn(
+                        List.of(PipelineInstance.builder().id(21L).fileId(11L).build()));
+        when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
+                .thenReturn(
+                        List.of(FileRecord.builder().id(11L).fileName("out.csv").build()));
+        when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 11L))
+                .thenReturn(
+                        List.of(FileRecord.builder().id(11L).fileName("old.csv").build()));
+        when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
+                .thenReturn(List.of(DispatchRecord.builder()
+                        .id(31L)
+                        .receiptStatus(FileReceiptStatus.SUCCESS.code())
+                        .build()));
 
-    LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 7L);
+        LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 7L);
 
-    assertThat(evidence.resultVersion().id()).isEqualTo(7L);
-    assertThat(evidence.fileRecords()).hasSize(1);
-    assertThat(evidence.fileRecords().get(0).fileName()).isEqualTo("out.csv");
-    assertThat(evidence.coverage().sources().fileRecords()).isEqualTo("HOT");
-    assertThat(evidence.dispatchRecords()).hasSize(1);
-    LineageEvidenceResponse.LineageCoverage coverage = evidence.coverage();
-    assertThat(coverage.payloadFileId()).isEqualTo(11L);
-    assertThat(coverage.payloadFileResolved()).isTrue();
-    assertThat(coverage.dispatchRecordCount()).isEqualTo(1);
-    assertThat(coverage.knownGaps()).isEmpty();
-  }
+        assertThat(evidence.resultVersion().id()).isEqualTo(7L);
+        assertThat(evidence.fileRecords()).hasSize(1);
+        assertThat(evidence.fileRecords().get(0).fileName()).isEqualTo("out.csv");
+        assertThat(evidence.coverage().sources().fileRecords()).isEqualTo("HOT");
+        assertThat(evidence.dispatchRecords()).hasSize(1);
+        LineageEvidenceResponse.LineageCoverage coverage = evidence.coverage();
+        assertThat(coverage.payloadFileId()).isEqualTo(11L);
+        assertThat(coverage.payloadFileResolved()).isTrue();
+        assertThat(coverage.dispatchRecordCount()).isEqualTo(1);
+        assertThat(coverage.knownGaps()).isEmpty();
+    }
 
-  @Test
-  @DisplayName("已归档作业的冷热同一文件优先保留归档快照")
-  void shouldPreferArchivedFileSnapshotForArchivedJob() {
-    ResultVersionEntity version = version(13L, "FILE_RECORD", "file_record:11");
-    when(resultVersionMapper.selectById("ta", 13L)).thenReturn(version);
-    when(lineageEvidenceMapper.selectArchivedJobInstance("ta", 101L))
-        .thenReturn(JobInstance.builder().id(101L).build());
-    when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
-        .thenReturn(List.of(FileRecord.builder().id(11L).fileName("new.csv").build()));
-    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 11L))
-        .thenReturn(
-            List.of(FileRecord.builder().id(11L).fileName("archived.csv").build()));
+    @Test
+    @DisplayName("已归档作业的冷热同一文件优先保留归档快照")
+    void shouldPreferArchivedFileSnapshotForArchivedJob() {
+        ResultVersionEntity version = version(13L, "FILE_RECORD", "file_record:11");
+        when(resultVersionMapper.selectById("ta", 13L)).thenReturn(version);
+        when(lineageEvidenceMapper.selectArchivedJobInstance("ta", 101L))
+                .thenReturn(JobInstance.builder().id(101L).build());
+        when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
+                .thenReturn(
+                        List.of(FileRecord.builder().id(11L).fileName("new.csv").build()));
+        when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 11L))
+                .thenReturn(List.of(
+                        FileRecord.builder().id(11L).fileName("archived.csv").build()));
 
-    LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 13L);
+        LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 13L);
 
-    assertThat(evidence.fileRecords()).hasSize(1);
-    assertThat(evidence.fileRecords().get(0).fileName()).isEqualTo("archived.csv");
-    assertThat(evidence.coverage().sources().fileRecords()).isEqualTo("ARCHIVE");
-  }
+        assertThat(evidence.fileRecords()).hasSize(1);
+        assertThat(evidence.fileRecords().get(0).fileName()).isEqualTo("archived.csv");
+        assertThat(evidence.coverage().sources().fileRecords()).isEqualTo("ARCHIVE");
+    }
 
-  @Test
-  @DisplayName("载荷文件无法解析时如实给出覆盖缺口, 不伪装完整")
-  void shouldExposeKnownGaps_whenPayloadFileUnresolved() {
-    ResultVersionEntity version = version(8L, "FILE_RECORD", "file_record:99");
-    when(resultVersionMapper.selectById("ta", 8L)).thenReturn(version);
-    when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
-    when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 99L)).thenReturn(List.of());
-    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 99L)).thenReturn(List.of());
-    when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of())).thenReturn(List.of());
+    @Test
+    @DisplayName("载荷文件无法解析时如实给出覆盖缺口, 不伪装完整")
+    void shouldExposeKnownGaps_whenPayloadFileUnresolved() {
+        ResultVersionEntity version = version(8L, "FILE_RECORD", "file_record:99");
+        when(resultVersionMapper.selectById("ta", 8L)).thenReturn(version);
+        when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
+        when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 99L)).thenReturn(List.of());
+        when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 99L)).thenReturn(List.of());
+        when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of())).thenReturn(List.of());
 
-    LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 8L);
+        LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 8L);
 
-    LineageEvidenceResponse.LineageCoverage coverage = evidence.coverage();
-    assertThat(coverage.knownGaps())
-        .contains(
-            "job_instance not found in hot or archive tables",
-            "payload_ref file_record not found in hot or archive tables",
-            "no related file_record found in hot or archive tables",
-            "no dispatch receipt found in hot or archive tables");
-    assertThat(coverage.payloadFileResolved()).isFalse();
-  }
+        LineageEvidenceResponse.LineageCoverage coverage = evidence.coverage();
+        assertThat(coverage.knownGaps())
+                .contains(
+                        "job_instance not found in hot or archive tables",
+                        "payload_ref file_record not found in hot or archive tables",
+                        "no related file_record found in hot or archive tables",
+                        "no dispatch receipt found in hot or archive tables");
+        assertThat(coverage.payloadFileResolved()).isFalse();
+    }
 
-  @Test
-  @DisplayName("热表查不到时回退归档表, 覆盖范围标记为热表与归档")
-  void shouldFallbackToArchiveTables_whenHotTablesMiss() {
-    ResultVersionEntity version = version(10L, "FILE_RECORD", "file_record:11");
-    when(resultVersionMapper.selectById("ta", 10L)).thenReturn(null);
-    when(resultVersionMapper.selectArchivedById("ta", 10L)).thenReturn(version);
-    when(lineageEvidenceMapper.selectJobInstance("ta", 101L)).thenReturn(null);
-    when(lineageEvidenceMapper.selectArchivedJobInstance("ta", 101L))
-        .thenReturn(JobInstance.builder().id(101L).jobCode("daily").build());
-    when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
-    when(lineageEvidenceMapper.selectArchivedPipelineInstances("ta", 101L))
-        .thenReturn(List.of(PipelineInstance.builder().id(21L).fileId(11L).build()));
-    when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
-        .thenReturn(List.of(FileRecord.builder().id(11L).fileName("out.csv").build()));
-    when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
-        .thenReturn(List.of());
-    when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of(11L)))
-        .thenReturn(List.of(DispatchRecord.builder()
-            .id(31L)
-            .receiptStatus(FileReceiptStatus.SUCCESS.code())
-            .build()));
+    @Test
+    @DisplayName("热表查不到时回退归档表, 覆盖范围标记为热表与归档")
+    void shouldFallbackToArchiveTables_whenHotTablesMiss() {
+        ResultVersionEntity version = version(10L, "FILE_RECORD", "file_record:11");
+        when(resultVersionMapper.selectById("ta", 10L)).thenReturn(null);
+        when(resultVersionMapper.selectArchivedById("ta", 10L)).thenReturn(version);
+        when(lineageEvidenceMapper.selectJobInstance("ta", 101L)).thenReturn(null);
+        when(lineageEvidenceMapper.selectArchivedJobInstance("ta", 101L))
+                .thenReturn(JobInstance.builder().id(101L).jobCode("daily").build());
+        when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
+        when(lineageEvidenceMapper.selectArchivedPipelineInstances("ta", 101L))
+                .thenReturn(
+                        List.of(PipelineInstance.builder().id(21L).fileId(11L).build()));
+        when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
+                .thenReturn(
+                        List.of(FileRecord.builder().id(11L).fileName("out.csv").build()));
+        when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
+                .thenReturn(List.of());
+        when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of(11L)))
+                .thenReturn(List.of(DispatchRecord.builder()
+                        .id(31L)
+                        .receiptStatus(FileReceiptStatus.SUCCESS.code())
+                        .build()));
 
-    LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 10L);
+        LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 10L);
 
-    LineageEvidenceResponse.LineageCoverage coverage = evidence.coverage();
-    assertThat(coverage.scope()).isEqualTo("BFS_HOT_AND_ARCHIVE");
-    LineageEvidenceResponse.LineageSources sources = coverage.sources();
-    assertThat(sources)
-        .isEqualTo(new LineageEvidenceResponse.LineageSources(
-            "ARCHIVE", "ARCHIVE", "ARCHIVE", "HOT", "ARCHIVE"));
-    assertThat(coverage.knownGaps()).isEmpty();
-  }
+        LineageEvidenceResponse.LineageCoverage coverage = evidence.coverage();
+        assertThat(coverage.scope()).isEqualTo("BFS_HOT_AND_ARCHIVE");
+        LineageEvidenceResponse.LineageSources sources = coverage.sources();
+        assertThat(sources)
+                .isEqualTo(
+                        new LineageEvidenceResponse.LineageSources("ARCHIVE", "ARCHIVE", "ARCHIVE", "HOT", "ARCHIVE"));
+        assertThat(coverage.knownGaps()).isEmpty();
+    }
 
-  @Test
-  @DisplayName("热表文件记录查不到时回退归档文件记录")
-  void shouldFallbackToArchiveFileRecords_whenHotRecordsMiss() {
-    ResultVersionEntity version = version(11L, "FILE_RECORD", "file_record:11");
-    when(resultVersionMapper.selectById("ta", 11L)).thenReturn(null);
-    when(resultVersionMapper.selectArchivedById("ta", 11L)).thenReturn(version);
-    when(lineageEvidenceMapper.selectJobInstance("ta", 101L)).thenReturn(null);
-    when(lineageEvidenceMapper.selectArchivedJobInstance("ta", 101L))
-        .thenReturn(JobInstance.builder().id(101L).jobCode("daily").build());
-    when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
-    when(lineageEvidenceMapper.selectArchivedPipelineInstances("ta", 101L))
-        .thenReturn(List.of(PipelineInstance.builder().id(21L).fileId(11L).build()));
-    when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L)).thenReturn(List.of());
-    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 11L))
-        .thenReturn(
-            List.of(FileRecord.builder().id(11L).fileName("archived.csv").build()));
-    when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
-        .thenReturn(List.of());
-    when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of(11L)))
-        .thenReturn(List.of(DispatchRecord.builder()
-            .id(31L)
-            .receiptStatus(FileReceiptStatus.SUCCESS.code())
-            .build()));
+    @Test
+    @DisplayName("热表文件记录查不到时回退归档文件记录")
+    void shouldFallbackToArchiveFileRecords_whenHotRecordsMiss() {
+        ResultVersionEntity version = version(11L, "FILE_RECORD", "file_record:11");
+        when(resultVersionMapper.selectById("ta", 11L)).thenReturn(null);
+        when(resultVersionMapper.selectArchivedById("ta", 11L)).thenReturn(version);
+        when(lineageEvidenceMapper.selectJobInstance("ta", 101L)).thenReturn(null);
+        when(lineageEvidenceMapper.selectArchivedJobInstance("ta", 101L))
+                .thenReturn(JobInstance.builder().id(101L).jobCode("daily").build());
+        when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
+        when(lineageEvidenceMapper.selectArchivedPipelineInstances("ta", 101L))
+                .thenReturn(
+                        List.of(PipelineInstance.builder().id(21L).fileId(11L).build()));
+        when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L)).thenReturn(List.of());
+        when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 11L))
+                .thenReturn(List.of(
+                        FileRecord.builder().id(11L).fileName("archived.csv").build()));
+        when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
+                .thenReturn(List.of());
+        when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of(11L)))
+                .thenReturn(List.of(DispatchRecord.builder()
+                        .id(31L)
+                        .receiptStatus(FileReceiptStatus.SUCCESS.code())
+                        .build()));
 
-    LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 11L);
+        LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 11L);
 
-    LineageEvidenceResponse.LineageCoverage coverage = evidence.coverage();
-    assertThat(coverage.scope()).isEqualTo("BFS_HOT_AND_ARCHIVE");
-    assertThat(coverage.payloadFileResolved()).isTrue();
-    LineageEvidenceResponse.LineageSources sources = coverage.sources();
-    assertThat(sources.fileRecords()).isEqualTo("ARCHIVE");
-    assertThat(coverage.knownGaps()).isEmpty();
-  }
+        LineageEvidenceResponse.LineageCoverage coverage = evidence.coverage();
+        assertThat(coverage.scope()).isEqualTo("BFS_HOT_AND_ARCHIVE");
+        assertThat(coverage.payloadFileResolved()).isTrue();
+        LineageEvidenceResponse.LineageSources sources = coverage.sources();
+        assertThat(sources.fileRecords()).isEqualTo("ARCHIVE");
+        assertThat(coverage.knownGaps()).isEmpty();
+    }
 
-  @Test
-  @DisplayName("查询生效版本证据时委托生效版本查询服务解析")
-  void shouldUseVersionQueryService_whenQueryingEffective() {
-    ResultVersionEntity version = version(9L, "INLINE_JSON", null);
-    when(resultVersionQueryService.findEffective("ta", "job:daily:2026-06-30"))
-        .thenReturn(Optional.of(version));
-    when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
-    when(lineageEvidenceMapper.selectFileRecords("ta", 101L, null)).thenReturn(List.of());
-    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, null)).thenReturn(List.of());
-    when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of())).thenReturn(List.of());
+    @Test
+    @DisplayName("查询生效版本证据时委托生效版本查询服务解析")
+    void shouldUseVersionQueryService_whenQueryingEffective() {
+        ResultVersionEntity version = version(9L, "INLINE_JSON", null);
+        when(resultVersionQueryService.findEffective("ta", "job:daily:2026-06-30"))
+                .thenReturn(Optional.of(version));
+        when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
+        when(lineageEvidenceMapper.selectFileRecords("ta", 101L, null)).thenReturn(List.of());
+        when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, null)).thenReturn(List.of());
+        when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of())).thenReturn(List.of());
 
-    service.evidenceForEffective("ta", "job:daily:2026-06-30");
+        service.evidenceForEffective("ta", "job:daily:2026-06-30");
 
-    verify(resultVersionQueryService).findEffective("ta", "job:daily:2026-06-30");
-  }
+        verify(resultVersionQueryService).findEffective("ta", "job:daily:2026-06-30");
+    }
 
-  @Test
-  @DisplayName("冷热投递合并后按 ID 降序去重并保留最近 100 条")
-  void shouldLimitMergedDispatchesAfterDeduplication() {
-    ResultVersionEntity version = version(12L, "INLINE_JSON", null);
-    when(resultVersionMapper.selectById("ta", 12L)).thenReturn(version);
-    List<DispatchRecord> hot = LongStream.rangeClosed(51, 150)
-        .mapToObj(id -> DispatchRecord.builder().id(id).channelCode("hot").build())
-        .toList();
-    List<DispatchRecord> archived = LongStream.rangeClosed(1, 100)
-        .mapToObj(id -> DispatchRecord.builder().id(id).channelCode("archive").build())
-        .toList();
-    when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of())).thenReturn(hot);
-    when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of()))
-        .thenReturn(archived);
+    @Test
+    @DisplayName("冷热投递合并后按 ID 降序去重并保留最近 100 条")
+    void shouldLimitMergedDispatchesAfterDeduplication() {
+        ResultVersionEntity version = version(12L, "INLINE_JSON", null);
+        when(resultVersionMapper.selectById("ta", 12L)).thenReturn(version);
+        List<DispatchRecord> hot = LongStream.rangeClosed(51, 150)
+                .mapToObj(
+                        id -> DispatchRecord.builder().id(id).channelCode("hot").build())
+                .toList();
+        List<DispatchRecord> archived = LongStream.rangeClosed(1, 100)
+                .mapToObj(id ->
+                        DispatchRecord.builder().id(id).channelCode("archive").build())
+                .toList();
+        when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of())).thenReturn(hot);
+        when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of()))
+                .thenReturn(archived);
 
-    LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 12L);
+        LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 12L);
 
-    assertThat(evidence.dispatchRecords()).hasSize(100);
-    assertThat(evidence.dispatchRecords().get(0).id()).isEqualTo(150L);
-    assertThat(evidence.dispatchRecords().get(99).id()).isEqualTo(51L);
-    assertThat(evidence.dispatchRecords()).allMatch(row -> "hot".equals(row.channelCode()));
-    assertThat(evidence.coverage().sources().dispatchRecords()).isEqualTo("HOT");
-  }
+        assertThat(evidence.dispatchRecords()).hasSize(100);
+        assertThat(evidence.dispatchRecords().get(0).id()).isEqualTo(150L);
+        assertThat(evidence.dispatchRecords().get(99).id()).isEqualTo(51L);
+        assertThat(evidence.dispatchRecords()).allMatch(row -> "hot".equals(row.channelCode()));
+        assertThat(evidence.coverage().sources().dispatchRecords()).isEqualTo("HOT");
+    }
 
-  @Test
-  @DisplayName("结果版本不存在时抛出未找到异常")
-  void shouldRaiseNotFound_whenResultVersionMissing() {
-    when(resultVersionMapper.selectById("ta", 404L)).thenReturn(null);
+    @Test
+    @DisplayName("结果版本不存在时抛出未找到异常")
+    void shouldRaiseNotFound_whenResultVersionMissing() {
+        when(resultVersionMapper.selectById("ta", 404L)).thenReturn(null);
 
-    assertThatThrownBy(() -> service.evidenceForResultVersion("ta", 404L))
-        .isInstanceOf(BizException.class);
-  }
+        assertThatThrownBy(() -> service.evidenceForResultVersion("ta", 404L)).isInstanceOf(BizException.class);
+    }
 
-  private static ResultVersionEntity version(Long id, String payloadStorage, String payloadRef) {
-    Instant now = Instant.parse("2026-06-30T00:00:00Z");
-    return ResultVersionEntity.builder()
-        .id(id)
-        .tenantId("ta")
-        .businessKey("job:daily:2026-06-30")
-        .versionNo(3)
-        .jobInstanceId(101L)
-        .status("EFFECTIVE")
-        .effectiveAt(now)
-        .payloadStorage(payloadStorage)
-        .payloadRef(payloadRef)
-        .generatedAt(now)
-        .generatedBy("test")
-        .promotionPolicy("AUTO_LATEST")
-        .createdAt(now)
-        .updatedAt(now)
-        .build();
-  }
+    private static ResultVersionEntity version(Long id, String payloadStorage, String payloadRef) {
+        Instant now = Instant.parse("2026-06-30T00:00:00Z");
+        return ResultVersionEntity.builder()
+                .id(id)
+                .tenantId("ta")
+                .businessKey("job:daily:2026-06-30")
+                .versionNo(3)
+                .jobInstanceId(101L)
+                .status("EFFECTIVE")
+                .effectiveAt(now)
+                .payloadStorage(payloadStorage)
+                .payloadRef(payloadRef)
+                .generatedAt(now)
+                .generatedBy("test")
+                .promotionPolicy("AUTO_LATEST")
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+    }
 
-  @BeforeEach
-  void initializeSubject() {
-    service = new LineageEvidenceService(
-        resultVersionMapper, resultVersionQueryService, lineageEvidenceMapper);
-  }
+    @BeforeEach
+    void initializeSubject() {
+        service = new LineageEvidenceService(resultVersionMapper, resultVersionQueryService, lineageEvidenceMapper);
+    }
 }

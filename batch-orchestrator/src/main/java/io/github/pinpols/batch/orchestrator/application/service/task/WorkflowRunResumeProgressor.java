@@ -27,107 +27,105 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class WorkflowRunResumeProgressor {
 
-  private final WorkflowRunMapper workflowRunMapper;
-  private final OrchestratorWorkflowMappers workflowMappers;
-  private final WorkflowDagService workflowDagService;
-  private final WorkflowNodeDispatchService workflowNodeDispatchService;
-  private final TaskOutcomeNodeRunRecorder nodeRunRecorder;
-  private final CountContinuityOutboxService countContinuityOutboxService;
-  private final SecretPayloadProtector secretPayloadProtector;
-  private final WorkflowNodeTerminalFinalizer terminalFinalizer;
+    private final WorkflowRunMapper workflowRunMapper;
+    private final OrchestratorWorkflowMappers workflowMappers;
+    private final WorkflowDagService workflowDagService;
+    private final WorkflowNodeDispatchService workflowNodeDispatchService;
+    private final TaskOutcomeNodeRunRecorder nodeRunRecorder;
+    private final CountContinuityOutboxService countContinuityOutboxService;
+    private final SecretPayloadProtector secretPayloadProtector;
+    private final WorkflowNodeTerminalFinalizer terminalFinalizer;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void resume(String tenantId, Long workflowRunId) {
-    WorkflowRunEntity run = workflowRunMapper.selectById(tenantId, workflowRunId);
-    if (EmptyChecks.isNull(run)) {
-      return;
-    }
-    Map<String, WorkflowNodeRunEntity> latestRuns = new HashMap<>();
-    List<WorkflowNodeRunEntity> nodeRuns =
-        workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRunId);
-    for (WorkflowNodeRunEntity nodeRun : nodeRuns) {
-      latestRuns.merge(
-          nodeRun.getNodeCode(),
-          nodeRun,
-          (left, right) -> left.getRunSeq() >= right.getRunSeq() ? left : right);
-    }
-    for (WorkflowNodeRunEntity source : List.copyOf(latestRuns.values())) {
-      String sourceStatus = source.getNodeStatus();
-      if (!isReplayableOutcome(sourceStatus)) {
-        continue;
-      }
-      boolean success = followsSuccessEdge(sourceStatus);
-      String sourcePayload = EmptyChecks.isNull(source.getSourcePayloadProtected())
-          ? null
-          : secretPayloadProtector.reveal(source.getSourcePayloadProtected());
-      List<WorkflowDagService.DagNodeResolution> nextNodes =
-          workflowDagService.resolveNextNodesForRun(
-              run, source.getNodeCode(), success, sourcePayload);
-      for (WorkflowDagService.DagNodeResolution next : nextNodes) {
-        boolean nextNodeCannotBeDispatched = EmptyChecks.isNull(next)
-            || isTerminal(latestRuns.get(next.nodeCode()))
-            || !workflowDagService.isNodeReadyForRunDispatch(run, next.nodeCode(), sourcePayload);
-        if (nextNodeCannotBeDispatched) {
-          continue;
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void resume(String tenantId, Long workflowRunId) {
+        WorkflowRunEntity run = workflowRunMapper.selectById(tenantId, workflowRunId);
+        if (EmptyChecks.isNull(run)) {
+            return;
         }
-        if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
-          completeEndIfMissing(run, next, latestRuns);
-        } else {
-          workflowNodeDispatchService.dispatchNode(
-              null, run, next, sourcePayload, run.getTraceId());
+        Map<String, WorkflowNodeRunEntity> latestRuns = new HashMap<>();
+        List<WorkflowNodeRunEntity> nodeRuns =
+                workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRunId);
+        for (WorkflowNodeRunEntity nodeRun : nodeRuns) {
+            latestRuns.merge(
+                    nodeRun.getNodeCode(),
+                    nodeRun,
+                    (left, right) -> left.getRunSeq() >= right.getRunSeq() ? left : right);
         }
-      }
-      workflowDagService.cascadeSkipDownstreamForRun(run, source.getNodeCode(), sourcePayload);
+        for (WorkflowNodeRunEntity source : List.copyOf(latestRuns.values())) {
+            String sourceStatus = source.getNodeStatus();
+            if (!isReplayableOutcome(sourceStatus)) {
+                continue;
+            }
+            boolean success = followsSuccessEdge(sourceStatus);
+            String sourcePayload = EmptyChecks.isNull(source.getSourcePayloadProtected())
+                    ? null
+                    : secretPayloadProtector.reveal(source.getSourcePayloadProtected());
+            List<WorkflowDagService.DagNodeResolution> nextNodes =
+                    workflowDagService.resolveNextNodesForRun(run, source.getNodeCode(), success, sourcePayload);
+            for (WorkflowDagService.DagNodeResolution next : nextNodes) {
+                boolean nextNodeCannotBeDispatched = EmptyChecks.isNull(next)
+                        || isTerminal(latestRuns.get(next.nodeCode()))
+                        || !workflowDagService.isNodeReadyForRunDispatch(run, next.nodeCode(), sourcePayload);
+                if (nextNodeCannotBeDispatched) {
+                    continue;
+                }
+                if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
+                    completeEndIfMissing(run, next, latestRuns);
+                } else {
+                    workflowNodeDispatchService.dispatchNode(null, run, next, sourcePayload, run.getTraceId());
+                }
+            }
+            workflowDagService.cascadeSkipDownstreamForRun(run, source.getNodeCode(), sourcePayload);
+        }
+        terminalFinalizer.finalizeIfAllNodesTerminal(run);
     }
-    terminalFinalizer.finalizeIfAllNodesTerminal(run);
-  }
 
-  private boolean isReplayableOutcome(String status) {
-    return WorkflowNodeRunStatus.SUCCESS.code().equals(status)
-        || WorkflowNodeRunStatus.FAILED.code().equals(status)
-        || WorkflowNodeRunStatus.SKIPPED.code().equals(status);
-  }
-
-  private boolean followsSuccessEdge(String status) {
-    return WorkflowNodeRunStatus.SUCCESS.code().equals(status)
-        || WorkflowNodeRunStatus.SKIPPED.code().equals(status);
-  }
-
-  private boolean isTerminal(WorkflowNodeRunEntity nodeRun) {
-    if (EmptyChecks.isNull(nodeRun)) {
-      return false;
+    private boolean isReplayableOutcome(String status) {
+        return WorkflowNodeRunStatus.SUCCESS.code().equals(status)
+                || WorkflowNodeRunStatus.FAILED.code().equals(status)
+                || WorkflowNodeRunStatus.SKIPPED.code().equals(status);
     }
-    String status = nodeRun.getNodeStatus();
-    return WorkflowNodeRunStatus.SUCCESS.code().equals(status)
-        || WorkflowNodeRunStatus.FAILED.code().equals(status)
-        || WorkflowNodeRunStatus.SKIPPED.code().equals(status);
-  }
 
-  private void completeEndIfMissing(
-      WorkflowRunEntity run,
-      WorkflowDagService.DagNodeResolution end,
-      Map<String, WorkflowNodeRunEntity> latestRuns) {
-    WorkflowNodeRunEntity existing = latestRuns.get(end.nodeCode());
-    boolean endNodeAlreadyActivated = EmptyChecks.isNotNull(existing)
-        && (WorkflowNodeRunStatus.READY.code().equals(existing.getNodeStatus())
-            || WorkflowNodeRunStatus.RUNNING.code().equals(existing.getNodeStatus())
-            || WorkflowNodeRunStatus.SUCCESS.code().equals(existing.getNodeStatus()));
-    if (endNodeAlreadyActivated) {
-      return;
+    private boolean followsSuccessEdge(String status) {
+        return WorkflowNodeRunStatus.SUCCESS.code().equals(status)
+                || WorkflowNodeRunStatus.SKIPPED.code().equals(status);
     }
-    Instant now = BatchDateTimeSupport.utcNow();
-    nodeRunRecorder.recordStart(run.getId(), end.nodeCode(), end.nodeType(), now);
-    TaskOutcomeService.NodeRunKey nodeRunKey =
-        new TaskOutcomeService.NodeRunKey(run.getId(), end.nodeCode(), end.nodeType());
-    TaskOutcomeService.NodeRunOutcome nodeRunOutcome = TaskOutcomeService.NodeRunOutcome.builder()
-        .success(true)
-        .startedAt(now)
-        .finishedAt(now)
-        .build();
-    TaskOutcomeService.NodeRunFinishCommand finishCommand =
-        TaskOutcomeService.NodeRunFinishCommand.of(nodeRunKey, nodeRunOutcome);
-    nodeRunRecorder.recordFinish(finishCommand);
-    countContinuityOutboxService.checkContinuity(run.getId(), end.nodeCode(), null);
-    latestRuns.put(end.nodeCode(), new WorkflowNodeRunEntity());
-  }
+
+    private boolean isTerminal(WorkflowNodeRunEntity nodeRun) {
+        if (EmptyChecks.isNull(nodeRun)) {
+            return false;
+        }
+        String status = nodeRun.getNodeStatus();
+        return WorkflowNodeRunStatus.SUCCESS.code().equals(status)
+                || WorkflowNodeRunStatus.FAILED.code().equals(status)
+                || WorkflowNodeRunStatus.SKIPPED.code().equals(status);
+    }
+
+    private void completeEndIfMissing(
+            WorkflowRunEntity run,
+            WorkflowDagService.DagNodeResolution end,
+            Map<String, WorkflowNodeRunEntity> latestRuns) {
+        WorkflowNodeRunEntity existing = latestRuns.get(end.nodeCode());
+        boolean endNodeAlreadyActivated = EmptyChecks.isNotNull(existing)
+                && (WorkflowNodeRunStatus.READY.code().equals(existing.getNodeStatus())
+                        || WorkflowNodeRunStatus.RUNNING.code().equals(existing.getNodeStatus())
+                        || WorkflowNodeRunStatus.SUCCESS.code().equals(existing.getNodeStatus()));
+        if (endNodeAlreadyActivated) {
+            return;
+        }
+        Instant now = BatchDateTimeSupport.utcNow();
+        nodeRunRecorder.recordStart(run.getId(), end.nodeCode(), end.nodeType(), now);
+        TaskOutcomeService.NodeRunKey nodeRunKey =
+                new TaskOutcomeService.NodeRunKey(run.getId(), end.nodeCode(), end.nodeType());
+        TaskOutcomeService.NodeRunOutcome nodeRunOutcome = TaskOutcomeService.NodeRunOutcome.builder()
+                .success(true)
+                .startedAt(now)
+                .finishedAt(now)
+                .build();
+        TaskOutcomeService.NodeRunFinishCommand finishCommand =
+                TaskOutcomeService.NodeRunFinishCommand.of(nodeRunKey, nodeRunOutcome);
+        nodeRunRecorder.recordFinish(finishCommand);
+        countContinuityOutboxService.checkContinuity(run.getId(), end.nodeCode(), null);
+        latestRuns.put(end.nodeCode(), new WorkflowNodeRunEntity());
+    }
 }

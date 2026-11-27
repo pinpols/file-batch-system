@@ -9,11 +9,11 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum MisfirePendingStatus implements DictEnum {
-  PENDING("PENDING", "待审批"),
-  APPROVED("APPROVED", "已通过"),
-  REJECTED("REJECTED", "已拒绝"),
-  EXPIRED("EXPIRED", "已过期");
+    PENDING("PENDING", "待审批"),
+    APPROVED("APPROVED", "已通过"),
+    REJECTED("REJECTED", "已拒绝"),
+    EXPIRED("EXPIRED", "已过期");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

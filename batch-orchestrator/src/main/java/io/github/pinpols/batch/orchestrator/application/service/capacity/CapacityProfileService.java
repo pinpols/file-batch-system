@@ -19,96 +19,92 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CapacityProfileService {
 
-  private static final Duration DEFAULT_WINDOW = Duration.ofHours(24);
-  private static final Duration MAX_WINDOW = Duration.ofDays(31);
-  private static final int DEFAULT_LIMIT = 50;
-  private static final int MAX_LIMIT = 200;
-  private static final String SCOPE = "BFS_HOT_TABLES";
+    private static final Duration DEFAULT_WINDOW = Duration.ofHours(24);
+    private static final Duration MAX_WINDOW = Duration.ofDays(31);
+    private static final int DEFAULT_LIMIT = 50;
+    private static final int MAX_LIMIT = 200;
+    private static final String SCOPE = "BFS_HOT_TABLES";
 
-  private final CapacityProfileMapper capacityProfileMapper;
+    private final CapacityProfileMapper capacityProfileMapper;
 
-  @Transactional(readOnly = true)
-  public CapacityProfileReport query(
-      String tenantId, Instant from, Instant to, CapacityProfileGroupBy groupBy, Integer limit) {
-    Guard.requireText(tenantId, "tenantId is required");
-    Instant resolvedTo = to == null ? Instant.now() : to;
-    Instant resolvedFrom = from == null ? resolvedTo.minus(DEFAULT_WINDOW) : from;
-    if (!resolvedFrom.isBefore(resolvedTo)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "from must be before to");
+    @Transactional(readOnly = true)
+    public CapacityProfileReport query(
+            String tenantId, Instant from, Instant to, CapacityProfileGroupBy groupBy, Integer limit) {
+        Guard.requireText(tenantId, "tenantId is required");
+        Instant resolvedTo = to == null ? Instant.now() : to;
+        Instant resolvedFrom = from == null ? resolvedTo.minus(DEFAULT_WINDOW) : from;
+        if (!resolvedFrom.isBefore(resolvedTo)) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "from must be before to");
+        }
+        if (Duration.between(resolvedFrom, resolvedTo).compareTo(MAX_WINDOW) > 0) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "capacity profile window must not exceed 31 days");
+        }
+        CapacityProfileGroupBy resolvedGroupBy = groupBy == null ? CapacityProfileGroupBy.TENANT : groupBy;
+        int resolvedLimit = normalizeLimit(limit);
+        List<CapacityProfileRow> rows =
+                selectRows(tenantId, resolvedFrom, resolvedTo, resolvedGroupBy, resolvedLimit).stream()
+                        .map(CapacityProfileRow::withRates)
+                        .toList();
+        Instant capturedAt = Instant.now();
+        CapacityProfileWindow window = new CapacityProfileWindow(resolvedFrom, resolvedTo);
+        CapacityProfileTotals totals = totals(rows);
+        CapacityProfileCoverage coverage = coverage();
+        return new CapacityProfileReport(capturedAt, tenantId, window, resolvedGroupBy, SCOPE, rows, totals, coverage);
     }
-    if (Duration.between(resolvedFrom, resolvedTo).compareTo(MAX_WINDOW) > 0) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "capacity profile window must not exceed 31 days");
+
+    private List<CapacityProfileRow> selectRows(
+            String tenantId, Instant from, Instant to, CapacityProfileGroupBy groupBy, int limit) {
+        return switch (groupBy) {
+            case TENANT -> capacityProfileMapper.selectTenantProfile(tenantId, from, to, limit);
+            case JOB -> capacityProfileMapper.selectJobProfile(tenantId, from, to, limit);
+            case WORKER -> capacityProfileMapper.selectWorkerProfile(tenantId, from, to, limit);
+        };
     }
-    CapacityProfileGroupBy resolvedGroupBy =
-        groupBy == null ? CapacityProfileGroupBy.TENANT : groupBy;
-    int resolvedLimit = normalizeLimit(limit);
-    List<CapacityProfileRow> rows =
-        selectRows(tenantId, resolvedFrom, resolvedTo, resolvedGroupBy, resolvedLimit).stream()
-            .map(CapacityProfileRow::withRates)
-            .toList();
-    Instant capturedAt = Instant.now();
-    CapacityProfileWindow window = new CapacityProfileWindow(resolvedFrom, resolvedTo);
-    CapacityProfileTotals totals = totals(rows);
-    CapacityProfileCoverage coverage = coverage();
-    return new CapacityProfileReport(
-        capturedAt, tenantId, window, resolvedGroupBy, SCOPE, rows, totals, coverage);
-  }
 
-  private List<CapacityProfileRow> selectRows(
-      String tenantId, Instant from, Instant to, CapacityProfileGroupBy groupBy, int limit) {
-    return switch (groupBy) {
-      case TENANT -> capacityProfileMapper.selectTenantProfile(tenantId, from, to, limit);
-      case JOB -> capacityProfileMapper.selectJobProfile(tenantId, from, to, limit);
-      case WORKER -> capacityProfileMapper.selectWorkerProfile(tenantId, from, to, limit);
-    };
-  }
-
-  private int normalizeLimit(Integer limit) {
-    if (limit == null) {
-      return DEFAULT_LIMIT;
+    private int normalizeLimit(Integer limit) {
+        if (limit == null) {
+            return DEFAULT_LIMIT;
+        }
+        int minimumLimit = Math.max(limit, 1);
+        return Math.min(minimumLimit, MAX_LIMIT);
     }
-    int minimumLimit = Math.max(limit, 1);
-    return Math.min(minimumLimit, MAX_LIMIT);
-  }
 
-  private CapacityProfileTotals totals(List<CapacityProfileRow> rows) {
-    long instanceCount =
-        rows.stream().mapToLong(CapacityProfileRow::instanceCount).sum();
-    long taskCount = rows.stream().mapToLong(CapacityProfileRow::taskCount).sum();
-    long successCount =
-        rows.stream().mapToLong(CapacityProfileRow::successCount).sum();
-    long failureCount =
-        rows.stream().mapToLong(CapacityProfileRow::failureCount).sum();
-    long totalDurationMs =
-        rows.stream().mapToLong(CapacityProfileRow::totalDurationMs).sum();
-    long totalFileBytes =
-        rows.stream().mapToLong(CapacityProfileRow::totalFileBytes).sum();
-    long processedRecords =
-        rows.stream().mapToLong(CapacityProfileRow::processedRecords).sum();
-    return new CapacityProfileTotals(
-        instanceCount,
-        taskCount,
-        successCount,
-        failureCount,
-        totalDurationMs,
-        totalFileBytes,
-        processedRecords);
-  }
+    private CapacityProfileTotals totals(List<CapacityProfileRow> rows) {
+        long instanceCount =
+                rows.stream().mapToLong(CapacityProfileRow::instanceCount).sum();
+        long taskCount = rows.stream().mapToLong(CapacityProfileRow::taskCount).sum();
+        long successCount =
+                rows.stream().mapToLong(CapacityProfileRow::successCount).sum();
+        long failureCount =
+                rows.stream().mapToLong(CapacityProfileRow::failureCount).sum();
+        long totalDurationMs =
+                rows.stream().mapToLong(CapacityProfileRow::totalDurationMs).sum();
+        long totalFileBytes =
+                rows.stream().mapToLong(CapacityProfileRow::totalFileBytes).sum();
+        long processedRecords =
+                rows.stream().mapToLong(CapacityProfileRow::processedRecords).sum();
+        return new CapacityProfileTotals(
+                instanceCount,
+                taskCount,
+                successCount,
+                failureCount,
+                totalDurationMs,
+                totalFileBytes,
+                processedRecords);
+    }
 
-  private CapacityProfileCoverage coverage() {
-    return new CapacityProfileCoverage(
-        SCOPE,
-        List.of(
-            "recordsPerSecond/mbPerSecond 使用 wallClockDurationMs,不是并行任务耗时求和",
-            "processedRecords 来自 pipeline_progress,未接续跑位点的历史任务会显示为 0",
-            "totalFileBytes 仅统计已关联到 job_instance/pipeline_instance 的 file_record",
-            "DB CPU/IO/WAL 仍以 benchmark 报告和数据库监控为准"),
-        List.of("云账单分摊", "跨平台 FinOps", "业务金额成本裁定"));
-  }
+    private CapacityProfileCoverage coverage() {
+        return new CapacityProfileCoverage(
+                SCOPE,
+                List.of(
+                        "recordsPerSecond/mbPerSecond 使用 wallClockDurationMs,不是并行任务耗时求和",
+                        "processedRecords 来自 pipeline_progress,未接续跑位点的历史任务会显示为 0",
+                        "totalFileBytes 仅统计已关联到 job_instance/pipeline_instance 的 file_record",
+                        "DB CPU/IO/WAL 仍以 benchmark 报告和数据库监控为准"),
+                List.of("云账单分摊", "跨平台 FinOps", "业务金额成本裁定"));
+    }
 }

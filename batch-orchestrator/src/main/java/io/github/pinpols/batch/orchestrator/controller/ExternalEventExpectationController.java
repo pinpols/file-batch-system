@@ -19,59 +19,55 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ExternalEventExpectationController {
 
-  private final ExternalEventExpectationService expectationService;
+    private final ExternalEventExpectationService expectationService;
 
-  @PutMapping
-  public int configure(@RequestBody ConfigureRequest request) {
-    DefinitionRequest definition = new DefinitionRequest(
-        request.tenantId(),
-        request.calendarCode(),
-        request.workflowDefinitionId(),
-        request.eventCode(),
-        request.expectedLocalTime(),
-        request.dueLocalTime(),
-        request.enabled());
-    return expectationService.configure(definition);
-  }
+    @PutMapping
+    public int configure(@RequestBody ConfigureRequest request) {
+        DefinitionRequest definition = new DefinitionRequest(
+                request.tenantId(),
+                request.calendarCode(),
+                request.workflowDefinitionId(),
+                request.eventCode(),
+                request.expectedLocalTime(),
+                request.dueLocalTime(),
+                request.enabled());
+        return expectationService.configure(definition);
+    }
 
-  @DeleteMapping
-  public boolean deleteDefinition(@RequestBody DeleteRequest request) {
-    return expectationService.deleteDefinition(
-        request.tenantId(),
-        request.calendarCode(),
-        request.workflowDefinitionId(),
-        request.eventCode());
-  }
+    @DeleteMapping
+    public boolean deleteDefinition(@RequestBody DeleteRequest request) {
+        return expectationService.deleteDefinition(
+                request.tenantId(), request.calendarCode(), request.workflowDefinitionId(), request.eventCode());
+    }
 
-  @PostMapping("/satisfied")
-  public boolean markSatisfied(@RequestBody MarkSatisfiedRequest request) {
-    SatisfactionRequest satisfaction = new SatisfactionRequest(
-        request.tenantId(),
-        request.calendarCode(),
-        request.workflowDefinitionId(),
-        request.eventCode(),
-        request.bizDate(),
-        request.triggerRequestId());
-    return expectationService.markSatisfied(satisfaction);
-  }
+    @PostMapping("/satisfied")
+    public boolean markSatisfied(@RequestBody MarkSatisfiedRequest request) {
+        SatisfactionRequest satisfaction = new SatisfactionRequest(
+                request.tenantId(),
+                request.calendarCode(),
+                request.workflowDefinitionId(),
+                request.eventCode(),
+                request.bizDate(),
+                request.triggerRequestId());
+        return expectationService.markSatisfied(satisfaction);
+    }
 
-  public record ConfigureRequest(
-      String tenantId,
-      String calendarCode,
-      Long workflowDefinitionId,
-      String eventCode,
-      LocalTime expectedLocalTime,
-      LocalTime dueLocalTime,
-      boolean enabled) {}
+    public record ConfigureRequest(
+            String tenantId,
+            String calendarCode,
+            Long workflowDefinitionId,
+            String eventCode,
+            LocalTime expectedLocalTime,
+            LocalTime dueLocalTime,
+            boolean enabled) {}
 
-  public record DeleteRequest(
-      String tenantId, String calendarCode, Long workflowDefinitionId, String eventCode) {}
+    public record DeleteRequest(String tenantId, String calendarCode, Long workflowDefinitionId, String eventCode) {}
 
-  public record MarkSatisfiedRequest(
-      String tenantId,
-      String calendarCode,
-      Long workflowDefinitionId,
-      String eventCode,
-      LocalDate bizDate,
-      String triggerRequestId) {}
+    public record MarkSatisfiedRequest(
+            String tenantId,
+            String calendarCode,
+            Long workflowDefinitionId,
+            String eventCode,
+            LocalDate bizDate,
+            String triggerRequestId) {}
 }

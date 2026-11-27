@@ -28,85 +28,80 @@ import org.springframework.web.bind.annotation.*;
 @Idempotent
 public class ConsoleWorkflowRunController {
 
-  /** workflow_node_run.skip_reason VARCHAR(1024)（V250__record_workflow_node_skip_reason.sql）。 */
-  private static final int SKIP_REASON_MAX_LENGTH = 1024;
+    /** workflow_node_run.skip_reason VARCHAR(1024)（V250__record_workflow_node_skip_reason.sql）。 */
+    private static final int SKIP_REASON_MAX_LENGTH = 1024;
 
-  private final ConsoleOrchestratorPort orchestratorProxyService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestratorProxyService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @PostMapping("/{id}/cancel")
-  @AuditAction(
-      action = "workflowRun.cancel",
-      aggregateType = "workflow_run",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleWorkflowRunActionResponse> cancel(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        orchestratorProxyService.workflowRunAction(id, tenantId, "cancel"));
-  }
-
-  @PostMapping("/{id}/terminate")
-  @AuditAction(
-      action = "workflowRun.terminate",
-      aggregateType = "workflow_run",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleWorkflowRunActionResponse> terminate(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        orchestratorProxyService.workflowRunAction(id, tenantId, "terminate"));
-  }
-
-  @PostMapping("/{id}/pause")
-  @AuditAction(
-      action = "workflowRun.pause",
-      aggregateType = "workflow_run",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleWorkflowRunActionResponse> pause(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        orchestratorProxyService.workflowRunAction(id, tenantId, "pause"));
-  }
-
-  @PostMapping("/{id}/resume")
-  @AuditAction(
-      action = "workflowRun.resume",
-      aggregateType = "workflow_run",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleWorkflowRunActionResponse> resume(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        orchestratorProxyService.workflowRunAction(id, tenantId, "resume"));
-  }
-
-  @PostMapping("/{id}/skip-node")
-  @AuditAction(
-      action = "workflowRun.skipNode",
-      aggregateType = "workflow_run",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<ConsoleWorkflowRunSkipNodeResponse> skipNode(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("nodeCode") String nodeCode,
-      @RequestParam("reason") String reason) {
-    Guard.requireText(reason, "skip reason is required");
-    Guard.require(
-        reason.length() <= SKIP_REASON_MAX_LENGTH, "skip reason must not exceed 1024 characters");
-    String operatorId = currentUsername();
-    return responseFactory.success(
-        orchestratorProxyService.workflowRunSkipNode(id, tenantId, nodeCode, operatorId, reason));
-  }
-
-  private static String currentUsername() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (EmptyChecks.isNotNull(authentication)
-        && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal.username();
+    @PostMapping("/{id}/cancel")
+    @AuditAction(
+            action = "workflowRun.cancel",
+            aggregateType = "workflow_run",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleWorkflowRunActionResponse> cancel(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(orchestratorProxyService.workflowRunAction(id, tenantId, "cancel"));
     }
-    throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.unauthenticated");
-  }
+
+    @PostMapping("/{id}/terminate")
+    @AuditAction(
+            action = "workflowRun.terminate",
+            aggregateType = "workflow_run",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleWorkflowRunActionResponse> terminate(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(orchestratorProxyService.workflowRunAction(id, tenantId, "terminate"));
+    }
+
+    @PostMapping("/{id}/pause")
+    @AuditAction(
+            action = "workflowRun.pause",
+            aggregateType = "workflow_run",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleWorkflowRunActionResponse> pause(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(orchestratorProxyService.workflowRunAction(id, tenantId, "pause"));
+    }
+
+    @PostMapping("/{id}/resume")
+    @AuditAction(
+            action = "workflowRun.resume",
+            aggregateType = "workflow_run",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleWorkflowRunActionResponse> resume(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(orchestratorProxyService.workflowRunAction(id, tenantId, "resume"));
+    }
+
+    @PostMapping("/{id}/skip-node")
+    @AuditAction(
+            action = "workflowRun.skipNode",
+            aggregateType = "workflow_run",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId")
+    public CommonResponse<ConsoleWorkflowRunSkipNodeResponse> skipNode(
+            @PathVariable Long id,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("nodeCode") String nodeCode,
+            @RequestParam("reason") String reason) {
+        Guard.requireText(reason, "skip reason is required");
+        Guard.require(reason.length() <= SKIP_REASON_MAX_LENGTH, "skip reason must not exceed 1024 characters");
+        String operatorId = currentUsername();
+        return responseFactory.success(
+                orchestratorProxyService.workflowRunSkipNode(id, tenantId, nodeCode, operatorId, reason));
+    }
+
+    private static String currentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (EmptyChecks.isNotNull(authentication)
+                && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal.username();
+        }
+        throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.unauthenticated");
+    }
 }

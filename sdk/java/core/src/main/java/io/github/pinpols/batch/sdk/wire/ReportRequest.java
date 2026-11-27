@@ -22,17 +22,17 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ReportRequest(
-    Long taskId,
-    String tenantId,
-    String workerId,
-    String traceId,
-    boolean success,
-    String code,
-    String message,
-    String resultSummary,
-    String errorCode,
-    String highWaterMarkOut,
-    Map<String, Object> outputs,
-    String partitionInvocationId,
-    String failureClass,
-    List<Map<String, Object>> verifierFailures) {}
+        Long taskId,
+        String tenantId,
+        String workerId,
+        String traceId,
+        boolean success,
+        String code,
+        String message,
+        String resultSummary,
+        String errorCode,
+        String highWaterMarkOut,
+        Map<String, Object> outputs,
+        String partitionInvocationId,
+        String failureClass,
+        List<Map<String, Object>> verifierFailures) {}

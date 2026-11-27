@@ -9,5 +9,4 @@ import lombok.Builder;
  * {@code operator} 落 updated_by 供审计。这是平台 ROLE_ADMIN 跨租操作,非租户自服务。
  */
 @Builder
-public record BusinessTenantPlacementUpsertCommand(
-    String tenantId, String placementKey, String operator) {}
+public record BusinessTenantPlacementUpsertCommand(String tenantId, String placementKey, String operator) {}

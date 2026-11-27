@@ -14,40 +14,40 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConsoleUserAccountServiceSupport {
 
-  private final ConsoleUserAccountMapper repository;
+    private final ConsoleUserAccountMapper repository;
 
-  public ConsoleUserAccountServiceSupport(ConsoleUserAccountMapper repository) {
-    this.repository = repository;
-  }
-
-  /** 按用户名全局查找账号（用户名全局唯一，租户从账号记录中获取）。 */
-  public Optional<ConsoleUserAccount> findByUsername(String username) {
-    return repository.findByUsernameIgnoreCase(username).map(this::toAccount);
-  }
-
-  private ConsoleUserAccount toAccount(ConsoleUserAccountEntity entity) {
-    String tenantId = entity.getTenantId();
-    String username = entity.getUsername();
-    String displayName = entity.getDisplayName();
-    String passwordHash = entity.getPasswordHash();
-    String rawAuthorities = entity.getAuthoritiesCsv();
-    Set<String> authorities = parseAuthorities(rawAuthorities);
-    boolean enabled = entity.isEnabled();
-    boolean mustChangePassword = entity.isMustChangePassword();
-    return new ConsoleUserAccount(
-        tenantId, username, displayName, passwordHash, authorities, enabled, mustChangePassword);
-  }
-
-  private Set<String> parseAuthorities(String raw) {
-    if (!Texts.hasText(raw)) {
-      return Set.of();
+    public ConsoleUserAccountServiceSupport(ConsoleUserAccountMapper repository) {
+        this.repository = repository;
     }
-    Set<String> authorities = new LinkedHashSet<>();
-    Arrays.stream(raw.split(","))
-        .map(String::trim)
-        .filter(Texts::hasText)
-        .map(value -> value.toUpperCase(Locale.ROOT))
-        .forEach(authorities::add);
-    return authorities;
-  }
+
+    /** 按用户名全局查找账号（用户名全局唯一，租户从账号记录中获取）。 */
+    public Optional<ConsoleUserAccount> findByUsername(String username) {
+        return repository.findByUsernameIgnoreCase(username).map(this::toAccount);
+    }
+
+    private ConsoleUserAccount toAccount(ConsoleUserAccountEntity entity) {
+        String tenantId = entity.getTenantId();
+        String username = entity.getUsername();
+        String displayName = entity.getDisplayName();
+        String passwordHash = entity.getPasswordHash();
+        String rawAuthorities = entity.getAuthoritiesCsv();
+        Set<String> authorities = parseAuthorities(rawAuthorities);
+        boolean enabled = entity.isEnabled();
+        boolean mustChangePassword = entity.isMustChangePassword();
+        return new ConsoleUserAccount(
+                tenantId, username, displayName, passwordHash, authorities, enabled, mustChangePassword);
+    }
+
+    private Set<String> parseAuthorities(String raw) {
+        if (!Texts.hasText(raw)) {
+            return Set.of();
+        }
+        Set<String> authorities = new LinkedHashSet<>();
+        Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(Texts::hasText)
+                .map(value -> value.toUpperCase(Locale.ROOT))
+                .forEach(authorities::add);
+        return authorities;
+    }
 }

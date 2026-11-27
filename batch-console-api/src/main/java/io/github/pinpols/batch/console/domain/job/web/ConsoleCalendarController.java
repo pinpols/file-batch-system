@@ -27,69 +27,62 @@ import org.springframework.web.bind.annotation.*;
 @Idempotent
 public class ConsoleCalendarController {
 
-  private final ConsoleCalendarApplicationService calendarApplicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleCalendarApplicationService calendarApplicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
-  public CommonResponse<PageResponse<ConsoleCalendarResponse>> list(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "calendarCode", required = false) String calendarCode,
-      @RequestParam(value = "enabled", required = false) Boolean enabled,
-      @RequestParam(value = "pageNo", defaultValue = "1") Integer pageNo,
-      @RequestParam(value = "pageSize", defaultValue = "20") Integer pageSize) {
-    return responseFactory.success(
-        calendarApplicationService.list(tenantId, calendarCode, enabled, pageNo, pageSize));
-  }
+    @GetMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+    public CommonResponse<PageResponse<ConsoleCalendarResponse>> list(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "calendarCode", required = false) String calendarCode,
+            @RequestParam(value = "enabled", required = false) Boolean enabled,
+            @RequestParam(value = "pageNo", defaultValue = "1") Integer pageNo,
+            @RequestParam(value = "pageSize", defaultValue = "20") Integer pageSize) {
+        return responseFactory.success(
+                calendarApplicationService.list(tenantId, calendarCode, enabled, pageNo, pageSize));
+    }
 
-  @PostMapping
-  public CommonResponse<ConsoleCalendarResponse> create(
-      @Valid @RequestBody CalendarSaveRequest request) {
-    return responseFactory.success(calendarApplicationService.create(request));
-  }
+    @PostMapping
+    public CommonResponse<ConsoleCalendarResponse> create(@Valid @RequestBody CalendarSaveRequest request) {
+        return responseFactory.success(calendarApplicationService.create(request));
+    }
 
-  @PutMapping("/{id}")
-  public CommonResponse<ConsoleCalendarResponse> update(
-      @PathVariable Long id, @Valid @RequestBody CalendarSaveRequest request) {
-    return responseFactory.success(calendarApplicationService.update(id, request));
-  }
+    @PutMapping("/{id}")
+    public CommonResponse<ConsoleCalendarResponse> update(
+            @PathVariable Long id, @Valid @RequestBody CalendarSaveRequest request) {
+        return responseFactory.success(calendarApplicationService.update(id, request));
+    }
 
-  @PatchMapping("/{id}/enabled")
-  public CommonResponse<Void> setEnabled(
-      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    calendarApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
-    return responseFactory.success(null);
-  }
+    @PatchMapping("/{id}/enabled")
+    public CommonResponse<Void> setEnabled(@PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        calendarApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
+        return responseFactory.success(null);
+    }
 
-  @GetMapping("/{id}/holidays")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
-  public CommonResponse<List<ConsoleHolidayResponse>> holidays(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(calendarApplicationService.holidays(id, tenantId));
-  }
+    @GetMapping("/{id}/holidays")
+    @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+    public CommonResponse<List<ConsoleHolidayResponse>> holidays(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(calendarApplicationService.holidays(id, tenantId));
+    }
 
-  @PostMapping("/{id}/holidays")
-  public CommonResponse<Void> importHolidays(
-      @PathVariable Long id, @Valid @RequestBody HolidayImportRequest request) {
-    calendarApplicationService.importHolidays(id, request);
-    return responseFactory.success(null);
-  }
+    @PostMapping("/{id}/holidays")
+    public CommonResponse<Void> importHolidays(
+            @PathVariable Long id, @Valid @RequestBody HolidayImportRequest request) {
+        calendarApplicationService.importHolidays(id, request);
+        return responseFactory.success(null);
+    }
 
-  @PutMapping("/{id}/holidays/{holidayId}")
-  public CommonResponse<ConsoleHolidayResponse> updateHoliday(
-      @PathVariable Long id,
-      @PathVariable Long holidayId,
-      @Valid @RequestBody HolidaySaveRequest request) {
-    return responseFactory.success(
-        calendarApplicationService.updateHoliday(id, holidayId, request));
-  }
+    @PutMapping("/{id}/holidays/{holidayId}")
+    public CommonResponse<ConsoleHolidayResponse> updateHoliday(
+            @PathVariable Long id, @PathVariable Long holidayId, @Valid @RequestBody HolidaySaveRequest request) {
+        return responseFactory.success(calendarApplicationService.updateHoliday(id, holidayId, request));
+    }
 
-  @DeleteMapping("/{id}/holidays/{holidayId}")
-  public CommonResponse<Void> deleteHoliday(
-      @PathVariable Long id,
-      @PathVariable Long holidayId,
-      @RequestParam("tenantId") String tenantId) {
-    calendarApplicationService.deleteHoliday(id, holidayId, tenantId);
-    return responseFactory.success(null);
-  }
+    @DeleteMapping("/{id}/holidays/{holidayId}")
+    public CommonResponse<Void> deleteHoliday(
+            @PathVariable Long id, @PathVariable Long holidayId, @RequestParam("tenantId") String tenantId) {
+        calendarApplicationService.deleteHoliday(id, holidayId, tenantId);
+        return responseFactory.success(null);
+    }
 }

@@ -3,10 +3,10 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import java.util.Set;
 
 public record ConsoleUserAccount(
-    String tenantId,
-    String username,
-    String displayName,
-    String passwordHash,
-    Set<String> authorities,
-    boolean enabled,
-    boolean mustChangePassword) {}
+        String tenantId,
+        String username,
+        String displayName,
+        String passwordHash,
+        Set<String> authorities,
+        boolean enabled,
+        boolean mustChangePassword) {}

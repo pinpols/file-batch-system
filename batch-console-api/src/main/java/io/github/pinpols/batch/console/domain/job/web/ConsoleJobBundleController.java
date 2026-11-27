@@ -33,42 +33,42 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleJobBundleController {
 
-  private final ConsoleJobBundleApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleJobBundleApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @PostMapping("/create")
-  public CommonResponse<ConsoleJobBundleResultResponse> create(
-      @Valid @RequestBody JobBundleCreateRequest request, HttpServletRequest httpRequest) {
-    String requestHash = requestHash(httpRequest);
-    ConsoleJobBundleResultResponse result = EmptyChecks.isNull(requestHash)
-        ? applicationService.create(request)
-        : applicationService.create(request, requestHash);
-    return responseFactory.success(result);
-  }
-
-  @GetMapping("/export")
-  public CommonResponse<ConsoleJobBundleExportResponse> export(
-      @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
-    return responseFactory.success(applicationService.exportBundle(tenantId, jobCode));
-  }
-
-  @PostMapping("/import")
-  public CommonResponse<ConsoleJobBundleResultResponse> importBundle(
-      @Valid @RequestBody JobBundleImportRequest request, HttpServletRequest httpRequest) {
-    String requestHash = requestHash(httpRequest);
-    ConsoleJobBundleResultResponse result = EmptyChecks.isNull(requestHash)
-        ? applicationService.importBundle(request)
-        : applicationService.importBundle(request, requestHash);
-    return responseFactory.success(result);
-  }
-
-  private String requestHash(HttpServletRequest request) {
-    String key = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
-    if (!Texts.hasText(key)) {
-      return null;
+    @PostMapping("/create")
+    public CommonResponse<ConsoleJobBundleResultResponse> create(
+            @Valid @RequestBody JobBundleCreateRequest request, HttpServletRequest httpRequest) {
+        String requestHash = requestHash(httpRequest);
+        ConsoleJobBundleResultResponse result = EmptyChecks.isNull(requestHash)
+                ? applicationService.create(request)
+                : applicationService.create(request, requestHash);
+        return responseFactory.success(result);
     }
-    String tenantHeader = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
-    return ConsoleIdempotencyRequestIdentity.requestHash(
-        tenantHeader, request.getMethod(), request.getRequestURI(), key);
-  }
+
+    @GetMapping("/export")
+    public CommonResponse<ConsoleJobBundleExportResponse> export(
+            @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
+        return responseFactory.success(applicationService.exportBundle(tenantId, jobCode));
+    }
+
+    @PostMapping("/import")
+    public CommonResponse<ConsoleJobBundleResultResponse> importBundle(
+            @Valid @RequestBody JobBundleImportRequest request, HttpServletRequest httpRequest) {
+        String requestHash = requestHash(httpRequest);
+        ConsoleJobBundleResultResponse result = EmptyChecks.isNull(requestHash)
+                ? applicationService.importBundle(request)
+                : applicationService.importBundle(request, requestHash);
+        return responseFactory.success(result);
+    }
+
+    private String requestHash(HttpServletRequest request) {
+        String key = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
+        if (!Texts.hasText(key)) {
+            return null;
+        }
+        String tenantHeader = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
+        return ConsoleIdempotencyRequestIdentity.requestHash(
+                tenantHeader, request.getMethod(), request.getRequestURI(), key);
+    }
 }

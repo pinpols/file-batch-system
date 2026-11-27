@@ -18,20 +18,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OrchestratorDrainController {
 
-  private final OrchestratorDrainService drainService;
+    private final OrchestratorDrainService drainService;
 
-  @GetMapping("/status")
-  public DrainStatus status() {
-    return drainService.status();
-  }
+    @GetMapping("/status")
+    public DrainStatus status() {
+        return drainService.status();
+    }
 
-  @PostMapping("/enable")
-  public DrainStatus enable() {
-    return drainService.enable();
-  }
+    @PostMapping("/enable")
+    public DrainStatus enable() {
+        return drainService.enable();
+    }
 
-  @PostMapping("/disable")
-  public DrainStatus disable() {
-    return drainService.disable();
-  }
+    @PostMapping("/disable")
+    public DrainStatus disable() {
+        return drainService.disable();
+    }
 }

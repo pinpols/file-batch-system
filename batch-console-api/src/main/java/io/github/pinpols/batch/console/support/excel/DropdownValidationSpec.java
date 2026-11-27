@@ -16,9 +16,9 @@ import org.springframework.context.MessageSource;
 @Builder
 @SuppressWarnings("java:S6218")
 public record DropdownValidationSpec(
-    String[] values,
-    String promptTitle,
-    String promptText,
-    int maxRow,
-    MessageSource messageSource,
-    Locale locale) {}
+        String[] values,
+        String promptTitle,
+        String promptText,
+        int maxRow,
+        MessageSource messageSource,
+        Locale locale) {}

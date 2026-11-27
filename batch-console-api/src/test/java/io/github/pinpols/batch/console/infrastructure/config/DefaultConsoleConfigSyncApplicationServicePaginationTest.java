@@ -22,43 +22,42 @@ import org.springframework.transaction.PlatformTransactionManager;
 @DisplayName("配置同步日志分页服务: 总数与切片结果")
 class DefaultConsoleConfigSyncApplicationServicePaginationTest {
 
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+    @Mock
+    private ConsoleTenantGuard tenantGuard;
 
-  @Mock
-  private ConsoleTenantConfigCopyService copyService;
+    @Mock
+    private ConsoleTenantConfigCopyService copyService;
 
-  @Mock
-  private ConfigSyncImportExecutor importExecutor;
+    @Mock
+    private ConfigSyncImportExecutor importExecutor;
 
-  @Mock
-  private ConsoleRequestMetadataResolver metadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver metadataResolver;
 
-  @Mock
-  private ConfigSyncLogMapper mapper;
+    @Mock
+    private ConfigSyncLogMapper mapper;
 
-  @Mock
-  private PlatformTransactionManager transactionManager;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
-  @InjectMocks
-  private DefaultConsoleConfigSyncApplicationService service;
+    @InjectMocks
+    private DefaultConsoleConfigSyncApplicationService service;
 
-  @Test
-  @DisplayName("按页码计算偏移并映射审计日志")
-  void logs_returns_requested_slice_and_total() {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
-    when(mapper.countByTenant("ta")).thenReturn(42L);
-    when(mapper.selectByTenant("ta", 30L, 15))
-        .thenReturn(List.of(new ConfigSyncLogRow(
-            9L, "ta", "IMPORT", null, null, null, null, null, null, null, "SUCCESS", null, null,
-            null)));
+    @Test
+    @DisplayName("按页码计算偏移并映射审计日志")
+    void logs_returns_requested_slice_and_total() {
+        when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+        when(mapper.countByTenant("ta")).thenReturn(42L);
+        when(mapper.selectByTenant("ta", 30L, 15))
+                .thenReturn(List.of(new ConfigSyncLogRow(
+                        9L, "ta", "IMPORT", null, null, null, null, null, null, null, "SUCCESS", null, null, null)));
 
-    var response = service.logs("ta", 3, 15);
+        var response = service.logs("ta", 3, 15);
 
-    assertThat(response.total()).isEqualTo(42L);
-    assertThat(response.pageNo()).isEqualTo(3);
-    assertThat(response.pageSize()).isEqualTo(15);
-    assertThat(response.items().getFirst().id()).isEqualTo(9L);
-    verify(mapper).selectByTenant("ta", 30L, 15);
-  }
+        assertThat(response.total()).isEqualTo(42L);
+        assertThat(response.pageNo()).isEqualTo(3);
+        assertThat(response.pageSize()).isEqualTo(15);
+        assertThat(response.items().getFirst().id()).isEqualTo(9L);
+        verify(mapper).selectByTenant("ta", 30L, 15);
+    }
 }

@@ -55,292 +55,269 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class TaskControllerApplicationService {
 
-  private final TaskAssignmentService taskAssignmentService;
-  private final ObjectMapper objectMapper;
-  private final BundleBatchClaimProperties batchClaimProperties;
-  private final MeterRegistry meterRegistry;
-  private final TaskReportRetryExecutor reportRetryExecutor;
-  private final TenantActionRateLimiter tenantActionRateLimiter;
+    private final TaskAssignmentService taskAssignmentService;
+    private final ObjectMapper objectMapper;
+    private final BundleBatchClaimProperties batchClaimProperties;
+    private final MeterRegistry meterRegistry;
+    private final TaskReportRetryExecutor reportRetryExecutor;
+    private final TenantActionRateLimiter tenantActionRateLimiter;
 
-  @Timed(
-      value = "batch.task.claim.duration",
-      description = "Worker task claim latency on orchestrator",
-      histogram = true)
-  public EffectiveTaskConfig claim(Long taskId, TaskClaimCommand request) {
-    enforceRateLimit(request.tenantId(), RateLimitAction.TASK_CLAIM);
-    JobTaskEntity task =
-        taskAssignmentService.assignWorker(request.tenantId(), taskId, request.workerId());
-    if (EmptyChecks.isNull(task)) {
-      throw BizException.of(
-          ResultCode.NOT_FOUND, "error.task.claim_not_available", String.valueOf(taskId));
+    @Timed(
+            value = "batch.task.claim.duration",
+            description = "Worker task claim latency on orchestrator",
+            histogram = true)
+    public EffectiveTaskConfig claim(Long taskId, TaskClaimCommand request) {
+        enforceRateLimit(request.tenantId(), RateLimitAction.TASK_CLAIM);
+        JobTaskEntity task = taskAssignmentService.assignWorker(request.tenantId(), taskId, request.workerId());
+        if (EmptyChecks.isNull(task)) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.task.claim_not_available", String.valueOf(taskId));
+        }
+        if (!isClaimedBy(task, request.workerId())) {
+            if (isStillUnclaimedReady(task)) {
+                throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.task.claim_not_ready");
+            }
+            throw BizException.of(ResultCode.CONFLICT, "error.task.already_claimed");
+        }
+        // P1-2.1:认领成功后返回 effective config 快照,worker 优先用本对象的字段。
+        // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉 loadEffectiveConfig 内的重复 selectById。
+        return taskAssignmentService.loadEffectiveConfig(request.tenantId(), task);
     }
-    if (!isClaimedBy(task, request.workerId())) {
-      if (isStillUnclaimedReady(task)) {
-        throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.task.claim_not_ready");
-      }
-      throw BizException.of(ResultCode.CONFLICT, "error.task.already_claimed");
-    }
-    // P1-2.1:认领成功后返回 effective config 快照,worker 优先用本对象的字段。
-    // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉 loadEffectiveConfig 内的重复 selectById。
-    return taskAssignmentService.loadEffectiveConfig(request.tenantId(), task);
-  }
 
-  public void markNonIdempotentExecutionStarted(
-      Long taskId, TaskNonIdempotentStartCommand request) {
-    enforceRateLimit(request.tenantId(), RateLimitAction.TASK_CLAIM);
-    if (!taskAssignmentService.markNonIdempotentExecutionStarted(
-        request.tenantId(), taskId, request.workerId(), request.partitionInvocationId())) {
-      throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
+    public void markNonIdempotentExecutionStarted(Long taskId, TaskNonIdempotentStartCommand request) {
+        enforceRateLimit(request.tenantId(), RateLimitAction.TASK_CLAIM);
+        if (!taskAssignmentService.markNonIdempotentExecutionStarted(
+                request.tenantId(), taskId, request.workerId(), request.partitionInvocationId())) {
+            throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
+        }
     }
-  }
 
-  /**
-   * ADR-046 P2 切片 2.1:批量认领 —— 一次 HTTP 往返认领 K 个**独立** partition 对应的 task, 把控制面往返从 O(N) 降到 O(N/K)。
-   *
-   * <p>语义与单条 {@link #claim} 完全一致(逐 task 各自 {@code assignWorker} CAS),只是**逐项返回结果而非抛异常**: 没领到的
-   * task(被并发对手领走 / READY 窗口已过 / 不存在)记 {@code claimed=false},worker 只处理领到的子集。 **不是束级状态机 / 不共享幂等 ——
-   * 每个 partition 仍是独立单元**(见 ADR-046 §1)。
-   *
-   * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝(保护 orchestrator)。
-   */
-  public TaskClaimBatchResult claimBatch(TaskClaimBatchCommand request) {
-    return claimBatch(null, request);
-  }
+    /**
+     * ADR-046 P2 切片 2.1:批量认领 —— 一次 HTTP 往返认领 K 个**独立** partition 对应的 task, 把控制面往返从 O(N) 降到 O(N/K)。
+     *
+     * <p>语义与单条 {@link #claim} 完全一致(逐 task 各自 {@code assignWorker} CAS),只是**逐项返回结果而非抛异常**: 没领到的
+     * task(被并发对手领走 / READY 窗口已过 / 不存在)记 {@code claimed=false},worker 只处理领到的子集。 **不是束级状态机 / 不共享幂等 ——
+     * 每个 partition 仍是独立单元**(见 ADR-046 §1)。
+     *
+     * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝(保护 orchestrator)。
+     */
+    public TaskClaimBatchResult claimBatch(TaskClaimBatchCommand request) {
+        return claimBatch(null, request);
+    }
 
-  public TaskClaimBatchResult claimBatch(String admissionTenantId, TaskClaimBatchCommand request) {
-    enforceRateLimit(admissionTenantId, RateLimitAction.TASK_CLAIM);
-    List<TaskClaimItemCommand> items =
-        EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())
-            ? List.of()
-            : request.items();
-    int cap = batchClaimProperties.effectiveBatchSize();
-    if (items.size() > cap) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "claim batch size " + items.size() + " exceeds max " + cap);
+    public TaskClaimBatchResult claimBatch(String admissionTenantId, TaskClaimBatchCommand request) {
+        enforceRateLimit(admissionTenantId, RateLimitAction.TASK_CLAIM);
+        List<TaskClaimItemCommand> items =
+                EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items()) ? List.of() : request.items();
+        int cap = batchClaimProperties.effectiveBatchSize();
+        if (items.size() > cap) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "claim batch size " + items.size() + " exceeds max " + cap);
+        }
+        List<TaskClaimItemResult> results = new ArrayList<>(items.size());
+        int claimed = 0;
+        // PERF(5.2c): 请求级 memo —— 同一批内同 (tenant,workerCode) 的 worker_registry 解析只查一次库。
+        TaskAssignmentService.WorkerLookupMemo workerMemo = new TaskAssignmentService.WorkerLookupMemo();
+        for (TaskClaimItemCommand item : items) {
+            if (EmptyChecks.isNull(item)) {
+                results.add(new TaskClaimItemResult(null, false, null));
+                continue;
+            }
+            JobTaskEntity task =
+                    taskAssignmentService.assignWorker(item.tenantId(), item.taskId(), item.workerId(), workerMemo);
+            if (EmptyChecks.isNotNull(task) && isClaimedBy(task, item.workerId())) {
+                // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉重复 selectById。
+                EffectiveTaskConfig config = taskAssignmentService.loadEffectiveConfig(item.tenantId(), task);
+                results.add(new TaskClaimItemResult(item.taskId(), true, config));
+                claimed++;
+            } else {
+                results.add(new TaskClaimItemResult(item.taskId(), false, null));
+            }
+        }
+        // 2.4 观测:批大小分布(看 K 实际多大=churn 省多少)+ 逐项 outcome 计数
+        if (EmptyChecks.isNotEmpty(items)) {
+            meterRegistry.summary(BatchMetricsNames.BATCH_CLAIM_SIZE).record(items.size());
+            meterRegistry
+                    .counter(BatchMetricsNames.BATCH_CLAIM_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "claimed")
+                    .increment(claimed);
+            meterRegistry
+                    .counter(BatchMetricsNames.BATCH_CLAIM_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "skipped")
+                    .increment((double) items.size() - claimed);
+        }
+        return new TaskClaimBatchResult(results);
     }
-    List<TaskClaimItemResult> results = new ArrayList<>(items.size());
-    int claimed = 0;
-    // PERF(5.2c): 请求级 memo —— 同一批内同 (tenant,workerCode) 的 worker_registry 解析只查一次库。
-    TaskAssignmentService.WorkerLookupMemo workerMemo =
-        new TaskAssignmentService.WorkerLookupMemo();
-    for (TaskClaimItemCommand item : items) {
-      if (EmptyChecks.isNull(item)) {
-        results.add(new TaskClaimItemResult(null, false, null));
-        continue;
-      }
-      JobTaskEntity task = taskAssignmentService.assignWorker(
-          item.tenantId(), item.taskId(), item.workerId(), workerMemo);
-      if (EmptyChecks.isNotNull(task) && isClaimedBy(task, item.workerId())) {
-        // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉重复 selectById。
-        EffectiveTaskConfig config =
-            taskAssignmentService.loadEffectiveConfig(item.tenantId(), task);
-        results.add(new TaskClaimItemResult(item.taskId(), true, config));
-        claimed++;
-      } else {
-        results.add(new TaskClaimItemResult(item.taskId(), false, null));
-      }
-    }
-    // 2.4 观测:批大小分布(看 K 实际多大=churn 省多少)+ 逐项 outcome 计数
-    if (EmptyChecks.isNotEmpty(items)) {
-      meterRegistry.summary(BatchMetricsNames.BATCH_CLAIM_SIZE).record(items.size());
-      meterRegistry
-          .counter(
-              BatchMetricsNames.BATCH_CLAIM_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "claimed")
-          .increment(claimed);
-      meterRegistry
-          .counter(
-              BatchMetricsNames.BATCH_CLAIM_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "skipped")
-          .increment((double) items.size() - claimed);
-    }
-    return new TaskClaimBatchResult(results);
-  }
 
-  public void report(Long taskId, TaskExecutionReportCommand request) {
-    enforceRateLimit(request.tenantId(), RateLimitAction.TASK_REPORT);
-    reportRetryExecutor.report(taskId, request);
-  }
+    public void report(Long taskId, TaskExecutionReportCommand request) {
+        enforceRateLimit(request.tenantId(), RateLimitAction.TASK_REPORT);
+        reportRetryExecutor.report(taskId, request);
+    }
 
-  /**
-   * ADR-046 P2 切片 2.2:批量上报 —— 一次 HTTP 往返上报 K 个**独立** partition 的结果, 把控制面往返从 O(N) 降到 O(N/K)。
-   *
-   * <p>**逐项独立事务 + 逐项结果**:每项经 {@link TaskReportRetryExecutor}（代理触发 {@code @Retryable}，再由
-   * {@code applyTaskOutcome} 的目标服务开启独立 {@code @Transactional}）推进；**某项失败（版本 CAS 冲突 /
-   * 校验 / 其它）只标记该项，不影响其余项也不回滚整批** —— 这正是 ADR-046 要求的「批内部分失败 =
-   * 失败项独立、不退整束」。worker 据逐项结果只重报 ok=false 的项。
-   *
-   * <p>设计取舍:不在单事务里做 savepoint 批量推进 —— {@code applyTaskOutcome} 自身 {@code @Transactional} + 父汇总
-   * 父汇总 + 死锁 {@code @Retryable},逐项独立事务隔离最强、复用已验证路径,风险最低; 真正的 churn 收益在「一次 HTTP 报 K
-   * 个」。outbox 单 INSERT 批写是更高风险的次要微优,后置；当前实现边界见 ADR-046。
-   *
-   * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝。
-   */
-  public TaskReportBatchResult reportBatch(TaskReportBatchCommand request) {
-    return reportBatch(null, request);
-  }
+    /**
+     * ADR-046 P2 切片 2.2:批量上报 —— 一次 HTTP 往返上报 K 个**独立** partition 的结果, 把控制面往返从 O(N) 降到 O(N/K)。
+     *
+     * <p>**逐项独立事务 + 逐项结果**:每项经 {@link TaskReportRetryExecutor}（代理触发 {@code @Retryable}，再由
+     * {@code applyTaskOutcome} 的目标服务开启独立 {@code @Transactional}）推进；**某项失败（版本 CAS 冲突 /
+     * 校验 / 其它）只标记该项，不影响其余项也不回滚整批** —— 这正是 ADR-046 要求的「批内部分失败 =
+     * 失败项独立、不退整束」。worker 据逐项结果只重报 ok=false 的项。
+     *
+     * <p>设计取舍:不在单事务里做 savepoint 批量推进 —— {@code applyTaskOutcome} 自身 {@code @Transactional} + 父汇总
+     * 父汇总 + 死锁 {@code @Retryable},逐项独立事务隔离最强、复用已验证路径,风险最低; 真正的 churn 收益在「一次 HTTP 报 K
+     * 个」。outbox 单 INSERT 批写是更高风险的次要微优,后置；当前实现边界见 ADR-046。
+     *
+     * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝。
+     */
+    public TaskReportBatchResult reportBatch(TaskReportBatchCommand request) {
+        return reportBatch(null, request);
+    }
 
-  public TaskReportBatchResult reportBatch(
-      String admissionTenantId, TaskReportBatchCommand request) {
-    enforceRateLimit(admissionTenantId, RateLimitAction.TASK_REPORT);
-    List<TaskExecutionReportCommand> items =
-        EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())
-            ? List.of()
-            : request.items();
-    int cap = batchClaimProperties.effectiveBatchSize();
-    if (items.size() > cap) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "report batch size " + items.size() + " exceeds max " + cap);
+    public TaskReportBatchResult reportBatch(String admissionTenantId, TaskReportBatchCommand request) {
+        enforceRateLimit(admissionTenantId, RateLimitAction.TASK_REPORT);
+        List<TaskExecutionReportCommand> items =
+                EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items()) ? List.of() : request.items();
+        int cap = batchClaimProperties.effectiveBatchSize();
+        if (items.size() > cap) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "report batch size " + items.size() + " exceeds max " + cap);
+        }
+        List<TaskReportItemResult> results = new ArrayList<>(items.size());
+        int ok = 0;
+        for (TaskExecutionReportCommand item : items) {
+            if (EmptyChecks.isNull(item)) {
+                results.add(new TaskReportItemResult(null, false, "batch item is null"));
+                continue;
+            }
+            Long taskId = item.taskId();
+            try {
+                reportRetryExecutor.report(taskId, item);
+                results.add(new TaskReportItemResult(taskId, true, null));
+                ok++;
+            } catch (RuntimeException e) {
+                // 逐项独立:该项失败不影响其余项;worker 只重报 ok=false 的项
+                log.warn("batch report item failed: taskId={} err={}", taskId, SwallowedExceptionLogger.summary(e));
+                results.add(new TaskReportItemResult(taskId, false, e.getMessage()));
+            }
+        }
+        // 2.4 观测:批大小分布 + 逐项 outcome(批内部分失败可观测)
+        if (EmptyChecks.isNotEmpty(items)) {
+            meterRegistry.summary(BatchMetricsNames.BATCH_REPORT_SIZE).record(items.size());
+            meterRegistry
+                    .counter(BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "ok")
+                    .increment(ok);
+            meterRegistry
+                    .counter(BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "failed")
+                    .increment((double) items.size() - ok);
+        }
+        return new TaskReportBatchResult(results);
     }
-    List<TaskReportItemResult> results = new ArrayList<>(items.size());
-    int ok = 0;
-    for (TaskExecutionReportCommand item : items) {
-      if (EmptyChecks.isNull(item)) {
-        results.add(new TaskReportItemResult(null, false, "batch item is null"));
-        continue;
-      }
-      Long taskId = item.taskId();
-      try {
-        reportRetryExecutor.report(taskId, item);
-        results.add(new TaskReportItemResult(taskId, true, null));
-        ok++;
-      } catch (RuntimeException e) {
-        // 逐项独立:该项失败不影响其余项;worker 只重报 ok=false 的项
-        log.warn(
-            "batch report item failed: taskId={} err={}",
-            taskId,
-            SwallowedExceptionLogger.summary(e));
-        results.add(new TaskReportItemResult(taskId, false, e.getMessage()));
-      }
-    }
-    // 2.4 观测:批大小分布 + 逐项 outcome(批内部分失败可观测)
-    if (EmptyChecks.isNotEmpty(items)) {
-      meterRegistry.summary(BatchMetricsNames.BATCH_REPORT_SIZE).record(items.size());
-      meterRegistry
-          .counter(BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "ok")
-          .increment(ok);
-      meterRegistry
-          .counter(
-              BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "failed")
-          .increment((double) items.size() - ok);
-    }
-    return new TaskReportBatchResult(results);
-  }
 
-  /**
-   * ORCH-P4-1：心跳 = 续租 + 进度上报 + 取消感知。续租失败 → 409;成功则(可选)落 details 并回带 {@code cancelRequested}, SDK
-   * 据此主动停长循环(不等 lease 超时)。
-   */
-  public TaskControlPayloads.TaskHeartbeatResult renew(Long taskId, TaskHeartbeatCommand request) {
-    String detailsJson = serializeDetails(taskId, request.details());
-    TaskHeartbeatResult result = taskAssignmentService.recordHeartbeat(
-        request.tenantId(),
-        taskId,
-        request.workerId(),
-        request.partitionInvocationId(),
-        detailsJson);
-    if (!result.leaseRenewed()) {
-      throw BizException.of(ResultCode.CONFLICT, "error.task.lease_renew_rejected");
+    /**
+     * ORCH-P4-1：心跳 = 续租 + 进度上报 + 取消感知。续租失败 → 409;成功则(可选)落 details 并回带 {@code cancelRequested}, SDK
+     * 据此主动停长循环(不等 lease 超时)。
+     */
+    public TaskControlPayloads.TaskHeartbeatResult renew(Long taskId, TaskHeartbeatCommand request) {
+        String detailsJson = serializeDetails(taskId, request.details());
+        TaskHeartbeatResult result = taskAssignmentService.recordHeartbeat(
+                request.tenantId(), taskId, request.workerId(), request.partitionInvocationId(), detailsJson);
+        if (!result.leaseRenewed()) {
+            throw BizException.of(ResultCode.CONFLICT, "error.task.lease_renew_rejected");
+        }
+        return new TaskControlPayloads.TaskHeartbeatResult(result.cancelRequested());
     }
-    return new TaskControlPayloads.TaskHeartbeatResult(result.cancelRequested());
-  }
 
-  /** ORCH-P4-1：运维 / 平台请求取消 RUNNING task;非 RUNNING / 不存在则静默成功(幂等,无需让运维区分)。 */
-  public void cancel(Long taskId, TaskCancelCommand request) {
-    boolean marked = taskAssignmentService.requestCancel(request.tenantId(), taskId);
-    log.info(
-        "task cancel requested: tenant={} taskId={} reason={} marked={}",
-        request.tenantId(),
-        taskId,
-        request.reason(),
-        marked);
-  }
+    /** ORCH-P4-1：运维 / 平台请求取消 RUNNING task;非 RUNNING / 不存在则静默成功(幂等,无需让运维区分)。 */
+    public void cancel(Long taskId, TaskCancelCommand request) {
+        boolean marked = taskAssignmentService.requestCancel(request.tenantId(), taskId);
+        log.info(
+                "task cancel requested: tenant={} taskId={} reason={} marked={}",
+                request.tenantId(),
+                taskId,
+                request.reason(),
+                marked);
+    }
 
-  /** details 非空时序列化为 JSON 文本(存 job_task.heartbeat_details);序列化失败降级为跳过 details,不阻塞续租。 */
-  private String serializeDetails(Long taskId, Object details) {
-    if (EmptyChecks.isNull(details)) {
-      return null;
+    /** details 非空时序列化为 JSON 文本(存 job_task.heartbeat_details);序列化失败降级为跳过 details,不阻塞续租。 */
+    private String serializeDetails(Long taskId, Object details) {
+        if (EmptyChecks.isNull(details)) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(details);
+        } catch (JsonProcessingException e) {
+            log.warn(
+                    "heartbeat details serialize failed, skipped: taskId={} err={}",
+                    taskId,
+                    SwallowedExceptionLogger.summary(e));
+            return null;
+        }
     }
-    try {
-      return objectMapper.writeValueAsString(details);
-    } catch (JsonProcessingException e) {
-      log.warn(
-          "heartbeat details serialize failed, skipped: taskId={} err={}",
-          taskId,
-          SwallowedExceptionLogger.summary(e));
-      return null;
-    }
-  }
 
-  /**
-   * ADR-016:批量续租 —— 一次 HTTP 往返处理多个 task;逐项返回结果而不抛异常。
-   *
-   * <p>ORCH-P4-1:批量续租同时返回 {@code cancelRequested};worker-core 据此中断长时间运行的 task, 而不必等待租约超时。
-   */
-  public TaskLeaseRenewBatchResult renewBatch(TaskLeaseRenewBatchCommand request) {
-    List<TaskLeaseRenewItemCommand> items =
-        EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())
-            ? List.of()
-            : request.items();
-    if (EmptyChecks.isEmpty(items)) {
-      return new TaskLeaseRenewBatchResult(List.of());
+    /**
+     * ADR-016:批量续租 —— 一次 HTTP 往返处理多个 task;逐项返回结果而不抛异常。
+     *
+     * <p>ORCH-P4-1:批量续租同时返回 {@code cancelRequested};worker-core 据此中断长时间运行的 task, 而不必等待租约超时。
+     */
+    public TaskLeaseRenewBatchResult renewBatch(TaskLeaseRenewBatchCommand request) {
+        List<TaskLeaseRenewItemCommand> items =
+                EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items()) ? List.of() : request.items();
+        if (EmptyChecks.isEmpty(items)) {
+            return new TaskLeaseRenewBatchResult(List.of());
+        }
+        // PERF(5.3): set-based —— N 项一条 UPDATE ... RETURNING 完成续租 + cancelRequested 回读;
+        // 丢租约的项按原逐项语义返回 renewed=false(结果与入参逐位对齐)。
+        List<TaskAssignmentService.LeaseRenewCommand> commands = new ArrayList<>(items.size());
+        List<TaskLeaseRenewItemResult> results = new ArrayList<>(items.size());
+        for (TaskLeaseRenewItemCommand item : items) {
+            if (EmptyChecks.isNull(item)) {
+                results.add(new TaskLeaseRenewItemResult(null, false, false));
+                continue;
+            }
+            TaskAssignmentService.LeaseRenewCommand command = new TaskAssignmentService.LeaseRenewCommand(
+                    item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
+            commands.add(command);
+            results.add(null);
+        }
+        List<TaskAssignmentService.TaskHeartbeatResult> outcomes =
+                EmptyChecks.isEmpty(commands) ? List.of() : taskAssignmentService.renewLeaseBatch(commands);
+        if (EmptyChecks.isNull(outcomes)) {
+            outcomes = List.of();
+        }
+        int outcomeIndex = 0;
+        for (int i = 0; i < items.size(); i++) {
+            if (EmptyChecks.isNull(items.get(i))) {
+                continue;
+            }
+            TaskAssignmentService.TaskHeartbeatResult result = outcomeIndex < outcomes.size()
+                    ? outcomes.get(outcomeIndex++)
+                    : new TaskAssignmentService.TaskHeartbeatResult(false, false);
+            if (EmptyChecks.isNull(result)) {
+                result = new TaskAssignmentService.TaskHeartbeatResult(false, false);
+            }
+            results.set(
+                    i,
+                    new TaskLeaseRenewItemResult(
+                            items.get(i).taskId(), result.leaseRenewed(), result.cancelRequested()));
+        }
+        return new TaskLeaseRenewBatchResult(results);
     }
-    // PERF(5.3): set-based —— N 项一条 UPDATE ... RETURNING 完成续租 + cancelRequested 回读;
-    // 丢租约的项按原逐项语义返回 renewed=false(结果与入参逐位对齐)。
-    List<TaskAssignmentService.LeaseRenewCommand> commands = new ArrayList<>(items.size());
-    List<TaskLeaseRenewItemResult> results = new ArrayList<>(items.size());
-    for (TaskLeaseRenewItemCommand item : items) {
-      if (EmptyChecks.isNull(item)) {
-        results.add(new TaskLeaseRenewItemResult(null, false, false));
-        continue;
-      }
-      TaskAssignmentService.LeaseRenewCommand command = new TaskAssignmentService.LeaseRenewCommand(
-          item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
-      commands.add(command);
-      results.add(null);
-    }
-    List<TaskAssignmentService.TaskHeartbeatResult> outcomes =
-        EmptyChecks.isEmpty(commands) ? List.of() : taskAssignmentService.renewLeaseBatch(commands);
-    if (EmptyChecks.isNull(outcomes)) {
-      outcomes = List.of();
-    }
-    int outcomeIndex = 0;
-    for (int i = 0; i < items.size(); i++) {
-      if (EmptyChecks.isNull(items.get(i))) {
-        continue;
-      }
-      TaskAssignmentService.TaskHeartbeatResult result = outcomeIndex < outcomes.size()
-          ? outcomes.get(outcomeIndex++)
-          : new TaskAssignmentService.TaskHeartbeatResult(false, false);
-      if (EmptyChecks.isNull(result)) {
-        result = new TaskAssignmentService.TaskHeartbeatResult(false, false);
-      }
-      results.set(
-          i,
-          new TaskLeaseRenewItemResult(
-              items.get(i).taskId(), result.leaseRenewed(), result.cancelRequested()));
-    }
-    return new TaskLeaseRenewBatchResult(results);
-  }
 
-  private boolean isClaimedBy(JobTaskEntity task, String workerId) {
-    return EmptyChecks.isNotNull(task)
-        && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
-        && EmptyChecks.isNotNull(workerId)
-        && workerId.equals(task.getAssignedWorkerCode());
-  }
-
-  /** 仍是无人认领的 READY。此时 409 会让 worker 提交 offset，消息丢失后没有第二次投递。 */
-  private static boolean isStillUnclaimedReady(JobTaskEntity task) {
-    return TaskStatus.READY.code().equals(task.getTaskStatus())
-        && EmptyChecks.isNull(task.getAssignedWorkerCode());
-  }
-
-  private void enforceRateLimit(String tenantId, RateLimitAction action) {
-    if (!tenantActionRateLimiter.tryConsume(tenantId, action)) {
-      throw new OperationFailure(Kind.RATE_LIMITED, "rate limit exceeded: " + action);
+    private boolean isClaimedBy(JobTaskEntity task, String workerId) {
+        return EmptyChecks.isNotNull(task)
+                && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
+                && EmptyChecks.isNotNull(workerId)
+                && workerId.equals(task.getAssignedWorkerCode());
     }
-  }
+
+    /** 仍是无人认领的 READY。此时 409 会让 worker 提交 offset，消息丢失后没有第二次投递。 */
+    private static boolean isStillUnclaimedReady(JobTaskEntity task) {
+        return TaskStatus.READY.code().equals(task.getTaskStatus()) && EmptyChecks.isNull(task.getAssignedWorkerCode());
+    }
+
+    private void enforceRateLimit(String tenantId, RateLimitAction action) {
+        if (!tenantActionRateLimiter.tryConsume(tenantId, action)) {
+            throw new OperationFailure(Kind.RATE_LIMITED, "rate limit exceeded: " + action);
+        }
+    }
 }

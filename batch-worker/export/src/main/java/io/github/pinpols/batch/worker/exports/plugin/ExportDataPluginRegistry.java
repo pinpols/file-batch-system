@@ -13,57 +13,56 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExportDataPluginRegistry {
 
-  private final Map<String, ExportDataPlugin> byId;
+    private final Map<String, ExportDataPlugin> byId;
 
-  public ExportDataPluginRegistry(List<ExportDataPlugin> plugins) {
-    Map<String, ExportDataPlugin> resolved = new LinkedHashMap<>();
-    for (ExportDataPlugin plugin : plugins) {
-      String id = plugin.id().toLowerCase(Locale.ROOT);
-      ExportDataPlugin previous = resolved.putIfAbsent(id, plugin);
-      if (previous != null) {
-        throw new IllegalStateException("duplicate ExportDataPlugin id: "
-            + id
-            + " ("
-            + previous.getClass().getName()
-            + ", "
-            + plugin.getClass().getName()
-            + ")");
-      }
+    public ExportDataPluginRegistry(List<ExportDataPlugin> plugins) {
+        Map<String, ExportDataPlugin> resolved = new LinkedHashMap<>();
+        for (ExportDataPlugin plugin : plugins) {
+            String id = plugin.id().toLowerCase(Locale.ROOT);
+            ExportDataPlugin previous = resolved.putIfAbsent(id, plugin);
+            if (previous != null) {
+                throw new IllegalStateException("duplicate ExportDataPlugin id: "
+                        + id
+                        + " ("
+                        + previous.getClass().getName()
+                        + ", "
+                        + plugin.getClass().getName()
+                        + ")");
+            }
+        }
+        this.byId = Map.copyOf(resolved);
     }
-    this.byId = Map.copyOf(resolved);
-  }
 
-  /**
-   * 按 id 获取插件，不存在时抛出异常。
-   *
-   * @param id 插件标识（大小写不敏感）
-   * @return 对应的 ExportDataPlugin
-   * @throws IllegalStateException id 为空或未找到插件时抛出
-   */
-  public ExportDataPlugin require(String id) {
-    if (id == null || id.isBlank()) {
-      throw new IllegalStateException(
-          "export_data_ref is required in template config: use 'jdbc_mapped_export' or"
-              + " 'sql_template_export'");
+    /**
+     * 按 id 获取插件，不存在时抛出异常。
+     *
+     * @param id 插件标识（大小写不敏感）
+     * @return 对应的 ExportDataPlugin
+     * @throws IllegalStateException id 为空或未找到插件时抛出
+     */
+    public ExportDataPlugin require(String id) {
+        if (id == null || id.isBlank()) {
+            throw new IllegalStateException(
+                    "export_data_ref is required in template config: use 'jdbc_mapped_export' or"
+                            + " 'sql_template_export'");
+        }
+        ExportDataPlugin plugin = byId.get(id.toLowerCase(Locale.ROOT));
+        if (plugin == null) {
+            throw new IllegalStateException("no ExportDataPlugin registered for id: " + id);
+        }
+        return plugin;
     }
-    ExportDataPlugin plugin = byId.get(id.toLowerCase(Locale.ROOT));
-    if (plugin == null) {
-      throw new IllegalStateException("no ExportDataPlugin registered for id: " + id);
+
+    /** 使用与导出相同的插件选择和冻结配置解析重放元数据。 */
+    public ReplayCapabilityDeclaration replayCapability(String id, Map<String, Object> frozenExportConfig) {
+        ExportDataPlugin plugin = require(id);
+        return plugin.replayCapability(frozenExportConfig);
     }
-    return plugin;
-  }
 
-  /** 使用与导出相同的插件选择和冻结配置解析重放元数据。 */
-  public ReplayCapabilityDeclaration replayCapability(
-      String id, Map<String, Object> frozenExportConfig) {
-    ExportDataPlugin plugin = require(id);
-    return plugin.replayCapability(frozenExportConfig);
-  }
-
-  public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
-    return byId.values().stream()
-        .sorted(Comparator.comparing(ExportDataPlugin::id))
-        .map(ExportDataPlugin::replayCapabilityDeclaration)
-        .toList();
-  }
+    public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
+        return byId.values().stream()
+                .sorted(Comparator.comparing(ExportDataPlugin::id))
+                .map(ExportDataPlugin::replayCapabilityDeclaration)
+                .toList();
+    }
 }

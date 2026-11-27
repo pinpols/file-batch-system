@@ -61,107 +61,81 @@ import org.springframework.transaction.PlatformTransactionManager;
  */
 @Configuration
 @EnableAutoConfiguration(
-    exclude = {
-      HttpRequestMdcAutoConfiguration.class,
-      AnthropicChatAutoConfiguration.class,
-      OpenAiChatAutoConfiguration.class,
-      OpenAiDecisionAutoConfiguration.class,
-      OpenAiAudioSpeechAutoConfiguration.class,
-      OpenAiAudioTranscriptionAutoConfiguration.class,
-      OpenAiEmbeddingAutoConfiguration.class,
-      OpenAiImageAutoConfiguration.class,
-      OpenAiModerationAutoConfiguration.class,
-      SecurityAutoConfiguration.class,
-      UserDetailsServiceAutoConfiguration.class,
-      SecurityFilterAutoConfiguration.class,
-      ServletWebSecurityAutoConfiguration.class,
-      ManagementWebSecurityAutoConfiguration.class,
-    })
+        exclude = {
+            HttpRequestMdcAutoConfiguration.class,
+            AnthropicChatAutoConfiguration.class,
+            OpenAiChatAutoConfiguration.class,
+            OpenAiDecisionAutoConfiguration.class,
+            OpenAiAudioSpeechAutoConfiguration.class,
+            OpenAiAudioTranscriptionAutoConfiguration.class,
+            OpenAiEmbeddingAutoConfiguration.class,
+            OpenAiImageAutoConfiguration.class,
+            OpenAiModerationAutoConfiguration.class,
+            SecurityAutoConfiguration.class,
+            UserDetailsServiceAutoConfiguration.class,
+            SecurityFilterAutoConfiguration.class,
+            ServletWebSecurityAutoConfiguration.class,
+            ManagementWebSecurityAutoConfiguration.class,
+        })
 @EnableKafka
 @Import({
-  BatchClockConfig.class,
-  E2ePlatformDataSourceConfiguration.class,
-  E2eBusinessDataSourceConfiguration.class,
-  E2ePlatformMybatisConfiguration.class,
-  E2eShedLockConfiguration.class
+    BatchClockConfig.class,
+    E2ePlatformDataSourceConfiguration.class,
+    E2eBusinessDataSourceConfiguration.class,
+    E2ePlatformMybatisConfiguration.class,
+    E2eShedLockConfiguration.class
 })
 @ComponentScan(
-    basePackages = {
-      "io.github.pinpols.batch.e2e.support",
-      "io.github.pinpols.batch.common.spi.task",
-      "io.github.pinpols.batch.common.storage.ingress",
-      "io.github.pinpols.batch.orchestrator",
-      "io.github.pinpols.batch.worker.core",
-      "io.github.pinpols.batch.worker.atomic"
-    },
-    excludeFilters = {
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = BatchOrchestratorApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = BatchWorkerImportApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = BatchWorkerExportApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = BatchWorkerProcessApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = BatchWorkerDispatchApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = BatchWorkerAtomicApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = ImportStepExecutionAdapter.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = ExportStepExecutionAdapter.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = ProcessStepExecutionAdapter.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = DispatchStepExecutionAdapter.class)
-    })
+        basePackages = {
+            "io.github.pinpols.batch.e2e.support",
+            "io.github.pinpols.batch.common.spi.task",
+            "io.github.pinpols.batch.common.storage.ingress",
+            "io.github.pinpols.batch.orchestrator",
+            "io.github.pinpols.batch.worker.core",
+            "io.github.pinpols.batch.worker.atomic"
+        },
+        excludeFilters = {
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchOrchestratorApplication.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerImportApplication.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerExportApplication.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerProcessApplication.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerDispatchApplication.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerAtomicApplication.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = ImportStepExecutionAdapter.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = ExportStepExecutionAdapter.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = ProcessStepExecutionAdapter.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = DispatchStepExecutionAdapter.class)
+        })
 @ImportAutoConfiguration({
-  BatchJsonAutoConfiguration.class,
-  BatchObjectCryptoAutoConfiguration.class,
-  RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "io.github.pinpols.batch")
-@MapperScan(
-    basePackages = "io.github.pinpols.batch.common.mapper",
-    sqlSessionFactoryRef = "sqlSessionFactory")
-@MapperScan(
-    basePackages = "io.github.pinpols.batch.orchestrator.mapper",
-    sqlSessionFactoryRef = "sqlSessionFactory")
-@MapperScan(
-    basePackages = "io.github.pinpols.batch.worker.core.mapper",
-    sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "io.github.pinpols.batch.common.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "io.github.pinpols.batch.orchestrator.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "io.github.pinpols.batch.worker.core.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
 public class E2eAtomicApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(E2eAtomicApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(E2eAtomicApplication.class, args);
+    }
 
-  @Bean(name = "applicationTaskExecutor")
-  public Executor applicationTaskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(2);
-    executor.setMaxPoolSize(4);
-    executor.setThreadNamePrefix("e2e-app-task-");
-    executor.initialize();
-    return executor;
-  }
+    @Bean(name = "applicationTaskExecutor")
+    public Executor applicationTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setThreadNamePrefix("e2e-app-task-");
+        executor.initialize();
+        return executor;
+    }
 
-  @Bean
-  @Primary
-  public PlatformTransactionManager transactionManager(
-      @Qualifier("orchestratorPlatformDataSource") DataSource platformDataSource) {
-    return new DataSourceTransactionManager(platformDataSource);
-  }
+    @Bean
+    @Primary
+    public PlatformTransactionManager transactionManager(
+            @Qualifier("orchestratorPlatformDataSource") DataSource platformDataSource) {
+        return new DataSourceTransactionManager(platformDataSource);
+    }
 }

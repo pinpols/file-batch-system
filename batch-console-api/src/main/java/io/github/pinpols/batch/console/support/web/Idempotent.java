@@ -21,6 +21,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Idempotent {
 
-  /** 当前只有"要求存在"一种语义；未来可扩展为"幂等策略"（如允许 N 分钟窗口 / 仅限指定方法等）。 */
-  boolean required() default true;
+    /** 当前只有"要求存在"一种语义；未来可扩展为"幂等策略"（如允许 N 分钟窗口 / 仅限指定方法等）。 */
+    boolean required() default true;
 }

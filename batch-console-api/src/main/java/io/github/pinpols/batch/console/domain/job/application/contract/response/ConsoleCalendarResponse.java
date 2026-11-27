@@ -14,36 +14,36 @@ import lombok.Builder;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Builder
 public record ConsoleCalendarResponse(
-    Long id,
-    String tenantId,
-    String calendarCode,
-    String calendarName,
-    String timezone,
-    String holidayRollRule,
-    String catchUpPolicy,
-    Integer catchUpMaxDays,
-    Boolean enabled,
-    String description,
-    Instant createdAt,
-    Instant updatedAt) {
+        Long id,
+        String tenantId,
+        String calendarCode,
+        String calendarName,
+        String timezone,
+        String holidayRollRule,
+        String catchUpPolicy,
+        Integer catchUpMaxDays,
+        Boolean enabled,
+        String description,
+        Instant createdAt,
+        Instant updatedAt) {
 
-  public static ConsoleCalendarResponse from(CalendarQueryRow row) {
-    if (EmptyChecks.isNull(row)) {
-      return null;
+    public static ConsoleCalendarResponse from(CalendarQueryRow row) {
+        if (EmptyChecks.isNull(row)) {
+            return null;
+        }
+        return ConsoleCalendarResponse.builder()
+                .id(row.id())
+                .tenantId(row.tenantId())
+                .calendarCode(row.calendarCode())
+                .calendarName(row.calendarName())
+                .timezone(row.timezone())
+                .holidayRollRule(row.holidayRollRule())
+                .catchUpPolicy(row.catchUpPolicy())
+                .catchUpMaxDays(row.catchUpMaxDays())
+                .enabled(row.enabled())
+                .description(row.description())
+                .createdAt(row.createdAt())
+                .updatedAt(row.updatedAt())
+                .build();
     }
-    return ConsoleCalendarResponse.builder()
-        .id(row.id())
-        .tenantId(row.tenantId())
-        .calendarCode(row.calendarCode())
-        .calendarName(row.calendarName())
-        .timezone(row.timezone())
-        .holidayRollRule(row.holidayRollRule())
-        .catchUpPolicy(row.catchUpPolicy())
-        .catchUpMaxDays(row.catchUpMaxDays())
-        .enabled(row.enabled())
-        .description(row.description())
-        .createdAt(row.createdAt())
-        .updatedAt(row.updatedAt())
-        .build();
-  }
 }

@@ -33,83 +33,74 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-    prefix = "batch.timeout",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
+@ConditionalOnProperty(prefix = "batch.timeout", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class JobInstanceTimeoutEnforcer {
 
-  private final JobInstanceMapper jobInstanceMapper;
-  private final BatchOrchestratorGovernanceProperties governance;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final MeterRegistry meterRegistry;
-  private final JobInstanceTerminalStatusApplicationService
-      jobInstanceTerminalStatusApplicationService;
-  private final AtomicBoolean running = new AtomicBoolean(false);
+    private final JobInstanceMapper jobInstanceMapper;
+    private final BatchOrchestratorGovernanceProperties governance;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final MeterRegistry meterRegistry;
+    private final JobInstanceTerminalStatusApplicationService jobInstanceTerminalStatusApplicationService;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
-  @Scheduled(fixedDelayString = "${batch.timeout.poll-interval-millis:60000}")
-  @SchedulerLock(
-      name = "job_instance_timeout_enforce",
-      lockAtMostFor = "PT2M",
-      lockAtLeastFor = "PT10S")
-  public void enforce() {
-    if (gracefulShutdown.isDraining()) {
-      return;
-    }
-    if (!running.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      int batchSize = Math.max(1, governance.timeout().getBatchSize());
-      List<JobInstanceEntity> candidates = jobInstanceMapper.selectTimedOutCandidates(batchSize);
-      if (candidates.isEmpty()) {
-        return;
-      }
-      Instant now = BatchDateTimeSupport.utcNow();
-      int failed = 0;
-      for (JobInstanceEntity ji : candidates) {
-        String terminalStatus = Boolean.TRUE.equals(ji.getDryRun())
-            ? JobInstanceStatus.FAILED_DRY_RUN.code()
-            : JobInstanceStatus.FAILED.code();
-        JobInstanceTerminalStatusCommand cmd = new JobInstanceTerminalStatusCommand(
-            ji.getTenantId(), ji.getId(), terminalStatus, now, ji.getVersion());
-        int rows = RlsTenantContextHolder.runWithTenant(
-            ji.getTenantId(),
-            () -> jobInstanceTerminalStatusApplicationService.enforceTimeoutAndReconcileWorkflow(
-                cmd));
-        if (rows > 0) {
-          failed++;
-          log.warn(
-              "job_instance timeout enforced: id={} tenant={} jobCode={} executionStartedAt={} (mark"
-                  + " FAILED)",
-              ji.getId(),
-              ji.getTenantId(),
-              ji.getJobCode(),
-              ji.getExecutionStartedAt());
-        } else {
-          log.debug(
-              "job_instance timeout CAS miss (concurrent advance): id={} tenant={}",
-              ji.getId(),
-              ji.getTenantId());
+    @Scheduled(fixedDelayString = "${batch.timeout.poll-interval-millis:60000}")
+    @SchedulerLock(name = "job_instance_timeout_enforce", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
+    public void enforce() {
+        if (gracefulShutdown.isDraining()) {
+            return;
         }
-      }
-      if (failed > 0) {
-        log.info("timeout enforcer tick: scanned={} marked_failed={}", candidates.size(), failed);
-        meterRegistry.counter("batch.timeout.enforcer.failed.total").increment(failed);
-      }
-      if (candidates.size() >= batchSize) {
-        log.warn(
-            "timeout enforcer hit batch ceiling: scanned={} batchSize={} — consider raising"
-                + " batch.timeout.batch-size or shortening interval",
-            candidates.size(),
-            batchSize);
-      }
-    } catch (RuntimeException ex) {
-      log.warn("timeout enforcer tick failed", ex);
-    } finally {
-      running.set(false);
+        if (!running.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            int batchSize = Math.max(1, governance.timeout().getBatchSize());
+            List<JobInstanceEntity> candidates = jobInstanceMapper.selectTimedOutCandidates(batchSize);
+            if (candidates.isEmpty()) {
+                return;
+            }
+            Instant now = BatchDateTimeSupport.utcNow();
+            int failed = 0;
+            for (JobInstanceEntity ji : candidates) {
+                String terminalStatus = Boolean.TRUE.equals(ji.getDryRun())
+                        ? JobInstanceStatus.FAILED_DRY_RUN.code()
+                        : JobInstanceStatus.FAILED.code();
+                JobInstanceTerminalStatusCommand cmd = new JobInstanceTerminalStatusCommand(
+                        ji.getTenantId(), ji.getId(), terminalStatus, now, ji.getVersion());
+                int rows = RlsTenantContextHolder.runWithTenant(
+                        ji.getTenantId(),
+                        () -> jobInstanceTerminalStatusApplicationService.enforceTimeoutAndReconcileWorkflow(cmd));
+                if (rows > 0) {
+                    failed++;
+                    log.warn(
+                            "job_instance timeout enforced: id={} tenant={} jobCode={} executionStartedAt={} (mark"
+                                    + " FAILED)",
+                            ji.getId(),
+                            ji.getTenantId(),
+                            ji.getJobCode(),
+                            ji.getExecutionStartedAt());
+                } else {
+                    log.debug(
+                            "job_instance timeout CAS miss (concurrent advance): id={} tenant={}",
+                            ji.getId(),
+                            ji.getTenantId());
+                }
+            }
+            if (failed > 0) {
+                log.info("timeout enforcer tick: scanned={} marked_failed={}", candidates.size(), failed);
+                meterRegistry.counter("batch.timeout.enforcer.failed.total").increment(failed);
+            }
+            if (candidates.size() >= batchSize) {
+                log.warn(
+                        "timeout enforcer hit batch ceiling: scanned={} batchSize={} — consider raising"
+                                + " batch.timeout.batch-size or shortening interval",
+                        candidates.size(),
+                        batchSize);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("timeout enforcer tick failed", ex);
+        } finally {
+            running.set(false);
+        }
     }
-  }
 }

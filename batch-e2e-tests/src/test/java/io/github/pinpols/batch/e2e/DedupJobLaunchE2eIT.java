@@ -42,220 +42,219 @@ import org.springframework.test.context.jdbc.Sql;
  * </ol>
  */
 @E2eSpringBootTest(
-    classes = E2eImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.import.worker-type=IMPORT")
+        classes = E2eImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.import.worker-type=IMPORT")
 @E2eBusinessSchema
 @Sql(
-    scripts = {
-      E2eTestSql.IMPORT_TEMPLATE_SEED,
-    })
+        scripts = {
+            E2eTestSql.IMPORT_TEMPLATE_SEED,
+        })
 @Tag("critical")
 @DisplayName("端到端测试: 同一 Workflow 同一业务日只创建一个活跃 WorkflowRun 并持久化容量等待")
 class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+    @Autowired
+    private WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  /**
-   * 顺序请求：先发起一次，再使用不同的 request_id 和相同的 dedup_key
-   * 重新发起；第二条请求等待容量，且不得创建第二个活跃 WorkflowRun。
-   */
-  @Test
-  @DisplayName("同一 Workflow 串行触发时第二个请求等待容量且只保留一个活跃 run")
-  void shouldKeepSingleInstance_whenSameDedupKeyLaunchedTwice() {
-    final String insertTriggerRequestSql = """
+    /**
+     * 顺序请求：先发起一次，再使用不同的 request_id 和相同的 dedup_key
+     * 重新发起；第二条请求等待容量，且不得创建第二个活跃 WorkflowRun。
+     */
+    @Test
+    @DisplayName("同一 Workflow 串行触发时第二个请求等待容量且只保留一个活跃 run")
+    void shouldKeepSingleInstance_whenSameDedupKeyLaunchedTwice() {
+        final String insertTriggerRequestSql = """
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key,
             request_status, trace_id
         ) values (?, ?, ?, ?, ?, ?, 'ACCEPTED', 'e2e-trace-dedup2')
         """;
-    final String selectCountSql = """
+        final String selectCountSql = """
         select count(*) from batch.workflow_run
         where tenant_id = ? and workflow_definition_id = ? and biz_date = ?
           and run_status in ('CREATED', 'RUNNING') and dry_run = false
         """;
 
-    // Seed: job_definition + workflow_definition + first trigger_request
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
+        // Seed: job_definition + workflow_definition + first trigger_request
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
-    // Insert a second trigger_request that shares the same dedup_key but uses a different
-    // request_id
-    String requestId2 = "e2e-req2-" + Long.toUnsignedString(System.nanoTime());
-    jdbcTemplate.update(
-        insertTriggerRequestSql,
-        TENANT,
-        requestId2,
-        TriggerType.API.code(),
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        seed.dedupKey());
+        // Insert a second trigger_request that shares the same dedup_key but uses a different
+        // request_id
+        String requestId2 = "e2e-req2-" + Long.toUnsignedString(System.nanoTime());
+        jdbcTemplate.update(
+                insertTriggerRequestSql,
+                TENANT,
+                requestId2,
+                TriggerType.API.code(),
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                seed.dedupKey());
 
-    // 只让重试时间到期；状态和完成结果仍由生产投递服务提供。
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-dedup-seq-1",
-        Map.of()));
+        // 只让重试时间到期；状态和完成结果仍由生产投递服务提供。
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-dedup-seq-1",
+                Map.of()));
 
-    // 首次启动会创建根 WorkflowRun。
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        requestId2,
-        "e2e-tr-dedup-seq-2",
-        Map.of()));
+        // 首次启动会创建根 WorkflowRun。
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                requestId2,
+                "e2e-tr-dedup-seq-2",
+                Map.of()));
 
-    Long activeRunCount = jdbcTemplate.queryForObject(
-        selectCountSql, Long.class, TENANT, seed.workflowDefinitionId(), BIZ_DATE);
-    assertThat(activeRunCount).isEqualTo(1L);
-    assertThat(requestStatus(seed.workflowDefinitionId(), seed.dedupKey()))
-        .containsExactlyInAnyOrder("PROCESSING", "LAUNCHED");
-    assertWaitingCount(seed.workflowDefinitionId(), 1L);
-  }
+        Long activeRunCount =
+                jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.workflowDefinitionId(), BIZ_DATE);
+        assertThat(activeRunCount).isEqualTo(1L);
+        assertThat(requestStatus(seed.workflowDefinitionId(), seed.dedupKey()))
+                .containsExactlyInAnyOrder("PROCESSING", "LAUNCHED");
+        assertWaitingCount(seed.workflowDefinitionId(), 1L);
+    }
 
-  /**
-   * 并发请求：两个线程使用相同的 dedup_key 竞争启动同一 Workflow，并在
-   * CountDownLatch 屏障处同步。最终只能有一个活跃 run，另一条请求持久化等待。
-   */
-  @Test
-  @DisplayName("两个线程并发发起同一 Workflow 时只有一个活跃 run 且另一条请求等待容量")
-  void shouldReturnSingleWinner_whenSameDedupKeyLaunchedConcurrently() throws Exception {
-    final String insertTriggerRequestSql = """
+    /**
+     * 并发请求：两个线程使用相同的 dedup_key 竞争启动同一 Workflow，并在
+     * CountDownLatch 屏障处同步。最终只能有一个活跃 run，另一条请求持久化等待。
+     */
+    @Test
+    @DisplayName("两个线程并发发起同一 Workflow 时只有一个活跃 run 且另一条请求等待容量")
+    void shouldReturnSingleWinner_whenSameDedupKeyLaunchedConcurrently() throws Exception {
+        final String insertTriggerRequestSql = """
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key,
             request_status, trace_id
         ) values (?, ?, ?, ?, ?, ?, 'ACCEPTED', 'e2e-trace-dedup-c2')
         """;
-    final String selectCountSql = """
+        final String selectCountSql = """
         select count(*) from batch.workflow_run
         where tenant_id = ? and workflow_definition_id = ? and biz_date = ?
           and run_status in ('CREATED', 'RUNNING') and dry_run = false
         """;
-    final String selectRequestStatusSql = """
+        final String selectRequestStatusSql = """
             select request_status from batch.trigger_request
             where tenant_id = ? and workflow_definition_id = ? and dedup_key = ?
             order by request_status
             """;
 
-    // 准备数据：创建 job_definition、workflow_definition，以及共享同一 dedup_key 的两条 trigger_requests。
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
+        // 准备数据：创建 job_definition、workflow_definition，以及共享同一 dedup_key 的两条 trigger_requests。
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
-    String requestId2 = "e2e-req2-" + Long.toUnsignedString(System.nanoTime());
-    jdbcTemplate.update(
-        insertTriggerRequestSql,
-        TENANT,
-        requestId2,
-        TriggerType.API.code(),
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        seed.dedupKey());
+        String requestId2 = "e2e-req2-" + Long.toUnsignedString(System.nanoTime());
+        jdbcTemplate.update(
+                insertTriggerRequestSql,
+                TENANT,
+                requestId2,
+                TriggerType.API.code(),
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                seed.dedupKey());
 
-    CountDownLatch barrier = new CountDownLatch(2);
-    ExecutorService executor = Executors.newFixedThreadPool(2);
-    AtomicInteger successCount = new AtomicInteger(0);
-    AtomicInteger errorCount = new AtomicInteger(0);
+        CountDownLatch barrier = new CountDownLatch(2);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger errorCount = new AtomicInteger(0);
 
-    try {
-      Future<?> f1 = executor.submit(() -> {
-        barrier.countDown();
         try {
-          barrier.await();
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          return;
-        }
-        try {
-          launchService.launch(new LaunchRequest(
-              TENANT,
-              seed.workflowDefinitionId(),
-              BIZ_DATE,
-              TriggerType.API,
-              seed.requestId(),
-              "e2e-tr-dedup-con-1",
-              Map.of()));
-          successCount.incrementAndGet();
-        } catch (Exception e) {
-          errorCount.incrementAndGet();
-        }
-      });
+            Future<?> f1 = executor.submit(() -> {
+                barrier.countDown();
+                try {
+                    barrier.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                try {
+                    launchService.launch(new LaunchRequest(
+                            TENANT,
+                            seed.workflowDefinitionId(),
+                            BIZ_DATE,
+                            TriggerType.API,
+                            seed.requestId(),
+                            "e2e-tr-dedup-con-1",
+                            Map.of()));
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    errorCount.incrementAndGet();
+                }
+            });
 
-      Future<?> f2 = executor.submit(() -> {
-        barrier.countDown();
-        try {
-          barrier.await();
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          return;
-        }
-        try {
-          launchService.launch(new LaunchRequest(
-              TENANT,
-              seed.workflowDefinitionId(),
-              BIZ_DATE,
-              TriggerType.API,
-              requestId2,
-              "e2e-tr-dedup-con-2",
-              Map.of()));
-          successCount.incrementAndGet();
-        } catch (Exception e) {
-          errorCount.incrementAndGet();
-        }
-      });
+            Future<?> f2 = executor.submit(() -> {
+                barrier.countDown();
+                try {
+                    barrier.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                try {
+                    launchService.launch(new LaunchRequest(
+                            TENANT,
+                            seed.workflowDefinitionId(),
+                            BIZ_DATE,
+                            TriggerType.API,
+                            requestId2,
+                            "e2e-tr-dedup-con-2",
+                            Map.of()));
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    errorCount.incrementAndGet();
+                }
+            });
 
-      f1.get();
-      f2.get();
-    } finally {
-      executor.shutdownNow();
+            f1.get();
+            f2.get();
+        } finally {
+            executor.shutdownNow();
+        }
+
+        // 两次调用均成功返回；活跃名额由数据库约束保护。
+        assertThat(successCount.get()).isEqualTo(2);
+        assertThat(errorCount.get()).isZero();
+
+        // 必须存在活跃的 WorkflowRun 记录。
+        Long activeRunCount =
+                jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.workflowDefinitionId(), BIZ_DATE);
+        assertThat(activeRunCount).isEqualTo(1L);
+
+        // 一条请求已启动，另一条仍在等待容量。
+        List<String> statuses = jdbcTemplate.queryForList(
+                selectRequestStatusSql, String.class, TENANT, seed.workflowDefinitionId(), seed.dedupKey());
+        assertThat(statuses).containsExactlyInAnyOrder("PROCESSING", "LAUNCHED");
+        assertWaitingCount(seed.workflowDefinitionId(), 1L);
     }
 
-    // 两次调用均成功返回；活跃名额由数据库约束保护。
-    assertThat(successCount.get()).isEqualTo(2);
-    assertThat(errorCount.get()).isZero();
-
-    // 必须存在活跃的 WorkflowRun 记录。
-    Long activeRunCount = jdbcTemplate.queryForObject(
-        selectCountSql, Long.class, TENANT, seed.workflowDefinitionId(), BIZ_DATE);
-    assertThat(activeRunCount).isEqualTo(1L);
-
-    // 一条请求已启动，另一条仍在等待容量。
-    List<String> statuses = jdbcTemplate.queryForList(
-        selectRequestStatusSql, String.class, TENANT, seed.workflowDefinitionId(), seed.dedupKey());
-    assertThat(statuses).containsExactlyInAnyOrder("PROCESSING", "LAUNCHED");
-    assertWaitingCount(seed.workflowDefinitionId(), 1L);
-  }
-
-  private List<String> requestStatus(Long workflowDefinitionId, String dedupKey) {
-    final String selectRequestStatusSql = """
+    private List<String> requestStatus(Long workflowDefinitionId, String dedupKey) {
+        final String selectRequestStatusSql = """
         select request_status from batch.trigger_request
         where tenant_id = ? and workflow_definition_id = ? and dedup_key = ?
         """;
 
-    return jdbcTemplate.queryForList(
-        selectRequestStatusSql, String.class, TENANT, workflowDefinitionId, dedupKey);
-  }
+        return jdbcTemplate.queryForList(selectRequestStatusSql, String.class, TENANT, workflowDefinitionId, dedupKey);
+    }
 
-  private void assertWaitingCount(Long workflowDefinitionId, long expected) {
-    final String selectWaitingCountSql = """
+    private void assertWaitingCount(Long workflowDefinitionId, long expected) {
+        final String selectWaitingCountSql = """
         select count(*) from batch.workflow_launch_wait
         where tenant_id = ? and workflow_definition_id = ? and biz_date = ?
           and dry_run = false and wait_status = 'WAITING'
         """;
-    Long waitingCount = jdbcTemplate.queryForObject(
-        selectWaitingCountSql, Long.class, TENANT, workflowDefinitionId, BIZ_DATE);
-    assertThat(waitingCount).isEqualTo(expected);
-  }
+        Long waitingCount =
+                jdbcTemplate.queryForObject(selectWaitingCountSql, Long.class, TENANT, workflowDefinitionId, BIZ_DATE);
+        assertThat(waitingCount).isEqualTo(expected);
+    }
 }

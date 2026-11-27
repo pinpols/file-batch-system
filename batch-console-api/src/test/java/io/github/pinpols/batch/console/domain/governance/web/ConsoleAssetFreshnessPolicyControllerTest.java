@@ -34,72 +34,57 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAssetFreshnessPolicyControllerTest {
 
-  @Mock
-  private ConsoleAssetFreshnessPolicyService policyService;
+    @Mock
+    private ConsoleAssetFreshnessPolicyService policyService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleAssetFreshnessPolicyController(policyService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleAssetFreshnessPolicyController(policyService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("查询策略列表时, 响应返回资产编码与严重级别")
-  void shouldListPolicies() throws Exception {
-    AssetFreshnessPolicyResponse entity = new AssetFreshnessPolicyResponse(
-        1L,
-        "t1",
-        "JOB_A",
-        "JOB",
-        LocalTime.of(2, 0),
-        "Asia/Shanghai",
-        300,
-        2,
-        "WARN",
-        true,
-        null,
-        null);
-    when(policyService.list("t1", "JOB_A", true, 1, 15))
-        .thenReturn(new PageResponse<>(1L, 1, 15, List.of(entity)));
+    @Test
+    @DisplayName("查询策略列表时, 响应返回资产编码与严重级别")
+    void shouldListPolicies() throws Exception {
+        AssetFreshnessPolicyResponse entity = new AssetFreshnessPolicyResponse(
+                1L, "t1", "JOB_A", "JOB", LocalTime.of(2, 0), "Asia/Shanghai", 300, 2, "WARN", true, null, null);
+        when(policyService.list("t1", "JOB_A", true, 1, 15)).thenReturn(new PageResponse<>(1L, 1, 15, List.of(entity)));
 
-    mockMvc
-        .perform(get("/api/console/asset-freshness-policies")
-            .param("tenantId", "t1")
-            .param("assetCode", "JOB_A")
-            .param("enabled", "true"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.items[0].assetCode").value("JOB_A"))
-        .andExpect(jsonPath("$.data.items[0].severity").value("WARN"))
-        .andExpect(jsonPath("$.data.total").value(1));
-  }
+        mockMvc.perform(get("/api/console/asset-freshness-policies")
+                        .param("tenantId", "t1")
+                        .param("assetCode", "JOB_A")
+                        .param("enabled", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.items[0].assetCode").value("JOB_A"))
+                .andExpect(jsonPath("$.data.items[0].severity").value("WARN"))
+                .andExpect(jsonPath("$.data.total").value(1));
+    }
 
-  @Test
-  @DisplayName("创建策略时, 请求体字段组装成服务入参")
-  void shouldCreatePolicy() throws Exception {
-    mockMvc
-        .perform(post("/api/console/asset-freshness-policies")
-            .param("tenantId", "t1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("创建策略时, 请求体字段组装成服务入参")
+    void shouldCreatePolicy() throws Exception {
+        mockMvc.perform(post("/api/console/asset-freshness-policies")
+                        .param("tenantId", "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "assetCode":"JOB_A",
                       "expectedByLocalTime":"02:00:00",
@@ -110,30 +95,29 @@ class ConsoleAssetFreshnessPolicyControllerTest {
                       "enabled":true
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(policyService)
-        .upsert(AssetFreshnessPolicyUpsertCommand.builder()
-            .tenantId("t1")
-            .assetCode("JOB_A")
-            .expectedByLocalTime(LocalTime.of(2, 0))
-            .timezone("Asia/Shanghai")
-            .staleAfterSeconds(300)
-            .lookbackDays(2)
-            .severity("WARN")
-            .enabled(true)
-            .build());
-  }
+        verify(policyService)
+                .upsert(AssetFreshnessPolicyUpsertCommand.builder()
+                        .tenantId("t1")
+                        .assetCode("JOB_A")
+                        .expectedByLocalTime(LocalTime.of(2, 0))
+                        .timezone("Asia/Shanghai")
+                        .staleAfterSeconds(300)
+                        .lookbackDays(2)
+                        .severity("WARN")
+                        .enabled(true)
+                        .build());
+    }
 
-  @Test
-  @DisplayName("回溯天数超出允许范围时, 返回参数错误")
-  void create_returns400_whenLookbackDaysOutOfRange() throws Exception {
-    mockMvc
-        .perform(post("/api/console/asset-freshness-policies")
-            .param("tenantId", "t1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("回溯天数超出允许范围时, 返回参数错误")
+    void create_returns400_whenLookbackDaysOutOfRange() throws Exception {
+        mockMvc.perform(post("/api/console/asset-freshness-policies")
+                        .param("tenantId", "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "assetCode":"JOB_A",
                       "expectedByLocalTime":"02:00:00",
@@ -144,17 +128,16 @@ class ConsoleAssetFreshnessPolicyControllerTest {
                       "enabled":true
                     }
                     """))
-        .andExpect(status().isBadRequest());
-  }
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  @DisplayName("资产编码为空时, 返回参数错误")
-  void create_returns400_whenAssetCodeBlank() throws Exception {
-    mockMvc
-        .perform(post("/api/console/asset-freshness-policies")
-            .param("tenantId", "t1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("资产编码为空时, 返回参数错误")
+    void create_returns400_whenAssetCodeBlank() throws Exception {
+        mockMvc.perform(post("/api/console/asset-freshness-policies")
+                        .param("tenantId", "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "assetCode":"",
                       "expectedByLocalTime":"02:00:00",
@@ -165,20 +148,19 @@ class ConsoleAssetFreshnessPolicyControllerTest {
                       "enabled":true
                     }
                     """))
-        .andExpect(status().isBadRequest());
-  }
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  @DisplayName("启停策略时, 租户、策略标识与目标状态传给服务")
-  void shouldTogglePolicy() throws Exception {
-    mockMvc
-        .perform(patch("/api/console/asset-freshness-policies/9/enabled")
-            .param("tenantId", "t1")
-            .contentType(APPLICATION_JSON)
-            .content("{\"enabled\":false}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
+    @Test
+    @DisplayName("启停策略时, 租户、策略标识与目标状态传给服务")
+    void shouldTogglePolicy() throws Exception {
+        mockMvc.perform(patch("/api/console/asset-freshness-policies/9/enabled")
+                        .param("tenantId", "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"enabled\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(policyService).setEnabled("t1", 9L, false);
-  }
+        verify(policyService).setEnabled("t1", 9L, false);
+    }
 }

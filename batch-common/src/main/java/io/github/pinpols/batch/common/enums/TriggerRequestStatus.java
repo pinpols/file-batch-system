@@ -9,20 +9,20 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum TriggerRequestStatus implements DictEnum {
-  PENDING("PENDING", "待处理"),
-  PROCESSING("PROCESSING", "处理中"),
-  ACCEPTED("ACCEPTED", "已接收"),
-  WAITING("WAITING", "等待中"),
-  LAUNCHED("LAUNCHED", "已派发"),
-  REJECTED("REJECTED", "已拒绝"),
-  DUPLICATE("DUPLICATE", "重复请求"),
-  FORWARD_FAILED("FORWARD_FAILED", "转发失败"),
-  GIVE_UP("GIVE_UP", "已放弃");
+    PENDING("PENDING", "待处理"),
+    PROCESSING("PROCESSING", "处理中"),
+    ACCEPTED("ACCEPTED", "已接收"),
+    WAITING("WAITING", "等待中"),
+    LAUNCHED("LAUNCHED", "已派发"),
+    REJECTED("REJECTED", "已拒绝"),
+    DUPLICATE("DUPLICATE", "重复请求"),
+    FORWARD_FAILED("FORWARD_FAILED", "转发失败"),
+    GIVE_UP("GIVE_UP", "已放弃");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 
-  public static TriggerRequestStatus fromCodeOrNull(String value) {
-    return DictEnum.fromCode(TriggerRequestStatus.class, value);
-  }
+    public static TriggerRequestStatus fromCodeOrNull(String value) {
+        return DictEnum.fromCode(TriggerRequestStatus.class, value);
+    }
 }

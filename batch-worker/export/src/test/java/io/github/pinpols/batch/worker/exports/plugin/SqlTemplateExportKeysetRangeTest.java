@@ -10,51 +10,48 @@ import org.junit.jupiter.api.Test;
 @DisplayName("模板导出 keyset 区间分页语句生成单测:区间谓词边界,回退与游标谓词共存语义")
 class SqlTemplateExportKeysetRangeTest {
 
-  private static final String BASE_SQL = "SELECT id FROM biz.t WHERE tenant_id = :tenantId";
+    private static final String BASE_SQL = "SELECT id FROM biz.t WHERE tenant_id = :tenantId";
 
-  @Test
-  @DisplayName("active 非末片 → 区间谓词 [loN, hiN)，不退 hashtext")
-  void shouldEmitRangePredicate_whenActiveNonLastPartition() {
-    ExportKeysetRange range =
-        new ExportKeysetRange(true, new BigDecimal("0"), new BigDecimal("25"), false, 4, 1);
+    @Test
+    @DisplayName("active 非末片 → 区间谓词 [loN, hiN)，不退 hashtext")
+    void shouldEmitRangePredicate_whenActiveNonLastPartition() {
+        ExportKeysetRange range = new ExportKeysetRange(true, new BigDecimal("0"), new BigDecimal("25"), false, 4, 1);
 
-    String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", false, range);
+        String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", false, range);
 
-    assertThat(sql)
-        .contains("base.\"id\" >= :__loN")
-        .contains("base.\"id\" < :__hiN")
-        .doesNotContain("hashtext");
-  }
+        assertThat(sql)
+                .contains("base.\"id\" >= :__loN")
+                .contains("base.\"id\" < :__hiN")
+                .doesNotContain("hashtext");
+    }
 
-  @Test
-  @DisplayName("active 末片 includeUpper=true → 含上界 <=")
-  void shouldEmitInclusiveUpper_whenLastPartition() {
-    ExportKeysetRange range =
-        new ExportKeysetRange(true, new BigDecimal("75"), new BigDecimal("100"), true, 4, 4);
+    @Test
+    @DisplayName("active 末片 includeUpper=true → 含上界 <=")
+    void shouldEmitInclusiveUpper_whenLastPartition() {
+        ExportKeysetRange range = new ExportKeysetRange(true, new BigDecimal("75"), new BigDecimal("100"), true, 4, 4);
 
-    String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", false, range);
+        String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", false, range);
 
-    assertThat(sql).contains("base.\"id\" <= :__hiN").doesNotContain("hashtext");
-  }
+        assertThat(sql).contains("base.\"id\" <= :__hiN").doesNotContain("hashtext");
+    }
 
-  @Test
-  @DisplayName("inactive → 退回 hashtext 分片谓词，不含区间参数")
-  void shouldFallBackToHashtext_whenInactive() {
-    ExportKeysetRange range = ExportKeysetRange.inactiveFor(4, 2);
+    @Test
+    @DisplayName("inactive → 退回 hashtext 分片谓词，不含区间参数")
+    void shouldFallBackToHashtext_whenInactive() {
+        ExportKeysetRange range = ExportKeysetRange.inactiveFor(4, 2);
 
-    String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", false, range);
+        String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", false, range);
 
-    assertThat(sql).contains("hashtext").doesNotContain(":__loN");
-  }
+        assertThat(sql).contains("hashtext").doesNotContain(":__loN");
+    }
 
-  @Test
-  @DisplayName("active + hasCursor → 区间谓词与游标谓词共存")
-  void shouldCombineRangeAndCursor_whenActiveWithCursor() {
-    ExportKeysetRange range =
-        new ExportKeysetRange(true, new BigDecimal("0"), new BigDecimal("25"), false, 4, 1);
+    @Test
+    @DisplayName("active + hasCursor → 区间谓词与游标谓词共存")
+    void shouldCombineRangeAndCursor_whenActiveWithCursor() {
+        ExportKeysetRange range = new ExportKeysetRange(true, new BigDecimal("0"), new BigDecimal("25"), false, 4, 1);
 
-    String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", true, range);
+        String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", true, range);
 
-    assertThat(sql).contains("base.\"id\" > :__cursor").contains("base.\"id\" < :__hiN");
-  }
+        assertThat(sql).contains("base.\"id\" > :__cursor").contains("base.\"id\" < :__hiN");
+    }
 }

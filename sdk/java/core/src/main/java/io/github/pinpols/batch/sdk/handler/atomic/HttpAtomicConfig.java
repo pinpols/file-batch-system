@@ -14,32 +14,30 @@ import java.util.Set;
  * @param maxResponseBytes 响应体最大字节数,超出截断(默认 1MB)
  */
 public record HttpAtomicConfig(
-    String taskType,
-    boolean blockPrivateIps,
-    Set<String> blockedHostPatterns,
-    Set<String> allowedMethods,
-    int timeoutSeconds,
-    int maxResponseBytes) {
+        String taskType,
+        boolean blockPrivateIps,
+        Set<String> blockedHostPatterns,
+        Set<String> allowedMethods,
+        int timeoutSeconds,
+        int maxResponseBytes) {
 
-  private static final Set<String> DEFAULT_METHODS =
-      Set.of("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD");
+    private static final Set<String> DEFAULT_METHODS = Set.of("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD");
 
-  public HttpAtomicConfig {
-    Objects.requireNonNull(taskType, "taskType");
-    blockedHostPatterns = blockedHostPatterns == null ? Set.of() : Set.copyOf(blockedHostPatterns);
-    allowedMethods = allowedMethods == null || allowedMethods.isEmpty()
-        ? DEFAULT_METHODS
-        : Set.copyOf(allowedMethods);
-    if (timeoutSeconds <= 0) {
-      throw new IllegalArgumentException("timeoutSeconds must be > 0");
+    public HttpAtomicConfig {
+        Objects.requireNonNull(taskType, "taskType");
+        blockedHostPatterns = blockedHostPatterns == null ? Set.of() : Set.copyOf(blockedHostPatterns);
+        allowedMethods =
+                allowedMethods == null || allowedMethods.isEmpty() ? DEFAULT_METHODS : Set.copyOf(allowedMethods);
+        if (timeoutSeconds <= 0) {
+            throw new IllegalArgumentException("timeoutSeconds must be > 0");
+        }
+        if (maxResponseBytes <= 0) {
+            throw new IllegalArgumentException("maxResponseBytes must be > 0");
+        }
     }
-    if (maxResponseBytes <= 0) {
-      throw new IllegalArgumentException("maxResponseBytes must be > 0");
-    }
-  }
 
-  /** 以指定 taskType 构造默认配置(blockPrivateIps=true,默认 method 全集,30s,1MB)。 */
-  public static HttpAtomicConfig defaults(String taskType) {
-    return new HttpAtomicConfig(taskType, true, Set.of(), DEFAULT_METHODS, 30, 1024 * 1024);
-  }
+    /** 以指定 taskType 构造默认配置(blockPrivateIps=true,默认 method 全集,30s,1MB)。 */
+    public static HttpAtomicConfig defaults(String taskType) {
+        return new HttpAtomicConfig(taskType, true, Set.of(), DEFAULT_METHODS, 30, 1024 * 1024);
+    }
 }

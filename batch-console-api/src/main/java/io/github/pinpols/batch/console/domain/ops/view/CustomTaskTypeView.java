@@ -12,15 +12,15 @@ import lombok.Data;
 @Data
 public class CustomTaskTypeView {
 
-  private Long id;
-  private String tenantId;
-  private String taskTypeCode;
-  private String displayName;
-  private String descriptor;
-  private String descriptorVersion;
-  private String source;
-  private String declaredByWorkerCode;
-  private String status;
-  private Instant firstDeclaredAt;
-  private Instant lastDeclaredAt;
+    private Long id;
+    private String tenantId;
+    private String taskTypeCode;
+    private String displayName;
+    private String descriptor;
+    private String descriptorVersion;
+    private String source;
+    private String declaredByWorkerCode;
+    private String status;
+    private Instant firstDeclaredAt;
+    private Instant lastDeclaredAt;
 }

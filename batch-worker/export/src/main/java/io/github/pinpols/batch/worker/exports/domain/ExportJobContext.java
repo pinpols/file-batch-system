@@ -9,11 +9,11 @@ import lombok.Data;
 @Data
 public class ExportJobContext implements ExecutionContext {
 
-  private String tenantId;
-  private String jobCode;
-  private String bizDate;
-  private String fileId;
-  private String workerId;
-  private String rawPayload;
-  private Map<String, Object> attributes = new LinkedHashMap<>();
+    private String tenantId;
+    private String jobCode;
+    private String bizDate;
+    private String fileId;
+    private String workerId;
+    private String rawPayload;
+    private Map<String, Object> attributes = new LinkedHashMap<>();
 }

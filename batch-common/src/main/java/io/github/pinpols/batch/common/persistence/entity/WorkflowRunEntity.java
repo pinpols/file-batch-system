@@ -9,33 +9,33 @@ import lombok.Data;
 @Data
 public class WorkflowRunEntity implements Stateful {
 
-  private Long id;
-  private String tenantId;
-  private Long workflowDefinitionId;
-  private Long singleJobDefinitionId;
-  private Long relatedJobInstanceId;
-  private Long triggerRequestId;
-  private Integer workflowVersionSnapshot;
-  private LocalDate bizDate;
-  private Instant dataIntervalStart;
-  private Instant dataIntervalEnd;
-  private String executionSnapshot;
-  private String runStatus;
-  private String currentNodeCode;
-  private String traceId;
-  private Instant startedAt;
-  private Instant finishedAt;
-  private Instant createdAt;
-  private Instant updatedAt;
+    private Long id;
+    private String tenantId;
+    private Long workflowDefinitionId;
+    private Long singleJobDefinitionId;
+    private Long relatedJobInstanceId;
+    private Long triggerRequestId;
+    private Integer workflowVersionSnapshot;
+    private LocalDate bizDate;
+    private Instant dataIntervalStart;
+    private Instant dataIntervalEnd;
+    private String executionSnapshot;
+    private String runStatus;
+    private String currentNodeCode;
+    private String traceId;
+    private Instant startedAt;
+    private Instant finishedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
 
-  /** ADR-026 dry-run 演练标记；与 batch_day_instance.dry_run / job_instance.dry_run 必须一致。 */
-  private Boolean dryRun;
+    /** ADR-026 dry-run 演练标记；与 batch_day_instance.dry_run / job_instance.dry_run 必须一致。 */
+    private Boolean dryRun;
 
-  /** ADR-050 活跃槽位（1..定义上限）；仅 CREATED/RUNNING 参与唯一约束。 */
-  private Integer activeSlot;
+    /** ADR-050 活跃槽位（1..定义上限）；仅 CREATED/RUNNING 参与唯一约束。 */
+    private Integer activeSlot;
 
-  @Override
-  public String getStatus() {
-    return runStatus;
-  }
+    @Override
+    public String getStatus() {
+        return runStatus;
+    }
 }

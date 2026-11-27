@@ -40,138 +40,136 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *       空转——下游不会收到重复事件。
  * </ol>
  */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("崩溃与重投场景下的精确一次不变量,验证重复回报,陈旧版本写入与重复事件入账在真实数据库上的收敛")
 class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 12, 20);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.of(2026, 12, 20);
 
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
+    @Autowired
+    private JobTaskMapper jobTaskMapper;
 
-  @Autowired
-  private OutboxEventMapper outboxEventMapper;
+    @Autowired
+    private OutboxEventMapper outboxEventMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Test
-  @DisplayName("REPORT 重投只生效一次,重复回报被终态 CAS 空转,版本只 +1")
-  void replayedReport_appliedExactlyOnce_whenFinishDeliveredTwice() {
-    long taskId = insertRunningTask("replay-finish-" + System.nanoTime());
-    try {
-      // arrange:task RUNNING、version=0
+    @Test
+    @DisplayName("REPORT 重投只生效一次,重复回报被终态 CAS 空转,版本只 +1")
+    void replayedReport_appliedExactlyOnce_whenFinishDeliveredTwice() {
+        long taskId = insertRunningTask("replay-finish-" + System.nanoTime());
+        try {
+            // arrange:task RUNNING、version=0
 
-      // act:同一份 REPORT(SUCCESS)投递两次,模拟 Kafka 重投
-      JobTaskEntity first = finishToSuccess(taskId, 0L);
-      JobTaskEntity second = finishToSuccess(taskId, 0L); // 重投:task 已非 RUNNING、version 已变
+            // act:同一份 REPORT(SUCCESS)投递两次,模拟 Kafka 重投
+            JobTaskEntity first = finishToSuccess(taskId, 0L);
+            JobTaskEntity second = finishToSuccess(taskId, 0L); // 重投:task 已非 RUNNING、version 已变
 
-      // assert:恰好一次被接受;状态只前进一次,版本 0→1
-      assertThat(first).as("首次 REPORT 应被接受").isNotNull();
-      assertThat(second).as("重投 REPORT 必须被终态 CAS 拒绝(幂等空转)").isNull();
-      assertThat(taskStatus(taskId)).isEqualTo(TaskStatus.SUCCESS.code());
-      assertThat(taskVersion(taskId)).as("版本只前进一次,无重复推进").isEqualTo(1L);
-    } finally {
-      cleanupTask(taskId);
+            // assert:恰好一次被接受;状态只前进一次,版本 0→1
+            assertThat(first).as("首次 REPORT 应被接受").isNotNull();
+            assertThat(second).as("重投 REPORT 必须被终态 CAS 拒绝(幂等空转)").isNull();
+            assertThat(taskStatus(taskId)).isEqualTo(TaskStatus.SUCCESS.code());
+            assertThat(taskVersion(taskId)).as("版本只前进一次,无重复推进").isEqualTo(1L);
+        } finally {
+            cleanupTask(taskId);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("GC-pause 旧 leader 的陈旧回报被拒,乐观锁不让覆盖已落定终态")
-  void staleLeaderReport_rejected_whenVersionAlreadyAdvanced() {
-    long taskId = insertRunningTask("stale-leader-" + System.nanoTime());
-    try {
-      // arrange:新 leader 已把任务 REPORT 成 SUCCESS,version 0→1
-      assertThat(finishToSuccess(taskId, 0L)).isNotNull();
+    @Test
+    @DisplayName("GC-pause 旧 leader 的陈旧回报被拒,乐观锁不让覆盖已落定终态")
+    void staleLeaderReport_rejected_whenVersionAlreadyAdvanced() {
+        long taskId = insertRunningTask("stale-leader-" + System.nanoTime());
+        try {
+            // arrange:新 leader 已把任务 REPORT 成 SUCCESS,version 0→1
+            assertThat(finishToSuccess(taskId, 0L)).isNotNull();
 
-      // act:GC-pause 复活的旧 leader 拿着陈旧 version=0 试图把它写成 FAILED
-      int stale = jobTaskMapper.updateStatus(UpdateTaskStatusParam.withDefaultTerminals()
-          .tenantId(TENANT)
-          .id(taskId)
-          .taskStatus(TaskStatus.FAILED.code())
-          .expectedVersion(0L)
-          .build());
+            // act:GC-pause 复活的旧 leader 拿着陈旧 version=0 试图把它写成 FAILED
+            int stale = jobTaskMapper.updateStatus(UpdateTaskStatusParam.withDefaultTerminals()
+                    .tenantId(TENANT)
+                    .id(taskId)
+                    .taskStatus(TaskStatus.FAILED.code())
+                    .expectedVersion(0L)
+                    .build());
 
-      // assert:陈旧写被乐观锁拒绝;终态仍是新 leader 落定的 SUCCESS
-      assertThat(stale).as("陈旧版本号的写入必须被 version CAS 拒绝").isZero();
-      assertThat(taskStatus(taskId)).isEqualTo(TaskStatus.SUCCESS.code());
-      assertThat(taskVersion(taskId)).isEqualTo(1L);
-    } finally {
-      cleanupTask(taskId);
+            // assert:陈旧写被乐观锁拒绝;终态仍是新 leader 落定的 SUCCESS
+            assertThat(stale).as("陈旧版本号的写入必须被 version CAS 拒绝").isZero();
+            assertThat(taskStatus(taskId)).isEqualTo(TaskStatus.SUCCESS.code());
+            assertThat(taskVersion(taskId)).isEqualTo(1L);
+        } finally {
+            cleanupTask(taskId);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("不重复出账,重投的同一 outbox 事件第二次 insert 被 (tenant_id, event_key) 幂等空转")
-  void duplicateOutboxEvent_dedupedByEventKey_noDoubleEmit() {
-    final String selectCountSql = """
+    @Test
+    @DisplayName("不重复出账,重投的同一 outbox 事件第二次 insert 被 (tenant_id, event_key) 幂等空转")
+    void duplicateOutboxEvent_dedupedByEventKey_noDoubleEmit() {
+        final String selectCountSql = """
         SELECT count(*) FROM batch.outbox_event WHERE tenant_id = ? AND event_key = ?
     """;
-    final String deleteOutboxEventSql = """
+        final String deleteOutboxEventSql = """
         DELETE FROM batch.outbox_event WHERE tenant_id = ? AND event_key = ?
     """;
 
-    String eventKey = "EVT_" + System.nanoTime();
-    try {
-      // act:同一事件(同 event_key)投递两次,模拟重投/重放
-      int first = outboxEventMapper.insert(newOutboxEvent(eventKey));
-      int second = outboxEventMapper.insert(newOutboxEvent(eventKey));
+        String eventKey = "EVT_" + System.nanoTime();
+        try {
+            // act:同一事件(同 event_key)投递两次,模拟重投/重放
+            int first = outboxEventMapper.insert(newOutboxEvent(eventKey));
+            int second = outboxEventMapper.insert(newOutboxEvent(eventKey));
 
-      // assert:第二次空转;DB 中该 (tenant_id,event_key) 只有一行 → 下游不会重复出账
-      assertThat(first).as("首次 outbox 写入应成功").isEqualTo(1);
-      assertThat(second).as("重投的同 event_key 第二次 insert 必须空转").isZero();
-      Integer rows = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, eventKey);
-      assertThat(rows).as("同一事件键全局只一行").isEqualTo(1);
-    } finally {
-      jdbcTemplate.update(deleteOutboxEventSql, TENANT, eventKey);
+            // assert:第二次空转;DB 中该 (tenant_id,event_key) 只有一行 → 下游不会重复出账
+            assertThat(first).as("首次 outbox 写入应成功").isEqualTo(1);
+            assertThat(second).as("重投的同 event_key 第二次 insert 必须空转").isZero();
+            Integer rows = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, eventKey);
+            assertThat(rows).as("同一事件键全局只一行").isEqualTo(1);
+        } finally {
+            jdbcTemplate.update(deleteOutboxEventSql, TENANT, eventKey);
+        }
     }
-  }
 
-  // ── helpers ────────────────────────────────────────────────────────────
+    // ── helpers ────────────────────────────────────────────────────────────
 
-  private JobTaskEntity finishToSuccess(long taskId, long expectedVersion) {
-    return jobTaskMapper.finishTask(FinishTaskParam.builder()
-        .tenantId(TENANT)
-        .id(taskId)
-        .taskStatus(TaskStatus.SUCCESS.code())
-        .expectedStatus(TaskStatus.RUNNING.code())
-        .resultSummary(null)
-        .errorCode(null)
-        .errorMessage(null)
-        .expectedVersion(expectedVersion)
-        .build());
-  }
+    private JobTaskEntity finishToSuccess(long taskId, long expectedVersion) {
+        return jobTaskMapper.finishTask(FinishTaskParam.builder()
+                .tenantId(TENANT)
+                .id(taskId)
+                .taskStatus(TaskStatus.SUCCESS.code())
+                .expectedStatus(TaskStatus.RUNNING.code())
+                .resultSummary(null)
+                .errorCode(null)
+                .errorMessage(null)
+                .expectedVersion(expectedVersion)
+                .build());
+    }
 
-  private OutboxEventEntity newOutboxEvent(String eventKey) {
-    OutboxEventEntity e = new OutboxEventEntity();
-    e.setTenantId(TENANT);
-    e.setAggregateType("JOB_TASK");
-    e.setAggregateId(1L);
-    e.setEventType("TASK_COMPLETED");
-    e.setEventKey(eventKey);
-    e.setPayloadJson("{}");
-    e.setPublishStatus("NEW");
-    e.setPublishAttempt(0);
-    e.setPriority(5);
-    return e;
-  }
+    private OutboxEventEntity newOutboxEvent(String eventKey) {
+        OutboxEventEntity e = new OutboxEventEntity();
+        e.setTenantId(TENANT);
+        e.setAggregateType("JOB_TASK");
+        e.setAggregateId(1L);
+        e.setEventType("TASK_COMPLETED");
+        e.setEventKey(eventKey);
+        e.setPayloadJson("{}");
+        e.setPublishStatus("NEW");
+        e.setPublishAttempt(0);
+        e.setPriority(5);
+        return e;
+    }
 
-  /** 用裸 JDBC 造一条 RUNNING、version=0 的 job_task(连带最小依赖行),返回 taskId。 */
-  private long insertRunningTask(String suffix) {
-    final String insertJobInstanceSql = """
+    /** 用裸 JDBC 造一条 RUNNING、version=0 的 job_task(连带最小依赖行),返回 taskId。 */
+    private long insertRunningTask(String suffix) {
+        final String insertJobInstanceSql = """
               INSERT INTO batch.job_instance (
                   tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
                   trigger_type, instance_status, dedup_key, biz_date
               ) VALUES (?, ?, ?, ?, ?, 'EVENT', 'RUNNING', ?, ?)
               RETURNING id
               """;
-    final String selectIdSql = """
+        final String selectIdSql = """
         select id from batch.job_definition where tenant_id = ? and job_code = ?
     """;
-    final String insertJobTaskSql = """
+        final String insertJobTaskSql = """
               INSERT INTO batch.job_task (
                   tenant_id, job_instance_id, job_instance_biz_date, task_type, task_seq, task_status, version
               ) VALUES (?, ?, (SELECT biz_date FROM batch.job_instance WHERE tenant_id = ?\s\
@@ -179,76 +177,73 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
               RETURNING id
               """;
 
-    WorkflowLaunchSeed workflow = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
-        jdbcTemplate, TENANT, "GENERAL", "DEFAULT", TriggerType.MANUAL, BIZ_DATE);
-    WorkflowChildTriggerSeed child = LaunchIntegrationFixture.prepareWorkflowChildTriggerRequest(
-        jdbcTemplate, TENANT, workflow, BIZ_DATE, TriggerType.MANUAL);
-    Long jobInstanceId = jdbcTemplate.queryForObject(
-        insertJobInstanceSql,
-        Long.class,
-        TENANT,
-        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, workflow.jobCode()),
-        child.triggerRequestId(),
-        workflow.jobCode(),
-        "INST_" + suffix,
-        "DEDUP_" + suffix,
-        BIZ_DATE);
-    return jdbcTemplate.queryForObject(
-        insertJobTaskSql, Long.class, TENANT, jobInstanceId, TENANT, jobInstanceId);
-  }
+        WorkflowLaunchSeed workflow = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+                jdbcTemplate, TENANT, "GENERAL", "DEFAULT", TriggerType.MANUAL, BIZ_DATE);
+        WorkflowChildTriggerSeed child = LaunchIntegrationFixture.prepareWorkflowChildTriggerRequest(
+                jdbcTemplate, TENANT, workflow, BIZ_DATE, TriggerType.MANUAL);
+        Long jobInstanceId = jdbcTemplate.queryForObject(
+                insertJobInstanceSql,
+                Long.class,
+                TENANT,
+                jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, workflow.jobCode()),
+                child.triggerRequestId(),
+                workflow.jobCode(),
+                "INST_" + suffix,
+                "DEDUP_" + suffix,
+                BIZ_DATE);
+        return jdbcTemplate.queryForObject(insertJobTaskSql, Long.class, TENANT, jobInstanceId, TENANT, jobInstanceId);
+    }
 
-  private String taskStatus(long taskId) {
-    final String selectTaskStatusSql = """
+    private String taskStatus(long taskId) {
+        final String selectTaskStatusSql = """
         SELECT task_status FROM batch.job_task WHERE id = ?
     """;
 
-    return jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, taskId);
-  }
+        return jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, taskId);
+    }
 
-  private long taskVersion(long taskId) {
-    final String selectVersionSql = """
+    private long taskVersion(long taskId) {
+        final String selectVersionSql = """
         SELECT version FROM batch.job_task WHERE id = ?
     """;
 
-    return jdbcTemplate.queryForObject(selectVersionSql, Long.class, taskId);
-  }
+        return jdbcTemplate.queryForObject(selectVersionSql, Long.class, taskId);
+    }
 
-  private void cleanupTask(long taskId) {
-    final String selectJobInstanceIdSql = """
+    private void cleanupTask(long taskId) {
+        final String selectJobInstanceIdSql = """
         SELECT job_instance_id FROM batch.job_task WHERE id = ?
     """;
-    final String deleteJobTaskSql = """
+        final String deleteJobTaskSql = """
       DELETE FROM batch.job_task WHERE id = ?
   """;
-    final String selectTriggerRequestIdSql = """
+        final String selectTriggerRequestIdSql = """
       SELECT trigger_request_id FROM batch.job_instance WHERE id = ?
   """;
-    final String selectParentWorkflowRunIdSql = """
+        final String selectParentWorkflowRunIdSql = """
       SELECT parent_workflow_run_id FROM batch.trigger_request WHERE id = ?
   """;
-    final String selectTriggerRequestIdSql2 = """
+        final String selectTriggerRequestIdSql2 = """
       SELECT trigger_request_id FROM batch.workflow_run WHERE id = ?
   """;
-    final String deleteJobInstanceSql = """
+        final String deleteJobInstanceSql = """
         DELETE FROM batch.job_instance WHERE id = ?
     """;
-    final String deleteTriggerRequestSql = """
+        final String deleteTriggerRequestSql = """
         DELETE FROM batch.trigger_request WHERE id = ?
     """;
-    final String deleteWorkflowRunSql = """
+        final String deleteWorkflowRunSql = """
         DELETE FROM batch.workflow_run WHERE id = ?
     """;
 
-    Long instanceId = jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, taskId);
-    jdbcTemplate.update(deleteJobTaskSql, taskId);
-    Long trId = jdbcTemplate.queryForObject(selectTriggerRequestIdSql, Long.class, instanceId);
-    Long workflowRunId =
-        jdbcTemplate.queryForObject(selectParentWorkflowRunIdSql, Long.class, trId);
-    Long rootTriggerRequestId =
-        jdbcTemplate.queryForObject(selectTriggerRequestIdSql2, Long.class, workflowRunId);
-    jdbcTemplate.update(deleteJobInstanceSql, instanceId);
-    jdbcTemplate.update(deleteTriggerRequestSql, trId);
-    jdbcTemplate.update(deleteWorkflowRunSql, workflowRunId);
-    jdbcTemplate.update(deleteTriggerRequestSql, rootTriggerRequestId);
-  }
+        Long instanceId = jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, taskId);
+        jdbcTemplate.update(deleteJobTaskSql, taskId);
+        Long trId = jdbcTemplate.queryForObject(selectTriggerRequestIdSql, Long.class, instanceId);
+        Long workflowRunId = jdbcTemplate.queryForObject(selectParentWorkflowRunIdSql, Long.class, trId);
+        Long rootTriggerRequestId = jdbcTemplate.queryForObject(selectTriggerRequestIdSql2, Long.class, workflowRunId);
+        jdbcTemplate.update(deleteJobInstanceSql, instanceId);
+        jdbcTemplate.update(deleteTriggerRequestSql, trId);
+        jdbcTemplate.update(deleteWorkflowRunSql, workflowRunId);
+        jdbcTemplate.update(deleteTriggerRequestSql, rootTriggerRequestId);
+    }
 }

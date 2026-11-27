@@ -32,81 +32,81 @@ import javax.annotation.Nullable;
 @SuppressWarnings("java:S2583")
 public final class CodeNormalizer {
 
-  private static final Pattern GROUP_PATTERN = Pattern.compile("^[A-Z][A-Z0-9_]*$");
-  private static final Pattern CONFIG_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9_]*$");
+    private static final Pattern GROUP_PATTERN = Pattern.compile("^[A-Z][A-Z0-9_]*$");
+    private static final Pattern CONFIG_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9_]*$");
 
-  private CodeNormalizer() {}
+    private CodeNormalizer() {}
 
-  /** 分组码归一（大写）：worker_group / tenant_id 等。 */
-  @Nullable
-  public static String normalizeGroupCode(@Nullable String raw, String fieldName) {
-    String trimmed = trimToNull(raw);
-    if (trimmed == null) {
-      return null;
+    /** 分组码归一（大写）：worker_group / tenant_id 等。 */
+    @Nullable
+    public static String normalizeGroupCode(@Nullable String raw, String fieldName) {
+        String trimmed = trimToNull(raw);
+        if (trimmed == null) {
+            return null;
+        }
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        if (!GROUP_PATTERN.matcher(upper).matches()) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "invalid "
+                            + fieldName
+                            + " '"
+                            + raw
+                            + "': must match "
+                            + GROUP_PATTERN.pattern()
+                            + " (after uppercasing)");
+        }
+        return upper;
     }
-    String upper = trimmed.toUpperCase(Locale.ROOT);
-    if (!GROUP_PATTERN.matcher(upper).matches()) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "invalid "
-              + fieldName
-              + " '"
-              + raw
-              + "': must match "
-              + GROUP_PATTERN.pattern()
-              + " (after uppercasing)");
-    }
-    return upper;
-  }
 
-  /** 配置码归一（小写 + 下划线）：window_code / calendar_code / queue_code / channel_code 等。 */
-  @Nullable
-  public static String normalizeConfigCode(@Nullable String raw, String fieldName) {
-    String trimmed = trimToNull(raw);
-    if (trimmed == null) {
-      return null;
+    /** 配置码归一（小写 + 下划线）：window_code / calendar_code / queue_code / channel_code 等。 */
+    @Nullable
+    public static String normalizeConfigCode(@Nullable String raw, String fieldName) {
+        String trimmed = trimToNull(raw);
+        if (trimmed == null) {
+            return null;
+        }
+        String lower = trimmed.toLowerCase(Locale.ROOT).replace('-', '_');
+        if (!CONFIG_PATTERN.matcher(lower).matches()) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    "invalid "
+                            + fieldName
+                            + " '"
+                            + raw
+                            + "': must match "
+                            + CONFIG_PATTERN.pattern()
+                            + " (after lowercasing and replacing '-' with '_')");
+        }
+        return lower;
     }
-    String lower = trimmed.toLowerCase(Locale.ROOT).replace('-', '_');
-    if (!CONFIG_PATTERN.matcher(lower).matches()) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          "invalid "
-              + fieldName
-              + " '"
-              + raw
-              + "': must match "
-              + CONFIG_PATTERN.pattern()
-              + " (after lowercasing and replacing '-' with '_')");
-    }
-    return lower;
-  }
 
-  /** 宽松归一：只 trim + upper/lower，不做格式校验（供 Excel 预览阶段用，真正 apply 时再强校验）。 */
-  @Nullable
-  public static String toUpperOrNull(@Nullable String raw) {
-    String trimmed = trimToNull(raw);
-    return trimmed == null ? null : trimmed.toUpperCase(Locale.ROOT);
-  }
-
-  @Nullable
-  public static String toConfigFormOrNull(@Nullable String raw) {
-    String trimmed = trimToNull(raw);
-    if (EmptyChecks.isNull(trimmed)) {
-      return null;
+    /** 宽松归一：只 trim + upper/lower，不做格式校验（供 Excel 预览阶段用，真正 apply 时再强校验）。 */
+    @Nullable
+    public static String toUpperOrNull(@Nullable String raw) {
+        String trimmed = trimToNull(raw);
+        return trimmed == null ? null : trimmed.toUpperCase(Locale.ROOT);
     }
-    String lowercaseConfigCode = trimmed.toLowerCase(Locale.ROOT);
-    return lowercaseConfigCode.replace('-', '_');
-  }
 
-  /** 纯归一:trim + 空白→null,不改大小写。供大小写敏感的码引用(如 job_code 引用)复用。 */
-  @Nullable
-  public static String trimToNull(@Nullable String raw) {
-    if (raw == null) {
-      return null;
+    @Nullable
+    public static String toConfigFormOrNull(@Nullable String raw) {
+        String trimmed = trimToNull(raw);
+        if (EmptyChecks.isNull(trimmed)) {
+            return null;
+        }
+        String lowercaseConfigCode = trimmed.toLowerCase(Locale.ROOT);
+        return lowercaseConfigCode.replace('-', '_');
     }
-    String trimmed = raw.trim();
-    return trimmed.isEmpty() ? null : trimmed;
-  }
+
+    /** 纯归一:trim + 空白→null,不改大小写。供大小写敏感的码引用(如 job_code 引用)复用。 */
+    @Nullable
+    public static String trimToNull(@Nullable String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 }

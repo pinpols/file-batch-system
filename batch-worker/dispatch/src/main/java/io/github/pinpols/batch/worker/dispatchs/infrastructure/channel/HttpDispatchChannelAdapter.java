@@ -33,167 +33,159 @@ import org.springframework.stereotype.Component;
 @Component
 public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
 
-  private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-  private final OkHttpClient okHttpClient;
-  private final BatchSecurityProperties securityProperties;
+    private final OkHttpClient okHttpClient;
+    private final BatchSecurityProperties securityProperties;
 
-  public HttpDispatchChannelAdapter(
-      HttpDispatchChannelProperties properties, BatchSecurityProperties securityProperties) {
-    this.securityProperties = securityProperties;
-    // 一次性把 OkHttpClient 构造好（含 callTimeout 回退 + 自定义 Dns）并复用：
-    // 1) 每次 dispatch 调用 newBuilder().dns(...).build() 会让 connection / dispatcher /
-    //    thread pool 被重建，复用价值归零，高并发下还会泄漏线程；
-    // 2) 父 Client 缺 callTimeout 时，connect/read/write 各自不超时 ≠ 总时长不超时——
-    //    比如 read 拉长导致总时长无界，必须显式 callTimeout 收敛。
-    Dns guardedDns = new Dns() {
-      @Override
-      public List<InetAddress> lookup(String hostname) throws UnknownHostException {
-        if (securityProperties.isBypassMode()) {
-          return SYSTEM.lookup(hostname);
+    public HttpDispatchChannelAdapter(
+            HttpDispatchChannelProperties properties, BatchSecurityProperties securityProperties) {
+        this.securityProperties = securityProperties;
+        // 一次性把 OkHttpClient 构造好（含 callTimeout 回退 + 自定义 Dns）并复用：
+        // 1) 每次 dispatch 调用 newBuilder().dns(...).build() 会让 connection / dispatcher /
+        //    thread pool 被重建，复用价值归零，高并发下还会泄漏线程；
+        // 2) 父 Client 缺 callTimeout 时，connect/read/write 各自不超时 ≠ 总时长不超时——
+        //    比如 read 拉长导致总时长无界，必须显式 callTimeout 收敛。
+        Dns guardedDns = new Dns() {
+            @Override
+            public List<InetAddress> lookup(String hostname) throws UnknownHostException {
+                if (securityProperties.isBypassMode()) {
+                    return SYSTEM.lookup(hostname);
+                }
+                // S-2.6: resolve-then-connect — 解析 + IP 安全校验合并在 Dns 接口实现里，
+                // 由 OkHttp 在真正建连前回调，省去每请求重建 Client 的开销。
+                return DnsResolveGuard.resolveAllAndValidate(hostname);
+            }
+        };
+        this.okHttpClient = new OkHttpClient.Builder()
+                .connectTimeout(properties.getConnectTimeoutMillis(), TimeUnit.MILLISECONDS)
+                .readTimeout(properties.getReadTimeoutMillis(), TimeUnit.MILLISECONDS)
+                .writeTimeout(properties.getWriteTimeoutMillis(), TimeUnit.MILLISECONDS)
+                .callTimeout(properties.getCallTimeoutMillis(), TimeUnit.MILLISECONDS)
+                .dns(guardedDns)
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .build();
+    }
+
+    @Override
+    public boolean supports(String channelType) {
+        if (channelType == null) {
+            return false;
         }
-        // S-2.6: resolve-then-connect — 解析 + IP 安全校验合并在 Dns 接口实现里，
-        // 由 OkHttp 在真正建连前回调，省去每请求重建 Client 的开销。
-        return DnsResolveGuard.resolveAllAndValidate(hostname);
-      }
-    };
-    this.okHttpClient = new OkHttpClient.Builder()
-        .connectTimeout(properties.getConnectTimeoutMillis(), TimeUnit.MILLISECONDS)
-        .readTimeout(properties.getReadTimeoutMillis(), TimeUnit.MILLISECONDS)
-        .writeTimeout(properties.getWriteTimeoutMillis(), TimeUnit.MILLISECONDS)
-        .callTimeout(properties.getCallTimeoutMillis(), TimeUnit.MILLISECONDS)
-        .dns(guardedDns)
-        .followRedirects(false)
-        .followSslRedirects(false)
-        .build();
-  }
-
-  @Override
-  public boolean supports(String channelType) {
-    if (channelType == null) {
-      return false;
+        String u = channelType.toUpperCase(Locale.ROOT);
+        return "API".equals(u) || "API_PUSH".equals(u);
     }
-    String u = channelType.toUpperCase(Locale.ROOT);
-    return "API".equals(u) || "API_PUSH".equals(u);
-  }
 
-  @Override
-  public DispatchResult dispatch(DispatchCommand command) {
-    Map<String, Object> channelConfig = command.channelConfig();
-    String endpoint = channelConfig.get("target_endpoint") == null
-        ? null
-        : String.valueOf(channelConfig.get("target_endpoint"));
-    if (endpoint == null || endpoint.isBlank()) {
-      return DispatchResult.failureWithoutReceipt("target endpoint missing");
+    @Override
+    public DispatchResult dispatch(DispatchCommand command) {
+        Map<String, Object> channelConfig = command.channelConfig();
+        String endpoint = channelConfig.get("target_endpoint") == null
+                ? null
+                : String.valueOf(channelConfig.get("target_endpoint"));
+        if (endpoint == null || endpoint.isBlank()) {
+            return DispatchResult.failureWithoutReceipt("target endpoint missing");
+        }
+        String evidenceEndpoint = SecretMasking.maskEndpoint(endpoint);
+        DispatchReceiptSupport.Receipt receipt =
+                DispatchReceiptSupport.resolve(command, channelConfig, FileReceiptPolicy.SYNC.code());
+
+        Map<String, Object> requestPayload = new LinkedHashMap<>();
+        requestPayload.put("tenantId", command.tenantId());
+        requestPayload.put(PipelineRuntimeKeys.TRACE_ID, command.traceId());
+        requestPayload.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, receipt.externalRequestId());
+        requestPayload.put(PipelineRuntimeKeys.FILE_RECORD, command.fileRecord());
+        requestPayload.put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, command.payload());
+
+        Request.Builder builder = new Request.Builder().url(endpoint);
+        String requestPayloadJson = JsonUtils.toJson(requestPayload);
+        RequestBody requestBody = RequestBody.create(requestPayloadJson, JSON);
+        builder.post(requestBody);
+        String idempotencyKey = idempotencyKey(receipt.externalRequestId());
+        builder.header("Idempotency-Key", idempotencyKey);
+        String ct = String.valueOf(channelConfig.getOrDefault("channel_type", ""));
+        if ("API_PUSH".equalsIgnoreCase(ct)) {
+            Object apiKey = channelConfig.get("api_push_api_key");
+            String apiKeyPresenceText = EmptyChecks.isNull(apiKey) ? null : String.valueOf(apiKey);
+            if (EmptyChecks.isNotNull(apiKey) && !EmptyChecks.isBlank(Objects.requireNonNull(apiKeyPresenceText))) {
+                String rawApiKey = String.valueOf(apiKey);
+                String normalizedApiKey = rawApiKey.trim();
+                builder.addHeader("X-Api-Key", normalizedApiKey);
+            }
+            Object authorization = channelConfig.get("authorization");
+            String authorizationPresenceText = EmptyChecks.isNull(authorization) ? null : String.valueOf(authorization);
+            if (EmptyChecks.isNotNull(authorization)
+                    && !EmptyChecks.isBlank(Objects.requireNonNull(authorizationPresenceText))) {
+                String rawAuthorization = String.valueOf(authorization);
+                String normalizedAuthorization = rawAuthorization.trim();
+                builder.addHeader("Authorization", normalizedAuthorization);
+            }
+        }
+        Request request = builder.build();
+        boolean receiverIdempotencySupported = Boolean.TRUE.equals(channelConfig.get("receiver_idempotency_supported"));
+        if (!securityProperties.isBypassMode()) {
+            try {
+                DnsResolveGuard.resolveAllAndValidate(request.url().host());
+            } catch (Exception ex) {
+                SwallowedExceptionLogger.warn(HttpDispatchChannelAdapter.class, "catch:Exception", ex);
+
+                return new DispatchResult(
+                        false,
+                        receipt.externalRequestId(),
+                        receipt.receiptCode(),
+                        false,
+                        false,
+                        SwallowedExceptionLogger.summary(ex),
+                        evidenceEndpoint);
+            }
+        }
+
+        // S-2.6: 使用构造期注入的 DNS 校验结果及共享 Client 执行请求。
+        try (Response response = okHttpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String responseMessage = "dispatch api responded " + response.code();
+                return failedResult(receipt, evidenceEndpoint, responseMessage, receiverIdempotencySupported);
+            }
+
+            return new DispatchResult(
+                    true,
+                    receipt.externalRequestId(),
+                    receipt.receiptCode(),
+                    receipt.acknowledged(),
+                    receipt.pending(),
+                    "dispatched via http adapter",
+                    evidenceEndpoint);
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(HttpDispatchChannelAdapter.class, "catch:Exception", ex);
+
+            return failedResult(
+                    receipt, evidenceEndpoint, SwallowedExceptionLogger.summary(ex), receiverIdempotencySupported);
+        }
     }
-    String evidenceEndpoint = SecretMasking.maskEndpoint(endpoint);
-    DispatchReceiptSupport.Receipt receipt =
-        DispatchReceiptSupport.resolve(command, channelConfig, FileReceiptPolicy.SYNC.code());
 
-    Map<String, Object> requestPayload = new LinkedHashMap<>();
-    requestPayload.put("tenantId", command.tenantId());
-    requestPayload.put(PipelineRuntimeKeys.TRACE_ID, command.traceId());
-    requestPayload.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, receipt.externalRequestId());
-    requestPayload.put(PipelineRuntimeKeys.FILE_RECORD, command.fileRecord());
-    requestPayload.put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, command.payload());
-
-    Request.Builder builder = new Request.Builder().url(endpoint);
-    String requestPayloadJson = JsonUtils.toJson(requestPayload);
-    RequestBody requestBody = RequestBody.create(requestPayloadJson, JSON);
-    builder.post(requestBody);
-    String idempotencyKey = idempotencyKey(receipt.externalRequestId());
-    builder.header("Idempotency-Key", idempotencyKey);
-    String ct = String.valueOf(channelConfig.getOrDefault("channel_type", ""));
-    if ("API_PUSH".equalsIgnoreCase(ct)) {
-      Object apiKey = channelConfig.get("api_push_api_key");
-      String apiKeyPresenceText = EmptyChecks.isNull(apiKey) ? null : String.valueOf(apiKey);
-      if (EmptyChecks.isNotNull(apiKey)
-          && !EmptyChecks.isBlank(Objects.requireNonNull(apiKeyPresenceText))) {
-        String rawApiKey = String.valueOf(apiKey);
-        String normalizedApiKey = rawApiKey.trim();
-        builder.addHeader("X-Api-Key", normalizedApiKey);
-      }
-      Object authorization = channelConfig.get("authorization");
-      String authorizationPresenceText =
-          EmptyChecks.isNull(authorization) ? null : String.valueOf(authorization);
-      if (EmptyChecks.isNotNull(authorization)
-          && !EmptyChecks.isBlank(Objects.requireNonNull(authorizationPresenceText))) {
-        String rawAuthorization = String.valueOf(authorization);
-        String normalizedAuthorization = rawAuthorization.trim();
-        builder.addHeader("Authorization", normalizedAuthorization);
-      }
-    }
-    Request request = builder.build();
-    boolean receiverIdempotencySupported =
-        Boolean.TRUE.equals(channelConfig.get("receiver_idempotency_supported"));
-    if (!securityProperties.isBypassMode()) {
-      try {
-        DnsResolveGuard.resolveAllAndValidate(request.url().host());
-      } catch (Exception ex) {
-        SwallowedExceptionLogger.warn(HttpDispatchChannelAdapter.class, "catch:Exception", ex);
+    private static DispatchResult failedResult(
+            DispatchReceiptSupport.Receipt receipt,
+            String endpoint,
+            String message,
+            boolean receiverIdempotencySupported) {
+        if (!receiverIdempotencySupported) {
+            return DispatchResult.externalOutcomeUnknown(receipt.externalRequestId(), receipt.receiptCode(), message);
+        }
 
         return new DispatchResult(
-            false,
-            receipt.externalRequestId(),
-            receipt.receiptCode(),
-            false,
-            false,
-            SwallowedExceptionLogger.summary(ex),
-            evidenceEndpoint);
-      }
+                false, receipt.externalRequestId(), receipt.receiptCode(), false, false, message, endpoint);
     }
 
-    // S-2.6: 使用构造期注入的 DNS 校验结果及共享 Client 执行请求。
-    try (Response response = okHttpClient.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
-        String responseMessage = "dispatch api responded " + response.code();
-        return failedResult(
-            receipt, evidenceEndpoint, responseMessage, receiverIdempotencySupported);
-      }
-
-      return new DispatchResult(
-          true,
-          receipt.externalRequestId(),
-          receipt.receiptCode(),
-          receipt.acknowledged(),
-          receipt.pending(),
-          "dispatched via http adapter",
-          evidenceEndpoint);
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(HttpDispatchChannelAdapter.class, "catch:Exception", ex);
-
-      return failedResult(
-          receipt,
-          evidenceEndpoint,
-          SwallowedExceptionLogger.summary(ex),
-          receiverIdempotencySupported);
-    }
-  }
-
-  private static DispatchResult failedResult(
-      DispatchReceiptSupport.Receipt receipt,
-      String endpoint,
-      String message,
-      boolean receiverIdempotencySupported) {
-    if (!receiverIdempotencySupported) {
-      return DispatchResult.externalOutcomeUnknown(
-          receipt.externalRequestId(), receipt.receiptCode(), message);
+    @PreDestroy
+    void shutdown() {
+        okHttpClient.dispatcher().cancelAll();
+        okHttpClient.dispatcher().executorService().shutdown();
+        okHttpClient.connectionPool().evictAll();
     }
 
-    return new DispatchResult(
-        false, receipt.externalRequestId(), receipt.receiptCode(), false, false, message, endpoint);
-  }
-
-  @PreDestroy
-  void shutdown() {
-    okHttpClient.dispatcher().cancelAll();
-    okHttpClient.dispatcher().executorService().shutdown();
-    okHttpClient.connectionPool().evictAll();
-  }
-
-  private static String idempotencyKey(String externalRequestId) {
-    byte[] requestIdBytes = externalRequestId.getBytes(StandardCharsets.UTF_8);
-    UUID deterministicId = UUID.nameUUIDFromBytes(requestIdBytes);
-    return deterministicId.toString();
-  }
+    private static String idempotencyKey(String externalRequestId) {
+        byte[] requestIdBytes = externalRequestId.getBytes(StandardCharsets.UTF_8);
+        UUID deterministicId = UUID.nameUUIDFromBytes(requestIdBytes);
+        return deterministicId.toString();
+    }
 }

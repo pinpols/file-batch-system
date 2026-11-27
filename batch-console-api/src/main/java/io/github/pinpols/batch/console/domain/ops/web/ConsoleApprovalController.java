@@ -44,115 +44,104 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 public class ConsoleApprovalController {
 
-  // R3-P2-6：审计独立 logger。logback.xml 可单独路由 audit 到独立 appender（独立日志文件/SIEM/Kafka）
-  // 实时告警；DB 表审计（AuditLogMapper）继续作为查询源，双轨互不依赖。
-  private static final Logger AUDIT = LoggerFactory.getLogger("audit.console.approval");
+    // R3-P2-6：审计独立 logger。logback.xml 可单独路由 audit 到独立 appender（独立日志文件/SIEM/Kafka）
+    // 实时告警；DB 表审计（AuditLogMapper）继续作为查询源，双轨互不依赖。
+    private static final Logger AUDIT = LoggerFactory.getLogger("audit.console.approval");
 
-  private final ConsoleApprovalApplicationService approvalApplicationService;
-  private final ConsoleResponseFactory responseFactory;
-  // R4-P0-2：所有 approve/reject 入口必须用 tenantGuard 校验请求体 tenantId 是否与 JWT 持有的 tenantId 一致，
-  // 防止租户角色用户改 body tenantId 批准其他租户的 approvalNo。
-  private final TenantIdResolver tenantGuard;
+    private final ConsoleApprovalApplicationService approvalApplicationService;
+    private final ConsoleResponseFactory responseFactory;
+    // R4-P0-2：所有 approve/reject 入口必须用 tenantGuard 校验请求体 tenantId 是否与 JWT 持有的 tenantId 一致，
+    // 防止租户角色用户改 body tenantId 批准其他租户的 approvalNo。
+    private final TenantIdResolver tenantGuard;
 
-  /** 审批通过。 */
-  @PostMapping("/{approvalNo}/approve")
-  @AuditAction(action = "approval.approve", aggregateType = "approval", aggregateId = "#approvalNo")
-  public CommonResponse<String> approve(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable String approvalNo,
-      @Valid @RequestBody ApprovalActionRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    String operatorId = authenticatedUsername();
-    String result =
-        approvalApplicationService.approve(tenantId, approvalNo, operatorId, request.getReason());
-    auditApprovalAction("approve", tenantId, approvalNo, operatorId, request.getReason());
-    return responseFactory.success(result);
-  }
-
-  /** 审批拒绝。 */
-  @PostMapping("/{approvalNo}/reject")
-  @AuditAction(action = "approval.reject", aggregateType = "approval", aggregateId = "#approvalNo")
-  public CommonResponse<String> reject(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable String approvalNo,
-      @Valid @RequestBody ApprovalActionRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    String operatorId = authenticatedUsername();
-    String result =
-        approvalApplicationService.reject(tenantId, approvalNo, operatorId, request.getReason());
-    auditApprovalAction("reject", tenantId, approvalNo, operatorId, request.getReason());
-    return responseFactory.success(result);
-  }
-
-  /** 批量审批通过。 */
-  @PostMapping("/batch-approve")
-  @AuditAction(action = "approval.batchApprove", aggregateType = "approval")
-  public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchApprove(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody BatchApprovalActionRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.tenantId());
-    String operatorId = authenticatedUsername();
-    List<ConsoleBatchApprovalResultResponse> result = approvalApplicationService.batchApprove(
-        tenantId, request.approvalNos(), operatorId, request.reason());
-    auditApprovalAction(
-        "batch-approve",
-        tenantId,
-        String.valueOf(request.approvalNos()),
-        operatorId,
-        request.reason());
-    return responseFactory.success(result);
-  }
-
-  /** 批量审批拒绝。 */
-  @PostMapping("/batch-reject")
-  @AuditAction(action = "approval.batchReject", aggregateType = "approval")
-  public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchReject(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody BatchApprovalActionRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.tenantId());
-    String operatorId = authenticatedUsername();
-    List<ConsoleBatchApprovalResultResponse> result = approvalApplicationService.batchReject(
-        tenantId, request.approvalNos(), operatorId, request.reason());
-    auditApprovalAction(
-        "batch-reject",
-        tenantId,
-        String.valueOf(request.approvalNos()),
-        operatorId,
-        request.reason());
-    return responseFactory.success(result);
-  }
-
-  /**
-   * R3-P2-6：审批 audit logger 双轨——DB 审计（AuditLogMapper）继续作为查询源， 此处通过独立 logger 输出结构化 INFO 行，可被
-   * logback.xml 路由到独立 appender（独立日志文件 / SIEM / Kafka）。 字段固定顺序便于结构化采集；不输出 reason 全文以防 PII 泄漏。
-   */
-  private void auditApprovalAction(
-      String action, String tenantId, String target, String operatorId, String reason) {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    String actor = EmptyChecks.isNull(auth) ? "anonymous" : authenticatedUsername(auth);
-    int reasonLen = reason == null ? 0 : reason.length();
-    AUDIT.info(
-        "action={} actor={} tenant={} target={} operatorId={} reasonLength={}",
-        action,
-        actor,
-        LogSanitizer.value(tenantId),
-        LogSanitizer.value(target),
-        LogSanitizer.value(operatorId),
-        reasonLen);
-  }
-
-  private static String authenticatedUsername() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return authenticatedUsername(authentication);
-  }
-
-  private static String authenticatedUsername(Authentication authentication) {
-    if (EmptyChecks.isNull(authentication)) {
-      return "anonymous";
+    /** 审批通过。 */
+    @PostMapping("/{approvalNo}/approve")
+    @AuditAction(action = "approval.approve", aggregateType = "approval", aggregateId = "#approvalNo")
+    public CommonResponse<String> approve(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String approvalNo,
+            @Valid @RequestBody ApprovalActionRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        String operatorId = authenticatedUsername();
+        String result = approvalApplicationService.approve(tenantId, approvalNo, operatorId, request.getReason());
+        auditApprovalAction("approve", tenantId, approvalNo, operatorId, request.getReason());
+        return responseFactory.success(result);
     }
-    if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal.username();
+
+    /** 审批拒绝。 */
+    @PostMapping("/{approvalNo}/reject")
+    @AuditAction(action = "approval.reject", aggregateType = "approval", aggregateId = "#approvalNo")
+    public CommonResponse<String> reject(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String approvalNo,
+            @Valid @RequestBody ApprovalActionRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        String operatorId = authenticatedUsername();
+        String result = approvalApplicationService.reject(tenantId, approvalNo, operatorId, request.getReason());
+        auditApprovalAction("reject", tenantId, approvalNo, operatorId, request.getReason());
+        return responseFactory.success(result);
     }
-    return authentication.getName();
-  }
+
+    /** 批量审批通过。 */
+    @PostMapping("/batch-approve")
+    @AuditAction(action = "approval.batchApprove", aggregateType = "approval")
+    public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchApprove(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody BatchApprovalActionRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.tenantId());
+        String operatorId = authenticatedUsername();
+        List<ConsoleBatchApprovalResultResponse> result =
+                approvalApplicationService.batchApprove(tenantId, request.approvalNos(), operatorId, request.reason());
+        auditApprovalAction(
+                "batch-approve", tenantId, String.valueOf(request.approvalNos()), operatorId, request.reason());
+        return responseFactory.success(result);
+    }
+
+    /** 批量审批拒绝。 */
+    @PostMapping("/batch-reject")
+    @AuditAction(action = "approval.batchReject", aggregateType = "approval")
+    public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchReject(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody BatchApprovalActionRequest request) {
+        String tenantId = tenantGuard.resolveTenant(request.tenantId());
+        String operatorId = authenticatedUsername();
+        List<ConsoleBatchApprovalResultResponse> result =
+                approvalApplicationService.batchReject(tenantId, request.approvalNos(), operatorId, request.reason());
+        auditApprovalAction(
+                "batch-reject", tenantId, String.valueOf(request.approvalNos()), operatorId, request.reason());
+        return responseFactory.success(result);
+    }
+
+    /**
+     * R3-P2-6：审批 audit logger 双轨——DB 审计（AuditLogMapper）继续作为查询源， 此处通过独立 logger 输出结构化 INFO 行，可被
+     * logback.xml 路由到独立 appender（独立日志文件 / SIEM / Kafka）。 字段固定顺序便于结构化采集；不输出 reason 全文以防 PII 泄漏。
+     */
+    private void auditApprovalAction(String action, String tenantId, String target, String operatorId, String reason) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String actor = EmptyChecks.isNull(auth) ? "anonymous" : authenticatedUsername(auth);
+        int reasonLen = reason == null ? 0 : reason.length();
+        AUDIT.info(
+                "action={} actor={} tenant={} target={} operatorId={} reasonLength={}",
+                action,
+                actor,
+                LogSanitizer.value(tenantId),
+                LogSanitizer.value(target),
+                LogSanitizer.value(operatorId),
+                reasonLen);
+    }
+
+    private static String authenticatedUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authenticatedUsername(authentication);
+    }
+
+    private static String authenticatedUsername(Authentication authentication) {
+        if (EmptyChecks.isNull(authentication)) {
+            return "anonymous";
+        }
+        if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal.username();
+        }
+        return authentication.getName();
+    }
 }

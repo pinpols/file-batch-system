@@ -14,6 +14,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.audit")
 public class WorkerCapabilityTagsAuditProperties {
 
-  /** 单轮审计日志最多打印多少条样例明细。 */
-  private int capabilityTagsLogSampleLimit = 10;
+    /** 单轮审计日志最多打印多少条样例明细。 */
+    private int capabilityTagsLogSampleLimit = 10;
 }

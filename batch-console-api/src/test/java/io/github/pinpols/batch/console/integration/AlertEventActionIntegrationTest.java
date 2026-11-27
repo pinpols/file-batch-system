@@ -25,173 +25,164 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 集成测试：告警事件操作通过告警应用服务更新状态。 */
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("告警事件操作: 确认,抑制,关闭三个动作的响应与落库状态流转")
 class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private ConsoleAlertApplicationService alertApplicationService;
+    @Autowired
+    private ConsoleAlertApplicationService alertApplicationService;
 
-  @Autowired
-  private AlertEventMapper alertEventMapper;
+    @Autowired
+    private AlertEventMapper alertEventMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Test
-  @DisplayName("确认告警: 响应状态为已确认,且库内记录状态同步更新")
-  void shouldAckAlert() {
-    String tenantId = "t-alert-ack-" + BatchDateTimeSupport.utcEpochMillis();
-    long alertId = insertAlertEvent(tenantId, "FILE_STUCK", "WARN", "OPEN", "File stalled");
+    @Test
+    @DisplayName("确认告警: 响应状态为已确认,且库内记录状态同步更新")
+    void shouldAckAlert() {
+        String tenantId = "t-alert-ack-" + BatchDateTimeSupport.utcEpochMillis();
+        long alertId = insertAlertEvent(tenantId, "FILE_STUCK", "WARN", "OPEN", "File stalled");
 
-    ConsoleAlertActionResponse response =
-        alertApplicationService.ack(alertId, alertRequest(tenantId), "idem-1");
+        ConsoleAlertActionResponse response = alertApplicationService.ack(alertId, alertRequest(tenantId), "idem-1");
 
-    assertThat(response.status()).isEqualTo("ACKED");
-    AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
-    assertThat(entity).isNotNull();
-    assertThat(entity.getStatus()).isEqualTo("ACKED");
-  }
+        assertThat(response.status()).isEqualTo("ACKED");
+        AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
+        assertThat(entity).isNotNull();
+        assertThat(entity.getStatus()).isEqualTo("ACKED");
+    }
 
-  @Test
-  @DisplayName("抑制告警: 响应状态为已抑制,且库内记录状态同步更新")
-  void shouldSilenceAlert() {
-    String tenantId = "t-alert-silence-" + BatchDateTimeSupport.utcEpochMillis();
-    long alertId = insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "SLA breach");
+    @Test
+    @DisplayName("抑制告警: 响应状态为已抑制,且库内记录状态同步更新")
+    void shouldSilenceAlert() {
+        String tenantId = "t-alert-silence-" + BatchDateTimeSupport.utcEpochMillis();
+        long alertId = insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "SLA breach");
 
-    ConsoleAlertActionResponse response =
-        alertApplicationService.silence(alertId, alertRequest(tenantId), "idem-2");
+        ConsoleAlertActionResponse response =
+                alertApplicationService.silence(alertId, alertRequest(tenantId), "idem-2");
 
-    assertThat(response.status()).isEqualTo("SUPPRESSED");
-    AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
-    assertThat(entity).isNotNull();
-    assertThat(entity.getStatus()).isEqualTo("SUPPRESSED");
-  }
+        assertThat(response.status()).isEqualTo("SUPPRESSED");
+        AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
+        assertThat(entity).isNotNull();
+        assertThat(entity.getStatus()).isEqualTo("SUPPRESSED");
+    }
 
-  @Test
-  @DisplayName("关闭告警: 响应状态为已关闭,且库内记录状态同步更新")
-  void shouldCloseAlert() {
-    String tenantId = "t-alert-close-" + BatchDateTimeSupport.utcEpochMillis();
-    long alertId = insertAlertEvent(tenantId, "DISK_USAGE", "ERROR", "OPEN", "Disk issue");
+    @Test
+    @DisplayName("关闭告警: 响应状态为已关闭,且库内记录状态同步更新")
+    void shouldCloseAlert() {
+        String tenantId = "t-alert-close-" + BatchDateTimeSupport.utcEpochMillis();
+        long alertId = insertAlertEvent(tenantId, "DISK_USAGE", "ERROR", "OPEN", "Disk issue");
 
-    ConsoleAlertActionResponse response =
-        alertApplicationService.close(alertId, alertRequest(tenantId), "idem-3");
+        ConsoleAlertActionResponse response = alertApplicationService.close(alertId, alertRequest(tenantId), "idem-3");
 
-    assertThat(response.status()).isEqualTo("CLOSED");
-    AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
-    assertThat(entity).isNotNull();
-    assertThat(entity.getStatus()).isEqualTo("CLOSED");
-    assertThat(entity.getClosedAt()).isNotNull();
-    assertThat(entity.getCloseReason()).isEqualTo("MANUAL");
-    Instant originalClosedAt = entity.getClosedAt();
-    alertApplicationService.close(alertId, alertRequest(tenantId), "idem-3-repeat");
-    AlertEventEntity retried = alertEventMapper.selectById(tenantId, alertId);
-    assertThat(retried.getClosedAt()).isEqualTo(originalClosedAt);
-    int reopened = alertEventMapper.updateStatus(tenantId, alertId, "ACKED");
-    assertThat(reopened).isZero();
-  }
+        assertThat(response.status()).isEqualTo("CLOSED");
+        AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
+        assertThat(entity).isNotNull();
+        assertThat(entity.getStatus()).isEqualTo("CLOSED");
+        assertThat(entity.getClosedAt()).isNotNull();
+        assertThat(entity.getCloseReason()).isEqualTo("MANUAL");
+        Instant originalClosedAt = entity.getClosedAt();
+        alertApplicationService.close(alertId, alertRequest(tenantId), "idem-3-repeat");
+        AlertEventEntity retried = alertEventMapper.selectById(tenantId, alertId);
+        assertThat(retried.getClosedAt()).isEqualTo(originalClosedAt);
+        int reopened = alertEventMapper.updateStatus(tenantId, alertId, "ACKED");
+        assertThat(reopened).isZero();
+    }
 
-  @Test
-  @DisplayName("同组活动计数按各实体状态统计，独立关闭不影响其他实体")
-  void shouldCountActivePeersInSameAlertmanagerGroup() {
-    String tenantId = "t-alert-group-" + BatchDateTimeSupport.utcEpochMillis();
-    long firstId = insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "OPEN", "first");
-    long ackedId = insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "ACKED", "acked");
-    long suppressedId =
-        insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "SUPPRESSED", "suppressed");
+    @Test
+    @DisplayName("同组活动计数按各实体状态统计，独立关闭不影响其他实体")
+    void shouldCountActivePeersInSameAlertmanagerGroup() {
+        String tenantId = "t-alert-group-" + BatchDateTimeSupport.utcEpochMillis();
+        long firstId = insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "OPEN", "first");
+        long ackedId = insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "ACKED", "acked");
+        long suppressedId = insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "SUPPRESSED", "suppressed");
 
-    alertApplicationService.close(firstId, alertRequest(tenantId), "idem-group-1");
+        alertApplicationService.close(firstId, alertRequest(tenantId), "idem-group-1");
 
-    assertThat(alertEventMapper.countActiveAlertsInAmGroup(
-            AlertEventActiveAlertsInAmGroupCountQuery.builder()
-                .tenantId(tenantId)
-                .serviceName("batch-orchestrator")
-                .alertType("JOB_RUNNING_TOO_LONG")
-                .severity("WARN")
-                .excludingId(firstId)
-                .build()))
-        .isEqualTo(2);
+        assertThat(alertEventMapper.countActiveAlertsInAmGroup(AlertEventActiveAlertsInAmGroupCountQuery.builder()
+                        .tenantId(tenantId)
+                        .serviceName("batch-orchestrator")
+                        .alertType("JOB_RUNNING_TOO_LONG")
+                        .severity("WARN")
+                        .excludingId(firstId)
+                        .build()))
+                .isEqualTo(2);
 
-    alertApplicationService.close(ackedId, alertRequest(tenantId), "idem-group-2");
+        alertApplicationService.close(ackedId, alertRequest(tenantId), "idem-group-2");
 
-    assertThat(alertEventMapper.countActiveAlertsInAmGroup(
-            AlertEventActiveAlertsInAmGroupCountQuery.builder()
-                .tenantId(tenantId)
-                .serviceName("batch-orchestrator")
-                .alertType("JOB_RUNNING_TOO_LONG")
-                .severity("WARN")
-                .excludingId(ackedId)
-                .build()))
-        .isEqualTo(1);
+        assertThat(alertEventMapper.countActiveAlertsInAmGroup(AlertEventActiveAlertsInAmGroupCountQuery.builder()
+                        .tenantId(tenantId)
+                        .serviceName("batch-orchestrator")
+                        .alertType("JOB_RUNNING_TOO_LONG")
+                        .severity("WARN")
+                        .excludingId(ackedId)
+                        .build()))
+                .isEqualTo(1);
 
-    alertApplicationService.close(suppressedId, alertRequest(tenantId), "idem-group-3");
+        alertApplicationService.close(suppressedId, alertRequest(tenantId), "idem-group-3");
 
-    assertThat(alertEventMapper.countActiveAlertsInAmGroup(
-            AlertEventActiveAlertsInAmGroupCountQuery.builder()
-                .tenantId(tenantId)
-                .serviceName("batch-orchestrator")
-                .alertType("JOB_RUNNING_TOO_LONG")
-                .severity("WARN")
-                .excludingId(suppressedId)
-                .build()))
-        .isZero();
-  }
+        assertThat(alertEventMapper.countActiveAlertsInAmGroup(AlertEventActiveAlertsInAmGroupCountQuery.builder()
+                        .tenantId(tenantId)
+                        .serviceName("batch-orchestrator")
+                        .alertType("JOB_RUNNING_TOO_LONG")
+                        .severity("WARN")
+                        .excludingId(suppressedId)
+                        .build()))
+                .isZero();
+    }
 
-  private AlertActionRequest alertRequest(String tenantId) {
-    AlertActionRequest request = new AlertActionRequest();
-    request.setTenantId(tenantId);
-    request.setOperatorId("operator-1");
-    request.setReason("manual action");
-    return request;
-  }
+    private AlertActionRequest alertRequest(String tenantId) {
+        AlertActionRequest request = new AlertActionRequest();
+        request.setTenantId(tenantId);
+        request.setOperatorId("operator-1");
+        request.setReason("manual action");
+        return request;
+    }
 
-  private long insertAlertEvent(
-      String tenantId, String alertType, String severity, String status, String title) {
-    final String insertAlertEventSql = """
+    private long insertAlertEvent(String tenantId, String alertType, String severity, String status, String title) {
+        final String insertAlertEventSql = """
     INSERT INTO batch.alert_event
     (tenant_id, service_name, alert_type, severity, title, detail_json, dedup_fingerprint,
     occurrence_count, first_seen_at, last_seen_at, status, created_at, updated_at)
     VALUES (?, 'batch-orchestrator', ?, ?, ?, '{}', ?,
     1, ?, ?, ?, now(), now())
     """;
-    String dedupFingerprint = tenantId + ":" + alertType + ":" + System.nanoTime();
-    Timestamp firstSeenAt = Timestamp.from(BatchDateTimeSupport.utcNow());
-    Timestamp lastSeenAt = Timestamp.from(BatchDateTimeSupport.utcNow());
-    jdbcTemplate.update(
-        insertAlertEventSql,
-        tenantId,
-        alertType,
-        severity,
-        title,
-        dedupFingerprint,
-        firstSeenAt,
-        lastSeenAt,
-        status);
-    final String latestAlertEventIdSql = """
+        String dedupFingerprint = tenantId + ":" + alertType + ":" + System.nanoTime();
+        Timestamp firstSeenAt = Timestamp.from(BatchDateTimeSupport.utcNow());
+        Timestamp lastSeenAt = Timestamp.from(BatchDateTimeSupport.utcNow());
+        jdbcTemplate.update(
+                insertAlertEventSql,
+                tenantId,
+                alertType,
+                severity,
+                title,
+                dedupFingerprint,
+                firstSeenAt,
+                lastSeenAt,
+                status);
+        final String latestAlertEventIdSql = """
     select id
     from batch.alert_event
     where tenant_id = ?
     order by id desc
     limit 1
     """;
-    Long id = jdbcTemplate.queryForObject(latestAlertEventIdSql, Long.class, tenantId);
-    return id == null ? -1L : id;
-  }
-
-  @TestConfiguration
-  static class TestTenantGuardConfig {
-
-    @Bean
-    @Primary
-    ConsoleTenantGuard testTenantGuard() {
-      return new ConsoleTenantGuard(null, TenantDatabaseContext.NONE) {
-        @Override
-        public String resolveTenant(String requestTenantId) {
-          return requestTenantId;
-        }
-      };
+        Long id = jdbcTemplate.queryForObject(latestAlertEventIdSql, Long.class, tenantId);
+        return id == null ? -1L : id;
     }
-  }
+
+    @TestConfiguration
+    static class TestTenantGuardConfig {
+
+        @Bean
+        @Primary
+        ConsoleTenantGuard testTenantGuard() {
+            return new ConsoleTenantGuard(null, TenantDatabaseContext.NONE) {
+                @Override
+                public String resolveTenant(String requestTenantId) {
+                    return requestTenantId;
+                }
+            };
+        }
+    }
 }

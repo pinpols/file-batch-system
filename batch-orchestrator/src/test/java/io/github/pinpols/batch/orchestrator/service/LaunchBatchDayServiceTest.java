@@ -49,164 +49,152 @@ import org.springframework.transaction.PlatformTransactionManager;
 @ExtendWith(MockitoExtension.class)
 class LaunchBatchDayServiceTest {
 
-  @Mock
-  private OrchestratorConfigCacheService configCacheService;
+    @Mock
+    private OrchestratorConfigCacheService configCacheService;
 
-  @Mock
-  private BatchDayInstanceMapper batchDayInstanceMapper;
+    @Mock
+    private BatchDayInstanceMapper batchDayInstanceMapper;
 
-  @Mock
-  private JobExecutionLogMapper jobExecutionLogMapper;
+    @Mock
+    private JobExecutionLogMapper jobExecutionLogMapper;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private JobTaskMapper jobTaskMapper;
+    @Mock
+    private JobTaskMapper jobTaskMapper;
 
-  @Mock
-  private JobStepInstanceMapper jobStepInstanceMapper;
+    @Mock
+    private JobStepInstanceMapper jobStepInstanceMapper;
 
-  @Mock
-  private TriggerRequestMapper triggerRequestMapper;
+    @Mock
+    private TriggerRequestMapper triggerRequestMapper;
 
-  @Mock
-  private BatchTimezoneProvider timezoneProvider;
+    @Mock
+    private BatchTimezoneProvider timezoneProvider;
 
-  @Mock
-  private BatchDayTimePolicyResolver timePolicyResolver;
+    @Mock
+    private BatchDayTimePolicyResolver timePolicyResolver;
 
-  @Mock
-  private BatchDateTimeSupport dateTimeSupport;
+    @Mock
+    private BatchDateTimeSupport dateTimeSupport;
 
-  @Mock
-  private AlertEventService alertEventService;
+    @Mock
+    private AlertEventService alertEventService;
 
-  @Mock
-  private PlatformTransactionManager transactionManager;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
-  private LaunchBatchDayService service;
+    private LaunchBatchDayService service;
 
-  @BeforeEach
-  void setUp() {
-    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
-        jobInstanceMapper,
-        jobPartitionMapper,
-        jobTaskMapper,
-        jobStepInstanceMapper,
-        triggerRequestMapper);
-    service = new LaunchBatchDayService(
-        configCacheService,
-        batchDayInstanceMapper,
-        jobExecutionLogMapper,
-        jobMappers,
-        timezoneProvider,
-        timePolicyResolver,
-        dateTimeSupport,
-        alertEventService,
-        transactionManager);
-  }
+    @BeforeEach
+    void setUp() {
+        OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
+                jobInstanceMapper, jobPartitionMapper, jobTaskMapper, jobStepInstanceMapper, triggerRequestMapper);
+        service = new LaunchBatchDayService(
+                configCacheService,
+                batchDayInstanceMapper,
+                jobExecutionLogMapper,
+                jobMappers,
+                timezoneProvider,
+                timePolicyResolver,
+                dateTimeSupport,
+                alertEventService,
+                transactionManager);
+    }
 
-  private LaunchRequest req(String jobCode, LocalDate bizDate, TriggerType type) {
-    return new LaunchRequest("ta", jobCode, bizDate, type, "req-1", "trace", Map.of());
-  }
+    private LaunchRequest req(String jobCode, LocalDate bizDate, TriggerType type) {
+        return new LaunchRequest("ta", jobCode, bizDate, type, "req-1", "trace", Map.of());
+    }
 
-  private JobDefinitionView jobDef(String calendarCode) {
-    return JobDefinitionView.builder()
-        .id(1L)
-        .tenantId("ta")
-        .jobCode("j1")
-        .calendarCode(calendarCode)
-        .build();
-  }
+    private JobDefinitionView jobDef(String calendarCode) {
+        return JobDefinitionView.builder()
+                .id(1L)
+                .tenantId("ta")
+                .jobCode("j1")
+                .calendarCode(calendarCode)
+                .build();
+    }
 
-  // ===== isMissingLaunchContext 早退 =====
+    // ===== isMissingLaunchContext 早退 =====
 
-  @Test
-  @DisplayName("启动请求为空时跳过批次日实例维护,不发起数据库查询")
-  void shouldSkipBatchDayUpsert_whenLaunchRequestIsNull() {
-    service.doUpsertBatchDayInstance(null, jobDef("cal-1"), Map.of(), Instant.now());
-    verify(batchDayInstanceMapper, never())
-        .selectByTenantCalendarBizDate(anyString(), anyString(), any());
-  }
+    @Test
+    @DisplayName("启动请求为空时跳过批次日实例维护,不发起数据库查询")
+    void shouldSkipBatchDayUpsert_whenLaunchRequestIsNull() {
+        service.doUpsertBatchDayInstance(null, jobDef("cal-1"), Map.of(), Instant.now());
+        verify(batchDayInstanceMapper, never()).selectByTenantCalendarBizDate(anyString(), anyString(), any());
+    }
 
-  @Test
-  @DisplayName("业务日期为空时跳过批次日实例维护,不发起数据库查询")
-  void null_bizDate_short_circuits() {
-    LaunchRequest r = req("j1", null, TriggerType.SCHEDULED);
-    service.doUpsertBatchDayInstance(r, jobDef("cal-1"), Map.of(), Instant.now());
-    verify(batchDayInstanceMapper, never())
-        .selectByTenantCalendarBizDate(anyString(), anyString(), any());
-  }
+    @Test
+    @DisplayName("业务日期为空时跳过批次日实例维护,不发起数据库查询")
+    void null_bizDate_short_circuits() {
+        LaunchRequest r = req("j1", null, TriggerType.SCHEDULED);
+        service.doUpsertBatchDayInstance(r, jobDef("cal-1"), Map.of(), Instant.now());
+        verify(batchDayInstanceMapper, never()).selectByTenantCalendarBizDate(anyString(), anyString(), any());
+    }
 
-  @Test
-  @DisplayName("作业定义为空时跳过批次日实例维护,不发起数据库查询")
-  void null_jobDefinition_short_circuits() {
-    LaunchRequest r = req("j1", LocalDate.of(2026, Month.MAY, 20), TriggerType.SCHEDULED);
-    service.doUpsertBatchDayInstance(r, null, Map.of(), Instant.now());
-    verify(batchDayInstanceMapper, never())
-        .selectByTenantCalendarBizDate(anyString(), anyString(), any());
-  }
+    @Test
+    @DisplayName("作业定义为空时跳过批次日实例维护,不发起数据库查询")
+    void null_jobDefinition_short_circuits() {
+        LaunchRequest r = req("j1", LocalDate.of(2026, Month.MAY, 20), TriggerType.SCHEDULED);
+        service.doUpsertBatchDayInstance(r, null, Map.of(), Instant.now());
+        verify(batchDayInstanceMapper, never()).selectByTenantCalendarBizDate(anyString(), anyString(), any());
+    }
 
-  @Test
-  @DisplayName("日历编码缺失或仅含空白时跳过批次日实例维护,不发起数据库查询")
-  void shouldSkipBatchDayUpsert_whenCalendarCodeMissing() {
-    LaunchRequest r = req("j1", LocalDate.of(2026, Month.MAY, 20), TriggerType.SCHEDULED);
-    service.doUpsertBatchDayInstance(r, jobDef(null), Map.of(), Instant.now());
-    verify(batchDayInstanceMapper, never())
-        .selectByTenantCalendarBizDate(anyString(), anyString(), any());
+    @Test
+    @DisplayName("日历编码缺失或仅含空白时跳过批次日实例维护,不发起数据库查询")
+    void shouldSkipBatchDayUpsert_whenCalendarCodeMissing() {
+        LaunchRequest r = req("j1", LocalDate.of(2026, Month.MAY, 20), TriggerType.SCHEDULED);
+        service.doUpsertBatchDayInstance(r, jobDef(null), Map.of(), Instant.now());
+        verify(batchDayInstanceMapper, never()).selectByTenantCalendarBizDate(anyString(), anyString(), any());
 
-    service.doUpsertBatchDayInstance(r, jobDef("  "), Map.of(), Instant.now());
-    verify(batchDayInstanceMapper, never())
-        .selectByTenantCalendarBizDate(anyString(), anyString(), any());
-  }
+        service.doUpsertBatchDayInstance(r, jobDef("  "), Map.of(), Instant.now());
+        verify(batchDayInstanceMapper, never()).selectByTenantCalendarBizDate(anyString(), anyString(), any());
+    }
 
-  // ===== isCatchUpLaunch =====
+    // ===== isCatchUpLaunch =====
 
-  @Test
-  @DisplayName("仅补跑触发类型判定为补跑启动,其余触发类型与空请求均判定为非补跑")
-  void shouldMarkCatchUpLaunchOnly_whenTriggerTypeIsCatchUp() {
-    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.CATCH_UP)))
-        .isTrue();
-    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.SCHEDULED)))
-        .isFalse();
-    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.MANUAL)))
-        .isFalse();
-    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.RERUN)))
-        .isFalse();
-    assertThat(service.isCatchUpLaunch(null)).isFalse();
-  }
+    @Test
+    @DisplayName("仅补跑触发类型判定为补跑启动,其余触发类型与空请求均判定为非补跑")
+    void shouldMarkCatchUpLaunchOnly_whenTriggerTypeIsCatchUp() {
+        assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.CATCH_UP)))
+                .isTrue();
+        assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.SCHEDULED)))
+                .isFalse();
+        assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.MANUAL)))
+                .isFalse();
+        assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.RERUN)))
+                .isFalse();
+        assertThat(service.isCatchUpLaunch(null)).isFalse();
+    }
 
-  // ===== isLateAccepted =====
+    // ===== isLateAccepted =====
 
-  @Test
-  @DisplayName("迟到标志与接受状态同时命中才判定为迟到接受,其余组合与空入参均判定为非迟到接受")
-  void shouldAcceptLateArrivalOnly_whenBothFlagsMatched() {
-    assertThat(
-            service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "LATE_ACCEPTED")))
-        .isTrue();
-    // 仅 lateArrival 不够
-    assertThat(service.isLateAccepted(Map.of("lateArrival", true))).isFalse();
-    // arrivalStatus 是其他值
-    assertThat(service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "ON_TIME")))
-        .isFalse();
-    // lateArrival=false
-    assertThat(
-            service.isLateAccepted(Map.of("lateArrival", false, "arrivalStatus", "LATE_ACCEPTED")))
-        .isFalse();
-    // null 入参
-    assertThat(service.isLateAccepted(null)).isFalse();
-    assertThat(service.isLateAccepted(Map.of())).isFalse();
-  }
+    @Test
+    @DisplayName("迟到标志与接受状态同时命中才判定为迟到接受,其余组合与空入参均判定为非迟到接受")
+    void shouldAcceptLateArrivalOnly_whenBothFlagsMatched() {
+        assertThat(service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "LATE_ACCEPTED")))
+                .isTrue();
+        // 仅 lateArrival 不够
+        assertThat(service.isLateAccepted(Map.of("lateArrival", true))).isFalse();
+        // arrivalStatus 是其他值
+        assertThat(service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "ON_TIME")))
+                .isFalse();
+        // lateArrival=false
+        assertThat(service.isLateAccepted(Map.of("lateArrival", false, "arrivalStatus", "LATE_ACCEPTED")))
+                .isFalse();
+        // null 入参
+        assertThat(service.isLateAccepted(null)).isFalse();
+        assertThat(service.isLateAccepted(Map.of())).isFalse();
+    }
 
-  @Test
-  @DisplayName("接受状态取值大小写不同时仍判定为迟到接受")
-  void shouldTreatLateAccepted_whenStatusLetterCaseDiffers() {
-    assertThat(
-            service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "late_accepted")))
-        .isTrue();
-  }
+    @Test
+    @DisplayName("接受状态取值大小写不同时仍判定为迟到接受")
+    void shouldTreatLateAccepted_whenStatusLetterCaseDiffers() {
+        assertThat(service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "late_accepted")))
+                .isTrue();
+    }
 }

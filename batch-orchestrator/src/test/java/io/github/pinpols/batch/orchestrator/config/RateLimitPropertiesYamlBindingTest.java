@@ -25,31 +25,33 @@ import org.springframework.core.io.ClassPathResource;
 @DisplayName("限流参数与真实配置文件绑定,验证无环境变量覆盖时默认开启且各项阈值与文档口径一致")
 class RateLimitPropertiesYamlBindingTest {
 
-  private static RateLimitProperties bindFromApplicationYaml() throws IOException {
-    YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
-    List<PropertySource<?>> loaded =
-        loader.load("application", new ClassPathResource("application.yml"));
-    MutablePropertySources sources = new MutablePropertySources();
-    loaded.forEach(sources::addLast);
-    Binder binder = new Binder(
-        ConfigurationPropertySources.from(sources),
-        new PropertySourcesPlaceholdersResolver(sources));
-    return binder.bind("batch.rate-limit", RateLimitProperties.class).get();
-  }
+    private static RateLimitProperties bindFromApplicationYaml() throws IOException {
+        YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
+        List<PropertySource<?>> loaded = loader.load("application", new ClassPathResource("application.yml"));
+        MutablePropertySources sources = new MutablePropertySources();
+        loaded.forEach(sources::addLast);
+        Binder binder = new Binder(
+                ConfigurationPropertySources.from(sources), new PropertySourcesPlaceholdersResolver(sources));
+        return binder.bind("batch.rate-limit", RateLimitProperties.class).get();
+    }
 
-  @Test
-  @DisplayName("生产配置未设置环境变量时默认开启限流,各项阈值与文档口径一致")
-  void shouldEnableRateLimitAndMatchDocumentedThresholds_whenNoEnvOverride() throws IOException {
-    RateLimitProperties props = bindFromApplicationYaml();
+    @Test
+    @DisplayName("生产配置未设置环境变量时默认开启限流,各项阈值与文档口径一致")
+    void shouldEnableRateLimitAndMatchDocumentedThresholds_whenNoEnvOverride() throws IOException {
+        RateLimitProperties props = bindFromApplicationYaml();
 
-    assertThat(props.isEnabled()).as("yml 默认应开启限流").isTrue();
-    assertThat(props.getBucketConfigurationVersion()).as("令牌桶配置版本").isEqualTo(2L);
-    assertThat(props.getMaxNewRequestsPerTenantPerMinute()).as("launch 阈值").isEqualTo(3000L);
-    assertThat(props.getMaxReleaseRequestsPerTenantPerMinute()).as("release 阈值").isEqualTo(3000L);
-    assertThat(props.getMaxRegisterRequestsPerTenantPerMinute())
-        .as("register 阈值")
-        .isEqualTo(300L);
-    assertThat(props.getMaxClaimRequestsPerTenantPerMinute()).as("claim 阈值").isEqualTo(12000L);
-    assertThat(props.getMaxReportRequestsPerTenantPerMinute()).as("report 阈值").isEqualTo(30000L);
-  }
+        assertThat(props.isEnabled()).as("yml 默认应开启限流").isTrue();
+        assertThat(props.getBucketConfigurationVersion()).as("令牌桶配置版本").isEqualTo(2L);
+        assertThat(props.getMaxNewRequestsPerTenantPerMinute()).as("launch 阈值").isEqualTo(3000L);
+        assertThat(props.getMaxReleaseRequestsPerTenantPerMinute())
+                .as("release 阈值")
+                .isEqualTo(3000L);
+        assertThat(props.getMaxRegisterRequestsPerTenantPerMinute())
+                .as("register 阈值")
+                .isEqualTo(300L);
+        assertThat(props.getMaxClaimRequestsPerTenantPerMinute()).as("claim 阈值").isEqualTo(12000L);
+        assertThat(props.getMaxReportRequestsPerTenantPerMinute())
+                .as("report 阈值")
+                .isEqualTo(30000L);
+    }
 }

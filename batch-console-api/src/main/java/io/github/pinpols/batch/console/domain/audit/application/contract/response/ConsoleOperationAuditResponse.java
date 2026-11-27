@@ -11,21 +11,21 @@ import lombok.Builder;
  */
 @Builder
 public record ConsoleOperationAuditResponse(
-    Long id,
-    String tenantId,
-    String aggregateType,
-    String aggregateId,
-    String action,
-    String operatorId,
-    String operatorRole,
-    String result,
-    String errorCode,
-    String errorMessage,
-    /** params 是 jsonb,这里以原 JSON 字符串透传给 FE,FE 自己解析展示 */
-    String params,
-    String traceId,
-    String requestId,
-    String ipHash,
-    String uaHash,
-    Integer eventVersion,
-    Instant createdAt) {}
+        Long id,
+        String tenantId,
+        String aggregateType,
+        String aggregateId,
+        String action,
+        String operatorId,
+        String operatorRole,
+        String result,
+        String errorCode,
+        String errorMessage,
+        /** params 是 jsonb,这里以原 JSON 字符串透传给 FE,FE 自己解析展示 */
+        String params,
+        String traceId,
+        String requestId,
+        String ipHash,
+        String uaHash,
+        Integer eventVersion,
+        Instant createdAt) {}

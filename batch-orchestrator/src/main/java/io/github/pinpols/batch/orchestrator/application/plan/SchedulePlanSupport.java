@@ -11,73 +11,71 @@ import java.util.Set;
 /** 调度计划与资源准入决策之间共用的转换逻辑。 */
 public final class SchedulePlanSupport {
 
-  private SchedulePlanSupport() {}
+    private SchedulePlanSupport() {}
 
-  public static ResourceSchedulingRequest toSchedulingRequest(SchedulePlan plan) {
-    ResourceSchedulingRequest request = new ResourceSchedulingRequest();
-    request.setTenantId(plan.getTenantId());
-    request.setJobCode(plan.getJobCode());
-    request.setQueueCode(plan.getQueueCode());
-    request.setWorkerGroup(plan.getWorkerGroup());
-    request.setResourceProfile(plan.getResourceProfile());
-    request.setDownstreamChannelCode(plan.getDownstreamChannelCode());
-    List<String> downstreamChannelCodes = resolveDownstreamChannelCodes(plan);
-    request.setDownstreamChannelCodes(downstreamChannelCodes);
-    request.setWorkerType(plan.getDefaultWorkerType());
-    request.setRequiredCapability(plan.isDryRun() ? WorkerCapabilities.DRY_RUN_SAFE : null);
-    request.setWindowCode(plan.getWindowCode());
-    request.setPriority(plan.getPriority());
-    request.setRequestedPartitionCount(
-        plan.getPartitionCount() == null ? 1 : plan.getPartitionCount());
-    return request;
-  }
+    public static ResourceSchedulingRequest toSchedulingRequest(SchedulePlan plan) {
+        ResourceSchedulingRequest request = new ResourceSchedulingRequest();
+        request.setTenantId(plan.getTenantId());
+        request.setJobCode(plan.getJobCode());
+        request.setQueueCode(plan.getQueueCode());
+        request.setWorkerGroup(plan.getWorkerGroup());
+        request.setResourceProfile(plan.getResourceProfile());
+        request.setDownstreamChannelCode(plan.getDownstreamChannelCode());
+        List<String> downstreamChannelCodes = resolveDownstreamChannelCodes(plan);
+        request.setDownstreamChannelCodes(downstreamChannelCodes);
+        request.setWorkerType(plan.getDefaultWorkerType());
+        request.setRequiredCapability(plan.isDryRun() ? WorkerCapabilities.DRY_RUN_SAFE : null);
+        request.setWindowCode(plan.getWindowCode());
+        request.setPriority(plan.getPriority());
+        request.setRequestedPartitionCount(plan.getPartitionCount() == null ? 1 : plan.getPartitionCount());
+        return request;
+    }
 
-  /**
-   * 普通 DISPATCH 使用计划级渠道，BUNDLE_DISPATCH 和 fan-out 使用分区级 targetRef。
-   * 两者合并去重后一次性参加准入，避免束内任一故障渠道绕过健康闸门。
-   */
-  private static List<String> resolveDownstreamChannelCodes(SchedulePlan plan) {
-    if (EmptyChecks.isNull(plan) || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())) {
-      return List.of();
+    /**
+     * 普通 DISPATCH 使用计划级渠道，BUNDLE_DISPATCH 和 fan-out 使用分区级 targetRef。
+     * 两者合并去重后一次性参加准入，避免束内任一故障渠道绕过健康闸门。
+     */
+    private static List<String> resolveDownstreamChannelCodes(SchedulePlan plan) {
+        if (EmptyChecks.isNull(plan) || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())) {
+            return List.of();
+        }
+        Set<String> channels = new LinkedHashSet<>();
+        if (EmptyChecks.isNotBlank(plan.getDownstreamChannelCode())) {
+            channels.add(plan.getDownstreamChannelCode());
+        }
+        if (EmptyChecks.isNotNull(plan.getPartitions())) {
+            plan.getPartitions().stream()
+                    .map(SchedulePlan.PartitionPlan::getTargetRef)
+                    .filter(EmptyChecks::isNotBlank)
+                    .forEach(channels::add);
+        }
+        return List.copyOf(channels);
     }
-    Set<String> channels = new LinkedHashSet<>();
-    if (EmptyChecks.isNotBlank(plan.getDownstreamChannelCode())) {
-      channels.add(plan.getDownstreamChannelCode());
-    }
-    if (EmptyChecks.isNotNull(plan.getPartitions())) {
-      plan.getPartitions().stream()
-          .map(SchedulePlan.PartitionPlan::getTargetRef)
-          .filter(EmptyChecks::isNotBlank)
-          .forEach(channels::add);
-    }
-    return List.copyOf(channels);
-  }
 
-  public static void applySchedulingDecision(
-      SchedulePlan plan, ResourceSchedulingDecision decision) {
-    if (plan == null || decision == null) {
-      return;
+    public static void applySchedulingDecision(SchedulePlan plan, ResourceSchedulingDecision decision) {
+        if (plan == null || decision == null) {
+            return;
+        }
+        if (EmptyChecks.isNotBlank(decision.getQueueCode())) {
+            plan.setQueueCode(decision.getQueueCode());
+        }
+        if (EmptyChecks.isNotBlank(decision.getWorkerGroup())) {
+            plan.setWorkerGroup(decision.getWorkerGroup());
+        }
+        if (decision.getPriority() != null) {
+            plan.setPriority(decision.getPriority());
+        }
+        if (decision.getRoute() != null) {
+            plan.setDefaultWorkerRoute(decision.getRoute());
+        }
+        if (plan.getPartitions() == null) {
+            return;
+        }
+        for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
+            partitionPlan.setPartitionStatus(decision.getPartitionStatus());
+            if (decision.getRoute() != null) {
+                partitionPlan.setWorkerRoute(decision.getRoute());
+            }
+        }
     }
-    if (EmptyChecks.isNotBlank(decision.getQueueCode())) {
-      plan.setQueueCode(decision.getQueueCode());
-    }
-    if (EmptyChecks.isNotBlank(decision.getWorkerGroup())) {
-      plan.setWorkerGroup(decision.getWorkerGroup());
-    }
-    if (decision.getPriority() != null) {
-      plan.setPriority(decision.getPriority());
-    }
-    if (decision.getRoute() != null) {
-      plan.setDefaultWorkerRoute(decision.getRoute());
-    }
-    if (plan.getPartitions() == null) {
-      return;
-    }
-    for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
-      partitionPlan.setPartitionStatus(decision.getPartitionStatus());
-      if (decision.getRoute() != null) {
-        partitionPlan.setWorkerRoute(decision.getRoute());
-      }
-    }
-  }
 }

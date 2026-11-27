@@ -10,8 +10,8 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ResourceQueueMapper {
 
-  List<ResourceQueueEntity> selectByTenantAndEnabled(
-      @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
+    List<ResourceQueueEntity> selectByTenantAndEnabled(
+            @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  ResourceQueueEntity selectById(@Param("id") Long id);
+    ResourceQueueEntity selectById(@Param("id") Long id);
 }

@@ -27,32 +27,22 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class ConsoleWebhookDomainEventListener {
 
-  private final WebhookDispatcher webhookDispatcher;
-  private final SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher;
+    private final WebhookDispatcher webhookDispatcher;
+    private final SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher;
 
-  // 外部通知只能观察到已提交事实。异步执行同时避免查询订阅、落投递记录占用原请求线程。
-  @Async(ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
-  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-  public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
-    boolean eventIsMissingTenant = EmptyChecks.isNull(event)
-        || EmptyChecks.isNull(event.tenantId())
-        || EmptyChecks.isBlank(Objects.requireNonNull(event.tenantId()));
-    if (eventIsMissingTenant) {
-      return;
+    // 外部通知只能观察到已提交事实。异步执行同时避免查询订阅、落投递记录占用原请求线程。
+    @Async(ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
+        boolean eventIsMissingTenant = EmptyChecks.isNull(event)
+                || EmptyChecks.isNull(event.tenantId())
+                || EmptyChecks.isBlank(Objects.requireNonNull(event.tenantId()));
+        if (eventIsMissingTenant) {
+            return;
+        }
+        webhookDispatcher.dispatchAsync(
+                event.tenantId(), event.eventType(), event.stream(), event.cursor(), event.data(), event.emittedAt());
+        subscriptionRuleWebhookDispatcher.dispatch(
+                event.tenantId(), event.eventType(), event.stream(), event.cursor(), event.data(), event.emittedAt());
     }
-    webhookDispatcher.dispatchAsync(
-        event.tenantId(),
-        event.eventType(),
-        event.stream(),
-        event.cursor(),
-        event.data(),
-        event.emittedAt());
-    subscriptionRuleWebhookDispatcher.dispatch(
-        event.tenantId(),
-        event.eventType(),
-        event.stream(),
-        event.cursor(),
-        event.data(),
-        event.emittedAt());
-  }
 }

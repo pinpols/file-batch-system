@@ -11,9 +11,8 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
  */
 public interface LaunchService {
 
-  LaunchResponse launch(LaunchRequest request);
+    LaunchResponse launch(LaunchRequest request);
 
-  /** 将不可重试的派发业务错误收敛为实例 FAILED、请求 REJECTED。 */
-  void finalizeDispatchFailure(
-      LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure);
+    /** 将不可重试的派发业务错误收敛为实例 FAILED、请求 REJECTED。 */
+    void finalizeDispatchFailure(LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure);
 }

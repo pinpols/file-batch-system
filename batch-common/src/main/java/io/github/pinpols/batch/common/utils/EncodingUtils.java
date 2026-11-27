@@ -25,122 +25,117 @@ import javax.annotation.Nullable;
 @SuppressWarnings("java:S2583")
 public final class EncodingUtils {
 
-  /** 系统内部字符集规范名；等价于 {@code StandardCharsets.UTF_8.name()}。 */
-  public static final String UTF_8 = StandardCharsets.UTF_8.name();
+    /** 系统内部字符集规范名；等价于 {@code StandardCharsets.UTF_8.name()}。 */
+    public static final String UTF_8 = StandardCharsets.UTF_8.name();
 
-  /**
-   * GB18030 字符集（GBK 的严格超集），用于导入侧「未显式配置 charset 时的编码探测回退」与导出侧老系统 GBK/GB18030 目标编码。
-   * 不属于 {@link StandardCharsets}，统一收敛到本工具，避免业务代码散落 {@code Charset.forName("GB18030")}。
-   */
-  public static final Charset GB18030 = Charset.forName("GB18030");
+    /**
+     * GB18030 字符集（GBK 的严格超集），用于导入侧「未显式配置 charset 时的编码探测回退」与导出侧老系统 GBK/GB18030 目标编码。
+     * 不属于 {@link StandardCharsets}，统一收敛到本工具，避免业务代码散落 {@code Charset.forName("GB18030")}。
+     */
+    public static final Charset GB18030 = Charset.forName("GB18030");
 
-  /** GBK 字符集（国标简体中文，GB18030 子集），导出侧老系统兼容目标编码。 */
-  public static final Charset GBK = Charset.forName("GBK");
+    /** GBK 字符集（国标简体中文，GB18030 子集），导出侧老系统兼容目标编码。 */
+    public static final Charset GBK = Charset.forName("GBK");
 
-  private EncodingUtils() {}
+    private EncodingUtils() {}
 
-  /**
-   * 把用户/配置输入的字符集名归一为 JDK 规范名。
-   *
-   * <p>空/空白输入返回 {@link #UTF_8}；非法字符集名抛 {@link IllegalArgumentException}。
-   */
-  public static String normalize(@Nullable String raw) {
-    if (raw == null || raw.isBlank()) { // empty-check: allow - Sonar S2259
-      return UTF_8;
+    /**
+     * 把用户/配置输入的字符集名归一为 JDK 规范名。
+     *
+     * <p>空/空白输入返回 {@link #UTF_8}；非法字符集名抛 {@link IllegalArgumentException}。
+     */
+    public static String normalize(@Nullable String raw) {
+        if (raw == null || raw.isBlank()) { // empty-check: allow - Sonar S2259
+            return UTF_8;
+        }
+        String normalized = raw.trim();
+        try {
+            Charset charset = Charset.forName(normalized);
+            return charset.name();
+        } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
+            throw new IllegalArgumentException("unsupported charset: " + raw, e);
+        }
     }
-    String normalized = raw.trim();
-    try {
-      Charset charset = Charset.forName(normalized);
-      return charset.name();
-    } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
-      throw new IllegalArgumentException("unsupported charset: " + raw, e);
-    }
-  }
 
-  /** 归一并返回对应 {@link Charset}；空/空白返回 {@link StandardCharsets#UTF_8}。 */
-  public static Charset resolve(@Nullable String raw) {
-    if (raw == null || raw.isBlank()) { // empty-check: allow - Sonar S2259
-      return StandardCharsets.UTF_8;
+    /** 归一并返回对应 {@link Charset}；空/空白返回 {@link StandardCharsets#UTF_8}。 */
+    public static Charset resolve(@Nullable String raw) {
+        if (raw == null || raw.isBlank()) { // empty-check: allow - Sonar S2259
+            return StandardCharsets.UTF_8;
+        }
+        String normalized = raw.trim();
+        try {
+            return Charset.forName(normalized);
+        } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
+            throw new IllegalArgumentException("unsupported charset: " + raw, e);
+        }
     }
-    String normalized = raw.trim();
-    try {
-      return Charset.forName(normalized);
-    } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
-      throw new IllegalArgumentException("unsupported charset: " + raw, e);
-    }
-  }
 
-  /** 归一后判断是否为 UTF-8；空/空白视为 UTF-8（默认值）。 */
-  public static boolean isUtf8(String raw) {
-    if (!Texts.hasText(raw)) {
-      return true;
+    /** 归一后判断是否为 UTF-8；空/空白视为 UTF-8（默认值）。 */
+    public static boolean isUtf8(String raw) {
+        if (!Texts.hasText(raw)) {
+            return true;
+        }
+        try {
+            String trimmedName = raw.trim();
+            Charset charset = Charset.forName(trimmedName);
+            String canonicalCharsetName = charset.name();
+            return UTF_8.equals(canonicalCharsetName);
+        } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
+            return false;
+        }
     }
-    try {
-      String trimmedName = raw.trim();
-      Charset charset = Charset.forName(trimmedName);
-      String canonicalCharsetName = charset.name();
-      return UTF_8.equals(canonicalCharsetName);
-    } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
-      return false;
-    }
-  }
 
-  /** 导出路径强制 UTF-8；非 UTF-8 抛 {@link IllegalArgumentException}。 */
-  public static void requireUtf8(String raw) {
-    if (!isUtf8(raw)) {
-      throw new IllegalArgumentException(
-          "only UTF-8 is allowed here (system internal contract): " + raw);
+    /** 导出路径强制 UTF-8；非 UTF-8 抛 {@link IllegalArgumentException}。 */
+    public static void requireUtf8(String raw) {
+        if (!isUtf8(raw)) {
+            throw new IllegalArgumentException("only UTF-8 is allowed here (system internal contract): " + raw);
+        }
     }
-  }
 
-  /** UTF-8 BOM = EF BB BF（3 字节）。 */
-  private static final byte[] UTF8_BOM = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+    /** UTF-8 BOM = EF BB BF（3 字节）。 */
+    private static final byte[] UTF8_BOM = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
-  /**
-   * S-1.8：剥离 UTF-8 BOM 前缀。返回一个包装后的流，前 3 个字节是 BOM 就捕获并抑制，否则透传。
-   *
-   * <p>外部导出工具（Windows Excel "CSV UTF-8"、部分文本编辑器）写出 UTF-8 文件时会自动加 BOM；系统内部读取这些文件做 parse 时，若不剥 BOM
-   * 会让首字段混入 {@code \uFEFF} 字符，后续 header 匹配 / 数值解析全部失败。{@code PreprocessStep.resolveCharset} 自己
-   * 早期在字符层（normalizeText）剥过一次；现在统一收口到本工具：PreprocessStep 文本路径与流式直载在字节层剥，
-   * {@code ImportPreprocessPipeline.charsetTranscode} 在 UTF-8→其他编码转码前也剥。
-   *
-   * <p>要求传入 <b>可 mark/reset 或 {@link PushbackInputStream}</b>——本方法内部用 PushbackInputStream
-   * 包装；调用方不需要再关心。返回流的 close 会级联关闭底层。
-   */
-  public static InputStream stripUtf8Bom(InputStream in) throws IOException {
-    if (in == null) {
-      return InputStream.nullInputStream();
+    /**
+     * S-1.8：剥离 UTF-8 BOM 前缀。返回一个包装后的流，前 3 个字节是 BOM 就捕获并抑制，否则透传。
+     *
+     * <p>外部导出工具（Windows Excel "CSV UTF-8"、部分文本编辑器）写出 UTF-8 文件时会自动加 BOM；系统内部读取这些文件做 parse 时，若不剥 BOM
+     * 会让首字段混入 {@code \uFEFF} 字符，后续 header 匹配 / 数值解析全部失败。{@code PreprocessStep.resolveCharset} 自己
+     * 早期在字符层（normalizeText）剥过一次；现在统一收口到本工具：PreprocessStep 文本路径与流式直载在字节层剥，
+     * {@code ImportPreprocessPipeline.charsetTranscode} 在 UTF-8→其他编码转码前也剥。
+     *
+     * <p>要求传入 <b>可 mark/reset 或 {@link PushbackInputStream}</b>——本方法内部用 PushbackInputStream
+     * 包装；调用方不需要再关心。返回流的 close 会级联关闭底层。
+     */
+    public static InputStream stripUtf8Bom(InputStream in) throws IOException {
+        if (in == null) {
+            return InputStream.nullInputStream();
+        }
+        PushbackInputStream pb = in instanceof PushbackInputStream p ? p : new PushbackInputStream(in, 3);
+        byte[] prefix = new byte[3];
+        int read = pb.read(prefix);
+        if (read <= 0) {
+            return pb;
+        }
+        boolean isBom = read == 3 && prefix[0] == UTF8_BOM[0] && prefix[1] == UTF8_BOM[1] && prefix[2] == UTF8_BOM[2];
+        if (!isBom) {
+            pb.unread(prefix, 0, read);
+        }
+        return pb;
     }
-    PushbackInputStream pb =
-        in instanceof PushbackInputStream p ? p : new PushbackInputStream(in, 3);
-    byte[] prefix = new byte[3];
-    int read = pb.read(prefix);
-    if (read <= 0) {
-      return pb;
-    }
-    boolean isBom = read == 3
-        && prefix[0] == UTF8_BOM[0]
-        && prefix[1] == UTF8_BOM[1]
-        && prefix[2] == UTF8_BOM[2];
-    if (!isBom) {
-      pb.unread(prefix, 0, read);
-    }
-    return pb;
-  }
 
-  /**
-   * 字节数组形态的 UTF-8 BOM 剥离：前 3 字节是 EF BB BF 则返回去掉 BOM 的新数组，否则原样返回（不复制）。
-   * 供 {@code PreprocessStep} 在 decode / spool 前对整块字节做一次统一剥离。
-   */
-  public static byte[] stripUtf8Bom(byte[] data) {
-    if (data == null || data.length < 3) {
-      return data;
+    /**
+     * 字节数组形态的 UTF-8 BOM 剥离：前 3 字节是 EF BB BF 则返回去掉 BOM 的新数组，否则原样返回（不复制）。
+     * 供 {@code PreprocessStep} 在 decode / spool 前对整块字节做一次统一剥离。
+     */
+    public static byte[] stripUtf8Bom(byte[] data) {
+        if (data == null || data.length < 3) {
+            return data;
+        }
+        if (data[0] == UTF8_BOM[0] && data[1] == UTF8_BOM[1] && data[2] == UTF8_BOM[2]) {
+            byte[] stripped = new byte[data.length - 3];
+            System.arraycopy(data, 3, stripped, 0, stripped.length);
+            return stripped;
+        }
+        return data;
     }
-    if (data[0] == UTF8_BOM[0] && data[1] == UTF8_BOM[1] && data[2] == UTF8_BOM[2]) {
-      byte[] stripped = new byte[data.length - 3];
-      System.arraycopy(data, 3, stripped, 0, stripped.length);
-      return stripped;
-    }
-    return data;
-  }
 }

@@ -16,21 +16,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class LineageEvidenceController {
 
-  private final LineageEvidenceService lineageEvidenceService;
+    private final LineageEvidenceService lineageEvidenceService;
 
-  @GetMapping("/result-versions/{id}")
-  public CommonResponse<LineageEvidenceResponse> byResultVersion(
-      @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    LineageEvidenceResponse evidence =
-        lineageEvidenceService.evidenceForResultVersion(tenantId, id);
-    return CommonResponse.success(evidence);
-  }
+    @GetMapping("/result-versions/{id}")
+    public CommonResponse<LineageEvidenceResponse> byResultVersion(
+            @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
+        LineageEvidenceResponse evidence = lineageEvidenceService.evidenceForResultVersion(tenantId, id);
+        return CommonResponse.success(evidence);
+    }
 
-  @GetMapping("/effective")
-  public CommonResponse<LineageEvidenceResponse> byEffectiveBusinessKey(
-      @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
-    LineageEvidenceResponse evidence =
-        lineageEvidenceService.evidenceForEffective(tenantId, businessKey);
-    return CommonResponse.success(evidence);
-  }
+    @GetMapping("/effective")
+    public CommonResponse<LineageEvidenceResponse> byEffectiveBusinessKey(
+            @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
+        LineageEvidenceResponse evidence = lineageEvidenceService.evidenceForEffective(tenantId, businessKey);
+        return CommonResponse.success(evidence);
+    }
 }

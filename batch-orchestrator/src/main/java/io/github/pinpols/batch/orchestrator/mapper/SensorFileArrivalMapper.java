@@ -14,17 +14,15 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface SensorFileArrivalMapper {
 
-  /**
-   * 查最新到达的 file_record。
-   *
-   * @param parameters 租户、SQL LIKE 模式（使用 {@code !} 转义）、可选来源及到达时间等筛选条件
-   * @return 最新命中投影，未命中返 null
-   */
-  SensorFileArrivalView selectLatestArrival(SensorFileArrivalLatestArrivalQuery parameters);
+    /**
+     * 查最新到达的 file_record。
+     *
+     * @param parameters 租户、SQL LIKE 模式（使用 {@code !} 转义）、可选来源及到达时间等筛选条件
+     * @return 最新命中投影，未命中返 null
+     */
+    SensorFileArrivalView selectLatestArrival(SensorFileArrivalLatestArrivalQuery parameters);
 
-  /** 调试用：返回最近 N 条匹配，方便排查 sensor 误判。 */
-  List<SensorFileArrivalMatchView> recentMatches(
-      @Param("tenantId") String tenantId,
-      @Param("namePattern") String namePattern,
-      @Param("limit") int limit);
+    /** 调试用：返回最近 N 条匹配，方便排查 sensor 误判。 */
+    List<SensorFileArrivalMatchView> recentMatches(
+            @Param("tenantId") String tenantId, @Param("namePattern") String namePattern, @Param("limit") int limit);
 }

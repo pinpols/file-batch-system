@@ -16,18 +16,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleCapacityProfileController {
 
-  private final ConsoleOrchestratorPort orchestratorProxy;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOrchestratorPort orchestratorProxy;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<CapacityProfileResponse> query(
-      @RequestParam(value = "tenantId", required = false) String tenantId,
-      @RequestParam(value = "from", required = false) String from,
-      @RequestParam(value = "to", required = false) String to,
-      @RequestParam(value = "groupBy", required = false, defaultValue = "TENANT") String groupBy,
-      @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit) {
-    CommonResponse<CapacityProfileResponse> resp =
-        orchestratorProxy.capacityProfile(tenantId, from, to, groupBy, limit);
-    return responseFactory.forwardOrchestrator(resp);
-  }
+    @GetMapping
+    public CommonResponse<CapacityProfileResponse> query(
+            @RequestParam(value = "tenantId", required = false) String tenantId,
+            @RequestParam(value = "from", required = false) String from,
+            @RequestParam(value = "to", required = false) String to,
+            @RequestParam(value = "groupBy", required = false, defaultValue = "TENANT") String groupBy,
+            @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit) {
+        CommonResponse<CapacityProfileResponse> resp =
+                orchestratorProxy.capacityProfile(tenantId, from, to, groupBy, limit);
+        return responseFactory.forwardOrchestrator(resp);
+    }
 }

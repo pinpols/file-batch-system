@@ -18,97 +18,97 @@ import org.slf4j.Logger;
  */
 public final class ThrottledLogger {
 
-  private final Logger delegate;
-  private final Duration throttleWindow;
-  private final Map<String, State> states = new ConcurrentHashMap<>();
+    private final Logger delegate;
+    private final Duration throttleWindow;
+    private final Map<String, State> states = new ConcurrentHashMap<>();
 
-  private ThrottledLogger(Logger delegate, Duration throttleWindow) {
-    if (delegate == null) throw new IllegalArgumentException("delegate logger required");
-    if (throttleWindow == null || throttleWindow.isNegative() || throttleWindow.isZero()) {
-      throw new IllegalArgumentException("throttleWindow must be positive");
+    private ThrottledLogger(Logger delegate, Duration throttleWindow) {
+        if (delegate == null) throw new IllegalArgumentException("delegate logger required");
+        if (throttleWindow == null || throttleWindow.isNegative() || throttleWindow.isZero()) {
+            throw new IllegalArgumentException("throttleWindow must be positive");
+        }
+        this.delegate = delegate;
+        this.throttleWindow = throttleWindow;
     }
-    this.delegate = delegate;
-    this.throttleWindow = throttleWindow;
-  }
 
-  public static ThrottledLogger create(Logger delegate, Duration throttleWindow) {
-    return new ThrottledLogger(delegate, throttleWindow);
-  }
-
-  /** 按 key 节流的 INFO。同 key 在窗口内首条放行,其余压制(只累加计数,下一次放行时附 suppressed 提示)。 */
-  public void info(String key, String format, Object... args) {
-    if (delegate.isInfoEnabled()) {
-      log(Level.INFO, key, format, args);
+    public static ThrottledLogger create(Logger delegate, Duration throttleWindow) {
+        return new ThrottledLogger(delegate, throttleWindow);
     }
-  }
 
-  public void warn(String key, String format, Object... args) {
-    if (delegate.isWarnEnabled()) {
-      log(Level.WARN, key, format, args);
+    /** 按 key 节流的 INFO。同 key 在窗口内首条放行,其余压制(只累加计数,下一次放行时附 suppressed 提示)。 */
+    public void info(String key, String format, Object... args) {
+        if (delegate.isInfoEnabled()) {
+            log(Level.INFO, key, format, args);
+        }
     }
-  }
 
-  public void error(String key, String format, Object... args) {
-    if (delegate.isErrorEnabled()) {
-      log(Level.ERROR, key, format, args);
+    public void warn(String key, String format, Object... args) {
+        if (delegate.isWarnEnabled()) {
+            log(Level.WARN, key, format, args);
+        }
     }
-  }
 
-  private void log(Level level, String key, String format, Object... args) {
-    Instant now = Instant.now();
-    long windowMillis = throttleWindow.toMillis();
-    long[] decisionHolder = new long[] {-1L}; // [0] = -1 抑制,≥0 放行(数值为本轮 suppressed 计数)
-    states.compute(key, (k, state) -> {
-      if (state == null) {
-        State fresh = new State();
-        fresh.lastEmittedEpochMillis = now.toEpochMilli();
-        decisionHolder[0] = 0L; // 首次放行,无 suppressed
-        return fresh;
-      }
-      long elapsed = now.toEpochMilli() - state.lastEmittedEpochMillis;
-      if (elapsed >= windowMillis) {
-        decisionHolder[0] = state.suppressed.getAndSet(0L);
-        state.lastEmittedEpochMillis = now.toEpochMilli();
-      } else {
-        state.suppressed.incrementAndGet();
-        decisionHolder[0] = -1L;
-      }
-      return state;
-    });
-    long suppressed = decisionHolder[0];
-    if (suppressed < 0) {
-      // 被抑制 — 不输出,仅累加计数
-      return;
+    public void error(String key, String format, Object... args) {
+        if (delegate.isErrorEnabled()) {
+            log(Level.ERROR, key, format, args);
+        }
     }
-    String finalFormat = format;
-    Object[] finalArgs = args;
-    if (suppressed > 0) {
-      finalFormat = format + " (suppressed {} similar log(s) in last {})";
-      finalArgs = appendArgs(args, suppressed, throttleWindow);
+
+    private void log(Level level, String key, String format, Object... args) {
+        Instant now = Instant.now();
+        long windowMillis = throttleWindow.toMillis();
+        long[] decisionHolder = new long[] {-1L}; // [0] = -1 抑制,≥0 放行(数值为本轮 suppressed 计数)
+        states.compute(key, (k, state) -> {
+            if (state == null) {
+                State fresh = new State();
+                fresh.lastEmittedEpochMillis = now.toEpochMilli();
+                decisionHolder[0] = 0L; // 首次放行,无 suppressed
+                return fresh;
+            }
+            long elapsed = now.toEpochMilli() - state.lastEmittedEpochMillis;
+            if (elapsed >= windowMillis) {
+                decisionHolder[0] = state.suppressed.getAndSet(0L);
+                state.lastEmittedEpochMillis = now.toEpochMilli();
+            } else {
+                state.suppressed.incrementAndGet();
+                decisionHolder[0] = -1L;
+            }
+            return state;
+        });
+        long suppressed = decisionHolder[0];
+        if (suppressed < 0) {
+            // 被抑制 — 不输出,仅累加计数
+            return;
+        }
+        String finalFormat = format;
+        Object[] finalArgs = args;
+        if (suppressed > 0) {
+            finalFormat = format + " (suppressed {} similar log(s) in last {})";
+            finalArgs = appendArgs(args, suppressed, throttleWindow);
+        }
+        switch (level) {
+            case INFO -> delegate.info(finalFormat, finalArgs);
+            case WARN -> delegate.warn(finalFormat, finalArgs);
+            case ERROR -> delegate.error(finalFormat, finalArgs);
+        }
     }
-    switch (level) {
-      case INFO -> delegate.info(finalFormat, finalArgs);
-      case WARN -> delegate.warn(finalFormat, finalArgs);
-      case ERROR -> delegate.error(finalFormat, finalArgs);
+
+    private static Object[] appendArgs(Object[] base, Object... extras) {
+        Object[] merged = new Object[base.length + extras.length];
+        System.arraycopy(base, 0, merged, 0, base.length);
+        System.arraycopy(extras, 0, merged, base.length, extras.length);
+        return merged;
     }
-  }
 
-  private static Object[] appendArgs(Object[] base, Object... extras) {
-    Object[] merged = new Object[base.length + extras.length];
-    System.arraycopy(base, 0, merged, 0, base.length);
-    System.arraycopy(extras, 0, merged, base.length, extras.length);
-    return merged;
-  }
+    private enum Level {
+        INFO,
+        WARN,
+        ERROR
+    }
 
-  private enum Level {
-    INFO,
-    WARN,
-    ERROR
-  }
-
-  /** 每 key 一份的状态。决策结果走 compute 闭包外的局部 holder 传出,避免跨线程读写。 */
-  private static final class State {
-    long lastEmittedEpochMillis;
-    final AtomicLong suppressed = new AtomicLong(0L);
-  }
+    /** 每 key 一份的状态。决策结果走 compute 闭包外的局部 holder 传出,避免跨线程读写。 */
+    private static final class State {
+        long lastEmittedEpochMillis;
+        final AtomicLong suppressed = new AtomicLong(0L);
+    }
 }

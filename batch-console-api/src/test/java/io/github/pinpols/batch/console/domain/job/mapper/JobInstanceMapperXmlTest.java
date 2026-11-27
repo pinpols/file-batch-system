@@ -21,147 +21,144 @@ import org.junit.jupiter.api.Test;
 @DisplayName("作业实例查询语句的状态过滤口径: 各筛选保留自身业务语义的状态集合")
 class JobInstanceMapperXmlTest {
 
-  @Test
-  @DisplayName("精确作业编码同时约束列表与计数，模糊查询仍保留原语义")
-  void shouldFilterExactJobCodeInListAndCount_withoutChangingFuzzyQuery() throws Exception {
-    Configuration configuration = new Configuration();
-    parseMapper(configuration, "mapper/CommonFragments.xml");
-    parseMapper(configuration, "mapper/JobInstanceMapper.xml");
-    Map<String, Object> exact = Map.of(
-        "tenantId",
-        "tenant-a",
-        "exactJobCode",
-        "JOB_A",
-        "jobCode",
-        "UNRELATED",
-        "pageRequest",
-        new PageRequest(1, 2));
-    Map<String, Object> fuzzy =
-        Map.of("tenantId", "tenant-a", "jobCode", "JOB_A", "pageRequest", new PageRequest(1, 2));
-    for (String statement : new String[] {"selectByQuery", "countByQuery"}) {
-      var mapped =
-          configuration.getMappedStatement(JobInstanceMapper.class.getName() + "." + statement);
-      String exactSql =
-          mapped.getBoundSql(exact).getSql().replaceAll("\\s+", " ").toLowerCase();
-      String fuzzySql =
-          mapped.getBoundSql(fuzzy).getSql().replaceAll("\\s+", " ").toLowerCase();
-      assertThat(exactSql).as(statement + " 精确作业编码").contains("job_code = ?");
-      assertThat(exactSql).as(statement + " 精确筛选优先").doesNotContain("job_code like");
-      assertThat(fuzzySql).as(statement + " 原模糊作业编码").contains("job_code like");
+    @Test
+    @DisplayName("精确作业编码同时约束列表与计数，模糊查询仍保留原语义")
+    void shouldFilterExactJobCodeInListAndCount_withoutChangingFuzzyQuery() throws Exception {
+        Configuration configuration = new Configuration();
+        parseMapper(configuration, "mapper/CommonFragments.xml");
+        parseMapper(configuration, "mapper/JobInstanceMapper.xml");
+        Map<String, Object> exact = Map.of(
+                "tenantId",
+                "tenant-a",
+                "exactJobCode",
+                "JOB_A",
+                "jobCode",
+                "UNRELATED",
+                "pageRequest",
+                new PageRequest(1, 2));
+        Map<String, Object> fuzzy =
+                Map.of("tenantId", "tenant-a", "jobCode", "JOB_A", "pageRequest", new PageRequest(1, 2));
+        for (String statement : new String[] {"selectByQuery", "countByQuery"}) {
+            var mapped = configuration.getMappedStatement(JobInstanceMapper.class.getName() + "." + statement);
+            String exactSql =
+                    mapped.getBoundSql(exact).getSql().replaceAll("\\s+", " ").toLowerCase();
+            String fuzzySql =
+                    mapped.getBoundSql(fuzzy).getSql().replaceAll("\\s+", " ").toLowerCase();
+            assertThat(exactSql).as(statement + " 精确作业编码").contains("job_code = ?");
+            assertThat(exactSql).as(statement + " 精确筛选优先").doesNotContain("job_code like");
+            assertThat(fuzzySql).as(statement + " 原模糊作业编码").contains("job_code like");
+        }
     }
-  }
 
-  @Test
-  @DisplayName("列表、详情与按编号查询都投影根运行的触发类型")
-  void shouldProjectRootTriggerType_inListDetailAndInstanceNoQueries() throws Exception {
-    Configuration configuration = new Configuration();
-    parseMapper(configuration, "mapper/CommonFragments.xml");
-    parseMapper(configuration, "mapper/JobInstanceMapper.xml");
-    Map<String, Object> params = Map.of(
-        "tenantId",
-        "tenant-a",
-        "id",
-        1L,
-        "instanceNos",
-        List.of("inst-a"),
-        "pageRequest",
-        new PageRequest(1, 2));
-    for (String statement : new String[] {"selectByQuery", "selectById", "selectByInstanceNos"}) {
-      String sql = configuration
-          .getMappedStatement(JobInstanceMapper.class.getName() + "." + statement)
-          .getBoundSql(params)
-          .getSql()
-          .replaceAll("\\s+", " ")
-          .toLowerCase();
-      assertThat(sql).as(statement).contains("as root_trigger_type");
-      assertThat(sql)
-          .as(statement + " 租户隔离")
-          .contains("child_request.tenant_id = job_instance.tenant_id");
+    @Test
+    @DisplayName("列表、详情与按编号查询都投影根运行的触发类型")
+    void shouldProjectRootTriggerType_inListDetailAndInstanceNoQueries() throws Exception {
+        Configuration configuration = new Configuration();
+        parseMapper(configuration, "mapper/CommonFragments.xml");
+        parseMapper(configuration, "mapper/JobInstanceMapper.xml");
+        Map<String, Object> params = Map.of(
+                "tenantId",
+                "tenant-a",
+                "id",
+                1L,
+                "instanceNos",
+                List.of("inst-a"),
+                "pageRequest",
+                new PageRequest(1, 2));
+        for (String statement : new String[] {"selectByQuery", "selectById", "selectByInstanceNos"}) {
+            String sql = configuration
+                    .getMappedStatement(JobInstanceMapper.class.getName() + "." + statement)
+                    .getBoundSql(params)
+                    .getSql()
+                    .replaceAll("\\s+", " ")
+                    .toLowerCase();
+            assertThat(sql).as(statement).contains("as root_trigger_type");
+            assertThat(sql).as(statement + " 租户隔离").contains("child_request.tenant_id = job_instance.tenant_id");
+        }
+        assertThat(configuration
+                        .getResultMap(JobInstanceMapper.class.getName() + ".JobInstanceResultMap")
+                        .getResultMappings())
+                .anySatisfy(m -> assertThat(m.getProperty()).isEqualTo("rootTriggerType"));
     }
-    assertThat(configuration
-            .getResultMap(JobInstanceMapper.class.getName() + ".JobInstanceResultMap")
-            .getResultMappings())
-        .anySatisfy(m -> assertThat(m.getProperty()).isEqualTo("rootTriggerType"));
-  }
 
-  @Test
-  @DisplayName("超期筛选保留自身业务口径的状态集合, 并包含部分失败状态")
-  void shouldKeepBusinessStatusSet_whenSlaFilterApplied() {
-    String resource = "mapper/JobInstanceMapper.xml";
-    Configuration configuration = new Configuration();
-    try {
-      parseMapper(configuration, "mapper/CommonFragments.xml");
-      parseMapper(configuration, resource);
+    @Test
+    @DisplayName("超期筛选保留自身业务口径的状态集合, 并包含部分失败状态")
+    void shouldKeepBusinessStatusSet_whenSlaFilterApplied() {
+        String resource = "mapper/JobInstanceMapper.xml";
+        Configuration configuration = new Configuration();
+        try {
+            parseMapper(configuration, "mapper/CommonFragments.xml");
+            parseMapper(configuration, resource);
 
-      JobInstanceQuery query = JobInstanceQuery.builder()
-          .tenantId("tenant-a")
-          .slaBreached(true)
-          .pageRequest(new PageRequest(1, 20))
-          .build();
-      String sql = configuration
-          .getMappedStatement(JobInstanceMapper.class.getName() + ".selectByQuery")
-          .getBoundSql(query)
-          .getSql();
+            JobInstanceQuery query = JobInstanceQuery.builder()
+                    .tenantId("tenant-a")
+                    .slaBreached(true)
+                    .pageRequest(new PageRequest(1, 20))
+                    .build();
+            String sql = configuration
+                    .getMappedStatement(JobInstanceMapper.class.getName() + ".selectByQuery")
+                    .getBoundSql(query)
+                    .getSql();
 
-      assertThat(slaStatuses(sql))
-          .containsExactlyInAnyOrder(
-              JobInstanceStatus.CREATED.code(),
-              JobInstanceStatus.WAITING.code(),
-              JobInstanceStatus.READY.code(),
-              JobInstanceStatus.RUNNING.code(),
-              JobInstanceStatus.PARTIAL_FAILED.code());
-    } catch (Exception ex) {
-      throw new AssertionError("failed to validate " + resource, ex);
+            assertThat(slaStatuses(sql))
+                    .containsExactlyInAnyOrder(
+                            JobInstanceStatus.CREATED.code(),
+                            JobInstanceStatus.WAITING.code(),
+                            JobInstanceStatus.READY.code(),
+                            JobInstanceStatus.RUNNING.code(),
+                            JobInstanceStatus.PARTIAL_FAILED.code());
+        } catch (Exception ex) {
+            throw new AssertionError("failed to validate " + resource, ex);
+        }
     }
-  }
 
-  @Test
-  @DisplayName("SLA 列表与计数使用相同的业务状态筛选")
-  void shouldUseSameBusinessStatusesForSlaListAndCount() throws Exception {
-    Configuration configuration = new Configuration();
-    parseMapper(configuration, "mapper/CommonFragments.xml");
-    parseMapper(configuration, "mapper/JobInstanceMapper.xml");
-    JobInstanceQuery query = JobInstanceQuery.builder()
-        .tenantId("tenant-a")
-        .slaBreached(true)
-        .pageRequest(new PageRequest(1, 20))
-        .build();
-    for (String statement : new String[] {"selectByQuery", "countByQuery"}) {
-      String sql = configuration
-          .getMappedStatement(JobInstanceMapper.class.getName() + "." + statement)
-          .getBoundSql(query)
-          .getSql();
-      assertThat(slaStatuses(sql))
-          .as(statement + " SLA 筛选状态")
-          .containsExactlyInAnyOrder("CREATED", "WAITING", "READY", "RUNNING", "PARTIAL_FAILED");
+    @Test
+    @DisplayName("SLA 列表与计数使用相同的业务状态筛选")
+    void shouldUseSameBusinessStatusesForSlaListAndCount() throws Exception {
+        Configuration configuration = new Configuration();
+        parseMapper(configuration, "mapper/CommonFragments.xml");
+        parseMapper(configuration, "mapper/JobInstanceMapper.xml");
+        JobInstanceQuery query = JobInstanceQuery.builder()
+                .tenantId("tenant-a")
+                .slaBreached(true)
+                .pageRequest(new PageRequest(1, 20))
+                .build();
+        for (String statement : new String[] {"selectByQuery", "countByQuery"}) {
+            String sql = configuration
+                    .getMappedStatement(JobInstanceMapper.class.getName() + "." + statement)
+                    .getBoundSql(query)
+                    .getSql();
+            assertThat(slaStatuses(sql))
+                    .as(statement + " SLA 筛选状态")
+                    .containsExactlyInAnyOrder("CREATED", "WAITING", "READY", "RUNNING", "PARTIAL_FAILED");
+        }
     }
-  }
 
-  private static void parseMapper(Configuration configuration, String resource) throws Exception {
-    try (InputStream inputStream =
-        Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
-      assertThat(inputStream).as(resource).isNotNull();
-      byte[] mapperBytes = inputStream.readAllBytes();
-      new XMLMapperBuilder(
-              new ByteArrayInputStream(mapperBytes),
-              configuration,
-              resource,
-              configuration.getSqlFragments())
-          .parse();
+    private static void parseMapper(Configuration configuration, String resource) throws Exception {
+        try (InputStream inputStream =
+                Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
+            assertThat(inputStream).as(resource).isNotNull();
+            byte[] mapperBytes = inputStream.readAllBytes();
+            new XMLMapperBuilder(
+                            new ByteArrayInputStream(mapperBytes),
+                            configuration,
+                            resource,
+                            configuration.getSqlFragments())
+                    .parse();
+        }
     }
-  }
 
-  private static Set<String> slaStatuses(String sql) {
-    Matcher matcher =
-        Pattern.compile("(?is)instance_status\\s+in\\s*\\(([^)]*)\\)").matcher(sql);
-    assertThat(matcher.find()).as("SLA instance status filter").isTrue();
-    Matcher codes = Pattern.compile("'([A-Z_]+)'").matcher(matcher.group(1));
-    Set<String> statuses = new HashSet<>();
-    while (codes.find()) {
-      statuses.add(codes.group(1));
+    private static Set<String> slaStatuses(String sql) {
+        Matcher matcher =
+                Pattern.compile("(?is)instance_status\\s+in\\s*\\(([^)]*)\\)").matcher(sql);
+        assertThat(matcher.find()).as("SLA instance status filter").isTrue();
+        Matcher codes = Pattern.compile("'([A-Z_]+)'").matcher(matcher.group(1));
+        Set<String> statuses = new HashSet<>();
+        while (codes.find()) {
+            statuses.add(codes.group(1));
+        }
+        assertThat(statuses).isNotEmpty();
+        assertThat(matcher.find()).as("single SLA instance status filter").isFalse();
+        return statuses;
     }
-    assertThat(statuses).isNotEmpty();
-    assertThat(matcher.find()).as("single SLA instance status filter").isFalse();
-    return statuses;
-  }
 }

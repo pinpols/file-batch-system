@@ -19,69 +19,67 @@ import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
 @ConfigurationProperties(prefix = "batch.storage.s3")
 public class S3StorageProperties {
 
-  @NotBlank(message = "batch.storage.s3.endpoint must not be blank")
-  private String endpoint;
+    @NotBlank(message = "batch.storage.s3.endpoint must not be blank")
+    private String endpoint;
 
-  private String accessKey;
-  private String secretKey;
+    private String accessKey;
+    private String secretKey;
 
-  @NotBlank(message = "batch.storage.s3.bucket must not be blank")
-  private String bucket;
+    @NotBlank(message = "batch.storage.s3.bucket must not be blank")
+    private String bucket;
 
-  /**
-   * S3 区域。AWS / 阿里 OSS / 腾讯 COS 走 SigV4 签名时必填（如 {@code us-east-1} / {@code oss-cn-hangzhou} /
-   * {@code ap-guangzhou}）；自建 S3 兼容服务可留空，运行时会回退 {@code us-east-1} 以满足 AWS SDK 构造要求。
-   */
-  private String region;
+    /**
+     * S3 区域。AWS / 阿里 OSS / 腾讯 COS 走 SigV4 签名时必填（如 {@code us-east-1} / {@code oss-cn-hangzhou} /
+     * {@code ap-guangzhou}）；自建 S3 兼容服务可留空，运行时会回退 {@code us-east-1} 以满足 AWS SDK 构造要求。
+     */
+    private String region;
 
-  /**
-   * 是否在 bucket 不存在时自动创建。自建对象存储默认 {@code true}（开发期便利）。 托管云（S3/OSS/COS）bucket 通常已预建、凭据无
-   * CreateBucket 权限，应设 {@code false}，否则启动期建桶会撞 AccessDenied。
-   */
-  private boolean autoCreateBucket = true;
+    /**
+     * 是否在 bucket 不存在时自动创建。自建对象存储默认 {@code true}（开发期便利）。 托管云（S3/OSS/COS）bucket 通常已预建、凭据无
+     * CreateBucket 权限，应设 {@code false}，否则启动期建桶会撞 AccessDenied。
+     */
+    private boolean autoCreateBucket = true;
 
-  /**
-   * 是否启用 path-style 访问。自建 S3 兼容服务通常需要 {@code true}；AWS S3 标准域名、部分云厂商可设 {@code false} 使用 virtual-hosted
-   * style。
-   */
-  private boolean pathStyleEnabled = true;
+    /**
+     * 是否启用 path-style 访问。自建 S3 兼容服务通常需要 {@code true}；AWS S3 标准域名、部分云厂商可设 {@code false} 使用 virtual-hosted
+     * style。
+     */
+    private boolean pathStyleEnabled = true;
 
-  /** 请求 checksum 计算策略。默认 WHEN_REQUIRED，避免部分 S3 兼容后端不支持 aws-chunked trailer。 */
-  private RequestChecksumCalculation requestChecksumCalculation =
-      RequestChecksumCalculation.WHEN_REQUIRED;
+    /** 请求 checksum 计算策略。默认 WHEN_REQUIRED，避免部分 S3 兼容后端不支持 aws-chunked trailer。 */
+    private RequestChecksumCalculation requestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED;
 
-  /** 响应 checksum 校验策略。默认 WHEN_REQUIRED，和请求侧保持兼容优先。 */
-  private ResponseChecksumValidation responseChecksumValidation =
-      ResponseChecksumValidation.WHEN_REQUIRED;
+    /** 响应 checksum 校验策略。默认 WHEN_REQUIRED，和请求侧保持兼容优先。 */
+    private ResponseChecksumValidation responseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED;
 
-  /** 建立 TCP 连接超时（ms）。后端挂/不可达时快速失败，不拖慢 worker 线程。 */
-  @Min(value = 1, message = "batch.storage.s3.connect-timeout-ms must be at least 1")
-  private long connectTimeoutMs = 5000L;
+    /** 建立 TCP 连接超时（ms）。后端挂/不可达时快速失败，不拖慢 worker 线程。 */
+    @Min(value = 1, message = "batch.storage.s3.connect-timeout-ms must be at least 1")
+    private long connectTimeoutMs = 5000L;
 
-  /**
-   * socket 空闲超时（ms）。Apache HTTP client 的 {@code socketTimeout} 对读写统一生效——大文件 put/get 时 socket
-   * 空闲超过此值即断,无独立的 write timeout 可配。
-   */
-  @Min(value = 1, message = "batch.storage.s3.read-timeout-ms must be at least 1")
-  private long readTimeoutMs = 30000L;
+    /**
+     * socket 空闲超时（ms）。Apache HTTP client 的 {@code socketTimeout} 对读写统一生效——大文件 put/get 时 socket
+     * 空闲超过此值即断,无独立的 write timeout 可配。
+     */
+    @Min(value = 1, message = "batch.storage.s3.read-timeout-ms must be at least 1")
+    private long readTimeoutMs = 30000L;
 
-  /** 大对象上传是否启用 multipart。 */
-  private boolean multipartEnabled = true;
+    /** 大对象上传是否启用 multipart。 */
+    private boolean multipartEnabled = true;
 
-  /** 文件大小达到该阈值后使用 multipart。默认 64MiB。 */
-  @Min(value = 1, message = "batch.storage.s3.multipart-threshold-bytes must be at least 1")
-  private long multipartThresholdBytes = 64L * 1024 * 1024;
+    /** 文件大小达到该阈值后使用 multipart。默认 64MiB。 */
+    @Min(value = 1, message = "batch.storage.s3.multipart-threshold-bytes must be at least 1")
+    private long multipartThresholdBytes = 64L * 1024 * 1024;
 
-  /** multipart 单 part 大小。S3 要求非最后 part 至少 5MiB，默认 16MiB。 */
-  @Min(value = 1, message = "batch.storage.s3.multipart-part-size-bytes must be at least 1")
-  private int multipartPartSizeBytes = 16 * 1024 * 1024;
+    /** multipart 单 part 大小。S3 要求非最后 part 至少 5MiB，默认 16MiB。 */
+    @Min(value = 1, message = "batch.storage.s3.multipart-part-size-bytes must be at least 1")
+    private int multipartPartSizeBytes = 16 * 1024 * 1024;
 
-  /** 客户端最大尝试次数(含首次)。{@code <=0} 表示不覆盖、走 AWS SDK 默认(standard 模式 3 次)。批量洪峰下可调高扛瞬时 503/限流。 */
-  private int maxAttempts = 0;
+    /** 客户端最大尝试次数(含首次)。{@code <=0} 表示不覆盖、走 AWS SDK 默认(standard 模式 3 次)。批量洪峰下可调高扛瞬时 503/限流。 */
+    private int maxAttempts = 0;
 
-  /**
-   * 是否用自适应重试模式(client-side rate limiting,遇限流主动退避)。批处理高并发打对象存储时建议开;默认 false(走标准 指数退避)。仅在 {@link
-   * #maxAttempts} {@code >0} 或本项为 true 时才覆盖 SDK 默认重试策略。
-   */
-  private boolean adaptiveRetry = false;
+    /**
+     * 是否用自适应重试模式(client-side rate limiting,遇限流主动退避)。批处理高并发打对象存储时建议开;默认 false(走标准 指数退避)。仅在 {@link
+     * #maxAttempts} {@code >0} 或本项为 true 时才覆盖 SDK 默认重试策略。
+     */
+    private boolean adaptiveRetry = false;
 }

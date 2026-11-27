@@ -26,105 +26,102 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
 
-  /** 关闭时同步 Worker 状态的最大尝试次数（含首次）。 */
-  private static final int STATUS_SYNC_MAX_ATTEMPTS = 3;
+    /** 关闭时同步 Worker 状态的最大尝试次数（含首次）。 */
+    private static final int STATUS_SYNC_MAX_ATTEMPTS = 3;
 
-  /** 状态同步重试的退避步长毫秒数，第 n 次失败后等待 n 倍。 */
-  private static final long STATUS_SYNC_BACKOFF_STEP_MILLIS = 200L;
+    /** 状态同步重试的退避步长毫秒数，第 n 次失败后等待 n 倍。 */
+    private static final long STATUS_SYNC_BACKOFF_STEP_MILLIS = 200L;
 
-  private final WorkerSelfRegistrationService workerRegistryService;
-  private final WorkerRuntimeState workerRuntimeState;
-  private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
-  private final BatchDateTimeSupport dateTimeSupport;
+    private final WorkerSelfRegistrationService workerRegistryService;
+    private final WorkerRuntimeState workerRuntimeState;
+    private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
+    private final BatchDateTimeSupport dateTimeSupport;
 
-  @Override
-  public WorkerRegistration start(WorkerRegistration registration) {
-    WorkerRegistration activeRegistration = registration;
-    if (activeRegistration.getWorkerId() == null
-        || activeRegistration.getWorkerId().isBlank()) {
-      activeRegistration.setWorkerId("worker-" + UUID.randomUUID());
-    }
-    activeRegistration.setStatus(WorkerRegistryStatus.ONLINE.code());
-    // 新进程的注册不继承上一代进程收到的停机指令。
-    activeRegistration.setPlatformDraining(false);
-    OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
-    activeRegistration.setRegisteredAt(now);
-    activeRegistration.setLastHeartbeatAt(now);
-    activeRegistration = workerRegistryService.register(activeRegistration);
-    workerRuntimeState.put(activeRegistration);
-    log.info(
-        "worker registered: workerId={}, tenantId={}, workerType={}",
-        activeRegistration.getWorkerId(),
-        activeRegistration.getTenantId(),
-        activeRegistration.getWorkerType());
-    return activeRegistration;
-  }
-
-  @Override
-  public void shutdown(String workerId) {
-    if (workerId == null || workerId.isBlank()) {
-      return;
-    }
-    WorkerRegistration activeRegistration = workerRuntimeState.get(workerId);
-    if (activeRegistration == null) {
-      return;
-    }
-
-    // 先标记为 DRAINING，让 Orchestrator 立即停止分发新任务。
-    String finalStatus = hasActiveLeases(workerId)
-        ? WorkerRegistryStatus.DRAINING.code()
-        : WorkerRegistryStatus.DECOMMISSIONED.code();
-    // R2-P1-7：之前 catch 仅 warn + e.getMessage()，registry 留 ONLINE → orchestrator 继续派任务给死 worker。
-    // 改为：最多 3 次指数退避重试，全部失败 ERROR + 完整 stack。
-    // finally 仍清本地 map（本地状态已不准确，留着无意义）；DB 状态由 PartitionLeaseReclaimScheduler 回退。
-    try {
-      updateStatusWithRetry(activeRegistration, WorkerRegistryStatus.DRAINING.code(), workerId);
-      if (!WorkerRegistryStatus.DRAINING.code().equals(finalStatus)) {
-        updateStatusWithRetry(activeRegistration, finalStatus, workerId);
-      }
-    } finally {
-      workerRuntimeState.remove(workerId);
-    }
-    log.info("worker shutdown handled: workerId={}, targetStatus={}", workerId, finalStatus);
-  }
-
-  private void updateStatusWithRetry(
-      WorkerRegistration registration, String targetStatus, String workerId) {
-    Exception lastError = null;
-    for (int attempt = 1; attempt <= STATUS_SYNC_MAX_ATTEMPTS; attempt++) {
-      try {
-        workerRegistryService.updateStatus(registration, targetStatus);
-        return;
-      } catch (Exception ex) {
-        lastError = ex;
-        String causeSummary = SwallowedExceptionLogger.summary(ex);
-        log.warn(
-            "worker shutdown status sync attempt {}/3 failed: workerId={}, targetStatus={},"
-                + " cause={}",
-            attempt,
-            workerId,
-            targetStatus,
-            causeSummary);
-        if (attempt < STATUS_SYNC_MAX_ATTEMPTS) {
-          try {
-            Thread.sleep(STATUS_SYNC_BACKOFF_STEP_MILLIS * attempt); // 200ms / 400ms 退避
-          } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            return;
-          }
+    @Override
+    public WorkerRegistration start(WorkerRegistration registration) {
+        WorkerRegistration activeRegistration = registration;
+        if (activeRegistration.getWorkerId() == null
+                || activeRegistration.getWorkerId().isBlank()) {
+            activeRegistration.setWorkerId("worker-" + UUID.randomUUID());
         }
-      }
+        activeRegistration.setStatus(WorkerRegistryStatus.ONLINE.code());
+        // 新进程的注册不继承上一代进程收到的停机指令。
+        activeRegistration.setPlatformDraining(false);
+        OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
+        activeRegistration.setRegisteredAt(now);
+        activeRegistration.setLastHeartbeatAt(now);
+        activeRegistration = workerRegistryService.register(activeRegistration);
+        workerRuntimeState.put(activeRegistration);
+        log.info(
+                "worker registered: workerId={}, tenantId={}, workerType={}",
+                activeRegistration.getWorkerId(),
+                activeRegistration.getTenantId(),
+                activeRegistration.getWorkerType());
+        return activeRegistration;
     }
-    log.error(
-        "worker shutdown status sync FAILED after 3 retries — registry stays stale,"
-            + " PartitionLeaseReclaimScheduler will reconcile: workerId={}, targetStatus={}",
-        workerId,
-        targetStatus,
-        lastError);
-  }
 
-  private boolean hasActiveLeases(String workerId) {
-    return activeTaskLeaseRegistry.snapshot().stream()
-        .anyMatch(lease -> workerId.equals(lease.getWorkerId()));
-  }
+    @Override
+    public void shutdown(String workerId) {
+        if (workerId == null || workerId.isBlank()) {
+            return;
+        }
+        WorkerRegistration activeRegistration = workerRuntimeState.get(workerId);
+        if (activeRegistration == null) {
+            return;
+        }
+
+        // 先标记为 DRAINING，让 Orchestrator 立即停止分发新任务。
+        String finalStatus = hasActiveLeases(workerId)
+                ? WorkerRegistryStatus.DRAINING.code()
+                : WorkerRegistryStatus.DECOMMISSIONED.code();
+        // R2-P1-7：之前 catch 仅 warn + e.getMessage()，registry 留 ONLINE → orchestrator 继续派任务给死 worker。
+        // 改为：最多 3 次指数退避重试，全部失败 ERROR + 完整 stack。
+        // finally 仍清本地 map（本地状态已不准确，留着无意义）；DB 状态由 PartitionLeaseReclaimScheduler 回退。
+        try {
+            updateStatusWithRetry(activeRegistration, WorkerRegistryStatus.DRAINING.code(), workerId);
+            if (!WorkerRegistryStatus.DRAINING.code().equals(finalStatus)) {
+                updateStatusWithRetry(activeRegistration, finalStatus, workerId);
+            }
+        } finally {
+            workerRuntimeState.remove(workerId);
+        }
+        log.info("worker shutdown handled: workerId={}, targetStatus={}", workerId, finalStatus);
+    }
+
+    private void updateStatusWithRetry(WorkerRegistration registration, String targetStatus, String workerId) {
+        Exception lastError = null;
+        for (int attempt = 1; attempt <= STATUS_SYNC_MAX_ATTEMPTS; attempt++) {
+            try {
+                workerRegistryService.updateStatus(registration, targetStatus);
+                return;
+            } catch (Exception ex) {
+                lastError = ex;
+                String causeSummary = SwallowedExceptionLogger.summary(ex);
+                log.warn(
+                        "worker shutdown status sync attempt {}/3 failed: workerId={}, targetStatus={}," + " cause={}",
+                        attempt,
+                        workerId,
+                        targetStatus,
+                        causeSummary);
+                if (attempt < STATUS_SYNC_MAX_ATTEMPTS) {
+                    try {
+                        Thread.sleep(STATUS_SYNC_BACKOFF_STEP_MILLIS * attempt); // 200ms / 400ms 退避
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+            }
+        }
+        log.error(
+                "worker shutdown status sync FAILED after 3 retries — registry stays stale,"
+                        + " PartitionLeaseReclaimScheduler will reconcile: workerId={}, targetStatus={}",
+                workerId,
+                targetStatus,
+                lastError);
+    }
+
+    private boolean hasActiveLeases(String workerId) {
+        return activeTaskLeaseRegistry.snapshot().stream().anyMatch(lease -> workerId.equals(lease.getWorkerId()));
+    }
 }

@@ -8,18 +8,18 @@ import lombok.Setter;
 @Getter
 @Builder
 public class BatchWindowInsertParam {
-  @Setter
-  private Long id;
+    @Setter
+    private Long id;
 
-  private final String tenantId;
-  private final String windowCode;
-  private final String windowName;
-  private final String timezone;
-  private final String startTime;
-  private final String endTime;
-  private final String endStrategy;
-  private final String outOfWindowAction;
-  private final Boolean allowCrossDay;
-  private final Boolean enabled;
-  private final String description;
+    private final String tenantId;
+    private final String windowCode;
+    private final String windowName;
+    private final String timezone;
+    private final String startTime;
+    private final String endTime;
+    private final String endStrategy;
+    private final String outOfWindowAction;
+    private final Boolean allowCrossDay;
+    private final Boolean enabled;
+    private final String description;
 }

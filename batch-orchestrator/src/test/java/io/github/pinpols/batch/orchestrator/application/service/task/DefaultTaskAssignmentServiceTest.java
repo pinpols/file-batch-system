@@ -63,435 +63,435 @@ import org.slf4j.LoggerFactory;
 @DisplayName("任务分派服务: 派工资格校验, 租约续期与批量续租口径")
 class DefaultTaskAssignmentServiceTest {
 
-  @Mock
-  private JobTaskMapper jobTaskMapper;
+    @Mock
+    private JobTaskMapper jobTaskMapper;
 
-  @Mock
-  private JobPartitionMapper jobPartitionMapper;
+    @Mock
+    private JobPartitionMapper jobPartitionMapper;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private JobStepInstanceMapper jobStepInstanceMapper;
+    @Mock
+    private JobStepInstanceMapper jobStepInstanceMapper;
 
-  @Mock
-  private JobExecutionLogMapper jobExecutionLogMapper;
+    @Mock
+    private JobExecutionLogMapper jobExecutionLogMapper;
 
-  @Mock
-  private WorkerRegistryMapper workerRegistryMapper;
+    @Mock
+    private WorkerRegistryMapper workerRegistryMapper;
 
-  @Mock
-  private JobDefinitionMapper jobDefinitionMapper;
+    @Mock
+    private JobDefinitionMapper jobDefinitionMapper;
 
-  private DefaultTaskAssignmentService service;
-  private final PartitionLeaseProperties leaseProps = new PartitionLeaseProperties();
-  private final ResourceSchedulerProperties resourceProps = new ResourceSchedulerProperties();
+    private DefaultTaskAssignmentService service;
+    private final PartitionLeaseProperties leaseProps = new PartitionLeaseProperties();
+    private final ResourceSchedulerProperties resourceProps = new ResourceSchedulerProperties();
 
-  @BeforeEach
-  void setUp() {
-    service = new DefaultTaskAssignmentService(
-        jobTaskMapper,
-        jobPartitionMapper,
-        jobInstanceMapper,
-        jobStepInstanceMapper,
-        jobExecutionLogMapper,
-        workerRegistryMapper,
-        jobDefinitionMapper,
-        leaseProps,
-        resourceProps,
-        new SimpleMeterRegistry());
-  }
+    @BeforeEach
+    void setUp() {
+        service = new DefaultTaskAssignmentService(
+                jobTaskMapper,
+                jobPartitionMapper,
+                jobInstanceMapper,
+                jobStepInstanceMapper,
+                jobExecutionLogMapper,
+                workerRegistryMapper,
+                jobDefinitionMapper,
+                leaseProps,
+                resourceProps,
+                new SimpleMeterRegistry());
+    }
 
-  // ===== assignWorker =====
+    // ===== assignWorker =====
 
-  @Test
-  @DisplayName("assignWorker: task 不存在 → null,不读 worker / 不调 CAS")
-  void shouldReturnNull_whenTaskMissing() {
-    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(null);
+    @Test
+    @DisplayName("assignWorker: task 不存在 → null,不读 worker / 不调 CAS")
+    void shouldReturnNull_whenTaskMissing() {
+        when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(null);
 
-    assertThat(service.assignWorker("ta", 100L, "w1")).isNull();
-    verify(workerRegistryMapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
-    verify(jobTaskMapper, never()).assignWorker(any(AssignWorkerParam.class));
-  }
+        assertThat(service.assignWorker("ta", 100L, "w1")).isNull();
+        verify(workerRegistryMapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
+        verify(jobTaskMapper, never()).assignWorker(any(AssignWorkerParam.class));
+    }
 
-  @Test
-  @DisplayName("assignWorker: workerCode 为空 → 返 current,不读 worker")
-  void shouldReturnCurrent_whenWorkerCodeBlank() {
-    JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
+    @Test
+    @DisplayName("assignWorker: workerCode 为空 → 返 current,不读 worker")
+    void shouldReturnCurrent_whenWorkerCodeBlank() {
+        JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
+        when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
 
-    JobTaskEntity result = service.assignWorker("ta", 100L, "  ");
-    assertThat(result).isSameAs(task);
-    verify(workerRegistryMapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
-  }
+        JobTaskEntity result = service.assignWorker("ta", 100L, "  ");
+        assertThat(result).isSameAs(task);
+        verify(workerRegistryMapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
+    }
 
-  @Test
-  @DisplayName("assignWorker: worker 不在线 → 返 current,不 CAS")
-  void shouldReturnCurrent_whenWorkerOffline() {
-    JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(worker(WorkerRegistryStatus.OFFLINE.code(), "default"));
+    @Test
+    @DisplayName("assignWorker: worker 不在线 → 返 current,不 CAS")
+    void shouldReturnCurrent_whenWorkerOffline() {
+        JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
+        when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
+        when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(worker(WorkerRegistryStatus.OFFLINE.code(), "default"));
 
-    JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
-    assertThat(result).isSameAs(task);
-    verify(jobTaskMapper, never()).assignWorker(any(AssignWorkerParam.class));
-  }
+        JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
+        assertThat(result).isSameAs(task);
+        verify(jobTaskMapper, never()).assignWorker(any(AssignWorkerParam.class));
+    }
 
-  @Test
-  @DisplayName("assignWorker: worker DRAINING → 返 current,不 CAS")
-  void shouldReturnCurrent_whenWorkerDraining() {
-    JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(worker(WorkerRegistryStatus.DRAINING.code(), "default"));
+    @Test
+    @DisplayName("assignWorker: worker DRAINING → 返 current,不 CAS")
+    void shouldReturnCurrent_whenWorkerDraining() {
+        JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
+        when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
+        when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(worker(WorkerRegistryStatus.DRAINING.code(), "default"));
 
-    JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
-    assertThat(result).isSameAs(task);
-  }
+        JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
+        assertThat(result).isSameAs(task);
+    }
 
-  @Test
-  @DisplayName("assignWorker: 主租户同名 worker 已退役时继续走 shared-tenant fallback")
-  void shouldFallBackToSharedTenant_whenPrimaryWorkerNotOnline() {
-    resourceProps.setSharedTenantFallback("default-tenant");
-    JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
-    JobTaskEntity claimed = task(100L, 2L, TaskStatus.RUNNING.code());
-    claimed.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(worker(WorkerRegistryStatus.DECOMMISSIONED.code(), "PROCESS"));
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("default-tenant", "w1"))
-        .thenReturn(worker("default-tenant", "w1", WorkerRegistryStatus.ONLINE.code(), "PROCESS"));
-    when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(claimed);
+    @Test
+    @DisplayName("assignWorker: 主租户同名 worker 已退役时继续走 shared-tenant fallback")
+    void shouldFallBackToSharedTenant_whenPrimaryWorkerNotOnline() {
+        resourceProps.setSharedTenantFallback("default-tenant");
+        JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
+        JobTaskEntity claimed = task(100L, 2L, TaskStatus.RUNNING.code());
+        claimed.setAssignedWorkerCode("w1");
+        when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial);
+        when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(worker(WorkerRegistryStatus.DECOMMISSIONED.code(), "PROCESS"));
+        when(workerRegistryMapper.selectByTenantAndWorkerCode("default-tenant", "w1"))
+                .thenReturn(worker("default-tenant", "w1", WorkerRegistryStatus.ONLINE.code(), "PROCESS"));
+        when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(claimed);
 
-    JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
+        JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
 
-    assertThat(result).isSameAs(claimed);
-    verify(workerRegistryMapper).selectByTenantAndWorkerCode("ta", "w1");
-    verify(workerRegistryMapper).selectByTenantAndWorkerCode("default-tenant", "w1");
-    verify(jobTaskMapper).assignWorker(any(AssignWorkerParam.class));
-  }
+        assertThat(result).isSameAs(claimed);
+        verify(workerRegistryMapper).selectByTenantAndWorkerCode("ta", "w1");
+        verify(workerRegistryMapper).selectByTenantAndWorkerCode("default-tenant", "w1");
+        verify(jobTaskMapper).assignWorker(any(AssignWorkerParam.class));
+    }
 
-  @Test
-  @DisplayName("assignWorker: workerGroup 与 partition group 不匹配 → 返 current")
-  void shouldReturnCurrent_whenWorkerGroupMismatch() {
-    JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    task.setJobPartitionId(50L);
-    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(worker(WorkerRegistryStatus.ONLINE.code(), "wrong-group"));
-    JobPartitionEntity p = new JobPartitionEntity();
-    p.setWorkerGroup("default");
-    when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(p);
+    @Test
+    @DisplayName("assignWorker: workerGroup 与 partition group 不匹配 → 返 current")
+    void shouldReturnCurrent_whenWorkerGroupMismatch() {
+        JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
+        task.setJobPartitionId(50L);
+        when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
+        when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(worker(WorkerRegistryStatus.ONLINE.code(), "wrong-group"));
+        JobPartitionEntity p = new JobPartitionEntity();
+        p.setWorkerGroup("default");
+        when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(p);
 
-    JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
-    assertThat(result).isSameAs(task);
-    verify(jobTaskMapper, never()).assignWorker(any(AssignWorkerParam.class));
-  }
+        JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
+        assertThat(result).isSameAs(task);
+        verify(jobTaskMapper, never()).assignWorker(any(AssignWorkerParam.class));
+    }
 
-  @Test
-  @DisplayName("assignWorker: CAS 失败 → 重读 DB 返回最新状态")
-  void shouldReturnRefreshedTask_whenAssignCasConflict() {
-    JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
-    JobTaskEntity refreshed = task(100L, 2L, TaskStatus.RUNNING.code());
-    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial, refreshed);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(worker(WorkerRegistryStatus.ONLINE.code(), null));
-    when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(null);
+    @Test
+    @DisplayName("assignWorker: CAS 失败 → 重读 DB 返回最新状态")
+    void shouldReturnRefreshedTask_whenAssignCasConflict() {
+        JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
+        JobTaskEntity refreshed = task(100L, 2L, TaskStatus.RUNNING.code());
+        when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial, refreshed);
+        when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(worker(WorkerRegistryStatus.ONLINE.code(), null));
+        when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(null);
 
-    JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
-    assertThat(result).isSameAs(refreshed);
-  }
+        JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
+        assertThat(result).isSameAs(refreshed);
+    }
 
-  @Test
-  @DisplayName("assignWorker: 稳定资源池授权实例认领，CAS 后记录实际实例 ID")
-  void shouldAssignWorker_whenInstanceBelongsToTargetPool() {
-    JobTaskEntity initial = task(100L, 3L, TaskStatus.READY.code());
-    initial.setAssignedWorkerCode("import-memory");
-    JobTaskEntity claimed = task(100L, 4L, TaskStatus.RUNNING.code());
-    claimed.setAssignedWorkerCode("import-memory-pod-a");
-    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "import-memory-pod-a"))
-        .thenReturn(workerWithPool("import-memory-pod-a", "import-memory"));
-    when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(claimed);
+    @Test
+    @DisplayName("assignWorker: 稳定资源池授权实例认领，CAS 后记录实际实例 ID")
+    void shouldAssignWorker_whenInstanceBelongsToTargetPool() {
+        JobTaskEntity initial = task(100L, 3L, TaskStatus.READY.code());
+        initial.setAssignedWorkerCode("import-memory");
+        JobTaskEntity claimed = task(100L, 4L, TaskStatus.RUNNING.code());
+        claimed.setAssignedWorkerCode("import-memory-pod-a");
+        when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial);
+        when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "import-memory-pod-a"))
+                .thenReturn(workerWithPool("import-memory-pod-a", "import-memory"));
+        when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(claimed);
 
-    JobTaskEntity result = service.assignWorker("ta", 100L, "import-memory-pod-a");
+        JobTaskEntity result = service.assignWorker("ta", 100L, "import-memory-pod-a");
 
-    assertThat(result).isSameAs(claimed);
-    ArgumentCaptor<AssignWorkerParam> captor = ArgumentCaptor.forClass(AssignWorkerParam.class);
-    verify(jobTaskMapper).assignWorker(captor.capture());
-    assertThat(captor.getValue().getAssignedWorkerCode()).isEqualTo("import-memory-pod-a");
-    assertThat(captor.getValue().getExpectedAssignedWorkerCode()).isEqualTo("import-memory");
-  }
+        assertThat(result).isSameAs(claimed);
+        ArgumentCaptor<AssignWorkerParam> captor = ArgumentCaptor.forClass(AssignWorkerParam.class);
+        verify(jobTaskMapper).assignWorker(captor.capture());
+        assertThat(captor.getValue().getAssignedWorkerCode()).isEqualTo("import-memory-pod-a");
+        assertThat(captor.getValue().getExpectedAssignedWorkerCode()).isEqualTo("import-memory");
+    }
 
-  @Test
-  @DisplayName("assignWorker: 同组但不属于目标资源池的实例不能认领")
-  void shouldRejectWorker_whenInstanceBelongsToOtherPool() {
-    JobTaskEntity initial = task(100L, 3L, TaskStatus.READY.code());
-    initial.setAssignedWorkerCode("import-memory");
-    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "import-cpu-pod-a"))
-        .thenReturn(workerWithPool("import-cpu-pod-a", "import-cpu"));
+    @Test
+    @DisplayName("assignWorker: 同组但不属于目标资源池的实例不能认领")
+    void shouldRejectWorker_whenInstanceBelongsToOtherPool() {
+        JobTaskEntity initial = task(100L, 3L, TaskStatus.READY.code());
+        initial.setAssignedWorkerCode("import-memory");
+        when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial);
+        when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "import-cpu-pod-a"))
+                .thenReturn(workerWithPool("import-cpu-pod-a", "import-cpu"));
 
-    JobTaskEntity result = service.assignWorker("ta", 100L, "import-cpu-pod-a");
+        JobTaskEntity result = service.assignWorker("ta", 100L, "import-cpu-pod-a");
 
-    assertThat(result).isSameAs(initial);
-    verify(jobTaskMapper, never()).assignWorker(any(AssignWorkerParam.class));
-  }
+        assertThat(result).isSameAs(initial);
+        verify(jobTaskMapper, never()).assignWorker(any(AssignWorkerParam.class));
+    }
 
-  // ===== renewTaskLease =====
+    // ===== renewTaskLease =====
 
-  @Test
-  @DisplayName("renewTaskLease: task 不存在 → false")
-  void shouldReturnFalse_whenTaskMissingOnRenew() {
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
-    assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
-  }
+    @Test
+    @DisplayName("renewTaskLease: task 不存在 → false")
+    void shouldReturnFalse_whenTaskMissingOnRenew() {
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
+        assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
+    }
 
-  @Test
-  @DisplayName("renewTaskLease: task 无 partition → false")
-  void shouldReturnFalse_whenTaskHasNoPartition() {
-    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
-    t.setJobPartitionId(null);
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
-    assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
-  }
+    @Test
+    @DisplayName("renewTaskLease: task 无 partition → false")
+    void shouldReturnFalse_whenTaskHasNoPartition() {
+        JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+        t.setJobPartitionId(null);
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+        assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
+    }
 
-  @Test
-  @DisplayName("renewTaskLease: task 非 RUNNING → false")
-  void shouldReturnFalse_whenTaskNotRunning() {
-    JobTaskEntity t = task(100L, 1L, TaskStatus.READY.code());
-    t.setJobPartitionId(50L);
-    t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
-    assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
-  }
+    @Test
+    @DisplayName("renewTaskLease: task 非 RUNNING → false")
+    void shouldReturnFalse_whenTaskNotRunning() {
+        JobTaskEntity t = task(100L, 1L, TaskStatus.READY.code());
+        t.setJobPartitionId(50L);
+        t.setAssignedWorkerCode("w1");
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+        assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
+    }
 
-  @Test
-  @DisplayName("renewTaskLease: workerCode 不匹配 → false(防止跨 worker 续他人租)")
-  void shouldReturnFalse_whenWorkerCodeMismatch() {
-    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
-    t.setJobPartitionId(50L);
-    t.setAssignedWorkerCode("w-other");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
-    assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
-  }
+    @Test
+    @DisplayName("renewTaskLease: workerCode 不匹配 → false(防止跨 worker 续他人租)")
+    void shouldReturnFalse_whenWorkerCodeMismatch() {
+        JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+        t.setJobPartitionId(50L);
+        t.setAssignedWorkerCode("w-other");
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+        assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
+    }
 
-  @Test
-  @DisplayName("renewTaskLease: invocationId 缺失 → false(R3-P1-10)")
-  void shouldReturnFalse_whenInvocationIdMissing() {
-    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
-    t.setJobPartitionId(50L);
-    t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
-    assertThat(service.renewTaskLease("ta", 100L, "w1", null)).isFalse();
-    assertThat(service.renewTaskLease("ta", 100L, "w1", "")).isFalse();
-    assertThat(service.renewTaskLease("ta", 100L, "w1", "  ")).isFalse();
-    verify(jobPartitionMapper, never()).renewLease(any());
-  }
+    @Test
+    @DisplayName("renewTaskLease: invocationId 缺失 → false(R3-P1-10)")
+    void shouldReturnFalse_whenInvocationIdMissing() {
+        JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+        t.setJobPartitionId(50L);
+        t.setAssignedWorkerCode("w1");
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+        assertThat(service.renewTaskLease("ta", 100L, "w1", null)).isFalse();
+        assertThat(service.renewTaskLease("ta", 100L, "w1", "")).isFalse();
+        assertThat(service.renewTaskLease("ta", 100L, "w1", "  ")).isFalse();
+        verify(jobPartitionMapper, never()).renewLease(any());
+    }
 
-  @Test
-  @DisplayName("renewTaskLease: 全部前置通过 + mapper 命中 → true")
-  void shouldReturnTrue_whenAllRenewChecksPass() {
-    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
-    t.setJobPartitionId(50L);
-    t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
-    when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
+    @Test
+    @DisplayName("renewTaskLease: 全部前置通过 + mapper 命中 → true")
+    void shouldReturnTrue_whenAllRenewChecksPass() {
+        JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+        t.setJobPartitionId(50L);
+        t.setAssignedWorkerCode("w1");
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+        when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
 
-    assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isTrue();
-  }
+        assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isTrue();
+    }
 
-  @Test
-  @DisplayName("renewTaskLease: mapper 返 0(并发被抢走)→ false")
-  void shouldReturnFalse_whenRenewUpdateMisses() {
-    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
-    t.setJobPartitionId(50L);
-    t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
-    when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(0);
+    @Test
+    @DisplayName("renewTaskLease: mapper 返 0(并发被抢走)→ false")
+    void shouldReturnFalse_whenRenewUpdateMisses() {
+        JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+        t.setJobPartitionId(50L);
+        t.setAssignedWorkerCode("w1");
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+        when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(0);
 
-    assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
-  }
+        assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
+    }
 
-  // ===== recordHeartbeat (ORCH-P4-1) =====
+    // ===== recordHeartbeat (ORCH-P4-1) =====
 
-  @Test
-  @DisplayName("recordHeartbeat: 续租失败 → leaseRenewed=false,不写 details / 不读取消标记")
-  void shouldReportNotRenewed_whenLeaseFails() {
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
+    @Test
+    @DisplayName("recordHeartbeat: 续租失败 → leaseRenewed=false,不写 details / 不读取消标记")
+    void shouldReportNotRenewed_whenLeaseFails() {
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
 
-    var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", "{\"p\":1}");
+        var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", "{\"p\":1}");
 
-    assertThat(result.leaseRenewed()).isFalse();
-    assertThat(result.cancelRequested()).isFalse();
-    verify(jobTaskMapper, never()).updateHeartbeatDetails(anyString(), anyLong(), anyString());
-  }
+        assertThat(result.leaseRenewed()).isFalse();
+        assertThat(result.cancelRequested()).isFalse();
+        verify(jobTaskMapper, never()).updateHeartbeatDetails(anyString(), anyLong(), anyString());
+    }
 
-  @Test
-  @DisplayName("recordHeartbeat: 续租成功 + details 非空 → 写 details,回带 cancelRequested")
-  void shouldWriteDetailsAndReportCancel_whenHeartbeatSucceeds() {
-    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
-    t.setJobPartitionId(50L);
-    t.setAssignedWorkerCode("w1");
-    t.setCancelRequested(true);
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
-    when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
+    @Test
+    @DisplayName("recordHeartbeat: 续租成功 + details 非空 → 写 details,回带 cancelRequested")
+    void shouldWriteDetailsAndReportCancel_whenHeartbeatSucceeds() {
+        JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+        t.setJobPartitionId(50L);
+        t.setAssignedWorkerCode("w1");
+        t.setCancelRequested(true);
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+        when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
 
-    var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", "{\"processed\":42}");
+        var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", "{\"processed\":42}");
 
-    assertThat(result.leaseRenewed()).isTrue();
-    assertThat(result.cancelRequested()).isTrue();
-    verify(jobTaskMapper).updateHeartbeatDetails("ta", 100L, "{\"processed\":42}");
-  }
+        assertThat(result.leaseRenewed()).isTrue();
+        assertThat(result.cancelRequested()).isTrue();
+        verify(jobTaskMapper).updateHeartbeatDetails("ta", 100L, "{\"processed\":42}");
+    }
 
-  @Test
-  @DisplayName("recordHeartbeat: details 为 null → 不写 details,仅续租 + 读取消标记")
-  void shouldSkipDetails_whenHeartbeatDetailsNull() {
-    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
-    t.setJobPartitionId(50L);
-    t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
-    when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
+    @Test
+    @DisplayName("recordHeartbeat: details 为 null → 不写 details,仅续租 + 读取消标记")
+    void shouldSkipDetails_whenHeartbeatDetailsNull() {
+        JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+        t.setJobPartitionId(50L);
+        t.setAssignedWorkerCode("w1");
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+        when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
 
-    var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", null);
+        var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", null);
 
-    assertThat(result.leaseRenewed()).isTrue();
-    assertThat(result.cancelRequested()).isFalse();
-    verify(jobTaskMapper, never()).updateHeartbeatDetails(anyString(), anyLong(), anyString());
-  }
+        assertThat(result.leaseRenewed()).isTrue();
+        assertThat(result.cancelRequested()).isFalse();
+        verify(jobTaskMapper, never()).updateHeartbeatDetails(anyString(), anyLong(), anyString());
+    }
 
-  // ===== requestCancel (ORCH-P4-1) =====
+    // ===== requestCancel (ORCH-P4-1) =====
 
-  @Test
-  @DisplayName("requestCancel: mapper 命中 RUNNING task → true")
-  void shouldReturnTrue_whenCancellingRunningTask() {
-    when(jobTaskMapper.requestCancel("ta", 100L)).thenReturn(1);
-    assertThat(service.requestCancel("ta", 100L)).isTrue();
-  }
+    @Test
+    @DisplayName("requestCancel: mapper 命中 RUNNING task → true")
+    void shouldReturnTrue_whenCancellingRunningTask() {
+        when(jobTaskMapper.requestCancel("ta", 100L)).thenReturn(1);
+        assertThat(service.requestCancel("ta", 100L)).isTrue();
+    }
 
-  @Test
-  @DisplayName("requestCancel: 非 RUNNING / 不存在 / 已请求 → false")
-  void shouldReturnFalse_whenCancelTargetNotRunning() {
-    when(jobTaskMapper.requestCancel("ta", 100L)).thenReturn(0);
-    assertThat(service.requestCancel("ta", 100L)).isFalse();
-  }
+    @Test
+    @DisplayName("requestCancel: 非 RUNNING / 不存在 / 已请求 → false")
+    void shouldReturnFalse_whenCancelTargetNotRunning() {
+        when(jobTaskMapper.requestCancel("ta", 100L)).thenReturn(0);
+        assertThat(service.requestCancel("ta", 100L)).isFalse();
+    }
 
-  // ===== loadEffectiveConfig =====
+    // ===== loadEffectiveConfig =====
 
-  @Test
-  @DisplayName("loadEffectiveConfig: 从 partition input_snapshot 暴露 typed 分区计划契约")
-  void shouldExposePartitionPlan_whenLoadingEffectiveConfig() {
-    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
-    t.setJobInstanceId(10L);
-    t.setJobPartitionId(50L);
-    t.setTaskType("IMPORT");
-    t.setTaskSeq(1);
-    t.setTaskPayload("{}");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+    @Test
+    @DisplayName("loadEffectiveConfig: 从 partition input_snapshot 暴露 typed 分区计划契约")
+    void shouldExposePartitionPlan_whenLoadingEffectiveConfig() {
+        JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+        t.setJobInstanceId(10L);
+        t.setJobPartitionId(50L);
+        t.setTaskType("IMPORT");
+        t.setTaskSeq(1);
+        t.setTaskPayload("{}");
+        when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
 
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(10L);
-    instance.setTenantId("ta");
-    instance.setJobDefinitionId(20L);
-    instance.setInstanceNo("INST-1");
-    instance.setJobCode("JOB_A");
-    instance.setExpectedPartitionCount(4);
-    instance.setTraceId("trace-1");
-    when(jobInstanceMapper.selectById("ta", 10L)).thenReturn(instance);
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setId(10L);
+        instance.setTenantId("ta");
+        instance.setJobDefinitionId(20L);
+        instance.setInstanceNo("INST-1");
+        instance.setJobCode("JOB_A");
+        instance.setExpectedPartitionCount(4);
+        instance.setTraceId("trace-1");
+        when(jobInstanceMapper.selectById("ta", 10L)).thenReturn(instance);
 
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(50L);
-    partition.setPartitionNo(3);
-    partition.setPartitionKey("JOB_A:2026-06-30:3");
-    partition.setBusinessKey("biz-key");
-    partition.setIdempotencyKey("idem-key");
-    partition.setCurrentInvocationId("inv-1");
-    partition.setInputSnapshot("""
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(50L);
+        partition.setPartitionNo(3);
+        partition.setPartitionKey("JOB_A:2026-06-30:3");
+        partition.setBusinessKey("biz-key");
+        partition.setIdempotencyKey("idem-key");
+        partition.setCurrentInvocationId("inv-1");
+        partition.setInputSnapshot("""
         {"partitionPlanVersion":1,"shardIndex":2,"shardTotal":4,
          "rangeStartInclusive":500,"rangeEndExclusive":750,"expectedRows":250}
         """);
-    when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(partition);
-    when(jobDefinitionMapper.selectById(20L))
-        .thenReturn(JobDefinitionView.builder()
-            .id(20L)
-            .executionMode("FULL")
-            .retryPolicy("NONE")
-            .build());
+        when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(partition);
+        when(jobDefinitionMapper.selectById(20L))
+                .thenReturn(JobDefinitionView.builder()
+                        .id(20L)
+                        .executionMode("FULL")
+                        .retryPolicy("NONE")
+                        .build());
 
-    EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 100L);
+        EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 100L);
 
-    assertThat(config.partitionPlanVersion()).isEqualTo(1);
-    assertThat(config.shardIndex()).isEqualTo(2);
-    assertThat(config.shardTotal()).isEqualTo(4);
-    assertThat(config.rangeStartInclusive()).isEqualTo(500L);
-    assertThat(config.rangeEndExclusive()).isEqualTo(750L);
-    assertThat(config.expectedRows()).isEqualTo(250L);
-    assertThat(config.partitionNo()).isEqualTo(3);
-    assertThat(config.partitionCount()).isEqualTo(4);
-    assertThat(config.partitionInvocationId()).isEqualTo("inv-1");
-  }
-
-  @Test
-  @DisplayName("损坏分片快照回退时不把原始异常及凭据写入日志")
-  void shouldNotLogRawMalformedPartitionSnapshot_whenLoadingEffectiveConfig() {
-    JobTaskEntity task = task(103L, 1L, TaskStatus.RUNNING.code());
-    task.setJobInstanceId(13L);
-    task.setJobPartitionId(50L);
-    when(jobTaskMapper.selectById("ta", 103L)).thenReturn(task);
-
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(13L);
-    instance.setJobDefinitionId(20L);
-    when(jobInstanceMapper.selectById("ta", 13L)).thenReturn(instance);
-
-    JobPartitionEntity partition = new JobPartitionEntity();
-    partition.setId(50L);
-    partition.setInputSnapshot("{\"password\":\"probe-secret\",");
-    when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(partition);
-
-    Logger logger = (Logger) LoggerFactory.getLogger(DefaultTaskAssignmentService.class);
-    ListAppender<ILoggingEvent> appender = new ListAppender<>();
-    appender.start();
-    logger.addAppender(appender);
-    try {
-      EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 103L);
-
-      assertThat(config.partitionPlanVersion()).isNull();
-      assertThat(appender.list).anySatisfy(event -> {
-        assertThat(event.getFormattedMessage())
-            .contains("partitionId=50")
-            .doesNotContain("probe-secret");
-        assertThat(event.getThrowableProxy()).isNull();
-      });
-    } finally {
-      logger.detachAppender(appender);
-      appender.stop();
+        assertThat(config.partitionPlanVersion()).isEqualTo(1);
+        assertThat(config.shardIndex()).isEqualTo(2);
+        assertThat(config.shardTotal()).isEqualTo(4);
+        assertThat(config.rangeStartInclusive()).isEqualTo(500L);
+        assertThat(config.rangeEndExclusive()).isEqualTo(750L);
+        assertThat(config.expectedRows()).isEqualTo(250L);
+        assertThat(config.partitionNo()).isEqualTo(3);
+        assertThat(config.partitionCount()).isEqualTo(4);
+        assertThat(config.partitionInvocationId()).isEqualTo("inv-1");
     }
-  }
 
-  @Test
-  @DisplayName("loadEffectiveConfig: 新实例使用创建时冻结的执行策略而非当前作业定义")
-  void shouldPreferInstanceExecutionPolicySnapshot_whenLoadingEffectiveConfig() {
-    JobTaskEntity task = task(101L, 1L, TaskStatus.RUNNING.code());
-    task.setJobInstanceId(11L);
-    task.setTaskType("IMPORT");
-    String pinnedCrossDayPayload = """
+    @Test
+    @DisplayName("损坏分片快照回退时不把原始异常及凭据写入日志")
+    void shouldNotLogRawMalformedPartitionSnapshot_whenLoadingEffectiveConfig() {
+        JobTaskEntity task = task(103L, 1L, TaskStatus.RUNNING.code());
+        task.setJobInstanceId(13L);
+        task.setJobPartitionId(50L);
+        when(jobTaskMapper.selectById("ta", 103L)).thenReturn(task);
+
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setId(13L);
+        instance.setJobDefinitionId(20L);
+        when(jobInstanceMapper.selectById("ta", 13L)).thenReturn(instance);
+
+        JobPartitionEntity partition = new JobPartitionEntity();
+        partition.setId(50L);
+        partition.setInputSnapshot("{\"password\":\"probe-secret\",");
+        when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(partition);
+
+        Logger logger = (Logger) LoggerFactory.getLogger(DefaultTaskAssignmentService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 103L);
+
+            assertThat(config.partitionPlanVersion()).isNull();
+            assertThat(appender.list).anySatisfy(event -> {
+                assertThat(event.getFormattedMessage())
+                        .contains("partitionId=50")
+                        .doesNotContain("probe-secret");
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
+
+    @Test
+    @DisplayName("loadEffectiveConfig: 新实例使用创建时冻结的执行策略而非当前作业定义")
+    void shouldPreferInstanceExecutionPolicySnapshot_whenLoadingEffectiveConfig() {
+        JobTaskEntity task = task(101L, 1L, TaskStatus.RUNNING.code());
+        task.setJobInstanceId(11L);
+        task.setTaskType("IMPORT");
+        String pinnedCrossDayPayload = """
         {"crossDay":{"prior_day":{"resultVersionId":9876,"versionNo":3,
         "businessKey":"job:JOB_A:2026-10-13","payloadStorage":"INLINE_JSON",
         "output":{"total":42}}}}
         """;
-    task.setTaskPayload(pinnedCrossDayPayload);
-    when(jobTaskMapper.selectById("ta", 101L)).thenReturn(task);
+        task.setTaskPayload(pinnedCrossDayPayload);
+        when(jobTaskMapper.selectById("ta", 101L)).thenReturn(task);
 
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(11L);
-    instance.setTenantId("ta");
-    instance.setJobDefinitionId(20L);
-    instance.setInstanceNo("INST-2");
-    instance.setJobCode("JOB_A");
-    instance.setParamsSnapshot("""
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setId(11L);
+        instance.setTenantId("ta");
+        instance.setJobDefinitionId(20L);
+        instance.setInstanceNo("INST-2");
+        instance.setJobCode("JOB_A");
+        instance.setParamsSnapshot("""
         {"executionPolicy":{"executionMode":"INCREMENTAL","watermarkField":"updated_at",
          "retryPolicy":"FIXED","retryMaxCount":2,"timeoutSeconds":900},
          "dependencyResultSnapshot":[{"upstreamJobCode":"UPSTREAM_JOB",
@@ -500,182 +500,180 @@ class DefaultTaskAssignmentServiceTest {
          "resultVersionId":9001,"sourceJobInstanceId":8001,
          "effectiveAt":"2026-05-01T00:00:00Z"}]}
         """);
-    when(jobInstanceMapper.selectById("ta", 11L)).thenReturn(instance);
-    when(jobDefinitionMapper.selectById(20L))
-        .thenReturn(JobDefinitionView.builder()
-            .id(20L)
-            .executionMode("FULL")
-            .watermarkField("live_field")
-            .retryPolicy("EXPONENTIAL")
-            .retryMaxCount(5)
-            .timeoutSeconds(60)
-            .build());
+        when(jobInstanceMapper.selectById("ta", 11L)).thenReturn(instance);
+        when(jobDefinitionMapper.selectById(20L))
+                .thenReturn(JobDefinitionView.builder()
+                        .id(20L)
+                        .executionMode("FULL")
+                        .watermarkField("live_field")
+                        .retryPolicy("EXPONENTIAL")
+                        .retryMaxCount(5)
+                        .timeoutSeconds(60)
+                        .build());
 
-    EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 101L);
+        EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 101L);
 
-    assertThat(config.executionMode()).isEqualTo("INCREMENTAL");
-    assertThat(config.watermarkField()).isEqualTo("updated_at");
-    assertThat(config.retryPolicy()).isEqualTo("FIXED");
-    assertThat(config.retryMaxCount()).isEqualTo(2);
-    assertThat(config.timeoutSeconds()).isEqualTo(900);
-    assertThat(config.payload()).isEqualTo(pinnedCrossDayPayload);
-    assertThat(config.dependencyResultSnapshot())
-        .containsExactly(new DependencyResultReference(
-            "UPSTREAM_JOB",
-            "PREVIOUS_BIZ_DAY",
-            LocalDate.parse("2026-04-30"),
-            "job:UPSTREAM_JOB:2026-04-30",
-            4,
-            9001L,
-            8001L,
-            Instant.parse("2026-05-01T00:00:00Z")));
-  }
+        assertThat(config.executionMode()).isEqualTo("INCREMENTAL");
+        assertThat(config.watermarkField()).isEqualTo("updated_at");
+        assertThat(config.retryPolicy()).isEqualTo("FIXED");
+        assertThat(config.retryMaxCount()).isEqualTo(2);
+        assertThat(config.timeoutSeconds()).isEqualTo(900);
+        assertThat(config.payload()).isEqualTo(pinnedCrossDayPayload);
+        assertThat(config.dependencyResultSnapshot())
+                .containsExactly(new DependencyResultReference(
+                        "UPSTREAM_JOB",
+                        "PREVIOUS_BIZ_DAY",
+                        LocalDate.parse("2026-04-30"),
+                        "job:UPSTREAM_JOB:2026-04-30",
+                        4,
+                        9001L,
+                        8001L,
+                        Instant.parse("2026-05-01T00:00:00Z")));
+    }
 
-  @Test
-  @DisplayName("loadEffectiveConfig: 非法依赖结果快照拒绝 Worker CLAIM 配置")
-  void shouldFailClosedWhenDependencyResultSnapshotIsMalformed() {
-    JobTaskEntity task = task(102L, 1L, TaskStatus.RUNNING.code());
-    task.setJobInstanceId(12L);
-    when(jobTaskMapper.selectById("ta", 102L)).thenReturn(task);
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(12L);
-    instance.setTenantId("ta");
-    instance.setJobDefinitionId(20L);
-    instance.setParamsSnapshot(
-        "{\"dependencyResultSnapshot\":[{\"upstreamBizDate\":\"bad-date\"}]}");
-    when(jobInstanceMapper.selectById("ta", 12L)).thenReturn(instance);
+    @Test
+    @DisplayName("loadEffectiveConfig: 非法依赖结果快照拒绝 Worker CLAIM 配置")
+    void shouldFailClosedWhenDependencyResultSnapshotIsMalformed() {
+        JobTaskEntity task = task(102L, 1L, TaskStatus.RUNNING.code());
+        task.setJobInstanceId(12L);
+        when(jobTaskMapper.selectById("ta", 102L)).thenReturn(task);
+        JobInstanceEntity instance = new JobInstanceEntity();
+        instance.setId(12L);
+        instance.setTenantId("ta");
+        instance.setJobDefinitionId(20L);
+        instance.setParamsSnapshot("{\"dependencyResultSnapshot\":[{\"upstreamBizDate\":\"bad-date\"}]}");
+        when(jobInstanceMapper.selectById("ta", 12L)).thenReturn(instance);
 
-    assertThatThrownBy(() -> service.loadEffectiveConfig("ta", 102L))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("refusing worker claim");
-  }
+        assertThatThrownBy(() -> service.loadEffectiveConfig("ta", 102L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("refusing worker claim");
+    }
 
-  // ===== renewLeaseBatch (PERF 5.3) =====
+    // ===== renewLeaseBatch (PERF 5.3) =====
 
-  @Test
-  @DisplayName("renewLeaseBatch: 一条 set-based SQL;结果与入参逐位对齐,缺席行=false")
-  void shouldMapRowsBackToItems_whenRenewingLeaseBatch() {
-    var row1 = new RenewLeaseBatchRow();
-    row1.setTenantId("ta");
-    row1.setTaskId(1L);
-    row1.setCancelRequested(false);
-    var row3 = new RenewLeaseBatchRow();
-    row3.setTenantId("ta");
-    row3.setTaskId(3L);
-    row3.setCancelRequested(true);
-    when(jobPartitionMapper.renewLeaseBatch(any(), any(), eq(TaskStatus.RUNNING.code())))
-        .thenReturn(List.of(row1, row3));
+    @Test
+    @DisplayName("renewLeaseBatch: 一条 set-based SQL;结果与入参逐位对齐,缺席行=false")
+    void shouldMapRowsBackToItems_whenRenewingLeaseBatch() {
+        var row1 = new RenewLeaseBatchRow();
+        row1.setTenantId("ta");
+        row1.setTaskId(1L);
+        row1.setCancelRequested(false);
+        var row3 = new RenewLeaseBatchRow();
+        row3.setTenantId("ta");
+        row3.setTaskId(3L);
+        row3.setCancelRequested(true);
+        when(jobPartitionMapper.renewLeaseBatch(any(), any(), eq(TaskStatus.RUNNING.code())))
+                .thenReturn(List.of(row1, row3));
 
-    var results = service.renewLeaseBatch(List.of(
-        new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", "inv-1"),
-        new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "inv-2"),
-        new TaskAssignmentService.LeaseRenewCommand("ta", 3L, "w1", "inv-3")));
+        var results = service.renewLeaseBatch(List.of(
+                new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", "inv-1"),
+                new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "inv-2"),
+                new TaskAssignmentService.LeaseRenewCommand("ta", 3L, "w1", "inv-3")));
 
-    assertThat(results).hasSize(3);
-    assertThat(results.get(0).leaseRenewed()).isTrue();
-    assertThat(results.get(0).cancelRequested()).isFalse();
-    assertThat(results.get(1).leaseRenewed()).isFalse();
-    assertThat(results.get(2).leaseRenewed()).isTrue();
-    assertThat(results.get(2).cancelRequested()).isTrue();
-    // set-based:不再逐项 selectById / renewLease
-    verify(jobTaskMapper, never()).selectById(anyString(), anyLong());
-    verify(jobPartitionMapper, never()).renewLease(any());
-  }
+        assertThat(results).hasSize(3);
+        assertThat(results.get(0).leaseRenewed()).isTrue();
+        assertThat(results.get(0).cancelRequested()).isFalse();
+        assertThat(results.get(1).leaseRenewed()).isFalse();
+        assertThat(results.get(2).leaseRenewed()).isTrue();
+        assertThat(results.get(2).cancelRequested()).isTrue();
+        // set-based:不再逐项 selectById / renewLease
+        verify(jobTaskMapper, never()).selectById(anyString(), anyLong());
+        verify(jobPartitionMapper, never()).renewLease(any());
+    }
 
-  @Test
-  @DisplayName("renewLeaseBatch: 入参缺失项(R3-P1-10 invocationId 等)Java 侧判 false,不进 SQL")
-  void shouldFilterInvalidItems_whenRenewingLeaseBatch() {
-    var results = service.renewLeaseBatch(List.of(
-        new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", null),
-        new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "  "),
-        new TaskAssignmentService.LeaseRenewCommand("ta", null, "w1", "inv"),
-        new TaskAssignmentService.LeaseRenewCommand("ta", 4L, "", "inv")));
+    @Test
+    @DisplayName("renewLeaseBatch: 入参缺失项(R3-P1-10 invocationId 等)Java 侧判 false,不进 SQL")
+    void shouldFilterInvalidItems_whenRenewingLeaseBatch() {
+        var results = service.renewLeaseBatch(List.of(
+                new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", null),
+                new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "  "),
+                new TaskAssignmentService.LeaseRenewCommand("ta", null, "w1", "inv"),
+                new TaskAssignmentService.LeaseRenewCommand("ta", 4L, "", "inv")));
 
-    assertThat(results).hasSize(4).allMatch(r -> !r.leaseRenewed() && !r.cancelRequested());
-    verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
-  }
+        assertThat(results).hasSize(4).allMatch(r -> !r.leaseRenewed() && !r.cancelRequested());
+        verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
+    }
 
-  @Test
-  @DisplayName("renewLeaseBatch: 空入参 → 空结果,不触 SQL")
-  void shouldReturnEmpty_whenLeaseRenewInputEmpty() {
-    assertThat(service.renewLeaseBatch(List.of())).isEmpty();
-    assertThat(service.renewLeaseBatch(null)).isEmpty();
-    verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
-  }
+    @Test
+    @DisplayName("renewLeaseBatch: 空入参 → 空结果,不触 SQL")
+    void shouldReturnEmpty_whenLeaseRenewInputEmpty() {
+        assertThat(service.renewLeaseBatch(List.of())).isEmpty();
+        assertThat(service.renewLeaseBatch(null)).isEmpty();
+        verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
+    }
 
-  // ===== assignWorker + WorkerLookupMemo (PERF 5.2c) =====
+    // ===== assignWorker + WorkerLookupMemo (PERF 5.2c) =====
 
-  @Test
-  @DisplayName("assignWorker(memo): 同一批内同 (tenant,workerCode) 只查一次 worker_registry(含 miss)")
-  void shouldLookUpWorkerOnce_whenAssigningWithMemo() {
-    JobTaskEntity t1 = task(101L, 1L, TaskStatus.READY.code());
-    JobTaskEntity t2 = task(102L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectForWorkerClaim("ta", 101L)).thenReturn(t1);
-    when(jobTaskMapper.selectForWorkerClaim("ta", 102L)).thenReturn(t2);
-    // worker 离线:两次 claim 都判不可认领,但 worker_registry 只应查一次
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(worker(WorkerRegistryStatus.OFFLINE.code(), "default"));
-    var memo = new TaskAssignmentService.WorkerLookupMemo();
+    @Test
+    @DisplayName("assignWorker(memo): 同一批内同 (tenant,workerCode) 只查一次 worker_registry(含 miss)")
+    void shouldLookUpWorkerOnce_whenAssigningWithMemo() {
+        JobTaskEntity t1 = task(101L, 1L, TaskStatus.READY.code());
+        JobTaskEntity t2 = task(102L, 1L, TaskStatus.READY.code());
+        when(jobTaskMapper.selectForWorkerClaim("ta", 101L)).thenReturn(t1);
+        when(jobTaskMapper.selectForWorkerClaim("ta", 102L)).thenReturn(t2);
+        // worker 离线:两次 claim 都判不可认领,但 worker_registry 只应查一次
+        when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
+                .thenReturn(worker(WorkerRegistryStatus.OFFLINE.code(), "default"));
+        var memo = new TaskAssignmentService.WorkerLookupMemo();
 
-    assertThat(service.assignWorker("ta", 101L, "w1", memo)).isSameAs(t1);
-    assertThat(service.assignWorker("ta", 102L, "w1", memo)).isSameAs(t2);
+        assertThat(service.assignWorker("ta", 101L, "w1", memo)).isSameAs(t1);
+        assertThat(service.assignWorker("ta", 102L, "w1", memo)).isSameAs(t2);
 
-    verify(workerRegistryMapper, times(1)).selectByTenantAndWorkerCode("ta", "w1");
-  }
+        verify(workerRegistryMapper, times(1)).selectByTenantAndWorkerCode("ta", "w1");
+    }
 
-  // ===== updateTaskStatus =====
+    // ===== updateTaskStatus =====
 
-  @Test
-  @DisplayName("updateTaskStatus: task 不存在 → null,不写表")
-  void shouldReturnNull_whenUpdatingMissingTask() {
-    when(jobTaskMapper.selectById(eq("ta"), anyLong())).thenReturn(null);
+    @Test
+    @DisplayName("updateTaskStatus: task 不存在 → null,不写表")
+    void shouldReturnNull_whenUpdatingMissingTask() {
+        when(jobTaskMapper.selectById(eq("ta"), anyLong())).thenReturn(null);
 
-    assertThat(service.updateTaskStatus("ta", 100L, TaskStatus.SUCCESS.code(), null, null))
-        .isNull();
-    verify(jobTaskMapper, never()).updateStatus(any());
-  }
+        assertThat(service.updateTaskStatus("ta", 100L, TaskStatus.SUCCESS.code(), null, null))
+                .isNull();
+        verify(jobTaskMapper, never()).updateStatus(any());
+    }
 
-  // ===== fixtures =====
+    // ===== fixtures =====
 
-  private JobTaskEntity task(Long id, Long version, String status) {
-    JobTaskEntity t = new JobTaskEntity();
-    t.setId(id);
-    t.setVersion(version);
-    t.setTaskStatus(status);
-    t.setTenantId("ta");
-    return t;
-  }
+    private JobTaskEntity task(Long id, Long version, String status) {
+        JobTaskEntity t = new JobTaskEntity();
+        t.setId(id);
+        t.setVersion(version);
+        t.setTaskStatus(status);
+        t.setTenantId("ta");
+        return t;
+    }
 
-  private WorkerRegistryEntity worker(String status, String group) {
-    return worker("ta", "w1", status, group);
-  }
+    private WorkerRegistryEntity worker(String status, String group) {
+        return worker("ta", "w1", status, group);
+    }
 
-  private WorkerRegistryEntity worker(
-      String tenantId, String workerCode, String status, String group) {
-    return new WorkerRegistryEntity(
-        1L, tenantId, workerCode, group, null, null, status, Instant.now(), 0, 10, null, null);
-  }
+    private WorkerRegistryEntity worker(String tenantId, String workerCode, String status, String group) {
+        return new WorkerRegistryEntity(
+                1L, tenantId, workerCode, group, null, null, status, Instant.now(), 0, 10, null, null);
+    }
 
-  private WorkerRegistryEntity workerWithPool(String workerCode, String workerPoolCode) {
-    return new WorkerRegistryEntity(
-        1L,
-        "ta",
-        workerCode,
-        "default",
-        null,
-        null,
-        WorkerRegistryStatus.ONLINE.code(),
-        Instant.now(),
-        0,
-        10,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        workerPoolCode);
-  }
+    private WorkerRegistryEntity workerWithPool(String workerCode, String workerPoolCode) {
+        return new WorkerRegistryEntity(
+                1L,
+                "ta",
+                workerCode,
+                "default",
+                null,
+                null,
+                WorkerRegistryStatus.ONLINE.code(),
+                Instant.now(),
+                0,
+                10,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                workerPoolCode);
+    }
 }

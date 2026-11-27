@@ -9,35 +9,34 @@ import org.apache.ibatis.annotations.Param;
 
 public interface LineageEvidenceMapper {
 
-  JobInstance selectJobInstance(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    JobInstance selectJobInstance(@Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  JobInstance selectArchivedJobInstance(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    JobInstance selectArchivedJobInstance(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<PipelineInstance> selectPipelineInstances(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    List<PipelineInstance> selectPipelineInstances(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<PipelineInstance> selectArchivedPipelineInstances(
-      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+    List<PipelineInstance> selectArchivedPipelineInstances(
+            @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<FileRecord> selectFileRecords(
-      @Param("tenantId") String tenantId,
-      @Param("jobInstanceId") Long jobInstanceId,
-      @Param("payloadFileId") Long payloadFileId);
+    List<FileRecord> selectFileRecords(
+            @Param("tenantId") String tenantId,
+            @Param("jobInstanceId") Long jobInstanceId,
+            @Param("payloadFileId") Long payloadFileId);
 
-  List<FileRecord> selectArchivedFileRecords(
-      @Param("tenantId") String tenantId,
-      @Param("jobInstanceId") Long jobInstanceId,
-      @Param("payloadFileId") Long payloadFileId);
+    List<FileRecord> selectArchivedFileRecords(
+            @Param("tenantId") String tenantId,
+            @Param("jobInstanceId") Long jobInstanceId,
+            @Param("payloadFileId") Long payloadFileId);
 
-  List<DispatchRecord> selectDispatchRecords(
-      @Param("tenantId") String tenantId,
-      @Param("jobInstanceId") Long jobInstanceId,
-      @Param("fileIds") List<Long> fileIds);
+    List<DispatchRecord> selectDispatchRecords(
+            @Param("tenantId") String tenantId,
+            @Param("jobInstanceId") Long jobInstanceId,
+            @Param("fileIds") List<Long> fileIds);
 
-  List<DispatchRecord> selectArchivedDispatchRecords(
-      @Param("tenantId") String tenantId,
-      @Param("jobInstanceId") Long jobInstanceId,
-      @Param("fileIds") List<Long> fileIds);
+    List<DispatchRecord> selectArchivedDispatchRecords(
+            @Param("tenantId") String tenantId,
+            @Param("jobInstanceId") Long jobInstanceId,
+            @Param("fileIds") List<Long> fileIds);
 }

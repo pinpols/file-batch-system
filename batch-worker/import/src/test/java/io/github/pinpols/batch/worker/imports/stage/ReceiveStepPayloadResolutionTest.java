@@ -24,56 +24,56 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("导入载荷解析:非法 JSON 与空对象使用具名空载荷")
 class ReceiveStepPayloadResolutionTest {
 
-  @Mock
-  private ObjectMapper nullableMapper;
+    @Mock
+    private ObjectMapper nullableMapper;
 
-  @Mock
-  private PlatformFileRecordRepository fileRecords;
+    @Mock
+    private PlatformFileRecordRepository fileRecords;
 
-  @Mock
-  private FrozenFileTemplateResolver templates;
+    @Mock
+    private FrozenFileTemplateResolver templates;
 
-  @Mock
-  private PlatformPipelineRunRepository pipelineRuns;
+    @Mock
+    private PlatformPipelineRunRepository pipelineRuns;
 
-  @Mock
-  private BatchSecurityProperties security;
+    @Mock
+    private BatchSecurityProperties security;
 
-  @Test
-  @DisplayName("非 JSON 与损坏 JSON 均返回空载荷")
-  void shouldReturnEmptyPayload_whenInputIsInvalid() {
-    ReceiveStep step = stepWith(new ObjectMapper());
+    @Test
+    @DisplayName("非 JSON 与损坏 JSON 均返回空载荷")
+    void shouldReturnEmptyPayload_whenInputIsInvalid() {
+        ReceiveStep step = stepWith(new ObjectMapper());
 
-    assertEmpty(resolve(step, "plain-text"));
-    assertEmpty(resolve(step, "{"));
-  }
+        assertEmpty(resolve(step, "plain-text"));
+        assertEmpty(resolve(step, "{"));
+    }
 
-  @Test
-  @DisplayName("反序列化返回空对象时使用空载荷")
-  void shouldReturnEmptyPayload_whenMapperReturnsNull() throws Exception {
-    when(nullableMapper.readValue(anyString(), eq(ImportPayload.class))).thenReturn(null);
+    @Test
+    @DisplayName("反序列化返回空对象时使用空载荷")
+    void shouldReturnEmptyPayload_whenMapperReturnsNull() throws Exception {
+        when(nullableMapper.readValue(anyString(), eq(ImportPayload.class))).thenReturn(null);
 
-    ReceiveStep step = stepWith(nullableMapper);
-    ImportPayload payload = resolve(step, "{}");
-    assertEmpty(payload);
-  }
+        ReceiveStep step = stepWith(nullableMapper);
+        ImportPayload payload = resolve(step, "{}");
+        assertEmpty(payload);
+    }
 
-  private ReceiveStep stepWith(ObjectMapper mapper) {
-    WorkerImportPayloadProperties properties = new WorkerImportPayloadProperties();
-    properties.setMaxPayloadSizeMb(1);
-    return new ReceiveStep(fileRecords, templates, pipelineRuns, security, mapper, properties);
-  }
+    private ReceiveStep stepWith(ObjectMapper mapper) {
+        WorkerImportPayloadProperties properties = new WorkerImportPayloadProperties();
+        properties.setMaxPayloadSizeMb(1);
+        return new ReceiveStep(fileRecords, templates, pipelineRuns, security, mapper, properties);
+    }
 
-  private static ImportPayload resolve(ReceiveStep step, String rawPayload) {
-    ImportJobContext context = new ImportJobContext();
-    context.setRawPayload(rawPayload);
-    context.setAttributes(new HashMap<>());
-    return step.resolvePayload(context);
-  }
+    private static ImportPayload resolve(ReceiveStep step, String rawPayload) {
+        ImportJobContext context = new ImportJobContext();
+        context.setRawPayload(rawPayload);
+        context.setAttributes(new HashMap<>());
+        return step.resolvePayload(context);
+    }
 
-  private static void assertEmpty(ImportPayload payload) {
-    assertThat(payload).isNotNull();
-    assertThat(payload.content()).isNull();
-    assertThat(payload.metadata()).isEmpty();
-  }
+    private static void assertEmpty(ImportPayload payload) {
+        assertThat(payload).isNotNull();
+        assertThat(payload.content()).isNull();
+        assertThat(payload.metadata()).isEmpty();
+    }
 }

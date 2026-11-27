@@ -37,115 +37,114 @@ import org.springframework.stereotype.Component;
 @Component
 public class CalendarBizDateResolver {
 
-  private static final LocalTime DEFAULT_CUTOFF_TIME = LocalTime.of(6, 0);
-  private static final int MAX_WORKDAY_SEARCH_DAYS = 365;
-  private static final String HOLIDAY_ROLL_SKIP = "SKIP";
-  private static final String HOLIDAY_ROLL_PREV_WORKDAY = "PREV_WORKDAY";
-  private static final String HOLIDAY_ROLL_NEXT_WORKDAY = "NEXT_WORKDAY";
+    private static final LocalTime DEFAULT_CUTOFF_TIME = LocalTime.of(6, 0);
+    private static final int MAX_WORKDAY_SEARCH_DAYS = 365;
+    private static final String HOLIDAY_ROLL_SKIP = "SKIP";
+    private static final String HOLIDAY_ROLL_PREV_WORKDAY = "PREV_WORKDAY";
+    private static final String HOLIDAY_ROLL_NEXT_WORKDAY = "NEXT_WORKDAY";
 
-  private final BatchTimezoneProvider timezoneProvider;
+    private final BatchTimezoneProvider timezoneProvider;
 
-  public CalendarBizDateResolver(BatchTimezoneProvider timezoneProvider) {
-    this.timezoneProvider = timezoneProvider;
-  }
-
-  public LocalDate resolve(
-      Instant fireTime, ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
-    Objects.requireNonNull(fireTime, "fireTime");
-    ZoneId zoneId = resolveZoneId(fallbackZoneId, calendar);
-    ZonedDateTime zonedFireTime = fireTime.atZone(zoneId);
-    if (EmptyChecks.isNull(calendar)) {
-      return zonedFireTime.toLocalDate();
+    public CalendarBizDateResolver(BatchTimezoneProvider timezoneProvider) {
+        this.timezoneProvider = timezoneProvider;
     }
-    LocalDate localDate = zonedFireTime.toLocalDate();
-    LocalTime cutoffTime = resolveCutoffTime(calendar);
-    Instant cutoffInstant = resolveCutoffInstant(localDate, cutoffTime, zoneId);
-    boolean cutoffHasNotBeenReached = fireTime.isBefore(cutoffInstant);
-    LocalDate rawBizDate = cutoffHasNotBeenReached ? localDate.minusDays(1) : localDate;
-    return adjustForHoliday(rawBizDate, calendar);
-  }
 
-  /** 重复时段只切换一次；日切落在跳时缺口时沿用首个有效本地时刻的边界。 */
-  private Instant resolveCutoffInstant(LocalDate date, LocalTime cutoff, ZoneId zoneId) {
-    LocalDateTime localCutoff = date.atTime(cutoff);
-    ZoneRules rules = zoneId.getRules();
-    List<ZoneOffset> offsets = rules.getValidOffsets(localCutoff);
-    if (EmptyChecks.isEmpty(offsets)) {
-      ZoneOffsetTransition transition = rules.getTransition(localCutoff);
-      return transition.getInstant();
+    public LocalDate resolve(Instant fireTime, ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
+        Objects.requireNonNull(fireTime, "fireTime");
+        ZoneId zoneId = resolveZoneId(fallbackZoneId, calendar);
+        ZonedDateTime zonedFireTime = fireTime.atZone(zoneId);
+        if (EmptyChecks.isNull(calendar)) {
+            return zonedFireTime.toLocalDate();
+        }
+        LocalDate localDate = zonedFireTime.toLocalDate();
+        LocalTime cutoffTime = resolveCutoffTime(calendar);
+        Instant cutoffInstant = resolveCutoffInstant(localDate, cutoffTime, zoneId);
+        boolean cutoffHasNotBeenReached = fireTime.isBefore(cutoffInstant);
+        LocalDate rawBizDate = cutoffHasNotBeenReached ? localDate.minusDays(1) : localDate;
+        return adjustForHoliday(rawBizDate, calendar);
     }
-    // 重叠时 getValidOffsets 按较早偏移量在前返回，与既有首次日切语义一致。
-    return localCutoff.toInstant(offsets.getFirst());
-  }
 
-  private ZoneId resolveZoneId(ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
-    if (EmptyChecks.isNotNull(calendar)) {
-      String timezone = calendar.timezone();
-      if (EmptyChecks.isNotBlank(timezone)) {
-        return ZoneId.of(timezone);
-      }
+    /** 重复时段只切换一次；日切落在跳时缺口时沿用首个有效本地时刻的边界。 */
+    private Instant resolveCutoffInstant(LocalDate date, LocalTime cutoff, ZoneId zoneId) {
+        LocalDateTime localCutoff = date.atTime(cutoff);
+        ZoneRules rules = zoneId.getRules();
+        List<ZoneOffset> offsets = rules.getValidOffsets(localCutoff);
+        if (EmptyChecks.isEmpty(offsets)) {
+            ZoneOffsetTransition transition = rules.getTransition(localCutoff);
+            return transition.getInstant();
+        }
+        // 重叠时 getValidOffsets 按较早偏移量在前返回，与既有首次日切语义一致。
+        return localCutoff.toInstant(offsets.getFirst());
     }
-    return EmptyChecks.isNull(fallbackZoneId) ? timezoneProvider.defaultZone() : fallbackZoneId;
-  }
 
-  private LocalTime resolveCutoffTime(CalendarBizDateDefinition calendar) {
-    return EmptyChecks.isNull(calendar.cutoffTime()) ? DEFAULT_CUTOFF_TIME : calendar.cutoffTime();
-  }
-
-  private LocalDate adjustForHoliday(LocalDate date, CalendarBizDateDefinition calendar) {
-    if (!isHoliday(date, calendar)) {
-      return date;
+    private ZoneId resolveZoneId(ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
+        if (EmptyChecks.isNotNull(calendar)) {
+            String timezone = calendar.timezone();
+            if (EmptyChecks.isNotBlank(timezone)) {
+                return ZoneId.of(timezone);
+            }
+        }
+        return EmptyChecks.isNull(fallbackZoneId) ? timezoneProvider.defaultZone() : fallbackZoneId;
     }
-    String rollRule = normalize(calendar.holidayRollRule());
-    return switch (rollRule) {
-      case HOLIDAY_ROLL_SKIP -> null;
-      case HOLIDAY_ROLL_PREV_WORKDAY -> previousWorkday(date, calendar);
-      case HOLIDAY_ROLL_NEXT_WORKDAY -> nextWorkday(date, calendar);
-      default -> date;
-    };
-  }
 
-  private LocalDate previousWorkday(LocalDate date, CalendarBizDateDefinition calendar) {
-    return searchWorkday(date, -1, calendar, "before");
-  }
-
-  private LocalDate nextWorkday(LocalDate date, CalendarBizDateDefinition calendar) {
-    return searchWorkday(date, +1, calendar, "after");
-  }
-
-  /** direction = ±1；上限 {@value #MAX_WORKDAY_SEARCH_DAYS} 天内找不到工作日即抛异常。 */
-  private LocalDate searchWorkday(
-      LocalDate date, int direction, CalendarBizDateDefinition calendar, String directionLabel) {
-    LocalDate candidate = date.plusDays(direction);
-    for (int i = 0; i < MAX_WORKDAY_SEARCH_DAYS; i++) {
-      if (!isHoliday(candidate, calendar)) {
-        return candidate;
-      }
-      candidate = candidate.plusDays(direction);
+    private LocalTime resolveCutoffTime(CalendarBizDateDefinition calendar) {
+        return EmptyChecks.isNull(calendar.cutoffTime()) ? DEFAULT_CUTOFF_TIME : calendar.cutoffTime();
     }
-    throw new IllegalStateException("No workday found within "
-        + MAX_WORKDAY_SEARCH_DAYS
-        + " days "
-        + directionLabel
-        + " "
-        + date
-        + " — calendar may have all days marked as holidays");
-  }
 
-  private boolean isHoliday(LocalDate date, CalendarBizDateDefinition calendar) {
-    Set<LocalDate> workdayOverrides = calendar.workdayOverrides();
-    if (EmptyChecks.isNotNull(workdayOverrides) && workdayOverrides.contains(date)) {
-      return false;
+    private LocalDate adjustForHoliday(LocalDate date, CalendarBizDateDefinition calendar) {
+        if (!isHoliday(date, calendar)) {
+            return date;
+        }
+        String rollRule = normalize(calendar.holidayRollRule());
+        return switch (rollRule) {
+            case HOLIDAY_ROLL_SKIP -> null;
+            case HOLIDAY_ROLL_PREV_WORKDAY -> previousWorkday(date, calendar);
+            case HOLIDAY_ROLL_NEXT_WORKDAY -> nextWorkday(date, calendar);
+            default -> date;
+        };
     }
-    Set<LocalDate> holidays = calendar.holidays();
-    return EmptyChecks.isNotNull(holidays) && holidays.contains(date);
-  }
 
-  private String normalize(String value) {
-    if (EmptyChecks.isNull(value)) {
-      return "SKIP";
+    private LocalDate previousWorkday(LocalDate date, CalendarBizDateDefinition calendar) {
+        return searchWorkday(date, -1, calendar, "before");
     }
-    String trimmedValue = value.trim();
-    return trimmedValue.toUpperCase(Locale.ROOT);
-  }
+
+    private LocalDate nextWorkday(LocalDate date, CalendarBizDateDefinition calendar) {
+        return searchWorkday(date, +1, calendar, "after");
+    }
+
+    /** direction = ±1；上限 {@value #MAX_WORKDAY_SEARCH_DAYS} 天内找不到工作日即抛异常。 */
+    private LocalDate searchWorkday(
+            LocalDate date, int direction, CalendarBizDateDefinition calendar, String directionLabel) {
+        LocalDate candidate = date.plusDays(direction);
+        for (int i = 0; i < MAX_WORKDAY_SEARCH_DAYS; i++) {
+            if (!isHoliday(candidate, calendar)) {
+                return candidate;
+            }
+            candidate = candidate.plusDays(direction);
+        }
+        throw new IllegalStateException("No workday found within "
+                + MAX_WORKDAY_SEARCH_DAYS
+                + " days "
+                + directionLabel
+                + " "
+                + date
+                + " — calendar may have all days marked as holidays");
+    }
+
+    private boolean isHoliday(LocalDate date, CalendarBizDateDefinition calendar) {
+        Set<LocalDate> workdayOverrides = calendar.workdayOverrides();
+        if (EmptyChecks.isNotNull(workdayOverrides) && workdayOverrides.contains(date)) {
+            return false;
+        }
+        Set<LocalDate> holidays = calendar.holidays();
+        return EmptyChecks.isNotNull(holidays) && holidays.contains(date);
+    }
+
+    private String normalize(String value) {
+        if (EmptyChecks.isNull(value)) {
+            return "SKIP";
+        }
+        String trimmedValue = value.trim();
+        return trimmedValue.toUpperCase(Locale.ROOT);
+    }
 }

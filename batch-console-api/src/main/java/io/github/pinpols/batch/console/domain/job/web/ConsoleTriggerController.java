@@ -30,40 +30,36 @@ import org.springframework.web.bind.annotation.*;
 @Idempotent
 public class ConsoleTriggerController {
 
-  private final ConsoleTriggerProxyService triggerProxyService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleTriggerProxyService triggerProxyService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
-  public CommonResponse<List<ConsoleTriggerStatusResponse>> list() {
-    return responseFactory.success(triggerProxyService.triggerList());
-  }
+    @GetMapping
+    @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+    public CommonResponse<List<ConsoleTriggerStatusResponse>> list() {
+        return responseFactory.success(triggerProxyService.triggerList());
+    }
 
-  @PostMapping("/{workflowCode}/register")
-  public CommonResponse<ConsoleTriggerActionResponse> register(
-      @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        triggerProxyService.triggerAction(tenantId, workflowCode, "register"));
-  }
+    @PostMapping("/{workflowCode}/register")
+    public CommonResponse<ConsoleTriggerActionResponse> register(
+            @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(triggerProxyService.triggerAction(tenantId, workflowCode, "register"));
+    }
 
-  @PostMapping("/{workflowCode}/unregister")
-  public CommonResponse<ConsoleTriggerActionResponse> unregister(
-      @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        triggerProxyService.triggerAction(tenantId, workflowCode, "unregister"));
-  }
+    @PostMapping("/{workflowCode}/unregister")
+    public CommonResponse<ConsoleTriggerActionResponse> unregister(
+            @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(triggerProxyService.triggerAction(tenantId, workflowCode, "unregister"));
+    }
 
-  @PostMapping("/{workflowCode}/pause")
-  public CommonResponse<ConsoleTriggerActionResponse> pause(
-      @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        triggerProxyService.triggerAction(tenantId, workflowCode, "pause"));
-  }
+    @PostMapping("/{workflowCode}/pause")
+    public CommonResponse<ConsoleTriggerActionResponse> pause(
+            @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(triggerProxyService.triggerAction(tenantId, workflowCode, "pause"));
+    }
 
-  @PostMapping("/{workflowCode}/resume")
-  public CommonResponse<ConsoleTriggerActionResponse> resume(
-      @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        triggerProxyService.triggerAction(tenantId, workflowCode, "resume"));
-  }
+    @PostMapping("/{workflowCode}/resume")
+    public CommonResponse<ConsoleTriggerActionResponse> resume(
+            @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(triggerProxyService.triggerAction(tenantId, workflowCode, "resume"));
+    }
 }

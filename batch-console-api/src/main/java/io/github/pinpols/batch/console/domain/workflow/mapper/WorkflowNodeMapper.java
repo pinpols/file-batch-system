@@ -8,13 +8,13 @@ import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowNodeMapper {
 
-  List<WorkflowNodeEntity> selectByQuery(WorkflowNodeQuery query);
+    List<WorkflowNodeEntity> selectByQuery(WorkflowNodeQuery query);
 
-  long countByQuery(WorkflowNodeQuery query);
+    long countByQuery(WorkflowNodeQuery query);
 
-  WorkflowNodeEntity selectByUniqueKey(Long workflowDefinitionId, String nodeCode);
+    WorkflowNodeEntity selectByUniqueKey(Long workflowDefinitionId, String nodeCode);
 
-  int deleteByWorkflowDefinitionId(@Param("workflowDefinitionId") Long workflowDefinitionId);
+    int deleteByWorkflowDefinitionId(@Param("workflowDefinitionId") Long workflowDefinitionId);
 
-  int upsertWorkflowNode(WorkflowNodeUpsertParam param);
+    int upsertWorkflowNode(WorkflowNodeUpsertParam param);
 }

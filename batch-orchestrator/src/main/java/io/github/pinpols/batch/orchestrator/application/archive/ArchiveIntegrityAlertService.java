@@ -20,37 +20,36 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ArchiveIntegrityAlertService {
 
-  private static final String ALERT_TYPE = "SUCCESS_INSTANCE_ARCHIVE_INTEGRITY";
-  private static final String RESOURCE_KEY = "success-instance-archive-integrity";
+    private static final String ALERT_TYPE = "SUCCESS_INSTANCE_ARCHIVE_INTEGRITY";
+    private static final String RESOURCE_KEY = "success-instance-archive-integrity";
 
-  private final AlertEventService alertEventService;
+    private final AlertEventService alertEventService;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void emitSuccessInstanceArchiveIssues(
-      Instant cutoff, List<ArchiveIntegrityCandidateSummary> summaries) {
-    for (ArchiveIntegrityCandidateSummary summary : summaries) {
-      Map<String, Object> detail = new LinkedHashMap<>();
-      detail.put("archiveDomain", "SUCCESS_INSTANCE");
-      detail.put("affectedInstanceCount", summary.affectedInstanceCount());
-      detail.put("sampleInstanceId", summary.sampleInstanceId());
-      detail.put("cutoff", cutoff);
-      detail.put("action", "manual-integrity-review-required");
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void emitSuccessInstanceArchiveIssues(Instant cutoff, List<ArchiveIntegrityCandidateSummary> summaries) {
+        for (ArchiveIntegrityCandidateSummary summary : summaries) {
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("archiveDomain", "SUCCESS_INSTANCE");
+            detail.put("affectedInstanceCount", summary.affectedInstanceCount());
+            detail.put("sampleInstanceId", summary.sampleInstanceId());
+            detail.put("cutoff", cutoff);
+            detail.put("action", "manual-integrity-review-required");
 
-      AlertEmitCommand request = AlertEmitCommand.builder()
-          .tenantId(summary.tenantId())
-          .serviceName("batch-orchestrator")
-          .alertType(ALERT_TYPE)
-          .severity("ERROR")
-          .title("成功实例归档发现运行数据引用归属异常")
-          .detailJson(JsonUtils.toJson(detail))
-          .resourceKey(RESOURCE_KEY)
-          .build();
-      alertEventService.emit(request);
-      log.warn(
-          "success-instance archive integrity issue persisted: tenantId={}, affectedInstances={}, cutoff={}",
-          summary.tenantId(),
-          summary.affectedInstanceCount(),
-          cutoff);
+            AlertEmitCommand request = AlertEmitCommand.builder()
+                    .tenantId(summary.tenantId())
+                    .serviceName("batch-orchestrator")
+                    .alertType(ALERT_TYPE)
+                    .severity("ERROR")
+                    .title("成功实例归档发现运行数据引用归属异常")
+                    .detailJson(JsonUtils.toJson(detail))
+                    .resourceKey(RESOURCE_KEY)
+                    .build();
+            alertEventService.emit(request);
+            log.warn(
+                    "success-instance archive integrity issue persisted: tenantId={}, affectedInstances={}, cutoff={}",
+                    summary.tenantId(),
+                    summary.affectedInstanceCount(),
+                    cutoff);
+        }
     }
-  }
 }

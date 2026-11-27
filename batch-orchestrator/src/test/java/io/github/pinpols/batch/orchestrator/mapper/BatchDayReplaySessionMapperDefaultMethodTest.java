@@ -20,37 +20,32 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("批次日重放会话 Mapper 默认方法")
 class BatchDayReplaySessionMapperDefaultMethodTest {
 
-  @Test
-  @DisplayName("重开部分失败会话时把 RUNNING 枚举编码传给带状态版本")
-  void shouldDelegateWithRunningStatus_whenReopeningPartialFailed() {
-    BatchDayReplaySessionMapper mapper =
-        mock(BatchDayReplaySessionMapper.class, CALLS_REAL_METHODS);
-    when(mapper.reopenPartialFailedForRetryWithStatus(any(), any(), any(), any()))
-        .thenReturn(1);
-    Instant now = Instant.parse("2026-11-12T00:00:00Z");
+    @Test
+    @DisplayName("重开部分失败会话时把 RUNNING 枚举编码传给带状态版本")
+    void shouldDelegateWithRunningStatus_whenReopeningPartialFailed() {
+        BatchDayReplaySessionMapper mapper = mock(BatchDayReplaySessionMapper.class, CALLS_REAL_METHODS);
+        when(mapper.reopenPartialFailedForRetryWithStatus(any(), any(), any(), any()))
+                .thenReturn(1);
+        Instant now = Instant.parse("2026-11-12T00:00:00Z");
 
-    int updated = mapper.reopenPartialFailedForRetry("t1", 7L, now);
+        int updated = mapper.reopenPartialFailedForRetry("t1", 7L, now);
 
-    assertThat(updated).isEqualTo(1);
-    ArgumentCaptor<String> targetStatus = ArgumentCaptor.forClass(String.class);
-    verify(mapper)
-        .reopenPartialFailedForRetryWithStatus(eq("t1"), eq(7L), eq(now), targetStatus.capture());
-    assertThat(targetStatus.getValue()).isEqualTo(BatchDayReplaySessionStatus.RUNNING.code());
-    assertThat(List.of(BatchDayReplaySessionStatus.RUNNING.code()))
-        .contains(targetStatus.getValue());
-  }
+        assertThat(updated).isEqualTo(1);
+        ArgumentCaptor<String> targetStatus = ArgumentCaptor.forClass(String.class);
+        verify(mapper).reopenPartialFailedForRetryWithStatus(eq("t1"), eq(7L), eq(now), targetStatus.capture());
+        assertThat(targetStatus.getValue()).isEqualTo(BatchDayReplaySessionStatus.RUNNING.code());
+        assertThat(List.of(BatchDayReplaySessionStatus.RUNNING.code())).contains(targetStatus.getValue());
+    }
 
-  @Test
-  @DisplayName("默认委托不自行构造状态更新参数")
-  void shouldNotTouchStatusUpdateParam_whenReopeningPartialFailed() {
-    BatchDayReplaySessionMapper mapper =
-        mock(BatchDayReplaySessionMapper.class, CALLS_REAL_METHODS);
-    when(mapper.reopenPartialFailedForRetryWithStatus(any(), any(), any(), any()))
-        .thenReturn(0);
+    @Test
+    @DisplayName("默认委托不自行构造状态更新参数")
+    void shouldNotTouchStatusUpdateParam_whenReopeningPartialFailed() {
+        BatchDayReplaySessionMapper mapper = mock(BatchDayReplaySessionMapper.class, CALLS_REAL_METHODS);
+        when(mapper.reopenPartialFailedForRetryWithStatus(any(), any(), any(), any()))
+                .thenReturn(0);
 
-    mapper.reopenPartialFailedForRetry("t1", 8L, Instant.parse("2026-11-12T00:00:00Z"));
+        mapper.reopenPartialFailedForRetry("t1", 8L, Instant.parse("2026-11-12T00:00:00Z"));
 
-    verify(mapper, org.mockito.Mockito.never())
-        .updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class));
-  }
+        verify(mapper, org.mockito.Mockito.never()).updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class));
+    }
 }

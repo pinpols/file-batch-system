@@ -19,19 +19,19 @@ import io.github.pinpols.batch.common.tenant.routing.TenantPlacementRepository;
  */
 public final class BusinessPlacementResolverFactory {
 
-  private BusinessPlacementResolverFactory() {}
+    private BusinessPlacementResolverFactory() {}
 
-  public static BusinessPlacementResolver create(
-      BusinessRoutingProperties routingProperties, TenantPlacementRepository placementRepository) {
-    HashAndSiloPlacementResolver hashFallback = new HashAndSiloPlacementResolver(
-        routingProperties.getPooledShardCount(), routingProperties.getSiloOverrides());
-    if (routingProperties.getPlacementSource() == BusinessRoutingProperties.PlacementSource.TABLE) {
-      return new DbTablePlacementResolver(
-          placementRepository,
-          hashFallback,
-          routingProperties.getPlacementCacheTtlMs(),
-          System::currentTimeMillis);
+    public static BusinessPlacementResolver create(
+            BusinessRoutingProperties routingProperties, TenantPlacementRepository placementRepository) {
+        HashAndSiloPlacementResolver hashFallback = new HashAndSiloPlacementResolver(
+                routingProperties.getPooledShardCount(), routingProperties.getSiloOverrides());
+        if (routingProperties.getPlacementSource() == BusinessRoutingProperties.PlacementSource.TABLE) {
+            return new DbTablePlacementResolver(
+                    placementRepository,
+                    hashFallback,
+                    routingProperties.getPlacementCacheTtlMs(),
+                    System::currentTimeMillis);
+        }
+        return hashFallback;
     }
-    return hashFallback;
-  }
 }

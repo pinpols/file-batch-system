@@ -13,29 +13,29 @@ import org.jetbrains.annotations.Contract;
 @SuppressWarnings("java:S2583")
 public final class Texts {
 
-  private Texts() {}
+    private Texts() {}
 
-  /** 字符序列是否非空且含至少一个非空白字符。 */
-  @Contract("null -> false")
-  public static boolean hasText(@Nullable CharSequence str) {
-    if (str == null) {
-      return false;
+    /** 字符序列是否非空且含至少一个非空白字符。 */
+    @Contract("null -> false")
+    public static boolean hasText(@Nullable CharSequence str) {
+        if (str == null) {
+            return false;
+        }
+        int len = str.length();
+        if (len == 0) {
+            return false;
+        }
+        for (int i = 0; i < len; i++) {
+            if (!Character.isWhitespace(str.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
     }
-    int len = str.length();
-    if (len == 0) {
-      return false;
-    }
-    for (int i = 0; i < len; i++) {
-      if (!Character.isWhitespace(str.charAt(i))) {
-        return true;
-      }
-    }
-    return false;
-  }
 
-  /** String 重载，避免调用方因 {@code null} 字面量歧义触发 {@code CharSequence} 路径的 NPE。 */
-  @Contract("null -> false")
-  public static boolean hasText(@Nullable String str) {
-    return hasText((CharSequence) str);
-  }
+    /** String 重载，避免调用方因 {@code null} 字面量歧义触发 {@code CharSequence} 路径的 NPE。 */
+    @Contract("null -> false")
+    public static boolean hasText(@Nullable String str) {
+        return hasText((CharSequence) str);
+    }
 }

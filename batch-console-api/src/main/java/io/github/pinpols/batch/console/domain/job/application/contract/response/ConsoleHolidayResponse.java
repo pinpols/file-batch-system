@@ -13,27 +13,27 @@ import java.time.LocalDate;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ConsoleHolidayResponse(
-    Long id,
-    Long calendarId,
-    LocalDate bizDate,
-    String dayType,
-    String holidayName,
-    String description,
-    Instant createdAt,
-    Instant updatedAt) {
+        Long id,
+        Long calendarId,
+        LocalDate bizDate,
+        String dayType,
+        String holidayName,
+        String description,
+        Instant createdAt,
+        Instant updatedAt) {
 
-  public static ConsoleHolidayResponse from(CalendarHolidayRow row) {
-    if (EmptyChecks.isNull(row)) {
-      return null;
+    public static ConsoleHolidayResponse from(CalendarHolidayRow row) {
+        if (EmptyChecks.isNull(row)) {
+            return null;
+        }
+        return new ConsoleHolidayResponse(
+                row.id(),
+                row.calendarId(),
+                row.bizDate(),
+                row.dayType(),
+                row.holidayName(),
+                row.description(),
+                row.createdAt(),
+                row.updatedAt());
     }
-    return new ConsoleHolidayResponse(
-        row.id(),
-        row.calendarId(),
-        row.bizDate(),
-        row.dayType(),
-        row.holidayName(),
-        row.description(),
-        row.createdAt(),
-        row.updatedAt());
-  }
 }

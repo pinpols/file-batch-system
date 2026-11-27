@@ -30,48 +30,45 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleSelfServiceJobControllerTest {
 
-  @Mock
-  private ConsoleSelfServiceJobService selfServiceJobService;
+    @Mock
+    private ConsoleSelfServiceJobService selfServiceJobService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSelfServiceJobController(
-            selfServiceJobService, responseFactory, requestMetadataResolver))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSelfServiceJobController(
+                        selfServiceJobService, responseFactory, requestMetadataResolver))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  @Test
-  @DisplayName("提交重跑申请后返回受理编号, 回包为成功状态")
-  void shouldSubmitRerunRequest() throws Exception {
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
-    when(selfServiceJobService.requestRerun(
-            any(ConsoleSelfServiceJobService.RerunParam.class), anyString(), anyString()))
-        .thenReturn("APR-20260101-001");
+    @Test
+    @DisplayName("提交重跑申请后返回受理编号, 回包为成功状态")
+    void shouldSubmitRerunRequest() throws Exception {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+        when(selfServiceJobService.requestRerun(
+                        any(ConsoleSelfServiceJobService.RerunParam.class), anyString(), anyString()))
+                .thenReturn("APR-20260101-001");
 
-    mockMvc
-        .perform(post("/api/console/self-service/jobs/rerun-request")
-            .header("Idempotency-Key", "idem-1")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/self-service/jobs/rerun-request")
+                        .header("Idempotency-Key", "idem-1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId":"t1",
                       "jobCode":"import-job-001",
@@ -80,26 +77,24 @@ class ConsoleSelfServiceJobControllerTest {
                       "reason":"Data correction"
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data").value("APR-20260101-001"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data").value("APR-20260101-001"));
+    }
 
-  @Test
-  @DisplayName("提交补偿申请后返回受理编号, 回包为成功状态")
-  void shouldSubmitCompensationRequest() throws Exception {
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
-    when(selfServiceJobService.requestCompensation(
-            any(ConsoleSelfServiceJobService.CompensationParam.class), anyString(), anyString()))
-        .thenReturn("APR-20260101-002");
+    @Test
+    @DisplayName("提交补偿申请后返回受理编号, 回包为成功状态")
+    void shouldSubmitCompensationRequest() throws Exception {
+        when(requestMetadataResolver.current())
+                .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+        when(selfServiceJobService.requestCompensation(
+                        any(ConsoleSelfServiceJobService.CompensationParam.class), anyString(), anyString()))
+                .thenReturn("APR-20260101-002");
 
-    mockMvc
-        .perform(post("/api/console/self-service/jobs/compensation-request")
-            .header("Idempotency-Key", "idem-2")
-            .contentType(APPLICATION_JSON)
-            .content("""
+        mockMvc.perform(post("/api/console/self-service/jobs/compensation-request")
+                        .header("Idempotency-Key", "idem-2")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId":"t1",
                       "jobCode":"import-job-001",
@@ -109,19 +104,18 @@ class ConsoleSelfServiceJobControllerTest {
                       "reason":"Missing records"
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data").value("APR-20260101-002"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data").value("APR-20260101-002"));
+    }
 
-  @Test
-  @DisplayName("补偿申请缺少类型或目标实例时在提交审批前拒绝")
-  void shouldRejectCompensationRequestWithoutTypeOrTarget() throws Exception {
-    mockMvc
-        .perform(post("/api/console/self-service/jobs/compensation-request")
-            .header("Idempotency-Key", "idem-3")
-            .contentType(APPLICATION_JSON)
-            .content("""
+    @Test
+    @DisplayName("补偿申请缺少类型或目标实例时在提交审批前拒绝")
+    void shouldRejectCompensationRequestWithoutTypeOrTarget() throws Exception {
+        mockMvc.perform(post("/api/console/self-service/jobs/compensation-request")
+                        .header("Idempotency-Key", "idem-3")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId":"t1",
                       "jobCode":"import-job-001",
@@ -129,8 +123,8 @@ class ConsoleSelfServiceJobControllerTest {
                       "reason":"Missing target"
                     }
                     """))
-        .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest());
 
-    Mockito.verifyNoInteractions(selfServiceJobService);
-  }
+        Mockito.verifyNoInteractions(selfServiceJobService);
+    }
 }

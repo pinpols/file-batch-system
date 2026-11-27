@@ -45,288 +45,276 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-public class DefaultImportStageExecutor
-    extends AbstractStageExecutor<ImportJobContext, ImportStageResult>
-    implements ImportStageExecutor {
+public class DefaultImportStageExecutor extends AbstractStageExecutor<ImportJobContext, ImportStageResult>
+        implements ImportStageExecutor {
 
-  private final Map<String, ImportStageStep> stepsByImplCode;
-  private final Map<ImportStage, ImportStageStep> stepsByStage;
-  private final List<PipelineStepTemplate> defaultStepDefinitions;
-  private final ImportRecordGovernanceService recordGovernanceService;
-  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    private final Map<String, ImportStageStep> stepsByImplCode;
+    private final Map<ImportStage, ImportStageStep> stepsByStage;
+    private final List<PipelineStepTemplate> defaultStepDefinitions;
+    private final ImportRecordGovernanceService recordGovernanceService;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
-  public DefaultImportStageExecutor(
-      List<ImportStageStep> steps,
-      PlatformPipelineRunRepository pipelineRuns,
-      ImportRecordGovernanceService recordGovernanceService,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    super(pipelineRuns);
-    this.stepsByImplCode = indexByImplCode(steps);
-    this.stepsByStage = indexByStage(steps);
-    this.defaultStepDefinitions = buildDefaultStepDefinitions();
-    this.recordGovernanceService = recordGovernanceService;
-    this.meterRegistryProvider = meterRegistryProvider;
-  }
-
-  @Override
-  public List<ImportStageResult> execute(ImportJobContext context) {
-    ImportStagingFiles stagingFiles = new ImportStagingFiles();
-    if (EmptyChecks.isNotNull(context)) {
-      context.setStagingFiles(stagingFiles);
+    public DefaultImportStageExecutor(
+            List<ImportStageStep> steps,
+            PlatformPipelineRunRepository pipelineRuns,
+            ImportRecordGovernanceService recordGovernanceService,
+            ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        super(pipelineRuns);
+        this.stepsByImplCode = indexByImplCode(steps);
+        this.stepsByStage = indexByStage(steps);
+        this.defaultStepDefinitions = buildDefaultStepDefinitions();
+        this.recordGovernanceService = recordGovernanceService;
+        this.meterRegistryProvider = meterRegistryProvider;
     }
-    // 主链路：执行 stage loop；无论成功/失败都尝试收敛错误明细产物（用于对账/审计）。
-    try {
-      List<ImportStageResult> results = runStageLoop(context);
-      if (EmptyChecks.isNotEmpty(results)
-          && results.stream().allMatch(ImportStageResult::success)) {
-        stagingFiles.markSuccessful();
-      }
-      return results;
-    } finally {
-      try {
-        finalizeImport(context);
-      } finally {
+
+    @Override
+    public List<ImportStageResult> execute(ImportJobContext context) {
+        ImportStagingFiles stagingFiles = new ImportStagingFiles();
         if (EmptyChecks.isNotNull(context)) {
-          context.setStagingFiles(null);
+            context.setStagingFiles(stagingFiles);
+        }
+        // 主链路：执行 stage loop；无论成功/失败都尝试收敛错误明细产物（用于对账/审计）。
+        try {
+            List<ImportStageResult> results = runStageLoop(context);
+            if (EmptyChecks.isNotEmpty(results) && results.stream().allMatch(ImportStageResult::success)) {
+                stagingFiles.markSuccessful();
+            }
+            return results;
+        } finally {
+            try {
+                finalizeImport(context);
+            } finally {
+                if (EmptyChecks.isNotNull(context)) {
+                    context.setStagingFiles(null);
+                }
+                try {
+                    stagingFiles.close();
+                } catch (Exception exception) {
+                    SwallowedExceptionLogger.warn(
+                            DefaultImportStageExecutor.class, "import-staging-cleanup", exception);
+                }
+            }
+        }
+    }
+
+    private void finalizeImport(ImportJobContext context) {
+        try {
+            recordImportRowsMetrics(context);
+        } catch (Exception exception) {
+            SwallowedExceptionLogger.warn(DefaultImportStageExecutor.class, "import-row-metrics", exception);
         }
         try {
-          stagingFiles.close();
+            recordGovernanceService.finalizeErrorOutput(context);
         } catch (Exception exception) {
-          SwallowedExceptionLogger.warn(
-              DefaultImportStageExecutor.class, "import-staging-cleanup", exception);
+            SwallowedExceptionLogger.warn(DefaultImportStageExecutor.class, "import-error-output-finalize", exception);
         }
-      }
     }
-  }
 
-  private void finalizeImport(ImportJobContext context) {
-    try {
-      recordImportRowsMetrics(context);
-    } catch (Exception exception) {
-      SwallowedExceptionLogger.warn(
-          DefaultImportStageExecutor.class, "import-row-metrics", exception);
+    private void recordImportRowsMetrics(ImportJobContext context) {
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (EmptyChecks.isNull(registry)) {
+            return;
+        }
+        recordRows(registry, "parsed", context, PipelineRuntimeKeys.IMPORT_PARSED_COUNT);
+        recordRows(registry, "validated", context, PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT);
+        recordRows(registry, "loaded", context, PipelineRuntimeKeys.IMPORT_LOADED_COUNT);
+        recordRows(registry, "skipped", context, PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT);
     }
-    try {
-      recordGovernanceService.finalizeErrorOutput(context);
-    } catch (Exception exception) {
-      SwallowedExceptionLogger.warn(
-          DefaultImportStageExecutor.class, "import-error-output-finalize", exception);
+
+    private void recordRows(MeterRegistry registry, String phase, ImportJobContext context, String attribute) {
+        Object value = context.getAttributes().get(attribute);
+        if (!(value instanceof Number count) || count.doubleValue() <= 0) {
+            return;
+        }
+        Counter.builder("import.file.rows.total")
+                .description("导入文件各处理阶段的记录数")
+                .tag("workerType", ImportWorkerType.IMPORT)
+                .tag("phase", phase)
+                .register(registry)
+                .increment(count.doubleValue());
     }
-  }
 
-  private void recordImportRowsMetrics(ImportJobContext context) {
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (EmptyChecks.isNull(registry)) {
-      return;
+    @Override
+    public List<PipelineStepTemplate> defaultStepDefinitions() {
+        return defaultStepDefinitions;
     }
-    recordRows(registry, "parsed", context, PipelineRuntimeKeys.IMPORT_PARSED_COUNT);
-    recordRows(registry, "validated", context, PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT);
-    recordRows(registry, "loaded", context, PipelineRuntimeKeys.IMPORT_LOADED_COUNT);
-    recordRows(registry, "skipped", context, PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT);
-  }
 
-  private void recordRows(
-      MeterRegistry registry, String phase, ImportJobContext context, String attribute) {
-    Object value = context.getAttributes().get(attribute);
-    if (!(value instanceof Number count) || count.doubleValue() <= 0) {
-      return;
+    @Override
+    public ReplayCapabilityDeclaration resolveReplayCapability(ImportJobContext context) {
+        ImportStageStep receiveStage = stepsByStage.get(ImportStage.RECEIVE);
+        ImportStageStep loadStage = stepsByStage.get(ImportStage.LOAD);
+        if (EmptyChecks.isNull(context)
+                || !(receiveStage instanceof ReceiveStep receiveStep)
+                || !(loadStage instanceof LoadStep loadStep)) {
+            return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
+        }
+        Map<String, Object> frozenTemplateConfig = receiveStep.resolveTemplateConfig(context);
+        return loadStep.replayCapability(frozenTemplateConfig);
     }
-    Counter.builder("import.file.rows.total")
-        .description("导入文件各处理阶段的记录数")
-        .tag("workerType", ImportWorkerType.IMPORT)
-        .tag("phase", phase)
-        .register(registry)
-        .increment(count.doubleValue());
-  }
 
-  @Override
-  public List<PipelineStepTemplate> defaultStepDefinitions() {
-    return defaultStepDefinitions;
-  }
-
-  @Override
-  public ReplayCapabilityDeclaration resolveReplayCapability(ImportJobContext context) {
-    ImportStageStep receiveStage = stepsByStage.get(ImportStage.RECEIVE);
-    ImportStageStep loadStage = stepsByStage.get(ImportStage.LOAD);
-    if (EmptyChecks.isNull(context)
-        || !(receiveStage instanceof ReceiveStep receiveStep)
-        || !(loadStage instanceof LoadStep loadStep)) {
-      return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
+    @Override
+    protected ImportStageResult stepMissingFailure() {
+        return ImportStageResult.failure(
+                ImportStage.RECEIVE,
+                StageFailureCode.PIPELINE_STEP_MISSING.name(),
+                "error.worker.pipeline_step_missing",
+                new Object[0],
+                "pipeline step definition missing",
+                ERROR_OBJECT_MAPPER);
     }
-    Map<String, Object> frozenTemplateConfig = receiveStep.resolveTemplateConfig(context);
-    return loadStep.replayCapability(frozenTemplateConfig);
-  }
 
-  @Override
-  protected ImportStageResult stepMissingFailure() {
-    return ImportStageResult.failure(
-        ImportStage.RECEIVE,
-        StageFailureCode.PIPELINE_STEP_MISSING.name(),
-        "error.worker.pipeline_step_missing",
-        new Object[0],
-        "pipeline step definition missing",
-        ERROR_OBJECT_MAPPER);
-  }
-
-  @Override
-  protected ImportStageResult executeOneStep(
-      ImportJobContext context, PipelineStepDefinition step) {
-    ImportStage stage = toStage(step.stageCode());
-    ImportStageStep stageStep = stepsByImplCode.get(step.implCode());
-    try {
-      return stageStep == null
-          ? ImportStageResult.failure(
-              stage,
-              StageFailureCode.STEP_NOT_FOUND.name(),
-              "error.worker.step_impl_not_found",
-              new Object[] {step.implCode()},
-              "step impl not found: " + step.implCode(),
-              ERROR_OBJECT_MAPPER)
-          : stageStep.execute(context);
-    } catch (BizException exception) {
-      // 业务级错误(state_conflict / 字段缺失 / 模板未配 等)由 orchestrator 端 retry/dead-letter 政策处理,
-      // worker 这里只是局部失败转 BUSINESS_ERROR,记 WARN 不带 stack 即可;
-      // 真正的 infra 异常走下面的 catch(Exception),仍保留 ERROR 分类及净化摘要。
-      log.warn(
-          "import stage business error (will be governed by orchestrator retry policy):"
-              + " stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
-          stage,
-          step.stepCode(),
-          step.implCode(),
-          context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          SwallowedExceptionLogger.summary(exception));
-      return ImportStageResult.failure(
-          stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
-    } catch (Exception exception) {
-      String failureSummary = SwallowedExceptionLogger.summary(exception);
-      log.error(
-          "import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
-          stage,
-          LogSanitizer.value(step.stepCode()),
-          LogSanitizer.value(step.implCode()),
-          LogSanitizer.value(context.getTenantId()),
-          LogSanitizer.value(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-          failureSummary);
-      return ImportStageResult.failure(
-          stage,
-          StageFailureCode.INFRA_ERROR.name(),
-          "error.worker.stage_infra_error",
-          new Object[] {failureSummary},
-          failureSummary,
-          ERROR_OBJECT_MAPPER);
+    @Override
+    protected ImportStageResult executeOneStep(ImportJobContext context, PipelineStepDefinition step) {
+        ImportStage stage = toStage(step.stageCode());
+        ImportStageStep stageStep = stepsByImplCode.get(step.implCode());
+        try {
+            return stageStep == null
+                    ? ImportStageResult.failure(
+                            stage,
+                            StageFailureCode.STEP_NOT_FOUND.name(),
+                            "error.worker.step_impl_not_found",
+                            new Object[] {step.implCode()},
+                            "step impl not found: " + step.implCode(),
+                            ERROR_OBJECT_MAPPER)
+                    : stageStep.execute(context);
+        } catch (BizException exception) {
+            // 业务级错误(state_conflict / 字段缺失 / 模板未配 等)由 orchestrator 端 retry/dead-letter 政策处理,
+            // worker 这里只是局部失败转 BUSINESS_ERROR,记 WARN 不带 stack 即可;
+            // 真正的 infra 异常走下面的 catch(Exception),仍保留 ERROR 分类及净化摘要。
+            log.warn(
+                    "import stage business error (will be governed by orchestrator retry policy):"
+                            + " stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
+                    stage,
+                    step.stepCode(),
+                    step.implCode(),
+                    context.getTenantId(),
+                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                    SwallowedExceptionLogger.summary(exception));
+            return ImportStageResult.failure(
+                    stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
+        } catch (Exception exception) {
+            String failureSummary = SwallowedExceptionLogger.summary(exception);
+            log.error(
+                    "import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
+                    stage,
+                    LogSanitizer.value(step.stepCode()),
+                    LogSanitizer.value(step.implCode()),
+                    LogSanitizer.value(context.getTenantId()),
+                    LogSanitizer.value(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+                    failureSummary);
+            return ImportStageResult.failure(
+                    stage,
+                    StageFailureCode.INFRA_ERROR.name(),
+                    "error.worker.stage_infra_error",
+                    new Object[] {failureSummary},
+                    failureSummary,
+                    ERROR_OBJECT_MAPPER);
+        }
     }
-  }
 
-  @Override
-  protected Map<String, Object> buildInputSummary(
-      ImportJobContext context, PipelineStepDefinition step) {
-    Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("stepCode", step.stepCode());
-    summary.put("stage", step.stageCode());
-    summary.put("implCode", step.implCode());
-    summary.put("tenantId", context.getTenantId());
-    summary.put(
-        PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    summary.put("workerId", context.getWorkerId());
-    summary.put(PipelineRuntimeKeys.JOB_CODE, context.getJobCode());
-    return summary;
-  }
-
-  @Override
-  protected Map<String, Object> buildOutputSummary(
-      ImportJobContext context, ImportStageResult result) {
-    Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("success", result.success());
-    summary.put("code", result.code());
-    summary.put("message", result.message());
-    summary.put("stage", result.stage().name());
-    summary.put(
-        PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    summary.put(
-        PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
-        context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
-    summary.put(
-        PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
-        context.getAttributes().get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
-    summary.put(
-        PipelineRuntimeKeys.IMPORT_LOADED_COUNT,
-        context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
-    return summary;
-  }
-
-  @Override
-  protected String cycleDetectedMessage() {
-    return "import pipeline step flow contains a cycle";
-  }
-
-  private ImportStage toStage(String stageCode) {
-    try {
-      return ImportStage.valueOf(stageCode);
-    } catch (IllegalArgumentException exception) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          exception,
-          "unsupported import stage code: " + stageCode);
+    @Override
+    protected Map<String, Object> buildInputSummary(ImportJobContext context, PipelineStepDefinition step) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("stepCode", step.stepCode());
+        summary.put("stage", step.stageCode());
+        summary.put("implCode", step.implCode());
+        summary.put("tenantId", context.getTenantId());
+        summary.put(PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put("workerId", context.getWorkerId());
+        summary.put(PipelineRuntimeKeys.JOB_CODE, context.getJobCode());
+        return summary;
     }
-  }
 
-  // implCode 索引用于运行时按步骤定义的 implCode 查找实现 Bean（同一 stage 可有多种实现）
-  private Map<String, ImportStageStep> indexByImplCode(List<ImportStageStep> steps) {
-    Map<String, ImportStageStep> indexed = new LinkedHashMap<>();
-    for (ImportStageStep step : steps) {
-      register(indexed, step.implCode(), step);
+    @Override
+    protected Map<String, Object> buildOutputSummary(ImportJobContext context, ImportStageResult result) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("success", result.success());
+        summary.put("code", result.code());
+        summary.put("message", result.message());
+        summary.put("stage", result.stage().name());
+        summary.put(PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put(
+                PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
+                context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
+        summary.put(
+                PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
+                context.getAttributes().get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
+        summary.put(
+                PipelineRuntimeKeys.IMPORT_LOADED_COUNT,
+                context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
+        return summary;
     }
-    return Map.copyOf(indexed);
-  }
 
-  // stage 索引用于构建默认步骤模板时按枚举顺序查找唯一实现，确保每个 stage 只注册一个 Bean
-  private Map<ImportStage, ImportStageStep> indexByStage(List<ImportStageStep> steps) {
-    Map<ImportStage, ImportStageStep> indexed = new LinkedHashMap<>();
-    for (ImportStageStep step : steps) {
-      if (indexed.putIfAbsent(step.stage(), step) != null) {
-        throw new IllegalStateException(
-            "duplicate import stage registered: " + step.stage().name());
-      }
+    @Override
+    protected String cycleDetectedMessage() {
+        return "import pipeline step flow contains a cycle";
     }
-    return Map.copyOf(indexed);
-  }
 
-  private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
-    List<AbstractStageExecutor.StageStepDescriptor> ordered = new ArrayList<>();
-    for (ImportStage stage : List.of(
-        ImportStage.RECEIVE,
-        ImportStage.PREPROCESS,
-        ImportStage.PARSE,
-        ImportStage.VALIDATE,
-        ImportStage.LOAD,
-        ImportStage.FEEDBACK)) {
-      ImportStageStep step = stepsByStage.get(stage);
-      if (step == null) {
-        throw new IllegalStateException("missing import step bean for stage: " + stage.name());
-      }
-      String stepCode = step.stepCode();
-      String stepName = step.stepName();
-      String implementationCode = step.implCode();
-      String stageCode = stage.name();
-      StepDescriptor descriptor =
-          new StepDescriptor(stepCode, stepName, implementationCode, stageCode);
-      ordered.add(descriptor);
+    private ImportStage toStage(String stageCode) {
+        try {
+            return ImportStage.valueOf(stageCode);
+        } catch (IllegalArgumentException exception) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    exception,
+                    "unsupported import stage code: " + stageCode);
+        }
     }
-    return buildStepTemplates(ordered);
-  }
 
-  /** 内联 record 把 {@link ImportStageStep} + {@link ImportStage} 适配到基类的 StageStepDescriptor 契约。 */
-  private record StepDescriptor(String stepCode, String stepName, String implCode, String stageCode)
-      implements AbstractStageExecutor.StageStepDescriptor {}
-
-  private void register(
-      Map<String, ImportStageStep> indexed, String implCode, ImportStageStep step) {
-    if (!indexed.containsKey(implCode)) {
-      indexed.put(implCode, step);
-      return;
+    // implCode 索引用于运行时按步骤定义的 implCode 查找实现 Bean（同一 stage 可有多种实现）
+    private Map<String, ImportStageStep> indexByImplCode(List<ImportStageStep> steps) {
+        Map<String, ImportStageStep> indexed = new LinkedHashMap<>();
+        for (ImportStageStep step : steps) {
+            register(indexed, step.implCode(), step);
+        }
+        return Map.copyOf(indexed);
     }
-    throw new IllegalStateException("duplicate import step implCode registered: " + implCode);
-  }
+
+    // stage 索引用于构建默认步骤模板时按枚举顺序查找唯一实现，确保每个 stage 只注册一个 Bean
+    private Map<ImportStage, ImportStageStep> indexByStage(List<ImportStageStep> steps) {
+        Map<ImportStage, ImportStageStep> indexed = new LinkedHashMap<>();
+        for (ImportStageStep step : steps) {
+            if (indexed.putIfAbsent(step.stage(), step) != null) {
+                throw new IllegalStateException(
+                        "duplicate import stage registered: " + step.stage().name());
+            }
+        }
+        return Map.copyOf(indexed);
+    }
+
+    private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
+        List<AbstractStageExecutor.StageStepDescriptor> ordered = new ArrayList<>();
+        for (ImportStage stage : List.of(
+                ImportStage.RECEIVE,
+                ImportStage.PREPROCESS,
+                ImportStage.PARSE,
+                ImportStage.VALIDATE,
+                ImportStage.LOAD,
+                ImportStage.FEEDBACK)) {
+            ImportStageStep step = stepsByStage.get(stage);
+            if (step == null) {
+                throw new IllegalStateException("missing import step bean for stage: " + stage.name());
+            }
+            String stepCode = step.stepCode();
+            String stepName = step.stepName();
+            String implementationCode = step.implCode();
+            String stageCode = stage.name();
+            StepDescriptor descriptor = new StepDescriptor(stepCode, stepName, implementationCode, stageCode);
+            ordered.add(descriptor);
+        }
+        return buildStepTemplates(ordered);
+    }
+
+    /** 内联 record 把 {@link ImportStageStep} + {@link ImportStage} 适配到基类的 StageStepDescriptor 契约。 */
+    private record StepDescriptor(String stepCode, String stepName, String implCode, String stageCode)
+            implements AbstractStageExecutor.StageStepDescriptor {}
+
+    private void register(Map<String, ImportStageStep> indexed, String implCode, ImportStageStep step) {
+        if (!indexed.containsKey(implCode)) {
+            indexed.put(implCode, step);
+            return;
+        }
+        throw new IllegalStateException("duplicate import step implCode registered: " + implCode);
+    }
 }

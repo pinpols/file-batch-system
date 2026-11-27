@@ -32,254 +32,252 @@ import org.mockito.ArgumentMatchers;
 @DisplayName("集群诊断服务:Worker 一致性, 投递健康, 终态子实例与实例级诊断的判定规则")
 class ConsoleClusterDiagnosticServiceTest {
 
-  private ConsoleTenantGuard tenantGuard;
-  private ConsoleClusterDiagnosticMapper diagnosticMapper;
-  private WorkerRegistryMapper workerRegistryMapper;
-  private ConsoleQueryCacheService cacheService;
-  private ConsoleClusterDiagnosticService service;
+    private ConsoleTenantGuard tenantGuard;
+    private ConsoleClusterDiagnosticMapper diagnosticMapper;
+    private WorkerRegistryMapper workerRegistryMapper;
+    private ConsoleQueryCacheService cacheService;
+    private ConsoleClusterDiagnosticService service;
 
-  @BeforeEach
-  void setUp() {
-    tenantGuard = mock(ConsoleTenantGuard.class);
-    diagnosticMapper = mock(ConsoleClusterDiagnosticMapper.class);
-    workerRegistryMapper = mock(WorkerRegistryMapper.class);
-    cacheService = passThroughCache();
-    service = new ConsoleClusterDiagnosticService(
-        tenantGuard, diagnosticMapper, workerRegistryMapper, cacheService);
-  }
-
-  private static ConsoleQueryCacheService passThroughCache() {
-    ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
-    when(cache.<Object>getOrLoad(
-            anyString(), any(), ArgumentMatchers.<TypeReference<Object>>any(), any()))
-        .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
-    return cache;
-  }
-
-  @Test
-  @DisplayName("调度锁诊断保留锁记录和可空字段")
-  void shouldPreserveLockRowsAndNullableFields() {
-    Instant time = Instant.now().plusSeconds(3600);
-    Instant expired = Instant.now().minusSeconds(3600);
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(diagnosticMapper.shedlockAll())
-        .thenReturn(List.of(
-            new ShedLockView("one", time, null, "worker", true),
-            new ShedLockView("two", null, time, null, false),
-            new ShedLockView("expired", expired, time, "worker", false)));
-
-    var result = service.shedLockStatus("tenant-a");
-
-    assertThat(result.totalLocks()).isEqualTo(3);
-    assertThat(result.activeLocks()).isEqualTo(1L);
-    assertThat(result.locks()).extracting("name").containsExactly("one", "two", "expired");
-    assertThat(result.locks().get(1).lockUntil()).isNull();
-    assertThat(result.locks().get(1).lockedBy()).isNull();
-  }
-
-  @Test
-  @DisplayName("Worker 一致性:存在在线 Worker 且作业在跑时判定健康, 并回填在线数与运行数")
-  void shouldReturnWorkerConsistencyHealthyWhenOnlineGt0() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
-        .thenReturn(2L);
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.DRAINING.code()))
-        .thenReturn(0L);
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.OFFLINE.code()))
-        .thenReturn(1L);
-    when(diagnosticMapper.countJobInstancesByStatuses(
-            "tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
-        .thenReturn(5L);
-
-    var result = service.workerConsistency("tenant-a");
-
-    assertThat(result.onlineWorkers()).isEqualTo(2L);
-    assertThat(result.runningInstances()).isEqualTo(5L);
-    assertThat(result.healthy()).isTrue();
-  }
-
-  @Test
-  @DisplayName("Worker 一致性:无在线 Worker 但仍有运行实例时判定不健康, 运行计数仍回填")
-  void shouldReturnWorkerConsistencyUnhealthyWhenNoOnlineAndRunning() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
-        .thenReturn(0L);
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.DRAINING.code()))
-        .thenReturn(0L);
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.OFFLINE.code()))
-        .thenReturn(2L);
-    when(diagnosticMapper.countJobInstancesByStatuses(
-            "tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
-        .thenReturn(3L);
-
-    var result = service.workerConsistency("tenant-a");
-
-    assertThat(result.onlineWorkers()).isZero();
-    assertThat(result.runningInstances()).isEqualTo(3L);
-    assertThat(result.healthy()).isFalse();
-  }
-
-  @Test
-  @DisplayName("Worker 一致性:已下线 Worker 仍持有活跃任务时判定不健康, 并标记该违规计数")
-  void shouldReturnWorkerConsistencyUnhealthyWhenInvariantBroken() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
-        .thenReturn(2L);
-    when(diagnosticMapper.countDecommissionedWorkersWithActiveTasks("tenant-a")).thenReturn(1L);
-
-    var result = service.workerConsistency("tenant-a");
-
-    assertThat(result.decommissionedWorkersWithActiveTasks()).isEqualTo(1L);
-    assertThat(result.healthy()).isFalse();
-  }
-
-  @Test
-  @DisplayName("投递健康:待处理积压低于阈值时判定健康, 并回填积压数")
-  void shouldReturnOutboxHealthyWhenPendingLow() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    DeliveryStatusCountView view = deliveryView("SUCCESS", 100L);
-    when(diagnosticMapper.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
-    when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(50L);
-
-    var result = service.outboxHealth("tenant-a");
-
-    assertThat(result.pendingEvents()).isEqualTo(50L);
-    assertThat(result.deliveryStats()).singleElement().satisfies(item -> {
-      assertThat(item.deliveryStatus()).isEqualTo("SUCCESS");
-      assertThat(item.cnt()).isEqualTo(100L);
-    });
-    assertThat(result.healthy()).isTrue();
-  }
-
-  @Test
-  @DisplayName("投递健康:待处理积压超出阈值时判定不健康, 并回填积压数")
-  void shouldReturnOutboxUnhealthyWhenPendingHigh() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    DeliveryStatusCountView view = deliveryView("FAILED", 500L);
-    when(diagnosticMapper.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
-    when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(1500L);
-
-    var result = service.outboxHealth("tenant-a");
-
-    assertThat(result.pendingEvents()).isEqualTo(1500L);
-    assertThat(result.healthy()).isFalse();
-  }
-
-  @Test
-  @DisplayName("投递健康:存在长时间停留发布中的事件时判定不健康, 并回填陈旧发布计数")
-  void shouldReturnOutboxUnhealthyWhenStalePublishingExists() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(10L);
-    when(diagnosticMapper.countStalePublishingOutboxEvents(
-            "tenant-a", OutboxPublishStatus.PUBLISHING.code(), 120L))
-        .thenReturn(1L);
-
-    var result = service.outboxHealth("tenant-a");
-
-    assertThat(result.stalePublishingEvents()).isEqualTo(1L);
-    assertThat(result.healthy()).isFalse();
-  }
-
-  @Test
-  @DisplayName("终态子实例:终态实例仍含活跃子任务时上报不一致, 并标记不健康")
-  void shouldReportTerminalChildrenInconsistency() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(diagnosticMapper.countTerminalInstancesWithActiveChildren("tenant-a")).thenReturn(2L);
-
-    var result = service.terminalChildrenHealth("tenant-a");
-
-    assertThat(result.terminalInstancesWithActiveChildren()).isEqualTo(2L);
-    assertThat(result.healthy()).isFalse();
-  }
-
-  @Test
-  @DisplayName("实例诊断:活跃实例无任何子任务时报出无子节点问题, 判定不健康")
-  void shouldDiagnoseActiveInstanceWithNoChildren() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    JobInstanceDiagnosticView instance = instance(7L, JobInstanceStatus.CREATED.code());
-    when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 7L)).thenReturn(instance);
-    when(diagnosticMapper.partitionStatusCounts("tenant-a", 7L)).thenReturn(List.of());
-    when(diagnosticMapper.taskStatusCounts("tenant-a", 7L)).thenReturn(List.of());
-    when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 7L)).thenReturn(List.of());
-    when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 7L, 120L)).thenReturn(List.of());
-    when(diagnosticMapper.countOnlineWorkersForGroup("tenant-a", "IMPORT")).thenReturn(1L);
-
-    var result = service.instanceDiagnosis("tenant-a", 7L);
-
-    assertThat(result.healthy()).isFalse();
-    assertThat(result.findings())
-        .extracting(finding -> finding.reasonCode())
-        .contains("INSTANCE_HAS_NO_CHILDREN");
-  }
-
-  @Test
-  @DisplayName("实例诊断:部分失败按终态处理, 只报活跃子节点且不误报无子节点与无在线 Worker")
-  void shouldTreatPartialFailureAsTerminalWhenDiagnosingActiveChildren() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    JobInstanceDiagnosticView instance = instance(9L, JobInstanceStatus.PARTIAL_FAILED.code());
-    when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 9L)).thenReturn(instance);
-    when(diagnosticMapper.partitionStatusCounts("tenant-a", 9L))
-        .thenReturn(List.of(new ClusterStatusCountView("RUNNING", 1L)));
-    when(diagnosticMapper.taskStatusCounts("tenant-a", 9L)).thenReturn(List.of());
-    when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 9L)).thenReturn(List.of());
-    when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 9L, 120L)).thenReturn(List.of());
-    when(diagnosticMapper.countOnlineWorkersForGroup("tenant-a", "IMPORT")).thenReturn(0L);
-
-    var result = service.instanceDiagnosis("tenant-a", 9L);
-
-    assertThat(result.findings())
-        .extracting(finding -> finding.reasonCode())
-        .contains("TERMINAL_INSTANCE_HAS_ACTIVE_CHILDREN")
-        .doesNotContain("NO_ONLINE_WORKER_FOR_GROUP", "INSTANCE_HAS_NO_CHILDREN");
-  }
-
-  @Test
-  @DisplayName("实例诊断:同时报出投递未终态与任务心跳陈旧, 两类问题并存")
-  void shouldDiagnoseWorkerAndOutboxIssues() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    JobInstanceDiagnosticView instance = instance(8L, JobInstanceStatus.RUNNING.code());
-    when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 8L)).thenReturn(instance);
-    when(diagnosticMapper.partitionStatusCounts("tenant-a", 8L))
-        .thenReturn(List.of(new ClusterStatusCountView("RUNNING", 1L)));
-    when(diagnosticMapper.taskStatusCounts("tenant-a", 8L))
-        .thenReturn(List.of(new ClusterStatusCountView("RUNNING", 1L)));
-    when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 8L))
-        .thenReturn(List.of(new OutboxStatusCountView("FAILED", 2L, Instant.EPOCH, Instant.EPOCH)));
-    when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 8L, 120L))
-        .thenReturn(List.of(new ActiveTaskWorkerIssueView(
-            99L, null, "RUNNING", "w1", null, null, null, "RUNNING_TASK_HEARTBEAT_STALE")));
-
-    var result = service.instanceDiagnosis("tenant-a", 8L);
-
-    assertThat(result.findings())
-        .extracting(finding -> finding.reasonCode())
-        .contains("OUTBOX_EVENTS_NOT_TERMINAL", "RUNNING_TASK_HEARTBEAT_STALE");
-  }
-
-  @Test
-  @DisplayName("实例未指定工作组时，不将未知在线数误报为零")
-  void shouldNotReportMissingWorkersWhenGroupUnspecified() {
-    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    for (String group : new String[] {null, "  "}) {
-      JobInstanceDiagnosticView instance = new JobInstanceDiagnosticView(
-          10L, "tenant-a", "JI-10", "import_daily", null, "RUNNING", null, group, null, null, null);
-      when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 10L)).thenReturn(instance);
-
-      var result = service.instanceDiagnosis("tenant-a", 10L);
-
-      assertThat(result.summary().onlineWorkersForGroup()).isNull();
-      assertThat(result.findings())
-          .extracting(finding -> finding.reasonCode())
-          .doesNotContain("NO_ONLINE_WORKER_FOR_GROUP");
+    @BeforeEach
+    void setUp() {
+        tenantGuard = mock(ConsoleTenantGuard.class);
+        diagnosticMapper = mock(ConsoleClusterDiagnosticMapper.class);
+        workerRegistryMapper = mock(WorkerRegistryMapper.class);
+        cacheService = passThroughCache();
+        service =
+                new ConsoleClusterDiagnosticService(tenantGuard, diagnosticMapper, workerRegistryMapper, cacheService);
     }
-  }
 
-  private static DeliveryStatusCountView deliveryView(String status, long cnt) {
-    return new DeliveryStatusCountView(status, cnt);
-  }
+    private static ConsoleQueryCacheService passThroughCache() {
+        ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
+        when(cache.<Object>getOrLoad(anyString(), any(), ArgumentMatchers.<TypeReference<Object>>any(), any()))
+                .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
+        return cache;
+    }
 
-  private static JobInstanceDiagnosticView instance(long id, String status) {
-    return new JobInstanceDiagnosticView(
-        id, "tenant-a", "JI-" + id, "import_daily", null, status, null, "IMPORT", null, null, null);
-  }
+    @Test
+    @DisplayName("调度锁诊断保留锁记录和可空字段")
+    void shouldPreserveLockRowsAndNullableFields() {
+        Instant time = Instant.now().plusSeconds(3600);
+        Instant expired = Instant.now().minusSeconds(3600);
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(diagnosticMapper.shedlockAll())
+                .thenReturn(List.of(
+                        new ShedLockView("one", time, null, "worker", true),
+                        new ShedLockView("two", null, time, null, false),
+                        new ShedLockView("expired", expired, time, "worker", false)));
+
+        var result = service.shedLockStatus("tenant-a");
+
+        assertThat(result.totalLocks()).isEqualTo(3);
+        assertThat(result.activeLocks()).isEqualTo(1L);
+        assertThat(result.locks()).extracting("name").containsExactly("one", "two", "expired");
+        assertThat(result.locks().get(1).lockUntil()).isNull();
+        assertThat(result.locks().get(1).lockedBy()).isNull();
+    }
+
+    @Test
+    @DisplayName("Worker 一致性:存在在线 Worker 且作业在跑时判定健康, 并回填在线数与运行数")
+    void shouldReturnWorkerConsistencyHealthyWhenOnlineGt0() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
+                .thenReturn(2L);
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.DRAINING.code()))
+                .thenReturn(0L);
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.OFFLINE.code()))
+                .thenReturn(1L);
+        when(diagnosticMapper.countJobInstancesByStatuses("tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
+                .thenReturn(5L);
+
+        var result = service.workerConsistency("tenant-a");
+
+        assertThat(result.onlineWorkers()).isEqualTo(2L);
+        assertThat(result.runningInstances()).isEqualTo(5L);
+        assertThat(result.healthy()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Worker 一致性:无在线 Worker 但仍有运行实例时判定不健康, 运行计数仍回填")
+    void shouldReturnWorkerConsistencyUnhealthyWhenNoOnlineAndRunning() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
+                .thenReturn(0L);
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.DRAINING.code()))
+                .thenReturn(0L);
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.OFFLINE.code()))
+                .thenReturn(2L);
+        when(diagnosticMapper.countJobInstancesByStatuses("tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
+                .thenReturn(3L);
+
+        var result = service.workerConsistency("tenant-a");
+
+        assertThat(result.onlineWorkers()).isZero();
+        assertThat(result.runningInstances()).isEqualTo(3L);
+        assertThat(result.healthy()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Worker 一致性:已下线 Worker 仍持有活跃任务时判定不健康, 并标记该违规计数")
+    void shouldReturnWorkerConsistencyUnhealthyWhenInvariantBroken() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
+                .thenReturn(2L);
+        when(diagnosticMapper.countDecommissionedWorkersWithActiveTasks("tenant-a"))
+                .thenReturn(1L);
+
+        var result = service.workerConsistency("tenant-a");
+
+        assertThat(result.decommissionedWorkersWithActiveTasks()).isEqualTo(1L);
+        assertThat(result.healthy()).isFalse();
+    }
+
+    @Test
+    @DisplayName("投递健康:待处理积压低于阈值时判定健康, 并回填积压数")
+    void shouldReturnOutboxHealthyWhenPendingLow() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        DeliveryStatusCountView view = deliveryView("SUCCESS", 100L);
+        when(diagnosticMapper.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
+        when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(50L);
+
+        var result = service.outboxHealth("tenant-a");
+
+        assertThat(result.pendingEvents()).isEqualTo(50L);
+        assertThat(result.deliveryStats()).singleElement().satisfies(item -> {
+            assertThat(item.deliveryStatus()).isEqualTo("SUCCESS");
+            assertThat(item.cnt()).isEqualTo(100L);
+        });
+        assertThat(result.healthy()).isTrue();
+    }
+
+    @Test
+    @DisplayName("投递健康:待处理积压超出阈值时判定不健康, 并回填积压数")
+    void shouldReturnOutboxUnhealthyWhenPendingHigh() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        DeliveryStatusCountView view = deliveryView("FAILED", 500L);
+        when(diagnosticMapper.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
+        when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(1500L);
+
+        var result = service.outboxHealth("tenant-a");
+
+        assertThat(result.pendingEvents()).isEqualTo(1500L);
+        assertThat(result.healthy()).isFalse();
+    }
+
+    @Test
+    @DisplayName("投递健康:存在长时间停留发布中的事件时判定不健康, 并回填陈旧发布计数")
+    void shouldReturnOutboxUnhealthyWhenStalePublishingExists() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(10L);
+        when(diagnosticMapper.countStalePublishingOutboxEvents("tenant-a", OutboxPublishStatus.PUBLISHING.code(), 120L))
+                .thenReturn(1L);
+
+        var result = service.outboxHealth("tenant-a");
+
+        assertThat(result.stalePublishingEvents()).isEqualTo(1L);
+        assertThat(result.healthy()).isFalse();
+    }
+
+    @Test
+    @DisplayName("终态子实例:终态实例仍含活跃子任务时上报不一致, 并标记不健康")
+    void shouldReportTerminalChildrenInconsistency() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        when(diagnosticMapper.countTerminalInstancesWithActiveChildren("tenant-a"))
+                .thenReturn(2L);
+
+        var result = service.terminalChildrenHealth("tenant-a");
+
+        assertThat(result.terminalInstancesWithActiveChildren()).isEqualTo(2L);
+        assertThat(result.healthy()).isFalse();
+    }
+
+    @Test
+    @DisplayName("实例诊断:活跃实例无任何子任务时报出无子节点问题, 判定不健康")
+    void shouldDiagnoseActiveInstanceWithNoChildren() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        JobInstanceDiagnosticView instance = instance(7L, JobInstanceStatus.CREATED.code());
+        when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 7L)).thenReturn(instance);
+        when(diagnosticMapper.partitionStatusCounts("tenant-a", 7L)).thenReturn(List.of());
+        when(diagnosticMapper.taskStatusCounts("tenant-a", 7L)).thenReturn(List.of());
+        when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 7L)).thenReturn(List.of());
+        when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 7L, 120L)).thenReturn(List.of());
+        when(diagnosticMapper.countOnlineWorkersForGroup("tenant-a", "IMPORT")).thenReturn(1L);
+
+        var result = service.instanceDiagnosis("tenant-a", 7L);
+
+        assertThat(result.healthy()).isFalse();
+        assertThat(result.findings())
+                .extracting(finding -> finding.reasonCode())
+                .contains("INSTANCE_HAS_NO_CHILDREN");
+    }
+
+    @Test
+    @DisplayName("实例诊断:部分失败按终态处理, 只报活跃子节点且不误报无子节点与无在线 Worker")
+    void shouldTreatPartialFailureAsTerminalWhenDiagnosingActiveChildren() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        JobInstanceDiagnosticView instance = instance(9L, JobInstanceStatus.PARTIAL_FAILED.code());
+        when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 9L)).thenReturn(instance);
+        when(diagnosticMapper.partitionStatusCounts("tenant-a", 9L))
+                .thenReturn(List.of(new ClusterStatusCountView("RUNNING", 1L)));
+        when(diagnosticMapper.taskStatusCounts("tenant-a", 9L)).thenReturn(List.of());
+        when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 9L)).thenReturn(List.of());
+        when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 9L, 120L)).thenReturn(List.of());
+        when(diagnosticMapper.countOnlineWorkersForGroup("tenant-a", "IMPORT")).thenReturn(0L);
+
+        var result = service.instanceDiagnosis("tenant-a", 9L);
+
+        assertThat(result.findings())
+                .extracting(finding -> finding.reasonCode())
+                .contains("TERMINAL_INSTANCE_HAS_ACTIVE_CHILDREN")
+                .doesNotContain("NO_ONLINE_WORKER_FOR_GROUP", "INSTANCE_HAS_NO_CHILDREN");
+    }
+
+    @Test
+    @DisplayName("实例诊断:同时报出投递未终态与任务心跳陈旧, 两类问题并存")
+    void shouldDiagnoseWorkerAndOutboxIssues() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        JobInstanceDiagnosticView instance = instance(8L, JobInstanceStatus.RUNNING.code());
+        when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 8L)).thenReturn(instance);
+        when(diagnosticMapper.partitionStatusCounts("tenant-a", 8L))
+                .thenReturn(List.of(new ClusterStatusCountView("RUNNING", 1L)));
+        when(diagnosticMapper.taskStatusCounts("tenant-a", 8L))
+                .thenReturn(List.of(new ClusterStatusCountView("RUNNING", 1L)));
+        when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 8L))
+                .thenReturn(List.of(new OutboxStatusCountView("FAILED", 2L, Instant.EPOCH, Instant.EPOCH)));
+        when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 8L, 120L))
+                .thenReturn(List.of(new ActiveTaskWorkerIssueView(
+                        99L, null, "RUNNING", "w1", null, null, null, "RUNNING_TASK_HEARTBEAT_STALE")));
+
+        var result = service.instanceDiagnosis("tenant-a", 8L);
+
+        assertThat(result.findings())
+                .extracting(finding -> finding.reasonCode())
+                .contains("OUTBOX_EVENTS_NOT_TERMINAL", "RUNNING_TASK_HEARTBEAT_STALE");
+    }
+
+    @Test
+    @DisplayName("实例未指定工作组时，不将未知在线数误报为零")
+    void shouldNotReportMissingWorkersWhenGroupUnspecified() {
+        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+        for (String group : new String[] {null, "  "}) {
+            JobInstanceDiagnosticView instance = new JobInstanceDiagnosticView(
+                    10L, "tenant-a", "JI-10", "import_daily", null, "RUNNING", null, group, null, null, null);
+            when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 10L)).thenReturn(instance);
+
+            var result = service.instanceDiagnosis("tenant-a", 10L);
+
+            assertThat(result.summary().onlineWorkersForGroup()).isNull();
+            assertThat(result.findings())
+                    .extracting(finding -> finding.reasonCode())
+                    .doesNotContain("NO_ONLINE_WORKER_FOR_GROUP");
+        }
+    }
+
+    private static DeliveryStatusCountView deliveryView(String status, long cnt) {
+        return new DeliveryStatusCountView(status, cnt);
+    }
+
+    private static JobInstanceDiagnosticView instance(long id, String status) {
+        return new JobInstanceDiagnosticView(
+                id, "tenant-a", "JI-" + id, "import_daily", null, status, null, "IMPORT", null, null, null);
+    }
 }

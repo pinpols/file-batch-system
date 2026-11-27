@@ -18,42 +18,41 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TriggerApiAdmissionConfigurationGuard implements SmartInitializingSingleton {
 
-  private final TriggerRuntimeProperties properties;
-  private final DataSource dataSource;
+    private final TriggerRuntimeProperties properties;
+    private final DataSource dataSource;
 
-  @Override
-  public void afterSingletonsInstantiated() {
-    if (!(dataSource instanceof HikariDataSource hikariDataSource)) {
-      log.warn("trigger API admission pool-budget validation skipped: datasource is not Hikari");
-      return;
+    @Override
+    public void afterSingletonsInstantiated() {
+        if (!(dataSource instanceof HikariDataSource hikariDataSource)) {
+            log.warn("trigger API admission pool-budget validation skipped: datasource is not Hikari");
+            return;
+        }
+        int poolSize = hikariDataSource.getMaximumPoolSize();
+        int reserve = properties.getApiLaunchDbReserveConnections();
+        int budget = poolSize - reserve;
+        if (budget < 1) {
+            throw new IllegalStateException(
+                    "batch.trigger.runtime.api-launch-db-reserve-connections must leave at least one "
+                            + "platform DB connection for API launch: pool=" + poolSize + ", reserve=" + reserve);
+        }
+        if (properties.getApiLaunchMinConcurrency() > properties.getApiLaunchMaxConcurrency()) {
+            throw new IllegalStateException(
+                    "batch.trigger.runtime.api-launch-min-concurrency must not exceed " + "api-launch-max-concurrency");
+        }
+        if (properties.getApiLaunchMaxConcurrency() > budget) {
+            throw new IllegalStateException(
+                    "batch.trigger.runtime.api-launch-max-concurrency exceeds platform DB budget: max="
+                            + properties.getApiLaunchMaxConcurrency()
+                            + ", pool=" + poolSize
+                            + ", reserve=" + reserve
+                            + ", budget=" + budget);
+        }
+        log.info(
+                "trigger API admission budget validated: maxConcurrency={} minConcurrency={} pool={} "
+                        + "reservedForBackground={}",
+                properties.getApiLaunchMaxConcurrency(),
+                properties.getApiLaunchMinConcurrency(),
+                poolSize,
+                reserve);
     }
-    int poolSize = hikariDataSource.getMaximumPoolSize();
-    int reserve = properties.getApiLaunchDbReserveConnections();
-    int budget = poolSize - reserve;
-    if (budget < 1) {
-      throw new IllegalStateException(
-          "batch.trigger.runtime.api-launch-db-reserve-connections must leave at least one "
-              + "platform DB connection for API launch: pool=" + poolSize + ", reserve=" + reserve);
-    }
-    if (properties.getApiLaunchMinConcurrency() > properties.getApiLaunchMaxConcurrency()) {
-      throw new IllegalStateException(
-          "batch.trigger.runtime.api-launch-min-concurrency must not exceed "
-              + "api-launch-max-concurrency");
-    }
-    if (properties.getApiLaunchMaxConcurrency() > budget) {
-      throw new IllegalStateException(
-          "batch.trigger.runtime.api-launch-max-concurrency exceeds platform DB budget: max="
-              + properties.getApiLaunchMaxConcurrency()
-              + ", pool=" + poolSize
-              + ", reserve=" + reserve
-              + ", budget=" + budget);
-    }
-    log.info(
-        "trigger API admission budget validated: maxConcurrency={} minConcurrency={} pool={} "
-            + "reservedForBackground={}",
-        properties.getApiLaunchMaxConcurrency(),
-        properties.getApiLaunchMinConcurrency(),
-        poolSize,
-        reserve);
-  }
 }

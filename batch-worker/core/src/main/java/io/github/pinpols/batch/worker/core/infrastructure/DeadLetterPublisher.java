@@ -35,132 +35,128 @@ import org.springframework.stereotype.Component;
 @Component
 public class DeadLetterPublisher {
 
-  /** DLQ 发送限时. 超出即 throw, 让消息留在 source topic 由 Kafka 自动 redeliver. */
-  static final long PUBLISH_TIMEOUT_SECONDS = 5L;
+    /** DLQ 发送限时. 超出即 throw, 让消息留在 source topic 由 Kafka 自动 redeliver. */
+    static final long PUBLISH_TIMEOUT_SECONDS = 5L;
 
-  /**
-   * DLQ envelope schema 版本号. 写入字段 {@code envelopeVersion}, 用于未来 schema 演进时 replay 工具兼容旧记录:
-   *
-   * <ul>
-   *   <li>v1 (本次): 基础字段 originalPayload / sourceTopic / workerType / errorMessage / failedAt
-   *   <li>未来 vN: 加字段保持向前兼容; 字段语义变更必须 bump version + replay 工具按 version 分支处理
-   * </ul>
-   */
-  static final int ENVELOPE_VERSION = 1;
+    /**
+     * DLQ envelope schema 版本号. 写入字段 {@code envelopeVersion}, 用于未来 schema 演进时 replay 工具兼容旧记录:
+     *
+     * <ul>
+     *   <li>v1 (本次): 基础字段 originalPayload / sourceTopic / workerType / errorMessage / failedAt
+     *   <li>未来 vN: 加字段保持向前兼容; 字段语义变更必须 bump version + replay 工具按 version 分支处理
+     * </ul>
+     */
+    static final int ENVELOPE_VERSION = 1;
 
-  /** DLQ 信封 errorMessage 字段的长度上限，限制死信消息体积；不对应数据库列。 */
-  private static final int ERROR_MESSAGE_MAX_LENGTH = 2000;
+    /** DLQ 信封 errorMessage 字段的长度上限，限制死信消息体积；不对应数据库列。 */
+    private static final int ERROR_MESSAGE_MAX_LENGTH = 2000;
 
-  private final MqMessagePublisher mqMessagePublisher;
-  private final BatchKafkaTopicNamespace topicNamespace;
-  private final Counter successCounter;
-  private final Counter timeoutCounter;
-  private final Counter failureCounter;
-  private final Timer publishTimer;
+    private final MqMessagePublisher mqMessagePublisher;
+    private final BatchKafkaTopicNamespace topicNamespace;
+    private final Counter successCounter;
+    private final Counter timeoutCounter;
+    private final Counter failureCounter;
+    private final Timer publishTimer;
 
-  public DeadLetterPublisher(
-      @Qualifier("workerMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      BatchKafkaTopicNamespace topicNamespace) {
-    this.mqMessagePublisher = mqMessagePublisher;
-    this.topicNamespace = topicNamespace;
-    String deadLetterTopic = topicNamespace.topic(BatchTopics.TASK_DEAD_LETTER);
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry == null) {
-      this.successCounter = null;
-      this.timeoutCounter = null;
-      this.failureCounter = null;
-      this.publishTimer = null;
-    } else {
-      Tags base = Tags.of("topic", deadLetterTopic);
-      this.successCounter = Counter.builder("worker.dlq.publish.success.total")
-          .description("DLQ 发布成功累计")
-          .tags(base)
-          .register(registry);
-      this.timeoutCounter = Counter.builder("worker.dlq.publish.timeout.total")
-          .description("DLQ 发布超时累计 (broker 抖动 / 容量不足时上升)")
-          .tags(base)
-          .register(registry);
-      this.failureCounter = Counter.builder("worker.dlq.publish.failed.total")
-          .description("DLQ 发布失败累计 (超时之外的异常)")
-          .tags(base)
-          .register(registry);
-      this.publishTimer = Timer.builder("worker.dlq.publish.duration")
-          .description("DLQ 发布耗时分位")
-          .tags(base)
-          .publishPercentiles(0.5, 0.95, 0.99)
-          .register(registry);
+    public DeadLetterPublisher(
+            @Qualifier("workerMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            BatchKafkaTopicNamespace topicNamespace) {
+        this.mqMessagePublisher = mqMessagePublisher;
+        this.topicNamespace = topicNamespace;
+        String deadLetterTopic = topicNamespace.topic(BatchTopics.TASK_DEAD_LETTER);
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry == null) {
+            this.successCounter = null;
+            this.timeoutCounter = null;
+            this.failureCounter = null;
+            this.publishTimer = null;
+        } else {
+            Tags base = Tags.of("topic", deadLetterTopic);
+            this.successCounter = Counter.builder("worker.dlq.publish.success.total")
+                    .description("DLQ 发布成功累计")
+                    .tags(base)
+                    .register(registry);
+            this.timeoutCounter = Counter.builder("worker.dlq.publish.timeout.total")
+                    .description("DLQ 发布超时累计 (broker 抖动 / 容量不足时上升)")
+                    .tags(base)
+                    .register(registry);
+            this.failureCounter = Counter.builder("worker.dlq.publish.failed.total")
+                    .description("DLQ 发布失败累计 (超时之外的异常)")
+                    .tags(base)
+                    .register(registry);
+            this.publishTimer = Timer.builder("worker.dlq.publish.duration")
+                    .description("DLQ 发布耗时分位")
+                    .tags(base)
+                    .publishPercentiles(0.5, 0.95, 0.99)
+                    .register(registry);
+        }
     }
-  }
 
-  /**
-   * 将失败消息发布到死信 topic.
-   *
-   * <p>语义: 限时同步 (默认 {@value #PUBLISH_TIMEOUT_SECONDS}s); 超时 / IO 异常即抛, 让上游不提交 source offset, Kafka
-   * 自动 redeliver. 不再无限阻塞 listener 线程.
-   */
-  public void publish(
-      String originalPayload, String sourceTopic, String workerType, String errorMessage) {
-    Map<String, Object> envelope = new LinkedHashMap<>();
-    // envelopeVersion 放第一位,replay 工具可 fast-path 解析版本后分支处理 (无 version 字段视为 v0)
-    envelope.put("envelopeVersion", ENVELOPE_VERSION);
-    envelope.put("originalPayload", originalPayload);
-    envelope.put("sourceTopic", sourceTopic);
-    envelope.put("workerType", workerType);
-    envelope.put(
-        "errorMessage",
-        SwallowedExceptionLogger.safeMessage(errorMessage, ERROR_MESSAGE_MAX_LENGTH));
-    Instant failedAt = BatchDateTimeSupport.utcNow();
-    String failedAtText = failedAt.toString();
-    envelope.put("failedAt", failedAtText);
-    String value = JsonUtils.toJson(envelope);
+    /**
+     * 将失败消息发布到死信 topic.
+     *
+     * <p>语义: 限时同步 (默认 {@value #PUBLISH_TIMEOUT_SECONDS}s); 超时 / IO 异常即抛, 让上游不提交 source offset, Kafka
+     * 自动 redeliver. 不再无限阻塞 listener 线程.
+     */
+    public void publish(String originalPayload, String sourceTopic, String workerType, String errorMessage) {
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        // envelopeVersion 放第一位,replay 工具可 fast-path 解析版本后分支处理 (无 version 字段视为 v0)
+        envelope.put("envelopeVersion", ENVELOPE_VERSION);
+        envelope.put("originalPayload", originalPayload);
+        envelope.put("sourceTopic", sourceTopic);
+        envelope.put("workerType", workerType);
+        envelope.put("errorMessage", SwallowedExceptionLogger.safeMessage(errorMessage, ERROR_MESSAGE_MAX_LENGTH));
+        Instant failedAt = BatchDateTimeSupport.utcNow();
+        String failedAtText = failedAt.toString();
+        envelope.put("failedAt", failedAtText);
+        String value = JsonUtils.toJson(envelope);
 
-    long startNanos = System.nanoTime();
-    try {
-      String deadLetterTopic = topicNamespace.topic(BatchTopics.TASK_DEAD_LETTER);
-      MqMessage deadLetterMessage = MqMessage.of(deadLetterTopic, null, value);
-      CompletableFuture<?> future = mqMessagePublisher.publish(deadLetterMessage);
-      if (future != null) {
-        future.get(PUBLISH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-      }
-      if (successCounter != null) {
-        successCounter.increment();
-      }
-      log.info("published to DLQ: sourceTopic={}, workerType={}", sourceTopic, workerType);
-    } catch (TimeoutException ex) {
-      if (timeoutCounter != null) {
-        timeoutCounter.increment();
-      }
-      log.error(
-          "DLQ publish timeout after {}s: sourceTopic={}, workerType={}",
-          PUBLISH_TIMEOUT_SECONDS,
-          sourceTopic,
-          workerType);
-      throw new IllegalStateException(
-          "dead letter publish timeout after " + PUBLISH_TIMEOUT_SECONDS + "s", ex);
-    } catch (ExecutionException ex) {
-      if (failureCounter != null) {
-        failureCounter.increment();
-      }
-      Throwable cause = ex.getCause();
-      Throwable reportedFailure = EmptyChecks.isNull(cause) ? ex : cause;
-      String errorSummary = SwallowedExceptionLogger.summary(reportedFailure);
-      log.error(
-          "DLQ publish failed: sourceTopic={}, workerType={}, error={}",
-          sourceTopic,
-          workerType,
-          errorSummary);
-      throw new IllegalStateException("dead letter publish failed", cause);
-    } catch (InterruptedException ex) {
-      Thread.currentThread().interrupt();
-      if (failureCounter != null) {
-        failureCounter.increment();
-      }
-      throw new IllegalStateException("dead letter publish interrupted", ex);
-    } finally {
-      if (publishTimer != null) {
-        publishTimer.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS);
-      }
+        long startNanos = System.nanoTime();
+        try {
+            String deadLetterTopic = topicNamespace.topic(BatchTopics.TASK_DEAD_LETTER);
+            MqMessage deadLetterMessage = MqMessage.of(deadLetterTopic, null, value);
+            CompletableFuture<?> future = mqMessagePublisher.publish(deadLetterMessage);
+            if (future != null) {
+                future.get(PUBLISH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            }
+            if (successCounter != null) {
+                successCounter.increment();
+            }
+            log.info("published to DLQ: sourceTopic={}, workerType={}", sourceTopic, workerType);
+        } catch (TimeoutException ex) {
+            if (timeoutCounter != null) {
+                timeoutCounter.increment();
+            }
+            log.error(
+                    "DLQ publish timeout after {}s: sourceTopic={}, workerType={}",
+                    PUBLISH_TIMEOUT_SECONDS,
+                    sourceTopic,
+                    workerType);
+            throw new IllegalStateException("dead letter publish timeout after " + PUBLISH_TIMEOUT_SECONDS + "s", ex);
+        } catch (ExecutionException ex) {
+            if (failureCounter != null) {
+                failureCounter.increment();
+            }
+            Throwable cause = ex.getCause();
+            Throwable reportedFailure = EmptyChecks.isNull(cause) ? ex : cause;
+            String errorSummary = SwallowedExceptionLogger.summary(reportedFailure);
+            log.error(
+                    "DLQ publish failed: sourceTopic={}, workerType={}, error={}",
+                    sourceTopic,
+                    workerType,
+                    errorSummary);
+            throw new IllegalStateException("dead letter publish failed", cause);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            if (failureCounter != null) {
+                failureCounter.increment();
+            }
+            throw new IllegalStateException("dead letter publish interrupted", ex);
+        } finally {
+            if (publishTimer != null) {
+                publishTimer.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS);
+            }
+        }
     }
-  }
 }

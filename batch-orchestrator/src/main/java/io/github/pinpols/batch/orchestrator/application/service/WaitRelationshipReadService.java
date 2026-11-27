@@ -13,34 +13,30 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class WaitRelationshipReadService {
 
-  /** 等待关系单页条数上限，未指定 pageSize 时也取该值。 */
-  private static final int MAX_PAGE_SIZE = 100;
+    /** 等待关系单页条数上限，未指定 pageSize 时也取该值。 */
+    private static final int MAX_PAGE_SIZE = 100;
 
-  private final WaitRelationshipMapper mapper;
-  private final WaitRelationshipSanitizer sanitizer;
+    private final WaitRelationshipMapper mapper;
+    private final WaitRelationshipSanitizer sanitizer;
 
-  @Transactional(readOnly = true)
-  public WaitRelationshipPage list(WaitRelationshipQuery query) {
-    int size = EmptyChecks.isNull(query.pageSize())
-        ? MAX_PAGE_SIZE
-        : Math.min(MAX_PAGE_SIZE, Math.max(1, query.pageSize()));
-    mapper.setTenantContext(query.tenantId());
-    List<WaitRelationshipRow> rows = mapper.selectPage(query, size + 1);
-    boolean hasMore = rows.size() > size;
-    List<WaitRelationshipRow> items =
-        hasMore ? List.copyOf(rows.subList(0, size)) : List.copyOf(rows);
-    items.forEach(sanitizer::sanitize);
-    WaitRelationshipRow last = hasMore ? items.get(items.size() - 1) : null;
-    return new WaitRelationshipPage(
-        items,
-        hasMore,
-        EmptyChecks.isNull(last) ? null : last.getWaitType(),
-        EmptyChecks.isNull(last) ? null : last.getId());
-  }
+    @Transactional(readOnly = true)
+    public WaitRelationshipPage list(WaitRelationshipQuery query) {
+        int size = EmptyChecks.isNull(query.pageSize())
+                ? MAX_PAGE_SIZE
+                : Math.min(MAX_PAGE_SIZE, Math.max(1, query.pageSize()));
+        mapper.setTenantContext(query.tenantId());
+        List<WaitRelationshipRow> rows = mapper.selectPage(query, size + 1);
+        boolean hasMore = rows.size() > size;
+        List<WaitRelationshipRow> items = hasMore ? List.copyOf(rows.subList(0, size)) : List.copyOf(rows);
+        items.forEach(sanitizer::sanitize);
+        WaitRelationshipRow last = hasMore ? items.get(items.size() - 1) : null;
+        return new WaitRelationshipPage(
+                items,
+                hasMore,
+                EmptyChecks.isNull(last) ? null : last.getWaitType(),
+                EmptyChecks.isNull(last) ? null : last.getId());
+    }
 
-  public record WaitRelationshipPage(
-      List<WaitRelationshipRow> items,
-      boolean hasMore,
-      String nextCursorType,
-      String nextCursorId) {}
+    public record WaitRelationshipPage(
+            List<WaitRelationshipRow> items, boolean hasMore, String nextCursorType, String nextCursorId) {}
 }

@@ -6,18 +6,18 @@ import lombok.Data;
 @Data
 public class DeadLetterTaskEntity {
 
-  private Long id;
-  private String tenantId;
-  private String sourceType;
-  private Long sourceId;
-  private String deadLetterReason;
-  private String errorClass;
-  private String payloadRef;
-  private String replayStatus;
-  private Integer replayCount;
-  private Instant lastReplayAt;
-  private String lastReplayResult;
-  private String traceId;
-  private Instant createdAt;
-  private Instant updatedAt;
+    private Long id;
+    private String tenantId;
+    private String sourceType;
+    private Long sourceId;
+    private String deadLetterReason;
+    private String errorClass;
+    private String payloadRef;
+    private String replayStatus;
+    private Integer replayCount;
+    private Instant lastReplayAt;
+    private String lastReplayResult;
+    private String traceId;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

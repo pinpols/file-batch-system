@@ -37,143 +37,131 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class JobInstanceTerminalChildStateReconcilerTest {
 
-  @Mock
-  private JobPartitionMapper partitionMapper;
+    @Mock
+    private JobPartitionMapper partitionMapper;
 
-  @Mock
-  private JobTaskMapper taskMapper;
+    @Mock
+    private JobTaskMapper taskMapper;
 
-  @Mock
-  private JobInstanceMapper instanceMapper;
+    @Mock
+    private JobInstanceMapper instanceMapper;
 
-  private JobInstanceTerminalChildStateReconciler reconciler;
+    private JobInstanceTerminalChildStateReconciler reconciler;
 
-  @BeforeEach
-  void setUp() {
-    reconciler =
-        new JobInstanceTerminalChildStateReconciler(partitionMapper, taskMapper, instanceMapper);
-  }
+    @BeforeEach
+    void setUp() {
+        reconciler = new JobInstanceTerminalChildStateReconciler(partitionMapper, taskMapper, instanceMapper);
+    }
 
-  @Test
-  @DisplayName("SUCCESS → 子表收敛为 SUCCESS")
-  void shouldReconcileSuccess_whenInstanceSucceeded() {
-    reconciler.reconcile("ta", 100L, JobInstanceStatus.SUCCESS.code());
+    @Test
+    @DisplayName("SUCCESS → 子表收敛为 SUCCESS")
+    void shouldReconcileSuccess_whenInstanceSucceeded() {
+        reconciler.reconcile("ta", 100L, JobInstanceStatus.SUCCESS.code());
 
-    verify(partitionMapper)
-        .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.SUCCESS.code());
-    verify(taskMapper)
-        .closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.SUCCESS.code());
-    verify(instanceMapper)
-        .closeRunningPipelineStepsForTerminalInstance(CloseRunningPipelineStepsParam.builder()
-            .tenantId("ta")
-            .id(100L)
-            .terminalInstanceStatus("SUCCESS")
-            .interruptedStepStatus(StepInstanceStatus.FAILED.code())
-            .terminalStatusCodes(JobInstanceStatus.terminalCodes())
-            .build());
-  }
+        verify(partitionMapper)
+                .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.SUCCESS.code());
+        verify(taskMapper).closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.SUCCESS.code());
+        verify(instanceMapper)
+                .closeRunningPipelineStepsForTerminalInstance(CloseRunningPipelineStepsParam.builder()
+                        .tenantId("ta")
+                        .id(100L)
+                        .terminalInstanceStatus("SUCCESS")
+                        .interruptedStepStatus(StepInstanceStatus.FAILED.code())
+                        .terminalStatusCodes(JobInstanceStatus.terminalCodes())
+                        .build());
+    }
 
-  @Test
-  @DisplayName("dry-run 终态按对应成功/失败状态收敛子表")
-  void shouldReconcileDryRunTerminalStates() {
-    reconciler.reconcile("ta", 100L, JobInstanceStatus.SUCCESS_DRY_RUN.code());
-    reconciler.reconcile("ta", 101L, JobInstanceStatus.FAILED_DRY_RUN.code());
+    @Test
+    @DisplayName("dry-run 终态按对应成功/失败状态收敛子表")
+    void shouldReconcileDryRunTerminalStates() {
+        reconciler.reconcile("ta", 100L, JobInstanceStatus.SUCCESS_DRY_RUN.code());
+        reconciler.reconcile("ta", 101L, JobInstanceStatus.FAILED_DRY_RUN.code());
 
-    verify(partitionMapper)
-        .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.SUCCESS.code());
-    verify(taskMapper)
-        .closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.SUCCESS.code());
-    verify(partitionMapper)
-        .closeNonTerminalPartitionsForTerminalInstance("ta", 101L, PartitionStatus.FAILED.code());
-    verify(taskMapper)
-        .closeNonTerminalTasksForTerminalInstance("ta", 101L, TaskStatus.FAILED.code());
-  }
+        verify(partitionMapper)
+                .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.SUCCESS.code());
+        verify(taskMapper).closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.SUCCESS.code());
+        verify(partitionMapper)
+                .closeNonTerminalPartitionsForTerminalInstance("ta", 101L, PartitionStatus.FAILED.code());
+        verify(taskMapper).closeNonTerminalTasksForTerminalInstance("ta", 101L, TaskStatus.FAILED.code());
+    }
 
-  @Test
-  @DisplayName("FAILED → 子表收敛为 FAILED")
-  void shouldReconcileFailed_whenInstanceFailed() {
-    reconciler.reconcile("ta", 100L, JobInstanceStatus.FAILED.code());
+    @Test
+    @DisplayName("FAILED → 子表收敛为 FAILED")
+    void shouldReconcileFailed_whenInstanceFailed() {
+        reconciler.reconcile("ta", 100L, JobInstanceStatus.FAILED.code());
 
-    verify(partitionMapper)
-        .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.FAILED.code());
-    verify(taskMapper)
-        .closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.FAILED.code());
-  }
+        verify(partitionMapper)
+                .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.FAILED.code());
+        verify(taskMapper).closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.FAILED.code());
+    }
 
-  @Test
-  @DisplayName("PARTIAL_FAILED → 子表收敛为 FAILED(部分失败也收敛为 FAILED)")
-  void shouldReconcileAsFailed_whenInstancePartialFailed() {
-    reconciler.reconcile("ta", 100L, JobInstanceStatus.PARTIAL_FAILED.code());
+    @Test
+    @DisplayName("PARTIAL_FAILED → 子表收敛为 FAILED(部分失败也收敛为 FAILED)")
+    void shouldReconcileAsFailed_whenInstancePartialFailed() {
+        reconciler.reconcile("ta", 100L, JobInstanceStatus.PARTIAL_FAILED.code());
 
-    verify(partitionMapper)
-        .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.FAILED.code());
-    verify(taskMapper)
-        .closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.FAILED.code());
-  }
+        verify(partitionMapper)
+                .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.FAILED.code());
+        verify(taskMapper).closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.FAILED.code());
+    }
 
-  @Test
-  @DisplayName("CANCELLED → 子表收敛为 CANCELLED")
-  void shouldReconcileCancelled_whenInstanceCancelled() {
-    reconciler.reconcile("ta", 100L, JobInstanceStatus.CANCELLED.code());
+    @Test
+    @DisplayName("CANCELLED → 子表收敛为 CANCELLED")
+    void shouldReconcileCancelled_whenInstanceCancelled() {
+        reconciler.reconcile("ta", 100L, JobInstanceStatus.CANCELLED.code());
 
-    verify(partitionMapper)
-        .closeNonTerminalPartitionsForTerminalInstance(
-            "ta", 100L, PartitionStatus.CANCELLED.code());
-    verify(taskMapper)
-        .closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.CANCELLED.code());
-  }
+        verify(partitionMapper)
+                .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.CANCELLED.code());
+        verify(taskMapper).closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.CANCELLED.code());
+    }
 
-  @Test
-  @DisplayName("TERMINATED → 子表收敛为 TERMINATED")
-  void shouldReconcileTerminated_whenInstanceTerminated() {
-    reconciler.reconcile("ta", 100L, JobInstanceStatus.TERMINATED.code());
+    @Test
+    @DisplayName("TERMINATED → 子表收敛为 TERMINATED")
+    void shouldReconcileTerminated_whenInstanceTerminated() {
+        reconciler.reconcile("ta", 100L, JobInstanceStatus.TERMINATED.code());
 
-    verify(partitionMapper)
-        .closeNonTerminalPartitionsForTerminalInstance(
-            "ta", 100L, PartitionStatus.TERMINATED.code());
-    verify(taskMapper)
-        .closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.TERMINATED.code());
-  }
+        verify(partitionMapper)
+                .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.TERMINATED.code());
+        verify(taskMapper).closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.TERMINATED.code());
+    }
 
-  @Test
-  @DisplayName("非业务终态 RUNNING → no-op,不写子表(防止节流计数泄漏)")
-  void shouldDoNothing_whenInstanceRunning() {
-    reconciler.reconcile("ta", 100L, JobInstanceStatus.RUNNING.code());
+    @Test
+    @DisplayName("非业务终态 RUNNING → no-op,不写子表(防止节流计数泄漏)")
+    void shouldDoNothing_whenInstanceRunning() {
+        reconciler.reconcile("ta", 100L, JobInstanceStatus.RUNNING.code());
 
-    verifyNoInteractions(instanceMapper);
+        verifyNoInteractions(instanceMapper);
 
-    verify(partitionMapper, never())
-        .closeNonTerminalPartitionsForTerminalInstance(anyString(), anyLong(), anyString());
-    verify(taskMapper, never())
-        .closeNonTerminalTasksForTerminalInstance(anyString(), anyLong(), anyString());
-  }
+        verify(partitionMapper, never())
+                .closeNonTerminalPartitionsForTerminalInstance(anyString(), anyLong(), anyString());
+        verify(taskMapper, never()).closeNonTerminalTasksForTerminalInstance(anyString(), anyLong(), anyString());
+    }
 
-  @Test
-  @DisplayName("非业务终态 WAITING → no-op")
-  void shouldDoNothing_whenInstanceWaiting() {
-    reconciler.reconcile("ta", 100L, JobInstanceStatus.WAITING.code());
+    @Test
+    @DisplayName("非业务终态 WAITING → no-op")
+    void shouldDoNothing_whenInstanceWaiting() {
+        reconciler.reconcile("ta", 100L, JobInstanceStatus.WAITING.code());
 
-    verify(partitionMapper, never())
-        .closeNonTerminalPartitionsForTerminalInstance(anyString(), anyLong(), anyString());
-    verify(taskMapper, never())
-        .closeNonTerminalTasksForTerminalInstance(anyString(), anyLong(), anyString());
-  }
+        verify(partitionMapper, never())
+                .closeNonTerminalPartitionsForTerminalInstance(anyString(), anyLong(), anyString());
+        verify(taskMapper, never()).closeNonTerminalTasksForTerminalInstance(anyString(), anyLong(), anyString());
+    }
 
-  @Test
-  @DisplayName("未知 code → no-op,不抛错")
-  void shouldDoNothing_whenStatusUnknown() {
-    reconciler.reconcile("ta", 100L, "UNKNOWN_GARBAGE");
+    @Test
+    @DisplayName("未知 code → no-op,不抛错")
+    void shouldDoNothing_whenStatusUnknown() {
+        reconciler.reconcile("ta", 100L, "UNKNOWN_GARBAGE");
 
-    verify(partitionMapper, never())
-        .closeNonTerminalPartitionsForTerminalInstance(anyString(), anyLong(), anyString());
-  }
+        verify(partitionMapper, never())
+                .closeNonTerminalPartitionsForTerminalInstance(anyString(), anyLong(), anyString());
+    }
 
-  @Test
-  @DisplayName("null code → no-op,不抛 NPE")
-  void shouldDoNothing_whenStatusMissing() {
-    reconciler.reconcile("ta", 100L, null);
+    @Test
+    @DisplayName("null code → no-op,不抛 NPE")
+    void shouldDoNothing_whenStatusMissing() {
+        reconciler.reconcile("ta", 100L, null);
 
-    verify(partitionMapper, never())
-        .closeNonTerminalPartitionsForTerminalInstance(anyString(), anyLong(), anyString());
-  }
+        verify(partitionMapper, never())
+                .closeNonTerminalPartitionsForTerminalInstance(anyString(), anyLong(), anyString());
+    }
 }

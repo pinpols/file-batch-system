@@ -35,180 +35,167 @@ import org.springframework.stereotype.Component;
 @Primary
 @Component
 public class ProcessStepExecutionAdapter
-    extends AbstractPipelineStepExecutionAdapter<ProcessJobContext, ProcessStageResult> {
+        extends AbstractPipelineStepExecutionAdapter<ProcessJobContext, ProcessStageResult> {
 
-  private final ProcessStageExecutor processStageExecutor;
-  private final ObjectMapper objectMapper;
+    private final ProcessStageExecutor processStageExecutor;
+    private final ObjectMapper objectMapper;
 
-  public ProcessStepExecutionAdapter(
-      ProcessStageExecutor processStageExecutor,
-      ObjectMapper objectMapper,
-      PlatformPipelineRunRepository pipelineRuns,
-      PlatformFileRecordRepository fileRecords,
-      PipelineStepTemplateProvider stepTemplateProvider,
-      ObjectProvider<PipelineVerifierHook> verifierHookProvider,
-      ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
-    super(
-        pipelineRuns,
-        fileRecords,
-        stepTemplateProvider,
-        verifierHookProvider,
-        compensationHookProvider);
-    this.processStageExecutor = processStageExecutor;
-    this.objectMapper = objectMapper;
-  }
-
-  @Override
-  protected String pipelineType() {
-    return ProcessWorkerType.PROCESS;
-  }
-
-  @Override
-  protected String initialStage() {
-    return ProcessStage.PREPARE.name();
-  }
-
-  @Override
-  protected ProcessJobContext buildContext(
-      StepExecutionRequest request, Map<String, Object> attributes, Long fileId) throws Exception {
-    ProcessJobContext context = new ProcessJobContext();
-    populateCommonFields(context, request, attributes);
-    // populateCommonFields 已 setRawPayload + setAttributes，这里再补 enrich（要在 attributes 已挂上后跑，
-    // 保证 enrich 写进去的 key 与 stage 读到的是同一 Map）。
-    enrichProcessAttributes(context.getRawPayload(), attributes);
-    // payload 显式指定 batchKey 时,保留它做补偿/重跑隔离;否则交给 DefaultProcessStageExecutor 生成。
-    // 注意:稳定 batchKey 配合 P0-2 staging tenant/target 强校验,跨 tenant 复用同 batchKey 仍会被
-    // commit/feedback 的 WHERE 过滤兜住。
-    if (attributes.get(PipelineRuntimeKeys.PROCESS_PAYLOAD) instanceof ProcessPayload typed
-        && EmptyChecks.isNotBlank(typed.batchKey())) {
-      context.setBatchKey(typed.batchKey());
+    public ProcessStepExecutionAdapter(
+            ProcessStageExecutor processStageExecutor,
+            ObjectMapper objectMapper,
+            PlatformPipelineRunRepository pipelineRuns,
+            PlatformFileRecordRepository fileRecords,
+            PipelineStepTemplateProvider stepTemplateProvider,
+            ObjectProvider<PipelineVerifierHook> verifierHookProvider,
+            ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
+        super(pipelineRuns, fileRecords, stepTemplateProvider, verifierHookProvider, compensationHookProvider);
+        this.processStageExecutor = processStageExecutor;
+        this.objectMapper = objectMapper;
     }
-    return context;
-  }
 
-  @Override
-  public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-    if (EmptyChecks.isNull(request)) {
-      return ReplayCapabilityDeclaration.unknown(ProcessWorkerType.PROCESS);
+    @Override
+    protected String pipelineType() {
+        return ProcessWorkerType.PROCESS;
     }
-    Map<String, Object> requestContext = request.context();
-    Map<String, Object> attributes = EmptyChecks.isNull(requestContext)
-        ? new LinkedHashMap<>()
-        : new LinkedHashMap<>(requestContext);
-    Object rawPayload = attributes.get(PipelineRuntimeKeys.PAYLOAD);
-    if (rawPayload instanceof String payload) {
-      try {
-        enrichProcessAttributes(payload, attributes);
-      } catch (JsonProcessingException exception) {
-        throw new IllegalArgumentException("invalid PROCESS replay payload", exception);
-      }
-    }
-    List<PipelineStepDefinition> pipelineSteps = resolveSystemPipelineSteps(attributes);
-    return processStageExecutor.replayCapability(pipelineSteps, attributes);
-  }
 
-  @SuppressWarnings("unchecked")
-  private void enrichProcessAttributes(String rawPayload, Map<String, Object> attributes)
-      throws JsonProcessingException {
-    if (EmptyChecks.isBlank(rawPayload)) {
-      return;
+    @Override
+    protected String initialStage() {
+        return ProcessStage.PREPARE.name();
     }
-    Object parsed = objectMapper.readValue(rawPayload, Object.class);
-    if (parsed instanceof Map<?, ?> payloadMap) {
-      Map<String, Object> payloadAttributes = (Map<String, Object>) payloadMap;
-      payloadAttributes.forEach(attributes::putIfAbsent);
-      Object processImplCode = payloadAttributes.get(ComputeStep.ATTR_PROCESS_IMPL_CODE);
-      if (EmptyChecks.isNotNull(processImplCode)) {
-        attributes.putIfAbsent(ComputeStep.ATTR_PROCESS_IMPL_CODE, String.valueOf(processImplCode));
-      }
-      Object systemStepParams = payloadAttributes.get(SystemPipelineTaskKeys.STEP_PARAMS);
-      if (systemStepParams instanceof Map<?, ?> steps) {
-        Object computeParams = steps.get(ProcessStage.COMPUTE.name());
-        if (computeParams instanceof Map<?, ?>) {
-          attributes.putIfAbsent(ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS, computeParams);
+
+    @Override
+    protected ProcessJobContext buildContext(StepExecutionRequest request, Map<String, Object> attributes, Long fileId)
+            throws Exception {
+        ProcessJobContext context = new ProcessJobContext();
+        populateCommonFields(context, request, attributes);
+        // populateCommonFields 已 setRawPayload + setAttributes，这里再补 enrich（要在 attributes 已挂上后跑，
+        // 保证 enrich 写进去的 key 与 stage 读到的是同一 Map）。
+        enrichProcessAttributes(context.getRawPayload(), attributes);
+        // payload 显式指定 batchKey 时,保留它做补偿/重跑隔离;否则交给 DefaultProcessStageExecutor 生成。
+        // 注意:稳定 batchKey 配合 P0-2 staging tenant/target 强校验,跨 tenant 复用同 batchKey 仍会被
+        // commit/feedback 的 WHERE 过滤兜住。
+        if (attributes.get(PipelineRuntimeKeys.PROCESS_PAYLOAD) instanceof ProcessPayload typed
+                && EmptyChecks.isNotBlank(typed.batchKey())) {
+            context.setBatchKey(typed.batchKey());
         }
-      }
+        return context;
     }
-    // 与 IMPORT/EXPORT 一致:除散开 Map 外,再放一份强类型 ProcessPayload,业务 stage 可按需取
-    // attributes["processPayload"] 拿到 typed record(参考 ExportPayload / ImportPayload)。
-    ProcessPayload typedProcessPayload = objectMapper.readValue(rawPayload, ProcessPayload.class);
-    attributes.putIfAbsent(PipelineRuntimeKeys.PROCESS_PAYLOAD, typedProcessPayload);
-  }
 
-  @Override
-  protected List<ProcessStageResult> executeStages(ProcessJobContext context) {
-    return processStageExecutor.execute(context);
-  }
-
-  @Override
-  protected boolean isSuccess(ProcessStageResult result) {
-    return EmptyChecks.isNotNull(result) && result.success();
-  }
-
-  @Override
-  protected String resultStage(ProcessStageResult result) {
-    return result.stage().name();
-  }
-
-  @Override
-  protected String resultCode(ProcessStageResult result) {
-    return result.code();
-  }
-
-  @Override
-  protected String resultMessage(ProcessStageResult result) {
-    return result.message();
-  }
-
-  @Override
-  protected StepExecutionResponse buildSuccessResponse(
-      ProcessJobContext context, List<ProcessStageResult> results, Map<String, Object> attributes) {
-    // ADR-009 Stage 1.2: 把 PROCESS 的关键产出暴露给下游 workflow 节点 DSL 引用。
-    // NODE_OUTPUTS 的键是下游 DSL（$.nodes.<X>.output.<key>）的契约面：与 attributes 键同名同义的复用
-    // 各自键表常量（同 DispatchRuntimeKeys 的 detailSummary / payload 口径），ADR-041 count 信封与
-    // batchKey 这类没有 attributes 归属的产出键取 NodeOutputKeys。
-    Map<String, Object> outputs = new LinkedHashMap<>();
-    putIfPresent(
-        outputs,
-        ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT,
-        attributes.get(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT));
-    putIfPresent(
-        outputs,
-        ProcessRuntimeKeys.PROCESS_STAGED_COUNT,
-        attributes.get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT));
-    putIfPresent(
-        outputs,
-        ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT,
-        attributes.get(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT));
-    // ADR-041 Phase1.3:归一化 count 信封。process:input=processedCount,output=publishedCount(缺省回落
-    // stagedCount)。
-    Object processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT);
-    if (EmptyChecks.isNull(processOutputCount)) {
-      processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT);
+    @Override
+    public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
+        if (EmptyChecks.isNull(request)) {
+            return ReplayCapabilityDeclaration.unknown(ProcessWorkerType.PROCESS);
+        }
+        Map<String, Object> requestContext = request.context();
+        Map<String, Object> attributes =
+                EmptyChecks.isNull(requestContext) ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
+        Object rawPayload = attributes.get(PipelineRuntimeKeys.PAYLOAD);
+        if (rawPayload instanceof String payload) {
+            try {
+                enrichProcessAttributes(payload, attributes);
+            } catch (JsonProcessingException exception) {
+                throw new IllegalArgumentException("invalid PROCESS replay payload", exception);
+            }
+        }
+        List<PipelineStepDefinition> pipelineSteps = resolveSystemPipelineSteps(attributes);
+        return processStageExecutor.replayCapability(pipelineSteps, attributes);
     }
-    putIfPresent(
-        outputs,
-        NodeOutputKeys.INPUT_COUNT,
-        attributes.get(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT));
-    putIfPresent(outputs, NodeOutputKeys.OUTPUT_COUNT, processOutputCount);
-    putIfPresent(outputs, NodeOutputKeys.BATCH_KEY, context.getBatchKey());
-    putIfPresent(
-        outputs,
-        PipelineRuntimeKeys.HIGH_WATER_MARK_OUT,
-        attributes.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
-    if (EmptyChecks.isNotEmpty(outputs)) {
-      attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
-    }
-    return new StepExecutionResponse(true, "SUCCESS", "process stage completed");
-  }
 
-  @Override
-  protected void handlePipelineFailure(
-      Map<String, Object> attributes,
-      String errorCode,
-      String errorMessage,
-      String errorKey,
-      String errorArgs) {
-    // PROCESS 不默认绑定 file_record,失败只由 pipeline/task report 承载;显式 no-op 覆盖父类默认实现。
-  }
+    @SuppressWarnings("unchecked")
+    private void enrichProcessAttributes(String rawPayload, Map<String, Object> attributes)
+            throws JsonProcessingException {
+        if (EmptyChecks.isBlank(rawPayload)) {
+            return;
+        }
+        Object parsed = objectMapper.readValue(rawPayload, Object.class);
+        if (parsed instanceof Map<?, ?> payloadMap) {
+            Map<String, Object> payloadAttributes = (Map<String, Object>) payloadMap;
+            payloadAttributes.forEach(attributes::putIfAbsent);
+            Object processImplCode = payloadAttributes.get(ComputeStep.ATTR_PROCESS_IMPL_CODE);
+            if (EmptyChecks.isNotNull(processImplCode)) {
+                attributes.putIfAbsent(ComputeStep.ATTR_PROCESS_IMPL_CODE, String.valueOf(processImplCode));
+            }
+            Object systemStepParams = payloadAttributes.get(SystemPipelineTaskKeys.STEP_PARAMS);
+            if (systemStepParams instanceof Map<?, ?> steps) {
+                Object computeParams = steps.get(ProcessStage.COMPUTE.name());
+                if (computeParams instanceof Map<?, ?>) {
+                    attributes.putIfAbsent(ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS, computeParams);
+                }
+            }
+        }
+        // 与 IMPORT/EXPORT 一致:除散开 Map 外,再放一份强类型 ProcessPayload,业务 stage 可按需取
+        // attributes["processPayload"] 拿到 typed record(参考 ExportPayload / ImportPayload)。
+        ProcessPayload typedProcessPayload = objectMapper.readValue(rawPayload, ProcessPayload.class);
+        attributes.putIfAbsent(PipelineRuntimeKeys.PROCESS_PAYLOAD, typedProcessPayload);
+    }
+
+    @Override
+    protected List<ProcessStageResult> executeStages(ProcessJobContext context) {
+        return processStageExecutor.execute(context);
+    }
+
+    @Override
+    protected boolean isSuccess(ProcessStageResult result) {
+        return EmptyChecks.isNotNull(result) && result.success();
+    }
+
+    @Override
+    protected String resultStage(ProcessStageResult result) {
+        return result.stage().name();
+    }
+
+    @Override
+    protected String resultCode(ProcessStageResult result) {
+        return result.code();
+    }
+
+    @Override
+    protected String resultMessage(ProcessStageResult result) {
+        return result.message();
+    }
+
+    @Override
+    protected StepExecutionResponse buildSuccessResponse(
+            ProcessJobContext context, List<ProcessStageResult> results, Map<String, Object> attributes) {
+        // ADR-009 Stage 1.2: 把 PROCESS 的关键产出暴露给下游 workflow 节点 DSL 引用。
+        // NODE_OUTPUTS 的键是下游 DSL（$.nodes.<X>.output.<key>）的契约面：与 attributes 键同名同义的复用
+        // 各自键表常量（同 DispatchRuntimeKeys 的 detailSummary / payload 口径），ADR-041 count 信封与
+        // batchKey 这类没有 attributes 归属的产出键取 NodeOutputKeys。
+        Map<String, Object> outputs = new LinkedHashMap<>();
+        putIfPresent(
+                outputs,
+                ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT,
+                attributes.get(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT));
+        putIfPresent(
+                outputs,
+                ProcessRuntimeKeys.PROCESS_STAGED_COUNT,
+                attributes.get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT));
+        putIfPresent(
+                outputs,
+                ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT,
+                attributes.get(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT));
+        // ADR-041 Phase1.3:归一化 count 信封。process:input=processedCount,output=publishedCount(缺省回落
+        // stagedCount)。
+        Object processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT);
+        if (EmptyChecks.isNull(processOutputCount)) {
+            processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT);
+        }
+        putIfPresent(outputs, NodeOutputKeys.INPUT_COUNT, attributes.get(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT));
+        putIfPresent(outputs, NodeOutputKeys.OUTPUT_COUNT, processOutputCount);
+        putIfPresent(outputs, NodeOutputKeys.BATCH_KEY, context.getBatchKey());
+        putIfPresent(
+                outputs,
+                PipelineRuntimeKeys.HIGH_WATER_MARK_OUT,
+                attributes.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
+        if (EmptyChecks.isNotEmpty(outputs)) {
+            attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+        }
+        return new StepExecutionResponse(true, "SUCCESS", "process stage completed");
+    }
+
+    @Override
+    protected void handlePipelineFailure(
+            Map<String, Object> attributes, String errorCode, String errorMessage, String errorKey, String errorArgs) {
+        // PROCESS 不默认绑定 file_record,失败只由 pipeline/task report 承载;显式 no-op 覆盖父类默认实现。
+    }
 }

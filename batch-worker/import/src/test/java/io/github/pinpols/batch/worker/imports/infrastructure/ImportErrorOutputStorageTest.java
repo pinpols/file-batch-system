@@ -20,25 +20,20 @@ import org.junit.jupiter.api.Test;
 @DisplayName("导入错误输出存储单测:坏记录先落本地中转文件再上传的语义")
 class ImportErrorOutputStorageTest {
 
-  @Test
-  @DisplayName("写出坏记录时先落本地中转文件再上传,对象键含租户与文件标识")
-  void shouldWriteSpoolBeforeUpload_whenBadRecordsExist() {
-    S3StorageProperties properties = new S3StorageProperties();
-    properties.setBucket("bucket");
-    BatchObjectStore objectStore = mock(BatchObjectStore.class);
-    ImportErrorOutputStorage storage = new ImportErrorOutputStorage(properties, objectStore);
-    ImportBadRecord badRecord = new ImportBadRecord(
-        1L, "PARSE", "E1", "invalid", Map.of("id", 1), false, null, Instant.now(), null, null);
+    @Test
+    @DisplayName("写出坏记录时先落本地中转文件再上传,对象键含租户与文件标识")
+    void shouldWriteSpoolBeforeUpload_whenBadRecordsExist() {
+        S3StorageProperties properties = new S3StorageProperties();
+        properties.setBucket("bucket");
+        BatchObjectStore objectStore = mock(BatchObjectStore.class);
+        ImportErrorOutputStorage storage = new ImportErrorOutputStorage(properties, objectStore);
+        ImportBadRecord badRecord = new ImportBadRecord(
+                1L, "PARSE", "E1", "invalid", Map.of("id", 1), false, null, Instant.now(), null, null);
 
-    String objectKey = storage.writeErrorOutput("tenant-A", "42", List.of(badRecord));
+        String objectKey = storage.writeErrorOutput("tenant-A", "42", List.of(badRecord));
 
-    assertThat(objectKey).contains("tenant-A", "42").endsWith("42.error.jsonl");
-    verify(objectStore)
-        .put(
-            eq("bucket"),
-            eq(objectKey),
-            any(InputStream.class),
-            anyLong(),
-            eq("application/x-ndjson"));
-  }
+        assertThat(objectKey).contains("tenant-A", "42").endsWith("42.error.jsonl");
+        verify(objectStore)
+                .put(eq("bucket"), eq(objectKey), any(InputStream.class), anyLong(), eq("application/x-ndjson"));
+    }
 }

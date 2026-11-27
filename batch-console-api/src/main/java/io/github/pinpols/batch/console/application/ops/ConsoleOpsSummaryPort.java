@@ -9,6 +9,6 @@ import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
  */
 public interface ConsoleOpsSummaryPort {
 
-  /** 返回指定租户的运维摘要。 */
-  ConsoleOpsSummaryResponse summary(String tenantId);
+    /** 返回指定租户的运维摘要。 */
+    ConsoleOpsSummaryResponse summary(String tenantId);
 }

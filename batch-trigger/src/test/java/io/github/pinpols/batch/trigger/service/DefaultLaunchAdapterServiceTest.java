@@ -26,238 +26,235 @@ import org.junit.jupiter.api.Test;
 @DisplayName("触发命令到 LaunchRequest 的适配:API 字段透传,定时触发推导 bizDate 与半开数据区间")
 class DefaultLaunchAdapterServiceTest {
 
-  private static final BatchTimezoneProvider TIMEZONE_PROVIDER =
-      new BatchTimezoneProvider(new BatchTimezoneProperties());
+    private static final BatchTimezoneProvider TIMEZONE_PROVIDER =
+            new BatchTimezoneProvider(new BatchTimezoneProperties());
 
-  private final DefaultLaunchAdapterService service = new DefaultLaunchAdapterService(
-      new CalendarBizDateResolver(TIMEZONE_PROVIDER),
-      TIMEZONE_PROVIDER,
-      new CronExpressionAdapter());
+    private final DefaultLaunchAdapterService service = new DefaultLaunchAdapterService(
+            new CalendarBizDateResolver(TIMEZONE_PROVIDER), TIMEZONE_PROVIDER, new CronExpressionAdapter());
 
-  @Test
-  @DisplayName("API 请求转 LaunchRequest 时保留 Workflow 根身份及业务字段")
-  void shouldBuildApiLaunchRequestFromControllerPayload() {
-    TriggerLaunchRequest request = new TriggerLaunchRequest();
-    request.setTenantId("t1");
-    request.setWorkflowDefinitionId(71L);
-    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
-    request.setTriggerType(TriggerType.API);
-    request.setParams(Map.of("source", "api"));
+    @Test
+    @DisplayName("API 请求转 LaunchRequest 时保留 Workflow 根身份及业务字段")
+    void shouldBuildApiLaunchRequestFromControllerPayload() {
+        TriggerLaunchRequest request = new TriggerLaunchRequest();
+        request.setTenantId("t1");
+        request.setWorkflowDefinitionId(71L);
+        request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
+        request.setTriggerType(TriggerType.API);
+        request.setParams(Map.of("source", "api"));
 
-    LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
-        TriggerCommandInputMapper.toInput(request), "idem-001", "req-001", "trace-001"));
+        LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
+                TriggerCommandInputMapper.toInput(request), "idem-001", "req-001", "trace-001"));
 
-    assertThat(launchRequest.tenantId()).isEqualTo("t1");
-    assertThat(launchRequest.jobCode()).isNull();
-    assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
-    assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, Month.MARCH, 27));
-    assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.API);
-    assertThat(launchRequest.requestId()).isEqualTo("req-001");
-    assertThat(launchRequest.traceId()).isEqualTo("trace-001");
-    assertThat(launchRequest.params()).containsEntry("source", "api");
-  }
+        assertThat(launchRequest.tenantId()).isEqualTo("t1");
+        assertThat(launchRequest.jobCode()).isNull();
+        assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
+        assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, Month.MARCH, 27));
+        assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.API);
+        assertThat(launchRequest.requestId()).isEqualTo("req-001");
+        assertThat(launchRequest.traceId()).isEqualTo("trace-001");
+        assertThat(launchRequest.params()).containsEntry("source", "api");
+    }
 
-  @Test
-  @DisplayName("API 请求显式以 Workflow ID 为目标时不把目标降格为 JobCode")
-  void shouldPreserveWorkflowTargetIdentityFromApiRequest() {
-    TriggerLaunchRequest request = new TriggerLaunchRequest();
-    request.setTenantId("t1");
-    request.setWorkflowDefinitionId(71L);
-    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
-    request.setTriggerType(TriggerType.API);
+    @Test
+    @DisplayName("API 请求显式以 Workflow ID 为目标时不把目标降格为 JobCode")
+    void shouldPreserveWorkflowTargetIdentityFromApiRequest() {
+        TriggerLaunchRequest request = new TriggerLaunchRequest();
+        request.setTenantId("t1");
+        request.setWorkflowDefinitionId(71L);
+        request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
+        request.setTriggerType(TriggerType.API);
 
-    LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
-        TriggerCommandInputMapper.toInput(request), "idem-wf", "req-wf", "trace-wf"));
+        LaunchRequest launchRequest = service.fromApiRequest(
+                new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), "idem-wf", "req-wf", "trace-wf"));
 
-    assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
-    assertThat(launchRequest.jobCode()).isNull();
-  }
+        assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
+        assertThat(launchRequest.jobCode()).isNull();
+    }
 
-  @Test
-  @DisplayName("外部 EVENT 编码从 Trigger API 请求透传到 launch envelope")
-  void shouldPropagateExternalEventCode() {
-    TriggerLaunchRequest request = new TriggerLaunchRequest();
-    request.setTenantId("t1");
-    request.setWorkflowDefinitionId(71L);
-    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
-    request.setTriggerType(TriggerType.EVENT);
-    request.setExternalEventCode("PAYMENT_CLOSED");
+    @Test
+    @DisplayName("外部 EVENT 编码从 Trigger API 请求透传到 launch envelope")
+    void shouldPropagateExternalEventCode() {
+        TriggerLaunchRequest request = new TriggerLaunchRequest();
+        request.setTenantId("t1");
+        request.setWorkflowDefinitionId(71L);
+        request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
+        request.setTriggerType(TriggerType.EVENT);
+        request.setExternalEventCode("PAYMENT_CLOSED");
 
-    LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
-        TriggerCommandInputMapper.toInput(request), "event-idem", "event-req", "event-trace"));
+        LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
+                TriggerCommandInputMapper.toInput(request), "event-idem", "event-req", "event-trace"));
 
-    assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.EVENT);
-    assertThat(launchRequest.externalEventCode()).isEqualTo("PAYMENT_CLOSED");
-  }
+        assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.EVENT);
+        assertThat(launchRequest.externalEventCode()).isEqualTo("PAYMENT_CLOSED");
+    }
 
-  @Test
-  @DisplayName("定时补跑按日历推导业务日期,并在参数中写入 MANUAL_APPROVAL 补跑与待审批标记")
-  void shouldDeriveBizDateAndCatchUpMetadataFromScheduledTrigger() {
-    TriggerDescriptor descriptor = new TriggerDescriptor();
-    descriptor.setTenantId("t1");
-    descriptor.setJobCode("EXPORT_JOB");
-    descriptor.setWorkflowDefinitionId(71L);
-    descriptor.setWorkflowCode("JOB-WF-71");
-    descriptor.setWorkflowVersion(4);
-    descriptor.setScheduleType("CRON");
-    descriptor.setScheduleExpression("0 15 0 * * ?");
-    descriptor.setTimezone("Asia/Shanghai");
-    descriptor.setTriggerMode("MIXED");
-    descriptor.setCalendarCode("BIZ_CAL");
-    descriptor.setCatchUpPolicy(CatchUpPolicyType.MANUAL_APPROVAL.code());
+    @Test
+    @DisplayName("定时补跑按日历推导业务日期,并在参数中写入 MANUAL_APPROVAL 补跑与待审批标记")
+    void shouldDeriveBizDateAndCatchUpMetadataFromScheduledTrigger() {
+        TriggerDescriptor descriptor = new TriggerDescriptor();
+        descriptor.setTenantId("t1");
+        descriptor.setJobCode("EXPORT_JOB");
+        descriptor.setWorkflowDefinitionId(71L);
+        descriptor.setWorkflowCode("JOB-WF-71");
+        descriptor.setWorkflowVersion(4);
+        descriptor.setScheduleType("CRON");
+        descriptor.setScheduleExpression("0 15 0 * * ?");
+        descriptor.setTimezone("Asia/Shanghai");
+        descriptor.setTriggerMode("MIXED");
+        descriptor.setCalendarCode("BIZ_CAL");
+        descriptor.setCatchUpPolicy(CatchUpPolicyType.MANUAL_APPROVAL.code());
 
-    Instant fireTime = Instant.parse("2026-03-27T16:30:00Z");
-    CalendarBizDateDefinition calendar = new CalendarBizDateDefinition(
-        "Asia/Shanghai", LocalTime.of(6, 0), "SKIP", Set.of(), Set.of());
-    LaunchRequest launchRequest = service.fromScheduledTrigger(
-        new ScheduledTriggerCommand(
-            descriptor, fireTime, TriggerType.CATCH_UP, "req-002", "trace-002"),
-        calendar);
+        Instant fireTime = Instant.parse("2026-03-27T16:30:00Z");
+        CalendarBizDateDefinition calendar =
+                new CalendarBizDateDefinition("Asia/Shanghai", LocalTime.of(6, 0), "SKIP", Set.of(), Set.of());
+        LaunchRequest launchRequest = service.fromScheduledTrigger(
+                new ScheduledTriggerCommand(descriptor, fireTime, TriggerType.CATCH_UP, "req-002", "trace-002"),
+                calendar);
 
-    assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
-    assertThat(launchRequest.jobCode()).isNull();
-    assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, Month.MARCH, 27));
-    assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.CATCH_UP);
-    assertThat(launchRequest.params())
-        .containsEntry("scheduleType", "CRON")
-        .containsEntry("scheduleExpression", "0 15 0 * * ?")
-        .containsEntry("triggerMode", "MIXED")
-        .containsEntry("calendarCode", "BIZ_CAL")
-        .containsEntry("catchUpPolicy", CatchUpPolicyType.MANUAL_APPROVAL.code())
-        .containsEntry("catchUp", true)
-        .containsEntry("catchUpApprovalRequired", true)
-        .containsEntry("workflowDefinitionId", 71L)
-        .containsEntry("workflowCode", "JOB-WF-71")
-        .containsEntry("workflowVersion", 4)
-        .containsEntry("scheduledAt", fireTime.toString());
-  }
+        assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
+        assertThat(launchRequest.jobCode()).isNull();
+        assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, Month.MARCH, 27));
+        assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.CATCH_UP);
+        assertThat(launchRequest.params())
+                .containsEntry("scheduleType", "CRON")
+                .containsEntry("scheduleExpression", "0 15 0 * * ?")
+                .containsEntry("triggerMode", "MIXED")
+                .containsEntry("calendarCode", "BIZ_CAL")
+                .containsEntry("catchUpPolicy", CatchUpPolicyType.MANUAL_APPROVAL.code())
+                .containsEntry("catchUp", true)
+                .containsEntry("catchUpApprovalRequired", true)
+                .containsEntry("workflowDefinitionId", 71L)
+                .containsEntry("workflowCode", "JOB-WF-71")
+                .containsEntry("workflowVersion", 4)
+                .containsEntry("scheduledAt", fireTime.toString());
+    }
 
-  /** V94: CRON 触发计算 [thisFireAt, nextFireAt) 半开区间. 0 15 0 * * ? → 每天 00:15:00 fire. */
-  @Test
-  @DisplayName("CRON 触发以本次 fire 时刻为区间起点,取表达式推得的下一个整点作为半开区间终点")
-  void shouldComputeDataIntervalForCronTrigger() {
-    TriggerDescriptor descriptor = new TriggerDescriptor();
-    descriptor.setTenantId("t1");
-    descriptor.setJobCode("HOURLY_JOB");
-    descriptor.setScheduleType("CRON");
-    descriptor.setScheduleExpression("0 0 * * * ?"); // 每小时整点
-    descriptor.setTimezone("Asia/Shanghai");
-    descriptor.setTriggerMode("SCHEDULED");
-    descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
+    /** V94: CRON 触发计算 [thisFireAt, nextFireAt) 半开区间. 0 15 0 * * ? → 每天 00:15:00 fire. */
+    @Test
+    @DisplayName("CRON 触发以本次 fire 时刻为区间起点,取表达式推得的下一个整点作为半开区间终点")
+    void shouldComputeDataIntervalForCronTrigger() {
+        TriggerDescriptor descriptor = new TriggerDescriptor();
+        descriptor.setTenantId("t1");
+        descriptor.setJobCode("HOURLY_JOB");
+        descriptor.setScheduleType("CRON");
+        descriptor.setScheduleExpression("0 0 * * * ?"); // 每小时整点
+        descriptor.setTimezone("Asia/Shanghai");
+        descriptor.setTriggerMode("SCHEDULED");
+        descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
-    Instant fireTime = Instant.parse("2026-03-27T14:00:00Z");
-    LaunchRequest launchRequest = service.fromScheduledTrigger(
-        new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv1", "trace-iv1"), null);
+        Instant fireTime = Instant.parse("2026-03-27T14:00:00Z");
+        LaunchRequest launchRequest = service.fromScheduledTrigger(
+                new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv1", "trace-iv1"), null);
 
-    assertThat(launchRequest.dataIntervalStart()).isEqualTo(fireTime);
-    assertThat(launchRequest.dataIntervalEnd())
-        .isEqualTo(Instant.parse("2026-03-27T15:00:00Z"))
-        .isAfter(launchRequest.dataIntervalStart());
-  }
+        assertThat(launchRequest.dataIntervalStart()).isEqualTo(fireTime);
+        assertThat(launchRequest.dataIntervalEnd())
+                .isEqualTo(Instant.parse("2026-03-27T15:00:00Z"))
+                .isAfter(launchRequest.dataIntervalStart());
+    }
 
-  /** V94: FIXED_RATE 表达式 "300" (秒) → end = start + 5 分钟. */
-  @Test
-  @DisplayName("FIXED_RATE 纯数字表达式按秒解析,区间终点落在触发时刻之后 5 分钟")
-  void shouldComputeDataIntervalForFixedRateSeconds() {
-    TriggerDescriptor descriptor = new TriggerDescriptor();
-    descriptor.setTenantId("t1");
-    descriptor.setJobCode("MIN_JOB");
-    descriptor.setScheduleType("FIXED_RATE");
-    descriptor.setScheduleExpression("300"); // 5 分钟
-    descriptor.setTimezone("UTC");
-    descriptor.setTriggerMode("SCHEDULED");
-    descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
+    /** V94: FIXED_RATE 表达式 "300" (秒) → end = start + 5 分钟. */
+    @Test
+    @DisplayName("FIXED_RATE 纯数字表达式按秒解析,区间终点落在触发时刻之后 5 分钟")
+    void shouldComputeDataIntervalForFixedRateSeconds() {
+        TriggerDescriptor descriptor = new TriggerDescriptor();
+        descriptor.setTenantId("t1");
+        descriptor.setJobCode("MIN_JOB");
+        descriptor.setScheduleType("FIXED_RATE");
+        descriptor.setScheduleExpression("300"); // 5 分钟
+        descriptor.setTimezone("UTC");
+        descriptor.setTriggerMode("SCHEDULED");
+        descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
-    Instant fireTime = Instant.parse("2026-03-27T14:30:00Z");
-    LaunchRequest launchRequest = service.fromScheduledTrigger(
-        new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv2", "trace-iv2"), null);
+        Instant fireTime = Instant.parse("2026-03-27T14:30:00Z");
+        LaunchRequest launchRequest = service.fromScheduledTrigger(
+                new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv2", "trace-iv2"), null);
 
-    assertThat(launchRequest.dataIntervalStart()).isEqualTo(fireTime);
-    assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T14:35:00Z"));
-  }
+        assertThat(launchRequest.dataIntervalStart()).isEqualTo(fireTime);
+        assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T14:35:00Z"));
+    }
 
-  /** V94: FIXED_RATE 用 ISO duration "PT1H" → end = start + 1 小时. */
-  @Test
-  @DisplayName("FIXED_RATE 支持 ISO-8601 duration 表达式,PT1H 推导出的区间终点延后 1 小时")
-  void shouldComputeDataIntervalForFixedRateIsoDuration() {
-    TriggerDescriptor descriptor = new TriggerDescriptor();
-    descriptor.setTenantId("t1");
-    descriptor.setJobCode("HOURLY_JOB");
-    descriptor.setScheduleType("FIXED_RATE");
-    descriptor.setScheduleExpression("PT1H");
-    descriptor.setTimezone("UTC");
-    descriptor.setTriggerMode("SCHEDULED");
-    descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
+    /** V94: FIXED_RATE 用 ISO duration "PT1H" → end = start + 1 小时. */
+    @Test
+    @DisplayName("FIXED_RATE 支持 ISO-8601 duration 表达式,PT1H 推导出的区间终点延后 1 小时")
+    void shouldComputeDataIntervalForFixedRateIsoDuration() {
+        TriggerDescriptor descriptor = new TriggerDescriptor();
+        descriptor.setTenantId("t1");
+        descriptor.setJobCode("HOURLY_JOB");
+        descriptor.setScheduleType("FIXED_RATE");
+        descriptor.setScheduleExpression("PT1H");
+        descriptor.setTimezone("UTC");
+        descriptor.setTriggerMode("SCHEDULED");
+        descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
-    Instant fireTime = Instant.parse("2026-03-27T14:00:00Z");
-    LaunchRequest launchRequest = service.fromScheduledTrigger(
-        new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv3", "trace-iv3"), null);
+        Instant fireTime = Instant.parse("2026-03-27T14:00:00Z");
+        LaunchRequest launchRequest = service.fromScheduledTrigger(
+                new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv3", "trace-iv3"), null);
 
-    assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T15:00:00Z"));
-  }
+        assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T15:00:00Z"));
+    }
 
-  /** V94: 非法 CRON / 未识别 scheduleType → null interval, 不阻断 launch. */
-  @Test
-  @DisplayName("无法推导下次触发时刻时区间终点为 null,起点仍透传 fire time 且不阻断本次 launch")
-  void shouldFallbackToNullDataIntervalWhenComputationFails() {
-    TriggerDescriptor descriptor = new TriggerDescriptor();
-    descriptor.setTenantId("t1");
-    descriptor.setJobCode("BAD_JOB");
-    descriptor.setScheduleType("MANUAL"); // 无 interval 概念
-    descriptor.setScheduleExpression("");
-    descriptor.setTimezone("UTC");
-    descriptor.setTriggerMode("MANUAL");
-    descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
+    /** V94: 非法 CRON / 未识别 scheduleType → null interval, 不阻断 launch. */
+    @Test
+    @DisplayName("无法推导下次触发时刻时区间终点为 null,起点仍透传 fire time 且不阻断本次 launch")
+    void shouldFallbackToNullDataIntervalWhenComputationFails() {
+        TriggerDescriptor descriptor = new TriggerDescriptor();
+        descriptor.setTenantId("t1");
+        descriptor.setJobCode("BAD_JOB");
+        descriptor.setScheduleType("MANUAL"); // 无 interval 概念
+        descriptor.setScheduleExpression("");
+        descriptor.setTimezone("UTC");
+        descriptor.setTriggerMode("MANUAL");
+        descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
-    LaunchRequest launchRequest = service.fromScheduledTrigger(
-        new ScheduledTriggerCommand(
-            descriptor, Instant.parse("2026-03-27T00:00:00Z"), null, "req-iv4", "trace-iv4"),
-        null);
+        LaunchRequest launchRequest = service.fromScheduledTrigger(
+                new ScheduledTriggerCommand(
+                        descriptor, Instant.parse("2026-03-27T00:00:00Z"), null, "req-iv4", "trace-iv4"),
+                null);
 
-    assertThat(launchRequest.dataIntervalStart()).isNotNull(); // 仍透传 fireTime 作为 start
-    assertThat(launchRequest.dataIntervalEnd()).isNull();
-  }
+        assertThat(launchRequest.dataIntervalStart()).isNotNull(); // 仍透传 fireTime 作为 start
+        assertThat(launchRequest.dataIntervalEnd()).isNull();
+    }
 
-  /** V94: API 触发显式提供 interval, 透传给 LaunchRequest. */
-  @Test
-  @DisplayName("API 触发显式指定的数据区间原样透传,适配层不覆盖调用方给定的起止时刻")
-  void shouldPropagateApiProvidedDataInterval() {
-    TriggerLaunchRequest request = new TriggerLaunchRequest();
-    request.setTenantId("t1");
-    request.setWorkflowDefinitionId(71L);
-    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
-    request.setTriggerType(TriggerType.API);
-    request.setParams(Map.of());
-    request.setDataIntervalStart(Instant.parse("2026-03-27T14:30:00Z"));
-    request.setDataIntervalEnd(Instant.parse("2026-03-27T14:35:00Z"));
+    /** V94: API 触发显式提供 interval, 透传给 LaunchRequest. */
+    @Test
+    @DisplayName("API 触发显式指定的数据区间原样透传,适配层不覆盖调用方给定的起止时刻")
+    void shouldPropagateApiProvidedDataInterval() {
+        TriggerLaunchRequest request = new TriggerLaunchRequest();
+        request.setTenantId("t1");
+        request.setWorkflowDefinitionId(71L);
+        request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
+        request.setTriggerType(TriggerType.API);
+        request.setParams(Map.of());
+        request.setDataIntervalStart(Instant.parse("2026-03-27T14:30:00Z"));
+        request.setDataIntervalEnd(Instant.parse("2026-03-27T14:35:00Z"));
 
-    LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
-        TriggerCommandInputMapper.toInput(request), "idem-api", "req-api", "trace-api"));
+        LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
+                TriggerCommandInputMapper.toInput(request), "idem-api", "req-api", "trace-api"));
 
-    assertThat(launchRequest.dataIntervalStart()).isEqualTo(Instant.parse("2026-03-27T14:30:00Z"));
-    assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T14:35:00Z"));
-  }
+        assertThat(launchRequest.dataIntervalStart()).isEqualTo(Instant.parse("2026-03-27T14:30:00Z"));
+        assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T14:35:00Z"));
+    }
 
-  @Test
-  @DisplayName("命令未携带触发类型时默认为 SCHEDULED,补跑与待审批标记均写为 false")
-  void shouldDefaultScheduledTriggerTypeWhenCommandTriggerTypeIsMissing() {
-    TriggerDescriptor descriptor = new TriggerDescriptor();
-    descriptor.setTenantId("t1");
-    descriptor.setJobCode("DISPATCH_JOB");
-    descriptor.setScheduleType("CRON");
-    descriptor.setScheduleExpression("0 0 * * * ?");
-    descriptor.setTimezone("UTC");
-    descriptor.setTriggerMode("SCHEDULED");
-    descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
+    @Test
+    @DisplayName("命令未携带触发类型时默认为 SCHEDULED,补跑与待审批标记均写为 false")
+    void shouldDefaultScheduledTriggerTypeWhenCommandTriggerTypeIsMissing() {
+        TriggerDescriptor descriptor = new TriggerDescriptor();
+        descriptor.setTenantId("t1");
+        descriptor.setJobCode("DISPATCH_JOB");
+        descriptor.setScheduleType("CRON");
+        descriptor.setScheduleExpression("0 0 * * * ?");
+        descriptor.setTimezone("UTC");
+        descriptor.setTriggerMode("SCHEDULED");
+        descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
-    LaunchRequest launchRequest = service.fromScheduledTrigger(
-        new ScheduledTriggerCommand(
-            descriptor, Instant.parse("2026-03-27T08:00:00Z"), null, "req-003", "trace-003"),
-        null);
+        LaunchRequest launchRequest = service.fromScheduledTrigger(
+                new ScheduledTriggerCommand(
+                        descriptor, Instant.parse("2026-03-27T08:00:00Z"), null, "req-003", "trace-003"),
+                null);
 
-    assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.SCHEDULED);
-    assertThat(launchRequest.params())
-        .containsEntry("catchUp", false)
-        .containsEntry("catchUpApprovalRequired", false);
-  }
+        assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.SCHEDULED);
+        assertThat(launchRequest.params())
+                .containsEntry("catchUp", false)
+                .containsEntry("catchUpApprovalRequired", false);
+    }
 }

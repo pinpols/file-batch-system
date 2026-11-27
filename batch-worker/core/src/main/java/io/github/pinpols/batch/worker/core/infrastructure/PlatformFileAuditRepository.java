@@ -17,75 +17,75 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class PlatformFileAuditRepository {
 
-  /** 对应 file_error_record.error_message VARCHAR(1024)。 */
-  private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
+    /** 对应 file_error_record.error_message VARCHAR(1024)。 */
+    private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
 
-  /** 对应 file_error_record.source_column VARCHAR(256)。 */
-  private static final int SOURCE_COLUMN_MAX_LENGTH = 256;
+    /** 对应 file_error_record.source_column VARCHAR(256)。 */
+    private static final int SOURCE_COLUMN_MAX_LENGTH = 256;
 
-  private final PlatformFileRuntimeMapper mapper;
+    private final PlatformFileRuntimeMapper mapper;
 
-  public Long insertFileErrorRecord(FileErrorRecordParam param) {
-    String tenantId = param.getTenantId();
-    Long fileId = param.getFileId();
-    Long pipelineInstanceId = param.getPipelineInstanceId();
-    Long pipelineStepRunId = param.getPipelineStepRunId();
-    Long recordNo = param.getRecordNo();
-    String errorCode = param.getErrorCode();
-    String errorMessage = truncate(param.getErrorMessage(), ERROR_MESSAGE_MAX_LENGTH);
-    String errorStage = param.getErrorStage();
-    boolean skipped = param.isSkipped();
-    String skipAction = param.getSkipAction();
-    String rawRecordJson = toJson(param.getRawRecord());
-    Long sourceRowNum = param.getSourceRowNum();
-    String sourceColumn = truncate(param.getSourceColumn(), SOURCE_COLUMN_MAX_LENGTH);
-    PlatformFileErrorInsertParam values = PlatformFileErrorInsertParam.builder()
-        .tenantId(tenantId)
-        .fileId(fileId)
-        .pipelineInstanceId(pipelineInstanceId)
-        .pipelineStepRunId(pipelineStepRunId)
-        .recordNo(recordNo)
-        .errorCode(errorCode)
-        .errorMessage(errorMessage)
-        .errorStage(errorStage)
-        .isSkipped(skipped)
-        .skipAction(skipAction)
-        .rawRecordJson(rawRecordJson)
-        .sourceRowNum(sourceRowNum)
-        .sourceColumn(sourceColumn)
-        .build();
-    mapper.insertFileErrorRecord(values);
-    return values.getId();
-  }
-
-  public void appendAudit(FileAuditParam param) {
-    boolean fileAuditParamIsIncomplete = EmptyChecks.isNull(param.getFileId())
-        || !Texts.hasText(param.getTenantId())
-        || !Texts.hasText(param.getOperationType())
-        || !Texts.hasText(param.getOperationResult());
-    if (fileAuditParamIsIncomplete) {
-      return;
+    public Long insertFileErrorRecord(FileErrorRecordParam param) {
+        String tenantId = param.getTenantId();
+        Long fileId = param.getFileId();
+        Long pipelineInstanceId = param.getPipelineInstanceId();
+        Long pipelineStepRunId = param.getPipelineStepRunId();
+        Long recordNo = param.getRecordNo();
+        String errorCode = param.getErrorCode();
+        String errorMessage = truncate(param.getErrorMessage(), ERROR_MESSAGE_MAX_LENGTH);
+        String errorStage = param.getErrorStage();
+        boolean skipped = param.isSkipped();
+        String skipAction = param.getSkipAction();
+        String rawRecordJson = toJson(param.getRawRecord());
+        Long sourceRowNum = param.getSourceRowNum();
+        String sourceColumn = truncate(param.getSourceColumn(), SOURCE_COLUMN_MAX_LENGTH);
+        PlatformFileErrorInsertParam values = PlatformFileErrorInsertParam.builder()
+                .tenantId(tenantId)
+                .fileId(fileId)
+                .pipelineInstanceId(pipelineInstanceId)
+                .pipelineStepRunId(pipelineStepRunId)
+                .recordNo(recordNo)
+                .errorCode(errorCode)
+                .errorMessage(errorMessage)
+                .errorStage(errorStage)
+                .isSkipped(skipped)
+                .skipAction(skipAction)
+                .rawRecordJson(rawRecordJson)
+                .sourceRowNum(sourceRowNum)
+                .sourceColumn(sourceColumn)
+                .build();
+        mapper.insertFileErrorRecord(values);
+        return values.getId();
     }
-    String tenantId = param.getTenantId();
-    Long fileId = param.getFileId();
-    String operationType = param.getOperationType();
-    String operationResult = param.getOperationResult();
-    String operatorType = defaultText(param.getOperatorType(), "SYSTEM");
-    String operatorId = param.getOperatorId();
-    String traceId = param.getTraceId();
-    String evidenceRef = param.getEvidenceRef();
-    String detailSummaryJson = toJson(param.getDetailSummary());
-    PlatformFileAuditInsertParam statementParams = PlatformFileAuditInsertParam.builder()
-        .tenantId(tenantId)
-        .fileId(fileId)
-        .operationType(operationType)
-        .operationResult(operationResult)
-        .operatorType(operatorType)
-        .operatorId(operatorId)
-        .traceId(traceId)
-        .evidenceRef(evidenceRef)
-        .detailSummaryJson(detailSummaryJson)
-        .build();
-    mapper.insertFileAuditLog(statementParams);
-  }
+
+    public void appendAudit(FileAuditParam param) {
+        boolean fileAuditParamIsIncomplete = EmptyChecks.isNull(param.getFileId())
+                || !Texts.hasText(param.getTenantId())
+                || !Texts.hasText(param.getOperationType())
+                || !Texts.hasText(param.getOperationResult());
+        if (fileAuditParamIsIncomplete) {
+            return;
+        }
+        String tenantId = param.getTenantId();
+        Long fileId = param.getFileId();
+        String operationType = param.getOperationType();
+        String operationResult = param.getOperationResult();
+        String operatorType = defaultText(param.getOperatorType(), "SYSTEM");
+        String operatorId = param.getOperatorId();
+        String traceId = param.getTraceId();
+        String evidenceRef = param.getEvidenceRef();
+        String detailSummaryJson = toJson(param.getDetailSummary());
+        PlatformFileAuditInsertParam statementParams = PlatformFileAuditInsertParam.builder()
+                .tenantId(tenantId)
+                .fileId(fileId)
+                .operationType(operationType)
+                .operationResult(operationResult)
+                .operatorType(operatorType)
+                .operatorId(operatorId)
+                .traceId(traceId)
+                .evidenceRef(evidenceRef)
+                .detailSummaryJson(detailSummaryJson)
+                .build();
+        mapper.insertFileAuditLog(statementParams);
+    }
 }

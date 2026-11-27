@@ -13,12 +13,12 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ConsoleBusinessTenantPlacementMapper {
 
-  /** 全表列出(平台 admin 跨租视图,无 tenant 过滤——本表即「哪个租户在哪片」的全局映射)。 */
-  List<BusinessTenantPlacementEntity> findAll();
+    /** 全表列出(平台 admin 跨租视图,无 tenant 过滤——本表即「哪个租户在哪片」的全局映射)。 */
+    List<BusinessTenantPlacementEntity> findAll();
 
-  /** ON CONFLICT (tenant_id) DO UPDATE 语义:指派或迁片。 */
-  void upsert(@Param("p") BusinessTenantPlacementUpsertParam p);
+    /** ON CONFLICT (tenant_id) DO UPDATE 语义:指派或迁片。 */
+    void upsert(@Param("p") BusinessTenantPlacementUpsertParam p);
 
-  /** 取消指派(该租户回退 hash 默认),返回删除行数。 */
-  int deleteByTenant(@Param("tenantId") String tenantId);
+    /** 取消指派(该租户回退 hash 默认),返回删除行数。 */
+    int deleteByTenant(@Param("tenantId") String tenantId);
 }

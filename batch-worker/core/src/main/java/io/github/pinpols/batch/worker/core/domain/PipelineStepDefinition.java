@@ -10,57 +10,57 @@ import lombok.Builder;
  */
 @Builder
 public record PipelineStepDefinition(
-    Long id,
-    String stepCode,
-    String stepName,
-    String stageCode,
-    Integer stepOrder,
-    String implCode,
-    Map<String, Object> stepParams,
-    Integer timeoutSeconds,
-    String retryPolicy,
-    Integer retryMaxCount,
-    boolean enabled) {
+        Long id,
+        String stepCode,
+        String stepName,
+        String stageCode,
+        Integer stepOrder,
+        String implCode,
+        Map<String, Object> stepParams,
+        Integer timeoutSeconds,
+        String retryPolicy,
+        Integer retryMaxCount,
+        boolean enabled) {
 
-  public String textParam(String... keys) {
-    if (stepParams == null || keys == null) {
-      return null;
-    }
-    for (String key : keys) {
-      Object value = stepParams.get(key);
-      if (value instanceof String text && Texts.hasText(text)) {
-        return text;
-      }
-      if (value != null) {
-        String text = String.valueOf(value);
-        boolean parameterTextIsUsable = Texts.hasText(text) && !"null".equalsIgnoreCase(text);
-        if (parameterTextIsUsable) {
-          return text;
+    public String textParam(String... keys) {
+        if (stepParams == null || keys == null) {
+            return null;
         }
-      }
+        for (String key : keys) {
+            Object value = stepParams.get(key);
+            if (value instanceof String text && Texts.hasText(text)) {
+                return text;
+            }
+            if (value != null) {
+                String text = String.valueOf(value);
+                boolean parameterTextIsUsable = Texts.hasText(text) && !"null".equalsIgnoreCase(text);
+                if (parameterTextIsUsable) {
+                    return text;
+                }
+            }
+        }
+        return null;
     }
-    return null;
-  }
 
-  public boolean booleanParam(String... keys) {
-    if (stepParams == null || keys == null) {
-      return false;
-    }
-    for (String key : keys) {
-      Object value = stepParams.get(key);
-      if (value instanceof Boolean bool) {
-        return bool;
-      }
-      if (value != null) {
-        String text = String.valueOf(value);
-        if ("true".equalsIgnoreCase(text)) {
-          return true;
+    public boolean booleanParam(String... keys) {
+        if (stepParams == null || keys == null) {
+            return false;
         }
-        if ("false".equalsIgnoreCase(text)) {
-          return false;
+        for (String key : keys) {
+            Object value = stepParams.get(key);
+            if (value instanceof Boolean bool) {
+                return bool;
+            }
+            if (value != null) {
+                String text = String.valueOf(value);
+                if ("true".equalsIgnoreCase(text)) {
+                    return true;
+                }
+                if ("false".equalsIgnoreCase(text)) {
+                    return false;
+                }
+            }
         }
-      }
+        return false;
     }
-    return false;
-  }
 }

@@ -6,15 +6,13 @@ import org.apache.ibatis.annotations.Param;
 
 public interface JobDependencyMapper {
 
-  List<String> selectUpstreamJobCodes(
-      @Param("tenantId") String tenantId, @Param("downstreamJobCode") String downstreamJobCode);
+    List<String> selectUpstreamJobCodes(
+            @Param("tenantId") String tenantId, @Param("downstreamJobCode") String downstreamJobCode);
 
-  List<JobDependencyRule> selectUpstreamRules(
-      @Param("tenantId") String tenantId, @Param("downstreamJobCode") String downstreamJobCode);
+    List<JobDependencyRule> selectUpstreamRules(
+            @Param("tenantId") String tenantId, @Param("downstreamJobCode") String downstreamJobCode);
 
-  String selectCalendarCodeByTenantAndJob(
-      @Param("tenantId") String tenantId, @Param("jobCode") String jobCode);
+    String selectCalendarCodeByTenantAndJob(@Param("tenantId") String tenantId, @Param("jobCode") String jobCode);
 
-  Long selectJobDefinitionIdByTenantAndJob(
-      @Param("tenantId") String tenantId, @Param("jobCode") String jobCode);
+    Long selectJobDefinitionIdByTenantAndJob(@Param("tenantId") String tenantId, @Param("jobCode") String jobCode);
 }

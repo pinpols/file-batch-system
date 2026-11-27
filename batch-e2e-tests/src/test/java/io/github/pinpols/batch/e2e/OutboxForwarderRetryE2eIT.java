@@ -47,128 +47,120 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * </ul>
  */
 @E2eSpringBootTest(
-    classes = E2eImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {
-      "batch.outbox.poll-interval-millis=200",
-      "batch.outbox.min-poll-interval-millis=200",
-      "batch.outbox.retry-delay-seconds=0",
-      "batch.outbox.max-retry-attempts=2",
-      "batch.outbox.circuit-breaker-enabled=false"
-    })
+        classes = E2eImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+            "batch.outbox.poll-interval-millis=200",
+            "batch.outbox.min-poll-interval-millis=200",
+            "batch.outbox.retry-delay-seconds=0",
+            "batch.outbox.max-retry-attempts=2",
+            "batch.outbox.circuit-breaker-enabled=false"
+        })
 @DisplayName("待发事件投递状态机与重试审计:以替身投递器精确控制成功与失败序列,验证重试耗尽与短暂失败恢复两种语义")
 class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
 
-  @DynamicPropertySource
-  static void registerOrchestratorUrl(DynamicPropertyRegistry registry) {
-    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-  }
+    @DynamicPropertySource
+    static void registerOrchestratorUrl(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
-  @MockitoBean
-  private OutboxPublisher outboxPublisher;
+    @MockitoBean
+    private OutboxPublisher outboxPublisher;
 
-  @Autowired
-  private OutboxEventMapper outboxEventMapper;
+    @Autowired
+    private OutboxEventMapper outboxEventMapper;
 
-  @Autowired
-  private EventOutboxRetryMapper eventOutboxRetryMapper;
+    @Autowired
+    private EventOutboxRetryMapper eventOutboxRetryMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  // ── Scenario A ────────────────────────────────────────────────────────────
+    // ── Scenario A ────────────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("投递持续失败时按配置上限耗尽重试,事件进入放弃终态,投递次数等于上限,审计表出现已耗尽记录")
-  void retryExhaustion_marksGiveUp_andWritesExhaustedAuditRecord() {
-    final String selectPublishStatusSql = """
+    @Test
+    @DisplayName("投递持续失败时按配置上限耗尽重试,事件进入放弃终态,投递次数等于上限,审计表出现已耗尽记录")
+    void retryExhaustion_marksGiveUp_andWritesExhaustedAuditRecord() {
+        final String selectPublishStatusSql = """
         select publish_status from batch.outbox_event where id = ?
     """;
-    final String selectPublishAttemptSql = """
+        final String selectPublishAttemptSql = """
         select publish_attempt from batch.outbox_event where id = ?
     """;
 
-    // publisher always fails
-    when(outboxPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(false));
+        // publisher always fails
+        when(outboxPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(false));
 
-    OutboxEventEntity event = seedOutboxEvent("t1", "e2e-exhausted-001");
+        OutboxEventEntity event = seedOutboxEvent("t1", "e2e-exhausted-001");
 
-    await()
-        .atMost(Duration.ofSeconds(30))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          E2eStatusLogger.logOutboxSnapshot(
-              jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
-          String status =
-              jdbcTemplate.queryForObject(selectPublishStatusSql, String.class, event.getId());
-          assertThat(status).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
-        });
+        await().atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    E2eStatusLogger.logOutboxSnapshot(jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
+                    String status = jdbcTemplate.queryForObject(selectPublishStatusSql, String.class, event.getId());
+                    assertThat(status).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
+                });
 
-    // publish_attempt 应等于最大重试次数。
-    Integer attempt =
-        jdbcTemplate.queryForObject(selectPublishAttemptSql, Integer.class, event.getId());
-    assertThat(attempt).isEqualTo(2);
+        // publish_attempt 应等于最大重试次数。
+        Integer attempt = jdbcTemplate.queryForObject(selectPublishAttemptSql, Integer.class, event.getId());
+        assertThat(attempt).isEqualTo(2);
 
-    // 审计记录中至少应存在一条状态为 EXHAUSTED 的重试记录。
-    List<EventOutboxRetryEntity> retries = eventOutboxRetryMapper.selectByQuery(
-        new EventOutboxRetryQuery("t1", null, "e2e-exhausted-001"));
-    assertThat(retries).isNotEmpty();
-    assertThat(retries)
-        .anyMatch(r -> RetryScheduleStatus.EXHAUSTED.code().equals(r.getRetryStatus()));
-  }
+        // 审计记录中至少应存在一条状态为 EXHAUSTED 的重试记录。
+        List<EventOutboxRetryEntity> retries =
+                eventOutboxRetryMapper.selectByQuery(new EventOutboxRetryQuery("t1", null, "e2e-exhausted-001"));
+        assertThat(retries).isNotEmpty();
+        assertThat(retries).anyMatch(r -> RetryScheduleStatus.EXHAUSTED.code().equals(r.getRetryStatus()));
+    }
 
-  // ── Scenario B ────────────────────────────────────────────────────────────
+    // ── Scenario B ────────────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("首次投递失败后下一次成功,事件最终进入已发布终态,审计表保留至少一条失败轨迹记录")
-  void transientFailure_thenRecovery_eventIsPublishedEventually() {
-    final String selectPublishStatusSql = """
+    @Test
+    @DisplayName("首次投递失败后下一次成功,事件最终进入已发布终态,审计表保留至少一条失败轨迹记录")
+    void transientFailure_thenRecovery_eventIsPublishedEventually() {
+        final String selectPublishStatusSql = """
         select publish_status from batch.outbox_event where id = ?
     """;
 
-    // 首次发布失败，第二次发布成功。
-    when(outboxPublisher.publish(any()))
-        .thenReturn(CompletableFuture.completedFuture(false))
-        .thenReturn(CompletableFuture.completedFuture(true));
+        // 首次发布失败，第二次发布成功。
+        when(outboxPublisher.publish(any()))
+                .thenReturn(CompletableFuture.completedFuture(false))
+                .thenReturn(CompletableFuture.completedFuture(true));
 
-    OutboxEventEntity event = seedOutboxEvent("t1", "e2e-recovery-001");
+        OutboxEventEntity event = seedOutboxEvent("t1", "e2e-recovery-001");
 
-    await()
-        .atMost(Duration.ofSeconds(30))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          E2eStatusLogger.logOutboxSnapshot(
-              jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
-          String status =
-              jdbcTemplate.queryForObject(selectPublishStatusSql, String.class, event.getId());
-          assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
-        });
+        await().atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    E2eStatusLogger.logOutboxSnapshot(jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
+                    String status = jdbcTemplate.queryForObject(selectPublishStatusSql, String.class, event.getId());
+                    assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+                });
 
-    // 审计记录中至少应包含一条对应首次失败尝试的 FAILED 重试记录。
-    List<EventOutboxRetryEntity> retries = eventOutboxRetryMapper.selectByQuery(
-        new EventOutboxRetryQuery("t1", null, "e2e-recovery-001"));
-    assertThat(retries).isNotEmpty();
-    assertThat(retries).anyMatch(r -> RetryScheduleStatus.FAILED.code().equals(r.getRetryStatus()));
-  }
+        // 审计记录中至少应包含一条对应首次失败尝试的 FAILED 重试记录。
+        List<EventOutboxRetryEntity> retries =
+                eventOutboxRetryMapper.selectByQuery(new EventOutboxRetryQuery("t1", null, "e2e-recovery-001"));
+        assertThat(retries).isNotEmpty();
+        assertThat(retries).anyMatch(r -> RetryScheduleStatus.FAILED.code().equals(r.getRetryStatus()));
+    }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
-  private OutboxEventEntity seedOutboxEvent(String tenantId, String eventKey) {
-    OutboxEventEntity entity = new OutboxEventEntity();
-    entity.setTenantId(tenantId);
-    entity.setAggregateType("E2E_TEST");
-    entity.setAggregateId(BatchDateTimeSupport.utcEpochMillis());
-    entity.setEventType("E2E_TEST_EVENT");
-    entity.setEventKey(eventKey);
-    entity.setPayloadJson("{\"test\":true}");
-    entity.setPublishStatus(OutboxPublishStatus.NEW.code());
-    entity.setPublishAttempt(0);
-    entity.setTraceId("e2e-tr-" + eventKey);
-    outboxEventMapper.insert(entity);
-    return entity;
-  }
+    private OutboxEventEntity seedOutboxEvent(String tenantId, String eventKey) {
+        OutboxEventEntity entity = new OutboxEventEntity();
+        entity.setTenantId(tenantId);
+        entity.setAggregateType("E2E_TEST");
+        entity.setAggregateId(BatchDateTimeSupport.utcEpochMillis());
+        entity.setEventType("E2E_TEST_EVENT");
+        entity.setEventKey(eventKey);
+        entity.setPayloadJson("{\"test\":true}");
+        entity.setPublishStatus(OutboxPublishStatus.NEW.code());
+        entity.setPublishAttempt(0);
+        entity.setTraceId("e2e-tr-" + eventKey);
+        outboxEventMapper.insert(entity);
+        return entity;
+    }
 
-  private String eventKey(OutboxEventEntity event) {
-    return event.getEventKey();
-  }
+    private String eventKey(OutboxEventEntity event) {
+        return event.getEventKey();
+    }
 }

@@ -24,12 +24,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleAtomicTaskTypeController {
 
-  private final ConsoleAtomicTaskTypeSchemaService schemaService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleAtomicTaskTypeSchemaService schemaService;
+    private final ConsoleResponseFactory responseFactory;
 
-  /** GET /api/console/atomic-task-types/schema — 四类内置原子任务的参数 schema + 安全闸。 */
-  @GetMapping("/schema")
-  public CommonResponse<List<AtomicTaskTypeSchema>> schema() {
-    return responseFactory.success(schemaService.schema());
-  }
+    /** GET /api/console/atomic-task-types/schema — 四类内置原子任务的参数 schema + 安全闸。 */
+    @GetMapping("/schema")
+    public CommonResponse<List<AtomicTaskTypeSchema>> schema() {
+        return responseFactory.success(schemaService.schema());
+    }
 }

@@ -40,244 +40,231 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-public class DefaultExportStageExecutor
-    extends AbstractStageExecutor<ExportJobContext, ExportStageResult>
-    implements ExportStageExecutor {
+public class DefaultExportStageExecutor extends AbstractStageExecutor<ExportJobContext, ExportStageResult>
+        implements ExportStageExecutor {
 
-  private final Map<String, ExportStageStep> stepsByImplCode;
-  private final Map<ExportStage, ExportStageStep> stepsByStage;
-  private final List<PipelineStepTemplate> defaultStepDefinitions;
+    private final Map<String, ExportStageStep> stepsByImplCode;
+    private final Map<ExportStage, ExportStageStep> stepsByStage;
+    private final List<PipelineStepTemplate> defaultStepDefinitions;
 
-  /**
-   * P1: 改为 ObjectProvider 注入,与 worker-core 内 DefaultTaskExecutionWrapper / DefaultHeartbeatService
-   * 等保持一致。test-slice (no Micrometer) 与
-   * {@code @SpringBootTest(excludeAutoConfiguration=MicrometerAutoConfiguration.class)} 场景下不再硬要求
-   * MeterRegistry bean。
-   */
-  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    /**
+     * P1: 改为 ObjectProvider 注入,与 worker-core 内 DefaultTaskExecutionWrapper / DefaultHeartbeatService
+     * 等保持一致。test-slice (no Micrometer) 与
+     * {@code @SpringBootTest(excludeAutoConfiguration=MicrometerAutoConfiguration.class)} 场景下不再硬要求
+     * MeterRegistry bean。
+     */
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
-  public DefaultExportStageExecutor(
-      List<ExportStageStep> steps,
-      PlatformPipelineRunRepository pipelineRuns,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    super(pipelineRuns);
-    this.stepsByImplCode = indexByImplCode(steps);
-    this.stepsByStage = indexByStage(steps);
-    this.defaultStepDefinitions = buildDefaultStepDefinitions();
-    this.meterRegistryProvider = meterRegistryProvider;
-  }
-
-  @Override
-  public List<ExportStageResult> execute(ExportJobContext context) {
-    List<ExportStageResult> results = runStageLoop(context);
-    boolean overallSuccess = results.stream().allMatch(ExportStageResult::success);
-    if (overallSuccess) {
-      recordExportRowsMetric(context);
+    public DefaultExportStageExecutor(
+            List<ExportStageStep> steps,
+            PlatformPipelineRunRepository pipelineRuns,
+            ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        super(pipelineRuns);
+        this.stepsByImplCode = indexByImplCode(steps);
+        this.stepsByStage = indexByStage(steps);
+        this.defaultStepDefinitions = buildDefaultStepDefinitions();
+        this.meterRegistryProvider = meterRegistryProvider;
     }
-    return results;
-  }
 
-  private void recordExportRowsMetric(ExportJobContext context) {
-    Object recordCountAttr = context.getAttributes().get(PipelineRuntimeKeys.RECORD_COUNT);
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry == null) {
-      return;
+    @Override
+    public List<ExportStageResult> execute(ExportJobContext context) {
+        List<ExportStageResult> results = runStageLoop(context);
+        boolean overallSuccess = results.stream().allMatch(ExportStageResult::success);
+        if (overallSuccess) {
+            recordExportRowsMetric(context);
+        }
+        return results;
     }
-    if (!(recordCountAttr instanceof Number recordCount)) {
-      Counter.builder("export.file.rows.count_missing")
-          .description("成功导出但缺少记录数的次数")
-          .tag("workerType", ExportWorkerType.EXPORT)
-          .register(registry)
-          .increment();
-      return;
+
+    private void recordExportRowsMetric(ExportJobContext context) {
+        Object recordCountAttr = context.getAttributes().get(PipelineRuntimeKeys.RECORD_COUNT);
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry == null) {
+            return;
+        }
+        if (!(recordCountAttr instanceof Number recordCount)) {
+            Counter.builder("export.file.rows.count_missing")
+                    .description("成功导出但缺少记录数的次数")
+                    .tag("workerType", ExportWorkerType.EXPORT)
+                    .register(registry)
+                    .increment();
+            return;
+        }
+        Counter.builder("export.file.rows.total")
+                .description("导出文件写入总行数")
+                .tag("workerType", ExportWorkerType.EXPORT)
+                .register(registry)
+                .increment(recordCount.doubleValue());
     }
-    Counter.builder("export.file.rows.total")
-        .description("导出文件写入总行数")
-        .tag("workerType", ExportWorkerType.EXPORT)
-        .register(registry)
-        .increment(recordCount.doubleValue());
-  }
 
-  @Override
-  public List<PipelineStepTemplate> defaultStepDefinitions() {
-    return defaultStepDefinitions;
-  }
-
-  @Override
-  public ReplayCapabilityDeclaration resolveReplayCapability(ExportJobContext context) {
-    ExportStageStep prepareStage = stepsByStage.get(ExportStage.PREPARE);
-    ExportStageStep generateStage = stepsByStage.get(ExportStage.GENERATE);
-    if (EmptyChecks.isNull(context)
-        || !(prepareStage instanceof PrepareStep prepareStep)
-        || !(generateStage instanceof GenerateStep generateStep)) {
-      return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
+    @Override
+    public List<PipelineStepTemplate> defaultStepDefinitions() {
+        return defaultStepDefinitions;
     }
-    Map<String, Object> frozenTemplateConfig = prepareStep.resolveTemplateConfig(context);
-    return generateStep.replayCapability(frozenTemplateConfig);
-  }
 
-  @Override
-  protected ExportStageResult stepMissingFailure() {
-    return ExportStageResult.failure(
-        ExportStage.PREPARE,
-        StageFailureCode.PIPELINE_STEP_MISSING.name(),
-        "error.worker.pipeline_step_missing",
-        new Object[0],
-        "pipeline step definition missing",
-        ERROR_OBJECT_MAPPER);
-  }
-
-  @Override
-  protected ExportStageResult executeOneStep(
-      ExportJobContext context, PipelineStepDefinition step) {
-    ExportStage stage = toStage(step.stageCode());
-    ExportStageStep stageStep = stepsByImplCode.get(step.implCode());
-    try {
-      return stageStep == null
-          ? ExportStageResult.failure(
-              stage,
-              StageFailureCode.STEP_NOT_FOUND.name(),
-              "error.worker.step_impl_not_found",
-              new Object[] {step.implCode()},
-              "step impl not found: " + step.implCode(),
-              ERROR_OBJECT_MAPPER)
-          : stageStep.execute(context);
-    } catch (BizException exception) {
-      // P2 对齐 import 侧"业务错误 → WARN"语义:BizException 是配置 / 输入侧的预期失败,
-      // 不属于运维需要 page 的 ERROR 等级(INFRA_ERROR 还在下方 catch(Exception) 保持 ERROR)。
-      log.warn(
-          "export stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
-          stage,
-          step.stepCode(),
-          step.implCode(),
-          context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          exception);
-      return ExportStageResult.failure(
-          stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
-    } catch (Exception exception) {
-      String failureSummary = SwallowedExceptionLogger.summary(exception);
-      log.error(
-          "export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
-          stage,
-          LogSanitizer.value(step.stepCode()),
-          LogSanitizer.value(step.implCode()),
-          LogSanitizer.value(context.getTenantId()),
-          LogSanitizer.value(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-          failureSummary);
-      return ExportStageResult.failure(
-          stage,
-          StageFailureCode.INFRA_ERROR.name(),
-          "error.worker.stage_infra_error",
-          new Object[] {failureSummary},
-          failureSummary,
-          ERROR_OBJECT_MAPPER);
+    @Override
+    public ReplayCapabilityDeclaration resolveReplayCapability(ExportJobContext context) {
+        ExportStageStep prepareStage = stepsByStage.get(ExportStage.PREPARE);
+        ExportStageStep generateStage = stepsByStage.get(ExportStage.GENERATE);
+        if (EmptyChecks.isNull(context)
+                || !(prepareStage instanceof PrepareStep prepareStep)
+                || !(generateStage instanceof GenerateStep generateStep)) {
+            return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
+        }
+        Map<String, Object> frozenTemplateConfig = prepareStep.resolveTemplateConfig(context);
+        return generateStep.replayCapability(frozenTemplateConfig);
     }
-  }
 
-  @Override
-  protected Map<String, Object> buildInputSummary(
-      ExportJobContext context, PipelineStepDefinition step) {
-    Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("stepCode", step.stepCode());
-    summary.put("stage", step.stageCode());
-    summary.put("implCode", step.implCode());
-    summary.put("tenantId", context.getTenantId());
-    summary.put(
-        PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    summary.put("workerId", context.getWorkerId());
-    summary.put(PipelineRuntimeKeys.JOB_CODE, context.getJobCode());
-    return summary;
-  }
-
-  @Override
-  protected Map<String, Object> buildOutputSummary(
-      ExportJobContext context, ExportStageResult result) {
-    Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("success", result.success());
-    summary.put("code", result.code());
-    summary.put("message", result.message());
-    summary.put("stage", result.stage().name());
-    summary.put(
-        PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    summary.put(
-        PipelineRuntimeKeys.RECORD_COUNT,
-        context.getAttributes().get(PipelineRuntimeKeys.RECORD_COUNT));
-    summary.put(
-        PipelineRuntimeKeys.FILE_SIZE_BYTES,
-        context.getAttributes().get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
-    summary.put(
-        PipelineRuntimeKeys.OBJECT_NAME,
-        context.getAttributes().get(PipelineRuntimeKeys.OBJECT_NAME));
-    return summary;
-  }
-
-  @Override
-  protected String cycleDetectedMessage() {
-    return "export pipeline stage flow contains a cycle";
-  }
-
-  private ExportStage toStage(String stageCode) {
-    try {
-      return ExportStage.valueOf(stageCode);
-    } catch (IllegalArgumentException exception) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          ResultCode.INVALID_ARGUMENT.detailKey(),
-          exception,
-          "unsupported export stage code: " + stageCode);
+    @Override
+    protected ExportStageResult stepMissingFailure() {
+        return ExportStageResult.failure(
+                ExportStage.PREPARE,
+                StageFailureCode.PIPELINE_STEP_MISSING.name(),
+                "error.worker.pipeline_step_missing",
+                new Object[0],
+                "pipeline step definition missing",
+                ERROR_OBJECT_MAPPER);
     }
-  }
 
-  // implCode 索引用于运行时按步骤定义的 implCode 查找实现 Bean（同一 stage 可有多种实现）
-  private Map<String, ExportStageStep> indexByImplCode(List<ExportStageStep> steps) {
-    Map<String, ExportStageStep> indexed = new LinkedHashMap<>();
-    for (ExportStageStep step : steps) {
-      register(indexed, step.implCode(), step);
+    @Override
+    protected ExportStageResult executeOneStep(ExportJobContext context, PipelineStepDefinition step) {
+        ExportStage stage = toStage(step.stageCode());
+        ExportStageStep stageStep = stepsByImplCode.get(step.implCode());
+        try {
+            return stageStep == null
+                    ? ExportStageResult.failure(
+                            stage,
+                            StageFailureCode.STEP_NOT_FOUND.name(),
+                            "error.worker.step_impl_not_found",
+                            new Object[] {step.implCode()},
+                            "step impl not found: " + step.implCode(),
+                            ERROR_OBJECT_MAPPER)
+                    : stageStep.execute(context);
+        } catch (BizException exception) {
+            // P2 对齐 import 侧"业务错误 → WARN"语义:BizException 是配置 / 输入侧的预期失败,
+            // 不属于运维需要 page 的 ERROR 等级(INFRA_ERROR 还在下方 catch(Exception) 保持 ERROR)。
+            log.warn(
+                    "export stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                    stage,
+                    step.stepCode(),
+                    step.implCode(),
+                    context.getTenantId(),
+                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                    exception);
+            return ExportStageResult.failure(
+                    stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
+        } catch (Exception exception) {
+            String failureSummary = SwallowedExceptionLogger.summary(exception);
+            log.error(
+                    "export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
+                    stage,
+                    LogSanitizer.value(step.stepCode()),
+                    LogSanitizer.value(step.implCode()),
+                    LogSanitizer.value(context.getTenantId()),
+                    LogSanitizer.value(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+                    failureSummary);
+            return ExportStageResult.failure(
+                    stage,
+                    StageFailureCode.INFRA_ERROR.name(),
+                    "error.worker.stage_infra_error",
+                    new Object[] {failureSummary},
+                    failureSummary,
+                    ERROR_OBJECT_MAPPER);
+        }
     }
-    return Map.copyOf(indexed);
-  }
 
-  // stage 索引用于构建默认步骤模板时按枚举顺序查找唯一实现
-  private Map<ExportStage, ExportStageStep> indexByStage(List<ExportStageStep> steps) {
-    Map<ExportStage, ExportStageStep> indexed = new LinkedHashMap<>();
-    for (ExportStageStep step : steps) {
-      if (indexed.putIfAbsent(step.stage(), step) != null) {
-        throw new IllegalStateException(
-            "duplicate export stage registered: " + step.stage().name());
-      }
+    @Override
+    protected Map<String, Object> buildInputSummary(ExportJobContext context, PipelineStepDefinition step) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("stepCode", step.stepCode());
+        summary.put("stage", step.stageCode());
+        summary.put("implCode", step.implCode());
+        summary.put("tenantId", context.getTenantId());
+        summary.put(PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put("workerId", context.getWorkerId());
+        summary.put(PipelineRuntimeKeys.JOB_CODE, context.getJobCode());
+        return summary;
     }
-    return Map.copyOf(indexed);
-  }
 
-  private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
-    List<AbstractStageExecutor.StageStepDescriptor> ordered = new ArrayList<>();
-    for (ExportStage stage : List.of(
-        ExportStage.PREPARE,
-        ExportStage.GENERATE,
-        ExportStage.STORE,
-        ExportStage.REGISTER,
-        ExportStage.COMPLETE)) {
-      ExportStageStep step = stepsByStage.get(stage);
-      if (step == null) {
-        throw new IllegalStateException("missing export step bean for stage: " + stage.name());
-      }
-      ordered.add(
-          new StepDescriptor(step.stepCode(), step.stepName(), step.implCode(), stage.name()));
+    @Override
+    protected Map<String, Object> buildOutputSummary(ExportJobContext context, ExportStageResult result) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("success", result.success());
+        summary.put("code", result.code());
+        summary.put("message", result.message());
+        summary.put("stage", result.stage().name());
+        summary.put(PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put(PipelineRuntimeKeys.RECORD_COUNT, context.getAttributes().get(PipelineRuntimeKeys.RECORD_COUNT));
+        summary.put(
+                PipelineRuntimeKeys.FILE_SIZE_BYTES, context.getAttributes().get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
+        summary.put(PipelineRuntimeKeys.OBJECT_NAME, context.getAttributes().get(PipelineRuntimeKeys.OBJECT_NAME));
+        return summary;
     }
-    return buildStepTemplates(ordered);
-  }
 
-  /** 内联 record 把 {@link ExportStageStep} + {@link ExportStage} 适配到基类的 StageStepDescriptor 契约。 */
-  private record StepDescriptor(String stepCode, String stepName, String implCode, String stageCode)
-      implements AbstractStageExecutor.StageStepDescriptor {}
-
-  private void register(
-      Map<String, ExportStageStep> indexed, String implCode, ExportStageStep step) {
-    if (!indexed.containsKey(implCode)) {
-      indexed.put(implCode, step);
-      return;
+    @Override
+    protected String cycleDetectedMessage() {
+        return "export pipeline stage flow contains a cycle";
     }
-    throw new IllegalStateException("duplicate export step implCode registered: " + implCode);
-  }
+
+    private ExportStage toStage(String stageCode) {
+        try {
+            return ExportStage.valueOf(stageCode);
+        } catch (IllegalArgumentException exception) {
+            throw BizException.of(
+                    ResultCode.INVALID_ARGUMENT,
+                    ResultCode.INVALID_ARGUMENT.detailKey(),
+                    exception,
+                    "unsupported export stage code: " + stageCode);
+        }
+    }
+
+    // implCode 索引用于运行时按步骤定义的 implCode 查找实现 Bean（同一 stage 可有多种实现）
+    private Map<String, ExportStageStep> indexByImplCode(List<ExportStageStep> steps) {
+        Map<String, ExportStageStep> indexed = new LinkedHashMap<>();
+        for (ExportStageStep step : steps) {
+            register(indexed, step.implCode(), step);
+        }
+        return Map.copyOf(indexed);
+    }
+
+    // stage 索引用于构建默认步骤模板时按枚举顺序查找唯一实现
+    private Map<ExportStage, ExportStageStep> indexByStage(List<ExportStageStep> steps) {
+        Map<ExportStage, ExportStageStep> indexed = new LinkedHashMap<>();
+        for (ExportStageStep step : steps) {
+            if (indexed.putIfAbsent(step.stage(), step) != null) {
+                throw new IllegalStateException(
+                        "duplicate export stage registered: " + step.stage().name());
+            }
+        }
+        return Map.copyOf(indexed);
+    }
+
+    private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
+        List<AbstractStageExecutor.StageStepDescriptor> ordered = new ArrayList<>();
+        for (ExportStage stage : List.of(
+                ExportStage.PREPARE,
+                ExportStage.GENERATE,
+                ExportStage.STORE,
+                ExportStage.REGISTER,
+                ExportStage.COMPLETE)) {
+            ExportStageStep step = stepsByStage.get(stage);
+            if (step == null) {
+                throw new IllegalStateException("missing export step bean for stage: " + stage.name());
+            }
+            ordered.add(new StepDescriptor(step.stepCode(), step.stepName(), step.implCode(), stage.name()));
+        }
+        return buildStepTemplates(ordered);
+    }
+
+    /** 内联 record 把 {@link ExportStageStep} + {@link ExportStage} 适配到基类的 StageStepDescriptor 契约。 */
+    private record StepDescriptor(String stepCode, String stepName, String implCode, String stageCode)
+            implements AbstractStageExecutor.StageStepDescriptor {}
+
+    private void register(Map<String, ExportStageStep> indexed, String implCode, ExportStageStep step) {
+        if (!indexed.containsKey(implCode)) {
+            indexed.put(implCode, step);
+            return;
+        }
+        throw new IllegalStateException("duplicate export step implCode registered: " + implCode);
+    }
 }

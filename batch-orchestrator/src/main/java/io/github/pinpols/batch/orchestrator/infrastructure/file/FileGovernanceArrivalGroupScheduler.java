@@ -17,18 +17,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class FileGovernanceArrivalGroupScheduler {
 
-  private final FileGovernanceScheduler fileGovernanceScheduler;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final FileGovernanceScheduler fileGovernanceScheduler;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.file-governance.arrival.poll-interval-millis:30000}")
-  @SchedulerLock(
-      name = "file_governance_arrival_group",
-      lockAtMostFor = "PT2M",
-      lockAtLeastFor = "PT15S")
-  public void manageFileArrivalGroups() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.file-governance.arrival.poll-interval-millis:30000}")
+    @SchedulerLock(name = "file_governance_arrival_group", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
+    public void manageFileArrivalGroups() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        fileGovernanceScheduler.manageFileArrivalGroups();
     }
-    fileGovernanceScheduler.manageFileArrivalGroups();
-  }
 }

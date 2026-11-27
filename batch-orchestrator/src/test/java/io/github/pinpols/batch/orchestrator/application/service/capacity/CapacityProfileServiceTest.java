@@ -25,185 +25,181 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CapacityProfileServiceTest {
 
-  @Mock
-  private CapacityProfileMapper mapper;
+    @Mock
+    private CapacityProfileMapper mapper;
 
-  private CapacityProfileService service;
+    private CapacityProfileService service;
 
-  @Test
-  @DisplayName("按任务分组查询时返回速率, 汇总与覆盖缺口, 并透传扫描范围")
-  void shouldReturnRatesTotalsAndGaps_whenQueryingByJob() {
-    Instant from = Instant.parse("2026-06-30T00:00:00Z");
-    Instant to = Instant.parse("2026-06-30T01:00:00Z");
-    when(mapper.selectJobProfile("ta", from, to, 10))
-        .thenReturn(List.of(new CapacityProfileRow(
-            "ta",
-            "import_daily",
-            null,
-            "import",
-            2,
-            0,
-            2,
-            0,
-            2_000,
-            1_000,
-            1_000,
-            1_500,
-            10 * 1024 * 1024,
-            4_000,
-            0,
-            0)));
+    @Test
+    @DisplayName("按任务分组查询时返回速率, 汇总与覆盖缺口, 并透传扫描范围")
+    void shouldReturnRatesTotalsAndGaps_whenQueryingByJob() {
+        Instant from = Instant.parse("2026-06-30T00:00:00Z");
+        Instant to = Instant.parse("2026-06-30T01:00:00Z");
+        when(mapper.selectJobProfile("ta", from, to, 10))
+                .thenReturn(List.of(new CapacityProfileRow(
+                        "ta",
+                        "import_daily",
+                        null,
+                        "import",
+                        2,
+                        0,
+                        2,
+                        0,
+                        2_000,
+                        1_000,
+                        1_000,
+                        1_500,
+                        10 * 1024 * 1024,
+                        4_000,
+                        0,
+                        0)));
 
-    CapacityProfileReport report = service.query("ta", from, to, CapacityProfileGroupBy.JOB, 10);
+        CapacityProfileReport report = service.query("ta", from, to, CapacityProfileGroupBy.JOB, 10);
 
-    assertThat(report.groupBy()).isEqualTo(CapacityProfileGroupBy.JOB);
-    assertThat(report.scope()).isEqualTo("BFS_HOT_TABLES");
-    assertThat(report.rows()).hasSize(1);
-    CapacityProfileRow row = report.rows().get(0);
-    assertThat(row.recordsPerSecond()).isEqualTo(4000.0);
-    assertThat(row.mbPerSecond()).isEqualTo(10.0);
-    assertThat(row.wallClockDurationMs()).isEqualTo(1_000);
-    assertThat(report.totals().instanceCount()).isEqualTo(2);
-    assertThat(report.totals().processedRecords()).isEqualTo(4_000);
-    assertThat(report.coverage().knownGaps()).isNotEmpty();
-    assertThat(report.coverage().rejectedScopes()).contains("跨平台 FinOps");
-    verify(mapper).selectJobProfile("ta", from, to, 10);
-  }
+        assertThat(report.groupBy()).isEqualTo(CapacityProfileGroupBy.JOB);
+        assertThat(report.scope()).isEqualTo("BFS_HOT_TABLES");
+        assertThat(report.rows()).hasSize(1);
+        CapacityProfileRow row = report.rows().get(0);
+        assertThat(row.recordsPerSecond()).isEqualTo(4000.0);
+        assertThat(row.mbPerSecond()).isEqualTo(10.0);
+        assertThat(row.wallClockDurationMs()).isEqualTo(1_000);
+        assertThat(report.totals().instanceCount()).isEqualTo(2);
+        assertThat(report.totals().processedRecords()).isEqualTo(4_000);
+        assertThat(report.coverage().knownGaps()).isNotEmpty();
+        assertThat(report.coverage().rejectedScopes()).contains("跨平台 FinOps");
+        verify(mapper).selectJobProfile("ta", from, to, 10);
+    }
 
-  @Test
-  @DisplayName("未指定分组时默认按租户分组, 条数上限被收敛到允许的最大值")
-  void shouldClampLimitAndDefaultToTenantGroup() {
-    Instant from = Instant.parse("2026-06-30T00:00:00Z");
-    Instant to = Instant.parse("2026-06-30T01:00:00Z");
-    when(mapper.selectTenantProfile("ta", from, to, 200)).thenReturn(List.of());
+    @Test
+    @DisplayName("未指定分组时默认按租户分组, 条数上限被收敛到允许的最大值")
+    void shouldClampLimitAndDefaultToTenantGroup() {
+        Instant from = Instant.parse("2026-06-30T00:00:00Z");
+        Instant to = Instant.parse("2026-06-30T01:00:00Z");
+        when(mapper.selectTenantProfile("ta", from, to, 200)).thenReturn(List.of());
 
-    CapacityProfileReport report = service.query("ta", from, to, null, 500);
+        CapacityProfileReport report = service.query("ta", from, to, null, 500);
 
-    assertThat(report.groupBy()).isEqualTo(CapacityProfileGroupBy.TENANT);
-    verify(mapper).selectTenantProfile("ta", from, to, 200);
-  }
+        assertThat(report.groupBy()).isEqualTo(CapacityProfileGroupBy.TENANT);
+        verify(mapper).selectTenantProfile("ta", from, to, 200);
+    }
 
-  @Test
-  @DisplayName("查询时间窗超过允许跨度时抛出业务异常")
-  void shouldRejectTooWideWindow() {
-    Instant from = Instant.parse("2026-05-01T00:00:00Z");
-    Instant to = Instant.parse("2026-06-30T00:00:00Z");
+    @Test
+    @DisplayName("查询时间窗超过允许跨度时抛出业务异常")
+    void shouldRejectTooWideWindow() {
+        Instant from = Instant.parse("2026-05-01T00:00:00Z");
+        Instant to = Instant.parse("2026-06-30T00:00:00Z");
 
-    assertThatThrownBy(() -> service.query("ta", from, to, CapacityProfileGroupBy.TENANT, 10))
-        .isInstanceOf(BizException.class);
-  }
+        assertThatThrownBy(() -> service.query("ta", from, to, CapacityProfileGroupBy.TENANT, 10))
+                .isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("时间窗恰好为上限天数时查询通过并原样返回区间")
-  void window_exactly31Days_isAccepted() {
-    Instant from = Instant.parse("2026-05-01T00:00:00Z");
-    Instant to = from.plus(Duration.ofDays(31));
-    when(mapper.selectTenantProfile("ta", from, to, 10)).thenReturn(List.of());
+    @Test
+    @DisplayName("时间窗恰好为上限天数时查询通过并原样返回区间")
+    void window_exactly31Days_isAccepted() {
+        Instant from = Instant.parse("2026-05-01T00:00:00Z");
+        Instant to = from.plus(Duration.ofDays(31));
+        when(mapper.selectTenantProfile("ta", from, to, 10)).thenReturn(List.of());
 
-    CapacityProfileReport report = service.query("ta", from, to, CapacityProfileGroupBy.TENANT, 10);
+        CapacityProfileReport report = service.query("ta", from, to, CapacityProfileGroupBy.TENANT, 10);
 
-    assertThat(report.window().from()).isEqualTo(from);
-    assertThat(report.window().to()).isEqualTo(to);
-    verify(mapper).selectTenantProfile("ta", from, to, 10);
-  }
+        assertThat(report.window().from()).isEqualTo(from);
+        assertThat(report.window().to()).isEqualTo(to);
+        verify(mapper).selectTenantProfile("ta", from, to, 10);
+    }
 
-  @Test
-  @DisplayName("时间窗比允许上限多出一秒时查询被拒绝")
-  void window_justOverMax_isRejected() {
-    Instant from = Instant.parse("2026-05-01T00:00:00Z");
-    Instant to = from.plus(Duration.ofDays(31)).plusSeconds(1);
+    @Test
+    @DisplayName("时间窗比允许上限多出一秒时查询被拒绝")
+    void window_justOverMax_isRejected() {
+        Instant from = Instant.parse("2026-05-01T00:00:00Z");
+        Instant to = from.plus(Duration.ofDays(31)).plusSeconds(1);
 
-    assertThatThrownBy(() -> service.query("ta", from, to, CapacityProfileGroupBy.TENANT, 10))
-        .isInstanceOf(BizException.class);
-  }
+        assertThatThrownBy(() -> service.query("ta", from, to, CapacityProfileGroupBy.TENANT, 10))
+                .isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("起点不早于终点时查询被拒绝")
-  void window_rejects_whenFromNotBeforeTo() {
-    Instant instant = Instant.parse("2026-06-30T00:00:00Z");
+    @Test
+    @DisplayName("起点不早于终点时查询被拒绝")
+    void window_rejects_whenFromNotBeforeTo() {
+        Instant instant = Instant.parse("2026-06-30T00:00:00Z");
 
-    // from == to
-    assertThatThrownBy(
-            () -> service.query("ta", instant, instant, CapacityProfileGroupBy.TENANT, 10))
-        .isInstanceOf(BizException.class);
+        // from == to
+        assertThatThrownBy(() -> service.query("ta", instant, instant, CapacityProfileGroupBy.TENANT, 10))
+                .isInstanceOf(BizException.class);
 
-    // from > to
-    Instant later = instant.plusSeconds(1);
-    assertThatThrownBy(() -> service.query("ta", later, instant, CapacityProfileGroupBy.TENANT, 10))
-        .isInstanceOf(BizException.class);
-  }
+        // from > to
+        Instant later = instant.plusSeconds(1);
+        assertThatThrownBy(() -> service.query("ta", later, instant, CapacityProfileGroupBy.TENANT, 10))
+                .isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("未指定时间窗时默认为最近一天的区间且起点早于终点")
-  void window_null_defaultsToBoundedRange() {
-    when(mapper.selectTenantProfile(
-            ArgumentMatchers.eq("ta"),
-            ArgumentMatchers.any(Instant.class),
-            ArgumentMatchers.any(Instant.class),
-            ArgumentMatchers.eq(10)))
-        .thenReturn(List.of());
+    @Test
+    @DisplayName("未指定时间窗时默认为最近一天的区间且起点早于终点")
+    void window_null_defaultsToBoundedRange() {
+        when(mapper.selectTenantProfile(
+                        ArgumentMatchers.eq("ta"),
+                        ArgumentMatchers.any(Instant.class),
+                        ArgumentMatchers.any(Instant.class),
+                        ArgumentMatchers.eq(10)))
+                .thenReturn(List.of());
 
-    service.query("ta", null, null, CapacityProfileGroupBy.TENANT, 10);
+        service.query("ta", null, null, CapacityProfileGroupBy.TENANT, 10);
 
-    ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
-    ArgumentCaptor<Instant> toCaptor = ArgumentCaptor.forClass(Instant.class);
-    verify(mapper)
-        .selectTenantProfile(eqArg("ta"), fromCaptor.capture(), toCaptor.capture(), eqInt(10));
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(mapper).selectTenantProfile(eqArg("ta"), fromCaptor.capture(), toCaptor.capture(), eqInt(10));
 
-    Instant resolvedFrom = fromCaptor.getValue();
-    Instant resolvedTo = toCaptor.getValue();
-    assertThat(resolvedFrom).isNotNull();
-    assertThat(resolvedTo).isNotNull();
-    assertThat(resolvedFrom).isBefore(resolvedTo);
-    // from 和 to 为空时，默认查询截至当前时间的 24 小时窗口。
-    assertThat(Duration.between(resolvedFrom, resolvedTo)).isEqualTo(Duration.ofHours(24));
-    assertThat(resolvedTo).isCloseTo(Instant.now(), within(1, ChronoUnit.MINUTES));
-  }
+        Instant resolvedFrom = fromCaptor.getValue();
+        Instant resolvedTo = toCaptor.getValue();
+        assertThat(resolvedFrom).isNotNull();
+        assertThat(resolvedTo).isNotNull();
+        assertThat(resolvedFrom).isBefore(resolvedTo);
+        // from 和 to 为空时，默认查询截至当前时间的 24 小时窗口。
+        assertThat(Duration.between(resolvedFrom, resolvedTo)).isEqualTo(Duration.ofHours(24));
+        assertThat(resolvedTo).isCloseTo(Instant.now(), within(1, ChronoUnit.MINUTES));
+    }
 
-  @Test
-  @DisplayName("条数上限低于最小值时被收敛到最小值")
-  void limit_belowMin_clampedToMin() {
-    Instant from = Instant.parse("2026-06-30T00:00:00Z");
-    Instant to = Instant.parse("2026-06-30T01:00:00Z");
-    when(mapper.selectTenantProfile("ta", from, to, 1)).thenReturn(List.of());
+    @Test
+    @DisplayName("条数上限低于最小值时被收敛到最小值")
+    void limit_belowMin_clampedToMin() {
+        Instant from = Instant.parse("2026-06-30T00:00:00Z");
+        Instant to = Instant.parse("2026-06-30T01:00:00Z");
+        when(mapper.selectTenantProfile("ta", from, to, 1)).thenReturn(List.of());
 
-    service.query("ta", from, to, CapacityProfileGroupBy.TENANT, 0);
+        service.query("ta", from, to, CapacityProfileGroupBy.TENANT, 0);
 
-    ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
-    verify(mapper)
-        .selectTenantProfile(eqArg("ta"), eqInstant(from), eqInstant(to), limitCaptor.capture());
-    assertThat(limitCaptor.getValue()).isEqualTo(1);
-  }
+        ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(mapper).selectTenantProfile(eqArg("ta"), eqInstant(from), eqInstant(to), limitCaptor.capture());
+        assertThat(limitCaptor.getValue()).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("未指定条数上限时默认为五十")
-  void limit_null_defaultsTo50() {
-    Instant from = Instant.parse("2026-06-30T00:00:00Z");
-    Instant to = Instant.parse("2026-06-30T01:00:00Z");
-    when(mapper.selectTenantProfile("ta", from, to, 50)).thenReturn(List.of());
+    @Test
+    @DisplayName("未指定条数上限时默认为五十")
+    void limit_null_defaultsTo50() {
+        Instant from = Instant.parse("2026-06-30T00:00:00Z");
+        Instant to = Instant.parse("2026-06-30T01:00:00Z");
+        when(mapper.selectTenantProfile("ta", from, to, 50)).thenReturn(List.of());
 
-    service.query("ta", from, to, CapacityProfileGroupBy.TENANT, null);
+        service.query("ta", from, to, CapacityProfileGroupBy.TENANT, null);
 
-    ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
-    verify(mapper)
-        .selectTenantProfile(eqArg("ta"), eqInstant(from), eqInstant(to), limitCaptor.capture());
-    assertThat(limitCaptor.getValue()).isEqualTo(50);
-  }
+        ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(mapper).selectTenantProfile(eqArg("ta"), eqInstant(from), eqInstant(to), limitCaptor.capture());
+        assertThat(limitCaptor.getValue()).isEqualTo(50);
+    }
 
-  private static String eqArg(String v) {
-    return ArgumentMatchers.eq(v);
-  }
+    private static String eqArg(String v) {
+        return ArgumentMatchers.eq(v);
+    }
 
-  private static Instant eqInstant(Instant v) {
-    return ArgumentMatchers.eq(v);
-  }
+    private static Instant eqInstant(Instant v) {
+        return ArgumentMatchers.eq(v);
+    }
 
-  private static int eqInt(int v) {
-    return ArgumentMatchers.eq(v);
-  }
+    private static int eqInt(int v) {
+        return ArgumentMatchers.eq(v);
+    }
 
-  @BeforeEach
-  void initializeSubject() {
-    service = new CapacityProfileService(mapper);
-  }
+    @BeforeEach
+    void initializeSubject() {
+        service = new CapacityProfileService(mapper);
+    }
 }

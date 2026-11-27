@@ -26,77 +26,77 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @DisplayName("实时回放存储: 游标续传读取与写入时的裁剪过期")
 class ConsoleRealtimeReplayStoreTest {
 
-  @Mock
-  private StringRedisTemplate redisTemplate;
+    @Mock
+    private StringRedisTemplate redisTemplate;
 
-  @Mock
-  private ListOperations<String, String> listOperations;
+    @Mock
+    private ListOperations<String, String> listOperations;
 
-  @Test
-  @DisplayName("按游标从回放缓冲续传, 只返回游标之后的事件")
-  void shouldReplayEventsAfterCursor() {
-    when(redisTemplate.opsForList()).thenReturn(listOperations);
-    ConsoleRealtimeReplayStore store = new ConsoleRealtimeReplayStore(
-        redisTemplate,
-        new BatchRedisNamespace(""),
-        properties(),
-        new ConsoleRealtimeMetrics(new SimpleMeterRegistry()));
-    ConsoleRealtimeStreamEnvelope first = new ConsoleRealtimeStreamEnvelope(
-        "console-a",
-        "t1",
-        "alerts",
-        "alert-updated",
-        "cursor-1",
-        false,
-        JsonUtils.toJson("a"),
-        BatchDateTimeSupport.utcNow());
-    ConsoleRealtimeStreamEnvelope second = new ConsoleRealtimeStreamEnvelope(
-        "console-a",
-        "t1",
-        "alerts",
-        "alert-updated",
-        "cursor-2",
-        false,
-        JsonUtils.toJson("b"),
-        BatchDateTimeSupport.utcNow());
-    // P1(2026-05-23 audit):replay 改用 LRANGE 0 (replayMaxEntries - 1) 截断,与 properties() 配对。
-    when(listOperations.range("batch:console:realtime:buffer:t1:alerts", 0, 19_999L))
-        .thenReturn(List.of(JsonUtils.toJson(first), JsonUtils.toJson(second)));
+    @Test
+    @DisplayName("按游标从回放缓冲续传, 只返回游标之后的事件")
+    void shouldReplayEventsAfterCursor() {
+        when(redisTemplate.opsForList()).thenReturn(listOperations);
+        ConsoleRealtimeReplayStore store = new ConsoleRealtimeReplayStore(
+                redisTemplate,
+                new BatchRedisNamespace(""),
+                properties(),
+                new ConsoleRealtimeMetrics(new SimpleMeterRegistry()));
+        ConsoleRealtimeStreamEnvelope first = new ConsoleRealtimeStreamEnvelope(
+                "console-a",
+                "t1",
+                "alerts",
+                "alert-updated",
+                "cursor-1",
+                false,
+                JsonUtils.toJson("a"),
+                BatchDateTimeSupport.utcNow());
+        ConsoleRealtimeStreamEnvelope second = new ConsoleRealtimeStreamEnvelope(
+                "console-a",
+                "t1",
+                "alerts",
+                "alert-updated",
+                "cursor-2",
+                false,
+                JsonUtils.toJson("b"),
+                BatchDateTimeSupport.utcNow());
+        // P1(2026-05-23 audit):replay 改用 LRANGE 0 (replayMaxEntries - 1) 截断,与 properties() 配对。
+        when(listOperations.range("batch:console:realtime:buffer:t1:alerts", 0, 19_999L))
+                .thenReturn(List.of(JsonUtils.toJson(first), JsonUtils.toJson(second)));
 
-    RealtimeReplayStore.ReplayBatch replay = store.replay("t1", "alerts", "cursor-1", null);
+        RealtimeReplayStore.ReplayBatch replay = store.replay("t1", "alerts", "cursor-1", null);
 
-    assertThat(replay.cursorFound()).isTrue();
-    assertThat(replay.events()).hasSize(1);
-    assertThat(replay.events().getFirst().cursor()).isEqualTo("cursor-2");
-  }
+        assertThat(replay.cursorFound()).isTrue();
+        assertThat(replay.events()).hasSize(1);
+        assertThat(replay.events().getFirst().cursor()).isEqualTo("cursor-2");
+    }
 
-  @Test
-  @DisplayName("写入回放缓冲时在同一次管道操作内完成裁剪与过期设置")
-  void shouldTrimAndExpireReplayBufferUsingConfiguredRetention() {
-    ConsoleRealtimeReplayStore store = new ConsoleRealtimeReplayStore(
-        redisTemplate,
-        new BatchRedisNamespace(""),
-        properties(),
-        new ConsoleRealtimeMetrics(new SimpleMeterRegistry()));
+    @Test
+    @DisplayName("写入回放缓冲时在同一次管道操作内完成裁剪与过期设置")
+    void shouldTrimAndExpireReplayBufferUsingConfiguredRetention() {
+        ConsoleRealtimeReplayStore store = new ConsoleRealtimeReplayStore(
+                redisTemplate,
+                new BatchRedisNamespace(""),
+                properties(),
+                new ConsoleRealtimeMetrics(new SimpleMeterRegistry()));
 
-    store.append(new ConsoleRealtimeStreamEnvelope(
-        "console-a",
-        "t1",
-        "alerts",
-        "alert-updated",
-        "cursor-1",
-        false,
-        JsonUtils.toJson("a"),
-        BatchDateTimeSupport.utcNow()));
+        store.append(new ConsoleRealtimeStreamEnvelope(
+                "console-a",
+                "t1",
+                "alerts",
+                "alert-updated",
+                "cursor-1",
+                false,
+                JsonUtils.toJson("a"),
+                BatchDateTimeSupport.utcNow()));
 
-    // append() 使用单个管线化的低层回调（rPush + lTrim + expire），而非 opsForList()/expire()
-    verify(redisTemplate).executePipelined(any(RedisCallback.class));
-  }
+        // append() 使用单个管线化的低层回调（rPush + lTrim + expire），而非 opsForList()/expire()
+        verify(redisTemplate).executePipelined(any(RedisCallback.class));
+    }
 
-  private ConsoleRealtimeProperties properties() {
-    ConsoleRealtimeProperties properties = new ConsoleRealtimeProperties();
-    properties.setReplayMaxEntries(20_000L);
-    properties.setReplayTtl(Duration.ofHours(24));
-    return properties;
-  }
+    private ConsoleRealtimeProperties properties() {
+        ConsoleRealtimeProperties properties = new ConsoleRealtimeProperties();
+        properties.setReplayMaxEntries(20_000L);
+        properties.setReplayTtl(Duration.ofHours(24));
+        return properties;
+    }
 }

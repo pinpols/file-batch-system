@@ -13,15 +13,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class WorkflowMonitoringCandidateService {
-  private final WorkflowMonitoringMapper mapper;
-  private final BatchTimezoneProvider timezoneProvider;
+    private final WorkflowMonitoringMapper mapper;
+    private final BatchTimezoneProvider timezoneProvider;
 
-  @Transactional(readOnly = true)
-  public List<WorkflowMonitoringAlertCandidate> select(WorkflowMonitoringQuery query) {
-    mapper.setTenantContext(query.tenantId());
-    WorkflowMonitoringQuery scoped = query.toBuilder()
-        .defaultTimezone(timezoneProvider.defaultZone().getId())
-        .build();
-    return mapper.selectCandidates(scoped);
-  }
+    @Transactional(readOnly = true)
+    public List<WorkflowMonitoringAlertCandidate> select(WorkflowMonitoringQuery query) {
+        mapper.setTenantContext(query.tenantId());
+        WorkflowMonitoringQuery scoped = query.toBuilder()
+                .defaultTimezone(timezoneProvider.defaultZone().getId())
+                .build();
+        return mapper.selectCandidates(scoped);
+    }
 }

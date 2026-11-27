@@ -47,112 +47,105 @@ import org.springframework.stereotype.Component;
 @Component
 public class RedisRateLimitCircuitBreaker {
 
-  /** R4J CircuitBreaker 实例名（进共享 registry + resilience4j.circuitbreaker.* 埋点的 name 维度）。 */
-  static final String CIRCUIT_NAME = "ratelimit-redis";
+    /** R4J CircuitBreaker 实例名（进共享 registry + resilience4j.circuitbreaker.* 埋点的 name 维度）。 */
+    static final String CIRCUIT_NAME = "ratelimit-redis";
 
-  /** 熔断开态 gauge：1=OPEN（短路放行，限流暂失效），0=CLOSED/HALF_OPEN。低基数，无 tenant/action tag。 */
-  static final String METRIC_CIRCUIT_OPEN = "batch.ratelimit.redis.circuit.open";
+    /** 熔断开态 gauge：1=OPEN（短路放行，限流暂失效），0=CLOSED/HALF_OPEN。低基数，无 tenant/action tag。 */
+    static final String METRIC_CIRCUIT_OPEN = "batch.ratelimit.redis.circuit.open";
 
-  private final boolean enabled;
+    private final boolean enabled;
 
-  /**
-   * 关闭短路熔断（{@code enabled=false}）时为 {@code null}，{@link #call} 退化为直发 Redis（保留 #782 纯 fail-open）。
-   */
-  private final CircuitBreaker circuitBreaker;
+    /**
+     * 关闭短路熔断（{@code enabled=false}）时为 {@code null}，{@link #call} 退化为直发 Redis（保留 #782 纯 fail-open）。
+     */
+    private final CircuitBreaker circuitBreaker;
 
-  @Autowired
-  public RedisRateLimitCircuitBreaker(
-      RateLimitProperties properties,
-      ObjectProvider<CircuitBreakerRegistry> circuitBreakerRegistryProvider,
-      MeterRegistry meterRegistry) {
-    this(
-        properties.getRedisCircuitBreaker(),
-        // 优先复用 R4J autoconfig 的共享 registry（不新建竞争 bean）；窄上下文单测无 autoconfig 时退回内置默认 registry。
-        circuitBreakerRegistryProvider.getIfAvailable(CircuitBreakerRegistry::ofDefaults),
-        meterRegistry);
-  }
-
-  /** 直连构造：单测用真实 {@link CircuitBreakerRegistry} 免去 {@code ObjectProvider} 桩。 */
-  RedisRateLimitCircuitBreaker(
-      RateLimitProperties.CircuitBreaker config,
-      CircuitBreakerRegistry registry,
-      MeterRegistry meterRegistry) {
-    this.enabled = config.isEnabled();
-    this.circuitBreaker =
-        enabled ? registry.circuitBreaker(CIRCUIT_NAME, buildConfig(config)) : null;
-    registerStateGauge(meterRegistry);
-  }
-
-  /** 单测便捷：关闭熔断（纯 passthrough，等价 #782 前行为），供不关心短路的 fail-open 测试复用。 */
-  static RedisRateLimitCircuitBreaker disabled(MeterRegistry meterRegistry) {
-    RateLimitProperties.CircuitBreaker config = new RateLimitProperties.CircuitBreaker();
-    config.setEnabled(false);
-    return new RedisRateLimitCircuitBreaker(
-        config, CircuitBreakerRegistry.ofDefaults(), meterRegistry);
-  }
-
-  /**
-   * 经熔断执行 Redis 限流调用。
-   *
-   * <ul>
-   *   <li>CLOSED / HALF_OPEN：执行 {@code redisCall}；抛 {@link RedisException} / {@link
-   *       TimeoutException} 时 计入失败并<b>原样上抛</b>（调用方 fail-open 分支照旧兜住）；正常返回（放行/拒绝）计成功。
-   *   <li>OPEN：不执行 {@code redisCall}，抛 {@link CallNotPermittedException} 让调用方短路 fail-open（省掉
-   *       requestTimeout 阻塞）。
-   * </ul>
-   *
-   * <p>熔断关闭（{@code enabled=false}）时直发 {@code redisCall} 不经状态机。
-   */
-  public <T> T call(Supplier<T> redisCall) {
-    if (!enabled || circuitBreaker == null) {
-      return redisCall.get();
+    @Autowired
+    public RedisRateLimitCircuitBreaker(
+            RateLimitProperties properties,
+            ObjectProvider<CircuitBreakerRegistry> circuitBreakerRegistryProvider,
+            MeterRegistry meterRegistry) {
+        this(
+                properties.getRedisCircuitBreaker(),
+                // 优先复用 R4J autoconfig 的共享 registry（不新建竞争 bean）；窄上下文单测无 autoconfig 时退回内置默认 registry。
+                circuitBreakerRegistryProvider.getIfAvailable(CircuitBreakerRegistry::ofDefaults),
+                meterRegistry);
     }
-    return circuitBreaker.executeSupplier(redisCall);
-  }
 
-  private static CircuitBreakerConfig buildConfig(RateLimitProperties.CircuitBreaker config) {
-    int window = Math.max(1, config.getConsecutiveFailures());
-    CircuitBreakerConfig.Builder builder = CircuitBreakerConfig.custom()
-        // COUNT_BASED + size=minCalls=window + 100% 阈值 = "连续 window 次全失败才 OPEN"（窗口内任一成功打断）。
-        .slidingWindowType(SlidingWindowType.COUNT_BASED)
-        .slidingWindowSize(window)
-        .minimumNumberOfCalls(window)
-        .failureRateThreshold(100.0f);
-    long configuredOpenWindowMillis = config.getOpenWindowMillis();
-    long positiveOpenWindowMillis = Math.max(1L, configuredOpenWindowMillis);
-    Duration openWindow = Duration.ofMillis(positiveOpenWindowMillis);
-    builder.waitDurationInOpenState(openWindow);
-    int configuredHalfOpenProbes = config.getHalfOpenProbes();
-    int positiveHalfOpenProbes = Math.max(1, configuredHalfOpenProbes);
-    builder.permittedNumberOfCallsInHalfOpenState(positiveHalfOpenProbes);
-    return builder
-        // 不后台自动转 HALF_OPEN：窗口到期后由下一个真实请求承载探测（该请求真发 Redis 命令），符合"放一个探测请求"语义。
-        .automaticTransitionFromOpenToHalfOpenEnabled(false)
-        // 只有 Redis 命令级故障 / bucket4j 超时计失败；限流"拒绝"正常返回 false 不计失败，不误熔断。
-        .recordExceptions(RedisException.class, TimeoutException.class)
-        .build();
-  }
-
-  private void registerStateGauge(MeterRegistry meterRegistry) {
-    if (meterRegistry == null) {
-      return;
+    /** 直连构造：单测用真实 {@link CircuitBreakerRegistry} 免去 {@code ObjectProvider} 桩。 */
+    RedisRateLimitCircuitBreaker(
+            RateLimitProperties.CircuitBreaker config, CircuitBreakerRegistry registry, MeterRegistry meterRegistry) {
+        this.enabled = config.isEnabled();
+        this.circuitBreaker = enabled ? registry.circuitBreaker(CIRCUIT_NAME, buildConfig(config)) : null;
+        registerStateGauge(meterRegistry);
     }
-    Gauge.builder(METRIC_CIRCUIT_OPEN, this, RedisRateLimitCircuitBreaker::openStateSample)
-        .description(
-            "Rate-limiter Redis circuit breaker state (1=open → tryConsume short-circuits to"
-                + " fail-open without hitting Redis, so quota is temporarily unenforced; 0=closed"
-                + " or half-open probing).")
-        .register(meterRegistry);
-  }
 
-  /** gauge 采样：OPEN / FORCED_OPEN → 1（短路放行中），其余（CLOSED / HALF_OPEN / DISABLED）→ 0。 */
-  private int openStateSample() {
-    if (circuitBreaker == null) {
-      return 0;
+    /** 单测便捷：关闭熔断（纯 passthrough，等价 #782 前行为），供不关心短路的 fail-open 测试复用。 */
+    static RedisRateLimitCircuitBreaker disabled(MeterRegistry meterRegistry) {
+        RateLimitProperties.CircuitBreaker config = new RateLimitProperties.CircuitBreaker();
+        config.setEnabled(false);
+        return new RedisRateLimitCircuitBreaker(config, CircuitBreakerRegistry.ofDefaults(), meterRegistry);
     }
-    CircuitBreaker.State state = circuitBreaker.getState();
-    return (state == CircuitBreaker.State.OPEN || state == CircuitBreaker.State.FORCED_OPEN)
-        ? 1
-        : 0;
-  }
+
+    /**
+     * 经熔断执行 Redis 限流调用。
+     *
+     * <ul>
+     *   <li>CLOSED / HALF_OPEN：执行 {@code redisCall}；抛 {@link RedisException} / {@link
+     *       TimeoutException} 时 计入失败并<b>原样上抛</b>（调用方 fail-open 分支照旧兜住）；正常返回（放行/拒绝）计成功。
+     *   <li>OPEN：不执行 {@code redisCall}，抛 {@link CallNotPermittedException} 让调用方短路 fail-open（省掉
+     *       requestTimeout 阻塞）。
+     * </ul>
+     *
+     * <p>熔断关闭（{@code enabled=false}）时直发 {@code redisCall} 不经状态机。
+     */
+    public <T> T call(Supplier<T> redisCall) {
+        if (!enabled || circuitBreaker == null) {
+            return redisCall.get();
+        }
+        return circuitBreaker.executeSupplier(redisCall);
+    }
+
+    private static CircuitBreakerConfig buildConfig(RateLimitProperties.CircuitBreaker config) {
+        int window = Math.max(1, config.getConsecutiveFailures());
+        CircuitBreakerConfig.Builder builder = CircuitBreakerConfig.custom()
+                // COUNT_BASED + size=minCalls=window + 100% 阈值 = "连续 window 次全失败才 OPEN"（窗口内任一成功打断）。
+                .slidingWindowType(SlidingWindowType.COUNT_BASED)
+                .slidingWindowSize(window)
+                .minimumNumberOfCalls(window)
+                .failureRateThreshold(100.0f);
+        long configuredOpenWindowMillis = config.getOpenWindowMillis();
+        long positiveOpenWindowMillis = Math.max(1L, configuredOpenWindowMillis);
+        Duration openWindow = Duration.ofMillis(positiveOpenWindowMillis);
+        builder.waitDurationInOpenState(openWindow);
+        int configuredHalfOpenProbes = config.getHalfOpenProbes();
+        int positiveHalfOpenProbes = Math.max(1, configuredHalfOpenProbes);
+        builder.permittedNumberOfCallsInHalfOpenState(positiveHalfOpenProbes);
+        return builder
+                // 不后台自动转 HALF_OPEN：窗口到期后由下一个真实请求承载探测（该请求真发 Redis 命令），符合"放一个探测请求"语义。
+                .automaticTransitionFromOpenToHalfOpenEnabled(false)
+                // 只有 Redis 命令级故障 / bucket4j 超时计失败；限流"拒绝"正常返回 false 不计失败，不误熔断。
+                .recordExceptions(RedisException.class, TimeoutException.class)
+                .build();
+    }
+
+    private void registerStateGauge(MeterRegistry meterRegistry) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Gauge.builder(METRIC_CIRCUIT_OPEN, this, RedisRateLimitCircuitBreaker::openStateSample)
+                .description("Rate-limiter Redis circuit breaker state (1=open → tryConsume short-circuits to"
+                        + " fail-open without hitting Redis, so quota is temporarily unenforced; 0=closed"
+                        + " or half-open probing).")
+                .register(meterRegistry);
+    }
+
+    /** gauge 采样：OPEN / FORCED_OPEN → 1（短路放行中），其余（CLOSED / HALF_OPEN / DISABLED）→ 0。 */
+    private int openStateSample() {
+        if (circuitBreaker == null) {
+            return 0;
+        }
+        CircuitBreaker.State state = circuitBreaker.getState();
+        return (state == CircuitBreaker.State.OPEN || state == CircuitBreaker.State.FORCED_OPEN) ? 1 : 0;
+    }
 }

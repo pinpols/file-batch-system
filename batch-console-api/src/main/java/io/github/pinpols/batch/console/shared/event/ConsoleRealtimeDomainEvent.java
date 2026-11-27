@@ -10,10 +10,10 @@ import lombok.Builder;
  */
 @Builder
 public record ConsoleRealtimeDomainEvent(
-    String tenantId,
-    String stream,
-    String eventType,
-    String cursor,
-    Object data,
-    boolean summaryRefresh,
-    Instant emittedAt) {}
+        String tenantId,
+        String stream,
+        String eventType,
+        String cursor,
+        Object data,
+        boolean summaryRefresh,
+        Instant emittedAt) {}

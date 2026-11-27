@@ -17,26 +17,26 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleAdminTestDataApplicationService {
 
-  private final ConsoleOrchestratorPort orchestratorPort;
-  private final Environment environment;
+    private final ConsoleOrchestratorPort orchestratorPort;
+    private final Environment environment;
 
-  public Map<String, Integer> cleanupByPrefix(String prefix) {
-    assertCleanupAllowed();
-    return orchestratorPort.adminTestDataCleanupByPrefix(prefix);
-  }
-
-  public Map<String, Integer> cleanupByExactIds(String ids) {
-    assertCleanupAllowed();
-    List<String> tenantIds = Arrays.stream(ids.split(","))
-        .map(String::trim)
-        .filter(tenantId -> EmptyChecks.isNotEmpty(tenantId))
-        .toList();
-    return orchestratorPort.adminTestDataCleanupByExactTenantIds(tenantIds);
-  }
-
-  private void assertCleanupAllowed() {
-    if (BatchProfileSupport.isProductionProfile(environment)) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.admin.test_data_cleanup_prod_forbidden");
+    public Map<String, Integer> cleanupByPrefix(String prefix) {
+        assertCleanupAllowed();
+        return orchestratorPort.adminTestDataCleanupByPrefix(prefix);
     }
-  }
+
+    public Map<String, Integer> cleanupByExactIds(String ids) {
+        assertCleanupAllowed();
+        List<String> tenantIds = Arrays.stream(ids.split(","))
+                .map(String::trim)
+                .filter(tenantId -> EmptyChecks.isNotEmpty(tenantId))
+                .toList();
+        return orchestratorPort.adminTestDataCleanupByExactTenantIds(tenantIds);
+    }
+
+    private void assertCleanupAllowed() {
+        if (BatchProfileSupport.isProductionProfile(environment)) {
+            throw BizException.of(ResultCode.FORBIDDEN, "error.admin.test_data_cleanup_prod_forbidden");
+        }
+    }
 }

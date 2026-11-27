@@ -28,48 +28,43 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleSchedulerControllerTest {
 
-  @Mock
-  private ConsoleTriggerProxyService proxy;
+    @Mock
+    private ConsoleTriggerProxyService proxy;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleSchedulerController(proxy, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSchedulerController(proxy, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("查询调度器运行状态并回包, 字段名与生产接口对齐")
-  void shouldReturnSchedulerState_whenStatusQueried() throws Exception {
-    // 下游 TriggerManagementController 真实返回键为 status（非 state），DTO 对齐生产 wire。
-    when(proxy.schedulerStatus()).thenReturn(new ConsoleSchedulerCommandResponse("RUNNING"));
-    mockMvc
-        .perform(get("/api/console/scheduler/status"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.status").value("RUNNING"));
-  }
+    @Test
+    @DisplayName("查询调度器运行状态并回包, 字段名与生产接口对齐")
+    void shouldReturnSchedulerState_whenStatusQueried() throws Exception {
+        // 下游 TriggerManagementController 真实返回键为 status（非 state），DTO 对齐生产 wire。
+        when(proxy.schedulerStatus()).thenReturn(new ConsoleSchedulerCommandResponse("RUNNING"));
+        mockMvc.perform(get("/api/console/scheduler/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RUNNING"));
+    }
 
-  @Test
-  @DisplayName("全局暂停与全局恢复分别下发, 两次调用各自触达下游")
-  void shouldPauseAllAndResumeAll_whenBothRequested() throws Exception {
-    when(proxy.schedulerPauseAll()).thenReturn(new ConsoleSchedulerCommandResponse("ALL_PAUSED"));
-    when(proxy.schedulerResumeAll()).thenReturn(new ConsoleSchedulerCommandResponse("ALL_RESUMED"));
-    mockMvc.perform(post("/api/console/scheduler/pause-all")).andExpect(status().isOk());
-    mockMvc
-        .perform(post("/api/console/scheduler/resume-all"))
-        .andExpect(status().isOk());
-    verify(proxy).schedulerPauseAll();
-    verify(proxy).schedulerResumeAll();
-  }
+    @Test
+    @DisplayName("全局暂停与全局恢复分别下发, 两次调用各自触达下游")
+    void shouldPauseAllAndResumeAll_whenBothRequested() throws Exception {
+        when(proxy.schedulerPauseAll()).thenReturn(new ConsoleSchedulerCommandResponse("ALL_PAUSED"));
+        when(proxy.schedulerResumeAll()).thenReturn(new ConsoleSchedulerCommandResponse("ALL_RESUMED"));
+        mockMvc.perform(post("/api/console/scheduler/pause-all")).andExpect(status().isOk());
+        mockMvc.perform(post("/api/console/scheduler/resume-all")).andExpect(status().isOk());
+        verify(proxy).schedulerPauseAll();
+        verify(proxy).schedulerResumeAll();
+    }
 }

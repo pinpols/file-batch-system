@@ -12,15 +12,15 @@ import lombok.Data;
 @Data
 public class AtomicTaskConfigEntity {
 
-  private Long id;
-  private String tenantId;
-  private String taskType;
-  private String name;
+    private Long id;
+    private String tenantId;
+    private String taskType;
+    private String name;
 
-  /** parameters JSONB 全文(::text 读出),序列化由调用方负责。 */
-  private String parameters;
+    /** parameters JSONB 全文(::text 读出),序列化由调用方负责。 */
+    private String parameters;
 
-  private String createdBy;
-  private Instant createdAt;
-  private Instant updatedAt;
+    private String createdBy;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

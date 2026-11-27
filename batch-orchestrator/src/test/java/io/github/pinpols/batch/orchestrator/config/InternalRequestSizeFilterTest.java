@@ -21,143 +21,143 @@ import org.springframework.mock.web.MockHttpServletResponse;
 @DisplayName("内部端点请求体大小上限过滤器,验证写方法与非内部路径的分流,报文长度来源为声明的长度或实际字节数,以及超限拒绝时的链路短路")
 class InternalRequestSizeFilterTest {
 
-  @Mock
-  private FilterChain chain;
+    @Mock
+    private FilterChain chain;
 
-  private InternalRequestSizeFilter filter(long maxBytes) {
-    InternalRequestProperties props = new InternalRequestProperties();
-    props.setMaxBodyBytes(maxBytes);
-    return new InternalRequestSizeFilter(props);
-  }
-
-  private MockHttpServletRequest post(String uri, long contentLength) {
-    MockHttpServletRequest req = new MockHttpServletRequest("POST", uri);
-    req.setContentType("application/json");
-    if (contentLength >= 0) {
-      req.setContent(new byte[(int) contentLength]);
+    private InternalRequestSizeFilter filter(long maxBytes) {
+        InternalRequestProperties props = new InternalRequestProperties();
+        props.setMaxBodyBytes(maxBytes);
+        return new InternalRequestSizeFilter(props);
     }
-    return req;
-  }
 
-  @Test
-  @DisplayName("Content-Length 超限 → 413,不进 chain")
-  void shouldRejectOversizedBody_whenContentLengthExceedsLimit() throws Exception {
-    MockHttpServletResponse res = new MockHttpServletResponse();
+    private MockHttpServletRequest post(String uri, long contentLength) {
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", uri);
+        req.setContentType("application/json");
+        if (contentLength >= 0) {
+            req.setContent(new byte[(int) contentLength]);
+        }
+        return req;
+    }
 
-    filter(1024).doFilter(post("/internal/tasks/report", 4096), res, chain);
+    @Test
+    @DisplayName("Content-Length 超限 → 413,不进 chain")
+    void shouldRejectOversizedBody_whenContentLengthExceedsLimit() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
 
-    assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
-    verify(chain, never()).doFilter(ArgumentMatchers.any(), ArgumentMatchers.any());
-  }
+        filter(1024).doFilter(post("/internal/tasks/report", 4096), res, chain);
 
-  @Test
-  @DisplayName("Content-Length 在上限内 → 读取缓存后放行")
-  void shouldPassBody_whenContentLengthWithinLimit() throws Exception {
-    MockHttpServletResponse res = new MockHttpServletResponse();
-    MockHttpServletRequest req = post("/internal/tasks/report", 512);
+        assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
+        verify(chain, never()).doFilter(ArgumentMatchers.any(), ArgumentMatchers.any());
+    }
 
-    filter(1024).doFilter(req, res, chain);
+    @Test
+    @DisplayName("Content-Length 在上限内 → 读取缓存后放行")
+    void shouldPassBody_whenContentLengthWithinLimit() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockHttpServletRequest req = post("/internal/tasks/report", 512);
 
-    verify(chain).doFilter(ArgumentMatchers.any(), ArgumentMatchers.eq(res));
-  }
+        filter(1024).doFilter(req, res, chain);
 
-  @Test
-  @DisplayName("maxBodyBytes<=0(不限)→ 即便超大也放行")
-  void shouldPassOversizedBody_whenLimitNotConfigured() throws Exception {
-    MockHttpServletResponse res = new MockHttpServletResponse();
-    MockHttpServletRequest req = post("/internal/tasks/report", 8_000_000L);
+        verify(chain).doFilter(ArgumentMatchers.any(), ArgumentMatchers.eq(res));
+    }
 
-    filter(0).doFilter(req, res, chain);
+    @Test
+    @DisplayName("maxBodyBytes<=0(不限)→ 即便超大也放行")
+    void shouldPassOversizedBody_whenLimitNotConfigured() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockHttpServletRequest req = post("/internal/tasks/report", 8_000_000L);
 
-    verify(chain).doFilter(req, res);
-  }
+        filter(0).doFilter(req, res, chain);
 
-  @Test
-  @DisplayName("Content-Length 缺失(chunked)但实际超限 → 413")
-  void shouldRejectChunkedBody_whenActualBytesExceedLimit() throws Exception {
-    MockHttpServletResponse res = new MockHttpServletResponse();
-    MockHttpServletRequest req = chunkedPost("/internal/tasks/report", 2048);
+        verify(chain).doFilter(req, res);
+    }
 
-    filter(1024).doFilter(req, res, chain);
+    @Test
+    @DisplayName("Content-Length 缺失(chunked)但实际超限 → 413")
+    void shouldRejectChunkedBody_whenActualBytesExceedLimit() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockHttpServletRequest req = chunkedPost("/internal/tasks/report", 2048);
 
-    assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
-    verify(chain, never()).doFilter(ArgumentMatchers.any(), ArgumentMatchers.any());
-  }
+        filter(1024).doFilter(req, res, chain);
 
-  @Test
-  @DisplayName("Content-Length 缺失(chunked)且实际未超限 → 缓存后放行")
-  void shouldPassChunkedBody_whenActualBytesWithinLimit() throws Exception {
-    MockHttpServletResponse res = new MockHttpServletResponse();
-    MockFilterChain mockChain = new MockFilterChain();
-    MockHttpServletRequest req = chunkedPost("/internal/tasks/report", 512);
+        assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
+        verify(chain, never()).doFilter(ArgumentMatchers.any(), ArgumentMatchers.any());
+    }
 
-    filter(1024).doFilter(req, res, mockChain);
+    @Test
+    @DisplayName("Content-Length 缺失(chunked)且实际未超限 → 缓存后放行")
+    void shouldPassChunkedBody_whenActualBytesWithinLimit() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockFilterChain mockChain = new MockFilterChain();
+        MockHttpServletRequest req = chunkedPost("/internal/tasks/report", 512);
 
-    assertThat(mockChain.getRequest()).isNotNull();
-  }
+        filter(1024).doFilter(req, res, mockChain);
 
-  @Test
-  @DisplayName("非 /internal/** 路径 → 不拦(放行)")
-  void shouldPassRequest_whenPathIsNotInternal() throws Exception {
-    MockHttpServletResponse res = new MockHttpServletResponse();
-    MockHttpServletRequest req = post("/api/public/x", 4096);
+        assertThat(mockChain.getRequest()).isNotNull();
+    }
 
-    filter(1024).doFilter(req, res, chain);
+    @Test
+    @DisplayName("非 /internal/** 路径 → 不拦(放行)")
+    void shouldPassRequest_whenPathIsNotInternal() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockHttpServletRequest req = post("/api/public/x", 4096);
 
-    verify(chain).doFilter(req, res);
-  }
+        filter(1024).doFilter(req, res, chain);
 
-  @Test
-  @DisplayName("GET 方法 → 不拦(只管写方法)")
-  void shouldPassRequest_whenMethodIsNotWritable() throws Exception {
-    MockHttpServletResponse res = new MockHttpServletResponse();
-    MockHttpServletRequest req = new MockHttpServletRequest("GET", "/internal/tasks/report");
-    req.setContent(new byte[4096]);
+        verify(chain).doFilter(req, res);
+    }
 
-    filter(1024).doFilter(req, res, chain);
+    @Test
+    @DisplayName("GET 方法 → 不拦(只管写方法)")
+    void shouldPassRequest_whenMethodIsNotWritable() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/internal/tasks/report");
+        req.setContent(new byte[4096]);
 
-    verify(chain).doFilter(req, res);
-  }
+        filter(1024).doFilter(req, res, chain);
 
-  @Test
-  @DisplayName("PATCH 写方法同样受限")
-  void shouldRejectPatchBody_whenContentLengthExceedsLimit() throws Exception {
-    MockHttpServletResponse res = new MockHttpServletResponse();
-    MockHttpServletRequest req = new MockHttpServletRequest("PATCH", "/internal/tasks/report");
-    req.setContent(new byte[4096]);
+        verify(chain).doFilter(req, res);
+    }
 
-    filter(1024).doFilter(req, res, chain);
+    @Test
+    @DisplayName("PATCH 写方法同样受限")
+    void shouldRejectPatchBody_whenContentLengthExceedsLimit() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockHttpServletRequest req = new MockHttpServletRequest("PATCH", "/internal/tasks/report");
+        req.setContent(new byte[4096]);
 
-    assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
-  }
+        filter(1024).doFilter(req, res, chain);
 
-  @Test
-  @DisplayName("multipart 上传 → 不拦(走 Spring multipart 限制)")
-  void shouldPassMultipartUpload_whenContentSpecifiesMultipart() throws Exception {
-    MockHttpServletResponse res = new MockHttpServletResponse();
-    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/files/upload");
-    req.setContentType("multipart/form-data; boundary=xyz");
-    req.setContent(new byte[4096]);
+        assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
+    }
 
-    filter(1024).doFilter(req, res, chain);
+    @Test
+    @DisplayName("multipart 上传 → 不拦(走 Spring multipart 限制)")
+    void shouldPassMultipartUpload_whenContentSpecifiesMultipart() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/files/upload");
+        req.setContentType("multipart/form-data; boundary=xyz");
+        req.setContent(new byte[4096]);
 
-    verify(chain).doFilter(req, res);
-  }
+        filter(1024).doFilter(req, res, chain);
 
-  private MockHttpServletRequest chunkedPost(String uri, int actualBytes) {
-    MockHttpServletRequest req = new MockHttpServletRequest("POST", uri) {
-      @Override
-      public int getContentLength() {
-        return -1;
-      }
+        verify(chain).doFilter(req, res);
+    }
 
-      @Override
-      public long getContentLengthLong() {
-        return -1L;
-      }
-    };
-    req.setContentType("application/json");
-    req.setContent(new byte[actualBytes]);
-    return req;
-  }
+    private MockHttpServletRequest chunkedPost(String uri, int actualBytes) {
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", uri) {
+            @Override
+            public int getContentLength() {
+                return -1;
+            }
+
+            @Override
+            public long getContentLengthLong() {
+                return -1L;
+            }
+        };
+        req.setContentType("application/json");
+        req.setContent(new byte[actualBytes]);
+        return req;
+    }
 }

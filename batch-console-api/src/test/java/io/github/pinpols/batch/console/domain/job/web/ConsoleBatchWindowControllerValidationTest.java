@@ -32,35 +32,33 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleBatchWindowControllerValidationTest {
 
-  @Mock
-  private ConsoleBatchWindowApplicationService service;
+    @Mock
+    private ConsoleBatchWindowApplicationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleBatchWindowController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchWindowController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  private String body(String windowCode) {
-    return """
+    private String body(String windowCode) {
+        return """
         {
           "tenantId": "ta",
           "windowCode": "%s",
@@ -70,59 +68,58 @@ class ConsoleBatchWindowControllerValidationTest {
           "endTime": "23:59"
         }
         """.formatted(windowCode).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("窗口编码含空格时返回参数校验失败, 且不写入下游")
-  void rejects_windowCode_with_space() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/batch-windows").contentType(APPLICATION_JSON).content(body("q q q")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never()).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("窗口编码含空格时返回参数校验失败, 且不写入下游")
+    void rejects_windowCode_with_space() throws Exception {
+        mockMvc.perform(post("/api/console/batch-windows")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("q q q")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).create(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("窗口编码含中文时返回参数校验失败")
-  void rejects_windowCode_chinese() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/batch-windows").contentType(APPLICATION_JSON).content(body("时间窗")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("窗口编码含中文时返回参数校验失败")
+    void rejects_windowCode_chinese() throws Exception {
+        mockMvc.perform(post("/api/console/batch-windows")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("时间窗")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("窗口编码以数字开头时返回参数校验失败")
-  void rejects_windowCode_starts_with_digit() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/batch-windows").contentType(APPLICATION_JSON).content(body("9win")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("窗口编码以数字开头时返回参数校验失败")
+    void rejects_windowCode_starts_with_digit() throws Exception {
+        mockMvc.perform(post("/api/console/batch-windows")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("9win")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("窗口编码为空时返回参数校验失败")
-  void rejects_windowCode_blank() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/batch-windows").contentType(APPLICATION_JSON).content(body("")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("窗口编码为空时返回参数校验失败")
+    void rejects_windowCode_blank() throws Exception {
+        mockMvc.perform(post("/api/console/batch-windows")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("窗口编码符合格式要求时创建成功并触达下游")
-  void accepts_valid_windowCode() throws Exception {
-    when(service.create(ArgumentMatchers.any())).thenReturn(null);
-    mockMvc
-        .perform(post("/api/console/batch-windows")
-            .contentType(APPLICATION_JSON)
-            .content(body("win_ok_01")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-    verify(service).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("窗口编码符合格式要求时创建成功并触达下游")
+    void accepts_valid_windowCode() throws Exception {
+        when(service.create(ArgumentMatchers.any())).thenReturn(null);
+        mockMvc.perform(post("/api/console/batch-windows")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("win_ok_01")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+        verify(service).create(ArgumentMatchers.any());
+    }
 }

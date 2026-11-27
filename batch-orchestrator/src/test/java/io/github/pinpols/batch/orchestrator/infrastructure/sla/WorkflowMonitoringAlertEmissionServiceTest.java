@@ -31,86 +31,84 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Workflow 时限告警发送前复核、独立身份与失败传播")
 class WorkflowMonitoringAlertEmissionServiceTest {
-  @Mock
-  private WorkflowMonitoringMapper mapper;
+    @Mock
+    private WorkflowMonitoringMapper mapper;
 
-  @Mock
-  private AlertEventService alertEventService;
+    @Mock
+    private AlertEventService alertEventService;
 
-  private WorkflowMonitoringAlertEmissionService service;
+    private WorkflowMonitoringAlertEmissionService service;
 
-  @BeforeEach
-  void setUp() {
-    service = new WorkflowMonitoringAlertEmissionService(
-        mapper, alertEventService, new BatchTimezoneProvider(new BatchTimezoneProperties()));
-  }
+    @BeforeEach
+    void setUp() {
+        service = new WorkflowMonitoringAlertEmissionService(
+                mapper, alertEventService, new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    }
 
-  @ParameterizedTest
-  @CsvSource({
-    "NOT_STARTED,WORKFLOW_NOT_STARTED_BY_DEADLINE",
-    "NOT_COMPLETED_BY_DEADLINE,WORKFLOW_NOT_COMPLETED_BY_DEADLINE",
-    "RUNNING_TOO_LONG,WORKFLOW_RUNNING_TOO_LONG"
-  })
-  @DisplayName("每种根级违约使用独立事件编码，保留真实资源与上下文")
-  void shouldEmitRootAlertAfterRechecking(Violation violation, String alertType) {
-    WorkflowMonitoringAlertCandidate candidate = candidate(violation);
-    when(mapper.selectCandidates(any())).thenReturn(List.of(candidate));
+    @ParameterizedTest
+    @CsvSource({
+        "NOT_STARTED,WORKFLOW_NOT_STARTED_BY_DEADLINE",
+        "NOT_COMPLETED_BY_DEADLINE,WORKFLOW_NOT_COMPLETED_BY_DEADLINE",
+        "RUNNING_TOO_LONG,WORKFLOW_RUNNING_TOO_LONG"
+    })
+    @DisplayName("每种根级违约使用独立事件编码，保留真实资源与上下文")
+    void shouldEmitRootAlertAfterRechecking(Violation violation, String alertType) {
+        WorkflowMonitoringAlertCandidate candidate = candidate(violation);
+        when(mapper.selectCandidates(any())).thenReturn(List.of(candidate));
 
-    assertThat(service.emitOnce(candidate)).isTrue();
+        assertThat(service.emitOnce(candidate)).isTrue();
 
-    ArgumentCaptor<AlertEmitCommand> requestCaptor =
-        ArgumentCaptor.forClass(AlertEmitCommand.class);
-    verify(alertEventService).emit(requestCaptor.capture());
-    AlertEmitCommand request = requestCaptor.getValue();
-    assertThat(request.alertType()).isEqualTo(alertType);
-    assertThat(request.tenantId()).isEqualTo("tenant-a");
-    assertThat(request.resourceKey()).isEqualTo("workflow_run:21");
-    assertThat(request.detailJson())
-        .contains("\"workflowRunId\":\"21\"")
-        .contains("\"monitoringResourceKey\":\"workflow_run:21\"");
-    verify(mapper).acquireAlertLock("tenant-a", "workflow_run:21", violation.name());
-    ArgumentCaptor<WorkflowMonitoringQuery> queryCaptor =
-        ArgumentCaptor.forClass(WorkflowMonitoringQuery.class);
-    verify(mapper).selectCandidates(queryCaptor.capture());
-    assertThat(queryCaptor.getValue().resourceKey()).isEqualTo("workflow_run:21");
-    assertThat(queryCaptor.getValue().violation()).isEqualTo(violation);
-    assertThat(queryCaptor.getValue().limit()).isOne();
-    assertThat(queryCaptor.getValue().defaultTimezone()).isEqualTo("Asia/Shanghai");
-  }
+        ArgumentCaptor<AlertEmitCommand> requestCaptor = ArgumentCaptor.forClass(AlertEmitCommand.class);
+        verify(alertEventService).emit(requestCaptor.capture());
+        AlertEmitCommand request = requestCaptor.getValue();
+        assertThat(request.alertType()).isEqualTo(alertType);
+        assertThat(request.tenantId()).isEqualTo("tenant-a");
+        assertThat(request.resourceKey()).isEqualTo("workflow_run:21");
+        assertThat(request.detailJson())
+                .contains("\"workflowRunId\":\"21\"")
+                .contains("\"monitoringResourceKey\":\"workflow_run:21\"");
+        verify(mapper).acquireAlertLock("tenant-a", "workflow_run:21", violation.name());
+        ArgumentCaptor<WorkflowMonitoringQuery> queryCaptor = ArgumentCaptor.forClass(WorkflowMonitoringQuery.class);
+        verify(mapper).selectCandidates(queryCaptor.capture());
+        assertThat(queryCaptor.getValue().resourceKey()).isEqualTo("workflow_run:21");
+        assertThat(queryCaptor.getValue().violation()).isEqualTo(violation);
+        assertThat(queryCaptor.getValue().limit()).isOne();
+        assertThat(queryCaptor.getValue().defaultTimezone()).isEqualTo("Asia/Shanghai");
+    }
 
-  @Test
-  @DisplayName("扫描后策略关闭或已有告警时复核为空，不再次发送")
-  void shouldSkipCandidateNoLongerEligible() {
-    WorkflowMonitoringAlertCandidate candidate = candidate(Violation.NOT_STARTED);
-    when(mapper.selectCandidates(any())).thenReturn(List.of());
+    @Test
+    @DisplayName("扫描后策略关闭或已有告警时复核为空，不再次发送")
+    void shouldSkipCandidateNoLongerEligible() {
+        WorkflowMonitoringAlertCandidate candidate = candidate(Violation.NOT_STARTED);
+        when(mapper.selectCandidates(any())).thenReturn(List.of());
 
-    assertThat(service.emitOnce(candidate)).isFalse();
+        assertThat(service.emitOnce(candidate)).isFalse();
 
-    verify(alertEventService, never()).emit(any());
-  }
+        verify(alertEventService, never()).emit(any());
+    }
 
-  @Test
-  @DisplayName("告警持久化错误传播给独立事务，允许回滚并由下轮重试")
-  void shouldPropagatePersistenceFailureForRollback() {
-    WorkflowMonitoringAlertCandidate candidate = candidate(Violation.RUNNING_TOO_LONG);
-    when(mapper.selectCandidates(any())).thenReturn(List.of(candidate));
-    doThrow(new IllegalStateException("injected persistence failure"))
-        .when(alertEventService)
-        .emit(any());
+    @Test
+    @DisplayName("告警持久化错误传播给独立事务，允许回滚并由下轮重试")
+    void shouldPropagatePersistenceFailureForRollback() {
+        WorkflowMonitoringAlertCandidate candidate = candidate(Violation.RUNNING_TOO_LONG);
+        when(mapper.selectCandidates(any())).thenReturn(List.of(candidate));
+        doThrow(new IllegalStateException("injected persistence failure"))
+                .when(alertEventService)
+                .emit(any());
 
-    assertThatThrownBy(() -> service.emitOnce(candidate)).isInstanceOf(IllegalStateException.class);
-  }
+        assertThatThrownBy(() -> service.emitOnce(candidate)).isInstanceOf(IllegalStateException.class);
+    }
 
-  private WorkflowMonitoringAlertCandidate candidate(Violation violation) {
-    return WorkflowMonitoringAlertCandidate.builder()
-        .tenantId("tenant-a")
-        .workflowDefinitionId(11L)
-        .workflowCode("WORKFLOW")
-        .workflowRunId(21L)
-        .resourceKey("workflow_run:21")
-        .severity("ERROR")
-        .startedAt(Instant.parse("2026-01-03T00:00:00Z"))
-        .violation(violation)
-        .build();
-  }
+    private WorkflowMonitoringAlertCandidate candidate(Violation violation) {
+        return WorkflowMonitoringAlertCandidate.builder()
+                .tenantId("tenant-a")
+                .workflowDefinitionId(11L)
+                .workflowCode("WORKFLOW")
+                .workflowRunId(21L)
+                .resourceKey("workflow_run:21")
+                .severity("ERROR")
+                .startedAt(Instant.parse("2026-01-03T00:00:00Z"))
+                .violation(violation)
+                .build();
+    }
 }

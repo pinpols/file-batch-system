@@ -16,24 +16,24 @@ import lombok.Data;
 @Data
 public class ForensicExportRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @NotNull
-  private LocalDate bizDateFrom;
+    @NotNull
+    private LocalDate bizDateFrom;
 
-  @NotNull
-  private LocalDate bizDateTo;
+    @NotNull
+    private LocalDate bizDateTo;
 
-  /** 可选 — 留空表示全部 jobCode；最多 100 个，单个 ≤ 128 字符。 */
-  @Size(max = 100, message = "jobCodes too many (max 100)")
-  private List<@Size(max = 128) String> jobCodes;
+    /** 可选 — 留空表示全部 jobCode；最多 100 个，单个 ≤ 128 字符。 */
+    @Size(max = 100, message = "jobCodes too many (max 100)")
+    private List<@Size(max = 128) String> jobCodes;
 
-  /** BUNDLE（默认）/ JSON / CSV。 */
-  @Pattern(regexp = "^(BUNDLE|JSON|CSV)$", message = "exportFormat must be BUNDLE / JSON / CSV")
-  private String exportFormat;
+    /** BUNDLE（默认）/ JSON / CSV。 */
+    @Pattern(regexp = "^(BUNDLE|JSON|CSV)$", message = "exportFormat must be BUNDLE / JSON / CSV")
+    private String exportFormat;
 
-  /** 操作人 ID（审计必填）。 */
-  @Size(max = 128)
-  private String requestedBy;
+    /** 操作人 ID（审计必填）。 */
+    @Size(max = 128)
+    private String requestedBy;
 }

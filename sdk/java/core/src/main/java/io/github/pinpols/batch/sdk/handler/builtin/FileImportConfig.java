@@ -14,21 +14,19 @@ import java.util.List;
  * @param filePathParam 从 {@code ctx.parameters()} 取文件路径的键名(默认 {@code filePath})
  */
 public record FileImportConfig(
-    String taskType,
-    String targetTable,
-    List<String> columns,
-    DelimitedFormat format,
-    int batchSize,
-    String filePathParam) {
+        String taskType,
+        String targetTable,
+        List<String> columns,
+        DelimitedFormat format,
+        int batchSize,
+        String filePathParam) {
 
-  public FileImportConfig {
-    columns = columns == null ? List.of() : List.copyOf(columns);
-  }
+    public FileImportConfig {
+        columns = columns == null ? List.of() : List.copyOf(columns);
+    }
 
-  /** 默认:逗号 CSV 含表头、batchSize=500、文件路径参数键 {@code filePath}。 */
-  public static FileImportConfig defaults(
-      String taskType, String targetTable, List<String> columns) {
-    return new FileImportConfig(
-        taskType, targetTable, columns, DelimitedFormat.defaults(), 500, "filePath");
-  }
+    /** 默认:逗号 CSV 含表头、batchSize=500、文件路径参数键 {@code filePath}。 */
+    public static FileImportConfig defaults(String taskType, String targetTable, List<String> columns) {
+        return new FileImportConfig(taskType, targetTable, columns, DelimitedFormat.defaults(), 500, "filePath");
+    }
 }

@@ -5,24 +5,24 @@ import java.time.Instant;
 
 /** 已保存原子任务配置的公开 Console 视图。 */
 public record AtomicTaskConfigResponse(
-    Long id,
-    String tenantId,
-    String taskType,
-    String name,
-    String parameters,
-    String createdBy,
-    Instant createdAt,
-    Instant updatedAt) {
+        Long id,
+        String tenantId,
+        String taskType,
+        String name,
+        String parameters,
+        String createdBy,
+        Instant createdAt,
+        Instant updatedAt) {
 
-  public static AtomicTaskConfigResponse from(AtomicTaskConfigEntity entity) {
-    return new AtomicTaskConfigResponse(
-        entity.getId(),
-        entity.getTenantId(),
-        entity.getTaskType(),
-        entity.getName(),
-        entity.getParameters(),
-        entity.getCreatedBy(),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
-  }
+    public static AtomicTaskConfigResponse from(AtomicTaskConfigEntity entity) {
+        return new AtomicTaskConfigResponse(
+                entity.getId(),
+                entity.getTenantId(),
+                entity.getTaskType(),
+                entity.getName(),
+                entity.getParameters(),
+                entity.getCreatedBy(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt());
+    }
 }

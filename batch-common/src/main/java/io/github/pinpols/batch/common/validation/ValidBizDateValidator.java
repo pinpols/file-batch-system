@@ -10,24 +10,23 @@ import java.time.format.ResolverStyle;
 
 public class ValidBizDateValidator implements ConstraintValidator<ValidBizDate, String> {
 
-  private static final DateTimeFormatter FMT =
-      DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
+    private static final DateTimeFormatter FMT =
+            DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
 
-  @Override
-  public boolean isValid(String value, ConstraintValidatorContext context) {
-    // 允许空值：是否必填由 @NotBlank 决定；本校验只负责“格式/可解析性”。
-    if (value == null || value.isBlank()) {
-      return true;
-    }
-    try {
-      String trimmedValue = value.trim();
-      LocalDate.parse(trimmedValue, FMT);
-      return true;
-    } catch (DateTimeParseException ex) {
-      SwallowedExceptionLogger.info(
-          ValidBizDateValidator.class, "catch:DateTimeParseException", ex);
+    @Override
+    public boolean isValid(String value, ConstraintValidatorContext context) {
+        // 允许空值：是否必填由 @NotBlank 决定；本校验只负责“格式/可解析性”。
+        if (value == null || value.isBlank()) {
+            return true;
+        }
+        try {
+            String trimmedValue = value.trim();
+            LocalDate.parse(trimmedValue, FMT);
+            return true;
+        } catch (DateTimeParseException ex) {
+            SwallowedExceptionLogger.info(ValidBizDateValidator.class, "catch:DateTimeParseException", ex);
 
-      return false;
+            return false;
+        }
     }
-  }
 }

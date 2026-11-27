@@ -20,40 +20,39 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("我的 Worker 接口:列表只查自托管 Worker, 弃用计数端点保持兼容")
 class ConsoleMyWorkerControllerTest {
 
-  @Mock
-  private ConsoleMyWorkerQueryService queryService;
+    @Mock
+    private ConsoleMyWorkerQueryService queryService;
 
-  @Mock
-  private ConsoleResponseFactory responseFactory;
+    @Mock
+    private ConsoleResponseFactory responseFactory;
 
-  @InjectMocks
-  private ConsoleMyWorkerController controller;
+    @InjectMocks
+    private ConsoleMyWorkerController controller;
 
-  @Test
-  @DisplayName("列表查询:先解析租户再查自托管 Worker, 返回结果按 Worker 编码回填")
-  void shouldResolveTenantAndListSelfHosted_whenListingMyWorkers() {
-    WorkerRegistryView w = new WorkerRegistryView();
-    w.setWorkerCode("sdk-1");
-    when(queryService.listSelfHosted("tx")).thenReturn(List.of(w));
-    WorkerRegistryResponse expected = WorkerRegistryResponse.from(w);
-    when(responseFactory.success(List.of(expected)))
-        .thenReturn(CommonResponse.success(List.of(expected)));
+    @Test
+    @DisplayName("列表查询:先解析租户再查自托管 Worker, 返回结果按 Worker 编码回填")
+    void shouldResolveTenantAndListSelfHosted_whenListingMyWorkers() {
+        WorkerRegistryView w = new WorkerRegistryView();
+        w.setWorkerCode("sdk-1");
+        when(queryService.listSelfHosted("tx")).thenReturn(List.of(w));
+        WorkerRegistryResponse expected = WorkerRegistryResponse.from(w);
+        when(responseFactory.success(List.of(expected))).thenReturn(CommonResponse.success(List.of(expected)));
 
-    CommonResponse<List<WorkerRegistryResponse>> resp = controller.list("tx");
+        CommonResponse<List<WorkerRegistryResponse>> resp = controller.list("tx");
 
-    assertThat(resp.data())
-        .hasSize(1)
-        .extracting(WorkerRegistryResponse::workerCode)
-        .contains("sdk-1");
-  }
+        assertThat(resp.data())
+                .hasSize(1)
+                .extracting(WorkerRegistryResponse::workerCode)
+                .contains("sdk-1");
+    }
 
-  @Test
-  @DisplayName("兼容计数查询:返回查询服务的统计结果")
-  @SuppressWarnings("removal")
-  void shouldReturnMapperCount_whenCountingSelfHostedWorkers() {
-    when(queryService.countSelfHosted("tx")).thenReturn(7L);
-    when(responseFactory.success(7L)).thenReturn(CommonResponse.success(7L));
+    @Test
+    @DisplayName("兼容计数查询:返回查询服务的统计结果")
+    @SuppressWarnings("removal")
+    void shouldReturnMapperCount_whenCountingSelfHostedWorkers() {
+        when(queryService.countSelfHosted("tx")).thenReturn(7L);
+        when(responseFactory.success(7L)).thenReturn(CommonResponse.success(7L));
 
-    assertThat(controller.count("tx").data()).isEqualTo(7L);
-  }
+        assertThat(controller.count("tx").data()).isEqualTo(7L);
+    }
 }

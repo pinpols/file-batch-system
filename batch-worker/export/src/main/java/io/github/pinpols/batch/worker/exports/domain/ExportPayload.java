@@ -14,14 +14,14 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExportPayload(
-    String fileCode,
-    String bizType,
-    String templateCode,
-    String batchNo,
-    String fileName,
-    String objectName,
-    String bizDate,
-    String targetPath,
-    Boolean autoDispatch,
-    @JsonProperty("run_mode") @JsonAlias("runMode") String runMode,
-    Map<String, Object> metadata) {}
+        String fileCode,
+        String bizType,
+        String templateCode,
+        String batchNo,
+        String fileName,
+        String objectName,
+        String bizDate,
+        String targetPath,
+        Boolean autoDispatch,
+        @JsonProperty("run_mode") @JsonAlias("runMode") String runMode,
+        Map<String, Object> metadata) {}

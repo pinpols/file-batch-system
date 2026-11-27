@@ -22,25 +22,25 @@ import org.springframework.context.annotation.Lazy;
  * docs/runbook/distributed-tracing.md}。
  */
 @AutoConfiguration(
-    afterName = {
-      "org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration",
-      "org.springframework.boot.opentelemetry.autoconfigure.OpenTelemetrySdkAutoConfiguration"
-    })
+        afterName = {
+            "org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration",
+            "org.springframework.boot.opentelemetry.autoconfigure.OpenTelemetrySdkAutoConfiguration"
+        })
 @ConditionalOnClass({ObservationRegistry.class, ObservedAspect.class})
 @ConditionalOnBean(ObservationRegistry.class)
 public class BatchObservabilityAutoConfiguration {
 
-  @Bean
-  @ConditionalOnMissingBean
-  public ObservedAspect observedAspect(ObservationRegistry observationRegistry) {
-    return new ObservedAspect(observationRegistry);
-  }
+    @Bean
+    @ConditionalOnMissingBean
+    public ObservedAspect observedAspect(ObservationRegistry observationRegistry) {
+        return new ObservedAspect(observationRegistry);
+    }
 
-  @Bean
-  @Lazy(false)
-  @ConditionalOnBean(OpenTelemetry.class)
-  @ConditionalOnMissingBean
-  public OpenTelemetryLogbackBridge openTelemetryLogbackBridge(OpenTelemetry openTelemetry) {
-    return new OpenTelemetryLogbackBridge(openTelemetry);
-  }
+    @Bean
+    @Lazy(false)
+    @ConditionalOnBean(OpenTelemetry.class)
+    @ConditionalOnMissingBean
+    public OpenTelemetryLogbackBridge openTelemetryLogbackBridge(OpenTelemetry openTelemetry) {
+        return new OpenTelemetryLogbackBridge(openTelemetry);
+    }
 }

@@ -26,65 +26,63 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("审批接口的请求处理与异常映射:提交成功返回审批单号,缺少租户参数时兜底为系统错误,业务异常映射为对应状态码与消息键")
 class ApprovalControllerTest {
 
-  @Mock
-  private ApprovalWorkflowService approvalWorkflowService;
+    @Mock
+    private ApprovalWorkflowService approvalWorkflowService;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    mockMvc = MockMvcBuilders.standaloneSetup(new ApprovalController(approvalWorkflowService))
-        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        mockMvc = MockMvcBuilders.standaloneSetup(new ApprovalController(approvalWorkflowService))
+                .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+                .build();
+    }
 
-  @Test
-  @DisplayName("按原请求键查询审批时缺少请求键应拒绝")
-  void shouldRejectApprovalLookupWithoutSourceKey() throws Exception {
-    mockMvc
-        .perform(get("/internal/approvals/by-source-key").param("tenantId", "t1"))
-        .andExpect(status().isBadRequest());
-  }
+    @Test
+    @DisplayName("按原请求键查询审批时缺少请求键应拒绝")
+    void shouldRejectApprovalLookupWithoutSourceKey() throws Exception {
+        mockMvc.perform(get("/internal/approvals/by-source-key").param("tenantId", "t1"))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  @DisplayName("按原请求键查询不存在的审批时返回未找到")
-  void shouldReturnNotFoundWhenApprovalSourceKeyIsUnknown() throws Exception {
-    when(approvalWorkflowService.getBySourceKey("t1", "source-1"))
-        .thenThrow(BizException.of(ResultCode.NOT_FOUND, "error.approval.not_found"));
-    mockMvc
-        .perform(get("/internal/approvals/by-source-key")
-            .param("tenantId", "t1")
-            .header("Idempotency-Key", "source-1"))
-        .andExpect(status().isNotFound());
-  }
+    @Test
+    @DisplayName("按原请求键查询不存在的审批时返回未找到")
+    void shouldReturnNotFoundWhenApprovalSourceKeyIsUnknown() throws Exception {
+        when(approvalWorkflowService.getBySourceKey("t1", "source-1"))
+                .thenThrow(BizException.of(ResultCode.NOT_FOUND, "error.approval.not_found"));
+        mockMvc.perform(get("/internal/approvals/by-source-key")
+                        .param("tenantId", "t1")
+                        .header("Idempotency-Key", "source-1"))
+                .andExpect(status().isNotFound());
+    }
 
-  @Test
-  @DisplayName("按原请求键查询返回审批身份和原始业务载荷")
-  void shouldReturnApprovalWhenSourceKeyMatches() throws Exception {
-    var record = ApprovalWorkflowService.ApprovalRecord.of(
-        "t1",
-        "apr-1",
-        new ApprovalWorkflowService.ApprovalTarget("CATCH_UP", "APPROVE", "JOB", "job-1", "{}"),
-        new ApprovalWorkflowService.ApprovalOutcome("PENDING", null, null, null),
-        new ApprovalWorkflowService.ApprovalSource("operator", null, "source-1", null));
-    when(approvalWorkflowService.getBySourceKey("t1", "source-1")).thenReturn(record);
-    mockMvc
-        .perform(get("/internal/approvals/by-source-key")
-            .param("tenantId", "t1")
-            .header("Idempotency-Key", "source-1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.record.approvalNo").value("apr-1"))
-        .andExpect(jsonPath("$.record.targetId").value("job-1"))
-        .andExpect(jsonPath("$.record.payloadJson").value("{}"));
-  }
+    @Test
+    @DisplayName("按原请求键查询返回审批身份和原始业务载荷")
+    void shouldReturnApprovalWhenSourceKeyMatches() throws Exception {
+        var record = ApprovalWorkflowService.ApprovalRecord.of(
+                "t1",
+                "apr-1",
+                new ApprovalWorkflowService.ApprovalTarget("CATCH_UP", "APPROVE", "JOB", "job-1", "{}"),
+                new ApprovalWorkflowService.ApprovalOutcome("PENDING", null, null, null),
+                new ApprovalWorkflowService.ApprovalSource("operator", null, "source-1", null));
+        when(approvalWorkflowService.getBySourceKey("t1", "source-1")).thenReturn(record);
+        mockMvc.perform(get("/internal/approvals/by-source-key")
+                        .param("tenantId", "t1")
+                        .header("Idempotency-Key", "source-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.record.approvalNo").value("apr-1"))
+                .andExpect(jsonPath("$.record.targetId").value("job-1"))
+                .andExpect(jsonPath("$.record.payloadJson").value("{}"));
+    }
 
-  @Test
-  @DisplayName("提交审批请求成功时返回受理结果中的审批单号")
-  void shouldSubmitAndReturnApprovalNo() throws Exception {
-    when(approvalWorkflowService.submit(any())).thenReturn("appr-001");
+    @Test
+    @DisplayName("提交审批请求成功时返回受理结果中的审批单号")
+    void shouldSubmitAndReturnApprovalNo() throws Exception {
+        when(approvalWorkflowService.submit(any())).thenReturn("appr-001");
 
-    mockMvc
-        .perform(post("/internal/approvals").contentType(APPLICATION_JSON).content("""
+        mockMvc.perform(post("/internal/approvals")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
                     {
                       "tenantId": "t1",
                       "approvalType": "CATCH_UP",
@@ -98,29 +96,27 @@ class ApprovalControllerTest {
                       "approvalReason": "ok"
                     }
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.approvalNo").value("appr-001"));
-  }
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalNo").value("appr-001"));
+    }
 
-  @Test
-  @DisplayName("查询审批单未携带租户参数时由兜底异常处理返回系统错误码")
-  void shouldReturn400WhenTenantIdParamMissingOnGet() throws Exception {
-    mockMvc
-        .perform(get("/internal/approvals/appr-001"))
-        .andExpect(status().isInternalServerError())
-        .andExpect(jsonPath("$.code").value(ResultCode.SYSTEM_ERROR.name()));
-  }
+    @Test
+    @DisplayName("查询审批单未携带租户参数时由兜底异常处理返回系统错误码")
+    void shouldReturn400WhenTenantIdParamMissingOnGet() throws Exception {
+        mockMvc.perform(get("/internal/approvals/appr-001"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value(ResultCode.SYSTEM_ERROR.name()));
+    }
 
-  @Test
-  @DisplayName("审批单不存在时业务异常映射为未找到状态码并回传错误消息键")
-  void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
-    when(approvalWorkflowService.get("t1", "appr-404"))
-        .thenThrow(BizException.of(ResultCode.NOT_FOUND, "error.common.not_found", "not found"));
+    @Test
+    @DisplayName("审批单不存在时业务异常映射为未找到状态码并回传错误消息键")
+    void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
+        when(approvalWorkflowService.get("t1", "appr-404"))
+                .thenThrow(BizException.of(ResultCode.NOT_FOUND, "error.common.not_found", "not found"));
 
-    mockMvc
-        .perform(get("/internal/approvals/appr-404").param("tenantId", "t1"))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code").value(ResultCode.NOT_FOUND.name()))
-        .andExpect(jsonPath("$.message").value("error.common.not_found"));
-  }
+        mockMvc.perform(get("/internal/approvals/appr-404").param("tenantId", "t1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ResultCode.NOT_FOUND.name()))
+                .andExpect(jsonPath("$.message").value("error.common.not_found"));
+    }
 }

@@ -29,174 +29,174 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class GenerateCheckpoint {
 
-  private final ProcessingPositionStore store;
-  private final GenerateCursorCodec codec;
-  private final String tenantId;
-  private final long pipelineInstanceId;
+    private final ProcessingPositionStore store;
+    private final GenerateCursorCodec codec;
+    private final String tenantId;
+    private final long pipelineInstanceId;
 
-  private final boolean resuming;
-  private final long resumeByteOffset;
-  private final Object resumeCursor;
-  private final long resumeRecordCount;
+    private final boolean resuming;
+    private final long resumeByteOffset;
+    private final Object resumeCursor;
+    private final long resumeRecordCount;
 
-  private long lastReportedCount;
-  private boolean disabled;
+    private long lastReportedCount;
+    private boolean disabled;
 
-  private GenerateCheckpoint(
-      ProcessingPositionStore store,
-      GenerateCursorCodec codec,
-      String tenantId,
-      long pipelineInstanceId,
-      boolean resuming,
-      long resumeByteOffset,
-      Object resumeCursor,
-      long resumeRecordCount) {
-    this.store = store;
-    this.codec = codec;
-    this.tenantId = tenantId;
-    this.pipelineInstanceId = pipelineInstanceId;
-    this.resuming = resuming;
-    this.resumeByteOffset = resumeByteOffset;
-    this.resumeCursor = resumeCursor;
-    this.resumeRecordCount = resumeRecordCount;
-    this.lastReportedCount = resumeRecordCount;
-  }
+    private GenerateCheckpoint(
+            ProcessingPositionStore store,
+            GenerateCursorCodec codec,
+            String tenantId,
+            long pipelineInstanceId,
+            boolean resuming,
+            long resumeByteOffset,
+            Object resumeCursor,
+            long resumeRecordCount) {
+        this.store = store;
+        this.codec = codec;
+        this.tenantId = tenantId;
+        this.pipelineInstanceId = pipelineInstanceId;
+        this.resuming = resuming;
+        this.resumeByteOffset = resumeByteOffset;
+        this.resumeCursor = resumeCursor;
+        this.resumeRecordCount = resumeRecordCount;
+        this.lastReportedCount = resumeRecordCount;
+    }
 
-  /**
-   * 依据已存位点 + 生成文件现状决定是否续跑。位点损坏 / 文件缺失 / 偏移越界 / cursor 不可解 → 退化为首跑(resuming=false)。 调用方在 {@code
-   * position.completed()} 时不应走到这里(应已幂等跳过)。
-   */
-  public static GenerateCheckpoint open(
-      ProcessingPositionStore store,
-      GenerateCursorCodec codec,
-      String tenantId,
-      long pipelineInstanceId,
-      ProcessingPosition position,
-      Path generatedFile) {
-    boolean resuming = false;
-    long offset = 0L;
-    Object cursor = null;
-    long recordCount = 0L;
-    String marker = position == null ? null : position.positionMarker();
-    if (marker != null && !position.completed()) {
-      try {
-        GenerateCursorCodec.Marker m = codec.decodeMarker(marker);
-        Object decodedCursor = codec.decodeCursor(m.encodedCursor());
-        boolean checkpointFileCanResume = m.byteOffset() > 0
-            && EmptyChecks.isNotNull(decodedCursor)
-            && Files.exists(generatedFile)
-            && Files.size(generatedFile) >= m.byteOffset();
-        if (checkpointFileCanResume) {
-          resuming = true;
-          offset = m.byteOffset();
-          cursor = decodedCursor;
-          recordCount = position.processedCount();
+    /**
+     * 依据已存位点 + 生成文件现状决定是否续跑。位点损坏 / 文件缺失 / 偏移越界 / cursor 不可解 → 退化为首跑(resuming=false)。 调用方在 {@code
+     * position.completed()} 时不应走到这里(应已幂等跳过)。
+     */
+    public static GenerateCheckpoint open(
+            ProcessingPositionStore store,
+            GenerateCursorCodec codec,
+            String tenantId,
+            long pipelineInstanceId,
+            ProcessingPosition position,
+            Path generatedFile) {
+        boolean resuming = false;
+        long offset = 0L;
+        Object cursor = null;
+        long recordCount = 0L;
+        String marker = position == null ? null : position.positionMarker();
+        if (marker != null && !position.completed()) {
+            try {
+                GenerateCursorCodec.Marker m = codec.decodeMarker(marker);
+                Object decodedCursor = codec.decodeCursor(m.encodedCursor());
+                boolean checkpointFileCanResume = m.byteOffset() > 0
+                        && EmptyChecks.isNotNull(decodedCursor)
+                        && Files.exists(generatedFile)
+                        && Files.size(generatedFile) >= m.byteOffset();
+                if (checkpointFileCanResume) {
+                    resuming = true;
+                    offset = m.byteOffset();
+                    cursor = decodedCursor;
+                    recordCount = position.processedCount();
+                }
+            } catch (Exception ex) {
+                // 位点损坏(理论上不应发生)— 退化为首跑;文件首跑会被 truncate 到 0,不留残尾。
+                log.warn(
+                        "export GENERATE checkpoint marker unusable (instanceId={}): {} — restarting fresh",
+                        pipelineInstanceId,
+                        SwallowedExceptionLogger.summary(ex));
+            }
         }
-      } catch (Exception ex) {
-        // 位点损坏(理论上不应发生)— 退化为首跑;文件首跑会被 truncate 到 0,不留残尾。
-        log.warn(
-            "export GENERATE checkpoint marker unusable (instanceId={}): {} — restarting fresh",
-            pipelineInstanceId,
-            SwallowedExceptionLogger.summary(ex));
-      }
+        return new GenerateCheckpoint(
+                store, codec, tenantId, pipelineInstanceId, resuming, offset, cursor, recordCount);
     }
-    return new GenerateCheckpoint(
-        store, codec, tenantId, pipelineInstanceId, resuming, offset, cursor, recordCount);
-  }
 
-  boolean resuming() {
-    return resuming;
-  }
-
-  long resumeByteOffset() {
-    return resumeByteOffset;
-  }
-
-  Object resumeCursor() {
-    return resumeCursor;
-  }
-
-  long resumeRecordCount() {
-    return resumeRecordCount;
-  }
-
-  /**
-   * 分页边界推进位点(由 {@code generatePaged} 在 fsync 后调用,仅当 cursor != null)。cursor 类型不支持时降级停记。
-   *
-   * @param byteOffset fsync 后的文件字节数(续跑 truncate 目标)
-   * @param nextCursor 下一页起始 cursor(非 null)
-   * @param recordCountSoFar 截至本页末的累计已写行数
-   */
-  void advance(long byteOffset, Object nextCursor, long recordCountSoFar) {
-    if (disabled) {
-      return;
+    boolean resuming() {
+        return resuming;
     }
-    Optional<String> encoded = codec.encodeCursor(nextCursor);
-    if (encoded.isEmpty()) {
-      disabled = true;
-      log.warn(
-          "export GENERATE cursor type {} not serializable — resume disabled for instanceId={} "
-              + "(generation continues as a non-resumable full run)",
-          nextCursor == null ? "null" : nextCursor.getClass().getName(),
-          pipelineInstanceId);
-      return;
-    }
-    long increment = recordCountSoFar - lastReportedCount;
-    String marker = codec.encodeMarker(byteOffset, encoded.get());
-    store.advance(tenantId, pipelineInstanceId, ProcessingStage.GENERATE, marker, increment);
-    lastReportedCount = recordCountSoFar;
-  }
 
-  /**
-   * 完成 marker 的 cursor 哨兵:类型标签 {@code C} <b>不是</b> {@link GenerateCursorCodec} 的合法解码标签(合法为
-   * L/I/BI/D/B/TS/LDT/DT/S)。故完成 marker 的 byteOffset 位可安全复用为「最终文件字节数」指纹:一旦「补记指纹」与「{@code
-   * markCompleted}」之间崩溃,{@code open} 尝试 {@code decodeCursor} 会因未知标签 {@code C} 抛错 → 退化为全量重跑(truncate
-   * 重写),绝不会基于完成哨兵错误续跑。
-   */
-  static final String COMPLETED_CURSOR_SENTINEL = "C|__completed__";
+    long resumeByteOffset() {
+        return resumeByteOffset;
+    }
 
-  /**
-   * 阶段整体完成:补记终页未记的行数(终页 cursor==null 不走 {@link #advance},否则 processedCount 会少最后一页),并把**最终文件字节数**
-   * 写进完成 marker(offset 位),再 {@code markCompleted}。
-   *
-   * <p>P1-2 文件指纹:{@code GenerateStep} 幂等跳过前用该字节数与残文件 {@code Files.size()} 比对——双故障(GENERATE 完→STORE
-   * 前崩→重派 fresh 半写→再崩→completed+残文件)下字节数不符即拒绝跳过、退化全量重写,杜绝上传半截文件。
-   *
-   * @param finalRecordCount generate 返回的真实总行数(含续跑前已写)
-   * @param finalFileSizeBytes 生成文件最终字节数(完整性指纹)
-   */
-  public void complete(long finalRecordCount, long finalFileSizeBytes) {
-    long increment = 0L;
-    if (!disabled && finalRecordCount > lastReportedCount) {
-      increment = finalRecordCount - lastReportedCount;
-      lastReportedCount = finalRecordCount;
+    Object resumeCursor() {
+        return resumeCursor;
     }
-    // 始终写含字节数指纹的完成 marker(即便无新增行数,也要落 fileSize 指纹供跳过前校验)。
-    store.advance(
-        tenantId,
-        pipelineInstanceId,
-        ProcessingStage.GENERATE,
-        codec.encodeMarker(finalFileSizeBytes, COMPLETED_CURSOR_SENTINEL),
-        increment);
-    store.markCompleted(tenantId, pipelineInstanceId, ProcessingStage.GENERATE);
-  }
 
-  /**
-   * 解析完成 marker 里的文件字节数指纹;非完成哨兵格式 / 解析失败 → 返回 {@code -1}(调用方据此拒绝幂等跳过、退化全量重写)。 兼容旧哨兵({@code
-   * 0@S|__completed__},无真实字节数)—— 其 offset=0 与真实文件字节数不符,自然触发重写(安全)。
-   */
-  public static long parseCompletedFileSize(GenerateCursorCodec codec, String marker) {
-    if (marker == null) {
-      return -1L;
+    long resumeRecordCount() {
+        return resumeRecordCount;
     }
-    try {
-      GenerateCursorCodec.Marker parsed = codec.decodeMarker(marker);
-      if (!COMPLETED_CURSOR_SENTINEL.equals(parsed.encodedCursor())) {
-        return -1L;
-      }
-      return parsed.byteOffset();
-    } catch (RuntimeException ex) {
-      return -1L;
+
+    /**
+     * 分页边界推进位点(由 {@code generatePaged} 在 fsync 后调用,仅当 cursor != null)。cursor 类型不支持时降级停记。
+     *
+     * @param byteOffset fsync 后的文件字节数(续跑 truncate 目标)
+     * @param nextCursor 下一页起始 cursor(非 null)
+     * @param recordCountSoFar 截至本页末的累计已写行数
+     */
+    void advance(long byteOffset, Object nextCursor, long recordCountSoFar) {
+        if (disabled) {
+            return;
+        }
+        Optional<String> encoded = codec.encodeCursor(nextCursor);
+        if (encoded.isEmpty()) {
+            disabled = true;
+            log.warn(
+                    "export GENERATE cursor type {} not serializable — resume disabled for instanceId={} "
+                            + "(generation continues as a non-resumable full run)",
+                    nextCursor == null ? "null" : nextCursor.getClass().getName(),
+                    pipelineInstanceId);
+            return;
+        }
+        long increment = recordCountSoFar - lastReportedCount;
+        String marker = codec.encodeMarker(byteOffset, encoded.get());
+        store.advance(tenantId, pipelineInstanceId, ProcessingStage.GENERATE, marker, increment);
+        lastReportedCount = recordCountSoFar;
     }
-  }
+
+    /**
+     * 完成 marker 的 cursor 哨兵:类型标签 {@code C} <b>不是</b> {@link GenerateCursorCodec} 的合法解码标签(合法为
+     * L/I/BI/D/B/TS/LDT/DT/S)。故完成 marker 的 byteOffset 位可安全复用为「最终文件字节数」指纹:一旦「补记指纹」与「{@code
+     * markCompleted}」之间崩溃,{@code open} 尝试 {@code decodeCursor} 会因未知标签 {@code C} 抛错 → 退化为全量重跑(truncate
+     * 重写),绝不会基于完成哨兵错误续跑。
+     */
+    static final String COMPLETED_CURSOR_SENTINEL = "C|__completed__";
+
+    /**
+     * 阶段整体完成:补记终页未记的行数(终页 cursor==null 不走 {@link #advance},否则 processedCount 会少最后一页),并把**最终文件字节数**
+     * 写进完成 marker(offset 位),再 {@code markCompleted}。
+     *
+     * <p>P1-2 文件指纹:{@code GenerateStep} 幂等跳过前用该字节数与残文件 {@code Files.size()} 比对——双故障(GENERATE 完→STORE
+     * 前崩→重派 fresh 半写→再崩→completed+残文件)下字节数不符即拒绝跳过、退化全量重写,杜绝上传半截文件。
+     *
+     * @param finalRecordCount generate 返回的真实总行数(含续跑前已写)
+     * @param finalFileSizeBytes 生成文件最终字节数(完整性指纹)
+     */
+    public void complete(long finalRecordCount, long finalFileSizeBytes) {
+        long increment = 0L;
+        if (!disabled && finalRecordCount > lastReportedCount) {
+            increment = finalRecordCount - lastReportedCount;
+            lastReportedCount = finalRecordCount;
+        }
+        // 始终写含字节数指纹的完成 marker(即便无新增行数,也要落 fileSize 指纹供跳过前校验)。
+        store.advance(
+                tenantId,
+                pipelineInstanceId,
+                ProcessingStage.GENERATE,
+                codec.encodeMarker(finalFileSizeBytes, COMPLETED_CURSOR_SENTINEL),
+                increment);
+        store.markCompleted(tenantId, pipelineInstanceId, ProcessingStage.GENERATE);
+    }
+
+    /**
+     * 解析完成 marker 里的文件字节数指纹;非完成哨兵格式 / 解析失败 → 返回 {@code -1}(调用方据此拒绝幂等跳过、退化全量重写)。 兼容旧哨兵({@code
+     * 0@S|__completed__},无真实字节数)—— 其 offset=0 与真实文件字节数不符,自然触发重写(安全)。
+     */
+    public static long parseCompletedFileSize(GenerateCursorCodec codec, String marker) {
+        if (marker == null) {
+            return -1L;
+        }
+        try {
+            GenerateCursorCodec.Marker parsed = codec.decodeMarker(marker);
+            if (!COMPLETED_CURSOR_SENTINEL.equals(parsed.encodedCursor())) {
+                return -1L;
+            }
+            return parsed.byteOffset();
+        } catch (RuntimeException ex) {
+            return -1L;
+        }
+    }
 }

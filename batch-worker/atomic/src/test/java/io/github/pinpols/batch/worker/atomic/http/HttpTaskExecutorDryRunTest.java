@@ -25,104 +25,98 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 @ExtendWith(OutputCaptureExtension.class)
 class HttpTaskExecutorDryRunTest {
 
-  private HttpExecutorProperties props;
-  private HttpTaskExecutor executor;
-  private HttpServer server;
-  private int serverPort;
-  private AtomicInteger requestCount;
+    private HttpExecutorProperties props;
+    private HttpTaskExecutor executor;
+    private HttpServer server;
+    private int serverPort;
+    private AtomicInteger requestCount;
 
-  @BeforeEach
-  void setUp() throws Exception {
-    props = new HttpExecutorProperties();
-    props.setEnabled(true);
-    props.setDefaultTimeout(Duration.ofSeconds(3));
-    props.setBlockedHostPatterns(Set.of());
-    props.setBlockPrivateIps(false);
-    executor = new HttpTaskExecutor(props);
+    @BeforeEach
+    void setUp() throws Exception {
+        props = new HttpExecutorProperties();
+        props.setEnabled(true);
+        props.setDefaultTimeout(Duration.ofSeconds(3));
+        props.setBlockedHostPatterns(Set.of());
+        props.setBlockPrivateIps(false);
+        executor = new HttpTaskExecutor(props);
 
-    requestCount = new AtomicInteger();
-    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    serverPort = server.getAddress().getPort();
-    server.createContext("/", exchange -> {
-      requestCount.incrementAndGet();
-      exchange.sendResponseHeaders(200, -1);
-      exchange.close();
-    });
-    server.start();
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (server != null) {
-      server.stop(0);
+        requestCount = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        serverPort = server.getAddress().getPort();
+        server.createContext("/", exchange -> {
+            requestCount.incrementAndGet();
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+        server.start();
     }
-  }
 
-  @Test
-  @DisplayName("dry-run 上下文下应短路返回计划动作, 且本地服务零请求, 凭据与报文不落入输出")
-  void shouldShortCircuit_whenDryRun_andNotSendHttpRequest() {
-    // 准备
-    String url = "http://127.0.0.1:" + serverPort + "/secret-endpoint";
-    TaskContext ctx = new TaskContext(
-        "t1",
-        "job-1",
-        "ti-1",
-        "w-1",
-        Map.of(
-            "method",
-            "POST",
-            "url",
-            url,
-            "headers",
-            Map.of("X-Tenant", "t1", "Authorization", "Bearer SECRET"),
-            "body",
-            "payload-with-pii"),
-        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
+    @AfterEach
+    void tearDown() {
+        if (server != null) {
+            server.stop(0);
+        }
+    }
 
-    // 执行
-    TaskResult result = executor.execute(ctx);
+    @Test
+    @DisplayName("dry-run 上下文下应短路返回计划动作, 且本地服务零请求, 凭据与报文不落入输出")
+    void shouldShortCircuit_whenDryRun_andNotSendHttpRequest() {
+        // 准备
+        String url = "http://127.0.0.1:" + serverPort + "/secret-endpoint";
+        TaskContext ctx = new TaskContext(
+                "t1",
+                "job-1",
+                "ti-1",
+                "w-1",
+                Map.of(
+                        "method",
+                        "POST",
+                        "url",
+                        url,
+                        "headers",
+                        Map.of("X-Tenant", "t1", "Authorization", "Bearer SECRET"),
+                        "body",
+                        "payload-with-pii"),
+                Map.of(PipelineRuntimeKeys.DRY_RUN, true));
 
-    // 断言
-    assertThat(result.success()).isTrue();
-    assertThat(result.message()).startsWith("dry-run:");
-    assertThat(result.output())
-        .containsEntry(PipelineRuntimeKeys.DRY_RUN, true)
-        .containsEntry("plannedAction", "http")
-        .containsEntry("method", "POST")
-        .containsEntry("url", url);
-    assertThat(result.output().get("headerKeys"))
-        .asInstanceOf(InstanceOfAssertFactories.list(String.class))
-        .contains("X-Tenant", "Authorization");
-    // 关键 1:真 server 一个请求都没收到
-    assertThat(requestCount.get()).isZero();
-    // 关键 2:header value / body 不进 output(防泄密)
-    assertThat(result.output().values()).noneMatch(v -> {
-      String s = String.valueOf(v);
-      return s.contains("SECRET") || s.contains("payload-with-pii");
-    });
-  }
+        // 执行
+        TaskResult result = executor.execute(ctx);
 
-  @Test
-  @DisplayName("dry-run 计划与日志中的目标地址应隐藏 URL 凭据")
-  void shouldMaskUrlCredentialsInDryRunPlan(CapturedOutput output) {
-    String url = "http://user:probe-secret@127.0.0.1:" + serverPort
-        + "/report?token=query-secret&mode=summary";
-    TaskContext ctx = new TaskContext(
-        "t1",
-        "job-1",
-        "ti-1",
-        "w-1",
-        Map.of("url", url),
-        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
+        // 断言
+        assertThat(result.success()).isTrue();
+        assertThat(result.message()).startsWith("dry-run:");
+        assertThat(result.output())
+                .containsEntry(PipelineRuntimeKeys.DRY_RUN, true)
+                .containsEntry("plannedAction", "http")
+                .containsEntry("method", "POST")
+                .containsEntry("url", url);
+        assertThat(result.output().get("headerKeys"))
+                .asInstanceOf(InstanceOfAssertFactories.list(String.class))
+                .contains("X-Tenant", "Authorization");
+        // 关键 1:真 server 一个请求都没收到
+        assertThat(requestCount.get()).isZero();
+        // 关键 2:header value / body 不进 output(防泄密)
+        assertThat(result.output().values()).noneMatch(v -> {
+            String s = String.valueOf(v);
+            return s.contains("SECRET") || s.contains("payload-with-pii");
+        });
+    }
 
-    TaskResult result = executor.execute(ctx);
+    @Test
+    @DisplayName("dry-run 计划与日志中的目标地址应隐藏 URL 凭据")
+    void shouldMaskUrlCredentialsInDryRunPlan(CapturedOutput output) {
+        String url = "http://user:probe-secret@127.0.0.1:" + serverPort + "/report?token=query-secret&mode=summary";
+        TaskContext ctx = new TaskContext(
+                "t1", "job-1", "ti-1", "w-1", Map.of("url", url), Map.of(PipelineRuntimeKeys.DRY_RUN, true));
 
-    assertThat(result.success()).isTrue();
-    assertThat(result.output().get("url").toString())
-        .contains("mode=summary")
-        .doesNotContain("probe-secret", "query-secret");
-    assertThat(result.message()).doesNotContain("probe-secret", "query-secret");
-    assertThat(output.getOut()).doesNotContain("probe-secret", "query-secret");
-    assertThat(requestCount.get()).isZero();
-  }
+        TaskResult result = executor.execute(ctx);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.output().get("url").toString())
+                .contains("mode=summary")
+                .doesNotContain("probe-secret", "query-secret");
+        assertThat(result.message()).doesNotContain("probe-secret", "query-secret");
+        assertThat(output.getOut()).doesNotContain("probe-secret", "query-secret");
+        assertThat(requestCount.get()).isZero();
+    }
 }

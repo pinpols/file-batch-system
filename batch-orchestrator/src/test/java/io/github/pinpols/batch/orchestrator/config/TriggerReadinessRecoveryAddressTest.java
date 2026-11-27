@@ -17,39 +17,34 @@ import org.springframework.core.io.ClassPathResource;
 @DisplayName("readiness 恢复地址与统一 Trigger 配置对齐")
 class TriggerReadinessRecoveryAddressTest {
 
-  @Test
-  @DisplayName("集群或自定义 Trigger 地址通过现有环境变量传入恢复客户端")
-  void shouldUseSharedTriggerBaseUrl() throws IOException {
-    TriggerInternalProperties properties =
-        bind(Map.of("BATCH_TRIGGER_BASE_URL", "http://trigger-service:19181"));
-    assertThat(properties.getBaseUrl()).isEqualTo("http://trigger-service:19181");
-  }
-
-  @Test
-  @DisplayName("未指定完整地址时使用本轮环境端口，默认端口与 Trigger 一致")
-  void shouldResolveLocalTriggerPort() throws IOException {
-    TriggerInternalProperties overridden = bind(Map.of("BATCH_TRIGGER_PORT", "29181"));
-    TriggerInternalProperties defaults = bind(Map.of());
-    assertThat(overridden.getBaseUrl()).isEqualTo("http://localhost:29181");
-    assertThat(defaults.getBaseUrl()).isEqualTo("http://localhost:18081");
-  }
-
-  private TriggerInternalProperties bind(Map<String, Object> overrides) throws IOException {
-    StandardEnvironment environment = new StandardEnvironment();
-    environment
-        .getPropertySources()
-        .remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
-    environment
-        .getPropertySources()
-        .remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
-    environment.getPropertySources().addFirst(new MapPropertySource("scenario", overrides));
-    var loader = new YamlPropertySourceLoader();
-    var application = new ClassPathResource("application.yml");
-    for (var source : loader.load("application", application)) {
-      environment.getPropertySources().addLast(source);
+    @Test
+    @DisplayName("集群或自定义 Trigger 地址通过现有环境变量传入恢复客户端")
+    void shouldUseSharedTriggerBaseUrl() throws IOException {
+        TriggerInternalProperties properties = bind(Map.of("BATCH_TRIGGER_BASE_URL", "http://trigger-service:19181"));
+        assertThat(properties.getBaseUrl()).isEqualTo("http://trigger-service:19181");
     }
-    return Binder.get(environment)
-        .bind("batch.trigger.internal", TriggerInternalProperties.class)
-        .get();
-  }
+
+    @Test
+    @DisplayName("未指定完整地址时使用本轮环境端口，默认端口与 Trigger 一致")
+    void shouldResolveLocalTriggerPort() throws IOException {
+        TriggerInternalProperties overridden = bind(Map.of("BATCH_TRIGGER_PORT", "29181"));
+        TriggerInternalProperties defaults = bind(Map.of());
+        assertThat(overridden.getBaseUrl()).isEqualTo("http://localhost:29181");
+        assertThat(defaults.getBaseUrl()).isEqualTo("http://localhost:18081");
+    }
+
+    private TriggerInternalProperties bind(Map<String, Object> overrides) throws IOException {
+        StandardEnvironment environment = new StandardEnvironment();
+        environment.getPropertySources().remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
+        environment.getPropertySources().remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
+        environment.getPropertySources().addFirst(new MapPropertySource("scenario", overrides));
+        var loader = new YamlPropertySourceLoader();
+        var application = new ClassPathResource("application.yml");
+        for (var source : loader.load("application", application)) {
+            environment.getPropertySources().addLast(source);
+        }
+        return Binder.get(environment)
+                .bind("batch.trigger.internal", TriggerInternalProperties.class)
+                .get();
+    }
 }

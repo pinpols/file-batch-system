@@ -20,17 +20,17 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Component
 public class ProcessStepBeanRegistrar extends AbstractStepBeanRegistrar<ProcessStageStep> {
 
-  public ProcessStepBeanRegistrar(
-      ApplicationContext applicationContext,
-      StepRegistryMapper stepRegistryMapper,
-      PlatformTransactionManager transactionManager) {
-    super(
-        applicationContext,
-        stepRegistryMapper,
-        transactionManager,
-        ProcessWorkerType.PROCESS,
-        List.of(
-            new BeanTypeBinding<>(ProcessStageStep.class, ProcessStageStep::implCode),
-            new BeanTypeBinding<>(ProcessComputePlugin.class, ProcessComputePlugin::implCode)));
-  }
+    public ProcessStepBeanRegistrar(
+            ApplicationContext applicationContext,
+            StepRegistryMapper stepRegistryMapper,
+            PlatformTransactionManager transactionManager) {
+        super(
+                applicationContext,
+                stepRegistryMapper,
+                transactionManager,
+                ProcessWorkerType.PROCESS,
+                List.of(
+                        new BeanTypeBinding<>(ProcessStageStep.class, ProcessStageStep::implCode),
+                        new BeanTypeBinding<>(ProcessComputePlugin.class, ProcessComputePlugin::implCode)));
+    }
 }

@@ -4,5 +4,5 @@ import io.github.pinpols.batch.console.shared.progress.PipelineStepProgressSnaps
 import java.util.List;
 
 public interface FilePipelineProgressSnapshotService {
-  List<PipelineStepProgressSnapshot> stepsAuthorized(String tenantId, Long pipelineInstanceId);
+    List<PipelineStepProgressSnapshot> stepsAuthorized(String tenantId, Long pipelineInstanceId);
 }

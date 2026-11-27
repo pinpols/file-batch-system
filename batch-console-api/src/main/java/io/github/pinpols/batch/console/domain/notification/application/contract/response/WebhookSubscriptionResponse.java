@@ -7,29 +7,29 @@ import lombok.Builder;
 /** 公开 Webhook 视图；API 不会返回回调密钥。 */
 @Builder
 public record WebhookSubscriptionResponse(
-    Long id,
-    String tenantId,
-    String name,
-    String callbackUrl,
-    String eventTypes,
-    Boolean enabled,
-    String createdBy,
-    String updatedBy,
-    Instant createdAt,
-    Instant updatedAt) {
+        Long id,
+        String tenantId,
+        String name,
+        String callbackUrl,
+        String eventTypes,
+        Boolean enabled,
+        String createdBy,
+        String updatedBy,
+        Instant createdAt,
+        Instant updatedAt) {
 
-  public static WebhookSubscriptionResponse from(WebhookSubscriptionEntity entity) {
-    return WebhookSubscriptionResponse.builder()
-        .id(entity.getId())
-        .tenantId(entity.getTenantId())
-        .name(entity.getName())
-        .callbackUrl(entity.getCallbackUrl())
-        .eventTypes(entity.getEventTypes())
-        .enabled(entity.getEnabled())
-        .createdBy(entity.getCreatedBy())
-        .updatedBy(entity.getUpdatedBy())
-        .createdAt(entity.getCreatedAt())
-        .updatedAt(entity.getUpdatedAt())
-        .build();
-  }
+    public static WebhookSubscriptionResponse from(WebhookSubscriptionEntity entity) {
+        return WebhookSubscriptionResponse.builder()
+                .id(entity.getId())
+                .tenantId(entity.getTenantId())
+                .name(entity.getName())
+                .callbackUrl(entity.getCallbackUrl())
+                .eventTypes(entity.getEventTypes())
+                .enabled(entity.getEnabled())
+                .createdBy(entity.getCreatedBy())
+                .updatedBy(entity.getUpdatedBy())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
+    }
 }

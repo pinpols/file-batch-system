@@ -39,709 +39,686 @@ import java.util.function.Function;
 @SuppressWarnings("java:S112")
 public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
-  /** 错误信息中字段值预览的截断长度；不对应数据库列。 */
-  private static final int PREVIEW_VALUE_MAX_LENGTH = 120;
+    /** 错误信息中字段值预览的截断长度；不对应数据库列。 */
+    private static final int PREVIEW_VALUE_MAX_LENGTH = 120;
 
-  /** Excel 工作表名称长度上限（Excel 限制 31 字符）；不对应数据库列。 */
-  private static final int MAX_SHEET_NAME_LENGTH = 31;
+    /** Excel 工作表名称长度上限（Excel 限制 31 字符）；不对应数据库列。 */
+    private static final int MAX_SHEET_NAME_LENGTH = 31;
 
-  private static final String KEY_DETAIL_PREFIX = "detail.";
-  private static final String KEY_QUERY_PARAM_SCHEMA = "query_param_schema";
+    private static final String KEY_DETAIL_PREFIX = "detail.";
+    private static final String KEY_QUERY_PARAM_SCHEMA = "query_param_schema";
 
-  /**
-   * A-3.12：列数硬上限。超过此值直接抛 {@link IllegalArgumentException}，防止宽表推断导致 Excel/CSV 生成时内存耗尽。1024
-   * 列足够覆盖业务极端场景；真要超此值需显式把模板的 {@code max_columns} 字段调大（见 {@link #resolveMaxColumns}）。
-   */
-  private static final int DEFAULT_MAX_COLUMNS = 1024;
+    /**
+     * A-3.12：列数硬上限。超过此值直接抛 {@link IllegalArgumentException}，防止宽表推断导致 Excel/CSV 生成时内存耗尽。1024
+     * 列足够覆盖业务极端场景；真要超此值需显式把模板的 {@code max_columns} 字段调大（见 {@link #resolveMaxColumns}）。
+     */
+    private static final int DEFAULT_MAX_COLUMNS = 1024;
 
-  protected static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    protected static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-  protected final ObjectMapper objectMapper;
+    protected final ObjectMapper objectMapper;
 
-  protected AbstractExportFormat(ObjectMapper objectMapper) {
-    this.objectMapper = objectMapper;
-  }
-
-  /**
-   * 按续跑状态打开生成文件:续跑则先 {@code FileChannel.truncate} 到已 fsync 的字节位点再 append;首跑则截断到 0 重写。
-   * 续跑写出来的行序号(rowIndex)接着续跑行数往后排,故 JSON 的「行前逗号」、Delimited 的换行等增量语义天然衔接。
-   */
-  protected ResumableExportFile openExportFile(ExportFormatContext ctx) throws IOException {
-    if (isResuming(ctx)) {
-      try (FileChannel ch = FileChannel.open(ctx.generatedFile(), StandardOpenOption.WRITE)) {
-        ch.truncate(ctx.checkpoint().resumeByteOffset());
-      }
-      return ResumableExportFile.append(ctx.generatedFile(), exportCharset(ctx));
+    protected AbstractExportFormat(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
     }
-    return ResumableExportFile.truncate(ctx.generatedFile(), exportCharset(ctx), withBom(ctx));
-  }
 
-  /** 导出目标字符集（GenerateStep 恒注入；防御 null 回退 UTF-8）。 */
-  protected Charset exportCharset(ExportFormatContext ctx) {
-    return ctx == null || ctx.charset() == null ? StandardCharsets.UTF_8 : ctx.charset();
-  }
-
-  /**
-   * 首次空输入（无列、无行）写出合法空产物：打开文件即截断历史字节，随后直接关闭并 fsync，不写表头或数据行。
-   *
-   * <p>只用于首跑。有断点时列布局不可还原必须抛 {@link ExportResumeLayoutUnknownException}，不能走这里静默返回零行。
-   */
-  protected long completeEmptyFirstRun(ExportFormatContext ctx) throws IOException {
-    try (ResumableExportFile ignored = openExportFile(ctx)) {
-      return 0L;
+    /**
+     * 按续跑状态打开生成文件:续跑则先 {@code FileChannel.truncate} 到已 fsync 的字节位点再 append;首跑则截断到 0 重写。
+     * 续跑写出来的行序号(rowIndex)接着续跑行数往后排,故 JSON 的「行前逗号」、Delimited 的换行等增量语义天然衔接。
+     */
+    protected ResumableExportFile openExportFile(ExportFormatContext ctx) throws IOException {
+        if (isResuming(ctx)) {
+            try (FileChannel ch = FileChannel.open(ctx.generatedFile(), StandardOpenOption.WRITE)) {
+                ch.truncate(ctx.checkpoint().resumeByteOffset());
+            }
+            return ResumableExportFile.append(ctx.generatedFile(), exportCharset(ctx));
+        }
+        return ResumableExportFile.truncate(ctx.generatedFile(), exportCharset(ctx), withBom(ctx));
     }
-  }
 
-  /** 是否写 BOM 前缀（仅对存在 BOM 约定的字符集生效）。 */
-  protected boolean withBom(ExportFormatContext ctx) {
-    return ctx != null && Boolean.TRUE.equals(ctx.withBom());
-  }
-
-  /** 行分隔符（GenerateStep 恒注入；防御 null 回退 LF）。 */
-  protected String exportLineSeparator(ExportFormatContext ctx) {
-    // 不能用 Texts.hasText 判空：真实 "\r\n" 会被 hasText 判定为空白（trim 后为空），导致 CRLF 退化成 LF。
-    return ctx == null || ctx.lineSeparator() == null ? "\n" : ctx.lineSeparator();
-  }
-
-  /** 按模板声明的行分隔符写一行结束符，替代 {@link BufferedWriter#newLine()} 的平台默认值。 */
-  protected void writeNewLine(BufferedWriter writer, ExportFormatContext ctx) throws IOException {
-    writer.write(exportLineSeparator(ctx));
-  }
-
-  /**
-   * 写一段文本并把「目标字符集无法表达该字符」（如 GBK 遇到 emoji / 生僻字）转成带行号、字段的明确错误。
-   * 真正的 IO 故障（磁盘满等）原样抛回，不误包装。
-   *
-   * <p>必须在 {@code write} 前预校验：BufferedWriter 会把实际编码推迟到 flush/close，若等异常从那里冒出来，
-   * 行号/字段上下文已经丢失，只能得到 "Input length = 2" 这类无意义信息。
-   */
-  protected void writeText(
-      BufferedWriter writer, String text, String rowLabel, String column, ExportFormatContext ctx)
-      throws IOException {
-    if (EmptyChecks.isNotEmpty(text)) {
-      CharsetEncoder encoder = strictEncoder(exportCharset(ctx));
-      try {
-        encoder.encode(CharBuffer.wrap(text));
-      } catch (CharacterCodingException ex) {
-        throw new IllegalStateException(
-            "EXPORT_GENERATE_UNMAPPABLE_CHARACTER: "
-                + (rowLabel == null ? "row=?" : rowLabel)
-                + (column == null ? "" : ", column=" + column)
-                + ", charset="
-                + exportCharset(ctx).name()
-                + ", value="
-                + previewValue(text),
-            ex);
-      }
+    /** 导出目标字符集（GenerateStep 恒注入；防御 null 回退 UTF-8）。 */
+    protected Charset exportCharset(ExportFormatContext ctx) {
+        return ctx == null || ctx.charset() == null ? StandardCharsets.UTF_8 : ctx.charset();
     }
-    try {
-      writer.write(text);
-    } catch (IOException ex) {
-      if (isEncodingFailure(ex)) {
-        throw new IllegalStateException(
-            "EXPORT_GENERATE_UNMAPPABLE_CHARACTER: "
-                + (rowLabel == null ? "row=?" : rowLabel)
-                + (column == null ? "" : ", column=" + column)
-                + ", charset="
-                + exportCharset(ctx).name()
-                + ", value="
-                + previewValue(text),
-            ex);
-      }
-      throw ex;
-    }
-  }
 
-  /** 异常链是否命中字符不可映射 / 畸形输入（{@code StreamEncoder} 把 CharacterCodingException 包成 IOException cause）。 */
-  protected static boolean isEncodingFailure(Throwable throwable) {
-    for (Throwable current = throwable; current != null; current = current.getCause()) {
-      if (current instanceof CharacterCodingException) {
-        return true;
-      }
+    /**
+     * 首次空输入（无列、无行）写出合法空产物：打开文件即截断历史字节，随后直接关闭并 fsync，不写表头或数据行。
+     *
+     * <p>只用于首跑。有断点时列布局不可还原必须抛 {@link ExportResumeLayoutUnknownException}，不能走这里静默返回零行。
+     */
+    protected long completeEmptyFirstRun(ExportFormatContext ctx) throws IOException {
+        try (ResumableExportFile ignored = openExportFile(ctx)) {
+            return 0L;
+        }
     }
-    return false;
-  }
 
-  /** 线程级缓存的严格编码器（REPORT 而非默认 REPLACE），复用避免每字段 newEncoder。 */
-  @SuppressWarnings("java:S5164")
-  private static final ThreadLocal<Map<String, CharsetEncoder>> STRICT_ENCODERS =
-      ThreadLocal.withInitial(HashMap::new);
+    /** 是否写 BOM 前缀（仅对存在 BOM 约定的字符集生效）。 */
+    protected boolean withBom(ExportFormatContext ctx) {
+        return ctx != null && Boolean.TRUE.equals(ctx.withBom());
+    }
 
-  /**
-   * 严格编码器缓存只服务于一次导出生成。worker 使用长寿命线程池，任务结束时必须清理线程本地缓存，避免配置过的字符集随线程生命周期滞留。
-   */
-  protected AutoCloseable strictEncoderScope() {
-    return () -> STRICT_ENCODERS.remove();
-  }
+    /** 行分隔符（GenerateStep 恒注入；防御 null 回退 LF）。 */
+    protected String exportLineSeparator(ExportFormatContext ctx) {
+        // 不能用 Texts.hasText 判空：真实 "\r\n" 会被 hasText 判定为空白（trim 后为空），导致 CRLF 退化成 LF。
+        return ctx == null || ctx.lineSeparator() == null ? "\n" : ctx.lineSeparator();
+    }
 
-  private static CharsetEncoder strictEncoder(Charset charset) {
-    Map<String, CharsetEncoder> cache = STRICT_ENCODERS.get();
-    CharsetEncoder encoder = cache.get(charset.name());
-    if (encoder == null) {
-      encoder = charset
-          .newEncoder()
-          .onMalformedInput(CodingErrorAction.REPORT)
-          .onUnmappableCharacter(CodingErrorAction.REPORT);
-      cache.put(charset.name(), encoder);
+    /** 按模板声明的行分隔符写一行结束符，替代 {@link BufferedWriter#newLine()} 的平台默认值。 */
+    protected void writeNewLine(BufferedWriter writer, ExportFormatContext ctx) throws IOException {
+        writer.write(exportLineSeparator(ctx));
     }
-    return encoder.reset();
-  }
 
-  private static String previewValue(String value) {
-    if (value == null) {
-      return "null";
+    /**
+     * 写一段文本并把「目标字符集无法表达该字符」（如 GBK 遇到 emoji / 生僻字）转成带行号、字段的明确错误。
+     * 真正的 IO 故障（磁盘满等）原样抛回，不误包装。
+     *
+     * <p>必须在 {@code write} 前预校验：BufferedWriter 会把实际编码推迟到 flush/close，若等异常从那里冒出来，
+     * 行号/字段上下文已经丢失，只能得到 "Input length = 2" 这类无意义信息。
+     */
+    protected void writeText(
+            BufferedWriter writer, String text, String rowLabel, String column, ExportFormatContext ctx)
+            throws IOException {
+        if (EmptyChecks.isNotEmpty(text)) {
+            CharsetEncoder encoder = strictEncoder(exportCharset(ctx));
+            try {
+                encoder.encode(CharBuffer.wrap(text));
+            } catch (CharacterCodingException ex) {
+                throw new IllegalStateException(
+                        "EXPORT_GENERATE_UNMAPPABLE_CHARACTER: "
+                                + (rowLabel == null ? "row=?" : rowLabel)
+                                + (column == null ? "" : ", column=" + column)
+                                + ", charset="
+                                + exportCharset(ctx).name()
+                                + ", value="
+                                + previewValue(text),
+                        ex);
+            }
+        }
+        try {
+            writer.write(text);
+        } catch (IOException ex) {
+            if (isEncodingFailure(ex)) {
+                throw new IllegalStateException(
+                        "EXPORT_GENERATE_UNMAPPABLE_CHARACTER: "
+                                + (rowLabel == null ? "row=?" : rowLabel)
+                                + (column == null ? "" : ", column=" + column)
+                                + ", charset="
+                                + exportCharset(ctx).name()
+                                + ", value="
+                                + previewValue(text),
+                        ex);
+            }
+            throw ex;
+        }
     }
-    String carriageReturnsEscaped = value.replace("\r", "\\r");
-    String lineBreaksEscaped = carriageReturnsEscaped.replace("\n", "\\n");
-    return lineBreaksEscaped.length() <= PREVIEW_VALUE_MAX_LENGTH
-        ? "\"" + lineBreaksEscaped + "\""
-        : "\"" + lineBreaksEscaped.substring(0, PREVIEW_VALUE_MAX_LENGTH) + "...\"";
-  }
 
-  /** 本次 generate 是否为续跑(已有可用位点 + 残文件)。 */
-  protected boolean isResuming(ExportFormatContext ctx) {
-    return EmptyChecks.isNotNull(ctx.checkpoint()) && ctx.checkpoint().resuming();
-  }
+    /** 异常链是否命中字符不可映射 / 畸形输入（{@code StreamEncoder} 把 CharacterCodingException 包成 IOException cause）。 */
+    protected static boolean isEncodingFailure(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            if (current instanceof CharacterCodingException) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-  /** 优先级：模板配置 &gt; 插件描述 &gt; 首页字段推断。 */
-  protected List<ColumnLayout> resolveDelimitedColumns(
-      ExportDataContext dataCtx,
-      ExportDataPlugin dataPlugin,
-      Map<String, Object> batch,
-      List<Map<String, Object>> firstPage) {
-    List<ColumnLayout> configuredColumns = templateDelimitedColumns(dataCtx.templateConfig());
-    List<ExportDataPlugin.DelimitedColumn> describedColumns =
-        dataPlugin.describeDelimitedColumns(dataCtx, batch);
-    ColumnResolutionSpec spec = new ColumnResolutionSpec(
-        "delimited",
-        configuredColumns,
-        describedColumns,
-        key -> new ColumnLayout(key, KEY_DETAIL_PREFIX + key, null, false, ' '));
-    return resolveColumns(dataCtx, firstPage, spec);
-  }
+    /** 线程级缓存的严格编码器（REPORT 而非默认 REPLACE），复用避免每字段 newEncoder。 */
+    @SuppressWarnings("java:S5164")
+    private static final ThreadLocal<Map<String, CharsetEncoder>> STRICT_ENCODERS =
+            ThreadLocal.withInitial(HashMap::new);
 
-  protected List<ColumnLayout> resolveExcelColumns(
-      ExportDataContext dataCtx,
-      ExportDataPlugin dataPlugin,
-      Map<String, Object> batch,
-      List<Map<String, Object>> firstPage) {
-    return resolveDelimitedColumns(dataCtx, dataPlugin, batch, firstPage);
-  }
+    /**
+     * 严格编码器缓存只服务于一次导出生成。worker 使用长寿命线程池，任务结束时必须清理线程本地缓存，避免配置过的字符集随线程生命周期滞留。
+     */
+    protected AutoCloseable strictEncoderScope() {
+        return () -> STRICT_ENCODERS.remove();
+    }
 
-  protected List<ColumnLayout> resolveFixedWidthColumns(
-      ExportDataContext dataCtx,
-      ExportDataPlugin dataPlugin,
-      Map<String, Object> batch,
-      List<Map<String, Object>> firstPage) {
-    List<ColumnLayout> configuredColumns = templateFixedWidthColumns(dataCtx.templateConfig());
-    List<ExportDataPlugin.DelimitedColumn> describedColumns =
-        dataPlugin.describeFixedWidthColumns(dataCtx, batch);
-    ColumnResolutionSpec spec =
-        new ColumnResolutionSpec("fixed-width", configuredColumns, describedColumns, key -> {
-          int minimumColumnWidth = Math.max(key.length(), 16);
-          return new ColumnLayout(key, KEY_DETAIL_PREFIX + key, minimumColumnWidth, false, ' ');
-        });
-    return resolveColumns(dataCtx, firstPage, spec);
-  }
+    private static CharsetEncoder strictEncoder(Charset charset) {
+        Map<String, CharsetEncoder> cache = STRICT_ENCODERS.get();
+        CharsetEncoder encoder = cache.get(charset.name());
+        if (encoder == null) {
+            encoder = charset.newEncoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT);
+            cache.put(charset.name(), encoder);
+        }
+        return encoder.reset();
+    }
 
-  /**
-   * delimited / fixed-width 共享的列解析模板：按 template &gt; plugin &gt; inferred 顺序选源，并统一做 max_columns 截断。
-   */
-  private List<ColumnLayout> resolveColumns(
-      ExportDataContext dataCtx, List<Map<String, Object>> firstPage, ColumnResolutionSpec spec) {
-    int maxColumns = resolveMaxColumns(dataCtx.templateConfig());
-    if (EmptyChecks.isNotEmpty(spec.configured())) {
-      return enforceMaxColumns(spec.configured(), maxColumns, spec.labelTag() + "-template");
+    private static String previewValue(String value) {
+        if (value == null) {
+            return "null";
+        }
+        String carriageReturnsEscaped = value.replace("\r", "\\r");
+        String lineBreaksEscaped = carriageReturnsEscaped.replace("\n", "\\n");
+        return lineBreaksEscaped.length() <= PREVIEW_VALUE_MAX_LENGTH
+                ? "\"" + lineBreaksEscaped + "\""
+                : "\"" + lineBreaksEscaped.substring(0, PREVIEW_VALUE_MAX_LENGTH) + "...\"";
     }
-    if (EmptyChecks.isNotEmpty(spec.pluginColumns())) {
-      List<ColumnLayout> fromPlugin = spec.pluginColumns().stream()
-          .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
-          .toList();
-      return enforceMaxColumns(fromPlugin, maxColumns, spec.labelTag() + "-plugin");
-    }
-    if (EmptyChecks.isEmpty(firstPage)) {
-      return List.of();
-    }
-    Map<String, Object> firstRow = firstPage.get(0);
-    if (EmptyChecks.isEmpty(firstRow)) {
-      return List.of();
-    }
-    List<ColumnLayout> inferred =
-        firstRow.keySet().stream().map(spec.inferredColumnFactory()).toList();
-    return enforceMaxColumns(inferred, maxColumns, spec.labelTag() + "-inferred");
-  }
 
-  private record ColumnResolutionSpec(
-      String labelTag,
-      List<ColumnLayout> configured,
-      List<ExportDataPlugin.DelimitedColumn> pluginColumns,
-      Function<String, ColumnLayout> inferredColumnFactory) {}
+    /** 本次 generate 是否为续跑(已有可用位点 + 残文件)。 */
+    protected boolean isResuming(ExportFormatContext ctx) {
+        return EmptyChecks.isNotNull(ctx.checkpoint()) && ctx.checkpoint().resuming();
+    }
 
-  /**
-   * A-3.12：解析模板中的 {@code max_columns} / {@code maxColumns}；未配置时走 {@link #DEFAULT_MAX_COLUMNS}。支持从
-   * {@code query_param_schema} 继承配置。
-   */
-  protected int resolveMaxColumns(Map<String, Object> templateConfig) {
-    if (EmptyChecks.isEmpty(templateConfig)) {
-      return DEFAULT_MAX_COLUMNS;
+    /** 优先级：模板配置 &gt; 插件描述 &gt; 首页字段推断。 */
+    protected List<ColumnLayout> resolveDelimitedColumns(
+            ExportDataContext dataCtx,
+            ExportDataPlugin dataPlugin,
+            Map<String, Object> batch,
+            List<Map<String, Object>> firstPage) {
+        List<ColumnLayout> configuredColumns = templateDelimitedColumns(dataCtx.templateConfig());
+        List<ExportDataPlugin.DelimitedColumn> describedColumns = dataPlugin.describeDelimitedColumns(dataCtx, batch);
+        ColumnResolutionSpec spec = new ColumnResolutionSpec(
+                "delimited",
+                configuredColumns,
+                describedColumns,
+                key -> new ColumnLayout(key, KEY_DETAIL_PREFIX + key, null, false, ' '));
+        return resolveColumns(dataCtx, firstPage, spec);
     }
-    Integer direct = integerValue(
-        firstNonNull(templateConfig.get("max_columns"), templateConfig.get("maxColumns")));
-    if (EmptyChecks.isNotNull(direct) && direct > 0) {
-      return direct;
-    }
-    Map<String, Object> schema = toMap(templateConfig.get(KEY_QUERY_PARAM_SCHEMA));
-    Integer fromSchema =
-        integerValue(firstNonNull(schema.get("maxColumns"), schema.get("max_columns")));
-    if (EmptyChecks.isNotNull(fromSchema) && fromSchema > 0) {
-      return fromSchema;
-    }
-    return DEFAULT_MAX_COLUMNS;
-  }
 
-  /** A-3.12：列数超上限立即 fail-fast，避免后续 StringBuilder / workbook 内存耗尽。 */
-  protected <T> List<T> enforceMaxColumns(List<T> columns, int maxColumns, String source) {
-    if (columns.size() > maxColumns) {
-      throw new IllegalArgumentException("export column count "
-          + columns.size()
-          + " exceeds max_columns="
-          + maxColumns
-          + " (source="
-          + source
-          + "); declare template.max_columns to raise the limit deliberately");
+    protected List<ColumnLayout> resolveExcelColumns(
+            ExportDataContext dataCtx,
+            ExportDataPlugin dataPlugin,
+            Map<String, Object> batch,
+            List<Map<String, Object>> firstPage) {
+        return resolveDelimitedColumns(dataCtx, dataPlugin, batch, firstPage);
     }
-    return columns;
-  }
 
-  protected List<ColumnLayout> templateDelimitedColumns(Map<String, Object> templateConfig) {
-    if (EmptyChecks.isEmpty(templateConfig)) {
-      return List.of();
+    protected List<ColumnLayout> resolveFixedWidthColumns(
+            ExportDataContext dataCtx,
+            ExportDataPlugin dataPlugin,
+            Map<String, Object> batch,
+            List<Map<String, Object>> firstPage) {
+        List<ColumnLayout> configuredColumns = templateFixedWidthColumns(dataCtx.templateConfig());
+        List<ExportDataPlugin.DelimitedColumn> describedColumns = dataPlugin.describeFixedWidthColumns(dataCtx, batch);
+        ColumnResolutionSpec spec =
+                new ColumnResolutionSpec("fixed-width", configuredColumns, describedColumns, key -> {
+                    int minimumColumnWidth = Math.max(key.length(), 16);
+                    return new ColumnLayout(key, KEY_DETAIL_PREFIX + key, minimumColumnWidth, false, ' ');
+                });
+        return resolveColumns(dataCtx, firstPage, spec);
     }
-    Object direct =
-        firstNonNull(templateConfig.get("csv_columns"), templateConfig.get("csvColumns"));
-    List<ColumnLayout> parsed = parseDelimitedColumns(direct, false);
-    if (EmptyChecks.isNotEmpty(parsed)) {
-      return parsed;
-    }
-    Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
-    Map<String, Object> schemaMap = toMap(querySchema);
-    Object schemaColumns =
-        firstNonNull(schemaMap.get("csvColumns"), schemaMap.get("delimitedColumns"));
-    return parseDelimitedColumns(schemaColumns, false);
-  }
 
-  protected List<ColumnLayout> templateFixedWidthColumns(Map<String, Object> templateConfig) {
-    if (EmptyChecks.isEmpty(templateConfig)) {
-      return List.of();
+    /**
+     * delimited / fixed-width 共享的列解析模板：按 template &gt; plugin &gt; inferred 顺序选源，并统一做 max_columns 截断。
+     */
+    private List<ColumnLayout> resolveColumns(
+            ExportDataContext dataCtx, List<Map<String, Object>> firstPage, ColumnResolutionSpec spec) {
+        int maxColumns = resolveMaxColumns(dataCtx.templateConfig());
+        if (EmptyChecks.isNotEmpty(spec.configured())) {
+            return enforceMaxColumns(spec.configured(), maxColumns, spec.labelTag() + "-template");
+        }
+        if (EmptyChecks.isNotEmpty(spec.pluginColumns())) {
+            List<ColumnLayout> fromPlugin = spec.pluginColumns().stream()
+                    .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
+                    .toList();
+            return enforceMaxColumns(fromPlugin, maxColumns, spec.labelTag() + "-plugin");
+        }
+        if (EmptyChecks.isEmpty(firstPage)) {
+            return List.of();
+        }
+        Map<String, Object> firstRow = firstPage.get(0);
+        if (EmptyChecks.isEmpty(firstRow)) {
+            return List.of();
+        }
+        List<ColumnLayout> inferred =
+                firstRow.keySet().stream().map(spec.inferredColumnFactory()).toList();
+        return enforceMaxColumns(inferred, maxColumns, spec.labelTag() + "-inferred");
     }
-    Object direct = firstNonNull(
-        templateConfig.get("fixed_width_columns"), templateConfig.get("fixedWidthColumns"));
-    List<ColumnLayout> parsed = parseDelimitedColumns(direct, true);
-    if (EmptyChecks.isNotEmpty(parsed)) {
-      return parsed;
-    }
-    Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
-    Map<String, Object> schemaMap = toMap(querySchema);
-    Object schemaColumns =
-        firstNonNull(schemaMap.get("fixedWidthColumns"), schemaMap.get("fixed_width_columns"));
-    return parseDelimitedColumns(schemaColumns, true);
-  }
 
-  protected List<ColumnLayout> parseDelimitedColumns(Object raw, boolean fixedWidth) {
-    if (!(raw instanceof Collection<?> list)) {
-      return List.of();
-    }
-    List<ColumnLayout> columns = new ArrayList<>();
-    for (Object item : list) {
-      Map<String, Object> map = toMap(item);
-      if (EmptyChecks.isEmpty(map)) {
-        continue;
-      }
-      String source = textValue(firstNonNull(map.get("source"), map.get("path"), map.get("field")));
-      if (!Texts.hasText(source)) {
-        continue;
-      }
-      String normalizedSource = normalizeDelimitedSource(source);
-      String header = textValue(firstNonNull(map.get("header"), map.get("name")));
-      if (!Texts.hasText(header)) {
-        header = defaultDelimitedHeader(normalizedSource);
-      }
-      Integer width = fixedWidth
-          ? integerValue(firstNonNull(map.get("width"), map.get("size"), map.get("len")))
-          : null;
-      String align =
-          fixedWidth ? textValue(firstNonNull(map.get("align"), map.get("alignment"))) : null;
-      String padChar =
-          fixedWidth ? textValue(firstNonNull(map.get("padChar"), map.get("pad_char"))) : null;
-      // type / numberFormat / dateFormat 仅 Excel 类型化导出消费;delimited / fixed-width 忽略这三个字段,
-      // 解析在此统一做不增加分支(未配=STRING + null 格式串 = 历史全文本行为)。
-      ColumnType type = ColumnType.from(firstNonNull(map.get("type"), map.get("cell_type")));
-      String numberFormat =
-          textValue(firstNonNull(map.get("numberFormat"), map.get("number_format")));
-      String dateFormat = textValue(firstNonNull(map.get("dateFormat"), map.get("date_format")));
-      ColumnLayout columnLayout = new ColumnLayout(
-          header,
-          normalizedSource,
-          width,
-          "RIGHT".equalsIgnoreCase(align),
-          resolvePadChar(padChar),
-          type,
-          numberFormat,
-          dateFormat);
-      columns.add(columnLayout);
-    }
-    return columns;
-  }
+    private record ColumnResolutionSpec(
+            String labelTag,
+            List<ColumnLayout> configured,
+            List<ExportDataPlugin.DelimitedColumn> pluginColumns,
+            Function<String, ColumnLayout> inferredColumnFactory) {}
 
-  protected String normalizeDelimitedSource(String source) {
-    String value = EmptyChecks.isNull(source) ? "" : source.trim();
-    if (value.startsWith("batch.") || value.startsWith(KEY_DETAIL_PREFIX)) {
-      return value;
+    /**
+     * A-3.12：解析模板中的 {@code max_columns} / {@code maxColumns}；未配置时走 {@link #DEFAULT_MAX_COLUMNS}。支持从
+     * {@code query_param_schema} 继承配置。
+     */
+    protected int resolveMaxColumns(Map<String, Object> templateConfig) {
+        if (EmptyChecks.isEmpty(templateConfig)) {
+            return DEFAULT_MAX_COLUMNS;
+        }
+        Integer direct =
+                integerValue(firstNonNull(templateConfig.get("max_columns"), templateConfig.get("maxColumns")));
+        if (EmptyChecks.isNotNull(direct) && direct > 0) {
+            return direct;
+        }
+        Map<String, Object> schema = toMap(templateConfig.get(KEY_QUERY_PARAM_SCHEMA));
+        Integer fromSchema = integerValue(firstNonNull(schema.get("maxColumns"), schema.get("max_columns")));
+        if (EmptyChecks.isNotNull(fromSchema) && fromSchema > 0) {
+            return fromSchema;
+        }
+        return DEFAULT_MAX_COLUMNS;
     }
-    return KEY_DETAIL_PREFIX + value;
-  }
 
-  protected String defaultDelimitedHeader(String source) {
-    int idx = source.lastIndexOf('.');
-    return idx >= 0 && idx + 1 < source.length() ? source.substring(idx + 1) : source;
-  }
+    /** A-3.12：列数超上限立即 fail-fast，避免后续 StringBuilder / workbook 内存耗尽。 */
+    protected <T> List<T> enforceMaxColumns(List<T> columns, int maxColumns, String source) {
+        if (columns.size() > maxColumns) {
+            throw new IllegalArgumentException("export column count "
+                    + columns.size()
+                    + " exceeds max_columns="
+                    + maxColumns
+                    + " (source="
+                    + source
+                    + "); declare template.max_columns to raise the limit deliberately");
+        }
+        return columns;
+    }
 
-  protected DelimitedFormatConfig resolveDelimitedFormatConfig(Map<String, Object> templateConfig) {
-    Map<String, Object> source = EmptyChecks.isNull(templateConfig) ? Map.of() : templateConfig;
-    Object schema = source.get(KEY_QUERY_PARAM_SCHEMA);
-    Map<String, Object> schemaMap = toMap(schema);
-    Object delimiterRaw = firstNonNull(
-        source.get("delimiter"), source.get("quote_delimiter"), schemaMap.get("delimiter"));
-    String delimiter = EmptyChecks.isNull(delimiterRaw) ? null : String.valueOf(delimiterRaw);
-    if (EmptyChecks.isEmpty(delimiter)) {
-      delimiter = ",";
+    protected List<ColumnLayout> templateDelimitedColumns(Map<String, Object> templateConfig) {
+        if (EmptyChecks.isEmpty(templateConfig)) {
+            return List.of();
+        }
+        Object direct = firstNonNull(templateConfig.get("csv_columns"), templateConfig.get("csvColumns"));
+        List<ColumnLayout> parsed = parseDelimitedColumns(direct, false);
+        if (EmptyChecks.isNotEmpty(parsed)) {
+            return parsed;
+        }
+        Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
+        Map<String, Object> schemaMap = toMap(querySchema);
+        Object schemaColumns = firstNonNull(schemaMap.get("csvColumns"), schemaMap.get("delimitedColumns"));
+        return parseDelimitedColumns(schemaColumns, false);
     }
-    Object quoteCharRaw =
-        firstNonNull(source.get("quote_char"), source.get("quoteChar"), schemaMap.get("quoteChar"));
-    String quoteChar = EmptyChecks.isNull(quoteCharRaw) ? null : String.valueOf(quoteCharRaw);
-    if (EmptyChecks.isEmpty(quoteChar)) {
-      quoteChar = "\"";
-    }
-    QuotePolicy quotePolicy = QuotePolicy.from(firstNonNull(
-        source.get("quote_policy"), source.get("quotePolicy"), schemaMap.get("quotePolicy")));
-    EscapePolicy escapePolicy = EscapePolicy.from(firstNonNull(
-        source.get("escape_policy"), source.get("escapePolicy"), schemaMap.get("escapePolicy")));
-    int headerRows = resolveIntValue(
-        firstNonNull(
-            source.get("header_rows"), source.get("headerRows"), schemaMap.get("headerRows")),
-        1);
-    return new DelimitedFormatConfig(delimiter, quoteChar, quotePolicy, escapePolicy, headerRows);
-  }
 
-  protected String resolveSheetName(Map<String, Object> templateConfig) {
-    if (EmptyChecks.isEmpty(templateConfig)) {
-      return "Sheet1";
+    protected List<ColumnLayout> templateFixedWidthColumns(Map<String, Object> templateConfig) {
+        if (EmptyChecks.isEmpty(templateConfig)) {
+            return List.of();
+        }
+        Object direct =
+                firstNonNull(templateConfig.get("fixed_width_columns"), templateConfig.get("fixedWidthColumns"));
+        List<ColumnLayout> parsed = parseDelimitedColumns(direct, true);
+        if (EmptyChecks.isNotEmpty(parsed)) {
+            return parsed;
+        }
+        Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
+        Map<String, Object> schemaMap = toMap(querySchema);
+        Object schemaColumns = firstNonNull(schemaMap.get("fixedWidthColumns"), schemaMap.get("fixed_width_columns"));
+        return parseDelimitedColumns(schemaColumns, true);
     }
-    Object v = firstNonNull(templateConfig.get("sheet_name"), templateConfig.get("sheetName"));
-    String text = textValue(v);
-    return Texts.hasText(text) ? sanitizeSheetName(text) : "Sheet1";
-  }
 
-  protected String sanitizeSheetName(String value) {
-    String cleaned = value.replaceAll("[\\\\/?*\\[\\]:]", "_");
-    return cleaned.length() > MAX_SHEET_NAME_LENGTH
-        ? cleaned.substring(0, MAX_SHEET_NAME_LENGTH)
-        : cleaned;
-  }
+    protected List<ColumnLayout> parseDelimitedColumns(Object raw, boolean fixedWidth) {
+        if (!(raw instanceof Collection<?> list)) {
+            return List.of();
+        }
+        List<ColumnLayout> columns = new ArrayList<>();
+        for (Object item : list) {
+            Map<String, Object> map = toMap(item);
+            if (EmptyChecks.isEmpty(map)) {
+                continue;
+            }
+            String source = textValue(firstNonNull(map.get("source"), map.get("path"), map.get("field")));
+            if (!Texts.hasText(source)) {
+                continue;
+            }
+            String normalizedSource = normalizeDelimitedSource(source);
+            String header = textValue(firstNonNull(map.get("header"), map.get("name")));
+            if (!Texts.hasText(header)) {
+                header = defaultDelimitedHeader(normalizedSource);
+            }
+            Integer width =
+                    fixedWidth ? integerValue(firstNonNull(map.get("width"), map.get("size"), map.get("len"))) : null;
+            String align = fixedWidth ? textValue(firstNonNull(map.get("align"), map.get("alignment"))) : null;
+            String padChar = fixedWidth ? textValue(firstNonNull(map.get("padChar"), map.get("pad_char"))) : null;
+            // type / numberFormat / dateFormat 仅 Excel 类型化导出消费;delimited / fixed-width 忽略这三个字段,
+            // 解析在此统一做不增加分支(未配=STRING + null 格式串 = 历史全文本行为)。
+            ColumnType type = ColumnType.from(firstNonNull(map.get("type"), map.get("cell_type")));
+            String numberFormat = textValue(firstNonNull(map.get("numberFormat"), map.get("number_format")));
+            String dateFormat = textValue(firstNonNull(map.get("dateFormat"), map.get("date_format")));
+            ColumnLayout columnLayout = new ColumnLayout(
+                    header,
+                    normalizedSource,
+                    width,
+                    "RIGHT".equalsIgnoreCase(align),
+                    resolvePadChar(padChar),
+                    type,
+                    numberFormat,
+                    dateFormat);
+            columns.add(columnLayout);
+        }
+        return columns;
+    }
 
-  protected Object resolveDelimitedValue(
-      Map<String, Object> batch, Map<String, Object> detail, String source) {
-    if (!Texts.hasText(source)) {
-      return null;
+    protected String normalizeDelimitedSource(String source) {
+        String value = EmptyChecks.isNull(source) ? "" : source.trim();
+        if (value.startsWith("batch.") || value.startsWith(KEY_DETAIL_PREFIX)) {
+            return value;
+        }
+        return KEY_DETAIL_PREFIX + value;
     }
-    if (source.startsWith("batch.")) {
-      String batchField = source.substring("batch.".length());
-      return batch.get(batchField);
-    }
-    if (source.startsWith(KEY_DETAIL_PREFIX)) {
-      String detailField = source.substring(KEY_DETAIL_PREFIX.length());
-      return detail.get(detailField);
-    }
-    Object detailValue = detail.get(source);
-    return EmptyChecks.isNotNull(detailValue) ? detailValue : batch.get(source);
-  }
 
-  protected int resolveTemplateInt(ExportJobContext context, String key, int fallback) {
-    return ExportConfigValueSupport.resolveTemplateInt(context, key, fallback);
-  }
-
-  protected String csv(Object value, DelimitedFormatConfig formatConfig) {
-    String text = textValue(value);
-    if (!Texts.hasText(text)) {
-      return "";
+    protected String defaultDelimitedHeader(String source) {
+        int idx = source.lastIndexOf('.');
+        return idx >= 0 && idx + 1 < source.length() ? source.substring(idx + 1) : source;
     }
-    boolean needsQuote =
-        switch (formatConfig.quotePolicy()) {
-          case ALL -> true;
-          case NONE -> false;
-          case REQUIRED ->
-            text.contains(formatConfig.delimiter())
-                || text.contains("\n")
-                || text.contains("\r")
-                || text.contains(formatConfig.quoteChar())
-                || text.startsWith(" ")
-                || text.endsWith(" ");
+
+    protected DelimitedFormatConfig resolveDelimitedFormatConfig(Map<String, Object> templateConfig) {
+        Map<String, Object> source = EmptyChecks.isNull(templateConfig) ? Map.of() : templateConfig;
+        Object schema = source.get(KEY_QUERY_PARAM_SCHEMA);
+        Map<String, Object> schemaMap = toMap(schema);
+        Object delimiterRaw =
+                firstNonNull(source.get("delimiter"), source.get("quote_delimiter"), schemaMap.get("delimiter"));
+        String delimiter = EmptyChecks.isNull(delimiterRaw) ? null : String.valueOf(delimiterRaw);
+        if (EmptyChecks.isEmpty(delimiter)) {
+            delimiter = ",";
+        }
+        Object quoteCharRaw =
+                firstNonNull(source.get("quote_char"), source.get("quoteChar"), schemaMap.get("quoteChar"));
+        String quoteChar = EmptyChecks.isNull(quoteCharRaw) ? null : String.valueOf(quoteCharRaw);
+        if (EmptyChecks.isEmpty(quoteChar)) {
+            quoteChar = "\"";
+        }
+        QuotePolicy quotePolicy = QuotePolicy.from(
+                firstNonNull(source.get("quote_policy"), source.get("quotePolicy"), schemaMap.get("quotePolicy")));
+        EscapePolicy escapePolicy = EscapePolicy.from(
+                firstNonNull(source.get("escape_policy"), source.get("escapePolicy"), schemaMap.get("escapePolicy")));
+        int headerRows = resolveIntValue(
+                firstNonNull(source.get("header_rows"), source.get("headerRows"), schemaMap.get("headerRows")), 1);
+        return new DelimitedFormatConfig(delimiter, quoteChar, quotePolicy, escapePolicy, headerRows);
+    }
+
+    protected String resolveSheetName(Map<String, Object> templateConfig) {
+        if (EmptyChecks.isEmpty(templateConfig)) {
+            return "Sheet1";
+        }
+        Object v = firstNonNull(templateConfig.get("sheet_name"), templateConfig.get("sheetName"));
+        String text = textValue(v);
+        return Texts.hasText(text) ? sanitizeSheetName(text) : "Sheet1";
+    }
+
+    protected String sanitizeSheetName(String value) {
+        String cleaned = value.replaceAll("[\\\\/?*\\[\\]:]", "_");
+        return cleaned.length() > MAX_SHEET_NAME_LENGTH ? cleaned.substring(0, MAX_SHEET_NAME_LENGTH) : cleaned;
+    }
+
+    protected Object resolveDelimitedValue(Map<String, Object> batch, Map<String, Object> detail, String source) {
+        if (!Texts.hasText(source)) {
+            return null;
+        }
+        if (source.startsWith("batch.")) {
+            String batchField = source.substring("batch.".length());
+            return batch.get(batchField);
+        }
+        if (source.startsWith(KEY_DETAIL_PREFIX)) {
+            String detailField = source.substring(KEY_DETAIL_PREFIX.length());
+            return detail.get(detailField);
+        }
+        Object detailValue = detail.get(source);
+        return EmptyChecks.isNotNull(detailValue) ? detailValue : batch.get(source);
+    }
+
+    protected int resolveTemplateInt(ExportJobContext context, String key, int fallback) {
+        return ExportConfigValueSupport.resolveTemplateInt(context, key, fallback);
+    }
+
+    protected String csv(Object value, DelimitedFormatConfig formatConfig) {
+        String text = textValue(value);
+        if (!Texts.hasText(text)) {
+            return "";
+        }
+        boolean needsQuote =
+                switch (formatConfig.quotePolicy()) {
+                    case ALL -> true;
+                    case NONE -> false;
+                    case REQUIRED ->
+                        text.contains(formatConfig.delimiter())
+                                || text.contains("\n")
+                                || text.contains("\r")
+                                || text.contains(formatConfig.quoteChar())
+                                || text.startsWith(" ")
+                                || text.endsWith(" ");
+                };
+        String escaped = escapeDelimited(text, formatConfig);
+        if (!needsQuote) {
+            return escaped;
+        }
+        return formatConfig.quoteChar() + escaped + formatConfig.quoteChar();
+    }
+
+    protected String escapeDelimited(String value, DelimitedFormatConfig formatConfig) {
+        return switch (formatConfig.escapePolicy()) {
+            case BACKSLASH -> {
+                String escapedBackslashes = value.replace("\\", "\\\\");
+                String escapedQuotes =
+                        escapedBackslashes.replace(formatConfig.quoteChar(), "\\" + formatConfig.quoteChar());
+                String escapedCarriageReturns = escapedQuotes.replace("\r", "\\r");
+                yield escapedCarriageReturns.replace("\n", "\\n");
+            }
+            case NONE -> value;
+            case DOUBLE_QUOTE ->
+                value.replace(formatConfig.quoteChar(), formatConfig.quoteChar() + formatConfig.quoteChar());
         };
-    String escaped = escapeDelimited(text, formatConfig);
-    if (!needsQuote) {
-      return escaped;
     }
-    return formatConfig.quoteChar() + escaped + formatConfig.quoteChar();
-  }
 
-  protected String escapeDelimited(String value, DelimitedFormatConfig formatConfig) {
-    return switch (formatConfig.escapePolicy()) {
-      case BACKSLASH -> {
-        String escapedBackslashes = value.replace("\\", "\\\\");
-        String escapedQuotes =
-            escapedBackslashes.replace(formatConfig.quoteChar(), "\\" + formatConfig.quoteChar());
-        String escapedCarriageReturns = escapedQuotes.replace("\r", "\\r");
-        yield escapedCarriageReturns.replace("\n", "\\n");
-      }
-      case NONE -> value;
-      case DOUBLE_QUOTE ->
-        value.replace(
-            formatConfig.quoteChar(), formatConfig.quoteChar() + formatConfig.quoteChar());
-    };
-  }
+    protected String fixedWidthLine(
+            List<ColumnLayout> columns, int recordLength, Function<ColumnLayout, String> valueMapper) {
+        StringBuilder builder = new StringBuilder();
+        for (ColumnLayout column : columns) {
+            String mappedValue = valueMapper.apply(column);
+            String formattedValue = fixedWidth(mappedValue, column);
+            builder.append(formattedValue);
+        }
+        if (recordLength > 0) {
+            String serializedLine = builder.toString();
+            return padRight(serializedLine, recordLength);
+        }
+        return builder.toString();
+    }
 
-  protected String fixedWidthLine(
-      List<ColumnLayout> columns, int recordLength, Function<ColumnLayout, String> valueMapper) {
-    StringBuilder builder = new StringBuilder();
-    for (ColumnLayout column : columns) {
-      String mappedValue = valueMapper.apply(column);
-      String formattedValue = fixedWidth(mappedValue, column);
-      builder.append(formattedValue);
+    protected String fixedWidth(Object value, ColumnLayout column) {
+        String text = textValue(value);
+        int width = EmptyChecks.isNull(column.width()) || column.width() <= 0
+                ? Math.max(column.header().length(), 16)
+                : column.width();
+        if (EmptyChecks.isNull(text)) {
+            text = "";
+        }
+        if (text.length() > width) {
+            return text.substring(0, width);
+        }
+        char pad = column.padChar();
+        String padding = String.valueOf(pad).repeat(width - text.length());
+        if (column.rightAlign()) {
+            return padding + text;
+        }
+        return text + padding;
     }
-    if (recordLength > 0) {
-      String serializedLine = builder.toString();
-      return padRight(serializedLine, recordLength);
-    }
-    return builder.toString();
-  }
 
-  protected String fixedWidth(Object value, ColumnLayout column) {
-    String text = textValue(value);
-    int width = EmptyChecks.isNull(column.width()) || column.width() <= 0
-        ? Math.max(column.header().length(), 16)
-        : column.width();
-    if (EmptyChecks.isNull(text)) {
-      text = "";
+    protected String padRight(String text, int length) {
+        String value = EmptyChecks.isNull(text) ? "" : text;
+        if (value.length() >= length) {
+            return value.substring(0, length);
+        }
+        return value + " ".repeat(length - value.length());
     }
-    if (text.length() > width) {
-      return text.substring(0, width);
-    }
-    char pad = column.padChar();
-    String padding = String.valueOf(pad).repeat(width - text.length());
-    if (column.rightAlign()) {
-      return padding + text;
-    }
-    return text + padding;
-  }
 
-  protected String padRight(String text, int length) {
-    String value = EmptyChecks.isNull(text) ? "" : text;
-    if (value.length() >= length) {
-      return value.substring(0, length);
+    protected Object firstNonNull(Object... values) {
+        for (Object value : values) {
+            if (EmptyChecks.isNotNull(value)) {
+                return value;
+            }
+        }
+        return null;
     }
-    return value + " ".repeat(length - value.length());
-  }
 
-  protected Object firstNonNull(Object... values) {
-    for (Object value : values) {
-      if (EmptyChecks.isNotNull(value)) {
-        return value;
-      }
+    protected String textValue(Object value) {
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        String text = String.valueOf(value);
+        return Texts.hasText(text) ? text.trim() : null;
     }
-    return null;
-  }
 
-  protected String textValue(Object value) {
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    String text = String.valueOf(value);
-    return Texts.hasText(text) ? text.trim() : null;
-  }
+    protected Map<String, Object> toMap(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> converted = new LinkedHashMap<>();
+            map.forEach((k, v) -> converted.put(String.valueOf(k), v));
+            return converted;
+        }
+        if (value instanceof String text && Texts.hasText(text)) {
+            try {
+                return objectMapper.readValue(text, MAP_TYPE);
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
 
-  protected Map<String, Object> toMap(Object value) {
-    if (value instanceof Map<?, ?> map) {
-      Map<String, Object> converted = new LinkedHashMap<>();
-      map.forEach((k, v) -> converted.put(String.valueOf(k), v));
-      return converted;
-    }
-    if (value instanceof String text && Texts.hasText(text)) {
-      try {
-        return objectMapper.readValue(text, MAP_TYPE);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
-
+                return Map.of();
+            }
+        }
         return Map.of();
-      }
-    }
-    return Map.of();
-  }
-
-  protected int resolveIntValue(Object value, int fallback) {
-    Integer resolved = integerValue(value);
-    return EmptyChecks.isNull(resolved) ? fallback : Math.max(1, resolved);
-  }
-
-  protected Integer integerValue(Object value) {
-    if (value instanceof Number number) {
-      return number.intValue();
-    }
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    if (!Texts.hasText(text)) {
-      return null;
-    }
-    try {
-      return Integer.parseInt(text);
-    } catch (Exception ignored) {
-      SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
-
-      return null;
-    }
-  }
-
-  protected char resolvePadChar(String padChar) {
-    if (!Texts.hasText(padChar)) {
-      return ' ';
-    }
-    return padChar.charAt(0);
-  }
-
-  /** ADR-041 Phase1.4:控制总额累加用的金额解析;非数字/空返回 null(不计入累加)。 */
-  protected BigDecimal decimalValue(Object value) {
-    if (value instanceof BigDecimal bigDecimal) {
-      return bigDecimal;
-    }
-    if (value instanceof Number number) {
-      String numericText = number.toString();
-      return new BigDecimal(numericText);
-    }
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    if (!Texts.hasText(text)) {
-      return null;
-    }
-    try {
-      return new BigDecimal(text);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.warn(
-          AbstractExportFormat.class, "catch:NumberFormatException", ignored);
-      return null;
-    }
-  }
-
-  /**
-   * 列布局。{@code type} / {@code numberFormat} / {@code dateFormat} 为 Excel 类型化导出新增的<b>可选</b>字段:不配=
-   * {@link ColumnType#STRING}、无格式串,导出行为与历史一致(全文本)。delimited / fixed-width 不消费这三个字段。
-   */
-  public record ColumnLayout(
-      String header,
-      String source,
-      Integer width,
-      boolean rightAlign,
-      char padChar,
-      ColumnType type,
-      String numberFormat,
-      String dateFormat) {
-
-    public ColumnLayout {
-      type = EmptyChecks.isNull(type) ? ColumnType.STRING : type;
     }
 
-    /** 兼容旧 5 参签名:type 默认 STRING、无数字 / 日期格式串(delimited / fixed-width 走此入口)。 */
-    public ColumnLayout(
-        String header, String source, Integer width, boolean rightAlign, char padChar) {
-      this(header, source, width, rightAlign, padChar, ColumnType.STRING, null, null);
+    protected int resolveIntValue(Object value, int fallback) {
+        Integer resolved = integerValue(value);
+        return EmptyChecks.isNull(resolved) ? fallback : Math.max(1, resolved);
     }
-  }
 
-  /** Excel 类型化导出的列类型。未配置或解析失败一律回退 {@link #STRING}(全文本,历史行为)。 */
-  public enum ColumnType {
-    STRING,
-    NUMBER,
-    DATE,
-    BOOL;
+    protected Integer integerValue(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        if (!Texts.hasText(text)) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(text);
+        } catch (Exception ignored) {
+            SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
 
-    public static ColumnType from(Object value) {
-      if (EmptyChecks.isNull(value)) {
-        return STRING;
-      }
-      try {
-        String rawValue = String.valueOf(value);
-        String trimmedValue = rawValue.trim();
-        String normalizedValue = trimmedValue.toUpperCase();
-        return ColumnType.valueOf(normalizedValue);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
-        return STRING;
-      }
+            return null;
+        }
     }
-  }
 
-  public record DelimitedFormatConfig(
-      String delimiter,
-      String quoteChar,
-      QuotePolicy quotePolicy,
-      EscapePolicy escapePolicy,
-      int headerRows) {}
-
-  public enum QuotePolicy {
-    NONE,
-    REQUIRED,
-    ALL;
-
-    public static QuotePolicy from(Object value) {
-      if (EmptyChecks.isNull(value)) {
-        return REQUIRED;
-      }
-      try {
-        String rawValue = String.valueOf(value);
-        String trimmedValue = rawValue.trim();
-        String normalizedValue = trimmedValue.toUpperCase();
-        return QuotePolicy.valueOf(normalizedValue);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
-
-        return REQUIRED;
-      }
+    protected char resolvePadChar(String padChar) {
+        if (!Texts.hasText(padChar)) {
+            return ' ';
+        }
+        return padChar.charAt(0);
     }
-  }
 
-  public enum EscapePolicy {
-    DOUBLE_QUOTE,
-    BACKSLASH,
-    NONE;
-
-    public static EscapePolicy from(Object value) {
-      if (EmptyChecks.isNull(value)) {
-        return DOUBLE_QUOTE;
-      }
-      try {
-        String rawValue = String.valueOf(value);
-        String trimmedValue = rawValue.trim();
-        String normalizedValue = trimmedValue.toUpperCase();
-        return EscapePolicy.valueOf(normalizedValue);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
-
-        return DOUBLE_QUOTE;
-      }
+    /** ADR-041 Phase1.4:控制总额累加用的金额解析;非数字/空返回 null(不计入累加)。 */
+    protected BigDecimal decimalValue(Object value) {
+        if (value instanceof BigDecimal bigDecimal) {
+            return bigDecimal;
+        }
+        if (value instanceof Number number) {
+            String numericText = number.toString();
+            return new BigDecimal(numericText);
+        }
+        if (EmptyChecks.isNull(value)) {
+            return null;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        if (!Texts.hasText(text)) {
+            return null;
+        }
+        try {
+            return new BigDecimal(text);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:NumberFormatException", ignored);
+            return null;
+        }
     }
-  }
+
+    /**
+     * 列布局。{@code type} / {@code numberFormat} / {@code dateFormat} 为 Excel 类型化导出新增的<b>可选</b>字段:不配=
+     * {@link ColumnType#STRING}、无格式串,导出行为与历史一致(全文本)。delimited / fixed-width 不消费这三个字段。
+     */
+    public record ColumnLayout(
+            String header,
+            String source,
+            Integer width,
+            boolean rightAlign,
+            char padChar,
+            ColumnType type,
+            String numberFormat,
+            String dateFormat) {
+
+        public ColumnLayout {
+            type = EmptyChecks.isNull(type) ? ColumnType.STRING : type;
+        }
+
+        /** 兼容旧 5 参签名:type 默认 STRING、无数字 / 日期格式串(delimited / fixed-width 走此入口)。 */
+        public ColumnLayout(String header, String source, Integer width, boolean rightAlign, char padChar) {
+            this(header, source, width, rightAlign, padChar, ColumnType.STRING, null, null);
+        }
+    }
+
+    /** Excel 类型化导出的列类型。未配置或解析失败一律回退 {@link #STRING}(全文本,历史行为)。 */
+    public enum ColumnType {
+        STRING,
+        NUMBER,
+        DATE,
+        BOOL;
+
+        public static ColumnType from(Object value) {
+            if (EmptyChecks.isNull(value)) {
+                return STRING;
+            }
+            try {
+                String rawValue = String.valueOf(value);
+                String trimmedValue = rawValue.trim();
+                String normalizedValue = trimmedValue.toUpperCase();
+                return ColumnType.valueOf(normalizedValue);
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
+                return STRING;
+            }
+        }
+    }
+
+    public record DelimitedFormatConfig(
+            String delimiter, String quoteChar, QuotePolicy quotePolicy, EscapePolicy escapePolicy, int headerRows) {}
+
+    public enum QuotePolicy {
+        NONE,
+        REQUIRED,
+        ALL;
+
+        public static QuotePolicy from(Object value) {
+            if (EmptyChecks.isNull(value)) {
+                return REQUIRED;
+            }
+            try {
+                String rawValue = String.valueOf(value);
+                String trimmedValue = rawValue.trim();
+                String normalizedValue = trimmedValue.toUpperCase();
+                return QuotePolicy.valueOf(normalizedValue);
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
+
+                return REQUIRED;
+            }
+        }
+    }
+
+    public enum EscapePolicy {
+        DOUBLE_QUOTE,
+        BACKSLASH,
+        NONE;
+
+        public static EscapePolicy from(Object value) {
+            if (EmptyChecks.isNull(value)) {
+                return DOUBLE_QUOTE;
+            }
+            try {
+                String rawValue = String.valueOf(value);
+                String trimmedValue = rawValue.trim();
+                String normalizedValue = trimmedValue.toUpperCase();
+                return EscapePolicy.valueOf(normalizedValue);
+            } catch (Exception ignored) {
+                SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
+
+                return DOUBLE_QUOTE;
+            }
+        }
+    }
 }

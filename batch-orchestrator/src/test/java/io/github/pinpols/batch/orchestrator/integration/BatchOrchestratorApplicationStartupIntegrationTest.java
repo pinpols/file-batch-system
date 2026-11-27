@@ -19,31 +19,27 @@ import org.springframework.test.context.TestConstructor;
  *
  * <p>继承 {@link AbstractIntegrationTest} —— 不要在此重复 {@code @BatchIntegrationTest} 或容器配置。
  */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("调度编排应用的启动冒烟,验证上下文可装配,外呼传输选用既定实现且数据库迁移回调已注册")
 class BatchOrchestratorApplicationStartupIntegrationTest extends AbstractIntegrationTest {
 
-  private final ApplicationContext applicationContext;
-  private final Flyway flyway;
+    private final ApplicationContext applicationContext;
+    private final Flyway flyway;
 
-  BatchOrchestratorApplicationStartupIntegrationTest(
-      ApplicationContext applicationContext, Flyway flyway) {
-    this.applicationContext = applicationContext;
-    this.flyway = flyway;
-  }
+    BatchOrchestratorApplicationStartupIntegrationTest(ApplicationContext applicationContext, Flyway flyway) {
+        this.applicationContext = applicationContext;
+        this.flyway = flyway;
+    }
 
-  @Test
-  @DisplayName("应用上下文可装配,外呼传输为既定实现且数据库迁移回调已注册")
-  void shouldLoadContextAndRegisterMigrationCallback_whenApplicationStarts() {
-    assertThat(applicationContext).isNotNull();
-    assertThat(applicationContext.getBean(OutboundHttpTransport.class))
-        .isInstanceOf(OkHttpOutboundHttpTransport.class);
-    assertThat(applicationContext.getBeanNamesForType(OutboundHttpTransport.class))
-        .containsExactly("okHttpOrchestratorExternalHttpTransport");
-    assertThat(flyway.getConfiguration().getCallbacks())
-        .anyMatch(SecretPayloadFlywayCallback.class::isInstance);
-  }
+    @Test
+    @DisplayName("应用上下文可装配,外呼传输为既定实现且数据库迁移回调已注册")
+    void shouldLoadContextAndRegisterMigrationCallback_whenApplicationStarts() {
+        assertThat(applicationContext).isNotNull();
+        assertThat(applicationContext.getBean(OutboundHttpTransport.class))
+                .isInstanceOf(OkHttpOutboundHttpTransport.class);
+        assertThat(applicationContext.getBeanNamesForType(OutboundHttpTransport.class))
+                .containsExactly("okHttpOrchestratorExternalHttpTransport");
+        assertThat(flyway.getConfiguration().getCallbacks()).anyMatch(SecretPayloadFlywayCallback.class::isInstance);
+    }
 }

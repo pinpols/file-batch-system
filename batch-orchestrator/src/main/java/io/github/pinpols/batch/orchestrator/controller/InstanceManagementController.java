@@ -17,44 +17,41 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class InstanceManagementController {
 
-  private final InstanceManagementApplicationService instanceManagementApplicationService;
+    private final InstanceManagementApplicationService instanceManagementApplicationService;
 
-  @PostMapping("/{id}/cancel")
-  public InstanceAction cancel(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return instanceManagementApplicationService.cancel(tenantId, id);
-  }
+    @PostMapping("/{id}/cancel")
+    public InstanceAction cancel(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return instanceManagementApplicationService.cancel(tenantId, id);
+    }
 
-  @PostMapping("/{id}/terminate")
-  public InstanceAction terminate(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return instanceManagementApplicationService.terminate(tenantId, id);
-  }
+    @PostMapping("/{id}/terminate")
+    public InstanceAction terminate(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return instanceManagementApplicationService.terminate(tenantId, id);
+    }
 
-  @PostMapping("/{id}/pause")
-  public InstanceAction pause(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return instanceManagementApplicationService.pause(tenantId, id);
-  }
+    @PostMapping("/{id}/pause")
+    public InstanceAction pause(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return instanceManagementApplicationService.pause(tenantId, id);
+    }
 
-  @PostMapping("/{id}/resume")
-  public InstanceAction resume(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return instanceManagementApplicationService.resume(tenantId, id);
-  }
+    @PostMapping("/{id}/resume")
+    public InstanceAction resume(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return instanceManagementApplicationService.resume(tenantId, id);
+    }
 
-  @PostMapping("/partitions/{id}/cancel")
-  public PartitionAction cancelPartition(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return instanceManagementApplicationService.cancelPartition(tenantId, id);
-  }
+    @PostMapping("/partitions/{id}/cancel")
+    public PartitionAction cancelPartition(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return instanceManagementApplicationService.cancelPartition(tenantId, id);
+    }
 
-  @PostMapping("/partitions/{id}/retry")
-  public PartitionAction retryPartition(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return instanceManagementApplicationService.retryPartition(tenantId, id);
-  }
+    @PostMapping("/partitions/{id}/retry")
+    public PartitionAction retryPartition(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return instanceManagementApplicationService.retryPartition(tenantId, id);
+    }
 
-  @PostMapping("/{id}/partitions/retry-failed")
-  public RetryFailedPartitions retryFailedPartitions(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return instanceManagementApplicationService.retryFailedPartitions(tenantId, id);
-  }
+    @PostMapping("/{id}/partitions/retry-failed")
+    public RetryFailedPartitions retryFailedPartitions(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+        return instanceManagementApplicationService.retryFailedPartitions(tenantId, id);
+    }
 }

@@ -22,45 +22,44 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleAtomicRuntimeStatusService {
 
-  private static final String SVC = "atomic-worker";
-  private static final String OP = "runtime-status";
-  private static final String ENDPOINT_URI = "/actuator/atomicruntime";
+    private static final String SVC = "atomic-worker";
+    private static final String OP = "runtime-status";
+    private static final String ENDPOINT_URI = "/actuator/atomicruntime";
 
-  private final AtomicWorkerInternalRestClient atomicClient;
-  private final DownstreamFallback downstreamFallback;
+    private final AtomicWorkerInternalRestClient atomicClient;
+    private final DownstreamFallback downstreamFallback;
 
-  public ConsoleAtomicRuntimeStatusResponse fetch() {
-    if (!atomicClient.isEnabled()) {
-      return ConsoleAtomicRuntimeStatusResponse.unavailable(
-          "batch.console.atomic-worker.enabled=false");
+    public ConsoleAtomicRuntimeStatusResponse fetch() {
+        if (!atomicClient.isEnabled()) {
+            return ConsoleAtomicRuntimeStatusResponse.unavailable("batch.console.atomic-worker.enabled=false");
+        }
+        return downstreamFallback.callOrFallback(
+                SVC,
+                OP,
+                () -> {
+                    AtomicRuntimeStatusPayload payload = atomicClient
+                            .client()
+                            .get()
+                            .uri(ENDPOINT_URI)
+                            .retrieve()
+                            .body(new ParameterizedTypeReference<AtomicRuntimeStatusPayload>() {});
+                    return toResponse(payload);
+                },
+                ex -> ConsoleAtomicRuntimeStatusResponse.unavailable("atomic worker unreachable"));
     }
-    return downstreamFallback.callOrFallback(
-        SVC,
-        OP,
-        () -> {
-          AtomicRuntimeStatusPayload payload = atomicClient
-              .client()
-              .get()
-              .uri(ENDPOINT_URI)
-              .retrieve()
-              .body(new ParameterizedTypeReference<AtomicRuntimeStatusPayload>() {});
-          return toResponse(payload);
-        },
-        ex -> ConsoleAtomicRuntimeStatusResponse.unavailable("atomic worker unreachable"));
-  }
 
-  static ConsoleAtomicRuntimeStatusResponse toResponse(AtomicRuntimeStatusPayload payload) {
-    if (payload == null) {
-      return ConsoleAtomicRuntimeStatusResponse.unavailable("empty response from atomic worker");
+    static ConsoleAtomicRuntimeStatusResponse toResponse(AtomicRuntimeStatusPayload payload) {
+        if (payload == null) {
+            return ConsoleAtomicRuntimeStatusResponse.unavailable("empty response from atomic worker");
+        }
+        return new ConsoleAtomicRuntimeStatusResponse(
+                true,
+                null,
+                payload.workerCode(),
+                payload.workerType(),
+                payload.shell(),
+                payload.sql(),
+                payload.http(),
+                payload.storedProc());
     }
-    return new ConsoleAtomicRuntimeStatusResponse(
-        true,
-        null,
-        payload.workerCode(),
-        payload.workerType(),
-        payload.shell(),
-        payload.sql(),
-        payload.http(),
-        payload.storedProc());
-  }
 }

@@ -29,113 +29,113 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 public abstract class AbstractStepBeanRegistrar<T> {
 
-  private final ApplicationContext applicationContext;
-  private final StepRegistryMapper stepRegistryMapper;
-  private final PlatformTransactionManager transactionManager;
-  private final String module;
-  private final List<BeanTypeBinding<?>> bindings;
+    private final ApplicationContext applicationContext;
+    private final StepRegistryMapper stepRegistryMapper;
+    private final PlatformTransactionManager transactionManager;
+    private final String module;
+    private final List<BeanTypeBinding<?>> bindings;
 
-  /** 单 bean 类型构造器：保持原有契约，向后兼容。 */
-  protected AbstractStepBeanRegistrar(
-      ApplicationContext applicationContext,
-      StepRegistryMapper stepRegistryMapper,
-      PlatformTransactionManager transactionManager,
-      Class<T> stepBeanType,
-      String module,
-      Function<T, String> implCodeExtractor) {
-    this(
-        applicationContext,
-        stepRegistryMapper,
-        transactionManager,
-        module,
-        List.of(new BeanTypeBinding<>(stepBeanType, implCodeExtractor)));
-  }
+    /** 单 bean 类型构造器：保持原有契约，向后兼容。 */
+    protected AbstractStepBeanRegistrar(
+            ApplicationContext applicationContext,
+            StepRegistryMapper stepRegistryMapper,
+            PlatformTransactionManager transactionManager,
+            Class<T> stepBeanType,
+            String module,
+            Function<T, String> implCodeExtractor) {
+        this(
+                applicationContext,
+                stepRegistryMapper,
+                transactionManager,
+                module,
+                List.of(new BeanTypeBinding<>(stepBeanType, implCodeExtractor)));
+    }
 
-  /**
-   * 多 bean 类型构造器：同一 module 下登记多种 bean 类型（例如 process 模块同时登记 ProcessStageStep 与
-   * ProcessComputePlugin）。各 binding 按列表顺序遍历，所有类型共享同一去重集合；同 impl_code 多实现直接失败，避免运行时选择不确定。
-   */
-  protected AbstractStepBeanRegistrar(
-      ApplicationContext applicationContext,
-      StepRegistryMapper stepRegistryMapper,
-      PlatformTransactionManager transactionManager,
-      String module,
-      List<BeanTypeBinding<?>> bindings) {
-    this.applicationContext = applicationContext;
-    this.stepRegistryMapper = stepRegistryMapper;
-    this.transactionManager = transactionManager;
-    this.module = module;
-    this.bindings = List.copyOf(bindings);
-  }
+    /**
+     * 多 bean 类型构造器：同一 module 下登记多种 bean 类型（例如 process 模块同时登记 ProcessStageStep 与
+     * ProcessComputePlugin）。各 binding 按列表顺序遍历，所有类型共享同一去重集合；同 impl_code 多实现直接失败，避免运行时选择不确定。
+     */
+    protected AbstractStepBeanRegistrar(
+            ApplicationContext applicationContext,
+            StepRegistryMapper stepRegistryMapper,
+            PlatformTransactionManager transactionManager,
+            String module,
+            List<BeanTypeBinding<?>> bindings) {
+        this.applicationContext = applicationContext;
+        this.stepRegistryMapper = stepRegistryMapper;
+        this.transactionManager = transactionManager;
+        this.module = module;
+        this.bindings = List.copyOf(bindings);
+    }
 
-  /**
-   * 事务边界：@EventListener 上原本挂的 {@code @Transactional(REQUIRES_NEW)} 违反 docs/agent-baseline.md 规则 #4
-   * （{@code @Transactional} 只放 Service 公共方法）且 REQUIRES_NEW 在 EventListener 调用方无外层事务时 等同
-   * REQUIRED，纯属误用。改为在 listener 内显式构造 {@link TransactionTemplate} 包裹 deleteByModule + N 条
-   * insertEntry 的原子写入。登记失败时 console-api 的 Excel 校验会退化为不校验 impl_code 白名单 （与修复前一致，保持兼容），运维收到 ERROR
-   * 日志即可定位。 (P0 backport from refactor/arch-audit-p0 f4e6be53)
-   */
-  @EventListener(ApplicationReadyEvent.class)
-  public void registerStepBeansOnStartup() {
-    try {
-      LinkedHashSet<String> registeredCodes = new LinkedHashSet<>();
-      Map<String, String> registeredOwners = new LinkedHashMap<>();
-      List<Object> collected = new ArrayList<>();
-      TransactionTemplate tx = new TransactionTemplate(transactionManager);
-      tx.executeWithoutResult(status -> {
-        stepRegistryMapper.deleteByModule(module);
-        for (BeanTypeBinding<?> binding : bindings) {
-          registerOne(binding, registeredCodes, registeredOwners, collected);
+    /**
+     * 事务边界：@EventListener 上原本挂的 {@code @Transactional(REQUIRES_NEW)} 违反 docs/agent-baseline.md 规则 #4
+     * （{@code @Transactional} 只放 Service 公共方法）且 REQUIRES_NEW 在 EventListener 调用方无外层事务时 等同
+     * REQUIRED，纯属误用。改为在 listener 内显式构造 {@link TransactionTemplate} 包裹 deleteByModule + N 条
+     * insertEntry 的原子写入。登记失败时 console-api 的 Excel 校验会退化为不校验 impl_code 白名单 （与修复前一致，保持兼容），运维收到 ERROR
+     * 日志即可定位。 (P0 backport from refactor/arch-audit-p0 f4e6be53)
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void registerStepBeansOnStartup() {
+        try {
+            LinkedHashSet<String> registeredCodes = new LinkedHashSet<>();
+            Map<String, String> registeredOwners = new LinkedHashMap<>();
+            List<Object> collected = new ArrayList<>();
+            TransactionTemplate tx = new TransactionTemplate(transactionManager);
+            tx.executeWithoutResult(status -> {
+                stepRegistryMapper.deleteByModule(module);
+                for (BeanTypeBinding<?> binding : bindings) {
+                    registerOne(binding, registeredCodes, registeredOwners, collected);
+                }
+            });
+            if (collected.isEmpty()) {
+                log.info("step registry snapshot refreshed: module={}, count=0 (no beans found)", module);
+                return;
+            }
+            log.info(
+                    "step registry snapshot refreshed: module={}, count={}, implCodes={}",
+                    module,
+                    registeredCodes.size(),
+                    registeredCodes);
+        } catch (Exception ex) {
+            log.error("step registry snapshot failed: module={}", module, ex);
         }
-      });
-      if (collected.isEmpty()) {
-        log.info("step registry snapshot refreshed: module={}, count=0 (no beans found)", module);
-        return;
-      }
-      log.info(
-          "step registry snapshot refreshed: module={}, count={}, implCodes={}",
-          module,
-          registeredCodes.size(),
-          registeredCodes);
-    } catch (Exception ex) {
-      log.error("step registry snapshot failed: module={}", module, ex);
     }
-  }
 
-  private <B> void registerOne(
-      BeanTypeBinding<B> binding,
-      LinkedHashSet<String> registeredCodes,
-      Map<String, String> registeredOwners,
-      List<Object> collected) {
-    Map<String, B> beans = applicationContext.getBeansOfType(binding.beanType());
-    for (B bean : beans.values()) {
-      // 关键：用业务侧的 step.implCode() 做登记键而非 Spring bean name。运行时
-      // DefaultImportStageExecutor / DefaultDispatchStageExecutor 用的就是 step.implCode()
-      // 做 Map key（默认返回 "MODULE_STAGENAME" 比如 DISPATCH_PREPARE），而不是 Spring
-      // camelCase 的 bean name（prepareDispatchStep）。登记必须对齐，否则 Excel 校验 /
-      // 下拉的 impl_code 跟运行时脱节。
-      String code = binding.implCodeExtractor().apply(bean);
-      if (code == null || code.isBlank()) {
-        continue;
-      }
-      String owner = bean.getClass().getName();
-      String existingOwner = registeredOwners.putIfAbsent(code, owner);
-      if (existingOwner != null) {
-        throw new IllegalStateException("duplicate step implCode '"
-            + code
-            + "' in module "
-            + module
-            + ": "
-            + existingOwner
-            + " and "
-            + owner);
-      }
-      registeredCodes.add(code);
-      stepRegistryMapper.insertEntry(module, code, owner);
-      collected.add(bean);
+    private <B> void registerOne(
+            BeanTypeBinding<B> binding,
+            LinkedHashSet<String> registeredCodes,
+            Map<String, String> registeredOwners,
+            List<Object> collected) {
+        Map<String, B> beans = applicationContext.getBeansOfType(binding.beanType());
+        for (B bean : beans.values()) {
+            // 关键：用业务侧的 step.implCode() 做登记键而非 Spring bean name。运行时
+            // DefaultImportStageExecutor / DefaultDispatchStageExecutor 用的就是 step.implCode()
+            // 做 Map key（默认返回 "MODULE_STAGENAME" 比如 DISPATCH_PREPARE），而不是 Spring
+            // camelCase 的 bean name（prepareDispatchStep）。登记必须对齐，否则 Excel 校验 /
+            // 下拉的 impl_code 跟运行时脱节。
+            String code = binding.implCodeExtractor().apply(bean);
+            if (code == null || code.isBlank()) {
+                continue;
+            }
+            String owner = bean.getClass().getName();
+            String existingOwner = registeredOwners.putIfAbsent(code, owner);
+            if (existingOwner != null) {
+                throw new IllegalStateException("duplicate step implCode '"
+                        + code
+                        + "' in module "
+                        + module
+                        + ": "
+                        + existingOwner
+                        + " and "
+                        + owner);
+            }
+            registeredCodes.add(code);
+            stepRegistryMapper.insertEntry(module, code, owner);
+            collected.add(bean);
+        }
     }
-  }
 
-  /** 单个 bean 类型 + 其 impl_code 提取器的绑定。 */
-  public record BeanTypeBinding<B>(Class<B> beanType, Function<B, String> implCodeExtractor) {}
+    /** 单个 bean 类型 + 其 impl_code 提取器的绑定。 */
+    public record BeanTypeBinding<B>(Class<B> beanType, Function<B, String> implCodeExtractor) {}
 }

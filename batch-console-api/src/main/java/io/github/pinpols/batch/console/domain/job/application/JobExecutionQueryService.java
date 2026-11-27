@@ -32,102 +32,98 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class JobExecutionQueryService {
-  private final TenantIdResolver tenantGuard;
-  private final JobExecutionMapper mapper;
-  private final FilePipelineProgressSnapshotService filePipelineProgress;
+    private final TenantIdResolver tenantGuard;
+    private final JobExecutionMapper mapper;
+    private final FilePipelineProgressSnapshotService filePipelineProgress;
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public JobExecutionProgressResponse query(String requestedTenant, Long id) {
-    String resolvedTenant = tenantGuard.resolveTenant(requestedTenant);
-    String requiredTenant = TenantScope.requireTenant(resolvedTenant);
-    return queryAuthorized(requiredTenant, id);
-  }
-
-  /** 后台推送只接受已在订阅入口授权的身份；事务内仍设置RLS租户。 */
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public JobExecutionProgressResponse queryAuthorized(String tenant, Long id) {
-    TenantScope.requireTenant(tenant);
-    mapper.setTenantContext(tenant);
-    JobExecutionView job = mapper.selectJob(tenant, id);
-    if (EmptyChecks.isNull(job))
-      throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
-    Optional<SystemPipelineDefinition> definition = SystemPipelineCatalog.definitions().stream()
-        .filter(d -> Objects.equals(d.code(), job.getSystemPipelineCode())
-            && Objects.equals(d.semanticVersion(), job.getSystemPipelineVersion()))
-        .findFirst();
-    boolean terminal = JobInstanceStatus.terminalCodes().contains(job.getInstanceStatus());
-    List<Stage> persisted = EmptyChecks.isNull(job.getPipelineInstanceId())
-        ? List.<Stage>of()
-        : mapper.selectStages(tenant, job.getPipelineInstanceId());
-    List<Stage> runtime = terminal || EmptyChecks.isNull(job.getPipelineInstanceId())
-        ? persisted
-        : withLiveProgress(tenant, job.getPipelineInstanceId(), persisted);
-    definition = definition.filter(
-        d -> runtime.stream().allMatch(stage -> d.stages().contains(stage.stageCode())));
-    Map<String, Stage> byCode =
-        runtime.stream().collect(Collectors.toMap(Stage::stageCode, Function.identity()));
-    List<Stage> stages = definition
-        .map(d -> d.stages().stream()
-            .map(code -> byCode.getOrDefault(
-                code,
-                new Stage(
-                    code, terminal ? "NOT_EXECUTED" : "PENDING", null, null, null, null, null)))
-            .toList())
-        .orElse(runtime);
-    return JobExecutionProgressResponse.builder()
-        .tenantId(tenant)
-        .jobInstanceId(id)
-        .jobCode(job.getJobCode())
-        .instanceStatus(job.getInstanceStatus())
-        .generatedAt(BatchDateTimeSupport.utcNow())
-        .startedAt(job.getStartedAt())
-        .finishedAt(job.getFinishedAt())
-        .expectedPartitions(job.getExpectedPartitions())
-        .workflowRunId(job.getWorkflowRunId())
-        .nodeCode(job.getNodeCode())
-        .pipelineInstanceId(job.getPipelineInstanceId())
-        .pipelineStatus(job.getPipelineStatus())
-        .currentStage(job.getCurrentStage())
-        .systemPipelineCode(job.getSystemPipelineCode())
-        .systemPipelineVersion(job.getSystemPipelineVersion())
-        .stageGraphAvailable(definition.isPresent())
-        .counts(mapper.selectCounts(tenant, id))
-        .stages(stages)
-        .build();
-  }
-
-  private List<Stage> withLiveProgress(String tenant, Long pipelineId, List<Stage> stages) {
-    if (stages.stream()
-        .noneMatch(s -> PipelineRunStatus.RUNNING.code().equals(s.stageStatus())
-            && EmptyChecks.isNull(s.rowsProcessed()))) {
-      return stages;
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public JobExecutionProgressResponse query(String requestedTenant, Long id) {
+        String resolvedTenant = tenantGuard.resolveTenant(requestedTenant);
+        String requiredTenant = TenantScope.requireTenant(resolvedTenant);
+        return queryAuthorized(requiredTenant, id);
     }
-    List<PipelineStepProgressSnapshot> liveSteps =
-        filePipelineProgress.stepsAuthorized(tenant, pipelineId);
-    if (EmptyChecks.isEmpty(liveSteps)) return stages;
-    Map<Long, PipelineStepProgressSnapshot> byId = liveSteps.stream()
-        .collect(Collectors.toMap(PipelineStepProgressSnapshot::stepId, Function.identity()));
-    return stages.stream()
-        .map(stage -> {
-          PipelineStepProgressSnapshot sample = byId.get(stage.stepRunId());
-          boolean sameAttempt = EmptyChecks.isNotNull(sample)
-              && Objects.equals(sample.runSeq(), stage.runSeq())
-              && PipelineRunStatus.RUNNING.code().equals(sample.stepStatus());
-          if (!PipelineRunStatus.RUNNING.code().equals(stage.stageStatus())
-              || EmptyChecks.isNotNull(stage.rowsProcessed())
-              || !sameAttempt) return stage;
-          Instant heartbeat = EmptyChecks.isNull(sample.lastHeartbeatAt())
-              ? stage.lastHeartbeatAt()
-              : Instant.ofEpochMilli(sample.lastHeartbeatAt());
-          return new Stage(
-              stage.stageCode(),
-              stage.stageStatus(),
-              stage.stepRunId(),
-              stage.runSeq(),
-              sample.rowsProcessed(),
-              heartbeat,
-              stage.errorCode());
-        })
-        .toList();
-  }
+
+    /** 后台推送只接受已在订阅入口授权的身份；事务内仍设置RLS租户。 */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public JobExecutionProgressResponse queryAuthorized(String tenant, Long id) {
+        TenantScope.requireTenant(tenant);
+        mapper.setTenantContext(tenant);
+        JobExecutionView job = mapper.selectJob(tenant, id);
+        if (EmptyChecks.isNull(job)) throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
+        Optional<SystemPipelineDefinition> definition = SystemPipelineCatalog.definitions().stream()
+                .filter(d -> Objects.equals(d.code(), job.getSystemPipelineCode())
+                        && Objects.equals(d.semanticVersion(), job.getSystemPipelineVersion()))
+                .findFirst();
+        boolean terminal = JobInstanceStatus.terminalCodes().contains(job.getInstanceStatus());
+        List<Stage> persisted = EmptyChecks.isNull(job.getPipelineInstanceId())
+                ? List.<Stage>of()
+                : mapper.selectStages(tenant, job.getPipelineInstanceId());
+        List<Stage> runtime = terminal || EmptyChecks.isNull(job.getPipelineInstanceId())
+                ? persisted
+                : withLiveProgress(tenant, job.getPipelineInstanceId(), persisted);
+        definition = definition.filter(
+                d -> runtime.stream().allMatch(stage -> d.stages().contains(stage.stageCode())));
+        Map<String, Stage> byCode = runtime.stream().collect(Collectors.toMap(Stage::stageCode, Function.identity()));
+        List<Stage> stages = definition
+                .map(d -> d.stages().stream()
+                        .map(code -> byCode.getOrDefault(
+                                code,
+                                new Stage(code, terminal ? "NOT_EXECUTED" : "PENDING", null, null, null, null, null)))
+                        .toList())
+                .orElse(runtime);
+        return JobExecutionProgressResponse.builder()
+                .tenantId(tenant)
+                .jobInstanceId(id)
+                .jobCode(job.getJobCode())
+                .instanceStatus(job.getInstanceStatus())
+                .generatedAt(BatchDateTimeSupport.utcNow())
+                .startedAt(job.getStartedAt())
+                .finishedAt(job.getFinishedAt())
+                .expectedPartitions(job.getExpectedPartitions())
+                .workflowRunId(job.getWorkflowRunId())
+                .nodeCode(job.getNodeCode())
+                .pipelineInstanceId(job.getPipelineInstanceId())
+                .pipelineStatus(job.getPipelineStatus())
+                .currentStage(job.getCurrentStage())
+                .systemPipelineCode(job.getSystemPipelineCode())
+                .systemPipelineVersion(job.getSystemPipelineVersion())
+                .stageGraphAvailable(definition.isPresent())
+                .counts(mapper.selectCounts(tenant, id))
+                .stages(stages)
+                .build();
+    }
+
+    private List<Stage> withLiveProgress(String tenant, Long pipelineId, List<Stage> stages) {
+        if (stages.stream()
+                .noneMatch(s -> PipelineRunStatus.RUNNING.code().equals(s.stageStatus())
+                        && EmptyChecks.isNull(s.rowsProcessed()))) {
+            return stages;
+        }
+        List<PipelineStepProgressSnapshot> liveSteps = filePipelineProgress.stepsAuthorized(tenant, pipelineId);
+        if (EmptyChecks.isEmpty(liveSteps)) return stages;
+        Map<Long, PipelineStepProgressSnapshot> byId =
+                liveSteps.stream().collect(Collectors.toMap(PipelineStepProgressSnapshot::stepId, Function.identity()));
+        return stages.stream()
+                .map(stage -> {
+                    PipelineStepProgressSnapshot sample = byId.get(stage.stepRunId());
+                    boolean sameAttempt = EmptyChecks.isNotNull(sample)
+                            && Objects.equals(sample.runSeq(), stage.runSeq())
+                            && PipelineRunStatus.RUNNING.code().equals(sample.stepStatus());
+                    if (!PipelineRunStatus.RUNNING.code().equals(stage.stageStatus())
+                            || EmptyChecks.isNotNull(stage.rowsProcessed())
+                            || !sameAttempt) return stage;
+                    Instant heartbeat = EmptyChecks.isNull(sample.lastHeartbeatAt())
+                            ? stage.lastHeartbeatAt()
+                            : Instant.ofEpochMilli(sample.lastHeartbeatAt());
+                    return new Stage(
+                            stage.stageCode(),
+                            stage.stageStatus(),
+                            stage.stepRunId(),
+                            stage.runSeq(),
+                            sample.rowsProcessed(),
+                            heartbeat,
+                            stage.errorCode());
+                })
+                .toList();
+    }
 }

@@ -12,23 +12,20 @@ import org.junit.jupiter.api.Test;
 @DisplayName("维护状态 Mapper 启动解析")
 class MaintenanceStateMapperXmlTest {
 
-  @Test
-  @DisplayName("维护状态结果映射及查询语句可正确解析")
-  void shouldMapMaintenanceStateToExistingEntity() throws Exception {
-    String resource = "mapper/MaintenanceStateMapper.xml";
-    Configuration configuration = new Configuration();
-    try (InputStream stream =
-        Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
-      assertThat(stream).as(resource).isNotNull();
-      new XMLMapperBuilder(stream, configuration, resource, configuration.getSqlFragments())
-          .parse();
+    @Test
+    @DisplayName("维护状态结果映射及查询语句可正确解析")
+    void shouldMapMaintenanceStateToExistingEntity() throws Exception {
+        String resource = "mapper/MaintenanceStateMapper.xml";
+        Configuration configuration = new Configuration();
+        try (InputStream stream = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
+            assertThat(stream).as(resource).isNotNull();
+            new XMLMapperBuilder(stream, configuration, resource, configuration.getSqlFragments()).parse();
+        }
+        assertThat(configuration
+                        .getResultMap(MaintenanceStateMapper.class.getName() + ".maintenanceStateMap")
+                        .getType())
+                .isEqualTo(MaintenanceStateEntity.class);
+        assertThat(configuration.hasStatement(MaintenanceStateMapper.class.getName() + ".selectSingleton"))
+                .isTrue();
     }
-    assertThat(configuration
-            .getResultMap(MaintenanceStateMapper.class.getName() + ".maintenanceStateMap")
-            .getType())
-        .isEqualTo(MaintenanceStateEntity.class);
-    assertThat(
-            configuration.hasStatement(MaintenanceStateMapper.class.getName() + ".selectSingleton"))
-        .isTrue();
-  }
 }

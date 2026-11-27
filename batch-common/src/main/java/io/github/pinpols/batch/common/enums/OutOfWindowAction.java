@@ -8,9 +8,9 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum OutOfWindowAction implements DictEnum {
-  WAIT("WAIT", "等待下次窗口"),
-  FAIL("FAIL", "失败");
+    WAIT("WAIT", "等待下次窗口"),
+    FAIL("FAIL", "失败");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

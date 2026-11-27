@@ -45,16 +45,15 @@ import lombok.Builder;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SdkTaskTypeDescriptor(
-    String code,
-    String displayName,
-    String version,
-    Map<String, Object> defaults,
-    Map<String, Object> inputSchema,
-    List<String> templateVariables) {
+        String code,
+        String displayName,
+        String version,
+        Map<String, Object> defaults,
+        Map<String, Object> inputSchema,
+        List<String> templateVariables) {
 
-  /** 返回 code 已绑定的副本 —— register 装配时框架用 {@link SdkTaskHandler#taskType()} 作为权威 code。 */
-  public SdkTaskTypeDescriptor withCode(String resolvedCode) {
-    return new SdkTaskTypeDescriptor(
-        resolvedCode, displayName, version, defaults, inputSchema, templateVariables);
-  }
+    /** 返回 code 已绑定的副本 —— register 装配时框架用 {@link SdkTaskHandler#taskType()} 作为权威 code。 */
+    public SdkTaskTypeDescriptor withCode(String resolvedCode) {
+        return new SdkTaskTypeDescriptor(resolvedCode, displayName, version, defaults, inputSchema, templateVariables);
+    }
 }

@@ -41,286 +41,275 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class ConsoleConfigCacheInvalidationService {
 
-  public static final String INVALIDATION_CHANNEL = "batch:config:invalidation";
+    public static final String INVALIDATION_CHANNEL = "batch:config:invalidation";
 
-  /** SCAN 单次返回上限 + DEL 单批次上限：太小 → SCAN 轮次多；太大 → 单 DEL 阻塞。500 是经验折中。 */
-  private static final int SCAN_BATCH_SIZE = 500;
+    /** SCAN 单次返回上限 + DEL 单批次上限：太小 → SCAN 轮次多；太大 → 单 DEL 阻塞。500 是经验折中。 */
+    private static final int SCAN_BATCH_SIZE = 500;
 
-  private final ConfigInvalidationStore invalidationStore;
-  private final ConfigCacheInvalidationOutboxMapper outbox;
-  private final ConsoleQueryCacheService queryCacheService;
-  private final AtomicLong publishedRevision = new AtomicLong(0);
-  private final Counter publishSuccessCounter;
-  private final Counter publishFailureCounter;
+    private final ConfigInvalidationStore invalidationStore;
+    private final ConfigCacheInvalidationOutboxMapper outbox;
+    private final ConsoleQueryCacheService queryCacheService;
+    private final AtomicLong publishedRevision = new AtomicLong(0);
+    private final Counter publishSuccessCounter;
+    private final Counter publishFailureCounter;
 
-  @Autowired
-  public ConsoleConfigCacheInvalidationService(
-      ConfigInvalidationStore invalidationStore,
-      ConsoleQueryCacheService queryCacheService,
-      ConfigCacheInvalidationOutboxMapper outbox,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this.invalidationStore = invalidationStore;
-    this.outbox = outbox;
-    this.queryCacheService = queryCacheService;
-    MeterRegistry meterRegistry = meterRegistryProvider == null // empty-check: allow - Sonar S2259
-        ? null
-        : meterRegistryProvider.getIfAvailable();
-    Metrics metrics = meterRegistry == null // empty-check: allow - Sonar S2259
-        ? Metrics.empty()
-        : createMetrics(meterRegistry, publishedRevision);
-    this.publishSuccessCounter = metrics.successCounter();
-    this.publishFailureCounter = metrics.failureCounter();
-  }
-
-  public ConsoleConfigCacheInvalidationService(
-      ConfigInvalidationStore invalidationStore, ConsoleQueryCacheService queryCacheService) {
-    this.invalidationStore = invalidationStore;
-    this.outbox = null;
-    this.queryCacheService = queryCacheService;
-    Metrics metrics = Metrics.empty();
-    this.publishSuccessCounter = metrics.successCounter();
-    this.publishFailureCounter = metrics.failureCounter();
-  }
-
-  private static Metrics createMetrics(MeterRegistry meterRegistry, AtomicLong publishedRevision) {
-    meterRegistry.gauge("batch.console.config.invalidation.published_revision", publishedRevision);
-    return new Metrics(
-        meterRegistry.counter(
-            "batch.console.config.invalidation.publish.total", "result", "success"),
-        meterRegistry.counter(
-            "batch.console.config.invalidation.publish.total", "result", "failure"));
-  }
-
-  private record Metrics(Counter successCounter, Counter failureCounter) {
-    private static Metrics empty() {
-      return new Metrics(null, null);
+    @Autowired
+    public ConsoleConfigCacheInvalidationService(
+            ConfigInvalidationStore invalidationStore,
+            ConsoleQueryCacheService queryCacheService,
+            ConfigCacheInvalidationOutboxMapper outbox,
+            ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        this.invalidationStore = invalidationStore;
+        this.outbox = outbox;
+        this.queryCacheService = queryCacheService;
+        MeterRegistry meterRegistry = meterRegistryProvider == null // empty-check: allow - Sonar S2259
+                ? null
+                : meterRegistryProvider.getIfAvailable();
+        Metrics metrics = meterRegistry == null // empty-check: allow - Sonar S2259
+                ? Metrics.empty()
+                : createMetrics(meterRegistry, publishedRevision);
+        this.publishSuccessCounter = metrics.successCounter();
+        this.publishFailureCounter = metrics.failureCounter();
     }
-  }
 
-  public void evictJobDefinition(String tenantId, String jobCode) {
-    evictAfterCommit(tenantId, "job-definition", jobCode);
-  }
-
-  public void evictAllJobDefinitions(String tenantId) {
-    String sanitizedTenantId = safe(tenantId);
-    String jobDefinitionPattern = "config:%s:job-definition:*".formatted(sanitizedTenantId);
-    evictByPatternAfterCommit(tenantId, "job-definition", "*", jobDefinitionPattern);
-  }
-
-  public void evictAllWorkflowDefinitions(String tenantId) {
-    String sanitizedTenantId = safe(tenantId);
-    String workflowDefinitionPattern =
-        "config:%s:workflow-definition:*".formatted(sanitizedTenantId);
-    evictByPatternAfterCommit(tenantId, "workflow-definition", "*", workflowDefinitionPattern);
-  }
-
-  public void evictAllBusinessCalendars(String tenantId) {
-    String sanitizedTenantId = safe(tenantId);
-    String businessCalendarPattern = "config:%s:business-calendar:*".formatted(sanitizedTenantId);
-    evictByPatternAfterCommit(tenantId, "business-calendar", "*", businessCalendarPattern);
-  }
-
-  public void evictAllBatchWindows(String tenantId) {
-    String sanitizedTenantId = safe(tenantId);
-    String batchWindowPattern = "config:%s:batch-window:*".formatted(sanitizedTenantId);
-    evictByPatternAfterCommit(tenantId, "batch-window", "*", batchWindowPattern);
-  }
-
-  public void evictWorkflowDefinition(String tenantId, String workflowCode) {
-    evictAfterCommit(tenantId, "workflow-definition", workflowCode);
-  }
-
-  public void evictBusinessCalendar(String tenantId, String calendarCode) {
-    evictAfterCommit(tenantId, "business-calendar", calendarCode);
-  }
-
-  public void evictBatchWindow(String tenantId, String windowCode) {
-    evictAfterCommit(tenantId, "batch-window", windowCode);
-  }
-
-  public void evictQuotaPolicies(String tenantId) {
-    evictAfterCommit(tenantId, "tenant-quota-policy", "enabled-first");
-  }
-
-  /** 手动失效没有配置表写入，须先保存待投递意图。 */
-  public void evictManual(String tenantId, String type, String code) {
-    outbox.insert(tenantId, type, code);
-    if ("*".equals(code)) {
-      String pattern = "config:%s:%s:*".formatted(safe(tenantId), safe(type));
-      evictByPatternAfterCommit(tenantId, type, code, pattern);
-    } else {
-      evictAfterCommit(tenantId, type, code);
+    public ConsoleConfigCacheInvalidationService(
+            ConfigInvalidationStore invalidationStore, ConsoleQueryCacheService queryCacheService) {
+        this.invalidationStore = invalidationStore;
+        this.outbox = null;
+        this.queryCacheService = queryCacheService;
+        Metrics metrics = Metrics.empty();
+        this.publishSuccessCounter = metrics.successCounter();
+        this.publishFailureCounter = metrics.failureCounter();
     }
-  }
 
-  /**
-   * 配置变更后同步清除 meta 查询缓存（队列/日历/窗口等下拉选项）。
-   *
-   * <p>R3-P1-14：之前直接调 evict，事务回滚窗口内会让并发读者拿到 pre-rollback 数据回填缓存； 与其他 evictXxx 一致改走 afterCommit，DB
-   * 提交后才删缓存。
-   */
-  public void evictMetaOptions(String tenantId) {
-    Runnable evict = () -> queryCacheService.evictMetaOptions(tenantId);
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCommit() {
-          evict.run();
+    private static Metrics createMetrics(MeterRegistry meterRegistry, AtomicLong publishedRevision) {
+        meterRegistry.gauge("batch.console.config.invalidation.published_revision", publishedRevision);
+        return new Metrics(
+                meterRegistry.counter("batch.console.config.invalidation.publish.total", "result", "success"),
+                meterRegistry.counter("batch.console.config.invalidation.publish.total", "result", "failure"));
+    }
+
+    private record Metrics(Counter successCounter, Counter failureCounter) {
+        private static Metrics empty() {
+            return new Metrics(null, null);
         }
-      });
-      return;
     }
-    evict.run();
-  }
 
-  private void evictByPatternAfterCommit(
-      String tenantId, String type, String code, String pattern) {
-    if (!Texts.hasText(pattern)) {
-      return;
+    public void evictJobDefinition(String tenantId, String jobCode) {
+        evictAfterCommit(tenantId, "job-definition", jobCode);
     }
-    Runnable evict = () -> {
-      if (scanAndDelete(pattern)) {
+
+    public void evictAllJobDefinitions(String tenantId) {
+        String sanitizedTenantId = safe(tenantId);
+        String jobDefinitionPattern = "config:%s:job-definition:*".formatted(sanitizedTenantId);
+        evictByPatternAfterCommit(tenantId, "job-definition", "*", jobDefinitionPattern);
+    }
+
+    public void evictAllWorkflowDefinitions(String tenantId) {
+        String sanitizedTenantId = safe(tenantId);
+        String workflowDefinitionPattern = "config:%s:workflow-definition:*".formatted(sanitizedTenantId);
+        evictByPatternAfterCommit(tenantId, "workflow-definition", "*", workflowDefinitionPattern);
+    }
+
+    public void evictAllBusinessCalendars(String tenantId) {
+        String sanitizedTenantId = safe(tenantId);
+        String businessCalendarPattern = "config:%s:business-calendar:*".formatted(sanitizedTenantId);
+        evictByPatternAfterCommit(tenantId, "business-calendar", "*", businessCalendarPattern);
+    }
+
+    public void evictAllBatchWindows(String tenantId) {
+        String sanitizedTenantId = safe(tenantId);
+        String batchWindowPattern = "config:%s:batch-window:*".formatted(sanitizedTenantId);
+        evictByPatternAfterCommit(tenantId, "batch-window", "*", batchWindowPattern);
+    }
+
+    public void evictWorkflowDefinition(String tenantId, String workflowCode) {
+        evictAfterCommit(tenantId, "workflow-definition", workflowCode);
+    }
+
+    public void evictBusinessCalendar(String tenantId, String calendarCode) {
+        evictAfterCommit(tenantId, "business-calendar", calendarCode);
+    }
+
+    public void evictBatchWindow(String tenantId, String windowCode) {
+        evictAfterCommit(tenantId, "batch-window", windowCode);
+    }
+
+    public void evictQuotaPolicies(String tenantId) {
+        evictAfterCommit(tenantId, "tenant-quota-policy", "enabled-first");
+    }
+
+    /** 手动失效没有配置表写入，须先保存待投递意图。 */
+    public void evictManual(String tenantId, String type, String code) {
+        outbox.insert(tenantId, type, code);
+        if ("*".equals(code)) {
+            String pattern = "config:%s:%s:*".formatted(safe(tenantId), safe(type));
+            evictByPatternAfterCommit(tenantId, type, code, pattern);
+        } else {
+            evictAfterCommit(tenantId, type, code);
+        }
+    }
+
+    /**
+     * 配置变更后同步清除 meta 查询缓存（队列/日历/窗口等下拉选项）。
+     *
+     * <p>R3-P1-14：之前直接调 evict，事务回滚窗口内会让并发读者拿到 pre-rollback 数据回填缓存； 与其他 evictXxx 一致改走 afterCommit，DB
+     * 提交后才删缓存。
+     */
+    public void evictMetaOptions(String tenantId) {
+        Runnable evict = () -> queryCacheService.evictMetaOptions(tenantId);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    evict.run();
+                }
+            });
+            return;
+        }
+        evict.run();
+    }
+
+    private void evictByPatternAfterCommit(String tenantId, String type, String code, String pattern) {
+        if (!Texts.hasText(pattern)) {
+            return;
+        }
+        Runnable evict = () -> {
+            if (scanAndDelete(pattern)) {
+                publishInvalidation(tenantId, type, code);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    evict.run();
+                }
+            });
+            return;
+        }
+        evict.run();
+    }
+
+    /** 通过失效存储执行严格的 SCAN 模式删除；本方法记录异常并返回失败，避免异常影响 afterCommit 钩子流程。 */
+    private boolean scanAndDelete(String pattern) {
+        try {
+            long deleted = invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
+            if (deleted > 0) {
+                log.debug("evicted {} redis keys matching pattern={}", deleted, LogSanitizer.value(pattern));
+            }
+            return true;
+        } catch (RuntimeException exception) {
+            increment(publishFailureCounter);
+            String sanitizedPattern = LogSanitizer.value(pattern);
+            String reasonSummary = SwallowedExceptionLogger.summary(exception);
+            log.warn(
+                    "config cache redis pattern delete failed: pattern={}, reason={}", sanitizedPattern, reasonSummary);
+            log.debug("config cache redis pattern delete failure: pattern={}", LogSanitizer.value(pattern), exception);
+            return false;
+        }
+    }
+
+    private void evictAfterCommit(String tenantId, String type, String code) {
+        String key = configKey(tenantId, type, code);
+        if (!Texts.hasText(key)) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    deleteAndPublish(key, tenantId, type, code);
+                }
+            });
+            return;
+        }
+        deleteAndPublish(key, tenantId, type, code);
+    }
+
+    private void deleteAndPublish(String key, String tenantId, String type, String code) {
+        try {
+            invalidationStore.delete(key);
+        } catch (RuntimeException exception) {
+            increment(publishFailureCounter);
+            String sanitizedKey = LogSanitizer.value(key);
+            String reasonSummary = SwallowedExceptionLogger.summary(exception);
+            log.warn("config cache redis delete failed: key={}, reason={}", sanitizedKey, reasonSummary);
+            log.debug("config cache redis delete failure: key={}", LogSanitizer.value(key), exception);
+            return;
+        }
         publishInvalidation(tenantId, type, code);
-      }
-    };
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCommit() {
-          evict.run();
+    }
+
+    private void publishInvalidation(String tenantId, String type, String code) {
+        try {
+            publishStrict(tenantId, type, code);
+        } catch (RuntimeException exception) {
+            increment(publishFailureCounter);
+            String sanitizedTenantId = LogSanitizer.value(tenantId);
+            String sanitizedType = LogSanitizer.value(type);
+            String sanitizedCode = LogSanitizer.value(code);
+            String reasonSummary = SwallowedExceptionLogger.summary(exception);
+            log.warn(
+                    "config cache invalidation publish failed: tenantId={}, type={}, code={}, reason={}",
+                    sanitizedTenantId,
+                    sanitizedType,
+                    sanitizedCode,
+                    reasonSummary);
+            log.debug(
+                    "config cache invalidation publish failure: tenantId={}, type={}, code={}",
+                    LogSanitizer.value(tenantId),
+                    LogSanitizer.value(type),
+                    LogSanitizer.value(code),
+                    exception);
         }
-      });
-      return;
     }
-    evict.run();
-  }
 
-  /** 通过失效存储执行严格的 SCAN 模式删除；本方法记录异常并返回失败，避免异常影响 afterCommit 钩子流程。 */
-  private boolean scanAndDelete(String pattern) {
-    try {
-      long deleted = invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
-      if (deleted > 0) {
-        log.debug(
-            "evicted {} redis keys matching pattern={}", deleted, LogSanitizer.value(pattern));
-      }
-      return true;
-    } catch (RuntimeException exception) {
-      increment(publishFailureCounter);
-      String sanitizedPattern = LogSanitizer.value(pattern);
-      String reasonSummary = SwallowedExceptionLogger.summary(exception);
-      log.warn(
-          "config cache redis pattern delete failed: pattern={}, reason={}",
-          sanitizedPattern,
-          reasonSummary);
-      log.debug(
-          "config cache redis pattern delete failure: pattern={}",
-          LogSanitizer.value(pattern),
-          exception);
-      return false;
-    }
-  }
-
-  private void evictAfterCommit(String tenantId, String type, String code) {
-    String key = configKey(tenantId, type, code);
-    if (!Texts.hasText(key)) {
-      return;
-    }
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCommit() {
-          deleteAndPublish(key, tenantId, type, code);
+    /** 严格投递供持久队列使用，失败必须传播以保留待重试记录。 */
+    public void deliver(ConfigCacheInvalidationIntent intent) {
+        String tenantId = intent.tenantId();
+        String type = intent.configType();
+        String code = intent.configCode();
+        if ("*".equals(code)) {
+            String pattern = "config:%s:%s:*".formatted(safe(tenantId), safe(type));
+            invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
+        } else {
+            invalidationStore.delete(configKey(tenantId, type, code));
         }
-      });
-      return;
+        publishStrict(tenantId, type, code);
     }
-    deleteAndPublish(key, tenantId, type, code);
-  }
 
-  private void deleteAndPublish(String key, String tenantId, String type, String code) {
-    try {
-      invalidationStore.delete(key);
-    } catch (RuntimeException exception) {
-      increment(publishFailureCounter);
-      String sanitizedKey = LogSanitizer.value(key);
-      String reasonSummary = SwallowedExceptionLogger.summary(exception);
-      log.warn("config cache redis delete failed: key={}, reason={}", sanitizedKey, reasonSummary);
-      log.debug("config cache redis delete failure: key={}", LogSanitizer.value(key), exception);
-      return;
+    private void publishStrict(String tenantId, String type, String code) {
+        Long keyRevision = Objects.requireNonNull(invalidationStore.nextKeyRevision(tenantId, type, code));
+        Long revision = Objects.requireNonNull(invalidationStore.nextGlobalRevision());
+        String safeTenantId = safe(tenantId);
+        String safeType = safe(type);
+        String safeCode = safe(code);
+        Instant occurredAt = Instant.now();
+        ConfigCacheInvalidationEvent event =
+                new ConfigCacheInvalidationEvent(safeTenantId, safeType, safeCode, revision, keyRevision, occurredAt);
+        invalidationStore.publish(event);
+        publishedRevision.set(event.revision());
+        increment(publishSuccessCounter);
     }
-    publishInvalidation(tenantId, type, code);
-  }
 
-  private void publishInvalidation(String tenantId, String type, String code) {
-    try {
-      publishStrict(tenantId, type, code);
-    } catch (RuntimeException exception) {
-      increment(publishFailureCounter);
-      String sanitizedTenantId = LogSanitizer.value(tenantId);
-      String sanitizedType = LogSanitizer.value(type);
-      String sanitizedCode = LogSanitizer.value(code);
-      String reasonSummary = SwallowedExceptionLogger.summary(exception);
-      log.warn(
-          "config cache invalidation publish failed: tenantId={}, type={}, code={}, reason={}",
-          sanitizedTenantId,
-          sanitizedType,
-          sanitizedCode,
-          reasonSummary);
-      log.debug(
-          "config cache invalidation publish failure: tenantId={}, type={}, code={}",
-          LogSanitizer.value(tenantId),
-          LogSanitizer.value(type),
-          LogSanitizer.value(code),
-          exception);
+    private void increment(Counter counter) {
+        if (EmptyChecks.isNotNull(counter)) {
+            counter.increment();
+        }
     }
-  }
 
-  /** 严格投递供持久队列使用，失败必须传播以保留待重试记录。 */
-  public void deliver(ConfigCacheInvalidationIntent intent) {
-    String tenantId = intent.tenantId();
-    String type = intent.configType();
-    String code = intent.configCode();
-    if ("*".equals(code)) {
-      String pattern = "config:%s:%s:*".formatted(safe(tenantId), safe(type));
-      invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
-    } else {
-      invalidationStore.delete(configKey(tenantId, type, code));
+    private String configKey(String tenantId, String type, String code) {
+        String safeTenantId = safe(tenantId);
+        String safeType = safe(type);
+        String safeCode = safe(code);
+        return "config:%s:%s:%s".formatted(safeTenantId, safeType, safeCode);
     }
-    publishStrict(tenantId, type, code);
-  }
 
-  private void publishStrict(String tenantId, String type, String code) {
-    Long keyRevision =
-        Objects.requireNonNull(invalidationStore.nextKeyRevision(tenantId, type, code));
-    Long revision = Objects.requireNonNull(invalidationStore.nextGlobalRevision());
-    String safeTenantId = safe(tenantId);
-    String safeType = safe(type);
-    String safeCode = safe(code);
-    Instant occurredAt = Instant.now();
-    ConfigCacheInvalidationEvent event = new ConfigCacheInvalidationEvent(
-        safeTenantId, safeType, safeCode, revision, keyRevision, occurredAt);
-    invalidationStore.publish(event);
-    publishedRevision.set(event.revision());
-    increment(publishSuccessCounter);
-  }
-
-  private void increment(Counter counter) {
-    if (EmptyChecks.isNotNull(counter)) {
-      counter.increment();
+    private String safe(String value) {
+        if (EmptyChecks.isBlank(value)) {
+            return "_";
+        }
+        return value.replace(':', '_');
     }
-  }
-
-  private String configKey(String tenantId, String type, String code) {
-    String safeTenantId = safe(tenantId);
-    String safeType = safe(type);
-    String safeCode = safe(code);
-    return "config:%s:%s:%s".formatted(safeTenantId, safeType, safeCode);
-  }
-
-  private String safe(String value) {
-    if (EmptyChecks.isBlank(value)) {
-      return "_";
-    }
-    return value.replace(':', '_');
-  }
 }

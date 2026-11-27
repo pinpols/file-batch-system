@@ -25,27 +25,27 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OutboxDomainEventPublisher implements DomainEventPublisher {
 
-  private final OutboxEventMapper outboxEventMapper;
+    private final OutboxEventMapper outboxEventMapper;
 
-  @Override
-  @Transactional(propagation = Propagation.MANDATORY)
-  public Long publish(DomainEvent event) {
-    OutboxEventEntity entity = new OutboxEventEntity();
-    entity.setTenantId(event.tenantId());
-    entity.setAggregateType(event.aggregateType());
-    entity.setAggregateId(event.aggregateId());
-    entity.setEventType(event.eventType());
-    entity.setEventKey(event.eventKey());
-    Map<String, Object> payload = event.payload();
-    String payloadJson = JsonUtils.toJson(payload);
-    entity.setPayloadJson(payloadJson);
-    entity.setPublishStatus(OutboxPublishStatus.NEW.code());
-    entity.setPublishAttempt(0);
-    entity.setTraceId(event.traceId());
-    if (event.priority() != null) {
-      entity.setPriority(event.priority());
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Long publish(DomainEvent event) {
+        OutboxEventEntity entity = new OutboxEventEntity();
+        entity.setTenantId(event.tenantId());
+        entity.setAggregateType(event.aggregateType());
+        entity.setAggregateId(event.aggregateId());
+        entity.setEventType(event.eventType());
+        entity.setEventKey(event.eventKey());
+        Map<String, Object> payload = event.payload();
+        String payloadJson = JsonUtils.toJson(payload);
+        entity.setPayloadJson(payloadJson);
+        entity.setPublishStatus(OutboxPublishStatus.NEW.code());
+        entity.setPublishAttempt(0);
+        entity.setTraceId(event.traceId());
+        if (event.priority() != null) {
+            entity.setPriority(event.priority());
+        }
+        outboxEventMapper.insert(entity);
+        return entity.getId();
     }
-    outboxEventMapper.insert(entity);
-    return entity.getId();
-  }
 }

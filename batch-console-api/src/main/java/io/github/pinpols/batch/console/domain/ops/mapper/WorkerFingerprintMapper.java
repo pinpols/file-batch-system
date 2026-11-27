@@ -15,14 +15,13 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface WorkerFingerprintMapper {
 
-  /**
-   * 列本租户「活跃 + 退场中」worker 指纹列表(heartbeat_at 倒序,上限 200 行)。
-   *
-   * <p>status IN ('ONLINE','DRAINING') — V3 worker_registry 表实际状态枚举(无 'ACTIVE')。
-   */
-  List<WorkerFingerprintRow> selectFingerprintsByTenant(@Param("tenantId") String tenantId);
+    /**
+     * 列本租户「活跃 + 退场中」worker 指纹列表(heartbeat_at 倒序,上限 200 行)。
+     *
+     * <p>status IN ('ONLINE','DRAINING') — V3 worker_registry 表实际状态枚举(无 'ACTIVE')。
+     */
+    List<WorkerFingerprintRow> selectFingerprintsByTenant(@Param("tenantId") String tenantId);
 
-  /** 按 (build_id, sdk_version) 聚合本租户 ONLINE worker 数,count desc。空值聚合为 "(unknown)"。 */
-  List<WorkerFingerprintSummaryRow> selectFingerprintSummaryByTenant(
-      @Param("tenantId") String tenantId);
+    /** 按 (build_id, sdk_version) 聚合本租户 ONLINE worker 数,count desc。空值聚合为 "(unknown)"。 */
+    List<WorkerFingerprintSummaryRow> selectFingerprintSummaryByTenant(@Param("tenantId") String tenantId);
 }

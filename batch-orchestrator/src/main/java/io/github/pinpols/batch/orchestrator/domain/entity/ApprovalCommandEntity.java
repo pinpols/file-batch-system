@@ -11,39 +11,39 @@ import lombok.Data;
 @Data
 public class ApprovalCommandEntity {
 
-  private Long id;
+    private Long id;
 
-  private String tenantId;
+    private String tenantId;
 
-  private String approvalNo;
+    private String approvalNo;
 
-  private String approvalType;
+    private String approvalType;
 
-  private String actionType;
+    private String actionType;
 
-  private String targetType;
+    private String targetType;
 
-  private String targetId;
+    private String targetId;
 
-  private String payloadJson;
+    private String payloadJson;
 
-  private String approvalStatus;
+    private String approvalStatus;
 
-  private String requesterId;
+    private String requesterId;
 
-  private String approverId;
+    private String approverId;
 
-  private String rejectionReason;
+    private String rejectionReason;
 
-  private String approvalReason;
+    private String approvalReason;
 
-  private String sourceApprovalReason;
+    private String sourceApprovalReason;
 
-  private String sourceTraceId;
+    private String sourceTraceId;
 
-  private String sourceIdempotencyKey;
+    private String sourceIdempotencyKey;
 
-  private Instant approvedAt;
+    private Instant approvedAt;
 
-  private Instant executedAt;
+    private Instant executedAt;
 }

@@ -11,12 +11,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisRateLimitStore implements RateLimitStore {
 
-  private static final DefaultRedisScript<Long> RATE_LIMIT_SCRIPT;
+    private static final DefaultRedisScript<Long> RATE_LIMIT_SCRIPT;
 
-  static {
-    RATE_LIMIT_SCRIPT = new DefaultRedisScript<>();
-    RATE_LIMIT_SCRIPT.setResultType(Long.class);
-    RATE_LIMIT_SCRIPT.setScriptText("""
+    static {
+        RATE_LIMIT_SCRIPT = new DefaultRedisScript<>();
+        RATE_LIMIT_SCRIPT.setResultType(Long.class);
+        RATE_LIMIT_SCRIPT.setScriptText("""
         redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[2])
         local count = redis.call('ZCARD', KEYS[1])
         if count < tonumber(ARGV[3]) then
@@ -27,21 +27,20 @@ public class RedisRateLimitStore implements RateLimitStore {
           return 0
         end
         """.stripTrailing());
-  }
+    }
 
-  private final StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-  @Override
-  public boolean tryAcquire(
-      String key, long now, long windowStart, int limit, String member, long ttlSeconds) {
-    Long result = redisTemplate.execute(
-        RATE_LIMIT_SCRIPT,
-        List.of(key),
-        String.valueOf(now),
-        String.valueOf(windowStart),
-        String.valueOf(limit),
-        member,
-        String.valueOf(ttlSeconds));
-    return Long.valueOf(1L).equals(result);
-  }
+    @Override
+    public boolean tryAcquire(String key, long now, long windowStart, int limit, String member, long ttlSeconds) {
+        Long result = redisTemplate.execute(
+                RATE_LIMIT_SCRIPT,
+                List.of(key),
+                String.valueOf(now),
+                String.valueOf(windowStart),
+                String.valueOf(limit),
+                member,
+                String.valueOf(ttlSeconds));
+        return Long.valueOf(1L).equals(result);
+    }
 }

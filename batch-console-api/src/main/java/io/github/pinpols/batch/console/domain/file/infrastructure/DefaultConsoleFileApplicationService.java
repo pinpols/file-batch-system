@@ -63,397 +63,375 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class DefaultConsoleFileApplicationService implements ConsoleFileApplicationService {
 
-  /**
-   * 转发给 orchestrator 文件操作的操作人 ID 长度上限，
-   * 与控制台请求侧操作人 ID 的 @Size(max = 64) 口径一致；
-   * 落库列 file_audit_log.operator_id 已在 V349__file_audit_log_operator_id_widen.sql 放宽到 VARCHAR(128)。
-   */
-  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+    /**
+     * 转发给 orchestrator 文件操作的操作人 ID 长度上限，
+     * 与控制台请求侧操作人 ID 的 @Size(max = 64) 口径一致；
+     * 落库列 file_audit_log.operator_id 已在 V349__file_audit_log_operator_id_widen.sql 放宽到 VARCHAR(128)。
+     */
+    private static final int OPERATOR_ID_MAX_LENGTH = 64;
 
-  /**
-   * 文件操作原因，
-   * 与 DeleteFileRequest / ArchiveFileRequest / RedispatchFileRequest / PresignDownloadFileRequest.reason 的 @Size(max = 512) 一致。
-   */
-  private static final int REASON_MAX_LENGTH = 512;
+    /**
+     * 文件操作原因，
+     * 与 DeleteFileRequest / ArchiveFileRequest / RedispatchFileRequest / PresignDownloadFileRequest.reason 的 @Size(max = 512) 一致。
+     */
+    private static final int REASON_MAX_LENGTH = 512;
 
-  /**
-   * 文件渠道编码，对应 file_channel_config.channel_code VARCHAR(128)（V6__create_file_tables.sql）
-   * ，与 RedispatchFileRequest.channelCode 的 @Size(max = 128) 一致。
-   */
-  private static final int CHANNEL_CODE_MAX_LENGTH = 128;
+    /**
+     * 文件渠道编码，对应 file_channel_config.channel_code VARCHAR(128)（V6__create_file_tables.sql）
+     * ，与 RedispatchFileRequest.channelCode 的 @Size(max = 128) 一致。
+     */
+    private static final int CHANNEL_CODE_MAX_LENGTH = 128;
 
-  /**
-   * 预签名上传的文件名长度上限，取常见文件系统单个文件名上限 255；
-   * file_record.file_name 为 VARCHAR(512)（V6__create_file_tables.sql）。
-   */
-  private static final int UPLOAD_FILE_NAME_MAX_LENGTH = 255;
+    /**
+     * 预签名上传的文件名长度上限，取常见文件系统单个文件名上限 255；
+     * file_record.file_name 为 VARCHAR(512)（V6__create_file_tables.sql）。
+     */
+    private static final int UPLOAD_FILE_NAME_MAX_LENGTH = 255;
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final OrchestratorApprovalClient approvalClient;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  // P0-2 (ADR audit 2026-05-14): 所有租户参数走 guard 解析，禁止信任 body/query 中的 tenantId；
-  // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，跨租户操作被拦截。
-  private final TenantIdResolver tenantGuard;
-  private final FileRecordMapper fileRecordMapper;
-  private final FileTemplateConfigMapper fileTemplateConfigMapper;
-  private final BatchObjectStore objectStore;
-  private final S3StorageProperties s3StorageProperties;
+    private final OrchestratorInternalRestClient orchestratorInternalRestClient;
+    private final OrchestratorApprovalClient approvalClient;
+    private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    // P0-2 (ADR audit 2026-05-14): 所有租户参数走 guard 解析，禁止信任 body/query 中的 tenantId；
+    // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，跨租户操作被拦截。
+    private final TenantIdResolver tenantGuard;
+    private final FileRecordMapper fileRecordMapper;
+    private final FileTemplateConfigMapper fileTemplateConfigMapper;
+    private final BatchObjectStore objectStore;
+    private final S3StorageProperties s3StorageProperties;
 
-  @Override
-  public ConsoleFileOperationResponse archive(ArchiveFileRequest request, String idempotencyKey) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    FileExecContext ctx = FileExecContext.builder()
-        .tenantId(tenantId)
-        .fileId(request.getFileId())
-        .reason(request.getReason())
-        .idempotencyKey(idempotencyKey)
-        .operation("archive")
-        .build();
-    return executeFileOperation(ctx);
-  }
-
-  @Override
-  public ConsoleFileOperationResponse delete(DeleteFileRequest request, String idempotencyKey) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    FileExecContext ctx = FileExecContext.builder()
-        .tenantId(tenantId)
-        .fileId(request.getFileId())
-        .reason(request.getReason())
-        .idempotencyKey(idempotencyKey)
-        .operation("delete")
-        .build();
-    return executeFileOperation(ctx);
-  }
-
-  @Override
-  public ConsoleFileOperationResponse redispatch(
-      RedispatchFileRequest request, String idempotencyKey) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    FileExecContext ctx = FileExecContext.builder()
-        .tenantId(tenantId)
-        .fileId(request.getFileId())
-        .channelCode(request.getChannelCode())
-        .reason(request.getReason())
-        .idempotencyKey(idempotencyKey)
-        .operation("redispatch")
-        .build();
-    return executeFileOperation(ctx);
-  }
-
-  @Override
-  public ConsolePresignDownloadResponse presignDownload(
-      PresignDownloadFileRequest request, String idempotencyKey) {
-    if (request.getApprovalId() == null || request.getApprovalId().isBlank()) {
-      ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
-          .approvalType("DOWNLOAD")
-          .actionType("DOWNLOAD")
-          .targetType("FILE")
-          .targetId(String.valueOf(request.getFileId()))
-          .payload(request)
-          .approvalReason(request.getReason())
-          .idempotencyKey(idempotencyKey)
-          .build();
-      return submitApproval(approvalCtx);
+    @Override
+    public ConsoleFileOperationResponse archive(ArchiveFileRequest request, String idempotencyKey) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        FileExecContext ctx = FileExecContext.builder()
+                .tenantId(tenantId)
+                .fileId(request.getFileId())
+                .reason(request.getReason())
+                .idempotencyKey(idempotencyKey)
+                .operation("archive")
+                .build();
+        return executeFileOperation(ctx);
     }
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    // 审批二次校验绑定到本次下载的 fileId（targetType=FILE），与提交侧写入的 targetId 对称，
-    // 消灭"任一已 APPROVED 的下载审批单解锁任意加密文件"的同租越权（此前 File 版漏了该绑定）。
-    approvalClient.requireApprovedApproval(
-        tenantId, request.getApprovalId(), ApprovalTargetBinding.file(request.getFileId()));
-    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.client();
-    String operatorId =
-        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
-    String traceId = requestMetadata.traceId();
-    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
-    String approvalId = request.getApprovalId();
-    FileOperationRequest fileOperation =
-        new FileOperationRequest(tenantId, null, operatorId, traceId, reason, approvalId);
-    FileDownloadResponse response = restClient
-        .post()
-        .uri("/internal/files/{fileId}/presign", request.getFileId())
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(fileOperation)
-        .retrieve()
-        .body(FileDownloadResponse.class);
-    return response == null
-        ? null
-        : new ConsolePresignDownloadResponse(null, response.downloadUrl());
-  }
 
-  @Override
-  public ConsoleFileOperationResponse operateArrivalGroup(
-      FileArrivalGroupActionRequest request, String idempotencyKey) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.client();
-    String action = request.getAction();
-    String operatorId =
-        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
-    String traceId = requestMetadata.traceId();
-    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
-    Long extendWaitSeconds = request.getExtendWaitSeconds();
-    ArrivalGroupOperationRequest arrivalGroupOperation = new ArrivalGroupOperationRequest(
-        tenantId, action, operatorId, traceId, reason, extendWaitSeconds);
-    FileOperationResponse response = restClient
-        .post()
-        .uri("/internal/files/arrival-groups/{fileGroupCode}/actions", request.getFileGroupCode())
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(arrivalGroupOperation)
-        .retrieve()
-        .body(FileOperationResponse.class);
-    return response == null ? null : new ConsoleFileOperationResponse(response.status());
-  }
-
-  @Override
-  public ConsoleFilePresignUploadResponse presignUpload(
-      String tenantId,
-      String channelCode,
-      String fileName,
-      ConsoleFileUploadBindingRequest binding,
-      String idempotencyKey) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.client();
-    String safeChannelCode = ConsoleTextSanitizer.safeInput(channelCode, CHANNEL_CODE_MAX_LENGTH);
-    String safeFileName = ConsoleTextSanitizer.safeInput(fileName, UPLOAD_FILE_NAME_MAX_LENGTH);
-    String operatorId =
-        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
-    String traceId = requestMetadata.traceId();
-    if (EmptyChecks.isNotNull(binding)) {
-      FileTemplateConfigQueryView template = fileTemplateConfigMapper.selectEnabledByTenantAndCode(
-          resolvedTenantId, binding.bundleTemplateCode());
-      if (EmptyChecks.isNull(template)
-          || !Boolean.TRUE.equals(template.enabled())
-          || !FileTemplateType.IMPORT.code().equals(template.templateType())) {
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT,
-            ResultCode.INVALID_ARGUMENT.detailKey(),
-            "manual upload template must be enabled for the selected tenant");
-      }
+    @Override
+    public ConsoleFileOperationResponse delete(DeleteFileRequest request, String idempotencyKey) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        FileExecContext ctx = FileExecContext.builder()
+                .tenantId(tenantId)
+                .fileId(request.getFileId())
+                .reason(request.getReason())
+                .idempotencyKey(idempotencyKey)
+                .operation("delete")
+                .build();
+        return executeFileOperation(ctx);
     }
-    PresignUploadRequest body = new PresignUploadRequest(
-        resolvedTenantId,
-        safeChannelCode,
-        safeFileName,
-        operatorId,
-        traceId,
-        EmptyChecks.isNull(binding) ? null : binding.calendarCode(),
-        EmptyChecks.isNull(binding) ? null : binding.workflowDefinitionId(),
-        EmptyChecks.isNull(binding) ? null : binding.fileGroupCode(),
-        EmptyChecks.isNull(binding) ? null : binding.bizDate(),
-        EmptyChecks.isNull(binding) ? null : binding.requiredFileNames(),
-        EmptyChecks.isNull(binding) ? null : binding.bundleTemplateCode());
-    return restClient
-        .post()
-        .uri("/internal/files/presign-upload")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(body)
-        .retrieve()
-        .body(ConsoleFilePresignUploadResponse.class);
-  }
 
-  @Override
-  public List<ConsoleFileUploadTargetResponse> listManualUploadTargets(String tenantId) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    List<ConsoleFileUploadTargetResponse> targets = orchestratorInternalRestClient
-        .client()
-        .get()
-        .uri(
-            "/internal/file-group-expectations/upload-targets?tenantId={tenantId}",
-            resolvedTenantId)
-        .retrieve()
-        .body(new ParameterizedTypeReference<>() {});
-    return EmptyChecks.isNull(targets) ? List.of() : targets;
-  }
+    @Override
+    public ConsoleFileOperationResponse redispatch(RedispatchFileRequest request, String idempotencyKey) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        FileExecContext ctx = FileExecContext.builder()
+                .tenantId(tenantId)
+                .fileId(request.getFileId())
+                .channelCode(request.getChannelCode())
+                .reason(request.getReason())
+                .idempotencyKey(idempotencyKey)
+                .operation("redispatch")
+                .build();
+        return executeFileOperation(ctx);
+    }
 
-  private record PresignUploadRequest(
-      String tenantId,
-      String channelCode,
-      String fileName,
-      String operatorId,
-      String traceId,
-      String calendarCode,
-      Long workflowDefinitionId,
-      String fileGroupCode,
-      LocalDate bizDate,
-      List<String> requiredFileNames,
-      String bundleTemplateCode) {}
+    @Override
+    public ConsolePresignDownloadResponse presignDownload(PresignDownloadFileRequest request, String idempotencyKey) {
+        if (request.getApprovalId() == null || request.getApprovalId().isBlank()) {
+            ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
+                    .approvalType("DOWNLOAD")
+                    .actionType("DOWNLOAD")
+                    .targetType("FILE")
+                    .targetId(String.valueOf(request.getFileId()))
+                    .payload(request)
+                    .approvalReason(request.getReason())
+                    .idempotencyKey(idempotencyKey)
+                    .build();
+            return submitApproval(approvalCtx);
+        }
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        // 审批二次校验绑定到本次下载的 fileId（targetType=FILE），与提交侧写入的 targetId 对称，
+        // 消灭"任一已 APPROVED 的下载审批单解锁任意加密文件"的同租越权（此前 File 版漏了该绑定）。
+        approvalClient.requireApprovedApproval(
+                tenantId, request.getApprovalId(), ApprovalTargetBinding.file(request.getFileId()));
+        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+        RestClient restClient = orchestratorInternalRestClient.client();
+        String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
+        String traceId = requestMetadata.traceId();
+        String reason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
+        String approvalId = request.getApprovalId();
+        FileOperationRequest fileOperation =
+                new FileOperationRequest(tenantId, null, operatorId, traceId, reason, approvalId);
+        FileDownloadResponse response = restClient
+                .post()
+                .uri("/internal/files/{fileId}/presign", request.getFileId())
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+                .body(fileOperation)
+                .retrieve()
+                .body(FileDownloadResponse.class);
+        return response == null ? null : new ConsolePresignDownloadResponse(null, response.downloadUrl());
+    }
 
-  @Override
-  public ConsoleFileOperationResponse uploadContent(
-      String tenantId, Long fileId, MultipartFile file, String idempotencyKey) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    if (fileId == null) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.id_required");
+    @Override
+    public ConsoleFileOperationResponse operateArrivalGroup(
+            FileArrivalGroupActionRequest request, String idempotencyKey) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+        RestClient restClient = orchestratorInternalRestClient.client();
+        String action = request.getAction();
+        String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
+        String traceId = requestMetadata.traceId();
+        String reason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
+        Long extendWaitSeconds = request.getExtendWaitSeconds();
+        ArrivalGroupOperationRequest arrivalGroupOperation =
+                new ArrivalGroupOperationRequest(tenantId, action, operatorId, traceId, reason, extendWaitSeconds);
+        FileOperationResponse response = restClient
+                .post()
+                .uri("/internal/files/arrival-groups/{fileGroupCode}/actions", request.getFileGroupCode())
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+                .body(arrivalGroupOperation)
+                .retrieve()
+                .body(FileOperationResponse.class);
+        return response == null ? null : new ConsoleFileOperationResponse(response.status());
     }
-    if (file == null || file.isEmpty()) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.content_required");
-    }
-    FileRecordStorageView fileRecord =
-        fileRecordMapper.selectFileRecordById(resolvedTenantId, fileId);
-    if (fileRecord == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
-    }
-    String storageType = fileRecord.storageType();
-    if ("LOCAL".equalsIgnoreCase(storageType)) {
-      throw BizException.of(
-          ResultCode.STATE_CONFLICT,
-          ResultCode.STATE_CONFLICT.detailKey(),
-          "content upload requires object-store backed file record");
-    }
-    String storagePath = fileRecord.storagePath();
-    if (!Texts.hasText(storagePath)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
-    }
-    String bucket = fileRecord.storageBucket();
-    if (!Texts.hasText(bucket)) {
-      bucket = s3StorageProperties.getBucket();
-    }
-    String contentType = file.getContentType();
-    if (!Texts.hasText(contentType)) {
-      contentType = fileRecord.mimeType();
-    }
-    if (!Texts.hasText(contentType)) {
-      contentType = "application/octet-stream";
-    }
-    try (InputStream inputStream = file.getInputStream()) {
-      objectStore.put(bucket, storagePath, inputStream, file.getSize(), contentType);
-      return new ConsoleFileOperationResponse("UPLOADED");
-    } catch (IOException exception) {
-      throw new IllegalStateException("failed to open upload stream", exception);
-    }
-  }
 
-  @Override
-  public ConsoleFileOperationResponse confirmArrival(
-      String tenantId, Long fileId, String idempotencyKey) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    FileExecContext ctx = FileExecContext.builder()
-        .tenantId(resolvedTenantId)
-        .fileId(fileId)
-        .reason("tenant confirmed arrival")
-        .idempotencyKey(idempotencyKey)
-        .operation("confirm-arrival")
-        .build();
-    return executeFileOperation(ctx);
-  }
-
-  @Builder
-  private record FileExecContext(
-      String tenantId,
-      Long fileId,
-      String channelCode,
-      String reason,
-      String idempotencyKey,
-      String operation,
-      String approvalId) {}
-
-  @Builder
-  private record ApprovalSubmitContext(
-      String approvalType,
-      String actionType,
-      String targetType,
-      String targetId,
-      Object payload,
-      String approvalReason,
-      String idempotencyKey) {}
-
-  private ConsoleFileOperationResponse executeFileOperation(FileExecContext ctx) {
-    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.client();
-    String tenantId = ctx.tenantId();
-    String sanitizedChannelCode =
-        ConsoleTextSanitizer.safeInput(ctx.channelCode(), CHANNEL_CODE_MAX_LENGTH);
-    String sanitizedOperatorId =
-        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
-    String traceId = requestMetadata.traceId();
-    String sanitizedReason = ConsoleTextSanitizer.safeInput(ctx.reason(), REASON_MAX_LENGTH);
-    String approvalId = ctx.approvalId();
-    FileOperationRequest fileOperation = new FileOperationRequest(
-        tenantId, sanitizedChannelCode, sanitizedOperatorId, traceId, sanitizedReason, approvalId);
-    FileOperationResponse response = restClient
-        .post()
-        .uri("/internal/files/{fileId}/" + ctx.operation(), ctx.fileId())
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(fileOperation)
-        .retrieve()
-        .body(FileOperationResponse.class);
-    return response == null ? null : new ConsoleFileOperationResponse(response.status());
-  }
-
-  private ConsolePresignDownloadResponse submitApproval(ApprovalSubmitContext ctx) {
-    // P0 (adv-review 2026-07-13)：审批提交必须经 tenantGuard.resolveTenant 校验/覆盖 body 声明的
-    // tenantId，与 presignDownload 带 approvalId 分支一致；否则租户 A 会话可借 body tenantId=B
-    // 向租户 B 的审批队列注入攻击者可控审批单（跨租户写越权）。
-    Object approvalPayload = ctx.payload();
-    String requestedTenantId = extractTenantId(approvalPayload);
-    String tenantId = tenantGuard.resolveTenant(requestedTenantId);
-    OrchestratorApprovalClient.ApprovalSubmitCommand.ApprovalSubmitCommandBuilder
-        approvalCommandBuilder = ApprovalSubmitCommand.builder()
-            .tenantId(tenantId)
-            .approvalType(ctx.approvalType())
-            .actionType(ctx.actionType())
-            .targetType(ctx.targetType())
-            .targetId(ctx.targetId());
-    String payloadJson = JsonUtils.toJson(ctx.payload());
-    ApprovalSubmitCommand approvalCommand = approvalCommandBuilder
-        .payloadJson(payloadJson)
-        .approvalReason(ctx.approvalReason())
-        .idempotencyKey(ctx.idempotencyKey())
-        .build();
-    String approvalNo = approvalClient.submitApproval(approvalCommand);
-    return new ConsolePresignDownloadResponse(approvalNo, null);
-  }
-
-  private String stringValue(Object value) {
-    return value == null ? null : String.valueOf(value);
-  }
-
-  private String extractTenantId(Object payload) {
-    if (payload instanceof PresignDownloadFileRequest request) {
-      return request.getTenantId();
+    @Override
+    public ConsoleFilePresignUploadResponse presignUpload(
+            String tenantId,
+            String channelCode,
+            String fileName,
+            ConsoleFileUploadBindingRequest binding,
+            String idempotencyKey) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+        RestClient restClient = orchestratorInternalRestClient.client();
+        String safeChannelCode = ConsoleTextSanitizer.safeInput(channelCode, CHANNEL_CODE_MAX_LENGTH);
+        String safeFileName = ConsoleTextSanitizer.safeInput(fileName, UPLOAD_FILE_NAME_MAX_LENGTH);
+        String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
+        String traceId = requestMetadata.traceId();
+        if (EmptyChecks.isNotNull(binding)) {
+            FileTemplateConfigQueryView template = fileTemplateConfigMapper.selectEnabledByTenantAndCode(
+                    resolvedTenantId, binding.bundleTemplateCode());
+            if (EmptyChecks.isNull(template)
+                    || !Boolean.TRUE.equals(template.enabled())
+                    || !FileTemplateType.IMPORT.code().equals(template.templateType())) {
+                throw BizException.of(
+                        ResultCode.INVALID_ARGUMENT,
+                        ResultCode.INVALID_ARGUMENT.detailKey(),
+                        "manual upload template must be enabled for the selected tenant");
+            }
+        }
+        PresignUploadRequest body = new PresignUploadRequest(
+                resolvedTenantId,
+                safeChannelCode,
+                safeFileName,
+                operatorId,
+                traceId,
+                EmptyChecks.isNull(binding) ? null : binding.calendarCode(),
+                EmptyChecks.isNull(binding) ? null : binding.workflowDefinitionId(),
+                EmptyChecks.isNull(binding) ? null : binding.fileGroupCode(),
+                EmptyChecks.isNull(binding) ? null : binding.bizDate(),
+                EmptyChecks.isNull(binding) ? null : binding.requiredFileNames(),
+                EmptyChecks.isNull(binding) ? null : binding.bundleTemplateCode());
+        return restClient
+                .post()
+                .uri("/internal/files/presign-upload")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+                .body(body)
+                .retrieve()
+                .body(ConsoleFilePresignUploadResponse.class);
     }
-    if (payload instanceof ArchiveFileRequest request) {
-      return request.getTenantId();
-    }
-    if (payload instanceof DeleteFileRequest request) {
-      return request.getTenantId();
-    }
-    if (payload instanceof RedispatchFileRequest request) {
-      return request.getTenantId();
-    }
-    if (payload instanceof FileArrivalGroupActionRequest request) {
-      return request.getTenantId();
-    }
-    return null;
-  }
 
-  private record FileOperationRequest(
-      String tenantId,
-      String channelCode,
-      String operatorId,
-      String traceId,
-      String reason,
-      String approvalId) {}
+    @Override
+    public List<ConsoleFileUploadTargetResponse> listManualUploadTargets(String tenantId) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        List<ConsoleFileUploadTargetResponse> targets = orchestratorInternalRestClient
+                .client()
+                .get()
+                .uri("/internal/file-group-expectations/upload-targets?tenantId={tenantId}", resolvedTenantId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+        return EmptyChecks.isNull(targets) ? List.of() : targets;
+    }
 
-  private record FileOperationResponse(String status) {}
+    private record PresignUploadRequest(
+            String tenantId,
+            String channelCode,
+            String fileName,
+            String operatorId,
+            String traceId,
+            String calendarCode,
+            Long workflowDefinitionId,
+            String fileGroupCode,
+            LocalDate bizDate,
+            List<String> requiredFileNames,
+            String bundleTemplateCode) {}
 
-  private record FileDownloadResponse(String downloadUrl) {}
+    @Override
+    public ConsoleFileOperationResponse uploadContent(
+            String tenantId, Long fileId, MultipartFile file, String idempotencyKey) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        if (fileId == null) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.id_required");
+        }
+        if (file == null || file.isEmpty()) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.content_required");
+        }
+        FileRecordStorageView fileRecord = fileRecordMapper.selectFileRecordById(resolvedTenantId, fileId);
+        if (fileRecord == null) {
+            throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
+        }
+        String storageType = fileRecord.storageType();
+        if ("LOCAL".equalsIgnoreCase(storageType)) {
+            throw BizException.of(
+                    ResultCode.STATE_CONFLICT,
+                    ResultCode.STATE_CONFLICT.detailKey(),
+                    "content upload requires object-store backed file record");
+        }
+        String storagePath = fileRecord.storagePath();
+        if (!Texts.hasText(storagePath)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
+        }
+        String bucket = fileRecord.storageBucket();
+        if (!Texts.hasText(bucket)) {
+            bucket = s3StorageProperties.getBucket();
+        }
+        String contentType = file.getContentType();
+        if (!Texts.hasText(contentType)) {
+            contentType = fileRecord.mimeType();
+        }
+        if (!Texts.hasText(contentType)) {
+            contentType = "application/octet-stream";
+        }
+        try (InputStream inputStream = file.getInputStream()) {
+            objectStore.put(bucket, storagePath, inputStream, file.getSize(), contentType);
+            return new ConsoleFileOperationResponse("UPLOADED");
+        } catch (IOException exception) {
+            throw new IllegalStateException("failed to open upload stream", exception);
+        }
+    }
 
-  private record ArrivalGroupOperationRequest(
-      String tenantId,
-      String action,
-      String operatorId,
-      String traceId,
-      String reason,
-      Long extendWaitSeconds) {}
+    @Override
+    public ConsoleFileOperationResponse confirmArrival(String tenantId, Long fileId, String idempotencyKey) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        FileExecContext ctx = FileExecContext.builder()
+                .tenantId(resolvedTenantId)
+                .fileId(fileId)
+                .reason("tenant confirmed arrival")
+                .idempotencyKey(idempotencyKey)
+                .operation("confirm-arrival")
+                .build();
+        return executeFileOperation(ctx);
+    }
+
+    @Builder
+    private record FileExecContext(
+            String tenantId,
+            Long fileId,
+            String channelCode,
+            String reason,
+            String idempotencyKey,
+            String operation,
+            String approvalId) {}
+
+    @Builder
+    private record ApprovalSubmitContext(
+            String approvalType,
+            String actionType,
+            String targetType,
+            String targetId,
+            Object payload,
+            String approvalReason,
+            String idempotencyKey) {}
+
+    private ConsoleFileOperationResponse executeFileOperation(FileExecContext ctx) {
+        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+        RestClient restClient = orchestratorInternalRestClient.client();
+        String tenantId = ctx.tenantId();
+        String sanitizedChannelCode = ConsoleTextSanitizer.safeInput(ctx.channelCode(), CHANNEL_CODE_MAX_LENGTH);
+        String sanitizedOperatorId =
+                ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
+        String traceId = requestMetadata.traceId();
+        String sanitizedReason = ConsoleTextSanitizer.safeInput(ctx.reason(), REASON_MAX_LENGTH);
+        String approvalId = ctx.approvalId();
+        FileOperationRequest fileOperation = new FileOperationRequest(
+                tenantId, sanitizedChannelCode, sanitizedOperatorId, traceId, sanitizedReason, approvalId);
+        FileOperationResponse response = restClient
+                .post()
+                .uri("/internal/files/{fileId}/" + ctx.operation(), ctx.fileId())
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+                .body(fileOperation)
+                .retrieve()
+                .body(FileOperationResponse.class);
+        return response == null ? null : new ConsoleFileOperationResponse(response.status());
+    }
+
+    private ConsolePresignDownloadResponse submitApproval(ApprovalSubmitContext ctx) {
+        // P0 (adv-review 2026-07-13)：审批提交必须经 tenantGuard.resolveTenant 校验/覆盖 body 声明的
+        // tenantId，与 presignDownload 带 approvalId 分支一致；否则租户 A 会话可借 body tenantId=B
+        // 向租户 B 的审批队列注入攻击者可控审批单（跨租户写越权）。
+        Object approvalPayload = ctx.payload();
+        String requestedTenantId = extractTenantId(approvalPayload);
+        String tenantId = tenantGuard.resolveTenant(requestedTenantId);
+        OrchestratorApprovalClient.ApprovalSubmitCommand.ApprovalSubmitCommandBuilder approvalCommandBuilder =
+                ApprovalSubmitCommand.builder()
+                        .tenantId(tenantId)
+                        .approvalType(ctx.approvalType())
+                        .actionType(ctx.actionType())
+                        .targetType(ctx.targetType())
+                        .targetId(ctx.targetId());
+        String payloadJson = JsonUtils.toJson(ctx.payload());
+        ApprovalSubmitCommand approvalCommand = approvalCommandBuilder
+                .payloadJson(payloadJson)
+                .approvalReason(ctx.approvalReason())
+                .idempotencyKey(ctx.idempotencyKey())
+                .build();
+        String approvalNo = approvalClient.submitApproval(approvalCommand);
+        return new ConsolePresignDownloadResponse(approvalNo, null);
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private String extractTenantId(Object payload) {
+        if (payload instanceof PresignDownloadFileRequest request) {
+            return request.getTenantId();
+        }
+        if (payload instanceof ArchiveFileRequest request) {
+            return request.getTenantId();
+        }
+        if (payload instanceof DeleteFileRequest request) {
+            return request.getTenantId();
+        }
+        if (payload instanceof RedispatchFileRequest request) {
+            return request.getTenantId();
+        }
+        if (payload instanceof FileArrivalGroupActionRequest request) {
+            return request.getTenantId();
+        }
+        return null;
+    }
+
+    private record FileOperationRequest(
+            String tenantId, String channelCode, String operatorId, String traceId, String reason, String approvalId) {}
+
+    private record FileOperationResponse(String status) {}
+
+    private record FileDownloadResponse(String downloadUrl) {}
+
+    private record ArrivalGroupOperationRequest(
+            String tenantId, String action, String operatorId, String traceId, String reason, Long extendWaitSeconds) {}
 }

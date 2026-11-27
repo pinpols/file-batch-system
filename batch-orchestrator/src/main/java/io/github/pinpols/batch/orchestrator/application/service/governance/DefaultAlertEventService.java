@@ -30,104 +30,97 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class DefaultAlertEventService implements AlertEventService {
 
-  private final AlertEventMapper alertEventMapper;
-  private final MeterRegistry meterRegistry;
-  private final AlertmanagerEmitPublisher alertmanagerEmitPublisher;
+    private final AlertEventMapper alertEventMapper;
+    private final MeterRegistry meterRegistry;
+    private final AlertmanagerEmitPublisher alertmanagerEmitPublisher;
 
-  @Override
-  @Transactional
-  public void emit(AlertEmitCommand request) {
-    if (request == null
-        || !Texts.hasText(request.tenantId())
-        || !Texts.hasText(request.alertType())) {
-      return;
-    }
-    String serviceName =
-        Texts.hasText(request.serviceName()) ? request.serviceName() : "batch-orchestrator";
-    String severity = Texts.hasText(request.severity()) ? request.severity() : "WARN";
-    String title = Texts.hasText(request.title()) ? request.title() : request.alertType();
-    String resourceKey = Texts.hasText(request.resourceKey()) ? request.resourceKey() : title;
-    String fingerprint =
-        AlertFingerprints.build(request.tenantId(), request.alertType(), resourceKey);
-
-    AlertEventEntity entity = new AlertEventEntity();
-    entity.setTenantId(request.tenantId());
-    entity.setServiceName(serviceName);
-    entity.setAlertType(request.alertType());
-    entity.setSeverity(severity);
-    entity.setTitle(title);
-    entity.setDetailJson(request.detailJson());
-    entity.setDedupFingerprint(fingerprint);
-    entity.setTraceId(request.traceId());
-    entity.setStatus(AlertStatus.OPEN.code());
-
-    alertEventMapper.insertOrMerge(entity);
-    AlertEventEntity persisted =
-        alertEventMapper.selectByFingerprint(request.tenantId(), fingerprint);
-    if (EmptyChecks.isNull(persisted)) {
-      throw new IllegalStateException("告警持久化后未能读取原始身份");
-    }
-
-    meterRegistry
-        .counter(
-            "batch.alert.events", Tags.of("alert_type", request.alertType(), "severity", severity))
-        .increment();
-
-    // emit 直连 AM(迁移方案 §6.1):必须放事务提交后,否则回滚了 AM 却收到幽灵告警。
-    // publisher 自身失败隔离(异步 + swallow),DB 落库为准。
-    if (!AlertStatus.CLOSED.code().equals(persisted.getStatus())) {
-      publishToAlertmanagerAfterCommit(persisted);
-    }
-  }
-
-  private void publishToAlertmanagerAfterCommit(AlertEventEntity entity) {
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCommit() {
-          alertmanagerEmitPublisher.publishFiring(entity);
+    @Override
+    @Transactional
+    public void emit(AlertEmitCommand request) {
+        if (request == null || !Texts.hasText(request.tenantId()) || !Texts.hasText(request.alertType())) {
+            return;
         }
-      });
-    } else {
-      // 无活跃事务(理论上 @Transactional 下不会走到);直接推,失败仍隔离。
-      alertmanagerEmitPublisher.publishFiring(entity);
-    }
-  }
+        String serviceName = Texts.hasText(request.serviceName()) ? request.serviceName() : "batch-orchestrator";
+        String severity = Texts.hasText(request.severity()) ? request.severity() : "WARN";
+        String title = Texts.hasText(request.title()) ? request.title() : request.alertType();
+        String resourceKey = Texts.hasText(request.resourceKey()) ? request.resourceKey() : title;
+        String fingerprint = AlertFingerprints.build(request.tenantId(), request.alertType(), resourceKey);
 
-  @Override
-  @Transactional
-  public int escalateOverdue(int slaMinutes, int maxTier, int batchLimit) {
-    boolean escalationLimitsAreInvalid = slaMinutes <= 0 || maxTier <= 0 || batchLimit <= 0;
-    if (escalationLimitsAreInvalid) {
-      return 0;
+        AlertEventEntity entity = new AlertEventEntity();
+        entity.setTenantId(request.tenantId());
+        entity.setServiceName(serviceName);
+        entity.setAlertType(request.alertType());
+        entity.setSeverity(severity);
+        entity.setTitle(title);
+        entity.setDetailJson(request.detailJson());
+        entity.setDedupFingerprint(fingerprint);
+        entity.setTraceId(request.traceId());
+        entity.setStatus(AlertStatus.OPEN.code());
+
+        alertEventMapper.insertOrMerge(entity);
+        AlertEventEntity persisted = alertEventMapper.selectByFingerprint(request.tenantId(), fingerprint);
+        if (EmptyChecks.isNull(persisted)) {
+            throw new IllegalStateException("告警持久化后未能读取原始身份");
+        }
+
+        meterRegistry
+                .counter("batch.alert.events", Tags.of("alert_type", request.alertType(), "severity", severity))
+                .increment();
+
+        // emit 直连 AM(迁移方案 §6.1):必须放事务提交后,否则回滚了 AM 却收到幽灵告警。
+        // publisher 自身失败隔离(异步 + swallow),DB 落库为准。
+        if (!AlertStatus.CLOSED.code().equals(persisted.getStatus())) {
+            publishToAlertmanagerAfterCommit(persisted);
+        }
     }
-    List<AlertEventEntity> overdue =
-        alertEventMapper.selectOverdueForEscalation(slaMinutes, maxTier, batchLimit);
-    int escalated = 0;
-    for (AlertEventEntity alert : overdue) {
-      int currentTier = alert.getEscalationTier() == null ? 0 : alert.getEscalationTier();
-      int updated = alertEventMapper.markEscalated(alert.getId(), alert.getTenantId(), currentTier);
-      if (updated == 0) {
-        // 被并发 ack 或其它节点抢先升级,跳过。
-        continue;
-      }
-      int newTier = currentTier + 1;
-      escalated++;
-      meterRegistry
-          .counter(
-              "batch.alert.escalations",
-              Tags.of("alert_type", alert.getAlertType(), "tier", String.valueOf(newTier)))
-          .increment();
-      log.error(
-          "Alert escalated to tier {} after staying OPEN past ack-SLA: alertId={} tenantId={} "
-              + "alertType={} severity={} traceId={}",
-          newTier,
-          alert.getId(),
-          alert.getTenantId(),
-          alert.getAlertType(),
-          alert.getSeverity(),
-          alert.getTraceId());
+
+    private void publishToAlertmanagerAfterCommit(AlertEventEntity entity) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    alertmanagerEmitPublisher.publishFiring(entity);
+                }
+            });
+        } else {
+            // 无活跃事务(理论上 @Transactional 下不会走到);直接推,失败仍隔离。
+            alertmanagerEmitPublisher.publishFiring(entity);
+        }
     }
-    return escalated;
-  }
+
+    @Override
+    @Transactional
+    public int escalateOverdue(int slaMinutes, int maxTier, int batchLimit) {
+        boolean escalationLimitsAreInvalid = slaMinutes <= 0 || maxTier <= 0 || batchLimit <= 0;
+        if (escalationLimitsAreInvalid) {
+            return 0;
+        }
+        List<AlertEventEntity> overdue = alertEventMapper.selectOverdueForEscalation(slaMinutes, maxTier, batchLimit);
+        int escalated = 0;
+        for (AlertEventEntity alert : overdue) {
+            int currentTier = alert.getEscalationTier() == null ? 0 : alert.getEscalationTier();
+            int updated = alertEventMapper.markEscalated(alert.getId(), alert.getTenantId(), currentTier);
+            if (updated == 0) {
+                // 被并发 ack 或其它节点抢先升级,跳过。
+                continue;
+            }
+            int newTier = currentTier + 1;
+            escalated++;
+            meterRegistry
+                    .counter(
+                            "batch.alert.escalations",
+                            Tags.of("alert_type", alert.getAlertType(), "tier", String.valueOf(newTier)))
+                    .increment();
+            log.error(
+                    "Alert escalated to tier {} after staying OPEN past ack-SLA: alertId={} tenantId={} "
+                            + "alertType={} severity={} traceId={}",
+                    newTier,
+                    alert.getId(),
+                    alert.getTenantId(),
+                    alert.getAlertType(),
+                    alert.getSeverity(),
+                    alert.getTraceId());
+        }
+        return escalated;
+    }
 }

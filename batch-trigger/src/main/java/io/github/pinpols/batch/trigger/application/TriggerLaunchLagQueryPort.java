@@ -11,15 +11,15 @@ import java.util.concurrent.TimeoutException;
  */
 public interface TriggerLaunchLagQueryPort {
 
-  /** topic 暂不可见时的未知样本哨兵值；发布治理器据此收缩到最小速率。 */
-  long UNKNOWN_LAG = -1L;
+    /** topic 暂不可见时的未知样本哨兵值；发布治理器据此收缩到最小速率。 */
+    long UNKNOWN_LAG = -1L;
 
-  /**
-   * 采样一次 consumer group 相对 topic 末端 offset 的总积压。
-   *
-   * <p>只读 offset，不消费消息、不提交 offset。
-   *
-   * @return 总 lag；topic 暂不可见时返回 {@link #UNKNOWN_LAG}
-   */
-  long sampleLag() throws InterruptedException, ExecutionException, TimeoutException;
+    /**
+     * 采样一次 consumer group 相对 topic 末端 offset 的总积压。
+     *
+     * <p>只读 offset，不消费消息、不提交 offset。
+     *
+     * @return 总 lag；topic 暂不可见时返回 {@link #UNKNOWN_LAG}
+     */
+    long sampleLag() throws InterruptedException, ExecutionException, TimeoutException;
 }

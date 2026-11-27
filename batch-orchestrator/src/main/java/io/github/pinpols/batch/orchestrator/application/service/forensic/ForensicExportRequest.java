@@ -13,11 +13,11 @@ import lombok.Builder;
  */
 @Builder
 public record ForensicExportRequest(
-    String tenantId,
-    LocalDate bizDateFrom,
-    LocalDate bizDateTo,
-    List<String> jobCodes,
-    /** BUNDLE（默认）/ JSON / CSV。 */
-    String exportFormat,
-    String requestedBy,
-    String traceId) {}
+        String tenantId,
+        LocalDate bizDateFrom,
+        LocalDate bizDateTo,
+        List<String> jobCodes,
+        /** BUNDLE（默认）/ JSON / CSV。 */
+        String exportFormat,
+        String requestedBy,
+        String traceId) {}

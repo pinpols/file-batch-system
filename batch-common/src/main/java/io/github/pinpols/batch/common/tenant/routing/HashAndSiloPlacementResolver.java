@@ -18,34 +18,34 @@ import java.util.Map;
  */
 public final class HashAndSiloPlacementResolver implements BusinessPlacementResolver {
 
-  /** 单片回退 key,也是无租户上下文时的归宿。 */
-  public static final String DEFAULT_KEY = "shard-0";
+    /** 单片回退 key,也是无租户上下文时的归宿。 */
+    public static final String DEFAULT_KEY = "shard-0";
 
-  private final int pooledShardCount;
-  private final Map<String, String> siloOverrides;
+    private final int pooledShardCount;
+    private final Map<String, String> siloOverrides;
 
-  /**
-   * @param pooledShardCount pooled 分片数(≥1;=1 即单片无损)
-   * @param siloOverrides tenant_id → silo 数据源 key(独占租户);可空
-   */
-  public HashAndSiloPlacementResolver(int pooledShardCount, Map<String, String> siloOverrides) {
-    if (pooledShardCount < 1) {
-      throw new IllegalArgumentException("pooledShardCount must be >= 1, got " + pooledShardCount);
+    /**
+     * @param pooledShardCount pooled 分片数(≥1;=1 即单片无损)
+     * @param siloOverrides tenant_id → silo 数据源 key(独占租户);可空
+     */
+    public HashAndSiloPlacementResolver(int pooledShardCount, Map<String, String> siloOverrides) {
+        if (pooledShardCount < 1) {
+            throw new IllegalArgumentException("pooledShardCount must be >= 1, got " + pooledShardCount);
+        }
+        this.pooledShardCount = pooledShardCount;
+        this.siloOverrides = siloOverrides == null ? Map.of() : Map.copyOf(siloOverrides);
     }
-    this.pooledShardCount = pooledShardCount;
-    this.siloOverrides = siloOverrides == null ? Map.of() : Map.copyOf(siloOverrides);
-  }
 
-  @Override
-  public String resolve(String tenantId) {
-    if (!Texts.hasText(tenantId)) {
-      return DEFAULT_KEY;
+    @Override
+    public String resolve(String tenantId) {
+        if (!Texts.hasText(tenantId)) {
+            return DEFAULT_KEY;
+        }
+        String silo = siloOverrides.get(tenantId);
+        if (silo != null) {
+            return silo;
+        }
+        int shardIndex = Math.floorMod(tenantId.hashCode(), pooledShardCount);
+        return "shard-" + shardIndex;
     }
-    String silo = siloOverrides.get(tenantId);
-    if (silo != null) {
-      return silo;
-    }
-    int shardIndex = Math.floorMod(tenantId.hashCode(), pooledShardCount);
-    return "shard-" + shardIndex;
-  }
 }

@@ -47,415 +47,401 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
-  /** SFTP 会话与通道的建连超时毫秒数。 */
-  private static final int SFTP_CONNECT_TIMEOUT_MILLIS = 30_000;
+    /** SFTP 会话与通道的建连超时毫秒数。 */
+    private static final int SFTP_CONNECT_TIMEOUT_MILLIS = 30_000;
 
-  private final DispatchFileContentResolver fileContentResolver;
-  private final BatchSecurityProperties securityProperties;
-  // S-1.2 a: 读 active profile 判定是否处于生产
-  private final Environment environment;
+    private final DispatchFileContentResolver fileContentResolver;
+    private final BatchSecurityProperties securityProperties;
+    // S-1.2 a: 读 active profile 判定是否处于生产
+    private final Environment environment;
 
-  // D-1: 异步 disconnect 池。Spring 管理生命周期,@PreDestroy 关闭避免 JVM 退出阻塞。
-  // 改为实例字段后 ThreadFactory 内计数器走 AtomicInteger,消除 newThread() 并发数据竞争。
-  private final ScheduledThreadPoolExecutor disconnectExecutor = newDisconnectExecutor();
+    // D-1: 异步 disconnect 池。Spring 管理生命周期,@PreDestroy 关闭避免 JVM 退出阻塞。
+    // 改为实例字段后 ThreadFactory 内计数器走 AtomicInteger,消除 newThread() 并发数据竞争。
+    private final ScheduledThreadPoolExecutor disconnectExecutor = newDisconnectExecutor();
 
-  private static ScheduledThreadPoolExecutor newDisconnectExecutor() {
-    ScheduledThreadPoolExecutor executor =
-        new ScheduledThreadPoolExecutor(2, new DisconnectThreadFactory());
-    // 两条断连线程卡住时，超时取消的排队任务必须立即移除，避免无界延迟队列积压。
-    executor.setRemoveOnCancelPolicy(true);
-    return executor;
-  }
-
-  private static final class DisconnectThreadFactory implements ThreadFactory {
-    private final AtomicInteger counter = new AtomicInteger();
-
-    @Override
-    public Thread newThread(Runnable r) {
-      int threadNumber = counter.incrementAndGet();
-      String threadName = "sftp-disconnect-" + threadNumber;
-      Thread t = new Thread(r, threadName);
-      t.setDaemon(true);
-      return t;
-    }
-  }
-
-  @PreDestroy
-  void shutdownDisconnectExecutor() {
-    disconnectExecutor.shutdown();
-    try {
-      if (!disconnectExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-        disconnectExecutor.shutdownNow();
-      }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      disconnectExecutor.shutdownNow();
-    }
-  }
-
-  private boolean isProductionProfile() {
-    String[] active = environment.getActiveProfiles();
-    // Spring 约定 getActiveProfiles() 永不为 null，无激活 profile 时返回空数组
-    if (EmptyChecks.isEmpty(active)) {
-      return false;
-    }
-    return Arrays.stream(active)
-        .anyMatch(p -> "prod".equalsIgnoreCase(p) || "production".equalsIgnoreCase(p));
-  }
-
-  @Override
-  public boolean supports(String channelType) {
-    return FileChannelType.SFTP.code().equalsIgnoreCase(channelType);
-  }
-
-  private record ConnectionConfig(String host, int port, String user, String password) {}
-
-  private record RemoteTarget(String remoteDir, String remoteName) {
-    String remotePath() {
-      return remoteDir + remoteName;
-    }
-  }
-
-  @Builder
-  private record SftpUploadContext(
-      DispatchCommand command,
-      Map<String, Object> channelConfig,
-      ConnectionConfig connConfig,
-      RemoteTarget remoteTarget,
-      Map<String, Object> fileRecord,
-      String externalRequestId,
-      String receiptCode,
-      boolean acknowledged,
-      boolean pending) {}
-
-  private final class SftpConnection implements AutoCloseable {
-    private final Session session;
-    private final ChannelSftp sftp;
-    private final String host;
-
-    private SftpConnection(Session session, ChannelSftp sftp, String host) {
-      this.session = session;
-      this.sftp = sftp;
-      this.host = host;
+    private static ScheduledThreadPoolExecutor newDisconnectExecutor() {
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(2, new DisconnectThreadFactory());
+        // 两条断连线程卡住时，超时取消的排队任务必须立即移除，避免无界延迟队列积压。
+        executor.setRemoveOnCancelPolicy(true);
+        return executor;
     }
 
-    private ChannelSftp sftp() {
-      return sftp;
+    private static final class DisconnectThreadFactory implements ThreadFactory {
+        private final AtomicInteger counter = new AtomicInteger();
+
+        @Override
+        public Thread newThread(Runnable r) {
+            int threadNumber = counter.incrementAndGet();
+            String threadName = "sftp-disconnect-" + threadNumber;
+            Thread t = new Thread(r, threadName);
+            t.setDaemon(true);
+            return t;
+        }
+    }
+
+    @PreDestroy
+    void shutdownDisconnectExecutor() {
+        disconnectExecutor.shutdown();
+        try {
+            if (!disconnectExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                disconnectExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            disconnectExecutor.shutdownNow();
+        }
+    }
+
+    private boolean isProductionProfile() {
+        String[] active = environment.getActiveProfiles();
+        // Spring 约定 getActiveProfiles() 永不为 null，无激活 profile 时返回空数组
+        if (EmptyChecks.isEmpty(active)) {
+            return false;
+        }
+        return Arrays.stream(active).anyMatch(p -> "prod".equalsIgnoreCase(p) || "production".equalsIgnoreCase(p));
     }
 
     @Override
-    public void close() {
-      // D-1：JSch disconnect 在网络抖动 / 半关闭连接上可能挂住 30+s（TCP 关半开），
-      // 之前的 try/catch(ignored) 虽然吞了异常但不管挂住——dispatch worker 线程被卡住，
-      // 线程池堆积僵尸。改异步 disconnect + 5s 硬超时；超时则让后台线程自然结束，
-      // 主路径立即返回不阻塞下一个 dispatch。
-      disconnectWithTimeout(sftp, "sftp-channel", host);
-      disconnectWithTimeout(session, "sftp-session", host);
-    }
-  }
-
-  @Override
-  public DispatchResult dispatch(DispatchCommand command) {
-    Map<String, Object> channelConfig = command.channelConfig();
-
-    ConnectionConfig connConfig = resolveConnectionConfig(channelConfig);
-    if (connConfig == null) {
-      String host = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_host");
-      if (!Texts.hasText(host)) {
-        return DispatchResult.failureWithoutReceipt("sftp_host missing");
-      }
-      return DispatchResult.failureWithoutReceipt("sftp_user/sftp_password missing");
+    public boolean supports(String channelType) {
+        return FileChannelType.SFTP.code().equalsIgnoreCase(channelType);
     }
 
-    RemoteTarget remoteTarget = resolveRemoteTarget(channelConfig, command.fileRecord());
+    private record ConnectionConfig(String host, int port, String user, String password) {}
 
-    DispatchReceiptSupport.Receipt receipt =
-        DispatchReceiptSupport.resolve(command, channelConfig, FileReceiptPolicy.SYNC.code());
-
-    SftpUploadContext uploadCtx = SftpUploadContext.builder()
-        .command(command)
-        .channelConfig(channelConfig)
-        .connConfig(connConfig)
-        .remoteTarget(remoteTarget)
-        .fileRecord(command.fileRecord())
-        .externalRequestId(receipt.externalRequestId())
-        .receiptCode(receipt.receiptCode())
-        .acknowledged(receipt.acknowledged())
-        .pending(receipt.pending())
-        .build();
-    return uploadViaSftp(uploadCtx);
-  }
-
-  private ConnectionConfig resolveConnectionConfig(Map<String, Object> channelConfig) {
-    String host = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_host");
-    if (!Texts.hasText(host)) {
-      return null;
-    }
-    int port = DispatchChannelConfigSupport.intProp(channelConfig, "sftp_port", 22);
-    String user = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_user");
-    String password = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_password");
-    if (!Texts.hasText(user) || !Texts.hasText(password)) {
-      return null;
-    }
-    return new ConnectionConfig(host, port, user, password);
-  }
-
-  private RemoteTarget resolveRemoteTarget(
-      Map<String, Object> channelConfig, Map<String, Object> fileRecord) {
-    String remoteDir =
-        DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_remote_directory");
-    if (!Texts.hasText(remoteDir)) {
-      remoteDir = "/";
-    }
-    if (!remoteDir.endsWith("/")) {
-      remoteDir = remoteDir + "/";
-    }
-    String remoteName =
-        DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_remote_file_name");
-    if (!Texts.hasText(remoteName)) {
-      String originalFileName = String.valueOf(fileRecord.getOrDefault("original_file_name", ""));
-      String fileName = String.valueOf(fileRecord.getOrDefault("file_name", "file.bin"));
-      remoteName = firstNonBlank(originalFileName, fileName);
-    }
-    remoteName = sanitizeFileName(remoteName);
-    return new RemoteTarget(remoteDir, remoteName);
-  }
-
-  private DispatchResult uploadViaSftp(SftpUploadContext ctx) {
-    try (SftpConnection connection = openSftpConnection(ctx)) {
-      ChannelSftp sftp = connection.sftp();
-      String tempRemotePath = null;
-      String manifestTempRemotePath = null;
-      boolean publicationAttempted = false;
-      boolean publicationConfirmed = false;
-      try {
-        String remotePath = ctx.remoteTarget().remotePath();
-        tempRemotePath = remotePath + ".tmp-" + UUID.randomUUID();
-        DispatchManifestSupport.PayloadDigest payloadDigest;
-        try (InputStream in = fileContentResolver.openInputStream(ctx.fileRecord());
-            DispatchManifestSupport.DigestingInputStream digesting =
-                DispatchManifestSupport.digesting(in)) {
-          sftp.put(digesting, tempRemotePath, ChannelSftp.OVERWRITE);
-          payloadDigest = digesting.finish();
+    private record RemoteTarget(String remoteDir, String remoteName) {
+        String remotePath() {
+            return remoteDir + remoteName;
         }
-        publicationAttempted = true;
-        publishRemoteFile(sftp, tempRemotePath, remotePath);
-        publicationConfirmed = true;
-        tempRemotePath = null;
-        String evidence = "sftp://" + ctx.connConfig().host() + remotePath;
-        DispatchManifestSupport.ManifestPayload manifest = null;
-        if (DispatchManifestSupport.enabled(ctx.channelConfig())) {
-          String manifestRemotePath =
-              remotePath + DispatchManifestSupport.suffix(ctx.channelConfig());
-          manifestTempRemotePath = manifestRemotePath + ".tmp-" + UUID.randomUUID();
-          String manifestRef = "sftp://" + ctx.connConfig().host() + manifestRemotePath;
-          DispatchManifestSupport.ManifestTarget manifestTarget =
-              new DispatchManifestSupport.ManifestTarget(
-                  evidence, ctx.remoteTarget().remoteName(), manifestRef);
-          manifest = DispatchManifestSupport.manifestPayload(
-              ctx.command(),
-              manifestTarget,
-              ctx.externalRequestId(),
-              ctx.receiptCode(),
-              payloadDigest);
-          byte[] manifestBytes = manifest.bytes();
-          ByteArrayInputStream manifestStream = new ByteArrayInputStream(manifestBytes);
-          sftp.put(manifestStream, manifestTempRemotePath, ChannelSftp.OVERWRITE);
-          publishRemoteFile(sftp, manifestTempRemotePath, manifestRemotePath);
-          manifestTempRemotePath = null;
+    }
+
+    @Builder
+    private record SftpUploadContext(
+            DispatchCommand command,
+            Map<String, Object> channelConfig,
+            ConnectionConfig connConfig,
+            RemoteTarget remoteTarget,
+            Map<String, Object> fileRecord,
+            String externalRequestId,
+            String receiptCode,
+            boolean acknowledged,
+            boolean pending) {}
+
+    private final class SftpConnection implements AutoCloseable {
+        private final Session session;
+        private final ChannelSftp sftp;
+        private final String host;
+
+        private SftpConnection(Session session, ChannelSftp sftp, String host) {
+            this.session = session;
+            this.sftp = sftp;
+            this.host = host;
         }
-        if (manifest != null) {
-          return new DispatchResult(
-              true,
-              ctx.externalRequestId(),
-              ctx.receiptCode(),
-              ctx.acknowledged(),
-              ctx.pending(),
-              "uploaded via SFTP",
-              evidence,
-              manifest.toRef());
+
+        private ChannelSftp sftp() {
+            return sftp;
         }
-        return new DispatchResult(
-            true,
-            ctx.externalRequestId(),
-            ctx.receiptCode(),
-            ctx.acknowledged(),
-            ctx.pending(),
-            "uploaded via SFTP",
-            evidence);
-      } catch (Exception ex) {
-        cleanupRemoteTemp(sftp, manifestTempRemotePath);
-        cleanupRemoteTemp(sftp, tempRemotePath);
-        SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
 
-        boolean unknownExternalOutcome =
-            publicationConfirmed || (publicationAttempted && isAmbiguousPublicationFailure(ex));
-        if (unknownExternalOutcome) {
-          return DispatchResult.externalOutcomeUnknown(
-              ctx.externalRequestId(),
-              ctx.receiptCode(),
-              "EXTERNAL_OUTCOME_UNKNOWN: remote file publication may have completed: "
-                  + SwallowedExceptionLogger.summary(ex));
+        @Override
+        public void close() {
+            // D-1：JSch disconnect 在网络抖动 / 半关闭连接上可能挂住 30+s（TCP 关半开），
+            // 之前的 try/catch(ignored) 虽然吞了异常但不管挂住——dispatch worker 线程被卡住，
+            // 线程池堆积僵尸。改异步 disconnect + 5s 硬超时；超时则让后台线程自然结束，
+            // 主路径立即返回不阻塞下一个 dispatch。
+            disconnectWithTimeout(sftp, "sftp-channel", host);
+            disconnectWithTimeout(session, "sftp-session", host);
         }
-        return new DispatchResult(
-            false,
-            ctx.externalRequestId(),
-            ctx.receiptCode(),
-            false,
-            false,
-            SwallowedExceptionLogger.summary(ex),
-            null);
-      }
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
-      return new DispatchResult(
-          false,
-          ctx.externalRequestId(),
-          ctx.receiptCode(),
-          false,
-          false,
-          SwallowedExceptionLogger.summary(ex),
-          null);
     }
-  }
 
-  static boolean isAmbiguousPublicationFailure(Exception failure) {
-    if (!(failure instanceof SftpException sftpFailure)) {
-      return true;
-    }
-    // JSch 将等待 rename 响应时的 I/O 异常包装为带 cause 的 SSH_FX_FAILURE；远端可能已完成发布。
-    return (sftpFailure.id == ChannelSftp.SSH_FX_FAILURE
-            && EmptyChecks.isNotNull(sftpFailure.getCause()))
-        || sftpFailure.id == ChannelSftp.SSH_FX_NO_CONNECTION
-        || sftpFailure.id == ChannelSftp.SSH_FX_CONNECTION_LOST;
-  }
+    @Override
+    public DispatchResult dispatch(DispatchCommand command) {
+        Map<String, Object> channelConfig = command.channelConfig();
 
-  private SftpConnection openSftpConnection(SftpUploadContext ctx) throws Exception {
-    Session session = null;
-    ChannelSftp sftp = null;
-    try {
-      JSch jsch = new JSch();
-      // S-1.2 a: 生产 profile 强制 StrictHostKeyChecking=yes，不允许渠道配置翻盘；
-      // dev/test/e2e/local 允许通过 channel 配置 sftp_strict_host_key_checking=no 关闭。
-      // 判定方式：只要当前有 "prod" / "production" active profile，则 prodMode=true。
-      boolean prodMode = isProductionProfile();
-      String strictHostKeyChecking = DispatchChannelConfigSupport.stringProp(
-          ctx.channelConfig(), "sftp_strict_host_key_checking");
-      boolean strictMode = prodMode || !"no".equalsIgnoreCase(strictHostKeyChecking);
-      if (!strictMode) {
-        log.warn(
-            "SFTP StrictHostKeyChecking disabled for host {} — susceptible to MITM attacks"
-                + " (allowed only outside prod profile)",
-            ctx.connConfig().host());
-      } else {
-        if (prodMode && "no".equalsIgnoreCase(strictHostKeyChecking)) {
-          log.warn(
-              "SFTP channel requested sftp_strict_host_key_checking=no but prod profile"
-                  + " forces strict mode — overriding to yes for host {}",
-              ctx.connConfig().host());
+        ConnectionConfig connConfig = resolveConnectionConfig(channelConfig);
+        if (connConfig == null) {
+            String host = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_host");
+            if (!Texts.hasText(host)) {
+                return DispatchResult.failureWithoutReceipt("sftp_host missing");
+            }
+            return DispatchResult.failureWithoutReceipt("sftp_user/sftp_password missing");
         }
-        String knownHostsPath =
-            DispatchChannelConfigSupport.stringProp(ctx.channelConfig(), "sftp_known_hosts_path");
-        if (Texts.hasText(knownHostsPath)) {
-          jsch.setKnownHosts(knownHostsPath);
+
+        RemoteTarget remoteTarget = resolveRemoteTarget(channelConfig, command.fileRecord());
+
+        DispatchReceiptSupport.Receipt receipt =
+                DispatchReceiptSupport.resolve(command, channelConfig, FileReceiptPolicy.SYNC.code());
+
+        SftpUploadContext uploadCtx = SftpUploadContext.builder()
+                .command(command)
+                .channelConfig(channelConfig)
+                .connConfig(connConfig)
+                .remoteTarget(remoteTarget)
+                .fileRecord(command.fileRecord())
+                .externalRequestId(receipt.externalRequestId())
+                .receiptCode(receipt.receiptCode())
+                .acknowledged(receipt.acknowledged())
+                .pending(receipt.pending())
+                .build();
+        return uploadViaSftp(uploadCtx);
+    }
+
+    private ConnectionConfig resolveConnectionConfig(Map<String, Object> channelConfig) {
+        String host = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_host");
+        if (!Texts.hasText(host)) {
+            return null;
         }
-      }
-      // S-2.6: resolve-then-connect — 用解析后的 IP 建连，防止 DNS rebinding
-      String connectHost = ctx.connConfig().host();
-      if (!securityProperties.isBypassMode()) {
-        InetAddress resolved = DnsResolveGuard.resolveAndValidate(connectHost);
-        connectHost = resolved.getHostAddress();
-      }
-      session =
-          jsch.getSession(ctx.connConfig().user(), connectHost, ctx.connConfig().port());
-      // JSch 使用 hostKeyAlias 字段匹配 known_hosts；非默认端口采用标准 [host]:port 格式。
-      String originalHost = ctx.connConfig().host();
-      String hostKeyAlias = ctx.connConfig().port() == 22
-          ? originalHost
-          : "[" + originalHost + "]:" + ctx.connConfig().port();
-      session.setHostKeyAlias(hostKeyAlias);
-      // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
-      session.setPassword(ctx.connConfig().password());
-      session.setConfig("StrictHostKeyChecking", strictMode ? "yes" : "no");
-      session.connect(SFTP_CONNECT_TIMEOUT_MILLIS);
-      sftp = (ChannelSftp) session.openChannel("sftp");
-      sftp.connect(SFTP_CONNECT_TIMEOUT_MILLIS);
-      return new SftpConnection(session, sftp, ctx.connConfig().host());
-    } catch (Exception ex) {
-      disconnectWithTimeout(sftp, "sftp-channel", ctx.connConfig().host());
-      disconnectWithTimeout(session, "sftp-session", ctx.connConfig().host());
-      throw ex;
+        int port = DispatchChannelConfigSupport.intProp(channelConfig, "sftp_port", 22);
+        String user = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_user");
+        String password = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_password");
+        if (!Texts.hasText(user) || !Texts.hasText(password)) {
+            return null;
+        }
+        return new ConnectionConfig(host, port, user, password);
     }
-  }
 
-  static void publishRemoteFile(ChannelSftp sftp, String tempRemotePath, String remotePath)
-      throws SftpException {
-    // 服务端不能安全替换时保留已有目标；删除后重命名失败会丢失旧文件。
-    sftp.rename(tempRemotePath, remotePath);
-  }
-
-  private static void cleanupRemoteTemp(ChannelSftp sftp, String remotePath) {
-    if (sftp == null || !Texts.hasText(remotePath)) {
-      return;
+    private RemoteTarget resolveRemoteTarget(Map<String, Object> channelConfig, Map<String, Object> fileRecord) {
+        String remoteDir = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_remote_directory");
+        if (!Texts.hasText(remoteDir)) {
+            remoteDir = "/";
+        }
+        if (!remoteDir.endsWith("/")) {
+            remoteDir = remoteDir + "/";
+        }
+        String remoteName = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_remote_file_name");
+        if (!Texts.hasText(remoteName)) {
+            String originalFileName = String.valueOf(fileRecord.getOrDefault("original_file_name", ""));
+            String fileName = String.valueOf(fileRecord.getOrDefault("file_name", "file.bin"));
+            remoteName = firstNonBlank(originalFileName, fileName);
+        }
+        remoteName = sanitizeFileName(remoteName);
+        return new RemoteTarget(remoteDir, remoteName);
     }
-    removeRemoteIfExists(sftp, remotePath);
-  }
 
-  private static void removeRemoteIfExists(ChannelSftp sftp, String remotePath) {
-    try {
-      sftp.rm(remotePath);
-    } catch (Exception ignored) {
-      SwallowedExceptionLogger.info(SftpDispatchChannelAdapter.class, "catch:Exception", ignored);
+    private DispatchResult uploadViaSftp(SftpUploadContext ctx) {
+        try (SftpConnection connection = openSftpConnection(ctx)) {
+            ChannelSftp sftp = connection.sftp();
+            String tempRemotePath = null;
+            String manifestTempRemotePath = null;
+            boolean publicationAttempted = false;
+            boolean publicationConfirmed = false;
+            try {
+                String remotePath = ctx.remoteTarget().remotePath();
+                tempRemotePath = remotePath + ".tmp-" + UUID.randomUUID();
+                DispatchManifestSupport.PayloadDigest payloadDigest;
+                try (InputStream in = fileContentResolver.openInputStream(ctx.fileRecord());
+                        DispatchManifestSupport.DigestingInputStream digesting =
+                                DispatchManifestSupport.digesting(in)) {
+                    sftp.put(digesting, tempRemotePath, ChannelSftp.OVERWRITE);
+                    payloadDigest = digesting.finish();
+                }
+                publicationAttempted = true;
+                publishRemoteFile(sftp, tempRemotePath, remotePath);
+                publicationConfirmed = true;
+                tempRemotePath = null;
+                String evidence = "sftp://" + ctx.connConfig().host() + remotePath;
+                DispatchManifestSupport.ManifestPayload manifest = null;
+                if (DispatchManifestSupport.enabled(ctx.channelConfig())) {
+                    String manifestRemotePath = remotePath + DispatchManifestSupport.suffix(ctx.channelConfig());
+                    manifestTempRemotePath = manifestRemotePath + ".tmp-" + UUID.randomUUID();
+                    String manifestRef = "sftp://" + ctx.connConfig().host() + manifestRemotePath;
+                    DispatchManifestSupport.ManifestTarget manifestTarget = new DispatchManifestSupport.ManifestTarget(
+                            evidence, ctx.remoteTarget().remoteName(), manifestRef);
+                    manifest = DispatchManifestSupport.manifestPayload(
+                            ctx.command(), manifestTarget, ctx.externalRequestId(), ctx.receiptCode(), payloadDigest);
+                    byte[] manifestBytes = manifest.bytes();
+                    ByteArrayInputStream manifestStream = new ByteArrayInputStream(manifestBytes);
+                    sftp.put(manifestStream, manifestTempRemotePath, ChannelSftp.OVERWRITE);
+                    publishRemoteFile(sftp, manifestTempRemotePath, manifestRemotePath);
+                    manifestTempRemotePath = null;
+                }
+                if (manifest != null) {
+                    return new DispatchResult(
+                            true,
+                            ctx.externalRequestId(),
+                            ctx.receiptCode(),
+                            ctx.acknowledged(),
+                            ctx.pending(),
+                            "uploaded via SFTP",
+                            evidence,
+                            manifest.toRef());
+                }
+                return new DispatchResult(
+                        true,
+                        ctx.externalRequestId(),
+                        ctx.receiptCode(),
+                        ctx.acknowledged(),
+                        ctx.pending(),
+                        "uploaded via SFTP",
+                        evidence);
+            } catch (Exception ex) {
+                cleanupRemoteTemp(sftp, manifestTempRemotePath);
+                cleanupRemoteTemp(sftp, tempRemotePath);
+                SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
+
+                boolean unknownExternalOutcome =
+                        publicationConfirmed || (publicationAttempted && isAmbiguousPublicationFailure(ex));
+                if (unknownExternalOutcome) {
+                    return DispatchResult.externalOutcomeUnknown(
+                            ctx.externalRequestId(),
+                            ctx.receiptCode(),
+                            "EXTERNAL_OUTCOME_UNKNOWN: remote file publication may have completed: "
+                                    + SwallowedExceptionLogger.summary(ex));
+                }
+                return new DispatchResult(
+                        false,
+                        ctx.externalRequestId(),
+                        ctx.receiptCode(),
+                        false,
+                        false,
+                        SwallowedExceptionLogger.summary(ex),
+                        null);
+            }
+        } catch (Exception ex) {
+            SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
+            return new DispatchResult(
+                    false,
+                    ctx.externalRequestId(),
+                    ctx.receiptCode(),
+                    false,
+                    false,
+                    SwallowedExceptionLogger.summary(ex),
+                    null);
+        }
     }
-  }
 
-  private void disconnectWithTimeout(ChannelSftp channel, String kind, String host) {
-    if (channel == null) {
-      return;
+    static boolean isAmbiguousPublicationFailure(Exception failure) {
+        if (!(failure instanceof SftpException sftpFailure)) {
+            return true;
+        }
+        // JSch 将等待 rename 响应时的 I/O 异常包装为带 cause 的 SSH_FX_FAILURE；远端可能已完成发布。
+        return (sftpFailure.id == ChannelSftp.SSH_FX_FAILURE && EmptyChecks.isNotNull(sftpFailure.getCause()))
+                || sftpFailure.id == ChannelSftp.SSH_FX_NO_CONNECTION
+                || sftpFailure.id == ChannelSftp.SSH_FX_CONNECTION_LOST;
     }
-    Future<?> future = disconnectExecutor.submit(channel::disconnect);
-    awaitOrCancel(future, kind, host);
-  }
 
-  private void disconnectWithTimeout(Session session, String kind, String host) {
-    if (session == null) {
-      return;
+    private SftpConnection openSftpConnection(SftpUploadContext ctx) throws Exception {
+        Session session = null;
+        ChannelSftp sftp = null;
+        try {
+            JSch jsch = new JSch();
+            // S-1.2 a: 生产 profile 强制 StrictHostKeyChecking=yes，不允许渠道配置翻盘；
+            // dev/test/e2e/local 允许通过 channel 配置 sftp_strict_host_key_checking=no 关闭。
+            // 判定方式：只要当前有 "prod" / "production" active profile，则 prodMode=true。
+            boolean prodMode = isProductionProfile();
+            String strictHostKeyChecking =
+                    DispatchChannelConfigSupport.stringProp(ctx.channelConfig(), "sftp_strict_host_key_checking");
+            boolean strictMode = prodMode || !"no".equalsIgnoreCase(strictHostKeyChecking);
+            if (!strictMode) {
+                log.warn(
+                        "SFTP StrictHostKeyChecking disabled for host {} — susceptible to MITM attacks"
+                                + " (allowed only outside prod profile)",
+                        ctx.connConfig().host());
+            } else {
+                if (prodMode && "no".equalsIgnoreCase(strictHostKeyChecking)) {
+                    log.warn(
+                            "SFTP channel requested sftp_strict_host_key_checking=no but prod profile"
+                                    + " forces strict mode — overriding to yes for host {}",
+                            ctx.connConfig().host());
+                }
+                String knownHostsPath =
+                        DispatchChannelConfigSupport.stringProp(ctx.channelConfig(), "sftp_known_hosts_path");
+                if (Texts.hasText(knownHostsPath)) {
+                    jsch.setKnownHosts(knownHostsPath);
+                }
+            }
+            // S-2.6: resolve-then-connect — 用解析后的 IP 建连，防止 DNS rebinding
+            String connectHost = ctx.connConfig().host();
+            if (!securityProperties.isBypassMode()) {
+                InetAddress resolved = DnsResolveGuard.resolveAndValidate(connectHost);
+                connectHost = resolved.getHostAddress();
+            }
+            session = jsch.getSession(
+                    ctx.connConfig().user(), connectHost, ctx.connConfig().port());
+            // JSch 使用 hostKeyAlias 字段匹配 known_hosts；非默认端口采用标准 [host]:port 格式。
+            String originalHost = ctx.connConfig().host();
+            String hostKeyAlias = ctx.connConfig().port() == 22
+                    ? originalHost
+                    : "[" + originalHost + "]:" + ctx.connConfig().port();
+            session.setHostKeyAlias(hostKeyAlias);
+            // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
+            session.setPassword(ctx.connConfig().password());
+            session.setConfig("StrictHostKeyChecking", strictMode ? "yes" : "no");
+            session.connect(SFTP_CONNECT_TIMEOUT_MILLIS);
+            sftp = (ChannelSftp) session.openChannel("sftp");
+            sftp.connect(SFTP_CONNECT_TIMEOUT_MILLIS);
+            return new SftpConnection(session, sftp, ctx.connConfig().host());
+        } catch (Exception ex) {
+            disconnectWithTimeout(sftp, "sftp-channel", ctx.connConfig().host());
+            disconnectWithTimeout(session, "sftp-session", ctx.connConfig().host());
+            throw ex;
+        }
     }
-    Future<?> future = disconnectExecutor.submit(session::disconnect);
-    awaitOrCancel(future, kind, host);
-  }
 
-  private static void awaitOrCancel(Future<?> future, String kind, String host) {
-    try {
-      future.get(5, TimeUnit.SECONDS);
-    } catch (TimeoutException timeout) {
-      log.warn(
-          "{} disconnect timed out for host {} — leaving background thread to finish", kind, host);
-      future.cancel(true);
-    } catch (InterruptedException interrupted) {
-      Thread.currentThread().interrupt();
-      future.cancel(true);
-    } catch (Exception ignored) {
-      SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ignored);
-
-      // 其他 disconnect 异常捕获并抑制（原语义）
+    static void publishRemoteFile(ChannelSftp sftp, String tempRemotePath, String remotePath) throws SftpException {
+        // 服务端不能安全替换时保留已有目标；删除后重命名失败会丢失旧文件。
+        sftp.rename(tempRemotePath, remotePath);
     }
-  }
 
-  private static String firstNonBlank(String a, String b) {
-    if (Texts.hasText(a)) {
-      return a.trim();
+    private static void cleanupRemoteTemp(ChannelSftp sftp, String remotePath) {
+        if (sftp == null || !Texts.hasText(remotePath)) {
+            return;
+        }
+        removeRemoteIfExists(sftp, remotePath);
     }
-    if (Texts.hasText(b)) {
-      return b.trim();
-    }
-    return "file.bin";
-  }
 
-  private static String sanitizeFileName(String name) {
-    String withoutParentTraversal = name.replace("..", "_");
-    String withoutForwardSlashes = withoutParentTraversal.replace('/', '_');
-    String sanitizedName = withoutForwardSlashes.replace('\\', '_');
-    return EmptyChecks.isBlank(Objects.requireNonNull(sanitizedName)) ? "file.bin" : sanitizedName;
-  }
+    private static void removeRemoteIfExists(ChannelSftp sftp, String remotePath) {
+        try {
+            sftp.rm(remotePath);
+        } catch (Exception ignored) {
+            SwallowedExceptionLogger.info(SftpDispatchChannelAdapter.class, "catch:Exception", ignored);
+        }
+    }
+
+    private void disconnectWithTimeout(ChannelSftp channel, String kind, String host) {
+        if (channel == null) {
+            return;
+        }
+        Future<?> future = disconnectExecutor.submit(channel::disconnect);
+        awaitOrCancel(future, kind, host);
+    }
+
+    private void disconnectWithTimeout(Session session, String kind, String host) {
+        if (session == null) {
+            return;
+        }
+        Future<?> future = disconnectExecutor.submit(session::disconnect);
+        awaitOrCancel(future, kind, host);
+    }
+
+    private static void awaitOrCancel(Future<?> future, String kind, String host) {
+        try {
+            future.get(5, TimeUnit.SECONDS);
+        } catch (TimeoutException timeout) {
+            log.warn("{} disconnect timed out for host {} — leaving background thread to finish", kind, host);
+            future.cancel(true);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            future.cancel(true);
+        } catch (Exception ignored) {
+            SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ignored);
+
+            // 其他 disconnect 异常捕获并抑制（原语义）
+        }
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (Texts.hasText(a)) {
+            return a.trim();
+        }
+        if (Texts.hasText(b)) {
+            return b.trim();
+        }
+        return "file.bin";
+    }
+
+    private static String sanitizeFileName(String name) {
+        String withoutParentTraversal = name.replace("..", "_");
+        String withoutForwardSlashes = withoutParentTraversal.replace('/', '_');
+        String sanitizedName = withoutForwardSlashes.replace('\\', '_');
+        return EmptyChecks.isBlank(Objects.requireNonNull(sanitizedName)) ? "file.bin" : sanitizedName;
+    }
 }

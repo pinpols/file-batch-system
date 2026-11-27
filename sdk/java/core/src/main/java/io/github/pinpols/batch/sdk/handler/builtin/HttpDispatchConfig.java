@@ -11,15 +11,15 @@ package io.github.pinpols.batch.sdk.handler.builtin;
  * @param failFast 单条失败是否立即整体失败:true=遇错即 fail;false=单条计 failed 不中断(ADR-036 dispatch 语义,默认 false)
  */
 public record HttpDispatchConfig(
-    String taskType,
-    String selectQuery,
-    String endpoint,
-    int timeoutSeconds,
-    boolean blockPrivateIps,
-    boolean failFast) {
+        String taskType,
+        String selectQuery,
+        String endpoint,
+        int timeoutSeconds,
+        boolean blockPrivateIps,
+        boolean failFast) {
 
-  /** 默认:timeout=30s、拦私网、不 failFast(单条失败不中断整批)。 */
-  public static HttpDispatchConfig defaults(String taskType, String selectQuery, String endpoint) {
-    return new HttpDispatchConfig(taskType, selectQuery, endpoint, 30, true, false);
-  }
+    /** 默认:timeout=30s、拦私网、不 failFast(单条失败不中断整批)。 */
+    public static HttpDispatchConfig defaults(String taskType, String selectQuery, String endpoint) {
+        return new HttpDispatchConfig(taskType, selectQuery, endpoint, 30, true, false);
+    }
 }

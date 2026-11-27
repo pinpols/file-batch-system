@@ -30,69 +30,66 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAtomicRuntimeStatusControllerTest {
 
-  @Mock
-  private ConsoleAtomicRuntimeStatusService runtimeStatusService;
+    @Mock
+    private ConsoleAtomicRuntimeStatusService runtimeStatusService;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleAtomicRuntimeStatusController(runtimeStatusService, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new ConsoleAtomicRuntimeStatusController(runtimeStatusService, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
 
-  @Test
-  @DisplayName("可用状态:返回成功响应并回填 Worker 与各分组字段")
-  void shouldReturnRuntimeStatus_whenAtomicWorkerAvailable() throws Exception {
-    ConsoleAtomicRuntimeStatusResponse resp = new ConsoleAtomicRuntimeStatusResponse(
-        true,
-        null,
-        "atomic-node-1",
-        "ATOMIC",
-        Map.of("enabled", true, "commandWhitelistSize", 2),
-        Map.of("enabled", true, "dialect", "PostgreSQL"),
-        Map.of(
-            "enabled",
-            true,
-            "enforceAllowlist",
-            true,
-            "enforceAllowlistSource",
-            "prod-default",
-            "allowlistHostsSize",
-            3),
-        Map.of("enabled", true, "allowedSchemasSize", 1));
-    when(runtimeStatusService.fetch()).thenReturn(resp);
+    @Test
+    @DisplayName("可用状态:返回成功响应并回填 Worker 与各分组字段")
+    void shouldReturnRuntimeStatus_whenAtomicWorkerAvailable() throws Exception {
+        ConsoleAtomicRuntimeStatusResponse resp = new ConsoleAtomicRuntimeStatusResponse(
+                true,
+                null,
+                "atomic-node-1",
+                "ATOMIC",
+                Map.of("enabled", true, "commandWhitelistSize", 2),
+                Map.of("enabled", true, "dialect", "PostgreSQL"),
+                Map.of(
+                        "enabled",
+                        true,
+                        "enforceAllowlist",
+                        true,
+                        "enforceAllowlistSource",
+                        "prod-default",
+                        "allowlistHostsSize",
+                        3),
+                Map.of("enabled", true, "allowedSchemasSize", 1));
+        when(runtimeStatusService.fetch()).thenReturn(resp);
 
-    mockMvc
-        .perform(get("/api/console/ops/atomic-runtime-status"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.available").value(true))
-        .andExpect(jsonPath("$.data.workerCode").value("atomic-node-1"))
-        .andExpect(jsonPath("$.data.http.enforceAllowlistSource").value("prod-default"))
-        .andExpect(jsonPath("$.data.sql.dialect").value("PostgreSQL"));
-  }
+        mockMvc.perform(get("/api/console/ops/atomic-runtime-status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.available").value(true))
+                .andExpect(jsonPath("$.data.workerCode").value("atomic-node-1"))
+                .andExpect(jsonPath("$.data.http.enforceAllowlistSource").value("prod-default"))
+                .andExpect(jsonPath("$.data.sql.dialect").value("PostgreSQL"));
+    }
 
-  @Test
-  @DisplayName("不可用状态:反向通道关闭时标记不可用, 并给出原因")
-  void shouldReturnUnavailable_whenAtomicWorkerReverseChannelDisabled() throws Exception {
-    when(runtimeStatusService.fetch())
-        .thenReturn(ConsoleAtomicRuntimeStatusResponse.unavailable(
-            "batch.console.atomic-worker.enabled=false"));
+    @Test
+    @DisplayName("不可用状态:反向通道关闭时标记不可用, 并给出原因")
+    void shouldReturnUnavailable_whenAtomicWorkerReverseChannelDisabled() throws Exception {
+        when(runtimeStatusService.fetch())
+                .thenReturn(
+                        ConsoleAtomicRuntimeStatusResponse.unavailable("batch.console.atomic-worker.enabled=false"));
 
-    mockMvc
-        .perform(get("/api/console/ops/atomic-runtime-status"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.available").value(false))
-        .andExpect(jsonPath("$.data.unavailableReason").exists());
-  }
+        mockMvc.perform(get("/api/console/ops/atomic-runtime-status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.available").value(false))
+                .andExpect(jsonPath("$.data.unavailableReason").exists());
+    }
 }

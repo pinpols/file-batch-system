@@ -10,15 +10,15 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface TenantQuotaPolicyMapper {
 
-  List<TenantQuotaPolicyEntity> selectByTenantAndEnabled(
-      @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
+    List<TenantQuotaPolicyEntity> selectByTenantAndEnabled(
+            @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  /** 取指定租户启用的第一条策略（按 id asc）。无对应记录返回 null。 */
-  TenantQuotaPolicyEntity selectFirstEnabledByTenantId(
-      @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
+    /** 取指定租户启用的第一条策略（按 id asc）。无对应记录返回 null。 */
+    TenantQuotaPolicyEntity selectFirstEnabledByTenantId(
+            @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  /** 列出 enabled=true 的所有 distinct tenantId；snapshot/reconciler 走全租户枚举。 */
-  List<String> selectDistinctEnabledTenantIds();
+    /** 列出 enabled=true 的所有 distinct tenantId；snapshot/reconciler 走全租户枚举。 */
+    List<String> selectDistinctEnabledTenantIds();
 
-  TenantQuotaPolicyEntity selectById(@Param("id") Long id);
+    TenantQuotaPolicyEntity selectById(@Param("id") Long id);
 }

@@ -32,79 +32,75 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryPort {
 
-  private final KafkaAdmin kafkaAdmin;
-  private final TriggerOutboxRelayProperties properties;
-  private final BatchKafkaTopicNamespace topicNamespace;
-  private final Object adminClientMonitor = new Object();
-  private final AtomicBoolean stopping = new AtomicBoolean();
-  private AdminClient adminClient;
+    private final KafkaAdmin kafkaAdmin;
+    private final TriggerOutboxRelayProperties properties;
+    private final BatchKafkaTopicNamespace topicNamespace;
+    private final Object adminClientMonitor = new Object();
+    private final AtomicBoolean stopping = new AtomicBoolean();
+    private AdminClient adminClient;
 
-  @Override
-  public long sampleLag() throws InterruptedException, ExecutionException, TimeoutException {
-    long timeout = properties.getLagQueryTimeoutMillis();
-    AdminClient admin = adminClient();
-    String consumerGroupId = topicNamespace.consumerGroup(properties.getConsumerGroupId());
-    Map<TopicPartition, OffsetAndMetadata> committed = admin
-        .listConsumerGroupOffsets(consumerGroupId)
-        .partitionsToOffsetAndMetadata()
-        .get(timeout, TimeUnit.MILLISECONDS);
-    String launchTopic = topicNamespace.topic(BatchTopics.TRIGGER_LAUNCH_V1);
-    TopicDescription topic = admin
-        .describeTopics(List.of(launchTopic))
-        .allTopicNames()
-        .get(timeout, TimeUnit.MILLISECONDS)
-        .get(launchTopic);
-    if (EmptyChecks.isNull(topic)) {
-      return UNKNOWN_LAG;
+    @Override
+    public long sampleLag() throws InterruptedException, ExecutionException, TimeoutException {
+        long timeout = properties.getLagQueryTimeoutMillis();
+        AdminClient admin = adminClient();
+        String consumerGroupId = topicNamespace.consumerGroup(properties.getConsumerGroupId());
+        Map<TopicPartition, OffsetAndMetadata> committed = admin.listConsumerGroupOffsets(consumerGroupId)
+                .partitionsToOffsetAndMetadata()
+                .get(timeout, TimeUnit.MILLISECONDS);
+        String launchTopic = topicNamespace.topic(BatchTopics.TRIGGER_LAUNCH_V1);
+        TopicDescription topic = admin.describeTopics(List.of(launchTopic))
+                .allTopicNames()
+                .get(timeout, TimeUnit.MILLISECONDS)
+                .get(launchTopic);
+        if (EmptyChecks.isNull(topic)) {
+            return UNKNOWN_LAG;
+        }
+        Map<TopicPartition, OffsetSpec> requests = new LinkedHashMap<>();
+        topic.partitions()
+                .forEach(partition ->
+                        requests.put(new TopicPartition(launchTopic, partition.partition()), OffsetSpec.latest()));
+        Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
+                admin.listOffsets(requests).all().get(timeout, TimeUnit.MILLISECONDS);
+        Map<TopicPartition, OffsetSpec> earliestRequests = new LinkedHashMap<>();
+        requests.keySet().stream()
+                .filter(partition -> !committed.containsKey(partition))
+                .forEach(partition -> earliestRequests.put(partition, OffsetSpec.earliest()));
+        Map<TopicPartition, ListOffsetsResultInfo> earliestOffsets = EmptyChecks.isEmpty(earliestRequests)
+                ? Map.<TopicPartition, ListOffsetsResultInfo>of()
+                : admin.listOffsets(earliestRequests).all().get(timeout, TimeUnit.MILLISECONDS);
+        long lag = 0L;
+        for (Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : endOffsets.entrySet()) {
+            OffsetAndMetadata offset = committed.get(entry.getKey());
+            long committedOffset = EmptyChecks.isNull(offset)
+                    ? earliestOffsets.get(entry.getKey()).offset()
+                    : offset.offset();
+            long endOffset = entry.getValue().offset();
+            long partitionLag = Math.max(0L, endOffset - committedOffset);
+            lag = Math.addExact(lag, partitionLag);
+        }
+        return lag;
     }
-    Map<TopicPartition, OffsetSpec> requests = new LinkedHashMap<>();
-    topic
-        .partitions()
-        .forEach(partition -> requests.put(
-            new TopicPartition(launchTopic, partition.partition()), OffsetSpec.latest()));
-    Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
-        admin.listOffsets(requests).all().get(timeout, TimeUnit.MILLISECONDS);
-    Map<TopicPartition, OffsetSpec> earliestRequests = new LinkedHashMap<>();
-    requests.keySet().stream()
-        .filter(partition -> !committed.containsKey(partition))
-        .forEach(partition -> earliestRequests.put(partition, OffsetSpec.earliest()));
-    Map<TopicPartition, ListOffsetsResultInfo> earliestOffsets =
-        EmptyChecks.isEmpty(earliestRequests)
-            ? Map.<TopicPartition, ListOffsetsResultInfo>of()
-            : admin.listOffsets(earliestRequests).all().get(timeout, TimeUnit.MILLISECONDS);
-    long lag = 0L;
-    for (Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : endOffsets.entrySet()) {
-      OffsetAndMetadata offset = committed.get(entry.getKey());
-      long committedOffset = EmptyChecks.isNull(offset)
-          ? earliestOffsets.get(entry.getKey()).offset()
-          : offset.offset();
-      long endOffset = entry.getValue().offset();
-      long partitionLag = Math.max(0L, endOffset - committedOffset);
-      lag = Math.addExact(lag, partitionLag);
-    }
-    return lag;
-  }
 
-  private AdminClient adminClient() {
-    synchronized (adminClientMonitor) {
-      if (stopping.get()) {
-        throw new IllegalStateException("Trigger launch lag query adapter is stopping");
-      }
-      if (EmptyChecks.isNull(adminClient)) {
-        adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
-      }
-      return adminClient;
+    private AdminClient adminClient() {
+        synchronized (adminClientMonitor) {
+            if (stopping.get()) {
+                throw new IllegalStateException("Trigger launch lag query adapter is stopping");
+            }
+            if (EmptyChecks.isNull(adminClient)) {
+                adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+            }
+            return adminClient;
+        }
     }
-  }
 
-  @PreDestroy
-  void closeAdminClient() {
-    stopping.set(true);
-    synchronized (adminClientMonitor) {
-      if (EmptyChecks.isNotNull(adminClient)) {
-        adminClient.close(Duration.ZERO);
-        adminClient = null;
-      }
+    @PreDestroy
+    void closeAdminClient() {
+        stopping.set(true);
+        synchronized (adminClientMonitor) {
+            if (EmptyChecks.isNotNull(adminClient)) {
+                adminClient.close(Duration.ZERO);
+                adminClient = null;
+            }
+        }
     }
-  }
 }

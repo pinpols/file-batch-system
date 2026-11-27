@@ -20,97 +20,90 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkerBasedPartitionCountResolver implements PartitionCountResolver {
 
-  private final WorkerRegistryMapper workerRegistryMapper;
+    private final WorkerRegistryMapper workerRegistryMapper;
 
-  @Override
-  public int resolve(
-      JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
-    long onlineWorkerCount = resolveOnlineWorkerCount(jobDefinition, params);
-    if (onlineWorkerCount <= 0) {
-      return 0;
+    @Override
+    public int resolve(JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+        long onlineWorkerCount = resolveOnlineWorkerCount(jobDefinition, params);
+        if (onlineWorkerCount <= 0) {
+            return 0;
+        }
+        Object configuredPartitionFactor = params.get("partitionFactor");
+        Object legacyPartitionFactor = params.get("workerPartitionFactor");
+        int partitionFactor = firstPositiveInt(
+                configuredPartitionFactor, legacyPartitionFactor, shardStrategy == ShardStrategy.DYNAMIC ? 2 : 1);
+        return (int) Math.min(DefaultSchedulePlanBuilder.MAX_PARTITION_COUNT, onlineWorkerCount * partitionFactor);
     }
-    Object configuredPartitionFactor = params.get("partitionFactor");
-    Object legacyPartitionFactor = params.get("workerPartitionFactor");
-    int partitionFactor = firstPositiveInt(
-        configuredPartitionFactor,
-        legacyPartitionFactor,
-        shardStrategy == ShardStrategy.DYNAMIC ? 2 : 1);
-    return (int) Math.min(
-        DefaultSchedulePlanBuilder.MAX_PARTITION_COUNT, onlineWorkerCount * partitionFactor);
-  }
 
-  private long resolveOnlineWorkerCount(
-      JobDefinitionView jobDefinition, Map<String, Object> params) {
-    if (jobDefinition == null || !Texts.hasText(jobDefinition.tenantId())) {
-      Object onlineWorkerCount = params.get("onlineWorkerCount");
-      Object legacyWorkerCount = params.get("workerCount");
-      return firstPositiveLong(onlineWorkerCount, legacyWorkerCount);
+    private long resolveOnlineWorkerCount(JobDefinitionView jobDefinition, Map<String, Object> params) {
+        if (jobDefinition == null || !Texts.hasText(jobDefinition.tenantId())) {
+            Object onlineWorkerCount = params.get("onlineWorkerCount");
+            Object legacyWorkerCount = params.get("workerCount");
+            return firstPositiveLong(onlineWorkerCount, legacyWorkerCount);
+        }
+        if (Texts.hasText(jobDefinition.workerGroup())) {
+            return workerRegistryMapper.countByTenantAndWorkerGroupAndStatus(
+                    jobDefinition.tenantId(), jobDefinition.workerGroup(), WorkerRegistryStatus.ONLINE.code());
+        }
+        return workerRegistryMapper.countByTenantAndStatus(
+                jobDefinition.tenantId(), WorkerRegistryStatus.ONLINE.code());
     }
-    if (Texts.hasText(jobDefinition.workerGroup())) {
-      return workerRegistryMapper.countByTenantAndWorkerGroupAndStatus(
-          jobDefinition.tenantId(),
-          jobDefinition.workerGroup(),
-          WorkerRegistryStatus.ONLINE.code());
-    }
-    return workerRegistryMapper.countByTenantAndStatus(
-        jobDefinition.tenantId(), WorkerRegistryStatus.ONLINE.code());
-  }
 
-  private int firstPositiveInt(Object... values) {
-    for (Object value : values) {
-      int candidate = toInt(value);
-      if (candidate > 0) {
-        return candidate;
-      }
+    private int firstPositiveInt(Object... values) {
+        for (Object value : values) {
+            int candidate = toInt(value);
+            if (candidate > 0) {
+                return candidate;
+            }
+        }
+        return 0;
     }
-    return 0;
-  }
 
-  private long firstPositiveLong(Object... values) {
-    for (Object value : values) {
-      long candidate = toLong(value);
-      if (candidate > 0) {
-        return candidate;
-      }
+    private long firstPositiveLong(Object... values) {
+        for (Object value : values) {
+            long candidate = toLong(value);
+            if (candidate > 0) {
+                return candidate;
+            }
+        }
+        return 0L;
     }
-    return 0L;
-  }
 
-  private int toInt(Object value) {
-    if (value == null) {
-      return 0;
-    }
-    if (value instanceof Number number) {
-      return number.intValue();
-    }
-    try {
-      String rawValue = String.valueOf(value);
-      String normalizedValue = rawValue.trim();
-      return Integer.parseInt(normalizedValue);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(
-          WorkerBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);
+    private int toInt(Object value) {
+        if (value == null) {
+            return 0;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            String rawValue = String.valueOf(value);
+            String normalizedValue = rawValue.trim();
+            return Integer.parseInt(normalizedValue);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(
+                    WorkerBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);
 
-      return 0;
+            return 0;
+        }
     }
-  }
 
-  private long toLong(Object value) {
-    if (value == null) {
-      return 0L;
-    }
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    try {
-      String rawValue = String.valueOf(value);
-      String normalizedValue = rawValue.trim();
-      return Long.parseLong(normalizedValue);
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(
-          WorkerBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);
+    private long toLong(Object value) {
+        if (value == null) {
+            return 0L;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            String rawValue = String.valueOf(value);
+            String normalizedValue = rawValue.trim();
+            return Long.parseLong(normalizedValue);
+        } catch (NumberFormatException ignored) {
+            SwallowedExceptionLogger.info(
+                    WorkerBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);
 
-      return 0L;
+            return 0L;
+        }
     }
-  }
 }

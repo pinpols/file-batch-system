@@ -30,94 +30,90 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleQuotaPolicyControllerValidationTest {
 
-  @Mock
-  private ConsoleQuotaPolicyApplicationService service;
+    @Mock
+    private ConsoleQuotaPolicyApplicationService service;
 
-  @Mock
-  private ConsoleRequestMetadataResolver requestMetadataResolver;
+    @Mock
+    private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  private MockMvc mockMvc;
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
 
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+        when(requestMetadataResolver.responseMeta())
+                .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-    validator.afterPropertiesSet();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleQuotaPolicyController(service, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .setValidator(validator)
-        .build();
-  }
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleQuotaPolicyController(service, responseFactory))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
 
-  private String body(String policyCode) {
-    return """
+    private String body(String policyCode) {
+        return """
         {
           "tenantId": "ta",
           "policyCode": "%s"
         }
         """.formatted(policyCode).stripTrailing();
-  }
+    }
 
-  @Test
-  @DisplayName("策略编码含空格时, 请求被校验拦截并返回参数错误, 不落库")
-  void rejects_policyCode_with_space() throws Exception {
-    mockMvc
-        .perform(post("/api/console/quota-policies")
-            .contentType(APPLICATION_JSON)
-            .content(body("q q q")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verify(service, never()).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("策略编码含空格时, 请求被校验拦截并返回参数错误, 不落库")
+    void rejects_policyCode_with_space() throws Exception {
+        mockMvc.perform(post("/api/console/quota-policies")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("q q q")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).create(ArgumentMatchers.any());
+    }
 
-  @Test
-  @DisplayName("策略编码含中文时, 请求被校验拦截并返回参数错误")
-  void rejects_policyCode_chinese() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/quota-policies").contentType(APPLICATION_JSON).content(body("配额")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("策略编码含中文时, 请求被校验拦截并返回参数错误")
+    void rejects_policyCode_chinese() throws Exception {
+        mockMvc.perform(post("/api/console/quota-policies")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("配额")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("策略编码以数字开头时, 请求被校验拦截并返回参数错误")
-  void rejects_policyCode_starts_with_digit() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/quota-policies").contentType(APPLICATION_JSON).content(body("1q")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("策略编码以数字开头时, 请求被校验拦截并返回参数错误")
+    void rejects_policyCode_starts_with_digit() throws Exception {
+        mockMvc.perform(post("/api/console/quota-policies")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("1q")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("策略编码为空时, 请求被校验拦截并返回参数错误")
-  void rejects_policyCode_blank() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/quota-policies").contentType(APPLICATION_JSON).content(body("")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-  }
+    @Test
+    @DisplayName("策略编码为空时, 请求被校验拦截并返回参数错误")
+    void rejects_policyCode_blank() throws Exception {
+        mockMvc.perform(post("/api/console/quota-policies")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
-  @Test
-  @DisplayName("策略编码合法时, 请求通过校验并创建成功")
-  void accepts_valid_policyCode() throws Exception {
-    when(service.create(ArgumentMatchers.any())).thenReturn(null);
-    mockMvc
-        .perform(post("/api/console/quota-policies")
-            .contentType(APPLICATION_JSON)
-            .content(body("policy_ok_01")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-    verify(service).create(ArgumentMatchers.any());
-  }
+    @Test
+    @DisplayName("策略编码合法时, 请求通过校验并创建成功")
+    void accepts_valid_policyCode() throws Exception {
+        when(service.create(ArgumentMatchers.any())).thenReturn(null);
+        mockMvc.perform(post("/api/console/quota-policies")
+                        .contentType(APPLICATION_JSON)
+                        .content(body("policy_ok_01")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
+        verify(service).create(ArgumentMatchers.any());
+    }
 }

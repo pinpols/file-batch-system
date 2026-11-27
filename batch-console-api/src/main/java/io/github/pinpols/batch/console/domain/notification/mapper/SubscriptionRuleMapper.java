@@ -9,17 +9,17 @@ import org.apache.ibatis.annotations.Param;
 
 public interface SubscriptionRuleMapper {
 
-  List<SubscriptionRuleRow> selectByTenant(@Param("tenantId") String tenantId);
+    List<SubscriptionRuleRow> selectByTenant(@Param("tenantId") String tenantId);
 
-  /** 读取启用的租户候选，调用方必须执行事件类型及其余规则匹配。 */
-  List<EnabledSubscriptionRuleRow> selectEnabledByEventType(
-      @Param("tenantId") String tenantId, @Param("eventType") String eventType);
+    /** 读取启用的租户候选，调用方必须执行事件类型及其余规则匹配。 */
+    List<EnabledSubscriptionRuleRow> selectEnabledByEventType(
+            @Param("tenantId") String tenantId, @Param("eventType") String eventType);
 
-  SubscriptionRuleRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    SubscriptionRuleRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int insert(SubscriptionRuleInsertParam params);
+    int insert(SubscriptionRuleInsertParam params);
 
-  int update(SubscriptionRuleUpdateParam params);
+    int update(SubscriptionRuleUpdateParam params);
 
-  int deleteById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    int deleteById(@Param("tenantId") String tenantId, @Param("id") Long id);
 }

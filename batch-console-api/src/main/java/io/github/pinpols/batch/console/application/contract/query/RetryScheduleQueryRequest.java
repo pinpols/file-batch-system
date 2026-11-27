@@ -9,15 +9,15 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class RetryScheduleQueryRequest extends PageQueryRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @Size(max = 32, message = "relatedType too long (max 32)")
-  private String relatedType;
+    @Size(max = 32, message = "relatedType too long (max 32)")
+    private String relatedType;
 
-  @Size(max = 32, message = "retryPolicy too long (max 32)")
-  private String retryPolicy;
+    @Size(max = 32, message = "retryPolicy too long (max 32)")
+    private String retryPolicy;
 
-  @Size(max = 32, message = "retryStatus too long (max 32)")
-  private String retryStatus;
+    @Size(max = 32, message = "retryStatus too long (max 32)")
+    private String retryStatus;
 }

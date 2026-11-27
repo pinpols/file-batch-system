@@ -46,168 +46,160 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class MaintenanceAlertPublisher {
 
-  private static final Duration REPUBLISH_INTERVAL = Duration.ofSeconds(30);
-  private static final Duration RECONCILE_INTERVAL = Duration.ofSeconds(5);
-  private final MaintenanceStateHolder stateHolder;
-  private final AlertmanagerNotifyProperties.Silence properties;
-  private final OutboundHttpTransport transport;
-  private final Clock clock;
-  private final TaskScheduler scheduler;
-  private ScheduledFuture<?> reconciliation;
-  private volatile boolean lastPublishSucceeded;
-  private long publishedVersion = Long.MIN_VALUE;
-  private boolean publishedActive;
-  private Instant nextPublishAt = Instant.EPOCH;
+    private static final Duration REPUBLISH_INTERVAL = Duration.ofSeconds(30);
+    private static final Duration RECONCILE_INTERVAL = Duration.ofSeconds(5);
+    private final MaintenanceStateHolder stateHolder;
+    private final AlertmanagerNotifyProperties.Silence properties;
+    private final OutboundHttpTransport transport;
+    private final Clock clock;
+    private final TaskScheduler scheduler;
+    private ScheduledFuture<?> reconciliation;
+    private volatile boolean lastPublishSucceeded;
+    private long publishedVersion = Long.MIN_VALUE;
+    private boolean publishedActive;
+    private Instant nextPublishAt = Instant.EPOCH;
 
-  @Autowired
-  public MaintenanceAlertPublisher(
-      MaintenanceStateHolder stateHolder,
-      AlertmanagerNotifyProperties properties,
-      @ConsoleOutboundTransport OutboundHttpTransport transport,
-      MeterRegistry registry,
-      @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
-    this(stateHolder, properties, transport, registry, Clock.systemUTC(), scheduler);
-  }
-
-  MaintenanceAlertPublisher(
-      MaintenanceStateHolder stateHolder,
-      AlertmanagerNotifyProperties properties,
-      OutboundHttpTransport transport,
-      MeterRegistry registry,
-      Clock clock,
-      TaskScheduler scheduler) {
-    this.stateHolder = stateHolder;
-    this.properties = properties.getSilence();
-    this.transport = transport;
-    this.clock = clock;
-    this.scheduler = scheduler;
-    Gauge.builder(
-            "batch.console.maintenance.alert_suppression_available",
-            this,
-            publisher -> publisher.lastPublishSucceeded ? 1.0 : 0.0)
-        .description("Whether the last maintenance signal publication succeeded")
-        .register(registry);
-    Gauge.builder(
-            "batch.console.maintenance.alert_suppression_deadline_seconds",
-            this,
-            MaintenanceAlertPublisher::deadlineSeconds)
-        .description("Fixed notification suppression deadline; zero when maintenance is disabled")
-        .register(registry);
-  }
-
-  /** 在共享状态完成首次刷新后，使用 Spring 托管调度器周期对账。 */
-  @Order(Ordered.HIGHEST_PRECEDENCE + 1)
-  @EventListener(ApplicationReadyEvent.class)
-  public void startReconciliation() {
-    reconciliation = scheduler.scheduleWithFixedDelay(this::reconcile, RECONCILE_INTERVAL);
-  }
-
-  /** 取消本组件的周期任务；调度器由 Spring 容器统一关闭。 */
-  @PreDestroy
-  void stopReconciliation() {
-    if (EmptyChecks.isNotNull(reconciliation)) {
-      reconciliation.cancel(false);
+    @Autowired
+    public MaintenanceAlertPublisher(
+            MaintenanceStateHolder stateHolder,
+            AlertmanagerNotifyProperties properties,
+            @ConsoleOutboundTransport OutboundHttpTransport transport,
+            MeterRegistry registry,
+            @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
+        this(stateHolder, properties, transport, registry, Clock.systemUTC(), scheduler);
     }
-  }
 
-  public synchronized void reconcile() {
-    MaintenanceState state = stateHolder.current();
-    boolean configured = properties.isEnabled()
-        && Texts.hasText(properties.getApiBaseUrl())
-        && Texts.hasText(properties.getMaintenanceScope());
-    if (!configured || !state.sharedStateAvailable()) {
-      lastPublishSucceeded = false;
-      return;
+    MaintenanceAlertPublisher(
+            MaintenanceStateHolder stateHolder,
+            AlertmanagerNotifyProperties properties,
+            OutboundHttpTransport transport,
+            MeterRegistry registry,
+            Clock clock,
+            TaskScheduler scheduler) {
+        this.stateHolder = stateHolder;
+        this.properties = properties.getSilence();
+        this.transport = transport;
+        this.clock = clock;
+        this.scheduler = scheduler;
+        Gauge.builder(
+                        "batch.console.maintenance.alert_suppression_available",
+                        this,
+                        publisher -> publisher.lastPublishSucceeded ? 1.0 : 0.0)
+                .description("Whether the last maintenance signal publication succeeded")
+                .register(registry);
+        Gauge.builder(
+                        "batch.console.maintenance.alert_suppression_deadline_seconds",
+                        this,
+                        MaintenanceAlertPublisher::deadlineSeconds)
+                .description("Fixed notification suppression deadline; zero when maintenance is disabled")
+                .register(registry);
     }
-    Instant now = clock.instant();
-    MaintenanceAlertWindow window =
-        MaintenanceAlertWindow.from(state, properties.getDefaultDurationMinutes());
-    boolean active = state.enabled() && window.activeAt(now);
-    if (publishedVersion == state.version()
-        && publishedActive == active
-        && now.isBefore(nextPublishAt)) {
-      return;
-    }
-    List<MaintenanceSignal> signals = buildSignals(state, window, now, active);
-    try {
-      String body = JsonUtils.toJson(signals);
-      String baseUrl = properties.getApiBaseUrl().replaceAll("/+$", "");
-      Duration connectTimeout = Duration.ofMillis(properties.getConnectTimeoutMillis());
-      Duration requestTimeout = Duration.ofMillis(properties.getTimeoutMillis());
-      OutboundHttpContent content =
-          new OutboundHttpContent(body, "application/json; charset=utf-8");
-      OutboundHttpRequest request = OutboundHttpRequest.post(
-          baseUrl + "/api/v2/alerts",
-          Map.of(),
-          content,
-          connectTimeout,
-          requestTimeout,
-          OutboundAddressPolicy.TRUSTED);
-      OutboundHttpResponse response = transport.execute(request);
-      if (!response.isSuccessful()) {
-        lastPublishSucceeded = false;
-        log.warn(
-            "maintenance alert signal rejected: status={}, version={}",
-            response.statusCode(),
-            state.version());
-        return;
-      }
-      lastPublishSucceeded = !active || EmptyChecks.isNotEmpty(window.jobs());
-      publishedVersion = state.version();
-      publishedActive = active;
-      nextPublishAt = now.plus(REPUBLISH_INTERVAL);
-    } catch (IOException | RuntimeException failure) {
-      lastPublishSucceeded = false;
-      log.warn(
-          "maintenance alert signal publication failed: version={}, cause={}",
-          state.version(),
-          SwallowedExceptionLogger.summary(failure));
-    }
-  }
 
-  private List<MaintenanceSignal> buildSignals(
-      MaintenanceState state, MaintenanceAlertWindow window, Instant now, boolean active) {
-    List<MaintenanceSignal> signals = new ArrayList<>();
-    // 每次同时解除不在新范围内的旧信号；重启和多副本无需依赖本地记忆恢复范围。
-    for (String job : MaintenanceAlertWindow.APPLICATION_JOBS) {
-      boolean suppressed = active && window.jobs().contains(job);
-      Instant end = suppressed ? window.endsAt() : now;
-      Instant start = window.startsAt().isBefore(end) ? window.startsAt() : end.minusSeconds(1);
-      Map<String, String> labels = Map.of(
-          "alertname",
-          "BatchPlannedMaintenance",
-          "job",
-          job,
-          "maintenance_scope",
-          properties.getMaintenanceScope(),
-          "severity",
-          "info",
-          "team",
-          "batch-platform",
-          "alert_group",
-          "maintenance");
-      Map<String, String> annotations =
-          Map.of("summary", "计划维护通知抑制信号", "maintenance_version", Long.toString(state.version()));
-      String startsAt = start.toString();
-      String endsAt = end.toString();
-      signals.add(new MaintenanceSignal(labels, annotations, startsAt, endsAt));
+    /** 在共享状态完成首次刷新后，使用 Spring 托管调度器周期对账。 */
+    @Order(Ordered.HIGHEST_PRECEDENCE + 1)
+    @EventListener(ApplicationReadyEvent.class)
+    public void startReconciliation() {
+        reconciliation = scheduler.scheduleWithFixedDelay(this::reconcile, RECONCILE_INTERVAL);
     }
-    return signals;
-  }
 
-  private double deadlineSeconds() {
-    MaintenanceState state = stateHolder.current();
-    if (!state.enabled()) {
-      return 0.0;
+    /** 取消本组件的周期任务；调度器由 Spring 容器统一关闭。 */
+    @PreDestroy
+    void stopReconciliation() {
+        if (EmptyChecks.isNotNull(reconciliation)) {
+            reconciliation.cancel(false);
+        }
     }
-    MaintenanceAlertWindow window =
-        MaintenanceAlertWindow.from(state, properties.getDefaultDurationMinutes());
-    return window.endsAt().getEpochSecond();
-  }
 
-  private record MaintenanceSignal(
-      Map<String, String> labels,
-      Map<String, String> annotations,
-      String startsAt,
-      String endsAt) {}
+    public synchronized void reconcile() {
+        MaintenanceState state = stateHolder.current();
+        boolean configured = properties.isEnabled()
+                && Texts.hasText(properties.getApiBaseUrl())
+                && Texts.hasText(properties.getMaintenanceScope());
+        if (!configured || !state.sharedStateAvailable()) {
+            lastPublishSucceeded = false;
+            return;
+        }
+        Instant now = clock.instant();
+        MaintenanceAlertWindow window = MaintenanceAlertWindow.from(state, properties.getDefaultDurationMinutes());
+        boolean active = state.enabled() && window.activeAt(now);
+        if (publishedVersion == state.version() && publishedActive == active && now.isBefore(nextPublishAt)) {
+            return;
+        }
+        List<MaintenanceSignal> signals = buildSignals(state, window, now, active);
+        try {
+            String body = JsonUtils.toJson(signals);
+            String baseUrl = properties.getApiBaseUrl().replaceAll("/+$", "");
+            Duration connectTimeout = Duration.ofMillis(properties.getConnectTimeoutMillis());
+            Duration requestTimeout = Duration.ofMillis(properties.getTimeoutMillis());
+            OutboundHttpContent content = new OutboundHttpContent(body, "application/json; charset=utf-8");
+            OutboundHttpRequest request = OutboundHttpRequest.post(
+                    baseUrl + "/api/v2/alerts",
+                    Map.of(),
+                    content,
+                    connectTimeout,
+                    requestTimeout,
+                    OutboundAddressPolicy.TRUSTED);
+            OutboundHttpResponse response = transport.execute(request);
+            if (!response.isSuccessful()) {
+                lastPublishSucceeded = false;
+                log.warn(
+                        "maintenance alert signal rejected: status={}, version={}",
+                        response.statusCode(),
+                        state.version());
+                return;
+            }
+            lastPublishSucceeded = !active || EmptyChecks.isNotEmpty(window.jobs());
+            publishedVersion = state.version();
+            publishedActive = active;
+            nextPublishAt = now.plus(REPUBLISH_INTERVAL);
+        } catch (IOException | RuntimeException failure) {
+            lastPublishSucceeded = false;
+            log.warn(
+                    "maintenance alert signal publication failed: version={}, cause={}",
+                    state.version(),
+                    SwallowedExceptionLogger.summary(failure));
+        }
+    }
+
+    private List<MaintenanceSignal> buildSignals(
+            MaintenanceState state, MaintenanceAlertWindow window, Instant now, boolean active) {
+        List<MaintenanceSignal> signals = new ArrayList<>();
+        // 每次同时解除不在新范围内的旧信号；重启和多副本无需依赖本地记忆恢复范围。
+        for (String job : MaintenanceAlertWindow.APPLICATION_JOBS) {
+            boolean suppressed = active && window.jobs().contains(job);
+            Instant end = suppressed ? window.endsAt() : now;
+            Instant start = window.startsAt().isBefore(end) ? window.startsAt() : end.minusSeconds(1);
+            Map<String, String> labels = Map.of(
+                    "alertname",
+                    "BatchPlannedMaintenance",
+                    "job",
+                    job,
+                    "maintenance_scope",
+                    properties.getMaintenanceScope(),
+                    "severity",
+                    "info",
+                    "team",
+                    "batch-platform",
+                    "alert_group",
+                    "maintenance");
+            Map<String, String> annotations =
+                    Map.of("summary", "计划维护通知抑制信号", "maintenance_version", Long.toString(state.version()));
+            String startsAt = start.toString();
+            String endsAt = end.toString();
+            signals.add(new MaintenanceSignal(labels, annotations, startsAt, endsAt));
+        }
+        return signals;
+    }
+
+    private double deadlineSeconds() {
+        MaintenanceState state = stateHolder.current();
+        if (!state.enabled()) {
+            return 0.0;
+        }
+        MaintenanceAlertWindow window = MaintenanceAlertWindow.from(state, properties.getDefaultDurationMinutes());
+        return window.endsAt().getEpochSecond();
+    }
+
+    private record MaintenanceSignal(
+            Map<String, String> labels, Map<String, String> annotations, String startsAt, String endsAt) {}
 }

@@ -53,347 +53,325 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class WaitingPartitionDispatchScheduler {
 
-  private final ResourceScheduler resourceScheduler;
-  private final BatchOrchestratorGovernanceProperties governance;
-  private final OrchestratorJobMappers jobMappers;
-  private final OrchestratorConfigCacheService configCacheService;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final WaitingPartitionDispatcher dispatcher;
+    private final ResourceScheduler resourceScheduler;
+    private final BatchOrchestratorGovernanceProperties governance;
+    private final OrchestratorJobMappers jobMappers;
+    private final OrchestratorConfigCacheService configCacheService;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final WaitingPartitionDispatcher dispatcher;
 
-  /** WAITING partition 会在这里重新进入资源判断，只有满足窗口/并发/worker 条件才会真正出队。 */
-  @Scheduled(
-      fixedDelayString = "${batch.resource-scheduler.waiting-dispatch-interval-millis:10000}")
-  @SchedulerLock(
-      name = "waiting_partition_dispatch",
-      lockAtMostFor = "PT1M",
-      lockAtLeastFor = "PT5S")
-  public void dispatchWaitingPartitions() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    /** WAITING partition 会在这里重新进入资源判断，只有满足窗口/并发/worker 条件才会真正出队。 */
+    @Scheduled(fixedDelayString = "${batch.resource-scheduler.waiting-dispatch-interval-millis:10000}")
+    @SchedulerLock(name = "waiting_partition_dispatch", lockAtMostFor = "PT1M", lockAtLeastFor = "PT5S")
+    public void dispatchWaitingPartitions() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        int batchSize = governance.resourceScheduler().getWaitingDispatchBatchSize();
+        List<JobPartitionEntity> waitingPartitions = selectWaitingCandidates(batchSize);
+        if (waitingPartitions.isEmpty()) {
+            log.debug("no WAITING partitions this tick");
+            return;
+        }
+        // 每 10 秒一次 tick，evaluate 数本身没业务进展信息（仍 WAITING 表明一直被限流挡）；
+        // 改 DEBUG 防 3 小时积 1000+ 噪音。真有 partition 被释放时由 line 269 的"released" 日志体现。
+        log.debug("waiting dispatch tick: {} WAITING partitions to evaluate", waitingPartitions.size());
+        List<WaitingDispatchCandidate> candidates = collectWaitingCandidates(waitingPartitions);
+        Comparator<WaitingDispatchCandidate> comparator = Comparator.comparing(WaitingDispatchCandidate::dryRun)
+                .thenComparing(Comparator.comparingLong(WaitingDispatchCandidate::fairnessScore)
+                        .reversed())
+                .thenComparing(Comparator.comparingInt(WaitingDispatchCandidate::priority)
+                        .reversed())
+                .thenComparingLong(WaitingDispatchCandidate::partitionId);
+        // 逐个 partition 走独立 REQUIRES_NEW 事务：release + outbox + instance/workflow 状态推进作为原子单元。
+        // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；事务协作者开新事务。
+        List<WaitingDispatchCandidate> sorted =
+                candidates.stream().sorted(comparator).toList();
+        for (WaitingDispatchCandidate candidate : sorted) {
+            String tenantId = EmptyChecks.isNull(candidate.partition())
+                    ? null
+                    : candidate.partition().getTenantId();
+            if (EmptyChecks.isBlank(tenantId)) {
+                continue;
+            }
+            try {
+                // RLS Phase B：dispatchWaitingPartition → dispatcher (REQUIRES_NEW) → 多张 batch 表写入，
+                // 必须在事务协作者调用前绑好 holder，事务起点才能读到 app.tenant_id。
+                // try/catch 包在 runWithTenant 外保留"单 partition 失败不影响其余"语义。
+                RlsTenantContextHolder.runWithTenant(
+                        tenantId,
+                        () -> dispatchWaitingPartition(
+                                candidate.partition(),
+                                candidate.task(),
+                                candidate.jobInstance(),
+                                candidate.decision()));
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "dispatch waiting partition failed, will retry next tick: tenantId={},"
+                                + " partitionId={}, error={}",
+                        candidate.partition().getTenantId(),
+                        candidate.partition().getId(),
+                        SwallowedExceptionLogger.summary(exception));
+            }
+        }
     }
-    int batchSize = governance.resourceScheduler().getWaitingDispatchBatchSize();
-    List<JobPartitionEntity> waitingPartitions = selectWaitingCandidates(batchSize);
-    if (waitingPartitions.isEmpty()) {
-      log.debug("no WAITING partitions this tick");
-      return;
-    }
-    // 每 10 秒一次 tick，evaluate 数本身没业务进展信息（仍 WAITING 表明一直被限流挡）；
-    // 改 DEBUG 防 3 小时积 1000+ 噪音。真有 partition 被释放时由 line 269 的"released" 日志体现。
-    log.debug("waiting dispatch tick: {} WAITING partitions to evaluate", waitingPartitions.size());
-    List<WaitingDispatchCandidate> candidates = collectWaitingCandidates(waitingPartitions);
-    Comparator<WaitingDispatchCandidate> comparator = Comparator.comparing(
-            WaitingDispatchCandidate::dryRun)
-        .thenComparing(
-            Comparator.comparingLong(WaitingDispatchCandidate::fairnessScore).reversed())
-        .thenComparing(
-            Comparator.comparingInt(WaitingDispatchCandidate::priority).reversed())
-        .thenComparingLong(WaitingDispatchCandidate::partitionId);
-    // 逐个 partition 走独立 REQUIRES_NEW 事务：release + outbox + instance/workflow 状态推进作为原子单元。
-    // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；事务协作者开新事务。
-    List<WaitingDispatchCandidate> sorted =
-        candidates.stream().sorted(comparator).toList();
-    for (WaitingDispatchCandidate candidate : sorted) {
-      String tenantId = EmptyChecks.isNull(candidate.partition())
-          ? null
-          : candidate.partition().getTenantId();
-      if (EmptyChecks.isBlank(tenantId)) {
-        continue;
-      }
-      try {
-        // RLS Phase B：dispatchWaitingPartition → dispatcher (REQUIRES_NEW) → 多张 batch 表写入，
-        // 必须在事务协作者调用前绑好 holder，事务起点才能读到 app.tenant_id。
-        // try/catch 包在 runWithTenant 外保留"单 partition 失败不影响其余"语义。
-        RlsTenantContextHolder.runWithTenant(
-            tenantId,
-            () -> dispatchWaitingPartition(
-                candidate.partition(),
-                candidate.task(),
-                candidate.jobInstance(),
-                candidate.decision()));
-      } catch (RuntimeException exception) {
-        log.warn(
-            "dispatch waiting partition failed, will retry next tick: tenantId={},"
-                + " partitionId={}, error={}",
-            candidate.partition().getTenantId(),
-            candidate.partition().getId(),
-            SwallowedExceptionLogger.summary(exception));
-      }
-    }
-  }
 
-  private List<WaitingDispatchCandidate> collectWaitingCandidates(
-      List<JobPartitionEntity> waitingPartitions) {
-    List<WaitingDispatchCandidate> candidates = new ArrayList<>();
-    // 开启 DefaultResourceScheduler 的 tick 级活跃计数缓存:同租户/队列的 4 路 COUNT 在本批
-    // 内只查 DB 一次,消除 N x 4 重复 round-trip。
-    DefaultResourceScheduler.openTickCache();
-    try {
-      for (JobPartitionEntity partition : waitingPartitions) {
-        WaitingDispatchCandidate candidate = null;
-        // R3-P2-3：@Scheduled 后台线程默认 MDC 空，多 tenant 循环里的 log 行不带 tenantId/traceId
-        // 字段，无法按 tenant 过滤。每个 per-tenant 迭代用 BatchMdc.withTenantAndTrace 套一层。
-        // partition 持有 tenantId；jobInstance.traceId 此处暂未取，传 null（BatchMdc 会跳过空值）。
-        String tenantTag = partition == null ? null : partition.getTenantId();
-        BatchMdc.put(StructuredLogField.TENANT_ID, tenantTag);
+    private List<WaitingDispatchCandidate> collectWaitingCandidates(List<JobPartitionEntity> waitingPartitions) {
+        List<WaitingDispatchCandidate> candidates = new ArrayList<>();
+        // 开启 DefaultResourceScheduler 的 tick 级活跃计数缓存:同租户/队列的 4 路 COUNT 在本批
+        // 内只查 DB 一次,消除 N x 4 重复 round-trip。
+        DefaultResourceScheduler.openTickCache();
         try {
-          if (tenantTag == null || tenantTag.isBlank()) {
-            // 没 tenantId 的 partition 进不了 RLS 路径，直接退回回退（与原行为等价：buildCandidate 会再判 null）
-            candidate = buildCandidate(partition);
-          } else {
-            // RLS Phase B：buildCandidate 内部走 jobTask / jobInstance / jobDefinition /
-            // resourceScheduler
-            // 一连串 mapper 查询，全部需要 app.tenant_id 在 ThreadLocal 上。
-            candidate =
-                RlsTenantContextHolder.runWithTenant(tenantTag, () -> buildCandidate(partition));
-          }
-        } catch (RuntimeException exception) {
-          // 单个候选的资源评估失败（常见于 quota_runtime_state 的 @Version CAS 冲突）不应中断整批 tick，
-          // 否则会出现"第一条 partition 撞 OLFE → 整轮 scheduled 任务被 ErrorHandler 捕获并抑制 → 后面几千条
-          // WAITING 永远轮不到"的级联阻塞。跳过本条，下 tick 重新评估。
-          log.warn(
-              "buildCandidate failed, skipping this tick's partition: tenantId={}, partitionId={},"
-                  + " error={}",
-              partition == null ? null : partition.getTenantId(),
-              partition == null ? null : partition.getId(),
-              SwallowedExceptionLogger.summary(exception));
+            for (JobPartitionEntity partition : waitingPartitions) {
+                WaitingDispatchCandidate candidate = null;
+                // R3-P2-3：@Scheduled 后台线程默认 MDC 空，多 tenant 循环里的 log 行不带 tenantId/traceId
+                // 字段，无法按 tenant 过滤。每个 per-tenant 迭代用 BatchMdc.withTenantAndTrace 套一层。
+                // partition 持有 tenantId；jobInstance.traceId 此处暂未取，传 null（BatchMdc 会跳过空值）。
+                String tenantTag = partition == null ? null : partition.getTenantId();
+                BatchMdc.put(StructuredLogField.TENANT_ID, tenantTag);
+                try {
+                    if (tenantTag == null || tenantTag.isBlank()) {
+                        // 没 tenantId 的 partition 进不了 RLS 路径，直接退回回退（与原行为等价：buildCandidate 会再判 null）
+                        candidate = buildCandidate(partition);
+                    } else {
+                        // RLS Phase B：buildCandidate 内部走 jobTask / jobInstance / jobDefinition /
+                        // resourceScheduler
+                        // 一连串 mapper 查询，全部需要 app.tenant_id 在 ThreadLocal 上。
+                        candidate = RlsTenantContextHolder.runWithTenant(tenantTag, () -> buildCandidate(partition));
+                    }
+                } catch (RuntimeException exception) {
+                    // 单个候选的资源评估失败（常见于 quota_runtime_state 的 @Version CAS 冲突）不应中断整批 tick，
+                    // 否则会出现"第一条 partition 撞 OLFE → 整轮 scheduled 任务被 ErrorHandler 捕获并抑制 → 后面几千条
+                    // WAITING 永远轮不到"的级联阻塞。跳过本条，下 tick 重新评估。
+                    log.warn(
+                            "buildCandidate failed, skipping this tick's partition: tenantId={}, partitionId={},"
+                                    + " error={}",
+                            partition == null ? null : partition.getTenantId(),
+                            partition == null ? null : partition.getId(),
+                            SwallowedExceptionLogger.summary(exception));
+                } finally {
+                    // R3-P2-3：循环结束清 MDC，避免 ThreadLocal 污染下一 partition / 下一 tick；
+                    // 包括 buildCandidate 抛异常的分支。
+                    BatchMdc.remove(StructuredLogField.TENANT_ID);
+                }
+                if (candidate != null) {
+                    candidates.add(candidate);
+                }
+            }
         } finally {
-          // R3-P2-3：循环结束清 MDC，避免 ThreadLocal 污染下一 partition / 下一 tick；
-          // 包括 buildCandidate 抛异常的分支。
-          BatchMdc.remove(StructuredLogField.TENANT_ID);
+            DefaultResourceScheduler.closeTickCache();
         }
-        if (candidate != null) {
-          candidates.add(candidate);
+        return candidates;
+    }
+
+    private List<JobPartitionEntity> selectWaitingCandidates(int batchSize) {
+        WaitingPartitionScanCursor scanCursor = jobMappers.jobPartitionMapper.selectWaitingPartitionScanCursor();
+        if (EmptyChecks.isNull(scanCursor)) {
+            throw new IllegalStateException("Waiting partition scan cursor is missing");
         }
-      }
-    } finally {
-      DefaultResourceScheduler.closeTickCache();
-    }
-    return candidates;
-  }
-
-  private List<JobPartitionEntity> selectWaitingCandidates(int batchSize) {
-    WaitingPartitionScanCursor scanCursor =
-        jobMappers.jobPartitionMapper.selectWaitingPartitionScanCursor();
-    if (EmptyChecks.isNull(scanCursor)) {
-      throw new IllegalStateException("Waiting partition scan cursor is missing");
-    }
-    long cursor = scanCursor.lastPartitionId();
-    long upperId = scanCursor.cycleUpperId();
-    boolean dryRunPhase = scanCursor.dryRunPhase();
-    if (upperId == 0) {
-      upperId = jobMappers.jobPartitionMapper.selectLatestPartitionId();
-      dryRunPhase = false;
-    }
-    List<JobPartitionEntity> waitingPartitions =
-        selectWaitingPage(batchSize, cursor, upperId, dryRunPhase);
-    if (EmptyChecks.isEmpty(waitingPartitions) && !dryRunPhase) {
-      dryRunPhase = true;
-      cursor = 0;
-      waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, true);
-    }
-    if (EmptyChecks.isEmpty(waitingPartitions) && scanCursor.dryRunPhase()) {
-      // 旧轮次已结束；同一 tick 开始下一轮，避免空跑延迟恢复。
-      upperId = jobMappers.jobPartitionMapper.selectLatestPartitionId();
-      cursor = 0;
-      dryRunPhase = false;
-      waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, false);
-      if (EmptyChecks.isEmpty(waitingPartitions)) {
-        dryRunPhase = true;
-        waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, true);
-      }
-    }
-    long lastId =
-        EmptyChecks.isEmpty(waitingPartitions) ? 0 : waitingPartitions.getLast().getId();
-    boolean phaseComplete = EmptyChecks.isEmpty(waitingPartitions) || lastId >= upperId;
-    boolean nextDryRunPhase = phaseComplete ? !dryRunPhase : dryRunPhase;
-    long nextCursor = phaseComplete ? 0 : lastId;
-    long nextUpperId = phaseComplete && dryRunPhase ? 0 : upperId;
-    boolean cursorNeedsAdvance = scanCursor.lastPartitionId() != 0
-        || scanCursor.cycleUpperId() != 0
-        || EmptyChecks.isNotEmpty(waitingPartitions);
-    if (cursorNeedsAdvance
-        && jobMappers.jobPartitionMapper.advanceWaitingPartitionScanCursor(
-                nextCursor, nextUpperId, nextDryRunPhase, scanCursor.version())
-            != 1) {
-      log.debug("waiting partition scan cursor changed by another scheduler");
-      return List.of();
-    }
-    return waitingPartitions;
-  }
-
-  private List<JobPartitionEntity> selectWaitingPage(
-      int batchSize, long afterId, long upperId, boolean dryRun) {
-    WaitingPartitionScanQuery query = new WaitingPartitionScanQuery(
-        batchSize, PartitionStatus.WAITING.code(), afterId, upperId, dryRun);
-    return jobMappers.jobPartitionMapper.selectWaitingPartitionsGlobalInCycle(query);
-  }
-
-  private WaitingDispatchCandidate buildCandidate(JobPartitionEntity partition) {
-    if (partition == null) {
-      return null;
-    }
-    JobTaskEntity task = jobMappers.jobTaskMapper.selectByPartitionAndSeq(
-        partition.getTenantId(), partition.getId(), 1);
-    if (task == null || !TaskStatus.CREATED.code().equals(task.getTaskStatus())) {
-      log.debug(
-          "skip partitionId={}: task missing or not CREATED (status={})",
-          partition.getId(),
-          task == null ? "null" : task.getTaskStatus());
-      return null;
-    }
-    JobInstanceEntity jobInstance = jobMappers.jobInstanceMapper.selectById(
-        partition.getTenantId(), partition.getJobInstanceId());
-    if (jobInstance == null) {
-      log.debug("skip partitionId={}: job_instance missing", partition.getId());
-      return null;
-    }
-    JobDefinitionView jobDefinition = configCacheService.findEnabledJobDefinition(
-        jobInstance.getTenantId(), jobInstance.getJobCode());
-    ResourceSchedulingRequest schedulingRequest =
-        buildRequest(jobInstance, partition, task, jobDefinition);
-    ResourceSchedulingDecision decision = resourceScheduler.preview(schedulingRequest);
-    if (!decision.isDispatchable()) {
-      log.debug(
-          "skip partitionId={}: not dispatchable, reason={}, route={}",
-          partition.getId(),
-          decision.getReasonCode(),
-          decision.getRoute() == null ? "null" : decision.getRoute().getAvailable());
-      return null;
-    }
-    return new WaitingDispatchCandidate(partition, task, jobInstance, decision);
-  }
-
-  /**
-   * MDC 包装层：给 {@link #executeDispatch} 套上 tenantId / traceId / jobInstanceId 上下文， 事务边界由
-   * executeDispatch 自己管。纯粹是 ThreadLocal MDC 操作，不做 DB 调用，因此本方法 <b>不挂
-   * {@code @Transactional}</b>，避免在一个只做 MDC + 代理委派的方法上空开事务。
-   */
-  public void dispatchWaitingPartition(
-      JobPartitionEntity partition,
-      JobTaskEntity task,
-      JobInstanceEntity jobInstance,
-      ResourceSchedulingDecision decision) {
-    boolean waitingDispatchContextIncomplete = EmptyChecks.isNull(partition)
-        || task == null
-        || jobInstance == null
-        || decision == null
-        || !decision.isDispatchable();
-    if (waitingDispatchContextIncomplete) {
-      return;
-    }
-    BatchMdc.withTenantAndTrace(jobInstance.getTenantId(), jobInstance.getTraceId(), () -> {
-      BatchMdc.put(
-          StructuredLogField.JOB_INSTANCE_ID,
-          jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
-      try {
-        dispatcher.executeDispatch(partition, task, jobInstance, decision);
-      } finally {
-        BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
-      }
-    });
-  }
-
-  static ResourceSchedulingRequest buildRequest(
-      JobInstanceEntity jobInstance,
-      JobPartitionEntity partition,
-      JobTaskEntity task,
-      JobDefinitionView jobDefinition) {
-    ResourceSchedulingRequest request = new ResourceSchedulingRequest();
-    request.setTenantId(jobInstance.getTenantId());
-    request.setJobCode(jobInstance.getJobCode());
-    // workflow TASK 节点的 partition 由 SchedulePlanBuilder 按 sub-job 的 job_definition 填
-    // input_snapshot.queueCode（如 DISPATCH 节点 → dispatch_queue），与 jobInstance.queue_code
-    // （workflow 自己的 workflow_queue）不一致。优先用 partition input_snapshot 里写的 queueCode，
-    // 否则 selector 按 workflow_queue 的 resource_tag=workflow 去找 DISPATCH worker，永远不会匹配到
-    // capability_tags=[delivery] 的分发 worker → NO_AVAILABLE_WORKER 无限循环。
-    String partitionQueueCode = extractInputField(partition, "queueCode");
-    request.setQueueCode(
-        partitionQueueCode != null && !partitionQueueCode.isBlank()
-            ? partitionQueueCode
-            : jobInstance.getQueueCode());
-    request.setWorkerGroup(
-        partition.getWorkerGroup() == null
-            ? jobInstance.getWorkerGroup()
-            : partition.getWorkerGroup());
-    request.setWorkerType(task.getTaskType());
-    request.setResourceProfile(extractInputField(partition, "resourceProfile"));
-    request.setDownstreamChannelCode(firstInputField(
-        partition,
-        "downstreamChannelCode",
-        "channelCode",
-        "dispatchChannelCode",
-        "targetChannelCode"));
-    request.setRequiredCapability(
-        Boolean.TRUE.equals(partition.getDryRun()) ? WorkerCapabilities.DRY_RUN_SAFE : null);
-    request.setPriority(jobInstance.getPriority());
-    request.setRequestedPartitionCount(1);
-    request.setNewJobAdmission(
-        JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus()));
-    request.setWaitingSince(
-        partition.getUpdatedAt() == null ? partition.getCreatedAt() : partition.getUpdatedAt());
-    // windowCode 同理：优先读 partition（sub-job 的 window），否则回退到 workflow 的 job_definition
-    String partitionWindowCode = extractInputField(partition, "windowCode");
-    request.setWindowCode(
-        partitionWindowCode != null && !partitionWindowCode.isBlank()
-            ? partitionWindowCode
-            : (jobDefinition == null ? null : jobDefinition.windowCode()));
-    return request;
-  }
-
-  private static String firstInputField(JobPartitionEntity partition, String... fields) {
-    for (String field : fields) {
-      String value = extractInputField(partition, field);
-      if (EmptyChecks.isNotBlank(value)) {
-        return value;
-      }
-    }
-    return null;
-  }
-
-  /** 从 partition.input_snapshot（JSON 字符串）里抽一个顶层字符串字段。畸形 JSON 返回 null。 */
-  private static String extractInputField(JobPartitionEntity partition, String field) {
-    if (partition == null || partition.getInputSnapshot() == null) {
-      return null;
-    }
-    try {
-      Object parsed = JsonUtils.fromJson(partition.getInputSnapshot(), Object.class);
-      if (parsed instanceof Map<?, ?> map) {
-        Object v = map.get(field);
-        return v == null ? null : String.valueOf(v);
-      }
-    } catch (IllegalArgumentException ignored) {
-      SwallowedExceptionLogger.info(
-          WaitingPartitionDispatchScheduler.class, "catch:IllegalArgumentException", ignored);
-
-      // 畸形 snapshot 不阻断调度
-    }
-    return null;
-  }
-
-  private record WaitingDispatchCandidate(
-      JobPartitionEntity partition,
-      JobTaskEntity task,
-      JobInstanceEntity jobInstance,
-      ResourceSchedulingDecision decision) {
-
-    private long fairnessScore() {
-      return decision == null || decision.getFairnessScore() == null
-          ? 0L
-          : decision.getFairnessScore();
+        long cursor = scanCursor.lastPartitionId();
+        long upperId = scanCursor.cycleUpperId();
+        boolean dryRunPhase = scanCursor.dryRunPhase();
+        if (upperId == 0) {
+            upperId = jobMappers.jobPartitionMapper.selectLatestPartitionId();
+            dryRunPhase = false;
+        }
+        List<JobPartitionEntity> waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, dryRunPhase);
+        if (EmptyChecks.isEmpty(waitingPartitions) && !dryRunPhase) {
+            dryRunPhase = true;
+            cursor = 0;
+            waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, true);
+        }
+        if (EmptyChecks.isEmpty(waitingPartitions) && scanCursor.dryRunPhase()) {
+            // 旧轮次已结束；同一 tick 开始下一轮，避免空跑延迟恢复。
+            upperId = jobMappers.jobPartitionMapper.selectLatestPartitionId();
+            cursor = 0;
+            dryRunPhase = false;
+            waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, false);
+            if (EmptyChecks.isEmpty(waitingPartitions)) {
+                dryRunPhase = true;
+                waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, true);
+            }
+        }
+        long lastId = EmptyChecks.isEmpty(waitingPartitions)
+                ? 0
+                : waitingPartitions.getLast().getId();
+        boolean phaseComplete = EmptyChecks.isEmpty(waitingPartitions) || lastId >= upperId;
+        boolean nextDryRunPhase = phaseComplete ? !dryRunPhase : dryRunPhase;
+        long nextCursor = phaseComplete ? 0 : lastId;
+        long nextUpperId = phaseComplete && dryRunPhase ? 0 : upperId;
+        boolean cursorNeedsAdvance = scanCursor.lastPartitionId() != 0
+                || scanCursor.cycleUpperId() != 0
+                || EmptyChecks.isNotEmpty(waitingPartitions);
+        if (cursorNeedsAdvance
+                && jobMappers.jobPartitionMapper.advanceWaitingPartitionScanCursor(
+                                nextCursor, nextUpperId, nextDryRunPhase, scanCursor.version())
+                        != 1) {
+            log.debug("waiting partition scan cursor changed by another scheduler");
+            return List.of();
+        }
+        return waitingPartitions;
     }
 
-    private int priority() {
-      return jobInstance == null || jobInstance.getPriority() == null
-          ? 5
-          : jobInstance.getPriority();
+    private List<JobPartitionEntity> selectWaitingPage(int batchSize, long afterId, long upperId, boolean dryRun) {
+        WaitingPartitionScanQuery query =
+                new WaitingPartitionScanQuery(batchSize, PartitionStatus.WAITING.code(), afterId, upperId, dryRun);
+        return jobMappers.jobPartitionMapper.selectWaitingPartitionsGlobalInCycle(query);
     }
 
-    private boolean dryRun() {
-      return jobInstance != null && Boolean.TRUE.equals(jobInstance.getDryRun());
+    private WaitingDispatchCandidate buildCandidate(JobPartitionEntity partition) {
+        if (partition == null) {
+            return null;
+        }
+        JobTaskEntity task =
+                jobMappers.jobTaskMapper.selectByPartitionAndSeq(partition.getTenantId(), partition.getId(), 1);
+        if (task == null || !TaskStatus.CREATED.code().equals(task.getTaskStatus())) {
+            log.debug(
+                    "skip partitionId={}: task missing or not CREATED (status={})",
+                    partition.getId(),
+                    task == null ? "null" : task.getTaskStatus());
+            return null;
+        }
+        JobInstanceEntity jobInstance =
+                jobMappers.jobInstanceMapper.selectById(partition.getTenantId(), partition.getJobInstanceId());
+        if (jobInstance == null) {
+            log.debug("skip partitionId={}: job_instance missing", partition.getId());
+            return null;
+        }
+        JobDefinitionView jobDefinition =
+                configCacheService.findEnabledJobDefinition(jobInstance.getTenantId(), jobInstance.getJobCode());
+        ResourceSchedulingRequest schedulingRequest = buildRequest(jobInstance, partition, task, jobDefinition);
+        ResourceSchedulingDecision decision = resourceScheduler.preview(schedulingRequest);
+        if (!decision.isDispatchable()) {
+            log.debug(
+                    "skip partitionId={}: not dispatchable, reason={}, route={}",
+                    partition.getId(),
+                    decision.getReasonCode(),
+                    decision.getRoute() == null ? "null" : decision.getRoute().getAvailable());
+            return null;
+        }
+        return new WaitingDispatchCandidate(partition, task, jobInstance, decision);
     }
 
-    private long partitionId() {
-      return partition == null || partition.getId() == null ? Long.MAX_VALUE : partition.getId();
+    /**
+     * MDC 包装层：给 {@link #executeDispatch} 套上 tenantId / traceId / jobInstanceId 上下文， 事务边界由
+     * executeDispatch 自己管。纯粹是 ThreadLocal MDC 操作，不做 DB 调用，因此本方法 <b>不挂
+     * {@code @Transactional}</b>，避免在一个只做 MDC + 代理委派的方法上空开事务。
+     */
+    public void dispatchWaitingPartition(
+            JobPartitionEntity partition,
+            JobTaskEntity task,
+            JobInstanceEntity jobInstance,
+            ResourceSchedulingDecision decision) {
+        boolean waitingDispatchContextIncomplete = EmptyChecks.isNull(partition)
+                || task == null
+                || jobInstance == null
+                || decision == null
+                || !decision.isDispatchable();
+        if (waitingDispatchContextIncomplete) {
+            return;
+        }
+        BatchMdc.withTenantAndTrace(jobInstance.getTenantId(), jobInstance.getTraceId(), () -> {
+            BatchMdc.put(
+                    StructuredLogField.JOB_INSTANCE_ID,
+                    jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
+            try {
+                dispatcher.executeDispatch(partition, task, jobInstance, decision);
+            } finally {
+                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+            }
+        });
     }
-  }
+
+    static ResourceSchedulingRequest buildRequest(
+            JobInstanceEntity jobInstance,
+            JobPartitionEntity partition,
+            JobTaskEntity task,
+            JobDefinitionView jobDefinition) {
+        ResourceSchedulingRequest request = new ResourceSchedulingRequest();
+        request.setTenantId(jobInstance.getTenantId());
+        request.setJobCode(jobInstance.getJobCode());
+        // workflow TASK 节点的 partition 由 SchedulePlanBuilder 按 sub-job 的 job_definition 填
+        // input_snapshot.queueCode（如 DISPATCH 节点 → dispatch_queue），与 jobInstance.queue_code
+        // （workflow 自己的 workflow_queue）不一致。优先用 partition input_snapshot 里写的 queueCode，
+        // 否则 selector 按 workflow_queue 的 resource_tag=workflow 去找 DISPATCH worker，永远不会匹配到
+        // capability_tags=[delivery] 的分发 worker → NO_AVAILABLE_WORKER 无限循环。
+        String partitionQueueCode = extractInputField(partition, "queueCode");
+        request.setQueueCode(
+                partitionQueueCode != null && !partitionQueueCode.isBlank()
+                        ? partitionQueueCode
+                        : jobInstance.getQueueCode());
+        request.setWorkerGroup(
+                partition.getWorkerGroup() == null ? jobInstance.getWorkerGroup() : partition.getWorkerGroup());
+        request.setWorkerType(task.getTaskType());
+        request.setResourceProfile(extractInputField(partition, "resourceProfile"));
+        request.setDownstreamChannelCode(firstInputField(
+                partition, "downstreamChannelCode", "channelCode", "dispatchChannelCode", "targetChannelCode"));
+        request.setRequiredCapability(
+                Boolean.TRUE.equals(partition.getDryRun()) ? WorkerCapabilities.DRY_RUN_SAFE : null);
+        request.setPriority(jobInstance.getPriority());
+        request.setRequestedPartitionCount(1);
+        request.setNewJobAdmission(JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus()));
+        request.setWaitingSince(partition.getUpdatedAt() == null ? partition.getCreatedAt() : partition.getUpdatedAt());
+        // windowCode 同理：优先读 partition（sub-job 的 window），否则回退到 workflow 的 job_definition
+        String partitionWindowCode = extractInputField(partition, "windowCode");
+        request.setWindowCode(
+                partitionWindowCode != null && !partitionWindowCode.isBlank()
+                        ? partitionWindowCode
+                        : (jobDefinition == null ? null : jobDefinition.windowCode()));
+        return request;
+    }
+
+    private static String firstInputField(JobPartitionEntity partition, String... fields) {
+        for (String field : fields) {
+            String value = extractInputField(partition, field);
+            if (EmptyChecks.isNotBlank(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /** 从 partition.input_snapshot（JSON 字符串）里抽一个顶层字符串字段。畸形 JSON 返回 null。 */
+    private static String extractInputField(JobPartitionEntity partition, String field) {
+        if (partition == null || partition.getInputSnapshot() == null) {
+            return null;
+        }
+        try {
+            Object parsed = JsonUtils.fromJson(partition.getInputSnapshot(), Object.class);
+            if (parsed instanceof Map<?, ?> map) {
+                Object v = map.get(field);
+                return v == null ? null : String.valueOf(v);
+            }
+        } catch (IllegalArgumentException ignored) {
+            SwallowedExceptionLogger.info(
+                    WaitingPartitionDispatchScheduler.class, "catch:IllegalArgumentException", ignored);
+
+            // 畸形 snapshot 不阻断调度
+        }
+        return null;
+    }
+
+    private record WaitingDispatchCandidate(
+            JobPartitionEntity partition,
+            JobTaskEntity task,
+            JobInstanceEntity jobInstance,
+            ResourceSchedulingDecision decision) {
+
+        private long fairnessScore() {
+            return decision == null || decision.getFairnessScore() == null ? 0L : decision.getFairnessScore();
+        }
+
+        private int priority() {
+            return jobInstance == null || jobInstance.getPriority() == null ? 5 : jobInstance.getPriority();
+        }
+
+        private boolean dryRun() {
+            return jobInstance != null && Boolean.TRUE.equals(jobInstance.getDryRun());
+        }
+
+        private long partitionId() {
+            return partition == null || partition.getId() == null ? Long.MAX_VALUE : partition.getId();
+        }
+    }
 }

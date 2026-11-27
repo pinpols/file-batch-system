@@ -58,490 +58,482 @@ import org.springframework.kafka.test.EmbeddedKafkaKraftBroker;
  */
 public final class FakeBatchPlatform implements AutoCloseable {
 
-  /** 内嵌 broker 的派单 topic;{@link #DISPATCH_TOPIC_PATTERN} 正则匹配它。 */
-  public static final String DISPATCH_TOPIC = "batch.task.dispatch.testkit";
+    /** 内嵌 broker 的派单 topic;{@link #DISPATCH_TOPIC_PATTERN} 正则匹配它。 */
+    public static final String DISPATCH_TOPIC = "batch.task.dispatch.testkit";
 
-  /** 默认 config 的 {@code kafkaTopicPattern}(正则,匹配 {@link #DISPATCH_TOPIC})。 */
-  public static final String DISPATCH_TOPIC_PATTERN = "batch\\.task\\.dispatch\\..*";
+    /** 默认 config 的 {@code kafkaTopicPattern}(正则,匹配 {@link #DISPATCH_TOPIC})。 */
+    public static final String DISPATCH_TOPIC_PATTERN = "batch\\.task\\.dispatch\\..*";
 
-  private static final byte[] EMPTY_JSON = "{}".getBytes(StandardCharsets.UTF_8);
-  private static final String CONTENT_TYPE = "Content-Type";
-  private static final String JSON_MIME = "application/json";
-  private static final Duration ASSIGNMENT_TIMEOUT = Duration.ofSeconds(15);
+    private static final byte[] EMPTY_JSON = "{}".getBytes(StandardCharsets.UTF_8);
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String JSON_MIME = "application/json";
+    private static final Duration ASSIGNMENT_TIMEOUT = Duration.ofSeconds(15);
 
-  private final EmbeddedKafkaBroker broker;
-  private final HttpServer httpServer;
-  private final String baseUrl;
-  private final String kafkaBootstrap;
-  private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private final EmbeddedKafkaBroker broker;
+    private final HttpServer httpServer;
+    private final String baseUrl;
+    private final String kafkaBootstrap;
+    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
-  private final Map<Long, RecordedReport> reports = new ConcurrentHashMap<>();
-  /** 租户和载荷作为同一派单快照发布，避免读到部分写入。 */
-  private record DispatchedTask(String tenantId, String payload) {}
+    private final Map<Long, RecordedReport> reports = new ConcurrentHashMap<>();
+    /** 租户和载荷作为同一派单快照发布，避免读到部分写入。 */
+    private record DispatchedTask(String tenantId, String payload) {}
 
-  private final Map<Long, DispatchedTask> dispatchedTasks = new ConcurrentHashMap<>();
+    private final Map<Long, DispatchedTask> dispatchedTasks = new ConcurrentHashMap<>();
 
-  private final List<Map<String, Object>> registrations = new CopyOnWriteArrayList<>();
-  private final List<Long> claims = new CopyOnWriteArrayList<>();
+    private final List<Map<String, Object>> registrations = new CopyOnWriteArrayList<>();
+    private final List<Long> claims = new CopyOnWriteArrayList<>();
 
-  /** CLAIM 身份由平台产生，不能采信 Kafka 消息或认领请求里的旧 invocation。 */
-  private record ClaimedExecution(
-      String tenantId, String workerId, String invocationId, String payload, boolean completed) {}
+    /** CLAIM 身份由平台产生，不能采信 Kafka 消息或认领请求里的旧 invocation。 */
+    private record ClaimedExecution(
+            String tenantId, String workerId, String invocationId, String payload, boolean completed) {}
 
-  private final Map<Long, ClaimedExecution> claimedExecutions = new ConcurrentHashMap<>();
-  private final Map<Long, String> nonIdempotentStarts = new ConcurrentHashMap<>();
+    private final Map<Long, ClaimedExecution> claimedExecutions = new ConcurrentHashMap<>();
+    private final Map<Long, String> nonIdempotentStarts = new ConcurrentHashMap<>();
 
-  private final AtomicReference<Producer<String, byte[]>> producer = new AtomicReference<>();
+    private final AtomicReference<Producer<String, byte[]>> producer = new AtomicReference<>();
 
-  private FakeBatchPlatform(
-      EmbeddedKafkaBroker broker, HttpServer httpServer, String baseUrl, String kafkaBootstrap) {
-    this.broker = broker;
-    this.httpServer = httpServer;
-    this.baseUrl = baseUrl;
-    this.kafkaBootstrap = kafkaBootstrap;
-  }
-
-  /** 起内嵌 broker + HTTP stub。调用方负责 {@link #close()}(或用 {@link BatchWorkerTest} 托管)。 */
-  public static FakeBatchPlatform start() {
-    EmbeddedKafkaBroker broker = new EmbeddedKafkaKraftBroker(1, 1, DISPATCH_TOPIC);
-    // 首次 rebalance 不等默认 3s,让 test 在秒级内拿到 partition assignment。
-    broker.brokerProperties(Map.of("group.initial.rebalance.delay.ms", "0"));
-    try {
-      broker.afterPropertiesSet();
-    } catch (Exception e) {
-      throw new IllegalStateException("embedded kafka start failed", e);
+    private FakeBatchPlatform(
+            EmbeddedKafkaBroker broker, HttpServer httpServer, String baseUrl, String kafkaBootstrap) {
+        this.broker = broker;
+        this.httpServer = httpServer;
+        this.baseUrl = baseUrl;
+        this.kafkaBootstrap = kafkaBootstrap;
     }
-    HttpServer server;
-    try {
-      server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    } catch (IOException e) {
-      broker.destroy();
-      throw new IllegalStateException("http stub start failed", e);
-    }
-    String url = "http://127.0.0.1:" + server.getAddress().getPort();
-    FakeBatchPlatform platform =
-        new FakeBatchPlatform(broker, server, url, broker.getBrokersAsString());
-    server.createContext("/internal/", platform::handleHttp);
-    server.setExecutor(Executors.newFixedThreadPool(4));
-    server.start();
-    return platform;
-  }
 
-  // ─── 配置 ───────────────────────────────────────────────────────────────────
-
-  /** 预接好两端的 config builder;租户可继续覆盖(如 maxConcurrentTasks)再 {@code build()}。 */
-  public BatchPlatformClientConfigBuilder configBuilder(String tenantId, String workerCode) {
-    return BatchPlatformClientConfig.builder()
-        .baseUrl(baseUrl)
-        .tenantId(tenantId)
-        .workerCode(workerCode)
-        .kafkaBootstrap(kafkaBootstrap)
-        .kafkaTopicPattern(DISPATCH_TOPIC_PATTERN)
-        .kafkaGroupId("testkit-" + workerCode)
-        .heartbeatInterval(Duration.ofSeconds(30))
-        .leaseRenewInterval(Duration.ofSeconds(30))
-        .kafkaPollInterval(Duration.ofMillis(100));
-  }
-
-  /** 预接好两端的 config(默认参数)。 */
-  public BatchPlatformClientConfig configFor(String tenantId, String workerCode) {
-    return configBuilder(tenantId, workerCode).build();
-  }
-
-  // ─── 派单 ───────────────────────────────────────────────────────────────────
-
-  /**
-   * 投一条派单消息给 SDK consumer。该辅助入口等待 partition assignment 后发送，
-   * 便于测试就绪状态；SDK 无提交位点时从 earliest 读取，先派单后启动由真实 Kafka E2E 覆盖。
-   */
-  public void dispatch(TaskDispatchMessage msg) {
-    if (EmptyChecks.isNull(msg)
-        || EmptyChecks.isNull(msg.taskId())
-        || EmptyChecks.isBlank(msg.tenantId())) {
-      throw new IllegalArgumentException("taskId and tenantId are required");
-    }
-    awaitTopicAssignment(ASSIGNMENT_TIMEOUT);
-    sleepQuietly(250); // assignment 可见后为消费者完成首次 poll 保留既有缓冲
-    byte[] payload;
-    try {
-      payload = objectMapper.writeValueAsBytes(msg);
-      Long taskId = msg.taskId();
-      String parametersJson = objectMapper.writeValueAsString(msg.parameters());
-      dispatchedTasks.put(taskId, new DispatchedTask(msg.tenantId(), parametersJson));
-    } catch (IOException e) {
-      throw new IllegalArgumentException("cannot serialize dispatch message", e);
-    }
-    String key = msg.taskId() == null ? null : String.valueOf(msg.taskId());
-    try {
-      producer().send(new ProducerRecord<>(DISPATCH_TOPIC, key, payload)).get();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException("dispatch interrupted", e);
-    } catch (ExecutionException e) {
-      throw new IllegalStateException("dispatch send failed", e);
-    }
-  }
-
-  /** 将已完成的任务显式重置为可认领状态；保留最后一次派单快照，不自动发送新消息。 */
-  public void requeue(Long taskId) {
-    if (EmptyChecks.isNull(taskId)) {
-      throw new IllegalArgumentException("taskId is required");
-    }
-    AtomicBoolean reset = new AtomicBoolean();
-    claimedExecutions.computeIfPresent(taskId, (id, current) -> {
-      if (!current.completed()) {
-        return current;
-      }
-      reports.remove(id);
-      nonIdempotentStarts.remove(id);
-      reset.set(true);
-      return null;
-    });
-    if (!reset.get()) {
-      throw new IllegalStateException("task is not completed: " + taskId);
-    }
-  }
-
-  /** 阻塞等待某 taskId 的 report 到达,超时抛 {@link AssertionError}(测试断言友好)。 */
-  public RecordedReport awaitReport(long taskId, Duration timeout) {
-    long deadline = System.nanoTime() + timeout.toNanos();
-    while (System.nanoTime() < deadline) {
-      RecordedReport report = reports.get(taskId);
-      if (report != null) {
-        return report;
-      }
-      sleepQuietly(50);
-    }
-    throw new AssertionError("no report for taskId=" + taskId + " within " + timeout);
-  }
-
-  // ─── 录制读取 ─────────────────────────────────────────────────────────────────
-
-  public String baseUrl() {
-    return baseUrl;
-  }
-
-  public String kafkaBootstrap() {
-    return kafkaBootstrap;
-  }
-
-  public String topic() {
-    return DISPATCH_TOPIC;
-  }
-
-  /** 收到的 register body 快照列表(按到达顺序)。 */
-  public List<Map<String, Object>> registrations() {
-    return List.copyOf(registrations);
-  }
-
-  /** 收到的 CLAIM 的 taskId 列表(按到达顺序)。 */
-  public List<Long> claims() {
-    return List.copyOf(claims);
-  }
-
-  /** 已确认的非幂等开始快照(taskId → 当前调用标识)。 */
-  public Map<Long, String> nonIdempotentStarts() {
-    return Map.copyOf(nonIdempotentStarts);
-  }
-
-  /** 已收到的 report 快照(taskId → report)。 */
-  public Map<Long, RecordedReport> reports() {
-    return Map.copyOf(reports);
-  }
-
-  // ─── HTTP stub ───────────────────────────────────────────────────────────────
-
-  private void handleHttp(HttpExchange exchange) throws IOException {
-    String path = exchange.getRequestURI().getPath();
-    try {
-      boolean supported = path.equals("/internal/workers/register")
-          || path.matches("/internal/workers/[^/]+/(heartbeat|deactivate)")
-          || path.matches("/internal/tasks/[^/]+/(claim|report|renew|non-idempotent-started)");
-      if (!supported) {
-        respond(exchange, 404);
-        return;
-      }
-      if (!"POST".equals(exchange.getRequestMethod())) {
-        respond(exchange, 405);
-        return;
-      }
-      if (path.endsWith("/register")) {
-        Map<String, Object> registration = readBody(exchange);
-        registrations.add(registration);
-      } else if (path.endsWith("/report")) {
-        Map<String, Object> body = readBody(exchange);
-        if (!recordReport(taskIdFromPath(path), body)) {
-          respond(exchange, 409);
-          return;
+    /** 起内嵌 broker + HTTP stub。调用方负责 {@link #close()}(或用 {@link BatchWorkerTest} 托管)。 */
+    public static FakeBatchPlatform start() {
+        EmbeddedKafkaBroker broker = new EmbeddedKafkaKraftBroker(1, 1, DISPATCH_TOPIC);
+        // 首次 rebalance 不等默认 3s,让 test 在秒级内拿到 partition assignment。
+        broker.brokerProperties(Map.of("group.initial.rebalance.delay.ms", "0"));
+        try {
+            broker.afterPropertiesSet();
+        } catch (Exception e) {
+            throw new IllegalStateException("embedded kafka start failed", e);
         }
-      } else if (path.endsWith("/claim")) {
+        HttpServer server;
+        try {
+            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        } catch (IOException e) {
+            broker.destroy();
+            throw new IllegalStateException("http stub start failed", e);
+        }
+        String url = "http://127.0.0.1:" + server.getAddress().getPort();
+        FakeBatchPlatform platform = new FakeBatchPlatform(broker, server, url, broker.getBrokersAsString());
+        server.createContext("/internal/", platform::handleHttp);
+        server.setExecutor(Executors.newFixedThreadPool(4));
+        server.start();
+        return platform;
+    }
+
+    // ─── 配置 ───────────────────────────────────────────────────────────────────
+
+    /** 预接好两端的 config builder;租户可继续覆盖(如 maxConcurrentTasks)再 {@code build()}。 */
+    public BatchPlatformClientConfigBuilder configBuilder(String tenantId, String workerCode) {
+        return BatchPlatformClientConfig.builder()
+                .baseUrl(baseUrl)
+                .tenantId(tenantId)
+                .workerCode(workerCode)
+                .kafkaBootstrap(kafkaBootstrap)
+                .kafkaTopicPattern(DISPATCH_TOPIC_PATTERN)
+                .kafkaGroupId("testkit-" + workerCode)
+                .heartbeatInterval(Duration.ofSeconds(30))
+                .leaseRenewInterval(Duration.ofSeconds(30))
+                .kafkaPollInterval(Duration.ofMillis(100));
+    }
+
+    /** 预接好两端的 config(默认参数)。 */
+    public BatchPlatformClientConfig configFor(String tenantId, String workerCode) {
+        return configBuilder(tenantId, workerCode).build();
+    }
+
+    // ─── 派单 ───────────────────────────────────────────────────────────────────
+
+    /**
+     * 投一条派单消息给 SDK consumer。该辅助入口等待 partition assignment 后发送，
+     * 便于测试就绪状态；SDK 无提交位点时从 earliest 读取，先派单后启动由真实 Kafka E2E 覆盖。
+     */
+    public void dispatch(TaskDispatchMessage msg) {
+        if (EmptyChecks.isNull(msg) || EmptyChecks.isNull(msg.taskId()) || EmptyChecks.isBlank(msg.tenantId())) {
+            throw new IllegalArgumentException("taskId and tenantId are required");
+        }
+        awaitTopicAssignment(ASSIGNMENT_TIMEOUT);
+        sleepQuietly(250); // assignment 可见后为消费者完成首次 poll 保留既有缓冲
+        byte[] payload;
+        try {
+            payload = objectMapper.writeValueAsBytes(msg);
+            Long taskId = msg.taskId();
+            String parametersJson = objectMapper.writeValueAsString(msg.parameters());
+            dispatchedTasks.put(taskId, new DispatchedTask(msg.tenantId(), parametersJson));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("cannot serialize dispatch message", e);
+        }
+        String key = msg.taskId() == null ? null : String.valueOf(msg.taskId());
+        try {
+            producer().send(new ProducerRecord<>(DISPATCH_TOPIC, key, payload)).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("dispatch interrupted", e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("dispatch send failed", e);
+        }
+    }
+
+    /** 将已完成的任务显式重置为可认领状态；保留最后一次派单快照，不自动发送新消息。 */
+    public void requeue(Long taskId) {
+        if (EmptyChecks.isNull(taskId)) {
+            throw new IllegalArgumentException("taskId is required");
+        }
+        AtomicBoolean reset = new AtomicBoolean();
+        claimedExecutions.computeIfPresent(taskId, (id, current) -> {
+            if (!current.completed()) {
+                return current;
+            }
+            reports.remove(id);
+            nonIdempotentStarts.remove(id);
+            reset.set(true);
+            return null;
+        });
+        if (!reset.get()) {
+            throw new IllegalStateException("task is not completed: " + taskId);
+        }
+    }
+
+    /** 阻塞等待某 taskId 的 report 到达,超时抛 {@link AssertionError}(测试断言友好)。 */
+    public RecordedReport awaitReport(long taskId, Duration timeout) {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            RecordedReport report = reports.get(taskId);
+            if (report != null) {
+                return report;
+            }
+            sleepQuietly(50);
+        }
+        throw new AssertionError("no report for taskId=" + taskId + " within " + timeout);
+    }
+
+    // ─── 录制读取 ─────────────────────────────────────────────────────────────────
+
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    public String kafkaBootstrap() {
+        return kafkaBootstrap;
+    }
+
+    public String topic() {
+        return DISPATCH_TOPIC;
+    }
+
+    /** 收到的 register body 快照列表(按到达顺序)。 */
+    public List<Map<String, Object>> registrations() {
+        return List.copyOf(registrations);
+    }
+
+    /** 收到的 CLAIM 的 taskId 列表(按到达顺序)。 */
+    public List<Long> claims() {
+        return List.copyOf(claims);
+    }
+
+    /** 已确认的非幂等开始快照(taskId → 当前调用标识)。 */
+    public Map<Long, String> nonIdempotentStarts() {
+        return Map.copyOf(nonIdempotentStarts);
+    }
+
+    /** 已收到的 report 快照(taskId → report)。 */
+    public Map<Long, RecordedReport> reports() {
+        return Map.copyOf(reports);
+    }
+
+    // ─── HTTP stub ───────────────────────────────────────────────────────────────
+
+    private void handleHttp(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+        try {
+            boolean supported = path.equals("/internal/workers/register")
+                    || path.matches("/internal/workers/[^/]+/(heartbeat|deactivate)")
+                    || path.matches("/internal/tasks/[^/]+/(claim|report|renew|non-idempotent-started)");
+            if (!supported) {
+                respond(exchange, 404);
+                return;
+            }
+            if (!"POST".equals(exchange.getRequestMethod())) {
+                respond(exchange, 405);
+                return;
+            }
+            if (path.endsWith("/register")) {
+                Map<String, Object> registration = readBody(exchange);
+                registrations.add(registration);
+            } else if (path.endsWith("/report")) {
+                Map<String, Object> body = readBody(exchange);
+                if (!recordReport(taskIdFromPath(path), body)) {
+                    respond(exchange, 409);
+                    return;
+                }
+            } else if (path.endsWith("/claim")) {
+                Long taskId = taskIdFromPath(path);
+                Map<String, Object> claimBody = readBody(exchange);
+                ClaimedExecution claimed = claimExecution(taskId, claimBody);
+                if (EmptyChecks.isNull(claimed)) {
+                    respond(exchange, 409);
+                    return;
+                }
+                claims.add(taskId);
+                respondWithClaimPayload(exchange, claimed.payload(), claimed.invocationId());
+                return;
+            } else if (path.endsWith("/non-idempotent-started")) {
+                Map<String, Object> body = readBody(exchange);
+                if (!recordStart(taskIdFromPath(path), body)) {
+                    respond(exchange, 409);
+                    return;
+                }
+            } else if (path.endsWith("/renew")) {
+                Map<String, Object> body = readBody(exchange);
+                if (!hasCurrentClaimOwner(path, body, true)) {
+                    respond(exchange, 409);
+                    return;
+                }
+            } else {
+                readBody(exchange); // heartbeat / deactivate:消费 body 后 200
+            }
+            respond(exchange, 200);
+        } catch (RuntimeException e) {
+            respond(exchange, 500);
+        }
+    }
+
+    private ClaimedExecution claimExecution(Long taskId, Map<String, Object> body) {
+        String tenantId = asString(body.get("tenantId"));
+        String workerId = asString(body.get("workerId"));
+        DispatchedTask dispatched = EmptyChecks.isNull(taskId) ? null : dispatchedTasks.get(taskId);
+        if (EmptyChecks.isNull(dispatched)
+                || !dispatched.tenantId().equals(tenantId)
+                || EmptyChecks.isBlank(workerId)) {
+            return null;
+        }
+        ClaimedExecution candidate =
+                new ClaimedExecution(tenantId, workerId, UUID.randomUUID().toString(), dispatched.payload(), false);
+        AtomicReference<ClaimedExecution> accepted = new AtomicReference<>();
+        claimedExecutions.compute(taskId, (id, existing) -> {
+            ClaimedExecution current = EmptyChecks.isNull(existing) ? candidate : existing;
+            if (!current.completed()
+                    && current.tenantId().equals(tenantId)
+                    && current.workerId().equals(workerId)) {
+                accepted.set(current);
+            }
+            return current;
+        });
+        return accepted.get();
+    }
+
+    private boolean hasCurrentClaimOwner(String path, Map<String, Object> body, boolean requireRunning) {
         Long taskId = taskIdFromPath(path);
-        Map<String, Object> claimBody = readBody(exchange);
-        ClaimedExecution claimed = claimExecution(taskId, claimBody);
-        if (EmptyChecks.isNull(claimed)) {
-          respond(exchange, 409);
-          return;
+        if (EmptyChecks.isNull(taskId)) {
+            return false;
         }
-        claims.add(taskId);
-        respondWithClaimPayload(exchange, claimed.payload(), claimed.invocationId());
-        return;
-      } else if (path.endsWith("/non-idempotent-started")) {
-        Map<String, Object> body = readBody(exchange);
-        if (!recordStart(taskIdFromPath(path), body)) {
-          respond(exchange, 409);
-          return;
+        ClaimedExecution current = claimedExecutions.get(taskId);
+        return isCurrentClaimOwner(current, body, requireRunning);
+    }
+
+    private boolean isCurrentClaimOwner(ClaimedExecution current, Map<String, Object> body, boolean requireRunning) {
+        String bodyTenantId = asString(body.get("tenantId"));
+        String bodyWorkerId = asString(body.get("workerId"));
+        String bodyInvocationId = asString(body.get("partitionInvocationId"));
+        return EmptyChecks.isNotNull(current)
+                && (!requireRunning || !current.completed())
+                && current.tenantId().equals(bodyTenantId)
+                && current.workerId().equals(bodyWorkerId)
+                && current.invocationId().equals(bodyInvocationId);
+    }
+
+    private boolean recordStart(Long taskId, Map<String, Object> body) {
+        if (EmptyChecks.isNull(taskId)) return false;
+        AtomicBoolean accepted = new AtomicBoolean();
+        claimedExecutions.computeIfPresent(taskId, (id, current) -> {
+            if (isCurrentClaimOwner(current, body, true)) {
+                nonIdempotentStarts.put(id, current.invocationId());
+                accepted.set(true);
+            }
+            return current;
+        });
+        return accepted.get();
+    }
+
+    private boolean recordReport(Long taskId, Map<String, Object> body) {
+        if (EmptyChecks.isNull(taskId)) return false;
+        boolean success = Boolean.TRUE.equals(body.get("success"));
+        String message = asString(body.get("message"));
+        Map<String, Object> outputs = asMap(body.get("outputs"));
+        String errorCode = asString(body.get("errorCode"));
+        AtomicBoolean accepted = new AtomicBoolean();
+        claimedExecutions.computeIfPresent(taskId, (id, current) -> {
+            if (!isCurrentClaimOwner(current, body, false)) {
+                return current;
+            }
+            accepted.set(true);
+            if (current.completed()) {
+                return current;
+            }
+            reports.put(taskId, new RecordedReport(taskId, success, message, outputs, errorCode, body));
+            return new ClaimedExecution(
+                    current.tenantId(), current.workerId(), current.invocationId(), current.payload(), true);
+        });
+        return accepted.get();
+    }
+
+    private Map<String, Object> readBody(HttpExchange exchange) {
+        try (InputStream in = exchange.getRequestBody()) {
+            byte[] bytes = in.readAllBytes();
+            if (bytes.length == 0) {
+                return Map.of();
+            }
+            return parseMap(bytes);
+        } catch (IOException e) {
+            return Map.of();
         }
-      } else if (path.endsWith("/renew")) {
-        Map<String, Object> body = readBody(exchange);
-        if (!hasCurrentClaimOwner(path, body, true)) {
-          respond(exchange, 409);
-          return;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseMap(byte[] bytes) throws IOException {
+        return objectMapper.readValue(bytes, Map.class);
+    }
+
+    private static void respond(HttpExchange exchange, int status) throws IOException {
+        exchange.getResponseHeaders().add(CONTENT_TYPE, JSON_MIME);
+        exchange.sendResponseHeaders(status, EMPTY_JSON.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(EMPTY_JSON);
         }
-      } else {
-        readBody(exchange); // heartbeat / deactivate:消费 body 后 200
-      }
-      respond(exchange, 200);
-    } catch (RuntimeException e) {
-      respond(exchange, 500);
     }
-  }
 
-  private ClaimedExecution claimExecution(Long taskId, Map<String, Object> body) {
-    String tenantId = asString(body.get("tenantId"));
-    String workerId = asString(body.get("workerId"));
-    DispatchedTask dispatched = EmptyChecks.isNull(taskId) ? null : dispatchedTasks.get(taskId);
-    if (EmptyChecks.isNull(dispatched)
-        || !dispatched.tenantId().equals(tenantId)
-        || EmptyChecks.isBlank(workerId)) {
-      return null;
-    }
-    ClaimedExecution candidate = new ClaimedExecution(
-        tenantId, workerId, UUID.randomUUID().toString(), dispatched.payload(), false);
-    AtomicReference<ClaimedExecution> accepted = new AtomicReference<>();
-    claimedExecutions.compute(taskId, (id, existing) -> {
-      ClaimedExecution current = EmptyChecks.isNull(existing) ? candidate : existing;
-      if (!current.completed()
-          && current.tenantId().equals(tenantId)
-          && current.workerId().equals(workerId)) {
-        accepted.set(current);
-      }
-      return current;
-    });
-    return accepted.get();
-  }
-
-  private boolean hasCurrentClaimOwner(
-      String path, Map<String, Object> body, boolean requireRunning) {
-    Long taskId = taskIdFromPath(path);
-    if (EmptyChecks.isNull(taskId)) {
-      return false;
-    }
-    ClaimedExecution current = claimedExecutions.get(taskId);
-    return isCurrentClaimOwner(current, body, requireRunning);
-  }
-
-  private boolean isCurrentClaimOwner(
-      ClaimedExecution current, Map<String, Object> body, boolean requireRunning) {
-    String bodyTenantId = asString(body.get("tenantId"));
-    String bodyWorkerId = asString(body.get("workerId"));
-    String bodyInvocationId = asString(body.get("partitionInvocationId"));
-    return EmptyChecks.isNotNull(current)
-        && (!requireRunning || !current.completed())
-        && current.tenantId().equals(bodyTenantId)
-        && current.workerId().equals(bodyWorkerId)
-        && current.invocationId().equals(bodyInvocationId);
-  }
-
-  private boolean recordStart(Long taskId, Map<String, Object> body) {
-    if (EmptyChecks.isNull(taskId)) return false;
-    AtomicBoolean accepted = new AtomicBoolean();
-    claimedExecutions.computeIfPresent(taskId, (id, current) -> {
-      if (isCurrentClaimOwner(current, body, true)) {
-        nonIdempotentStarts.put(id, current.invocationId());
-        accepted.set(true);
-      }
-      return current;
-    });
-    return accepted.get();
-  }
-
-  private boolean recordReport(Long taskId, Map<String, Object> body) {
-    if (EmptyChecks.isNull(taskId)) return false;
-    boolean success = Boolean.TRUE.equals(body.get("success"));
-    String message = asString(body.get("message"));
-    Map<String, Object> outputs = asMap(body.get("outputs"));
-    String errorCode = asString(body.get("errorCode"));
-    AtomicBoolean accepted = new AtomicBoolean();
-    claimedExecutions.computeIfPresent(taskId, (id, current) -> {
-      if (!isCurrentClaimOwner(current, body, false)) {
-        return current;
-      }
-      accepted.set(true);
-      if (current.completed()) {
-        return current;
-      }
-      reports.put(taskId, new RecordedReport(taskId, success, message, outputs, errorCode, body));
-      return new ClaimedExecution(
-          current.tenantId(), current.workerId(), current.invocationId(), current.payload(), true);
-    });
-    return accepted.get();
-  }
-
-  private Map<String, Object> readBody(HttpExchange exchange) {
-    try (InputStream in = exchange.getRequestBody()) {
-      byte[] bytes = in.readAllBytes();
-      if (bytes.length == 0) {
-        return Map.of();
-      }
-      return parseMap(bytes);
-    } catch (IOException e) {
-      return Map.of();
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  private Map<String, Object> parseMap(byte[] bytes) throws IOException {
-    return objectMapper.readValue(bytes, Map.class);
-  }
-
-  private static void respond(HttpExchange exchange, int status) throws IOException {
-    exchange.getResponseHeaders().add(CONTENT_TYPE, JSON_MIME);
-    exchange.sendResponseHeaders(status, EMPTY_JSON.length);
-    try (OutputStream os = exchange.getResponseBody()) {
-      os.write(EMPTY_JSON);
-    }
-  }
-
-  private void respondWithClaimPayload(HttpExchange exchange, String payload, String invocationId)
-      throws IOException {
-    Map<String, Object> body = Map.of(
-        "payload",
-        EmptyChecks.isNull(payload) ? "{}" : payload,
-        "partitionInvocationId",
-        invocationId);
-    byte[] response = objectMapper.writeValueAsBytes(body);
-    exchange.getResponseHeaders().add(CONTENT_TYPE, JSON_MIME);
-    exchange.sendResponseHeaders(200, response.length);
-    try (OutputStream os = exchange.getResponseBody()) {
-      os.write(response);
-    }
-  }
-
-  private static Long taskIdFromPath(String path) {
-    String[] parts = path.split("/");
-    for (int i = 0; i < parts.length - 1; i++) {
-      if ("tasks".equals(parts[i])) {
-        return parseLong(parts[i + 1]);
-      }
-    }
-    return null;
-  }
-
-  // ─── Kafka 辅助 ───────────────────────────────────────────────────────────────
-
-  private void awaitTopicAssignment(Duration timeout) {
-    Properties props = new Properties();
-    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrap);
-    long deadline = System.nanoTime() + timeout.toNanos();
-    try (Admin admin = Admin.create(props)) {
-      while (System.nanoTime() < deadline) {
-        if (hasAssignedConsumer(admin)) {
-          return;
+    private void respondWithClaimPayload(HttpExchange exchange, String payload, String invocationId)
+            throws IOException {
+        Map<String, Object> body =
+                Map.of("payload", EmptyChecks.isNull(payload) ? "{}" : payload, "partitionInvocationId", invocationId);
+        byte[] response = objectMapper.writeValueAsBytes(body);
+        exchange.getResponseHeaders().add(CONTENT_TYPE, JSON_MIME);
+        exchange.sendResponseHeaders(200, response.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(response);
         }
-        sleepQuietly(100);
-      }
     }
-    throw new IllegalStateException("no SDK consumer assigned to topic "
-        + DISPATCH_TOPIC
-        + " within "
-        + timeout
-        + "; did you call client.start() before dispatch()?");
-  }
 
-  private boolean hasAssignedConsumer(Admin admin) {
-    try {
-      Collection<GroupListing> groups = admin.listGroups().all().get();
-      List<String> ids = groups.stream().map(GroupListing::groupId).toList();
-      if (ids.isEmpty()) {
+    private static Long taskIdFromPath(String path) {
+        String[] parts = path.split("/");
+        for (int i = 0; i < parts.length - 1; i++) {
+            if ("tasks".equals(parts[i])) {
+                return parseLong(parts[i + 1]);
+            }
+        }
+        return null;
+    }
+
+    // ─── Kafka 辅助 ───────────────────────────────────────────────────────────────
+
+    private void awaitTopicAssignment(Duration timeout) {
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrap);
+        long deadline = System.nanoTime() + timeout.toNanos();
+        try (Admin admin = Admin.create(props)) {
+            while (System.nanoTime() < deadline) {
+                if (hasAssignedConsumer(admin)) {
+                    return;
+                }
+                sleepQuietly(100);
+            }
+        }
+        throw new IllegalStateException("no SDK consumer assigned to topic "
+                + DISPATCH_TOPIC
+                + " within "
+                + timeout
+                + "; did you call client.start() before dispatch()?");
+    }
+
+    private boolean hasAssignedConsumer(Admin admin) {
+        try {
+            Collection<GroupListing> groups = admin.listGroups().all().get();
+            List<String> ids = groups.stream().map(GroupListing::groupId).toList();
+            if (ids.isEmpty()) {
+                return false;
+            }
+            Map<String, ConsumerGroupDescription> described =
+                    admin.describeConsumerGroups(ids).all().get();
+            return described.values().stream().anyMatch(FakeBatchPlatform::ownsDispatchTopic);
+        } catch (ExecutionException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private static boolean ownsDispatchTopic(ConsumerGroupDescription group) {
+        for (MemberDescription member : group.members()) {
+            for (TopicPartition tp : member.assignment().topicPartitions()) {
+                if (DISPATCH_TOPIC.equals(tp.topic())) {
+                    return true;
+                }
+            }
+        }
         return false;
-      }
-      Map<String, ConsumerGroupDescription> described =
-          admin.describeConsumerGroups(ids).all().get();
-      return described.values().stream().anyMatch(FakeBatchPlatform::ownsDispatchTopic);
-    } catch (ExecutionException e) {
-      return false;
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      return false;
     }
-  }
 
-  private static boolean ownsDispatchTopic(ConsumerGroupDescription group) {
-    for (MemberDescription member : group.members()) {
-      for (TopicPartition tp : member.assignment().topicPartitions()) {
-        if (DISPATCH_TOPIC.equals(tp.topic())) {
-          return true;
+    private synchronized Producer<String, byte[]> producer() {
+        Producer<String, byte[]> current = producer.get();
+        if (current == null) {
+            Properties props = new Properties();
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrap);
+            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+            props.put(ProducerConfig.ACKS_CONFIG, "all");
+            current = new KafkaProducer<>(props);
+            producer.set(current);
         }
-      }
+        return current;
     }
-    return false;
-  }
 
-  private synchronized Producer<String, byte[]> producer() {
-    Producer<String, byte[]> current = producer.get();
-    if (current == null) {
-      Properties props = new Properties();
-      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrap);
-      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-      props.put(ProducerConfig.ACKS_CONFIG, "all");
-      current = new KafkaProducer<>(props);
-      producer.set(current);
+    // ─── 杂项 ─────────────────────────────────────────────────────────────────────
+
+    @Override
+    public void close() {
+        Producer<String, byte[]> current = producer.getAndSet(null);
+        if (current != null) {
+            try {
+                current.close(Duration.ofSeconds(2));
+            } catch (RuntimeException ignored) {
+                // 关闭 producer 失败不应淹没测试结果
+            }
+        }
+        httpServer.stop(0);
+        if (httpServer.getExecutor() instanceof ExecutorService es) {
+            es.shutdownNow();
+        }
+        broker.destroy();
     }
-    return current;
-  }
 
-  // ─── 杂项 ─────────────────────────────────────────────────────────────────────
-
-  @Override
-  public void close() {
-    Producer<String, byte[]> current = producer.getAndSet(null);
-    if (current != null) {
-      try {
-        current.close(Duration.ofSeconds(2));
-      } catch (RuntimeException ignored) {
-        // 关闭 producer 失败不应淹没测试结果
-      }
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
-    httpServer.stop(0);
-    if (httpServer.getExecutor() instanceof ExecutorService es) {
-      es.shutdownNow();
+
+    private static String asString(Object value) {
+        return value == null ? null : value.toString();
     }
-    broker.destroy();
-  }
 
-  private static void sleepQuietly(long millis) {
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(Object value) {
+        return value instanceof Map<?, ?> m ? Map.copyOf((Map<String, Object>) m) : Map.of();
     }
-  }
 
-  private static String asString(Object value) {
-    return value == null ? null : value.toString();
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> asMap(Object value) {
-    return value instanceof Map<?, ?> m ? Map.copyOf((Map<String, Object>) m) : Map.of();
-  }
-
-  private static Long parseLong(String s) {
-    try {
-      return Long.valueOf(s);
-    } catch (NumberFormatException e) {
-      return null;
+    private static Long parseLong(String s) {
+        try {
+            return Long.valueOf(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
-  }
 }

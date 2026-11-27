@@ -39,72 +39,67 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleUserAccountController {
 
-  private final ConsoleUserAccountService userAccountService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleUserAccountService userAccountService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping
-  public CommonResponse<PageResponse<ConsoleUserAccountResponse>> list(
-      @RequestParam(required = false) String tenantId,
-      @RequestParam(required = false) String keyword,
-      @RequestParam(required = false) Boolean enabled,
-      @RequestParam(defaultValue = "1") int pageNo,
-      @RequestParam(defaultValue = "20") int pageSize) {
-    PageRequest pageRequest = new PageRequest(pageNo, pageSize);
-    return responseFactory.success(
-        userAccountService.list(tenantId, keyword, enabled, pageRequest));
-  }
+    @GetMapping
+    public CommonResponse<PageResponse<ConsoleUserAccountResponse>> list(
+            @RequestParam(required = false) String tenantId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Boolean enabled,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        PageRequest pageRequest = new PageRequest(pageNo, pageSize);
+        return responseFactory.success(userAccountService.list(tenantId, keyword, enabled, pageRequest));
+    }
 
-  @GetMapping("/{id}")
-  public CommonResponse<ConsoleUserAccountResponse> get(@PathVariable long id) {
-    return responseFactory.success(userAccountService.get(id));
-  }
+    @GetMapping("/{id}")
+    public CommonResponse<ConsoleUserAccountResponse> get(@PathVariable long id) {
+        return responseFactory.success(userAccountService.get(id));
+    }
 
-  @PostMapping
-  @AuditAction(
-      action = "user.create",
-      aggregateType = "user_account",
-      targetTenantParam = "#request.tenantId")
-  public CommonResponse<ConsoleUserAccountResponse> create(
-      @Validated @RequestBody CreateUserAccountRequest request) {
-    ConsoleUserAccountResponse account = userAccountService.create(
-        request.getTenantId(),
-        request.getUsername(),
-        request.getPassword(),
-        request.getDisplayName(),
-        request.getAuthoritiesCsv());
-    return responseFactory.success(account);
-  }
+    @PostMapping
+    @AuditAction(action = "user.create", aggregateType = "user_account", targetTenantParam = "#request.tenantId")
+    public CommonResponse<ConsoleUserAccountResponse> create(@Validated @RequestBody CreateUserAccountRequest request) {
+        ConsoleUserAccountResponse account = userAccountService.create(
+                request.getTenantId(),
+                request.getUsername(),
+                request.getPassword(),
+                request.getDisplayName(),
+                request.getAuthoritiesCsv());
+        return responseFactory.success(account);
+    }
 
-  @PutMapping("/{id}")
-  @AuditAction(action = "user.update", aggregateType = "user_account", aggregateId = "#id")
-  public CommonResponse<ConsoleUserAccountResponse> update(
-      @PathVariable long id, @Validated @RequestBody UpdateUserAccountRequest request) {
-    ConsoleUserAccountResponse account =
-        userAccountService.update(id, request.getDisplayName(), request.getAuthoritiesCsv());
-    return responseFactory.success(account);
-  }
+    @PutMapping("/{id}")
+    @AuditAction(action = "user.update", aggregateType = "user_account", aggregateId = "#id")
+    public CommonResponse<ConsoleUserAccountResponse> update(
+            @PathVariable long id, @Validated @RequestBody UpdateUserAccountRequest request) {
+        ConsoleUserAccountResponse account =
+                userAccountService.update(id, request.getDisplayName(), request.getAuthoritiesCsv());
+        return responseFactory.success(account);
+    }
 
-  @PostMapping("/{id}/reset-password")
-  @AuditAction(
-      action = "user.resetPassword",
-      aggregateType = "user_account",
-      aggregateId = "#id",
-      recordParams = false)
-  public CommonResponse<Void> resetPassword(
-      @PathVariable long id, @Validated @RequestBody ResetPasswordRequest request) {
-    userAccountService.resetPassword(id, request.getNewPassword());
-    return responseFactory.success(null);
-  }
+    @PostMapping("/{id}/reset-password")
+    @AuditAction(
+            action = "user.resetPassword",
+            aggregateType = "user_account",
+            aggregateId = "#id",
+            recordParams = false)
+    public CommonResponse<Void> resetPassword(
+            @PathVariable long id, @Validated @RequestBody ResetPasswordRequest request) {
+        userAccountService.resetPassword(id, request.getNewPassword());
+        return responseFactory.success(null);
+    }
 
-  @PostMapping("/{id}/enable")
-  @AuditAction(action = "user.enable", aggregateType = "user_account", aggregateId = "#id")
-  public CommonResponse<ConsoleUserAccountResponse> enable(@PathVariable long id) {
-    return responseFactory.success(userAccountService.enable(id));
-  }
+    @PostMapping("/{id}/enable")
+    @AuditAction(action = "user.enable", aggregateType = "user_account", aggregateId = "#id")
+    public CommonResponse<ConsoleUserAccountResponse> enable(@PathVariable long id) {
+        return responseFactory.success(userAccountService.enable(id));
+    }
 
-  @PostMapping("/{id}/disable")
-  @AuditAction(action = "user.disable", aggregateType = "user_account", aggregateId = "#id")
-  public CommonResponse<ConsoleUserAccountResponse> disable(@PathVariable long id) {
-    return responseFactory.success(userAccountService.disable(id));
-  }
+    @PostMapping("/{id}/disable")
+    @AuditAction(action = "user.disable", aggregateType = "user_account", aggregateId = "#id")
+    public CommonResponse<ConsoleUserAccountResponse> disable(@PathVariable long id) {
+        return responseFactory.success(userAccountService.disable(id));
+    }
 }

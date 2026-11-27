@@ -12,41 +12,40 @@ import lombok.Builder;
  * </ul>
  */
 @Builder
-public record DryRunFinding(
-    String code, Severity severity, String scope, String message, Object detail) {
+public record DryRunFinding(String code, Severity severity, String scope, String message, Object detail) {
 
-  public enum Severity {
-    PASS,
-    WARN,
-    ERROR
-  }
+    public enum Severity {
+        PASS,
+        WARN,
+        ERROR
+    }
 
-  public static DryRunFinding pass(String code, String scope, String message) {
-    return DryRunFinding.builder()
-        .code(code)
-        .severity(Severity.PASS)
-        .scope(scope)
-        .message(message)
-        .build();
-  }
+    public static DryRunFinding pass(String code, String scope, String message) {
+        return DryRunFinding.builder()
+                .code(code)
+                .severity(Severity.PASS)
+                .scope(scope)
+                .message(message)
+                .build();
+    }
 
-  public static DryRunFinding warn(String code, String scope, String message, Object detail) {
-    return DryRunFinding.builder()
-        .code(code)
-        .severity(Severity.WARN)
-        .scope(scope)
-        .message(message)
-        .detail(detail)
-        .build();
-  }
+    public static DryRunFinding warn(String code, String scope, String message, Object detail) {
+        return DryRunFinding.builder()
+                .code(code)
+                .severity(Severity.WARN)
+                .scope(scope)
+                .message(message)
+                .detail(detail)
+                .build();
+    }
 
-  public static DryRunFinding error(String code, String scope, String message, Object detail) {
-    return DryRunFinding.builder()
-        .code(code)
-        .severity(Severity.ERROR)
-        .scope(scope)
-        .message(message)
-        .detail(detail)
-        .build();
-  }
+    public static DryRunFinding error(String code, String scope, String message, Object detail) {
+        return DryRunFinding.builder()
+                .code(code)
+                .severity(Severity.ERROR)
+                .scope(scope)
+                .message(message)
+                .detail(detail)
+                .build();
+    }
 }

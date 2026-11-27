@@ -26,76 +26,82 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class MeteredObjectStoreTest {
 
-  private static final String TIMER = "batch.objectstore.op";
-  private static final String BUCKET = "b";
-  private static final String KEY = "k";
+    private static final String TIMER = "batch.objectstore.op";
+    private static final String BUCKET = "b";
+    private static final String KEY = "k";
 
-  private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
-  @Mock
-  private BatchObjectStore delegate;
+    @Mock
+    private BatchObjectStore delegate;
 
-  private MeteredObjectStore metered;
+    private MeteredObjectStore metered;
 
-  @Test
-  @DisplayName("读取成功时按操作与结果标签累计一次耗时计数,并原样返回底层数据流")
-  void shouldRecordSuccessTimerForGet() {
-    byte[] payload = "hi".getBytes(StandardCharsets.UTF_8);
-    when(delegate.get(BUCKET, KEY)).thenReturn(new ByteArrayInputStream(payload));
+    @Test
+    @DisplayName("读取成功时按操作与结果标签累计一次耗时计数,并原样返回底层数据流")
+    void shouldRecordSuccessTimerForGet() {
+        byte[] payload = "hi".getBytes(StandardCharsets.UTF_8);
+        when(delegate.get(BUCKET, KEY)).thenReturn(new ByteArrayInputStream(payload));
 
-    InputStream in = metered.get(BUCKET, KEY);
+        InputStream in = metered.get(BUCKET, KEY);
 
-    assertThat(in).isNotNull();
-    verify(delegate).get(BUCKET, KEY);
-    Timer t =
-        registry.find(TIMER).tag("operation", "get").tag("outcome", "success").timer();
-    assertThat(t).isNotNull();
-    assertThat(t.count()).isEqualTo(1);
-  }
+        assertThat(in).isNotNull();
+        verify(delegate).get(BUCKET, KEY);
+        Timer t = registry.find(TIMER)
+                .tag("operation", "get")
+                .tag("outcome", "success")
+                .timer();
+        assertThat(t).isNotNull();
+        assertThat(t.count()).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("写入成功时按操作与结果标签累计一次耗时计数,并透传到底层")
-  void shouldRecordSuccessTimerForPut() {
-    byte[] payload = "x".getBytes(StandardCharsets.UTF_8);
+    @Test
+    @DisplayName("写入成功时按操作与结果标签累计一次耗时计数,并透传到底层")
+    void shouldRecordSuccessTimerForPut() {
+        byte[] payload = "x".getBytes(StandardCharsets.UTF_8);
 
-    metered.put(BUCKET, KEY, new ByteArrayInputStream(payload), payload.length, "text/plain");
+        metered.put(BUCKET, KEY, new ByteArrayInputStream(payload), payload.length, "text/plain");
 
-    verify(delegate).put(anyString(), anyString(), any(), anyLong(), anyString());
-    Timer t =
-        registry.find(TIMER).tag("operation", "put").tag("outcome", "success").timer();
-    assertThat(t).isNotNull();
-    assertThat(t.count()).isEqualTo(1);
-  }
+        verify(delegate).put(anyString(), anyString(), any(), anyLong(), anyString());
+        Timer t = registry.find(TIMER)
+                .tag("operation", "put")
+                .tag("outcome", "success")
+                .timer();
+        assertThat(t).isNotNull();
+        assertThat(t.count()).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("删除失败时记录失败结果标签,并把原始异常向上抛出")
-  void shouldRecordErrorTimerAndPropagateException() {
-    doThrow(new RuntimeException("boom")).when(delegate).delete(BUCKET, KEY);
+    @Test
+    @DisplayName("删除失败时记录失败结果标签,并把原始异常向上抛出")
+    void shouldRecordErrorTimerAndPropagateException() {
+        doThrow(new RuntimeException("boom")).when(delegate).delete(BUCKET, KEY);
 
-    assertThatThrownBy(() -> metered.delete(BUCKET, KEY))
-        .isInstanceOf(RuntimeException.class)
-        .hasMessage("boom");
+        assertThatThrownBy(() -> metered.delete(BUCKET, KEY))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("boom");
 
-    Timer t =
-        registry.find(TIMER).tag("operation", "delete").tag("outcome", "error").timer();
-    assertThat(t).isNotNull();
-    assertThat(t.count()).isEqualTo(1);
-  }
+        Timer t = registry.find(TIMER)
+                .tag("operation", "delete")
+                .tag("outcome", "error")
+                .timer();
+        assertThat(t).isNotNull();
+        assertThat(t.count()).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("能力探测直接返回底层配置,且不产生任何耗时指标")
-  void shouldDelegateCapabilityFlagsWithoutTiming() {
-    when(delegate.supportsRangeRead()).thenReturn(true);
-    when(delegate.supportsPresignPut()).thenReturn(false);
+    @Test
+    @DisplayName("能力探测直接返回底层配置,且不产生任何耗时指标")
+    void shouldDelegateCapabilityFlagsWithoutTiming() {
+        when(delegate.supportsRangeRead()).thenReturn(true);
+        when(delegate.supportsPresignPut()).thenReturn(false);
 
-    assertThat(metered.supportsRangeRead()).isTrue();
-    assertThat(metered.supportsPresignPut()).isFalse();
-    // 能力探测不打点。
-    assertThat(registry.find(TIMER).timers()).isEmpty();
-  }
+        assertThat(metered.supportsRangeRead()).isTrue();
+        assertThat(metered.supportsPresignPut()).isFalse();
+        // 能力探测不打点。
+        assertThat(registry.find(TIMER).timers()).isEmpty();
+    }
 
-  @BeforeEach
-  void initializeSubject() {
-    metered = new MeteredObjectStore(delegate, registry);
-  }
+    @BeforeEach
+    void initializeSubject() {
+        metered = new MeteredObjectStore(delegate, registry);
+    }
 }

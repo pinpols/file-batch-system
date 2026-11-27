@@ -10,17 +10,17 @@ import lombok.EqualsAndHashCode;
 @Data
 public class AlertRoutingQueryRequest extends PageQueryRequest {
 
-  @ValidTenantId
-  private String tenantId;
+    @ValidTenantId
+    private String tenantId;
 
-  @Size(max = 256)
-  private String keyword;
+    @Size(max = 256)
+    private String keyword;
 
-  private String routeCode;
+    private String routeCode;
 
-  private String team;
+    private String team;
 
-  private String severity;
+    private String severity;
 
-  private Boolean enabled;
+    private Boolean enabled;
 }

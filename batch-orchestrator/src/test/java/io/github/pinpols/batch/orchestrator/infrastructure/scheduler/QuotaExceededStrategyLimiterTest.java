@@ -41,194 +41,194 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class QuotaExceededStrategyLimiterTest {
 
-  private DefaultConcurrencyLimiter limiter;
+    private DefaultConcurrencyLimiter limiter;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
+    @Mock
+    private JobInstanceMapper jobInstanceMapper;
 
-  @Mock
-  private OrchestratorConfigCacheService configCache;
+    @Mock
+    private OrchestratorConfigCacheService configCache;
 
-  @Mock
-  private QuotaRuntimeStateService quotaRuntime;
+    @Mock
+    private QuotaRuntimeStateService quotaRuntime;
 
-  @Mock
-  private GlobalJobAdmission globalJobAdmission;
+    @Mock
+    private GlobalJobAdmission globalJobAdmission;
 
-  @Mock
-  private FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
+    @Mock
+    private FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
 
-  private ResourceSchedulerProperties resScheduler;
+    private ResourceSchedulerProperties resScheduler;
 
-  @Mock
-  private BatchOrchestratorGovernanceProperties governance;
+    @Mock
+    private BatchOrchestratorGovernanceProperties governance;
 
-  @BeforeEach
-  void setUp() {
-    resScheduler = new ResourceSchedulerProperties();
-    limiter = new DefaultConcurrencyLimiter(
-        jobInstanceMapper,
-        globalJobAdmission,
-        fairShareGroupAdmissionGuard,
-        configCache,
-        quotaRuntime,
-        governance);
-  }
-
-  @Test
-  @DisplayName("租户配置硬拒策略时超额请求不放行并标记快速失败,原因码为租户作业数超限")
-  void rejectStrategy_shouldFailFast() {
-    arrangeBurstExceeded("REJECT");
-
-    ResourceCheck check = limiter.check(request(), null);
-
-    assertThat(check.allowed()).isFalse();
-    assertThat(check.failFast()).isTrue();
-    assertThat(check.reasonCode()).isEqualTo("TENANT_JOB_LIMIT");
-  }
-
-  @Test
-  @DisplayName("租户配置排队等待策略时超额请求等待容量,不标记快速失败且原因码为租户作业数超限")
-  void queueDeferStrategy_shouldWaitForCapacity() {
-    arrangeBurstExceeded("QUEUE_DEFER");
-
-    ResourceCheck check = limiter.check(request(), null);
-
-    assertThat(check.allowed()).isFalse();
-    assertThat(check.failFast()).isFalse();
-    assertThat(check.reasonCode()).isEqualTo("TENANT_JOB_LIMIT");
-  }
-
-  @Test
-  @DisplayName("租户配置优先级降级策略时超额请求等待容量,原因码追加降级标记以便后续调度降低优先级")
-  void degradePriorityStrategy_shouldMarkReasonWithDegradedSuffix() {
-    arrangeBurstExceeded("DEGRADE_PRIORITY");
-
-    ResourceCheck check = limiter.check(request(), null);
-
-    assertThat(check.allowed()).isFalse();
-    assertThat(check.failFast()).isFalse();
-    assertThat(check.reasonCode()).isEqualTo("TENANT_JOB_LIMIT_DEGRADED");
-  }
-
-  @Test
-  @DisplayName("租户未配置超额策略时按平台默认排队等待处理,不标记快速失败")
-  void nullStrategy_shouldDeferByPlatformDefault() {
-    // ADR-041 Phase2.3:租户未配策略 → 平台默认 QUEUE_DEFER(有界队列),defer 而非硬拒。
-    arrangeBurstExceeded(null);
-
-    ResourceCheck check = limiter.check(request(), null);
-
-    assertThat(check.allowed()).isFalse();
-    assertThat(check.failFast()).isFalse();
-    assertThat(check.reasonCode()).isEqualTo("TENANT_JOB_LIMIT");
-  }
-
-  @Test
-  @DisplayName("平台默认策略配回硬拒时租户未配置策略的超额请求仍标记快速失败")
-  void nullStrategy_withRejectPlatformDefault_stillRejects() {
-    // 平台默认可配回 REJECT 恢复旧硬拒语义。
-    resScheduler.setDefaultExceededStrategy(QuotaExceededStrategy.REJECT);
-    arrangeBurstExceeded(null);
-
-    ResourceCheck check = limiter.check(request(), null);
-
-    assertThat(check.failFast()).isTrue();
-  }
-
-  @Test
-  @DisplayName("租户策略取值无法识别时抛出参数非法异常并在消息中保留原始取值,避免静默放行")
-  void unknownTenantStrategy_shouldFailExplicitly() {
-    arrangeBurstExceeded("QUEU_DEFER");
-
-    assertThatThrownBy(() -> limiter.check(request(), null))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("QUEU_DEFER");
-  }
-
-  /** quota 未触顶时 limiter 必须 allow，与 strategy 无关。 */
-  @Test
-  @DisplayName("租户配额未触顶时直接放行,不受已启用配额策略的硬拒配置影响")
-  void allowedQuota_shouldNotApplyStrategy() {
-    when(globalJobAdmission.hasCapacity()).thenReturn(true);
-    when(governance.resourceScheduler()).thenReturn(resScheduler);
-    when(jobInstanceMapper.countActiveByTenant(anyString())).thenReturn(1L);
-    when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(policy("REJECT"));
-    when(quotaRuntime.evaluateAndReserve(any())).thenReturn(ResourceCheck.allow());
-
-    ResourceCheck check = limiter.check(request(), null);
-
-    assertThat(check.allowed()).isTrue();
-  }
-
-  @Test
-  @DisplayName("已有作业在公平组满额时可继续释放分区,不重复占用作业名额")
-  void existingJob_shouldNotConsumeFairShareOrTenantJobSlot() {
-    TenantQuotaPolicyEntity fairPolicy = new TenantQuotaPolicyEntity(
-        1L, "tenant-x", "fair", 1, 2, 0, 1, "settlement", 0, 0, "NONE", 1, true, "QUEUE_DEFER");
-    when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(fairPolicy);
-    ResourceSchedulingRequest request = request();
-    request.setNewJobAdmission(false);
-
-    assertThat(limiter.check(request, null).allowed()).isTrue();
-
-    verify(fairShareGroupAdmissionGuard, never()).hasCapacity(any());
-    verify(quotaRuntime, never()).evaluateAndReserve(any());
-    verify(jobInstanceMapper).acquireTenantResourceAdmissionLock("tenant-x");
-  }
-
-  @Test
-  @DisplayName("新作业准入时全局容量判定先于放行发生,确认容量查询被触发")
-  void globalLimit_shouldAcquireTransactionLockBeforeCountingNewJob() {
-    when(globalJobAdmission.hasCapacity()).thenReturn(true);
-
-    assertThat(limiter.check(request(), null).allowed()).isTrue();
-
-    verify(globalJobAdmission).hasCapacity();
-  }
-
-  @Test
-  @DisplayName("已有作业的准入检查不走新作业名额逻辑,不触发全局容量判定")
-  void existingJob_shouldNotConsumeAnotherGlobalSlot() {
-    ResourceSchedulingRequest request = request();
-    request.setNewJobAdmission(false);
-
-    assertThat(limiter.check(request, null).allowed()).isTrue();
-
-    verify(globalJobAdmission, never()).hasCapacity();
-    verify(globalJobAdmission, never()).hasObservedCapacity();
-  }
-
-  // ── helpers ────────────────────────────────────────────────────────────────
-
-  private void arrangeBurstExceeded(String strategy) {
-    when(globalJobAdmission.hasCapacity()).thenReturn(true);
-    if (!"QUEU_DEFER".equals(strategy)) {
-      when(governance.resourceScheduler()).thenReturn(resScheduler);
+    @BeforeEach
+    void setUp() {
+        resScheduler = new ResourceSchedulerProperties();
+        limiter = new DefaultConcurrencyLimiter(
+                jobInstanceMapper,
+                globalJobAdmission,
+                fairShareGroupAdmissionGuard,
+                configCache,
+                quotaRuntime,
+                governance);
     }
-    if (!"QUEU_DEFER".equals(strategy)) {
-      when(jobInstanceMapper.countActiveByTenant(anyString())).thenReturn(99L);
-    }
-    when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(policy(strategy));
-    if (!"QUEU_DEFER".equals(strategy)) {
-      when(quotaRuntime.evaluateAndReserve(any()))
-          .thenReturn(ResourceCheck.waitForCapacity(
-              "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)"));
-    }
-  }
 
-  private static TenantQuotaPolicyEntity policy(String exceededStrategy) {
-    return new TenantQuotaPolicyEntity(
-        1L, "tenant-x", "default", 10, 100, 0, 1, null, 0, 0, "NONE", null, true, exceededStrategy);
-  }
+    @Test
+    @DisplayName("租户配置硬拒策略时超额请求不放行并标记快速失败,原因码为租户作业数超限")
+    void rejectStrategy_shouldFailFast() {
+        arrangeBurstExceeded("REJECT");
 
-  private static ResourceSchedulingRequest request() {
-    ResourceSchedulingRequest r = new ResourceSchedulingRequest();
-    r.setTenantId("tenant-x");
-    r.setJobCode("JOB_Q");
-    r.setQueueCode("default");
-    r.setWorkerGroup("import");
-    r.setWorkerType("IMPORT");
-    return r;
-  }
+        ResourceCheck check = limiter.check(request(), null);
+
+        assertThat(check.allowed()).isFalse();
+        assertThat(check.failFast()).isTrue();
+        assertThat(check.reasonCode()).isEqualTo("TENANT_JOB_LIMIT");
+    }
+
+    @Test
+    @DisplayName("租户配置排队等待策略时超额请求等待容量,不标记快速失败且原因码为租户作业数超限")
+    void queueDeferStrategy_shouldWaitForCapacity() {
+        arrangeBurstExceeded("QUEUE_DEFER");
+
+        ResourceCheck check = limiter.check(request(), null);
+
+        assertThat(check.allowed()).isFalse();
+        assertThat(check.failFast()).isFalse();
+        assertThat(check.reasonCode()).isEqualTo("TENANT_JOB_LIMIT");
+    }
+
+    @Test
+    @DisplayName("租户配置优先级降级策略时超额请求等待容量,原因码追加降级标记以便后续调度降低优先级")
+    void degradePriorityStrategy_shouldMarkReasonWithDegradedSuffix() {
+        arrangeBurstExceeded("DEGRADE_PRIORITY");
+
+        ResourceCheck check = limiter.check(request(), null);
+
+        assertThat(check.allowed()).isFalse();
+        assertThat(check.failFast()).isFalse();
+        assertThat(check.reasonCode()).isEqualTo("TENANT_JOB_LIMIT_DEGRADED");
+    }
+
+    @Test
+    @DisplayName("租户未配置超额策略时按平台默认排队等待处理,不标记快速失败")
+    void nullStrategy_shouldDeferByPlatformDefault() {
+        // ADR-041 Phase2.3:租户未配策略 → 平台默认 QUEUE_DEFER(有界队列),defer 而非硬拒。
+        arrangeBurstExceeded(null);
+
+        ResourceCheck check = limiter.check(request(), null);
+
+        assertThat(check.allowed()).isFalse();
+        assertThat(check.failFast()).isFalse();
+        assertThat(check.reasonCode()).isEqualTo("TENANT_JOB_LIMIT");
+    }
+
+    @Test
+    @DisplayName("平台默认策略配回硬拒时租户未配置策略的超额请求仍标记快速失败")
+    void nullStrategy_withRejectPlatformDefault_stillRejects() {
+        // 平台默认可配回 REJECT 恢复旧硬拒语义。
+        resScheduler.setDefaultExceededStrategy(QuotaExceededStrategy.REJECT);
+        arrangeBurstExceeded(null);
+
+        ResourceCheck check = limiter.check(request(), null);
+
+        assertThat(check.failFast()).isTrue();
+    }
+
+    @Test
+    @DisplayName("租户策略取值无法识别时抛出参数非法异常并在消息中保留原始取值,避免静默放行")
+    void unknownTenantStrategy_shouldFailExplicitly() {
+        arrangeBurstExceeded("QUEU_DEFER");
+
+        assertThatThrownBy(() -> limiter.check(request(), null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("QUEU_DEFER");
+    }
+
+    /** quota 未触顶时 limiter 必须 allow，与 strategy 无关。 */
+    @Test
+    @DisplayName("租户配额未触顶时直接放行,不受已启用配额策略的硬拒配置影响")
+    void allowedQuota_shouldNotApplyStrategy() {
+        when(globalJobAdmission.hasCapacity()).thenReturn(true);
+        when(governance.resourceScheduler()).thenReturn(resScheduler);
+        when(jobInstanceMapper.countActiveByTenant(anyString())).thenReturn(1L);
+        when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(policy("REJECT"));
+        when(quotaRuntime.evaluateAndReserve(any())).thenReturn(ResourceCheck.allow());
+
+        ResourceCheck check = limiter.check(request(), null);
+
+        assertThat(check.allowed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("已有作业在公平组满额时可继续释放分区,不重复占用作业名额")
+    void existingJob_shouldNotConsumeFairShareOrTenantJobSlot() {
+        TenantQuotaPolicyEntity fairPolicy = new TenantQuotaPolicyEntity(
+                1L, "tenant-x", "fair", 1, 2, 0, 1, "settlement", 0, 0, "NONE", 1, true, "QUEUE_DEFER");
+        when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(fairPolicy);
+        ResourceSchedulingRequest request = request();
+        request.setNewJobAdmission(false);
+
+        assertThat(limiter.check(request, null).allowed()).isTrue();
+
+        verify(fairShareGroupAdmissionGuard, never()).hasCapacity(any());
+        verify(quotaRuntime, never()).evaluateAndReserve(any());
+        verify(jobInstanceMapper).acquireTenantResourceAdmissionLock("tenant-x");
+    }
+
+    @Test
+    @DisplayName("新作业准入时全局容量判定先于放行发生,确认容量查询被触发")
+    void globalLimit_shouldAcquireTransactionLockBeforeCountingNewJob() {
+        when(globalJobAdmission.hasCapacity()).thenReturn(true);
+
+        assertThat(limiter.check(request(), null).allowed()).isTrue();
+
+        verify(globalJobAdmission).hasCapacity();
+    }
+
+    @Test
+    @DisplayName("已有作业的准入检查不走新作业名额逻辑,不触发全局容量判定")
+    void existingJob_shouldNotConsumeAnotherGlobalSlot() {
+        ResourceSchedulingRequest request = request();
+        request.setNewJobAdmission(false);
+
+        assertThat(limiter.check(request, null).allowed()).isTrue();
+
+        verify(globalJobAdmission, never()).hasCapacity();
+        verify(globalJobAdmission, never()).hasObservedCapacity();
+    }
+
+    // ── helpers ────────────────────────────────────────────────────────────────
+
+    private void arrangeBurstExceeded(String strategy) {
+        when(globalJobAdmission.hasCapacity()).thenReturn(true);
+        if (!"QUEU_DEFER".equals(strategy)) {
+            when(governance.resourceScheduler()).thenReturn(resScheduler);
+        }
+        if (!"QUEU_DEFER".equals(strategy)) {
+            when(jobInstanceMapper.countActiveByTenant(anyString())).thenReturn(99L);
+        }
+        when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(policy(strategy));
+        if (!"QUEU_DEFER".equals(strategy)) {
+            when(quotaRuntime.evaluateAndReserve(any()))
+                    .thenReturn(ResourceCheck.waitForCapacity(
+                            "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)"));
+        }
+    }
+
+    private static TenantQuotaPolicyEntity policy(String exceededStrategy) {
+        return new TenantQuotaPolicyEntity(
+                1L, "tenant-x", "default", 10, 100, 0, 1, null, 0, 0, "NONE", null, true, exceededStrategy);
+    }
+
+    private static ResourceSchedulingRequest request() {
+        ResourceSchedulingRequest r = new ResourceSchedulingRequest();
+        r.setTenantId("tenant-x");
+        r.setJobCode("JOB_Q");
+        r.setQueueCode("default");
+        r.setWorkerGroup("import");
+        r.setWorkerType("IMPORT");
+        return r;
+    }
 }

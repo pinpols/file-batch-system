@@ -7,28 +7,26 @@ import org.apache.ibatis.annotations.Param;
 
 public interface CompensationCommandMapper {
 
-  int insert(CompensationCommandEntity entity);
+    int insert(CompensationCommandEntity entity);
 
-  CompensationCommandEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+    CompensationCommandEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  Long lockRunningCommand(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("runningStatus") String runningStatus);
+    Long lockRunningCommand(
+            @Param("tenantId") String tenantId, @Param("id") Long id, @Param("runningStatus") String runningStatus);
 
-  CompensationCommandEntity selectByCommandNo(
-      @Param("tenantId") String tenantId, @Param("commandNo") String commandNo);
+    CompensationCommandEntity selectByCommandNo(
+            @Param("tenantId") String tenantId, @Param("commandNo") String commandNo);
 
-  CompensationCommandEntity selectByTenantAndApprovalId(
-      @Param("tenantId") String tenantId, @Param("approvalId") String approvalId);
+    CompensationCommandEntity selectByTenantAndApprovalId(
+            @Param("tenantId") String tenantId, @Param("approvalId") String approvalId);
 
-  int updateStatus(UpdateCompensationStatusParam param);
+    int updateStatus(UpdateCompensationStatusParam param);
 
-  int countRunningByTarget(
-      @Param("tenantId") String tenantId,
-      @Param("compensationType") String compensationType,
-      @Param("targetId") Long targetId,
-      @Param("runningStatus") String runningStatus);
+    int countRunningByTarget(
+            @Param("tenantId") String tenantId,
+            @Param("compensationType") String compensationType,
+            @Param("targetId") Long targetId,
+            @Param("runningStatus") String runningStatus);
 
-  int markStaleRunningFailed(StaleCompensationFailureParam param);
+    int markStaleRunningFailed(StaleCompensationFailureParam param);
 }

@@ -15,16 +15,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.atomic")
 @SuppressWarnings("ConfigurationProperties") // 与 BatchWorkerAtomicProperties 共享前缀，子键互不重叠。
 public record AtomicWorkerConfiguration(
-    String workerCode,
-    String workerType,
-    String tenantId,
-    Long heartbeatIntervalMillis,
-    String topic,
-    String consumerGroupId,
-    List<String> capabilityTags)
-    implements WorkerConfiguration {
+        String workerCode,
+        String workerType,
+        String tenantId,
+        Long heartbeatIntervalMillis,
+        String topic,
+        String consumerGroupId,
+        List<String> capabilityTags)
+        implements WorkerConfiguration {
 
-  public AtomicWorkerConfiguration {
-    capabilityTags = BaseWorkerProperties.normalizeCapabilityTags(capabilityTags);
-  }
+    public AtomicWorkerConfiguration {
+        capabilityTags = BaseWorkerProperties.normalizeCapabilityTags(capabilityTags);
+    }
 }

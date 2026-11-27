@@ -11,25 +11,25 @@ import lombok.Data;
 @Data
 public class AiChatRequest {
 
-  private String tenantId;
+    private String tenantId;
 
-  // 防超长撞下游 audit 表 session_id VARCHAR(128)(截断/写入报错)。
-  @Size(max = 128)
-  private String sessionId;
+    // 防超长撞下游 audit 表 session_id VARCHAR(128)(截断/写入报错)。
+    @Size(max = 128)
+    private String sessionId;
 
-  @NotBlank
-  @Size(max = 32)
-  private String contextVersion = "v1";
+    @NotBlank
+    @Size(max = 32)
+    private String contextVersion = "v1";
 
-  @NotBlank
-  private String prompt;
+    @NotBlank
+    private String prompt;
 
-  private List<UUID> attachmentIds;
+    private List<UUID> attachmentIds;
 
-  private UUID clientTurnId;
+    private UUID clientTurnId;
 
-  private AiPageContextRequest pageContext;
+    private AiPageContextRequest pageContext;
 
-  /** 兼容旧版请求字段；v1 仅接受 pageType、objectType 和 objectId。 */
-  private Map<String, Object> context = new LinkedHashMap<>();
+    /** 兼容旧版请求字段；v1 仅接受 pageType、objectType 和 objectId。 */
+    private Map<String, Object> context = new LinkedHashMap<>();
 }

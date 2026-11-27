@@ -24,94 +24,94 @@ import org.springframework.data.redis.core.ValueOperations;
 @DisplayName("系统参数服务: 缓存优先读取, 数据库回退与写后清缓存")
 class ConsoleSystemParameterServiceTest {
 
-  private ConsoleSystemParameterMapper repository;
-  private ConsoleTenantGuard tenantGuard;
-  private StringRedisTemplate redisTemplate;
-  private ValueOperations<String, String> valueOperations;
-  private ConsoleSystemParameterService service;
+    private ConsoleSystemParameterMapper repository;
+    private ConsoleTenantGuard tenantGuard;
+    private StringRedisTemplate redisTemplate;
+    private ValueOperations<String, String> valueOperations;
+    private ConsoleSystemParameterService service;
 
-  @BeforeEach
-  void setUp() {
-    repository = mock(ConsoleSystemParameterMapper.class);
-    tenantGuard = mock(ConsoleTenantGuard.class);
-    redisTemplate = mock(StringRedisTemplate.class);
-    valueOperations = mock(ValueOperations.class);
-    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-    service = new ConsoleSystemParameterService(
-        repository, tenantGuard, new RedisSystemParameterCacheStore(redisTemplate));
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-  }
+    @BeforeEach
+    void setUp() {
+        repository = mock(ConsoleSystemParameterMapper.class);
+        tenantGuard = mock(ConsoleTenantGuard.class);
+        redisTemplate = mock(StringRedisTemplate.class);
+        valueOperations = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        service = new ConsoleSystemParameterService(
+                repository, tenantGuard, new RedisSystemParameterCacheStore(redisTemplate));
+        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    }
 
-  @Test
-  @DisplayName("按租户列出全部系统参数")
-  void shouldListParameters() {
-    SystemParameterEntity entity = new SystemParameterEntity();
-    entity.setParamKey("batch.size");
-    when(repository.findAllByTenant("t1")).thenReturn(List.of(entity));
+    @Test
+    @DisplayName("按租户列出全部系统参数")
+    void shouldListParameters() {
+        SystemParameterEntity entity = new SystemParameterEntity();
+        entity.setParamKey("batch.size");
+        when(repository.findAllByTenant("t1")).thenReturn(List.of(entity));
 
-    List<SystemParameterEntity> result = service.list("t1");
+        List<SystemParameterEntity> result = service.list("t1");
 
-    assertThat(result).hasSize(1);
-    assertThat(result.get(0).getParamKey()).isEqualTo("batch.size");
-  }
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getParamKey()).isEqualTo("batch.size");
+    }
 
-  @Test
-  @DisplayName("缓存命中时直接返回缓存中的参数值")
-  void shouldReturnCachedValueFromRedis() {
-    when(valueOperations.get("sys-param:t1:batch.size")).thenReturn("500");
+    @Test
+    @DisplayName("缓存命中时直接返回缓存中的参数值")
+    void shouldReturnCachedValueFromRedis() {
+        when(valueOperations.get("sys-param:t1:batch.size")).thenReturn("500");
 
-    Optional<String> result = service.getValue("t1", "batch.size");
+        Optional<String> result = service.getValue("t1", "batch.size");
 
-    assertThat(result).contains("500");
-  }
+        assertThat(result).contains("500");
+    }
 
-  @Test
-  @DisplayName("缓存未命中时回退查询数据库并回填缓存")
-  void shouldFallbackToDbWhenCacheMiss() {
-    when(valueOperations.get("sys-param:t1:batch.size")).thenReturn(null);
-    SystemParameterEntity entity = new SystemParameterEntity();
-    entity.setParamValue("200");
-    when(repository.findByTenantAndKey("t1", "batch.size")).thenReturn(Optional.of(entity));
+    @Test
+    @DisplayName("缓存未命中时回退查询数据库并回填缓存")
+    void shouldFallbackToDbWhenCacheMiss() {
+        when(valueOperations.get("sys-param:t1:batch.size")).thenReturn(null);
+        SystemParameterEntity entity = new SystemParameterEntity();
+        entity.setParamValue("200");
+        when(repository.findByTenantAndKey("t1", "batch.size")).thenReturn(Optional.of(entity));
 
-    Optional<String> result = service.getValue("t1", "batch.size");
+        Optional<String> result = service.getValue("t1", "batch.size");
 
-    assertThat(result).contains("200");
-    verify(valueOperations).set("sys-param:t1:batch.size", "200", Duration.ofMinutes(30));
-  }
+        assertThat(result).contains("200");
+        verify(valueOperations).set("sys-param:t1:batch.size", "200", Duration.ofMinutes(30));
+    }
 
-  @Test
-  @DisplayName("缓存与数据库均未命中时返回空结果")
-  void shouldReturnEmptyWhenCacheMissAndDbMiss() {
-    when(valueOperations.get("sys-param:t1:missing")).thenReturn(null);
-    when(repository.findByTenantAndKey("t1", "missing")).thenReturn(Optional.empty());
+    @Test
+    @DisplayName("缓存与数据库均未命中时返回空结果")
+    void shouldReturnEmptyWhenCacheMissAndDbMiss() {
+        when(valueOperations.get("sys-param:t1:missing")).thenReturn(null);
+        when(repository.findByTenantAndKey("t1", "missing")).thenReturn(Optional.empty());
 
-    Optional<String> result = service.getValue("t1", "missing");
+        Optional<String> result = service.getValue("t1", "missing");
 
-    assertThat(result).isEmpty();
-  }
+        assertThat(result).isEmpty();
+    }
 
-  @Test
-  @DisplayName("写入参数后清除对应的缓存键")
-  void shouldUpsertAndClearCache() {
-    service.upsert("t1", "batch.size", "300", "batch size config", "admin");
+    @Test
+    @DisplayName("写入参数后清除对应的缓存键")
+    void shouldUpsertAndClearCache() {
+        service.upsert("t1", "batch.size", "300", "batch size config", "admin");
 
-    verify(repository)
-        .upsert(ConsoleSystemParameterUpsertParam.builder()
-            .tenantId("t1")
-            .paramKey("batch.size")
-            .paramValue("300")
-            .description("batch size config")
-            .operator("admin")
-            .build());
-    verify(redisTemplate).delete("sys-param:t1:batch.size");
-  }
+        verify(repository)
+                .upsert(ConsoleSystemParameterUpsertParam.builder()
+                        .tenantId("t1")
+                        .paramKey("batch.size")
+                        .paramValue("300")
+                        .description("batch size config")
+                        .operator("admin")
+                        .build());
+        verify(redisTemplate).delete("sys-param:t1:batch.size");
+    }
 
-  @Test
-  @DisplayName("删除参数后清除对应的缓存键")
-  void shouldDeleteAndClearCache() {
-    service.delete("t1", "batch.size");
+    @Test
+    @DisplayName("删除参数后清除对应的缓存键")
+    void shouldDeleteAndClearCache() {
+        service.delete("t1", "batch.size");
 
-    verify(repository).deleteByTenantAndKey("t1", "batch.size");
-    verify(redisTemplate).delete("sys-param:t1:batch.size");
-  }
+        verify(repository).deleteByTenantAndKey("t1", "batch.size");
+        verify(redisTemplate).delete("sys-param:t1:batch.size");
+    }
 }

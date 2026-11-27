@@ -18,65 +18,63 @@ import org.springframework.context.i18n.LocaleContextHolder;
  */
 public class BizMessageResolver {
 
-  private final MessageSource messageSource;
+    private final MessageSource messageSource;
 
-  public BizMessageResolver(MessageSource messageSource) {
-    this.messageSource = messageSource;
-  }
-
-  /**
-   * 取 {@link BizException} 的展示字符串。优先级:
-   *
-   * <ol>
-   *   <li>{@code messageKey} 命中资源文件 → 返回翻译后的中文/英文文案
-   *   <li>{@code messageKey} 不存在但是 literal 异常 → 返回 {@link BizException#getMessage()}
-   *   <li>都没有 → 走 {@link ResultCode#label()}(中文回退)
-   * </ol>
-   */
-  public String resolve(BizException exception) {
-    return resolve(exception, LocaleContextHolder.getLocale());
-  }
-
-  public String resolve(BizException exception, Locale locale) {
-    String key = exception.getMessageKey();
-    if (Texts.hasText(key)) {
-      try {
-        return messageSource.getMessage(key, exception.getMessageArgs(), locale);
-      } catch (NoSuchMessageException ignored) {
-        SwallowedExceptionLogger.info(
-            BizMessageResolver.class, "catch:NoSuchMessageException", ignored);
-
-        // key 配错;继续往下走 fallback 让前端至少有可读消息,避免暴露 raw key。
-      }
+    public BizMessageResolver(MessageSource messageSource) {
+        this.messageSource = messageSource;
     }
-    String literal = exception.getMessage();
-    if (Texts.hasText(literal) && !literal.equals(key)) {
-      return literal;
+
+    /**
+     * 取 {@link BizException} 的展示字符串。优先级:
+     *
+     * <ol>
+     *   <li>{@code messageKey} 命中资源文件 → 返回翻译后的中文/英文文案
+     *   <li>{@code messageKey} 不存在但是 literal 异常 → 返回 {@link BizException#getMessage()}
+     *   <li>都没有 → 走 {@link ResultCode#label()}(中文回退)
+     * </ol>
+     */
+    public String resolve(BizException exception) {
+        return resolve(exception, LocaleContextHolder.getLocale());
     }
-    return exception.getCode() == null ? null : exception.getCode().label();
-  }
 
-  /** 直接按 ResultCode 解析为通用错误码文案(无业务详情场景用)。 */
-  public String resolve(ResultCode code) {
-    if (code == null) {
-      return null;
+    public String resolve(BizException exception, Locale locale) {
+        String key = exception.getMessageKey();
+        if (Texts.hasText(key)) {
+            try {
+                return messageSource.getMessage(key, exception.getMessageArgs(), locale);
+            } catch (NoSuchMessageException ignored) {
+                SwallowedExceptionLogger.info(BizMessageResolver.class, "catch:NoSuchMessageException", ignored);
+
+                // key 配错;继续往下走 fallback 让前端至少有可读消息,避免暴露 raw key。
+            }
+        }
+        String literal = exception.getMessage();
+        if (Texts.hasText(literal) && !literal.equals(key)) {
+            return literal;
+        }
+        return exception.getCode() == null ? null : exception.getCode().label();
     }
-    return resolveCommonCode(code, LocaleContextHolder.getLocale());
-  }
 
-  public String resolve(ResultCode code, Locale locale) {
-    return code == null ? null : resolveCommonCode(code, locale);
-  }
-
-  private String resolveCommonCode(ResultCode code, Locale locale) {
-    String key = "error.common." + code.code().toLowerCase(Locale.ROOT);
-    try {
-      return messageSource.getMessage(key, null, locale);
-    } catch (NoSuchMessageException ignored) {
-      SwallowedExceptionLogger.info(
-          BizMessageResolver.class, "catch:NoSuchMessageException", ignored);
-
-      return code.label();
+    /** 直接按 ResultCode 解析为通用错误码文案(无业务详情场景用)。 */
+    public String resolve(ResultCode code) {
+        if (code == null) {
+            return null;
+        }
+        return resolveCommonCode(code, LocaleContextHolder.getLocale());
     }
-  }
+
+    public String resolve(ResultCode code, Locale locale) {
+        return code == null ? null : resolveCommonCode(code, locale);
+    }
+
+    private String resolveCommonCode(ResultCode code, Locale locale) {
+        String key = "error.common." + code.code().toLowerCase(Locale.ROOT);
+        try {
+            return messageSource.getMessage(key, null, locale);
+        } catch (NoSuchMessageException ignored) {
+            SwallowedExceptionLogger.info(BizMessageResolver.class, "catch:NoSuchMessageException", ignored);
+
+            return code.label();
+        }
+    }
 }

@@ -43,109 +43,100 @@ import org.junit.jupiter.api.Test;
 @DisplayName("限界上下文依赖隔离守护: 各上下文之间禁止跨域直接依赖, 豁免须显式声明")
 class BoundedContextDependencyArchTest {
 
-  /** 10 个有界上下文的子包名,对应 {@code io.github.pinpols.batch.console.domain.<ctx>}. */
-  static final String[] BOUNDED_CONTEXTS = {
-    "job",
-    "workflow",
-    "file",
-    "ops",
-    "governance",
-    "notification",
-    "audit",
-    "rbac",
-    "observability",
-    "config"
-  };
+    /** 10 个有界上下文的子包名,对应 {@code io.github.pinpols.batch.console.domain.<ctx>}. */
+    static final String[] BOUNDED_CONTEXTS = {
+        "job", "workflow", "file", "ops", "governance", "notification", "audit", "rbac", "observability", "config"
+    };
 
-  /** P1-A Stage 1 已清空、不得回流的历史顶层包。 */
-  static final String[] LEGACY_PACKAGE_ROOTS = {
-    "io.github.pinpols.batch.console.web",
-    "io.github.pinpols.batch.console.mapper",
-    "io.github.pinpols.batch.console.service",
-    "io.github.pinpols.batch.console.domain.entity",
-    "io.github.pinpols.batch.console.domain.param",
-    "io.github.pinpols.batch.console.domain.query",
-    "io.github.pinpols.batch.console.domain.command"
-  };
+    /** P1-A Stage 1 已清空、不得回流的历史顶层包。 */
+    static final String[] LEGACY_PACKAGE_ROOTS = {
+        "io.github.pinpols.batch.console.web",
+        "io.github.pinpols.batch.console.mapper",
+        "io.github.pinpols.batch.console.service",
+        "io.github.pinpols.batch.console.domain.entity",
+        "io.github.pinpols.batch.console.domain.param",
+        "io.github.pinpols.batch.console.domain.query",
+        "io.github.pinpols.batch.console.domain.command"
+    };
 
-  static final String DOMAIN_ROOT = "io.github.pinpols.batch.console.domain";
-  static final String SHARED_ROOT = "io.github.pinpols.batch.console.shared";
-  private static final JavaClasses CLASSES = new ClassFileImporter()
-      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-      .importPackages("io.github.pinpols.batch.console..");
+    static final String DOMAIN_ROOT = "io.github.pinpols.batch.console.domain";
+    static final String SHARED_ROOT = "io.github.pinpols.batch.console.shared";
+    private static final JavaClasses CLASSES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("io.github.pinpols.batch.console..");
 
-  @Test
-  @DisplayName("不同限界上下文之间不得直接依赖, 扫描到的跨域违例计数必须为 0")
-  void shouldForbidCrossContextDependency_whenScanningDomainClasses() {
-    List<String> violations = crossContextViolations(CLASSES);
-    assertThat(violations)
-        .as("bounded-context cross dependencies must be eliminated")
-        .isEmpty();
-  }
-
-  @Test
-  @DisplayName("旧顶层包必须清空, 业务类只能落在 domain.<ctx> 或 shared 下")
-  void shouldForbidLegacyTopLevelPackages() {
-    List<String> legacyPackages = CLASSES.stream()
-        .map(JavaClass::getPackageName)
-        .filter(BoundedContextDependencyArchTest::isLegacyPackage)
-        .distinct()
-        .sorted()
-        .toList();
-    assertThat(legacyPackages)
-        .as("P1-A Stage 1 legacy packages must stay empty")
-        .isEmpty();
-  }
-
-  static boolean isLegacyPackage(String packageName) {
-    for (String root : LEGACY_PACKAGE_ROOTS) {
-      if (packageName.equals(root) || packageName.startsWith(root + ".")) {
-        return true;
-      }
+    @Test
+    @DisplayName("不同限界上下文之间不得直接依赖, 扫描到的跨域违例计数必须为 0")
+    void shouldForbidCrossContextDependency_whenScanningDomainClasses() {
+        List<String> violations = crossContextViolations(CLASSES);
+        assertThat(violations)
+                .as("bounded-context cross dependencies must be eliminated")
+                .isEmpty();
     }
-    return false;
-  }
 
-  static List<String> crossContextViolations(JavaClasses classes) {
-    List<String> violations = new ArrayList<>();
-    for (JavaClass src : classes) {
-      String srcCtx = boundedContextOf(src.getPackageName());
-      if (srcCtx == null || hasBoundedContextSuppression(src)) {
-        continue;
-      }
-      for (Dependency dep : src.getDirectDependenciesFromSelf()) {
-        String depCtx = boundedContextOf(dep.getTargetClass().getPackageName());
-        if (depCtx != null && !depCtx.equals(srcCtx)) {
-          violations.add(dep.getDescription());
+    @Test
+    @DisplayName("旧顶层包必须清空, 业务类只能落在 domain.<ctx> 或 shared 下")
+    void shouldForbidLegacyTopLevelPackages() {
+        List<String> legacyPackages = CLASSES.stream()
+                .map(JavaClass::getPackageName)
+                .filter(BoundedContextDependencyArchTest::isLegacyPackage)
+                .distinct()
+                .sorted()
+                .toList();
+        assertThat(legacyPackages)
+                .as("P1-A Stage 1 legacy packages must stay empty")
+                .isEmpty();
+    }
+
+    static boolean isLegacyPackage(String packageName) {
+        for (String root : LEGACY_PACKAGE_ROOTS) {
+            if (packageName.equals(root) || packageName.startsWith(root + ".")) {
+                return true;
+            }
         }
-      }
+        return false;
     }
-    violations.sort(String::compareTo);
-    return violations;
-  }
 
-  static boolean hasBoundedContextSuppression(JavaClass javaClass) {
-    return javaClass.getAnnotations().stream()
-        .filter(a -> a.getRawType().getName().equals(BoundedContextExemption.class.getName()))
-        .anyMatch(a -> {
-          String reason = String.valueOf(a.get("reason").orElse(""));
-          String cleanupBy = String.valueOf(a.get("cleanupBy").orElse(""));
-          return !reason.isBlank() && !cleanupBy.isBlank();
-        });
-  }
+    static List<String> crossContextViolations(JavaClasses classes) {
+        List<String> violations = new ArrayList<>();
+        for (JavaClass src : classes) {
+            String srcCtx = boundedContextOf(src.getPackageName());
+            if (srcCtx == null || hasBoundedContextSuppression(src)) {
+                continue;
+            }
+            for (Dependency dep : src.getDirectDependenciesFromSelf()) {
+                String depCtx = boundedContextOf(dep.getTargetClass().getPackageName());
+                if (depCtx != null && !depCtx.equals(srcCtx)) {
+                    violations.add(dep.getDescription());
+                }
+            }
+        }
+        violations.sort(String::compareTo);
+        return violations;
+    }
 
-  static String boundedContextOf(String pkg) {
-    if (!pkg.startsWith(DOMAIN_ROOT + ".")) {
-      return null;
+    static boolean hasBoundedContextSuppression(JavaClass javaClass) {
+        return javaClass.getAnnotations().stream()
+                .filter(a -> a.getRawType().getName().equals(BoundedContextExemption.class.getName()))
+                .anyMatch(a -> {
+                    String reason = String.valueOf(a.get("reason").orElse(""));
+                    String cleanupBy = String.valueOf(a.get("cleanupBy").orElse(""));
+                    return !reason.isBlank() && !cleanupBy.isBlank();
+                });
     }
-    String tail = pkg.substring(DOMAIN_ROOT.length() + 1);
-    int dot = tail.indexOf('.');
-    String head = dot < 0 ? tail : tail.substring(0, dot);
-    for (String context : BOUNDED_CONTEXTS) {
-      if (context.equals(head)) {
-        return context;
-      }
+
+    static String boundedContextOf(String pkg) {
+        if (!pkg.startsWith(DOMAIN_ROOT + ".")) {
+            return null;
+        }
+        String tail = pkg.substring(DOMAIN_ROOT.length() + 1);
+        int dot = tail.indexOf('.');
+        String head = dot < 0 ? tail : tail.substring(0, dot);
+        for (String context : BOUNDED_CONTEXTS) {
+            if (context.equals(head)) {
+                return context;
+            }
+        }
+        return null;
     }
-    return null;
-  }
 }

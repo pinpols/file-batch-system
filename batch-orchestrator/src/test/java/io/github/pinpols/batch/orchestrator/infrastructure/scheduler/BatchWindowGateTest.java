@@ -46,144 +46,142 @@ import org.junit.jupiter.api.Test;
 @DisplayName("资源调度中的业务日历窗口门禁,验证窗口内放行,窗口外的等待与快速失败两种策略,以及未指定窗口时直接放行")
 class BatchWindowGateTest {
 
-  private OrchestratorConfigCacheService configCacheService;
-  private DefaultResourceScheduler scheduler;
-  private BatchTimezoneProvider timezoneProvider;
+    private OrchestratorConfigCacheService configCacheService;
+    private DefaultResourceScheduler scheduler;
+    private BatchTimezoneProvider timezoneProvider;
 
-  @BeforeEach
-  void setUp() {
-    configCacheService = mock(OrchestratorConfigCacheService.class);
-    timezoneProvider = mock(BatchTimezoneProvider.class);
-    when(timezoneProvider.resolveOrDefault(any())).thenReturn(ZoneId.of("Asia/Shanghai"));
+    @BeforeEach
+    void setUp() {
+        configCacheService = mock(OrchestratorConfigCacheService.class);
+        timezoneProvider = mock(BatchTimezoneProvider.class);
+        when(timezoneProvider.resolveOrDefault(any())).thenReturn(ZoneId.of("Asia/Shanghai"));
 
-    ResourceQueueManager queueManager = mock(ResourceQueueManager.class);
-    when(queueManager.resolveQueue(any())).thenReturn(null);
+        ResourceQueueManager queueManager = mock(ResourceQueueManager.class);
+        when(queueManager.resolveQueue(any())).thenReturn(null);
 
-    PriorityScheduler prioritySched = mock(PriorityScheduler.class);
-    when(prioritySched.resolvePriority(any(), any())).thenReturn(5);
-    when(prioritySched.resolvePriorityBand(any())).thenReturn("NORMAL");
+        PriorityScheduler prioritySched = mock(PriorityScheduler.class);
+        when(prioritySched.resolvePriority(any(), any())).thenReturn(5);
+        when(prioritySched.resolvePriorityBand(any())).thenReturn("NORMAL");
 
-    // 关键：让 batch_window 之后的门禁（concurrency / partitionThrottle）都 allow，
-    // 这样 in-window 路径才能跑到底；否则 NPE on `concurrencyCheck.allowed()`。
-    // 用 doReturn().when() 形态绕开 Mockito strict-stubs 对 null arg 的 issue。
-    ConcurrencyLimiter concLimit = mock(ConcurrencyLimiter.class);
-    doReturn(ResourceCheck.allow()).when(concLimit).check(any(), any());
-    PartitionThrottle partThrottle = mock(PartitionThrottle.class);
-    doReturn(ResourceCheck.allow()).when(partThrottle).check(any(), any());
-    DispatchAdmissionLimiter dispatchAdmissionLimiter = mock(DispatchAdmissionLimiter.class);
-    doReturn(ResourceCheck.allow()).when(dispatchAdmissionLimiter).check(any(), any());
-    DownstreamAdmissionGuard downstreamAdmissionGuard = mock(DownstreamAdmissionGuard.class);
-    doReturn(ResourceCheck.allow()).when(downstreamAdmissionGuard).check(any());
-    WorkerSelector workerSelector = mock(WorkerSelector.class);
+        // 关键：让 batch_window 之后的门禁（concurrency / partitionThrottle）都 allow，
+        // 这样 in-window 路径才能跑到底；否则 NPE on `concurrencyCheck.allowed()`。
+        // 用 doReturn().when() 形态绕开 Mockito strict-stubs 对 null arg 的 issue。
+        ConcurrencyLimiter concLimit = mock(ConcurrencyLimiter.class);
+        doReturn(ResourceCheck.allow()).when(concLimit).check(any(), any());
+        PartitionThrottle partThrottle = mock(PartitionThrottle.class);
+        doReturn(ResourceCheck.allow()).when(partThrottle).check(any(), any());
+        DispatchAdmissionLimiter dispatchAdmissionLimiter = mock(DispatchAdmissionLimiter.class);
+        doReturn(ResourceCheck.allow()).when(dispatchAdmissionLimiter).check(any(), any());
+        DownstreamAdmissionGuard downstreamAdmissionGuard = mock(DownstreamAdmissionGuard.class);
+        doReturn(ResourceCheck.allow()).when(downstreamAdmissionGuard).check(any());
+        WorkerSelector workerSelector = mock(WorkerSelector.class);
 
-    scheduler = new DefaultResourceScheduler(
-        queueManager,
-        concLimit,
-        partThrottle,
-        dispatchAdmissionLimiter,
-        downstreamAdmissionGuard,
-        workerSelector,
-        prioritySched,
-        configCacheService,
-        mock(JobInstanceMapper.class),
-        mock(JobPartitionMapper.class),
-        timezoneProvider,
-        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
-        new ResourceSchedulerProperties());
-  }
+        scheduler = new DefaultResourceScheduler(
+                queueManager,
+                concLimit,
+                partThrottle,
+                dispatchAdmissionLimiter,
+                downstreamAdmissionGuard,
+                workerSelector,
+                prioritySched,
+                configCacheService,
+                mock(JobInstanceMapper.class),
+                mock(JobPartitionMapper.class),
+                timezoneProvider,
+                new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+                new ResourceSchedulerProperties());
+    }
 
-  /** in-window：当前时间在窗口内，schedule 不被门禁挡住（allow 路径，可能后续被并发 / worker 等其他门禁挡，但不是 batch_window 挡的）。 */
-  @Test
-  @DisplayName("当前时刻落在启用窗口内时,调度结果不被窗口门禁拦截,原因码不指向窗口外")
-  void shouldAllow_whenCurrentTimeIsWithinWindow() {
-    LocalTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalTime();
-    LocalTime start = now.minusHours(1);
-    LocalTime end = now.plusHours(1);
-    when(configCacheService.findEnabledBatchWindow(anyString(), anyString()))
-        .thenReturn(window("WAIT", start, end));
+    /** in-window：当前时间在窗口内，schedule 不被门禁挡住（allow 路径，可能后续被并发 / worker 等其他门禁挡，但不是 batch_window 挡的）。 */
+    @Test
+    @DisplayName("当前时刻落在启用窗口内时,调度结果不被窗口门禁拦截,原因码不指向窗口外")
+    void shouldAllow_whenCurrentTimeIsWithinWindow() {
+        LocalTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalTime();
+        LocalTime start = now.minusHours(1);
+        LocalTime end = now.plusHours(1);
+        when(configCacheService.findEnabledBatchWindow(anyString(), anyString()))
+                .thenReturn(window("WAIT", start, end));
 
-    ResourceSchedulingDecision decision = scheduler.schedule(request());
+        ResourceSchedulingDecision decision = scheduler.schedule(request());
 
-    // batch_window 不挡 → 后续 concurrency / worker 检查可能挡，但 reasonCode 不是 OUT_OF_WINDOW
-    assertThat(decision.getReasonCode()).isNotEqualTo("OUT_OF_WINDOW");
-    assertThat(decision.getReasonCode()).isNotEqualTo("OUT_OF_WINDOW_WAIT");
-  }
+        // batch_window 不挡 → 后续 concurrency / worker 检查可能挡，但 reasonCode 不是 OUT_OF_WINDOW
+        assertThat(decision.getReasonCode()).isNotEqualTo("OUT_OF_WINDOW");
+        assertThat(decision.getReasonCode()).isNotEqualTo("OUT_OF_WINDOW_WAIT");
+    }
 
-  /** out-of-window + WAIT：partition 状态保持 WAITING，等下次 tick 在 window 内重试。 */
-  @Test
-  @DisplayName("当前时刻在窗口外且策略为等待时,判定为等待容量,原因信息提示等待窗口且不快速失败")
-  void shouldWaitForCapacity_whenOutOfWindow_andActionIsWAIT() {
-    // 故意构造一个 1 分钟前刚结束的窗口（绝对在 out-of-window）
-    LocalTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalTime();
-    LocalTime start = now.minusHours(2);
-    LocalTime end = now.minusMinutes(1);
-    when(configCacheService.findEnabledBatchWindow(anyString(), anyString()))
-        .thenReturn(window("WAIT", start, end));
+    /** out-of-window + WAIT：partition 状态保持 WAITING，等下次 tick 在 window 内重试。 */
+    @Test
+    @DisplayName("当前时刻在窗口外且策略为等待时,判定为等待容量,原因信息提示等待窗口且不快速失败")
+    void shouldWaitForCapacity_whenOutOfWindow_andActionIsWAIT() {
+        // 故意构造一个 1 分钟前刚结束的窗口（绝对在 out-of-window）
+        LocalTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalTime();
+        LocalTime start = now.minusHours(2);
+        LocalTime end = now.minusMinutes(1);
+        when(configCacheService.findEnabledBatchWindow(anyString(), anyString()))
+                .thenReturn(window("WAIT", start, end));
 
-    ResourceSchedulingDecision decision = scheduler.schedule(request());
+        ResourceSchedulingDecision decision = scheduler.schedule(request());
 
-    assertThat(decision.getReasonCode()).isEqualTo("OUT_OF_WINDOW_WAIT");
-    assertThat(decision.getReasonMessage()).isEqualTo("waiting for batch window");
-    assertThat(decision.isFailFast()).isFalse();
-  }
+        assertThat(decision.getReasonCode()).isEqualTo("OUT_OF_WINDOW_WAIT");
+        assertThat(decision.getReasonMessage()).isEqualTo("waiting for batch window");
+        assertThat(decision.isFailFast()).isFalse();
+    }
 
-  /** out-of-window + FAIL：reject + failFast=true，应 fail-fast 不再等待。 */
-  @Test
-  @DisplayName("当前时刻在窗口外且策略为失败时,判定为拒绝并快速失败,原因信息指向执行时刻超出窗口")
-  void shouldRejectFailFast_whenOutOfWindow_andActionIsFAIL() {
-    LocalTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalTime();
-    LocalTime start = now.minusHours(2);
-    LocalTime end = now.minusMinutes(1);
-    when(configCacheService.findEnabledBatchWindow(anyString(), anyString()))
-        .thenReturn(window("FAIL", start, end));
+    /** out-of-window + FAIL：reject + failFast=true，应 fail-fast 不再等待。 */
+    @Test
+    @DisplayName("当前时刻在窗口外且策略为失败时,判定为拒绝并快速失败,原因信息指向执行时刻超出窗口")
+    void shouldRejectFailFast_whenOutOfWindow_andActionIsFAIL() {
+        LocalTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalTime();
+        LocalTime start = now.minusHours(2);
+        LocalTime end = now.minusMinutes(1);
+        when(configCacheService.findEnabledBatchWindow(anyString(), anyString()))
+                .thenReturn(window("FAIL", start, end));
 
-    ResourceSchedulingDecision decision = scheduler.schedule(request());
+        ResourceSchedulingDecision decision = scheduler.schedule(request());
 
-    assertThat(decision.getReasonCode()).isEqualTo("OUT_OF_WINDOW");
-    assertThat(decision.getReasonMessage())
-        .isEqualTo("current execution time is outside batch window");
-    assertThat(decision.isFailFast()).isTrue();
-  }
+        assertThat(decision.getReasonCode()).isEqualTo("OUT_OF_WINDOW");
+        assertThat(decision.getReasonMessage()).isEqualTo("current execution time is outside batch window");
+        assertThat(decision.isFailFast()).isTrue();
+    }
 
-  /** 未配 windowCode → 跳过门禁直接 allow。 */
-  @Test
-  @DisplayName("未指定窗口编码时跳过窗口门禁,原因码既不指向窗口外也不指向等待窗口")
-  void shouldAllow_whenWindowCodeIsMissing() {
-    ResourceSchedulingRequest req = request();
-    req.setWindowCode(null);
+    /** 未配 windowCode → 跳过门禁直接 allow。 */
+    @Test
+    @DisplayName("未指定窗口编码时跳过窗口门禁,原因码既不指向窗口外也不指向等待窗口")
+    void shouldAllow_whenWindowCodeIsMissing() {
+        ResourceSchedulingRequest req = request();
+        req.setWindowCode(null);
 
-    ResourceSchedulingDecision decision = scheduler.schedule(req);
+        ResourceSchedulingDecision decision = scheduler.schedule(req);
 
-    assertThat(decision.getReasonCode()).isNotEqualTo("OUT_OF_WINDOW");
-    assertThat(decision.getReasonCode()).isNotEqualTo("OUT_OF_WINDOW_WAIT");
-  }
+        assertThat(decision.getReasonCode()).isNotEqualTo("OUT_OF_WINDOW");
+        assertThat(decision.getReasonCode()).isNotEqualTo("OUT_OF_WINDOW_WAIT");
+    }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+    // ── helpers ────────────────────────────────────────────────────────────────
 
-  private static ResourceSchedulingRequest request() {
-    ResourceSchedulingRequest r = new ResourceSchedulingRequest();
-    r.setTenantId("tenant-window-test");
-    r.setJobCode("JOB_X");
-    r.setQueueCode("default-queue");
-    r.setWindowCode("daily-window");
-    r.setWorkerGroup("import");
-    r.setWorkerType("IMPORT");
-    return r;
-  }
+    private static ResourceSchedulingRequest request() {
+        ResourceSchedulingRequest r = new ResourceSchedulingRequest();
+        r.setTenantId("tenant-window-test");
+        r.setJobCode("JOB_X");
+        r.setQueueCode("default-queue");
+        r.setWindowCode("daily-window");
+        r.setWorkerGroup("import");
+        r.setWorkerType("IMPORT");
+        return r;
+    }
 
-  private static BatchWindowEntity window(
-      String outOfWindowAction, LocalTime start, LocalTime end) {
-    return new BatchWindowEntity(
-        1L,
-        "tenant-window-test",
-        "daily-window",
-        "Daily Window",
-        "Asia/Shanghai",
-        start,
-        end,
-        "FINISH_RUNNING",
-        outOfWindowAction,
-        false,
-        true);
-  }
+    private static BatchWindowEntity window(String outOfWindowAction, LocalTime start, LocalTime end) {
+        return new BatchWindowEntity(
+                1L,
+                "tenant-window-test",
+                "daily-window",
+                "Daily Window",
+                "Asia/Shanghai",
+                start,
+                end,
+                "FINISH_RUNNING",
+                outOfWindowAction,
+                false,
+                true);
+    }
 }

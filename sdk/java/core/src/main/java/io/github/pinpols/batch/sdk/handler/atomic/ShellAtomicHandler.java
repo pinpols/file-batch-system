@@ -52,218 +52,214 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Object>> {
 
-  /** JVM 临时目录系统属性名（{@code java.io.tmpdir}）；SDK 侧不依赖 batch-common，故本地持有同一份 key。 */
-  public static final String TEMP_ROOT_PROPERTY = "java.io.tmpdir";
+    /** JVM 临时目录系统属性名（{@code java.io.tmpdir}）；SDK 侧不依赖 batch-common，故本地持有同一份 key。 */
+    public static final String TEMP_ROOT_PROPERTY = "java.io.tmpdir";
 
-  /** 进程 kill 后 stdout/stderr reader 线程的有界 join 超时(ms),防 grandchild 持管道致永久挂死。 */
-  private static final long READER_JOIN_TIMEOUT_MS = 5000L;
+    /** 进程 kill 后 stdout/stderr reader 线程的有界 join 超时(ms),防 grandchild 持管道致永久挂死。 */
+    private static final long READER_JOIN_TIMEOUT_MS = 5000L;
 
-  private final ShellAtomicConfig config;
+    private final ShellAtomicConfig config;
 
-  public ShellAtomicHandler(ShellAtomicConfig config) {
-    if (config == null) {
-      throw new IllegalArgumentException("config must not be null");
-    }
-    this.config = config;
-  }
-
-  @Override
-  public String taskType() {
-    return config.taskType();
-  }
-
-  @Override
-  protected Map<String, Object> doInvoke(SdkTaskContext ctx) throws Exception {
-    String command = readCommand(ctx);
-    List<String> args = readArgs(ctx);
-
-    if (!config.allowedCommands().isEmpty() && !config.allowedCommands().contains(command)) {
-      throw new SecurityException("command not in allowedCommands: " + command);
-    }
-
-    List<String> cmd = new ArrayList<>(1 + args.size());
-    cmd.add(command);
-    cmd.addAll(args);
-
-    Path workdir = createPrivateWorkdir();
-    try {
-      return runProcess(cmd, workdir);
-    } finally {
-      if (config.cleanupWorkdir()) {
-        deleteRecursively(workdir);
-      }
-    }
-  }
-
-  @Override
-  protected Map<String, Object> asOutput(Map<String, Object> r) {
-    return r;
-  }
-
-  private static Path createPrivateWorkdir() throws IOException {
-    Path root = Path.of(System.getProperty(TEMP_ROOT_PROPERTY), "batch-sdk-private");
-    FileAttribute<Set<PosixFilePermission>> directoryPermissions =
-        PosixFilePermissions.asFileAttribute(Set.of(
-            PosixFilePermission.OWNER_READ,
-            PosixFilePermission.OWNER_WRITE,
-            PosixFilePermission.OWNER_EXECUTE));
-    try {
-      Files.createDirectory(root, directoryPermissions);
-    } catch (UnsupportedOperationException ignored) {
-      try {
-        Files.createDirectory(root);
-      } catch (FileAlreadyExistsException alreadyExists) {
-        // 目录是否存在将在下方校验。
-      }
-    } catch (FileAlreadyExistsException alreadyExists) {
-      // 目录是否存在将在下方校验。
-    }
-    if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
-      throw new IOException("private SDK workdir is not a directory: " + root);
-    }
-    try {
-      Files.setPosixFilePermissions(
-          root,
-          Set.of(
-              PosixFilePermission.OWNER_READ,
-              PosixFilePermission.OWNER_WRITE,
-              PosixFilePermission.OWNER_EXECUTE));
-    } catch (UnsupportedOperationException ignored) {
-      // Windows ACL 和非 POSIX 文件系统会在此 API 之外强制执行权限控制。
-    }
-    try {
-      return Files.createTempDirectory(root, "sdk-shell-", directoryPermissions);
-    } catch (UnsupportedOperationException ignored) {
-      Path path = Files.createTempDirectory(root, "sdk-shell-");
-      try {
-        Files.setPosixFilePermissions(
-            path,
-            Set.of(
-                PosixFilePermission.OWNER_READ,
-                PosixFilePermission.OWNER_WRITE,
-                PosixFilePermission.OWNER_EXECUTE));
-      } catch (UnsupportedOperationException ignoredPermissions) {
-        // Windows ACL 和非 POSIX 文件系统会在此 API 之外强制执行权限控制。
-      }
-      return path;
-    }
-  }
-
-  private static String readCommand(SdkTaskContext ctx) {
-    Object raw = ctx.parameters().get("command");
-    if (!(raw instanceof String s) || s.isBlank()) {
-      throw new IllegalArgumentException("parameter 'command' is required (absolute program path)");
-    }
-    return s;
-  }
-
-  private static List<String> readArgs(SdkTaskContext ctx) {
-    Object raw = ctx.parameters().get("args");
-    if (raw == null) {
-      return List.of();
-    }
-    if (!(raw instanceof List<?> list)) {
-      throw new IllegalArgumentException("parameter 'args' must be a List<String>");
-    }
-    List<String> out = new ArrayList<>(list.size());
-    for (Object o : list) {
-      out.add(String.valueOf(o));
-    }
-    return out;
-  }
-
-  private Map<String, Object> runProcess(List<String> cmd, Path workdir)
-      throws IOException, InterruptedException, TimeoutException {
-    ProcessBuilder pb = new ProcessBuilder(cmd).directory(workdir.toFile());
-    pb.redirectErrorStream(false);
-
-    Process process = pb.start();
-
-    // 并发读 stdout / stderr,避免任一管道缓冲填满导致子进程阻塞 / 死锁。
-    OutputCapture stdoutCap = new OutputCapture(process.getInputStream(), config.maxOutputBytes());
-    OutputCapture stderrCap = new OutputCapture(process.getErrorStream(), config.maxOutputBytes());
-    Thread stdoutThread = new Thread(stdoutCap, "sdk-shell-stdout");
-    Thread stderrThread = new Thread(stderrCap, "sdk-shell-stderr");
-    stdoutThread.start();
-    stderrThread.start();
-
-    boolean finished = process.waitFor(config.timeoutSeconds(), TimeUnit.SECONDS);
-    if (!finished) {
-      process.destroyForcibly();
-      // 有界 join:grandchild 可能持有管道导致流不关、reader 永不返回,无界 join 会挂死 dispatch worker 线程。
-      stdoutThread.join(READER_JOIN_TIMEOUT_MS);
-      stderrThread.join(READER_JOIN_TIMEOUT_MS);
-      throw new TimeoutException(
-          "shell command timeout after " + config.timeoutSeconds() + "s: " + cmd.get(0));
-    }
-
-    stdoutThread.join(READER_JOIN_TIMEOUT_MS);
-    stderrThread.join(READER_JOIN_TIMEOUT_MS);
-
-    int exitCode = process.exitValue();
-    return Map.of(
-        "exitCode", exitCode,
-        "stdout", stdoutCap.text(),
-        "stderr", stderrCap.text(),
-        "stdoutTruncated", stdoutCap.truncated(),
-        "stderrTruncated", stderrCap.truncated());
-  }
-
-  private static void deleteRecursively(Path dir) {
-    try (Stream<Path> paths = Files.walk(dir)) {
-      paths.sorted(Comparator.reverseOrder()).forEach(p -> {
-        try {
-          Files.deleteIfExists(p);
-        } catch (IOException e) {
-          log.warn("failed to delete temp path {}: {}", p, ExceptionLogSummary.of(e));
+    public ShellAtomicHandler(ShellAtomicConfig config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
         }
-      });
-    } catch (IOException e) {
-      log.warn("failed to cleanup workdir {}: {}", dir, ExceptionLogSummary.of(e));
-    }
-  }
-
-  /** 读取一个流到字节上限,超出则截断并置位 truncated。 */
-  private static final class OutputCapture implements Runnable {
-
-    private final InputStream in;
-    private final int maxBytes;
-    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-    private volatile boolean truncated;
-
-    OutputCapture(InputStream in, int maxBytes) {
-      this.in = in;
-      this.maxBytes = maxBytes;
+        this.config = config;
     }
 
     @Override
-    public void run() {
-      byte[] chunk = new byte[8192];
-      try (InputStream stream = in) {
-        int n;
-        while ((n = stream.read(chunk)) != -1) {
-          int remaining = maxBytes - buffer.size();
-          if (remaining <= 0) {
-            truncated = true;
-            continue; // drain残余字节,避免子进程在满管道上阻塞
-          }
-          int toWrite = Math.min(n, remaining);
-          buffer.write(chunk, 0, toWrite);
-          if (toWrite < n) {
-            truncated = true;
-          }
+    public String taskType() {
+        return config.taskType();
+    }
+
+    @Override
+    protected Map<String, Object> doInvoke(SdkTaskContext ctx) throws Exception {
+        String command = readCommand(ctx);
+        List<String> args = readArgs(ctx);
+
+        if (!config.allowedCommands().isEmpty() && !config.allowedCommands().contains(command)) {
+            throw new SecurityException("command not in allowedCommands: " + command);
         }
-      } catch (IOException e) {
-        log.warn("failed reading process output: {}", ExceptionLogSummary.of(e));
-      }
+
+        List<String> cmd = new ArrayList<>(1 + args.size());
+        cmd.add(command);
+        cmd.addAll(args);
+
+        Path workdir = createPrivateWorkdir();
+        try {
+            return runProcess(cmd, workdir);
+        } finally {
+            if (config.cleanupWorkdir()) {
+                deleteRecursively(workdir);
+            }
+        }
     }
 
-    String text() {
-      return buffer.toString(StandardCharsets.UTF_8);
+    @Override
+    protected Map<String, Object> asOutput(Map<String, Object> r) {
+        return r;
     }
 
-    boolean truncated() {
-      return truncated;
+    private static Path createPrivateWorkdir() throws IOException {
+        Path root = Path.of(System.getProperty(TEMP_ROOT_PROPERTY), "batch-sdk-private");
+        FileAttribute<Set<PosixFilePermission>> directoryPermissions = PosixFilePermissions.asFileAttribute(Set.of(
+                PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE));
+        try {
+            Files.createDirectory(root, directoryPermissions);
+        } catch (UnsupportedOperationException ignored) {
+            try {
+                Files.createDirectory(root);
+            } catch (FileAlreadyExistsException alreadyExists) {
+                // 目录是否存在将在下方校验。
+            }
+        } catch (FileAlreadyExistsException alreadyExists) {
+            // 目录是否存在将在下方校验。
+        }
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("private SDK workdir is not a directory: " + root);
+        }
+        try {
+            Files.setPosixFilePermissions(
+                    root,
+                    Set.of(
+                            PosixFilePermission.OWNER_READ,
+                            PosixFilePermission.OWNER_WRITE,
+                            PosixFilePermission.OWNER_EXECUTE));
+        } catch (UnsupportedOperationException ignored) {
+            // Windows ACL 和非 POSIX 文件系统会在此 API 之外强制执行权限控制。
+        }
+        try {
+            return Files.createTempDirectory(root, "sdk-shell-", directoryPermissions);
+        } catch (UnsupportedOperationException ignored) {
+            Path path = Files.createTempDirectory(root, "sdk-shell-");
+            try {
+                Files.setPosixFilePermissions(
+                        path,
+                        Set.of(
+                                PosixFilePermission.OWNER_READ,
+                                PosixFilePermission.OWNER_WRITE,
+                                PosixFilePermission.OWNER_EXECUTE));
+            } catch (UnsupportedOperationException ignoredPermissions) {
+                // Windows ACL 和非 POSIX 文件系统会在此 API 之外强制执行权限控制。
+            }
+            return path;
+        }
     }
-  }
+
+    private static String readCommand(SdkTaskContext ctx) {
+        Object raw = ctx.parameters().get("command");
+        if (!(raw instanceof String s) || s.isBlank()) {
+            throw new IllegalArgumentException("parameter 'command' is required (absolute program path)");
+        }
+        return s;
+    }
+
+    private static List<String> readArgs(SdkTaskContext ctx) {
+        Object raw = ctx.parameters().get("args");
+        if (raw == null) {
+            return List.of();
+        }
+        if (!(raw instanceof List<?> list)) {
+            throw new IllegalArgumentException("parameter 'args' must be a List<String>");
+        }
+        List<String> out = new ArrayList<>(list.size());
+        for (Object o : list) {
+            out.add(String.valueOf(o));
+        }
+        return out;
+    }
+
+    private Map<String, Object> runProcess(List<String> cmd, Path workdir)
+            throws IOException, InterruptedException, TimeoutException {
+        ProcessBuilder pb = new ProcessBuilder(cmd).directory(workdir.toFile());
+        pb.redirectErrorStream(false);
+
+        Process process = pb.start();
+
+        // 并发读 stdout / stderr,避免任一管道缓冲填满导致子进程阻塞 / 死锁。
+        OutputCapture stdoutCap = new OutputCapture(process.getInputStream(), config.maxOutputBytes());
+        OutputCapture stderrCap = new OutputCapture(process.getErrorStream(), config.maxOutputBytes());
+        Thread stdoutThread = new Thread(stdoutCap, "sdk-shell-stdout");
+        Thread stderrThread = new Thread(stderrCap, "sdk-shell-stderr");
+        stdoutThread.start();
+        stderrThread.start();
+
+        boolean finished = process.waitFor(config.timeoutSeconds(), TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            // 有界 join:grandchild 可能持有管道导致流不关、reader 永不返回,无界 join 会挂死 dispatch worker 线程。
+            stdoutThread.join(READER_JOIN_TIMEOUT_MS);
+            stderrThread.join(READER_JOIN_TIMEOUT_MS);
+            throw new TimeoutException("shell command timeout after " + config.timeoutSeconds() + "s: " + cmd.get(0));
+        }
+
+        stdoutThread.join(READER_JOIN_TIMEOUT_MS);
+        stderrThread.join(READER_JOIN_TIMEOUT_MS);
+
+        int exitCode = process.exitValue();
+        return Map.of(
+                "exitCode", exitCode,
+                "stdout", stdoutCap.text(),
+                "stderr", stderrCap.text(),
+                "stdoutTruncated", stdoutCap.truncated(),
+                "stderrTruncated", stderrCap.truncated());
+    }
+
+    private static void deleteRecursively(Path dir) {
+        try (Stream<Path> paths = Files.walk(dir)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    log.warn("failed to delete temp path {}: {}", p, ExceptionLogSummary.of(e));
+                }
+            });
+        } catch (IOException e) {
+            log.warn("failed to cleanup workdir {}: {}", dir, ExceptionLogSummary.of(e));
+        }
+    }
+
+    /** 读取一个流到字节上限,超出则截断并置位 truncated。 */
+    private static final class OutputCapture implements Runnable {
+
+        private final InputStream in;
+        private final int maxBytes;
+        private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        private volatile boolean truncated;
+
+        OutputCapture(InputStream in, int maxBytes) {
+            this.in = in;
+            this.maxBytes = maxBytes;
+        }
+
+        @Override
+        public void run() {
+            byte[] chunk = new byte[8192];
+            try (InputStream stream = in) {
+                int n;
+                while ((n = stream.read(chunk)) != -1) {
+                    int remaining = maxBytes - buffer.size();
+                    if (remaining <= 0) {
+                        truncated = true;
+                        continue; // drain残余字节,避免子进程在满管道上阻塞
+                    }
+                    int toWrite = Math.min(n, remaining);
+                    buffer.write(chunk, 0, toWrite);
+                    if (toWrite < n) {
+                        truncated = true;
+                    }
+                }
+            } catch (IOException e) {
+                log.warn("failed reading process output: {}", ExceptionLogSummary.of(e));
+            }
+        }
+
+        String text() {
+            return buffer.toString(StandardCharsets.UTF_8);
+        }
+
+        boolean truncated() {
+            return truncated;
+        }
+    }
 }

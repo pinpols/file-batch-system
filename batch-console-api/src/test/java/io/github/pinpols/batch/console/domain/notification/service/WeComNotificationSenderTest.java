@@ -18,106 +18,101 @@ import org.junit.jupiter.api.Test;
 @DisplayName("企业微信群机器人通知发送器")
 class WeComNotificationSenderTest {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
-  private AtomicReference<OutboundHttpRequest> capturedRequest;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private AtomicReference<OutboundHttpRequest> capturedRequest;
 
-  private WeComNotificationSender newSender(int statusCode, String responseBody) {
-    OutboundHttpTransport transport = request -> {
-      capturedRequest.set(request);
-      return new OutboundHttpResponse(statusCode, responseBody);
-    };
-    return new WeComNotificationSender(objectMapper, transport);
-  }
+    private WeComNotificationSender newSender(int statusCode, String responseBody) {
+        OutboundHttpTransport transport = request -> {
+            capturedRequest.set(request);
+            return new OutboundHttpResponse(statusCode, responseBody);
+        };
+        return new WeComNotificationSender(objectMapper, transport);
+    }
 
-  @BeforeEach
-  void setUp() {
-    capturedRequest = new AtomicReference<>();
-  }
+    @BeforeEach
+    void setUp() {
+        capturedRequest = new AtomicReference<>();
+    }
 
-  private NotificationMessage messageWith(String configJson) {
-    WebhookEventPayload payload = new WebhookEventPayload(
-        "t1", "JOB_FAILED", "jobs", "cursor-1", Instant.parse("2026-06-24T00:00:00Z"), null);
-    return new NotificationMessage(
-        "t1", "wecom-bot", "WECOM", configJson, payload, "{\"jobId\":42}");
-  }
+    private NotificationMessage messageWith(String configJson) {
+        WebhookEventPayload payload = new WebhookEventPayload(
+                "t1", "JOB_FAILED", "jobs", "cursor-1", Instant.parse("2026-06-24T00:00:00Z"), null);
+        return new NotificationMessage("t1", "wecom-bot", "WECOM", configJson, payload, "{\"jobId\":42}");
+    }
 
-  @Test
-  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
-  void shouldSupportWecomChannelTypeCaseInsensitive() {
-    WeComNotificationSender sender = newSender(200, "{\"errcode\":0}");
+    @Test
+    @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
+    void shouldSupportWecomChannelTypeCaseInsensitive() {
+        WeComNotificationSender sender = newSender(200, "{\"errcode\":0}");
 
-    assertThat(sender.supports("WECOM")).isTrue();
-    assertThat(sender.supports("wecom")).isTrue();
-    assertThat(sender.supports("WECHAT")).isFalse();
-    assertThat(sender.supports("DINGTALK")).isFalse();
-    assertThat(sender.supports(null)).isFalse();
-  }
+        assertThat(sender.supports("WECOM")).isTrue();
+        assertThat(sender.supports("wecom")).isTrue();
+        assertThat(sender.supports("WECHAT")).isFalse();
+        assertThat(sender.supports("DINGTALK")).isFalse();
+        assertThat(sender.supports(null)).isFalse();
+    }
 
-  @Test
-  @DisplayName("缺少机器人地址时直接失败, 未捕获到任何出站请求")
-  void shouldFailWithoutHittingNetwork_whenUrlMissing() {
-    WeComNotificationSender sender = new WeComNotificationSender(objectMapper, failOnRequest());
+    @Test
+    @DisplayName("缺少机器人地址时直接失败, 未捕获到任何出站请求")
+    void shouldFailWithoutHittingNetwork_whenUrlMissing() {
+        WeComNotificationSender sender = new WeComNotificationSender(objectMapper, failOnRequest());
 
-    WebhookDeliveryResult result = sender.send(messageWith("{\"foo\":\"bar\"}"));
+        WebhookDeliveryResult result = sender.send(messageWith("{\"foo\":\"bar\"}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.httpStatus()).isNull();
-    assertThat(result.errorSummary()).isEqualTo("missing wecom url");
-    assertThat(capturedRequest.get()).isNull();
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.httpStatus()).isNull();
+        assertThat(result.errorSummary()).isEqualTo("missing wecom url");
+        assertThat(capturedRequest.get()).isNull();
+    }
 
-  @Test
-  @DisplayName("响应错误码为零时判定成功, 请求体为文本消息且走在受保护地址策略上")
-  void shouldReturnOk_whenErrcodeZero() {
-    WeComNotificationSender sender = newSender(200, "{\"errcode\":0,\"errmsg\":\"ok\"}");
+    @Test
+    @DisplayName("响应错误码为零时判定成功, 请求体为文本消息且走在受保护地址策略上")
+    void shouldReturnOk_whenErrcodeZero() {
+        WeComNotificationSender sender = newSender(200, "{\"errcode\":0,\"errmsg\":\"ok\"}");
 
-    WebhookDeliveryResult result =
-        sender.send(messageWith("{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
+        WebhookDeliveryResult result =
+                sender.send(messageWith("{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
 
-    assertThat(result.success()).isTrue();
-    assertThat(capturedRequest.get().body())
-        .contains("\"msgtype\":\"text\"")
-        .contains("JOB_FAILED");
-    assertThat(capturedRequest.get().addressPolicy()).isEqualTo(OutboundAddressPolicy.GUARDED);
-  }
+        assertThat(result.success()).isTrue();
+        assertThat(capturedRequest.get().body())
+                .contains("\"msgtype\":\"text\"")
+                .contains("JOB_FAILED");
+        assertThat(capturedRequest.get().addressPolicy()).isEqualTo(OutboundAddressPolicy.GUARDED);
+    }
 
-  @Test
-  @DisplayName("响应错误码非零时判定失败, 错误摘要带业务码")
-  void shouldReturnFailure_whenErrcodeNonZero() {
-    WeComNotificationSender sender =
-        newSender(200, "{\"errcode\":93000,\"errmsg\":\"invalid webhook url\"}");
+    @Test
+    @DisplayName("响应错误码非零时判定失败, 错误摘要带业务码")
+    void shouldReturnFailure_whenErrcodeNonZero() {
+        WeComNotificationSender sender = newSender(200, "{\"errcode\":93000,\"errmsg\":\"invalid webhook url\"}");
 
-    WebhookDeliveryResult result =
-        sender.send(messageWith("{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
+        WebhookDeliveryResult result =
+                sender.send(messageWith("{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.httpStatus()).isEqualTo(200);
-    assertThat(result.errorSummary()).isEqualTo("wecom errcode=93000");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.httpStatus()).isEqualTo(200);
+        assertThat(result.errorSummary()).isEqualTo("wecom errcode=93000");
+    }
 
-  @Test
-  @DisplayName("域名解析到内网地址时拦截, 不发起真实投递")
-  void shouldBlock_whenHostResolvesToInternalAddress() {
-    WeComNotificationSender sender =
-        new WeComNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
+    @Test
+    @DisplayName("域名解析到内网地址时拦截, 不发起真实投递")
+    void shouldBlock_whenHostResolvesToInternalAddress() {
+        WeComNotificationSender sender = new WeComNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
 
-    WebhookDeliveryResult result =
-        sender.send(messageWith("{\"url\":\"https://localhost/robot?key=x\"}"));
+        WebhookDeliveryResult result = sender.send(messageWith("{\"url\":\"https://localhost/robot?key=x\"}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorSummary()).contains("BlockedAddressException");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorSummary()).contains("BlockedAddressException");
+    }
 
-  @Test
-  @DisplayName("地址为字面量元数据内网地址时拦截, 不发起真实投递")
-  void shouldBlock_whenUrlIsLiteralInternalIp() {
-    WeComNotificationSender sender =
-        new WeComNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
+    @Test
+    @DisplayName("地址为字面量元数据内网地址时拦截, 不发起真实投递")
+    void shouldBlock_whenUrlIsLiteralInternalIp() {
+        WeComNotificationSender sender = new WeComNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
 
-    WebhookDeliveryResult result =
-        sender.send(messageWith("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));
+        WebhookDeliveryResult result =
+                sender.send(messageWith("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.errorSummary()).contains("BlockedAddressException");
-  }
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorSummary()).contains("BlockedAddressException");
+    }
 }

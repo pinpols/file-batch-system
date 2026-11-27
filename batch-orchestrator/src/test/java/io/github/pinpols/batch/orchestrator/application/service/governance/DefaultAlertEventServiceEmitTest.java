@@ -22,63 +22,64 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("emit 直连 AM 旁路")
 class DefaultAlertEventServiceEmitTest {
 
-  @Mock
-  private AlertEventMapper alertEventMapper;
+    @Mock
+    private AlertEventMapper alertEventMapper;
 
-  @Mock
-  private AlertmanagerEmitPublisher publisher;
+    @Mock
+    private AlertmanagerEmitPublisher publisher;
 
-  private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
-  private DefaultAlertEventService service() {
-    return new DefaultAlertEventService(alertEventMapper, meterRegistry, publisher);
-  }
+    private DefaultAlertEventService service() {
+        return new DefaultAlertEventService(alertEventMapper, meterRegistry, publisher);
+    }
 
-  @Test
-  @DisplayName("落库后把告警推给 AM publisher(无活跃事务时直推)")
-  void emit_publishesToAlertmanagerAfterInsert() {
-    AlertEmitCommand request = AlertEmitCommand.builder()
-        .tenantId("ta")
-        .alertType("JOB_SLA_BREACH")
-        .severity("CRITICAL")
-        .build();
+    @Test
+    @DisplayName("落库后把告警推给 AM publisher(无活跃事务时直推)")
+    void emit_publishesToAlertmanagerAfterInsert() {
+        AlertEmitCommand request = AlertEmitCommand.builder()
+                .tenantId("ta")
+                .alertType("JOB_SLA_BREACH")
+                .severity("CRITICAL")
+                .build();
 
-    AlertEventEntity persisted = new AlertEventEntity();
-    persisted.setId(42L);
-    persisted.setStatus("OPEN");
-    persisted.setFirstSeenAt(Instant.parse("2026-10-25T00:00:00Z"));
-    when(alertEventMapper.selectByFingerprint(anyString(), anyString())).thenReturn(persisted);
+        AlertEventEntity persisted = new AlertEventEntity();
+        persisted.setId(42L);
+        persisted.setStatus("OPEN");
+        persisted.setFirstSeenAt(Instant.parse("2026-10-25T00:00:00Z"));
+        when(alertEventMapper.selectByFingerprint(anyString(), anyString())).thenReturn(persisted);
 
-    service().emit(request);
+        service().emit(request);
 
-    verify(alertEventMapper).insertOrMerge(any(AlertEventEntity.class));
-    verify(publisher).publishFiring(persisted);
-  }
+        verify(alertEventMapper).insertOrMerge(any(AlertEventEntity.class));
+        verify(publisher).publishFiring(persisted);
+    }
 
-  @Test
-  @DisplayName("重复信号命中已关闭告警时不重新发送发生通知")
-  void shouldNotRepublishClosedAlert() {
-    AlertEventEntity persisted = new AlertEventEntity();
-    persisted.setStatus("CLOSED");
-    when(alertEventMapper.selectByFingerprint(anyString(), anyString())).thenReturn(persisted);
-    AlertEmitCommand request = AlertEmitCommand.builder()
-        .tenantId("ta")
-        .alertType("JOB_RUNNING_TOO_LONG")
-        .resourceKey("42")
-        .build();
+    @Test
+    @DisplayName("重复信号命中已关闭告警时不重新发送发生通知")
+    void shouldNotRepublishClosedAlert() {
+        AlertEventEntity persisted = new AlertEventEntity();
+        persisted.setStatus("CLOSED");
+        when(alertEventMapper.selectByFingerprint(anyString(), anyString())).thenReturn(persisted);
+        AlertEmitCommand request = AlertEmitCommand.builder()
+                .tenantId("ta")
+                .alertType("JOB_RUNNING_TOO_LONG")
+                .resourceKey("42")
+                .build();
 
-    service().emit(request);
+        service().emit(request);
 
-    verify(publisher, never()).publishFiring(any());
-  }
+        verify(publisher, never()).publishFiring(any());
+    }
 
-  @Test
-  @DisplayName("无效请求(缺 tenant/alertType)不落库也不推 AM")
-  void emit_skipsInvalidRequest() {
-    AlertEmitCommand invalidRequest = AlertEmitCommand.builder().alertType("X").build();
-    service().emit(invalidRequest);
+    @Test
+    @DisplayName("无效请求(缺 tenant/alertType)不落库也不推 AM")
+    void emit_skipsInvalidRequest() {
+        AlertEmitCommand invalidRequest =
+                AlertEmitCommand.builder().alertType("X").build();
+        service().emit(invalidRequest);
 
-    verify(alertEventMapper, never()).insertOrMerge(any());
-    verify(publisher, never()).publishFiring(any());
-  }
+        verify(alertEventMapper, never()).insertOrMerge(any());
+        verify(publisher, never()).publishFiring(any());
+    }
 }

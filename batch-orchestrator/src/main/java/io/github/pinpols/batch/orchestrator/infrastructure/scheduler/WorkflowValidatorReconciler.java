@@ -32,84 +32,73 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkflowValidatorReconciler {
 
-  static final String ALERT_TYPE = "WORKFLOW_DEFINITION_INVALID";
+    static final String ALERT_TYPE = "WORKFLOW_DEFINITION_INVALID";
 
-  private final WorkflowDefinitionMapper workflowDefinitionMapper;
-  private final WorkflowGraphValidator validator;
-  private final AlertEventService alertEventService;
-  private final WorkflowValidatorReconcileProperties properties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final WorkflowDefinitionMapper workflowDefinitionMapper;
+    private final WorkflowGraphValidator validator;
+    private final AlertEventService alertEventService;
+    private final WorkflowValidatorReconcileProperties properties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.workflow.validator.poll-interval-millis:86400000}")
-  @SchedulerLock(
-      name = "workflow_validator_reconcile",
-      lockAtMostFor = "PT30M",
-      lockAtLeastFor = "PT5M")
-  public void scheduledReconcile() {
-    if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
-      return;
-    }
-    List<WorkflowDefinitionView> enabled =
-        workflowDefinitionMapper.selectAllEnabled(properties.getBatchSize());
-    if (EmptyChecks.isEmpty(enabled)) {
-      return;
-    }
-    int invalidCount = 0;
-    for (WorkflowDefinitionView wf : enabled) {
-      if (wf == null || wf.id() == null) continue;
-      String tenantId = wf.tenantId();
-      if (tenantId == null || tenantId.isBlank()) {
-        continue;
-      }
-      try {
-        // RLS Phase B：validator.validate 走 workflow_node / job_definition / calendar mapper，
-        // emitInvalid 写 alert_event；都依赖 holder。try/catch 包在 runWithTenant 外保证 finally 清。
-        boolean hasErrors =
-            RlsTenantContextHolder.runWithTenant(tenantId, () -> validateAndEmitInTenant(wf));
-        if (hasErrors) {
-          invalidCount++;
+    @Scheduled(fixedDelayString = "${batch.workflow.validator.poll-interval-millis:86400000}")
+    @SchedulerLock(name = "workflow_validator_reconcile", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5M")
+    public void scheduledReconcile() {
+        if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
+            return;
         }
-      } catch (Exception failure) {
-        Long workflowDefId = wf.id();
-        String causeSummary = SwallowedExceptionLogger.summary(failure);
-        log.warn(
-            "workflow_validator reconcile error: workflowDefId={}, msg={}",
-            workflowDefId,
-            causeSummary);
-      }
+        List<WorkflowDefinitionView> enabled = workflowDefinitionMapper.selectAllEnabled(properties.getBatchSize());
+        if (EmptyChecks.isEmpty(enabled)) {
+            return;
+        }
+        int invalidCount = 0;
+        for (WorkflowDefinitionView wf : enabled) {
+            if (wf == null || wf.id() == null) continue;
+            String tenantId = wf.tenantId();
+            if (tenantId == null || tenantId.isBlank()) {
+                continue;
+            }
+            try {
+                // RLS Phase B：validator.validate 走 workflow_node / job_definition / calendar mapper，
+                // emitInvalid 写 alert_event；都依赖 holder。try/catch 包在 runWithTenant 外保证 finally 清。
+                boolean hasErrors = RlsTenantContextHolder.runWithTenant(tenantId, () -> validateAndEmitInTenant(wf));
+                if (hasErrors) {
+                    invalidCount++;
+                }
+            } catch (Exception failure) {
+                Long workflowDefId = wf.id();
+                String causeSummary = SwallowedExceptionLogger.summary(failure);
+                log.warn("workflow_validator reconcile error: workflowDefId={}, msg={}", workflowDefId, causeSummary);
+            }
+        }
+        if (invalidCount > 0) {
+            log.warn("workflow_validator reconcile finished: total={}, invalid={}", enabled.size(), invalidCount);
+        }
     }
-    if (invalidCount > 0) {
-      log.warn(
-          "workflow_validator reconcile finished: total={}, invalid={}",
-          enabled.size(),
-          invalidCount);
-    }
-  }
 
-  private boolean validateAndEmitInTenant(WorkflowDefinitionView workflow) {
-    WorkflowValidationResult result = validator.validate(workflow.id());
-    if (result.hasErrors()) {
-      emitInvalid(workflow, result);
-      return true;
+    private boolean validateAndEmitInTenant(WorkflowDefinitionView workflow) {
+        WorkflowValidationResult result = validator.validate(workflow.id());
+        if (result.hasErrors()) {
+            emitInvalid(workflow, result);
+            return true;
+        }
+        return false;
     }
-    return false;
-  }
 
-  private void emitInvalid(WorkflowDefinitionView wf, WorkflowValidationResult result) {
-    Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("workflowDefinitionId", wf.id());
-    detail.put("workflowCode", wf.workflowCode());
-    detail.put("errors", result.errors());
-    detail.put("warnings", result.warnings());
-    AlertEmitCommand request = AlertEmitCommand.builder()
-        .tenantId(wf.tenantId())
-        .serviceName("batch-orchestrator")
-        .alertType(ALERT_TYPE)
-        .severity("ERROR")
-        .title("workflow definition invalid: " + wf.workflowCode())
-        .detailJson(JsonUtils.toJson(detail))
-        .resourceKey(wf.tenantId() + ":" + wf.id())
-        .build();
-    alertEventService.emit(request);
-  }
+    private void emitInvalid(WorkflowDefinitionView wf, WorkflowValidationResult result) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("workflowDefinitionId", wf.id());
+        detail.put("workflowCode", wf.workflowCode());
+        detail.put("errors", result.errors());
+        detail.put("warnings", result.warnings());
+        AlertEmitCommand request = AlertEmitCommand.builder()
+                .tenantId(wf.tenantId())
+                .serviceName("batch-orchestrator")
+                .alertType(ALERT_TYPE)
+                .severity("ERROR")
+                .title("workflow definition invalid: " + wf.workflowCode())
+                .detailJson(JsonUtils.toJson(detail))
+                .resourceKey(wf.tenantId() + ":" + wf.id())
+                .build();
+        alertEventService.emit(request);
+    }
 }

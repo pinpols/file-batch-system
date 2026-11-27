@@ -15,20 +15,20 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class InMemorySdkCheckpoint implements SdkCheckpoint {
 
-  private final Map<String, SdkCheckpointState> store = new ConcurrentHashMap<>();
+    private final Map<String, SdkCheckpointState> store = new ConcurrentHashMap<>();
 
-  @Override
-  public Optional<SdkCheckpointState> load(String taskId) {
-    return Optional.ofNullable(store.get(taskId));
-  }
+    @Override
+    public Optional<SdkCheckpointState> load(String taskId) {
+        return Optional.ofNullable(store.get(taskId));
+    }
 
-  @Override
-  public void save(String taskId, SdkCheckpointState state) {
-    store.put(taskId, state);
-  }
+    @Override
+    public void save(String taskId, SdkCheckpointState state) {
+        store.put(taskId, state);
+    }
 
-  /** 测试辅助:当前已保存的断点条数。 */
-  public int size() {
-    return store.size();
-  }
+    /** 测试辅助:当前已保存的断点条数。 */
+    public int size() {
+        return store.size();
+    }
 }

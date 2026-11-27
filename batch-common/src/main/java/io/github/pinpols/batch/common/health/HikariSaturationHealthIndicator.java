@@ -17,41 +17,44 @@ import org.springframework.boot.health.contributor.HealthIndicator;
  */
 public class HikariSaturationHealthIndicator implements HealthIndicator {
 
-  private final DataSource dataSource;
-  private final double saturationThreshold;
+    private final DataSource dataSource;
+    private final double saturationThreshold;
 
-  public HikariSaturationHealthIndicator(
-      DataSource dataSource, HikariSaturationProperties properties) {
-    this.dataSource = dataSource;
-    this.saturationThreshold = properties.getThreshold();
-  }
+    public HikariSaturationHealthIndicator(DataSource dataSource, HikariSaturationProperties properties) {
+        this.dataSource = dataSource;
+        this.saturationThreshold = properties.getThreshold();
+    }
 
-  @Override
-  public Health health() {
-    if (!(dataSource instanceof HikariDataSource hikari)) {
-      return Health.unknown().withDetail("reason", "not-a-hikari-datasource").build();
+    @Override
+    public Health health() {
+        if (!(dataSource instanceof HikariDataSource hikari)) {
+            return Health.unknown()
+                    .withDetail("reason", "not-a-hikari-datasource")
+                    .build();
+        }
+        HikariPoolMXBean pool = hikari.getHikariPoolMXBean();
+        if (pool == null) {
+            return Health.unknown()
+                    .withDetail("reason", "pool-mxbean-unavailable")
+                    .build();
+        }
+        int active = pool.getActiveConnections();
+        int total = hikari.getMaximumPoolSize();
+        int idle = pool.getIdleConnections();
+        int waiting = pool.getThreadsAwaitingConnection();
+        double saturation = total > 0 ? (double) active / total : 0.0;
+        Health.Builder builder = (saturation >= saturationThreshold ? Health.down() : Health.up())
+                .withDetail("active", active)
+                .withDetail("idle", idle)
+                .withDetail("max", total)
+                .withDetail("waiting", waiting)
+                .withDetail("saturation", saturation)
+                .withDetail("threshold", saturationThreshold);
+        if (waiting > 0) {
+            // 有线程在排队等连接 = 池子已经事实饱和,即使 active < threshold 也下沉
+            Map<String, Object> healthDetails = builder.build().getDetails();
+            builder = Health.down().withDetails(healthDetails);
+        }
+        return builder.build();
     }
-    HikariPoolMXBean pool = hikari.getHikariPoolMXBean();
-    if (pool == null) {
-      return Health.unknown().withDetail("reason", "pool-mxbean-unavailable").build();
-    }
-    int active = pool.getActiveConnections();
-    int total = hikari.getMaximumPoolSize();
-    int idle = pool.getIdleConnections();
-    int waiting = pool.getThreadsAwaitingConnection();
-    double saturation = total > 0 ? (double) active / total : 0.0;
-    Health.Builder builder = (saturation >= saturationThreshold ? Health.down() : Health.up())
-        .withDetail("active", active)
-        .withDetail("idle", idle)
-        .withDetail("max", total)
-        .withDetail("waiting", waiting)
-        .withDetail("saturation", saturation)
-        .withDetail("threshold", saturationThreshold);
-    if (waiting > 0) {
-      // 有线程在排队等连接 = 池子已经事实饱和,即使 active < threshold 也下沉
-      Map<String, Object> healthDetails = builder.build().getDetails();
-      builder = Health.down().withDetails(healthDetails);
-    }
-    return builder.build();
-  }
 }

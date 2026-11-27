@@ -18,29 +18,29 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.quota")
 public class QuotaProperties {
 
-  private String runtimeStore = "redis";
+    private String runtimeStore = "redis";
 
-  private Redis redis = new Redis();
+    private Redis redis = new Redis();
 
-  private Snapshot snapshot = new Snapshot();
+    private Snapshot snapshot = new Snapshot();
 
-  private BackendGuard backendGuard = new BackendGuard();
+    private BackendGuard backendGuard = new BackendGuard();
 
-  @Data
-  public static class Redis {
-    /** Redis 协调后端不可用时的策略：{@code FAIL_CLOSED}（默认，不绕过租户配额）或 {@code FAIL_OPEN}（仅本地联调）。 */
-    private String failureMode = "FAIL_CLOSED";
-  }
+    @Data
+    public static class Redis {
+        /** Redis 协调后端不可用时的策略：{@code FAIL_CLOSED}（默认，不绕过租户配额）或 {@code FAIL_OPEN}（仅本地联调）。 */
+        private String failureMode = "FAIL_CLOSED";
+    }
 
-  @Data
-  public static class Snapshot {
-    private boolean enabled = true;
-    private long intervalMillis = 300_000L;
-  }
+    @Data
+    public static class Snapshot {
+        private boolean enabled = true;
+        private long intervalMillis = 300_000L;
+    }
 
-  @Data
-  public static class BackendGuard {
-    /** 后端或连接定位变化时必须换用新的非空值；首次基线登记不需要。 */
-    private String cutoverId = "";
-  }
+    @Data
+    public static class BackendGuard {
+        /** 后端或连接定位变化时必须换用新的非空值；首次基线登记不需要。 */
+        private String cutoverId = "";
+    }
 }

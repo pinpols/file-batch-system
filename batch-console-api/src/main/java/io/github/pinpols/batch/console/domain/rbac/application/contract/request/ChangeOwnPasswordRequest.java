@@ -8,11 +8,11 @@ import lombok.Data;
 @Data
 public class ChangeOwnPasswordRequest {
 
-  @NotBlank
-  @Size(min = 8, max = 256)
-  private String currentPassword;
+    @NotBlank
+    @Size(min = 8, max = 256)
+    private String currentPassword;
 
-  @NotBlank
-  @Size(min = 8, max = 256)
-  private String newPassword;
+    @NotBlank
+    @Size(min = 8, max = 256)
+    private String newPassword;
 }

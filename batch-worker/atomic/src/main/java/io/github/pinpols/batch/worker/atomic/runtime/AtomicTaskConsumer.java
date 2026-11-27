@@ -14,52 +14,51 @@ import org.springframework.stereotype.Service;
 
 /** 专用原子任务 worker 的 Kafka 消费者:消费 batch.task.dispatch.atomic,执行 shell/sql/stored-proc/http 原子任务。 */
 @Service
-@SuppressWarnings(
-    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
+@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
 public class AtomicTaskConsumer extends AbstractTaskConsumer {
 
-  private final AtomicWorkerLoop workerLoop;
-  private final AtomicWorkerConfiguration configuration;
-  private final TaskDispatchExecutor taskDispatchExecutor;
-  private final DeadLetterPublisher deadLetterPublisher;
+    private final AtomicWorkerLoop workerLoop;
+    private final AtomicWorkerConfiguration configuration;
+    private final TaskDispatchExecutor taskDispatchExecutor;
+    private final DeadLetterPublisher deadLetterPublisher;
 
-  public AtomicTaskConsumer(
-      AtomicWorkerLoop workerLoop,
-      AtomicWorkerConfiguration configuration,
-      TaskDispatchExecutor taskDispatchExecutor,
-      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-      DeadLetterPublisher deadLetterPublisher,
-      ObjectProvider<MeterRegistry> meterRegistryProvider,
-      WorkerConcurrencyProperties concurrencyProperties) {
-    super(kafkaListenerEndpointRegistry, meterRegistryProvider, concurrencyProperties);
-    this.workerLoop = workerLoop;
-    this.configuration = configuration;
-    this.taskDispatchExecutor = taskDispatchExecutor;
-    this.deadLetterPublisher = deadLetterPublisher;
-  }
+    public AtomicTaskConsumer(
+            AtomicWorkerLoop workerLoop,
+            AtomicWorkerConfiguration configuration,
+            TaskDispatchExecutor taskDispatchExecutor,
+            KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+            DeadLetterPublisher deadLetterPublisher,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
+            WorkerConcurrencyProperties concurrencyProperties) {
+        super(kafkaListenerEndpointRegistry, meterRegistryProvider, concurrencyProperties);
+        this.workerLoop = workerLoop;
+        this.configuration = configuration;
+        this.taskDispatchExecutor = taskDispatchExecutor;
+        this.deadLetterPublisher = deadLetterPublisher;
+    }
 
-  @Override
-  protected AbstractWorkerLoop workerLoop() {
-    return workerLoop;
-  }
+    @Override
+    protected AbstractWorkerLoop workerLoop() {
+        return workerLoop;
+    }
 
-  @Override
-  protected WorkerConfiguration workerConfiguration() {
-    return configuration;
-  }
+    @Override
+    protected WorkerConfiguration workerConfiguration() {
+        return configuration;
+    }
 
-  @Override
-  protected TaskDispatchExecutor taskDispatchExecutor() {
-    return taskDispatchExecutor;
-  }
+    @Override
+    protected TaskDispatchExecutor taskDispatchExecutor() {
+        return taskDispatchExecutor;
+    }
 
-  @Override
-  protected DeadLetterPublisher deadLetterPublisher() {
-    return deadLetterPublisher;
-  }
+    @Override
+    protected DeadLetterPublisher deadLetterPublisher() {
+        return deadLetterPublisher;
+    }
 
-  @Override
-  public String listenerId() {
-    return "spi-task-consumer";
-  }
+    @Override
+    public String listenerId() {
+        return "spi-task-consumer";
+    }
 }

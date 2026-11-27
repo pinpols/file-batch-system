@@ -25,70 +25,72 @@ import org.springframework.stereotype.Service;
 @Service
 public class DefaultHeartbeatService implements HeartbeatService {
 
-  private final WorkerSelfRegistrationService workerRegistryService;
-  private final WorkerRuntimeState workerRuntimeState;
-  private final ObjectProvider<WorkerLoadProvider> loadProviders;
-  private final ObjectProvider<WorkerConsumptionControl> consumptionControls;
+    private final WorkerSelfRegistrationService workerRegistryService;
+    private final WorkerRuntimeState workerRuntimeState;
+    private final ObjectProvider<WorkerLoadProvider> loadProviders;
+    private final ObjectProvider<WorkerConsumptionControl> consumptionControls;
 
-  public DefaultHeartbeatService(
-      WorkerSelfRegistrationService workerRegistryService,
-      WorkerRuntimeState workerRuntimeState,
-      ObjectProvider<WorkerLoadProvider> loadProviders,
-      ObjectProvider<WorkerConsumptionControl> consumptionControls) {
-    this.workerRegistryService = workerRegistryService;
-    this.workerRuntimeState = workerRuntimeState;
-    this.loadProviders = loadProviders;
-    this.consumptionControls = consumptionControls;
-  }
+    public DefaultHeartbeatService(
+            WorkerSelfRegistrationService workerRegistryService,
+            WorkerRuntimeState workerRuntimeState,
+            ObjectProvider<WorkerLoadProvider> loadProviders,
+            ObjectProvider<WorkerConsumptionControl> consumptionControls) {
+        this.workerRegistryService = workerRegistryService;
+        this.workerRuntimeState = workerRuntimeState;
+        this.loadProviders = loadProviders;
+        this.consumptionControls = consumptionControls;
+    }
 
-  @Override
-  public void beat(String workerId) {
-    if (workerId == null || workerId.isBlank()) {
-      return;
+    @Override
+    public void beat(String workerId) {
+        if (workerId == null || workerId.isBlank()) {
+            return;
+        }
+        WorkerRegistration activeRegistration = workerRuntimeState.get(workerId);
+        if (activeRegistration == null) {
+            log.debug("skip heartbeat for unknown workerId={}", workerId);
+            return;
+        }
+        activeRegistration.setCurrentLoad(collectCurrentLoad());
+        WorkerRegistration renewed = workerRegistryService.renew(activeRegistration);
+        if (!workerRuntimeState.replaceIfCurrent(workerId, activeRegistration, renewed)) {
+            log.debug("ignore heartbeat for removed or replaced registration: workerId={}", workerId);
+            return;
+        }
+        applyPlatformDirective(renewed);
+        log.debug("worker heartbeat: workerId={} currentLoad={}", workerId, renewed.getCurrentLoad());
     }
-    WorkerRegistration activeRegistration = workerRuntimeState.get(workerId);
-    if (activeRegistration == null) {
-      log.debug("skip heartbeat for unknown workerId={}", workerId);
-      return;
-    }
-    activeRegistration.setCurrentLoad(collectCurrentLoad());
-    WorkerRegistration renewed = workerRegistryService.renew(activeRegistration);
-    if (!workerRuntimeState.replaceIfCurrent(workerId, activeRegistration, renewed)) {
-      log.debug("ignore heartbeat for removed or replaced registration: workerId={}", workerId);
-      return;
-    }
-    applyPlatformDirective(renewed);
-    log.debug("worker heartbeat: workerId={} currentLoad={}", workerId, renewed.getCurrentLoad());
-  }
 
-  private void applyPlatformDirective(WorkerRegistration registration) {
-    boolean draining = registration.isPlatformDraining()
-        || WorkerRegistryStatus.DRAINING.code().equals(registration.getStatus())
-        || WorkerRegistryStatus.DECOMMISSIONED.code().equals(registration.getStatus());
-    consumptionControls.orderedStream().forEach(control -> {
-      try {
-        control.setPlatformDraining(draining);
-      } catch (RuntimeException ex) {
-        String workerId = registration.getWorkerId();
-        String causeSummary = SwallowedExceptionLogger.summary(ex);
-        log.warn(
-            "failed to apply worker platform directive: workerId={}, draining={}, error={}",
-            workerId,
-            draining,
-            causeSummary);
-      }
-    });
-  }
-
-  /** 求和所有 WorkerLoadProvider 实现 (通常是 1 个 AbstractTaskConsumer 子类), 异常静默回退为 0. */
-  private int collectCurrentLoad() {
-    try {
-      return loadProviders.stream().mapToInt(WorkerLoadProvider::currentLoad).sum();
-    } catch (RuntimeException ex) {
-      log.warn(
-          "WorkerLoadProvider currentLoad sum failed; falling back to 0: {}",
-          SwallowedExceptionLogger.summary(ex));
-      return 0;
+    private void applyPlatformDirective(WorkerRegistration registration) {
+        boolean draining = registration.isPlatformDraining()
+                || WorkerRegistryStatus.DRAINING.code().equals(registration.getStatus())
+                || WorkerRegistryStatus.DECOMMISSIONED.code().equals(registration.getStatus());
+        consumptionControls.orderedStream().forEach(control -> {
+            try {
+                control.setPlatformDraining(draining);
+            } catch (RuntimeException ex) {
+                String workerId = registration.getWorkerId();
+                String causeSummary = SwallowedExceptionLogger.summary(ex);
+                log.warn(
+                        "failed to apply worker platform directive: workerId={}, draining={}, error={}",
+                        workerId,
+                        draining,
+                        causeSummary);
+            }
+        });
     }
-  }
+
+    /** 求和所有 WorkerLoadProvider 实现 (通常是 1 个 AbstractTaskConsumer 子类), 异常静默回退为 0. */
+    private int collectCurrentLoad() {
+        try {
+            return loadProviders.stream()
+                    .mapToInt(WorkerLoadProvider::currentLoad)
+                    .sum();
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "WorkerLoadProvider currentLoad sum failed; falling back to 0: {}",
+                    SwallowedExceptionLogger.summary(ex));
+            return 0;
+        }
+    }
 }

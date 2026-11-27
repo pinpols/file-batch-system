@@ -20,41 +20,41 @@ import java.util.List;
  */
 public final class SdkProtocolVersions {
 
-  /** 平台当前支持的协议 schema 主版本(规范形如 {@code "v1"} / {@code "v2"});v3+ 平台 register 拒绝。 */
-  public static final List<String> SUPPORTED_MAJOR_VERSIONS = List.of("v1", "v2");
+    /** 平台当前支持的协议 schema 主版本(规范形如 {@code "v1"} / {@code "v2"});v3+ 平台 register 拒绝。 */
+    public static final List<String> SUPPORTED_MAJOR_VERSIONS = List.of("v1", "v2");
 
-  /**
-   * 把上报的 protocolVersion 归一化为规范主版本 token(如 {@code "v2-rc"} → {@code "v2"};{@code "1.3.0"} → {@code
-   * "v1"};{@code "V2"} → {@code "v2"})。空 / 无前导数字一律返回 {@code null}(交由调用方判定 legacy / 非法)。
-   */
-  public static String normalizeMajor(String protocolVersion) {
-    if (protocolVersion == null || protocolVersion.isBlank()) {
-      return null;
+    /**
+     * 把上报的 protocolVersion 归一化为规范主版本 token(如 {@code "v2-rc"} → {@code "v2"};{@code "1.3.0"} → {@code
+     * "v1"};{@code "V2"} → {@code "v2"})。空 / 无前导数字一律返回 {@code null}(交由调用方判定 legacy / 非法)。
+     */
+    public static String normalizeMajor(String protocolVersion) {
+        if (protocolVersion == null || protocolVersion.isBlank()) {
+            return null;
+        }
+        String trimmed = protocolVersion.strip();
+        int start = 0;
+        // 容忍前缀 'v'/'V'(如 "v1.2.0")
+        if (trimmed.charAt(0) == 'v' || trimmed.charAt(0) == 'V') {
+            start = 1;
+        }
+        int end = start;
+        while (end < trimmed.length() && Character.isDigit(trimmed.charAt(end))) {
+            end++;
+        }
+        if (end == start) {
+            return null;
+        }
+        return "v" + trimmed.substring(start, end);
     }
-    String trimmed = protocolVersion.strip();
-    int start = 0;
-    // 容忍前缀 'v'/'V'(如 "v1.2.0")
-    if (trimmed.charAt(0) == 'v' || trimmed.charAt(0) == 'V') {
-      start = 1;
-    }
-    int end = start;
-    while (end < trimmed.length() && Character.isDigit(trimmed.charAt(end))) {
-      end++;
-    }
-    if (end == start) {
-      return null;
-    }
-    return "v" + trimmed.substring(start, end);
-  }
 
-  /**
-   * 判定上报的 protocolVersion 主版本是否在平台支持集合内。{@code null} / 空 / 无法解析的版本一律返回 {@code false}(由 register
-   * 门禁区分:缺字段=legacy 放行、present-but-unsupported=拒绝)。
-   */
-  public static boolean isSupportedMajor(String protocolVersion) {
-    String major = normalizeMajor(protocolVersion);
-    return major != null && SUPPORTED_MAJOR_VERSIONS.contains(major);
-  }
+    /**
+     * 判定上报的 protocolVersion 主版本是否在平台支持集合内。{@code null} / 空 / 无法解析的版本一律返回 {@code false}(由 register
+     * 门禁区分:缺字段=legacy 放行、present-but-unsupported=拒绝)。
+     */
+    public static boolean isSupportedMajor(String protocolVersion) {
+        String major = normalizeMajor(protocolVersion);
+        return major != null && SUPPORTED_MAJOR_VERSIONS.contains(major);
+    }
 
-  private SdkProtocolVersions() {}
+    private SdkProtocolVersions() {}
 }

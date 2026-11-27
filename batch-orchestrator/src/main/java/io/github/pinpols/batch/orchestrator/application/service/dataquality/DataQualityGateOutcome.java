@@ -17,26 +17,25 @@ import lombok.Builder;
 @Builder
 public record DataQualityGateOutcome(GateStatus status, List<RuleFinding> findings) {
 
-  public enum GateStatus {
-    /** 全部规则通过；EFFECTIVE 链按 ResultPolicy 正常推进。 */
-    PASS,
-    /** 仅 WARN/INFO 失败；EFFECTIVE 链正常但记 warning。 */
-    WARN,
-    /** ≥1 条 BLOCKER 失败；EFFECTIVE 链强制 MANUAL_APPROVAL。 */
-    BLOCKED,
-    /** 无规则关联；DQ gate 跳过。 */
-    NO_RULES
-  }
+    public enum GateStatus {
+        /** 全部规则通过；EFFECTIVE 链按 ResultPolicy 正常推进。 */
+        PASS,
+        /** 仅 WARN/INFO 失败；EFFECTIVE 链正常但记 warning。 */
+        WARN,
+        /** ≥1 条 BLOCKER 失败；EFFECTIVE 链强制 MANUAL_APPROVAL。 */
+        BLOCKED,
+        /** 无规则关联；DQ gate 跳过。 */
+        NO_RULES
+    }
 
-  /** 单条规则的执行结果。 */
-  @Builder
-  public record RuleFinding(
-      String ruleCode, String ruleType, String severity, String status, String message) {}
+    /** 单条规则的执行结果。 */
+    @Builder
+    public record RuleFinding(String ruleCode, String ruleType, String severity, String status, String message) {}
 
-  public static DataQualityGateOutcome noRules() {
-    return DataQualityGateOutcome.builder()
-        .status(GateStatus.NO_RULES)
-        .findings(List.of())
-        .build();
-  }
+    public static DataQualityGateOutcome noRules() {
+        return DataQualityGateOutcome.builder()
+                .status(GateStatus.NO_RULES)
+                .findings(List.of())
+                .build();
+    }
 }

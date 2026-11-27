@@ -62,243 +62,234 @@ import org.springframework.stereotype.Component;
 @Component
 public class ApiKeyVerifier {
 
-  /** 验证结果缓存 TTL(分钟);同时是 revoke 生效的最长窗口——见类 javadoc 失效语义。 */
-  static final int VERIFY_CACHE_TTL_MINUTES = 5;
+    /** 验证结果缓存 TTL(分钟);同时是 revoke 生效的最长窗口——见类 javadoc 失效语义。 */
+    static final int VERIFY_CACHE_TTL_MINUTES = 5;
 
-  static final int VERIFY_CACHE_MAX_SIZE = 10_000;
+    static final int VERIFY_CACHE_MAX_SIZE = 10_000;
 
-  /** last_used_at 两次真实写库的最小间隔;窗口内的命中跳过写库。 */
-  static final Duration TOUCH_MIN_INTERVAL = Duration.ofSeconds(60);
+    /** last_used_at 两次真实写库的最小间隔;窗口内的命中跳过写库。 */
+    static final Duration TOUCH_MIN_INTERVAL = Duration.ofSeconds(60);
 
-  /** 节流状态上限；超过该数量的历史 Key ID 由 Caffeine 按最大容量与写入过期逐出。 */
-  private static final int TOUCH_STATE_MAX_ENTRIES = 10_000;
+    /** 节流状态上限；超过该数量的历史 Key ID 由 Caffeine 按最大容量与写入过期逐出。 */
+    private static final int TOUCH_STATE_MAX_ENTRIES = 10_000;
 
-  private static final long TOUCH_MIN_INTERVAL_NANOS = TOUCH_MIN_INTERVAL.toNanos();
+    private static final long TOUCH_MIN_INTERVAL_NANOS = TOUCH_MIN_INTERVAL.toNanos();
 
-  public static final String SCOPE_WORKER_EXECUTE = "worker.execute";
+    public static final String SCOPE_WORKER_EXECUTE = "worker.execute";
 
-  /**
-   * 只读 scope:允许查询类(GET)端点,但不允许 claim/report/register 等会改状态的写操作。 {@code worker.execute}
-   * 是其超集(可写者必可读),故读端点接受二者之一。用于给监控 / 第三方集成发"只读 key"。
-   */
-  public static final String SCOPE_WORKER_READ = "worker.read";
+    /**
+     * 只读 scope:允许查询类(GET)端点,但不允许 claim/report/register 等会改状态的写操作。 {@code worker.execute}
+     * 是其超集(可写者必可读),故读端点接受二者之一。用于给监控 / 第三方集成发"只读 key"。
+     */
+    public static final String SCOPE_WORKER_READ = "worker.read";
 
-  /**
-   * 运维 scope:强制下线、接管、排空/恢复、状态变更与任务取消等运维变更端点只接受该 scope。执行凭据
-   * ({@code worker.execute}) 不能进入这些入口；平台内部调用继续使用 {@code X-Internal-Secret}。
-   */
-  public static final String SCOPE_WORKER_OPS = "worker.ops";
+    /**
+     * 运维 scope:强制下线、接管、排空/恢复、状态变更与任务取消等运维变更端点只接受该 scope。执行凭据
+     * ({@code worker.execute}) 不能进入这些入口；平台内部调用继续使用 {@code X-Internal-Secret}。
+     */
+    public static final String SCOPE_WORKER_OPS = "worker.ops";
 
-  public static final String SCOPE_WILDCARD = "*";
+    public static final String SCOPE_WILDCARD = "*";
 
-  /** 明文 key 前 8 位用作索引前缀(与 console-api ConsoleApiKeyService.create 同步)。 */
-  public static final int KEY_PREFIX_LEN = 8;
+    /** 明文 key 前 8 位用作索引前缀(与 console-api ConsoleApiKeyService.create 同步)。 */
+    public static final int KEY_PREFIX_LEN = 8;
 
-  private final ApiKeyAuthMapper mapper;
+    private final ApiKeyAuthMapper mapper;
 
-  private final Ticker ticker;
+    private final Ticker ticker;
 
-  /** 墙钟(epoch)来源——命中路径复查 {@code expires_at} 用;测试注入假钟,与 {@link #ticker} 同源推进。 */
-  private final InstantSource instantSource;
+    /** 墙钟(epoch)来源——命中路径复查 {@code expires_at} 用;测试注入假钟,与 {@link #ticker} 同源推进。 */
+    private final InstantSource instantSource;
 
-  /** 验证成功结果缓存:key = SHA-256(rawKey)|tenantId,value = 命中的不可变 entity。只缓存成功。 */
-  private final Cache<String, ApiKeyCandidate> verifyCache;
+    /** 验证成功结果缓存:key = SHA-256(rawKey)|tenantId,value = 命中的不可变 entity。只缓存成功。 */
+    private final Cache<String, ApiKeyCandidate> verifyCache;
 
-  /**
-   * O4:命中率/逐出/加载可观测。缓存价值=躲 PBKDF2 600k 迭代 CPU 税(本轮 perf 核心), 但此前不可观测 → TTL/size 无法校准、缓存穿透 CPU
-   * 打满无预警。@PostConstruct 用 {@link CaffeineCacheMetrics} 绑定 {@code cache.*}(tag {@code
-   * cache=apikey.verify})。 测试构造器无 registry 时为 null,跳过绑定。
-   */
-  private final MeterRegistry meterRegistry;
+    /**
+     * O4:命中率/逐出/加载可观测。缓存价值=躲 PBKDF2 600k 迭代 CPU 税(本轮 perf 核心), 但此前不可观测 → TTL/size 无法校准、缓存穿透 CPU
+     * 打满无预警。@PostConstruct 用 {@link CaffeineCacheMetrics} 绑定 {@code cache.*}(tag {@code
+     * cache=apikey.verify})。 测试构造器无 registry 时为 null,跳过绑定。
+     */
+    private final MeterRegistry meterRegistry;
 
-  private final ApiKeyAsyncMaintenance asyncMaintenance;
+    private final ApiKeyAsyncMaintenance asyncMaintenance;
 
-  /** keyId → 上次真实写 last_used_at 的 ticker 纳秒时刻;用于 60s 写节流。有界 + 写入过期，避免历史 Key ID 常驻。 */
-  private final Cache<Long, Long> lastTouchNanos = Caffeine.newBuilder()
-      .maximumSize(TOUCH_STATE_MAX_ENTRIES)
-      .expireAfterWrite(TOUCH_MIN_INTERVAL)
-      .build();
+    /** keyId → 上次真实写 last_used_at 的 ticker 纳秒时刻;用于 60s 写节流。有界 + 写入过期，避免历史 Key ID 常驻。 */
+    private final Cache<Long, Long> lastTouchNanos = Caffeine.newBuilder()
+            .maximumSize(TOUCH_STATE_MAX_ENTRIES)
+            .expireAfterWrite(TOUCH_MIN_INTERVAL)
+            .build();
 
-  /**
-   * 生产构造器(Spring):系统时钟。
-   *
-   * <p>{@code @Autowired} 必须显式标——本类有两个构造器(测试用三参 package-private),Spring 多构造器无注解时回退无参构造器 (不存在)→ 启动
-   * BeanInstantiationException。回归守护见 {@code
-   * ApiKeyVerifierTest.springCanInstantiateBeanDespiteMultipleConstructors}。
-   */
-  @Autowired
-  public ApiKeyVerifier(
-      ApiKeyAuthMapper mapper,
-      MeterRegistry meterRegistry,
-      ApiKeyAsyncMaintenance asyncMaintenance) {
-    this(mapper, Ticker.systemTicker(), InstantSource.system(), meterRegistry, asyncMaintenance);
-  }
-
-  /**
-   * 可注入 {@link Ticker} + {@link InstantSource} 的构造器(测试用假时钟驱动 TTL 逐出 / touch 节流 / expires_at 复查)。
-   * meterRegistry 为 null:不绑 micrometer(纯逻辑单测无需指标)。
-   */
-  ApiKeyVerifier(ApiKeyAuthMapper mapper, Ticker ticker, InstantSource instantSource) {
-    this(mapper, ticker, instantSource, null, new ApiKeyAsyncMaintenance(mapper));
-  }
-
-  ApiKeyVerifier(
-      ApiKeyAuthMapper mapper,
-      Ticker ticker,
-      InstantSource instantSource,
-      MeterRegistry meterRegistry) {
-    this(mapper, ticker, instantSource, meterRegistry, new ApiKeyAsyncMaintenance(mapper));
-  }
-
-  ApiKeyVerifier(
-      ApiKeyAuthMapper mapper,
-      Ticker ticker,
-      InstantSource instantSource,
-      MeterRegistry meterRegistry,
-      ApiKeyAsyncMaintenance asyncMaintenance) {
-    this.mapper = mapper;
-    this.ticker = ticker;
-    this.instantSource = instantSource;
-    this.meterRegistry = meterRegistry;
-    this.asyncMaintenance = asyncMaintenance;
-    this.verifyCache = Caffeine.newBuilder()
-        .ticker(ticker)
-        .expireAfterWrite(Duration.ofMinutes(VERIFY_CACHE_TTL_MINUTES))
-        .maximumSize(VERIFY_CACHE_MAX_SIZE)
-        // O4:开启统计,供 CaffeineCacheMetrics 读命中率/逐出/加载耗时。
-        .recordStats()
-        .build();
-  }
-
-  /**
-   * O4:把 {@link #verifyCache} 的 Caffeine 统计绑定到 micrometer,暴露 {@code cache.gets}/{@code
-   * cache.evictions}/{@code cache.size} 等(tag {@code cache=apikey.verify})。 registry 缺失(纯逻辑单测)时跳过。
-   */
-  @PostConstruct
-  void bindCacheMetrics() {
-    if (meterRegistry != null) {
-      CaffeineCacheMetrics.monitor(meterRegistry, verifyCache, "apikey.verify");
-    }
-  }
-
-  /**
-   * @param rawKey 客户端传来的 X-Batch-Api-Key 原文
-   * @param claimedTenantId 客户端传来的 X-Batch-Tenant-Id;必须与 key 在表里的 tenant_id 一致
-   * @return 命中且活跃的 {@link ApiKeyCandidate};否则空(filter 直接返 401,不暴露具体原因防侧信道)
-   */
-  public Optional<ApiKeyCandidate> verify(String rawKey, String claimedTenantId) {
-    if (rawKey == null || rawKey.isBlank()) return Optional.empty();
-    if (claimedTenantId == null || claimedTenantId.isBlank()) return Optional.empty();
-    if (rawKey.length() < KEY_PREFIX_LEN) return Optional.empty();
-
-    // 缓存命中:跳过候选查库 + PBKDF2 慢路径,直接返回。仍走 touch 节流(命中也代表 key 活跃)。
-    String cacheKey = verifyCacheKey(rawKey, claimedTenantId);
-    ApiKeyCandidate cached = verifyCache.getIfPresent(cacheKey);
-    if (cached != null) {
-      // expires_at 硬边界内存复查:自然过期不允许被缓存 TTL 延长(revoke 的 5 分钟窗口是另一回事,见类 javadoc)。
-      Instant expiresAt = cached.expiresAt();
-      boolean cachedKeyIsExpired =
-          EmptyChecks.isNotNull(expiresAt) && expiresAt.isBefore(instantSource.instant());
-      if (cachedKeyIsExpired) {
-        verifyCache.invalidate(cacheKey);
-        // 落回慢路径:SQL 只取未过期行,自然拒掉。
-      } else {
-        maybeTouch(cached.id());
-        return Optional.of(cached);
-      }
+    /**
+     * 生产构造器(Spring):系统时钟。
+     *
+     * <p>{@code @Autowired} 必须显式标——本类有两个构造器(测试用三参 package-private),Spring 多构造器无注解时回退无参构造器 (不存在)→ 启动
+     * BeanInstantiationException。回归守护见 {@code
+     * ApiKeyVerifierTest.springCanInstantiateBeanDespiteMultipleConstructors}。
+     */
+    @Autowired
+    public ApiKeyVerifier(
+            ApiKeyAuthMapper mapper, MeterRegistry meterRegistry, ApiKeyAsyncMaintenance asyncMaintenance) {
+        this(mapper, Ticker.systemTicker(), InstantSource.system(), meterRegistry, asyncMaintenance);
     }
 
-    String prefix = rawKey.substring(0, KEY_PREFIX_LEN);
-    List<ApiKeyCandidate> candidates =
-        mapper.findActiveCandidatesByPrefixAndTenant(prefix, claimedTenantId);
-    if (candidates == null || candidates.isEmpty()) return Optional.empty();
+    /**
+     * 可注入 {@link Ticker} + {@link InstantSource} 的构造器(测试用假时钟驱动 TTL 逐出 / touch 节流 / expires_at 复查)。
+     * meterRegistry 为 null:不绑 micrometer(纯逻辑单测无需指标)。
+     */
+    ApiKeyVerifier(ApiKeyAuthMapper mapper, Ticker ticker, InstantSource instantSource) {
+        this(mapper, ticker, instantSource, null, new ApiKeyAsyncMaintenance(mapper));
+    }
 
-    // 候选数极小(同一租户同一前缀的活跃 key,索引剪枝后通常 0-1 行,极端冲突 <5)。
-    // 逐行常量时间比对,命中即停;legacy sha256 命中后异步升级 KDF。
-    for (ApiKeyCandidate rec : candidates) {
-      String algo = rec.keyHashAlgo() == null ? ApiKeyHasher.ALGO_SHA256_LEGACY : rec.keyHashAlgo();
-      if (ApiKeyHasher.verify(rawKey, rec.keyHash(), rec.salt(), algo)) {
-        // 只缓存成功;失败不入缓存(避免误封窗口)。
-        verifyCache.put(cacheKey, rec);
-        maybeTouch(rec.id());
-        if (ApiKeyHasher.ALGO_SHA256_LEGACY.equals(algo)) {
-          asyncMaintenance.upgradeLegacyHash(rec.id(), rec.keyHash(), rawKey);
+    ApiKeyVerifier(ApiKeyAuthMapper mapper, Ticker ticker, InstantSource instantSource, MeterRegistry meterRegistry) {
+        this(mapper, ticker, instantSource, meterRegistry, new ApiKeyAsyncMaintenance(mapper));
+    }
+
+    ApiKeyVerifier(
+            ApiKeyAuthMapper mapper,
+            Ticker ticker,
+            InstantSource instantSource,
+            MeterRegistry meterRegistry,
+            ApiKeyAsyncMaintenance asyncMaintenance) {
+        this.mapper = mapper;
+        this.ticker = ticker;
+        this.instantSource = instantSource;
+        this.meterRegistry = meterRegistry;
+        this.asyncMaintenance = asyncMaintenance;
+        this.verifyCache = Caffeine.newBuilder()
+                .ticker(ticker)
+                .expireAfterWrite(Duration.ofMinutes(VERIFY_CACHE_TTL_MINUTES))
+                .maximumSize(VERIFY_CACHE_MAX_SIZE)
+                // O4:开启统计,供 CaffeineCacheMetrics 读命中率/逐出/加载耗时。
+                .recordStats()
+                .build();
+    }
+
+    /**
+     * O4:把 {@link #verifyCache} 的 Caffeine 统计绑定到 micrometer,暴露 {@code cache.gets}/{@code
+     * cache.evictions}/{@code cache.size} 等(tag {@code cache=apikey.verify})。 registry 缺失(纯逻辑单测)时跳过。
+     */
+    @PostConstruct
+    void bindCacheMetrics() {
+        if (meterRegistry != null) {
+            CaffeineCacheMetrics.monitor(meterRegistry, verifyCache, "apikey.verify");
         }
-        return Optional.of(rec);
-      }
     }
-    return Optional.empty();
-  }
 
-  /**
-   * 缓存 key:{@code SHA-256(rawKey) hex + "|" + tenantId}。用 SHA-256 而非 rawKey 明文,防堆转储 / 缓存 dump 泄漏原始
-   * 凭据(SHA-256 一次成本相对 PBKDF2 600k 迭代可忽略)。tenantId 拼入是因为验证语义按 (rawKey, tenantId) 双匹配。
-   */
-  private static String verifyCacheKey(String rawKey, String claimedTenantId) {
-    return ApiKeyHasher.legacySha256Hex(rawKey) + "|" + claimedTenantId;
-  }
+    /**
+     * @param rawKey 客户端传来的 X-Batch-Api-Key 原文
+     * @param claimedTenantId 客户端传来的 X-Batch-Tenant-Id;必须与 key 在表里的 tenant_id 一致
+     * @return 命中且活跃的 {@link ApiKeyCandidate};否则空(filter 直接返 401,不暴露具体原因防侧信道)
+     */
+    public Optional<ApiKeyCandidate> verify(String rawKey, String claimedTenantId) {
+        if (rawKey == null || rawKey.isBlank()) return Optional.empty();
+        if (claimedTenantId == null || claimedTenantId.isBlank()) return Optional.empty();
+        if (rawKey.length() < KEY_PREFIX_LEN) return Optional.empty();
 
-  /**
-   * last_used_at 写节流:距上次真实写 <{@link #TOUCH_MIN_INTERVAL}(60s)直接跳过,≥ 才异步写。用 {@code compute} 做 CAS
-   * 防并发下同一 key 重复写。
-   *
-   * <p>last_used_at 的运维语义是<b>僵尸 key 探测</b>(哪些 key 长期未用可回收),分钟级精度足够;同一 key 数百 QPS 打同一行的
-   * 写放大对该语义无收益,故节流。节流状态有界并随写入过期，轮换过的历史 Key ID 不会常驻。
-   */
-  private void maybeTouch(Long id) {
-    long now = ticker.read();
-    boolean[] doWrite = {false};
-    lastTouchNanos.asMap().compute(id, (k, prev) -> {
-      if (prev != null && now - prev < TOUCH_MIN_INTERVAL_NANOS) {
-        return prev; // 窗口内,跳过写库
-      }
-      doWrite[0] = true;
-      return now;
-    });
-    if (doWrite[0]) {
-      asyncMaintenance.touch(id);
+        // 缓存命中:跳过候选查库 + PBKDF2 慢路径,直接返回。仍走 touch 节流(命中也代表 key 活跃)。
+        String cacheKey = verifyCacheKey(rawKey, claimedTenantId);
+        ApiKeyCandidate cached = verifyCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            // expires_at 硬边界内存复查:自然过期不允许被缓存 TTL 延长(revoke 的 5 分钟窗口是另一回事,见类 javadoc)。
+            Instant expiresAt = cached.expiresAt();
+            boolean cachedKeyIsExpired =
+                    EmptyChecks.isNotNull(expiresAt) && expiresAt.isBefore(instantSource.instant());
+            if (cachedKeyIsExpired) {
+                verifyCache.invalidate(cacheKey);
+                // 落回慢路径:SQL 只取未过期行,自然拒掉。
+            } else {
+                maybeTouch(cached.id());
+                return Optional.of(cached);
+            }
+        }
+
+        String prefix = rawKey.substring(0, KEY_PREFIX_LEN);
+        List<ApiKeyCandidate> candidates = mapper.findActiveCandidatesByPrefixAndTenant(prefix, claimedTenantId);
+        if (candidates == null || candidates.isEmpty()) return Optional.empty();
+
+        // 候选数极小(同一租户同一前缀的活跃 key,索引剪枝后通常 0-1 行,极端冲突 <5)。
+        // 逐行常量时间比对,命中即停;legacy sha256 命中后异步升级 KDF。
+        for (ApiKeyCandidate rec : candidates) {
+            String algo = rec.keyHashAlgo() == null ? ApiKeyHasher.ALGO_SHA256_LEGACY : rec.keyHashAlgo();
+            if (ApiKeyHasher.verify(rawKey, rec.keyHash(), rec.salt(), algo)) {
+                // 只缓存成功;失败不入缓存(避免误封窗口)。
+                verifyCache.put(cacheKey, rec);
+                maybeTouch(rec.id());
+                if (ApiKeyHasher.ALGO_SHA256_LEGACY.equals(algo)) {
+                    asyncMaintenance.upgradeLegacyHash(rec.id(), rec.keyHash(), rawKey);
+                }
+                return Optional.of(rec);
+            }
+        }
+        return Optional.empty();
     }
-  }
 
-  /**
-   * 同 {@link #verify} 但强制 key.scope 含 {@code requiredScope}(或 {@code "*"} 通配)。
-   *
-   * @return 命中且 scope 通过的 {@link ApiKeyCandidate};否则空(scope 不通过也返空,filter 一律 401,不区分原因)
-   */
-  public Optional<ApiKeyCandidate> verifyWithScope(
-      String rawKey, String claimedTenantId, String requiredScope) {
-    return verify(rawKey, claimedTenantId).filter(rec -> scopesAllow(rec.scopes(), requiredScope));
-  }
-
-  /**
-   * 同 {@link #verifyWithScope} 但 key 命中 {@code acceptedScopes} 中**任一**(或 {@code "*"} 通配)即放行。 读端点用
-   * {@code (SCOPE_WORKER_READ, SCOPE_WORKER_EXECUTE)} 表达"读 key 或写 key 都可读"。
-   *
-   * @return 命中且 scope 通过的 {@link ApiKeyCandidate};否则空
-   */
-  public Optional<ApiKeyCandidate> verifyWithAnyScope(
-      String rawKey, String claimedTenantId, String... acceptedScopes) {
-    return verify(rawKey, claimedTenantId)
-        .filter(rec -> scopesAllowAny(rec.scopes(), acceptedScopes));
-  }
-
-  /** scopes 命中 {@code acceptedScopes} 任一即真;空 accepted 视为不限制(真)。 */
-  static boolean scopesAllowAny(String scopesField, String... acceptedScopes) {
-    if (acceptedScopes == null || acceptedScopes.length == 0) return true;
-    for (String accepted : acceptedScopes) {
-      if (scopesAllow(scopesField, accepted)) return true;
+    /**
+     * 缓存 key:{@code SHA-256(rawKey) hex + "|" + tenantId}。用 SHA-256 而非 rawKey 明文,防堆转储 / 缓存 dump 泄漏原始
+     * 凭据(SHA-256 一次成本相对 PBKDF2 600k 迭代可忽略)。tenantId 拼入是因为验证语义按 (rawKey, tenantId) 双匹配。
+     */
+    private static String verifyCacheKey(String rawKey, String claimedTenantId) {
+        return ApiKeyHasher.legacySha256Hex(rawKey) + "|" + claimedTenantId;
     }
-    return false;
-  }
 
-  /** scopes 字符串解析:逗号/空格 split,trim,去空;{@code "*"} 通配。 */
-  static boolean scopesAllow(String scopesField, String requiredScope) {
-    if (requiredScope == null || requiredScope.isBlank()) return true;
-    if (scopesField == null || scopesField.isBlank()) return false;
-    Set<String> scopes = Arrays.stream(scopesField.split("[,\\s]+"))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .collect(Collectors.toSet());
-    return scopes.contains(SCOPE_WILDCARD) || scopes.contains(requiredScope);
-  }
+    /**
+     * last_used_at 写节流:距上次真实写 <{@link #TOUCH_MIN_INTERVAL}(60s)直接跳过,≥ 才异步写。用 {@code compute} 做 CAS
+     * 防并发下同一 key 重复写。
+     *
+     * <p>last_used_at 的运维语义是<b>僵尸 key 探测</b>(哪些 key 长期未用可回收),分钟级精度足够;同一 key 数百 QPS 打同一行的
+     * 写放大对该语义无收益,故节流。节流状态有界并随写入过期，轮换过的历史 Key ID 不会常驻。
+     */
+    private void maybeTouch(Long id) {
+        long now = ticker.read();
+        boolean[] doWrite = {false};
+        lastTouchNanos.asMap().compute(id, (k, prev) -> {
+            if (prev != null && now - prev < TOUCH_MIN_INTERVAL_NANOS) {
+                return prev; // 窗口内,跳过写库
+            }
+            doWrite[0] = true;
+            return now;
+        });
+        if (doWrite[0]) {
+            asyncMaintenance.touch(id);
+        }
+    }
+
+    /**
+     * 同 {@link #verify} 但强制 key.scope 含 {@code requiredScope}(或 {@code "*"} 通配)。
+     *
+     * @return 命中且 scope 通过的 {@link ApiKeyCandidate};否则空(scope 不通过也返空,filter 一律 401,不区分原因)
+     */
+    public Optional<ApiKeyCandidate> verifyWithScope(String rawKey, String claimedTenantId, String requiredScope) {
+        return verify(rawKey, claimedTenantId).filter(rec -> scopesAllow(rec.scopes(), requiredScope));
+    }
+
+    /**
+     * 同 {@link #verifyWithScope} 但 key 命中 {@code acceptedScopes} 中**任一**(或 {@code "*"} 通配)即放行。 读端点用
+     * {@code (SCOPE_WORKER_READ, SCOPE_WORKER_EXECUTE)} 表达"读 key 或写 key 都可读"。
+     *
+     * @return 命中且 scope 通过的 {@link ApiKeyCandidate};否则空
+     */
+    public Optional<ApiKeyCandidate> verifyWithAnyScope(
+            String rawKey, String claimedTenantId, String... acceptedScopes) {
+        return verify(rawKey, claimedTenantId).filter(rec -> scopesAllowAny(rec.scopes(), acceptedScopes));
+    }
+
+    /** scopes 命中 {@code acceptedScopes} 任一即真;空 accepted 视为不限制(真)。 */
+    static boolean scopesAllowAny(String scopesField, String... acceptedScopes) {
+        if (acceptedScopes == null || acceptedScopes.length == 0) return true;
+        for (String accepted : acceptedScopes) {
+            if (scopesAllow(scopesField, accepted)) return true;
+        }
+        return false;
+    }
+
+    /** scopes 字符串解析:逗号/空格 split,trim,去空;{@code "*"} 通配。 */
+    static boolean scopesAllow(String scopesField, String requiredScope) {
+        if (requiredScope == null || requiredScope.isBlank()) return true;
+        if (scopesField == null || scopesField.isBlank()) return false;
+        Set<String> scopes = Arrays.stream(scopesField.split("[,\\s]+"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toSet());
+        return scopes.contains(SCOPE_WILDCARD) || scopes.contains(requiredScope);
+    }
 }

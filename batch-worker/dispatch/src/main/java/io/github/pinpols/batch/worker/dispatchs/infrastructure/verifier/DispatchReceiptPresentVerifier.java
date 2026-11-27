@@ -24,35 +24,33 @@ import org.springframework.stereotype.Component;
 @Component
 public class DispatchReceiptPresentVerifier implements ContentVerifier {
 
-  @Override
-  public String code() {
-    return "DISPATCH_RECEIPT_PRESENT";
-  }
-
-  @Override
-  public Set<JobType> appliesTo() {
-    return Set.of(JobType.DISPATCH);
-  }
-
-  @Override
-  public VerifyResult verify(VerifyContext context) {
-    String receiptCode = stringValue(context.property(DispatchRuntimeKeys.RECEIPT_CODE));
-    String externalRequestId =
-        stringValue(context.property(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
-    if (Texts.hasText(receiptCode) || Texts.hasText(externalRequestId)) {
-      return VerifyResult.pass();
+    @Override
+    public String code() {
+        return "DISPATCH_RECEIPT_PRESENT";
     }
-    Map<String, Object> evidence = new LinkedHashMap<>();
-    evidence.put(
-        DispatchRuntimeKeys.CHANNEL_CODE, context.property(DispatchRuntimeKeys.CHANNEL_CODE));
-    evidence.put(PipelineRuntimeKeys.FILE_ID, context.property(PipelineRuntimeKeys.FILE_ID));
-    return VerifyResult.fail(
-        "DISPATCH_RECEIPT_MISSING",
-        "DISPATCH task reported success but no receiptCode/externalRequestId returned",
-        evidence);
-  }
 
-  private static String stringValue(Object value) {
-    return value == null ? null : value.toString();
-  }
+    @Override
+    public Set<JobType> appliesTo() {
+        return Set.of(JobType.DISPATCH);
+    }
+
+    @Override
+    public VerifyResult verify(VerifyContext context) {
+        String receiptCode = stringValue(context.property(DispatchRuntimeKeys.RECEIPT_CODE));
+        String externalRequestId = stringValue(context.property(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
+        if (Texts.hasText(receiptCode) || Texts.hasText(externalRequestId)) {
+            return VerifyResult.pass();
+        }
+        Map<String, Object> evidence = new LinkedHashMap<>();
+        evidence.put(DispatchRuntimeKeys.CHANNEL_CODE, context.property(DispatchRuntimeKeys.CHANNEL_CODE));
+        evidence.put(PipelineRuntimeKeys.FILE_ID, context.property(PipelineRuntimeKeys.FILE_ID));
+        return VerifyResult.fail(
+                "DISPATCH_RECEIPT_MISSING",
+                "DISPATCH task reported success but no receiptCode/externalRequestId returned",
+                evidence);
+    }
+
+    private static String stringValue(Object value) {
+        return value == null ? null : value.toString();
+    }
 }

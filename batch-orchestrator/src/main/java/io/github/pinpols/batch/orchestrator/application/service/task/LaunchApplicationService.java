@@ -25,32 +25,30 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LaunchApplicationService {
 
-  private final TenantActionRateLimiter tenantActionRateLimiter;
-  private final WorkflowRunLaunchService workflowRunLaunchService;
+    private final TenantActionRateLimiter tenantActionRateLimiter;
+    private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  public LaunchResponse launch(LaunchRequest request) {
-    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
-      throw new OperationFailure(
-          Kind.INVALID_INPUT, "top-level launch requires an explicit Workflow target");
+    public LaunchResponse launch(LaunchRequest request) {
+        if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
+            throw new OperationFailure(Kind.INVALID_INPUT, "top-level launch requires an explicit Workflow target");
+        }
+        boolean allowed = tenantActionRateLimiter.tryConsume(request.tenantId(), RateLimitAction.LAUNCH);
+        if (!allowed) {
+            throw new OperationFailure(Kind.RATE_LIMITED, "launch rate limit exceeded");
+        }
+        return workflowRunLaunchService.launch(request);
     }
-    boolean allowed =
-        tenantActionRateLimiter.tryConsume(request.tenantId(), RateLimitAction.LAUNCH);
-    if (!allowed) {
-      throw new OperationFailure(Kind.RATE_LIMITED, "launch rate limit exceeded");
-    }
-    return workflowRunLaunchService.launch(request);
-  }
 
-  /**
-   * 消费 {@code batch.trigger.launch.v1} 的内部入口。
-   *
-   * <p>调用方必须是平台管理的 Kafka consumer；该方法只跳过面向同步 HTTP 的防盗刷令牌桶，不跳过底层 launch
-   * 的幂等、租户隔离、配额和调度准入。
-   */
-  public LaunchResponse launchFromTrustedQueue(LaunchRequest request) {
-    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.definition_id_required");
+    /**
+     * 消费 {@code batch.trigger.launch.v1} 的内部入口。
+     *
+     * <p>调用方必须是平台管理的 Kafka consumer；该方法只跳过面向同步 HTTP 的防盗刷令牌桶，不跳过底层 launch
+     * 的幂等、租户隔离、配额和调度准入。
+     */
+    public LaunchResponse launchFromTrustedQueue(LaunchRequest request) {
+        if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.definition_id_required");
+        }
+        return workflowRunLaunchService.launch(request);
     }
-    return workflowRunLaunchService.launch(request);
-  }
 }

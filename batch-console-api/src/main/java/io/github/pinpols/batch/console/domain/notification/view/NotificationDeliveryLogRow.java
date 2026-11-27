@@ -8,16 +8,16 @@ import java.time.Instant;
  * <p>payload_json / error_args 为 jsonb 列，按原始文本承载，响应层再做敏感值遮罩； alert_event_id 可空。
  */
 public record NotificationDeliveryLogRow(
-    Long id,
-    String tenantId,
-    Long ruleId,
-    String channelCode,
-    String eventType,
-    Long alertEventId,
-    String payloadJson,
-    String deliveryStatus,
-    String errorMessage,
-    String errorKey,
-    String errorArgs,
-    Integer attempt,
-    Instant createdAt) {}
+        Long id,
+        String tenantId,
+        Long ruleId,
+        String channelCode,
+        String eventType,
+        Long alertEventId,
+        String payloadJson,
+        String deliveryStatus,
+        String errorMessage,
+        String errorKey,
+        String errorArgs,
+        Integer attempt,
+        Instant createdAt) {}

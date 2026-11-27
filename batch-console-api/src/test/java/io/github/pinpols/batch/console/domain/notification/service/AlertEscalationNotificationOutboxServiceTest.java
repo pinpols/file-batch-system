@@ -22,91 +22,91 @@ import org.mockito.ArgumentCaptor;
 @DisplayName("告警升级通知待发落库: 水位标记与插入失败的判定口径")
 class AlertEscalationNotificationOutboxServiceTest {
 
-  private AlertEventMapper alertEventMapper;
-  private AlertEscalationNotificationOutboxMapper outboxMapper;
-  private AlertEscalationNotificationOutboxService service;
+    private AlertEventMapper alertEventMapper;
+    private AlertEscalationNotificationOutboxMapper outboxMapper;
+    private AlertEscalationNotificationOutboxService service;
 
-  @BeforeEach
-  void setUp() {
-    alertEventMapper = mock(AlertEventMapper.class);
-    outboxMapper = mock(AlertEscalationNotificationOutboxMapper.class);
-    when(outboxMapper.insert(any())).thenReturn(1);
-    service = new AlertEscalationNotificationOutboxService(alertEventMapper, outboxMapper);
-  }
+    @BeforeEach
+    void setUp() {
+        alertEventMapper = mock(AlertEventMapper.class);
+        outboxMapper = mock(AlertEscalationNotificationOutboxMapper.class);
+        when(outboxMapper.insert(any())).thenReturn(1);
+        service = new AlertEscalationNotificationOutboxService(alertEventMapper, outboxMapper);
+    }
 
-  @Test
-  @DisplayName("水位比较交换成功时标记已通知层级, 并按升级层级写入待发记录")
-  void shouldEnqueue_whenWatermarkCompareAndSwapWins() {
-    AlertEventEntity alert = alert(11L, "t1", 2, 1);
-    when(alertEventMapper.markEscalationNotified("t1", 11L, 1, 2)).thenReturn(1);
+    @Test
+    @DisplayName("水位比较交换成功时标记已通知层级, 并按升级层级写入待发记录")
+    void shouldEnqueue_whenWatermarkCompareAndSwapWins() {
+        AlertEventEntity alert = alert(11L, "t1", 2, 1);
+        when(alertEventMapper.markEscalationNotified("t1", 11L, 1, 2)).thenReturn(1);
 
-    boolean enqueued = service.enqueue(alert, "alerts", "ALERT_ESCALATED", payload(11L, 2));
+        boolean enqueued = service.enqueue(alert, "alerts", "ALERT_ESCALATED", payload(11L, 2));
 
-    assertThat(enqueued).isTrue();
-    ArgumentCaptor<AlertEscalationNotificationOutboxEntity> captor =
-        ArgumentCaptor.forClass(AlertEscalationNotificationOutboxEntity.class);
-    verify(outboxMapper).insert(captor.capture());
-    AlertEscalationNotificationOutboxEntity row = captor.getValue();
-    assertThat(row.getTenantId()).isEqualTo("t1");
-    assertThat(row.getAlertEventId()).isEqualTo(11L);
-    assertThat(row.getEscalationTier()).isEqualTo(2);
-    assertThat(row.getStream()).isEqualTo("alerts");
-    assertThat(row.getEventType()).isEqualTo("ALERT_ESCALATED");
-    assertThat(row.getPublishStatus()).isEqualTo("NEW");
-    assertThat(row.getAttemptCount()).isZero();
-  }
+        assertThat(enqueued).isTrue();
+        ArgumentCaptor<AlertEscalationNotificationOutboxEntity> captor =
+                ArgumentCaptor.forClass(AlertEscalationNotificationOutboxEntity.class);
+        verify(outboxMapper).insert(captor.capture());
+        AlertEscalationNotificationOutboxEntity row = captor.getValue();
+        assertThat(row.getTenantId()).isEqualTo("t1");
+        assertThat(row.getAlertEventId()).isEqualTo(11L);
+        assertThat(row.getEscalationTier()).isEqualTo(2);
+        assertThat(row.getStream()).isEqualTo("alerts");
+        assertThat(row.getEventType()).isEqualTo("ALERT_ESCALATED");
+        assertThat(row.getPublishStatus()).isEqualTo("NEW");
+        assertThat(row.getAttemptCount()).isZero();
+    }
 
-  @Test
-  @DisplayName("水位比较交换失败时视为已被其它实例接管, 不写入待发记录")
-  void shouldSkipInsert_whenWatermarkCompareAndSwapLoses() {
-    AlertEventEntity alert = alert(12L, "t1", 1, 0);
-    when(alertEventMapper.markEscalationNotified("t1", 12L, 0, 1)).thenReturn(0);
+    @Test
+    @DisplayName("水位比较交换失败时视为已被其它实例接管, 不写入待发记录")
+    void shouldSkipInsert_whenWatermarkCompareAndSwapLoses() {
+        AlertEventEntity alert = alert(12L, "t1", 1, 0);
+        when(alertEventMapper.markEscalationNotified("t1", 12L, 0, 1)).thenReturn(0);
 
-    boolean enqueued = service.enqueue(alert, "alerts", "ALERT_ESCALATED", payload(12L, 1));
+        boolean enqueued = service.enqueue(alert, "alerts", "ALERT_ESCALATED", payload(12L, 1));
 
-    assertThat(enqueued).isFalse();
-    verify(outboxMapper, never()).insert(any());
-  }
+        assertThat(enqueued).isFalse();
+        verify(outboxMapper, never()).insert(any());
+    }
 
-  @Test
-  @DisplayName("待发记录插入影响行数为零时立即抛出异常, 不静默吞掉")
-  void shouldFailFast_whenInsertAffectsNoRow() {
-    AlertEventEntity alert = alert(14L, "t1", 2, 1);
-    when(alertEventMapper.markEscalationNotified("t1", 14L, 1, 2)).thenReturn(1);
-    when(outboxMapper.insert(any())).thenReturn(0);
+    @Test
+    @DisplayName("待发记录插入影响行数为零时立即抛出异常, 不静默吞掉")
+    void shouldFailFast_whenInsertAffectsNoRow() {
+        AlertEventEntity alert = alert(14L, "t1", 2, 1);
+        when(alertEventMapper.markEscalationNotified("t1", 14L, 1, 2)).thenReturn(1);
+        when(outboxMapper.insert(any())).thenReturn(0);
 
-    assertThatThrownBy(() -> service.enqueue(alert, "alerts", "ALERT_ESCALATED", payload(14L, 2)))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("outbox insert affected 0 rows");
-  }
+        assertThatThrownBy(() -> service.enqueue(alert, "alerts", "ALERT_ESCALATED", payload(14L, 2)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outbox insert affected 0 rows");
+    }
 
-  @Test
-  @DisplayName("当前层级已标记通知过时直接跳过, 不再更新水位也不写待发记录")
-  void shouldSkip_whenAlreadyNotifiedAtSameTier() {
-    AlertEventEntity alert = alert(13L, "t1", 2, 2);
+    @Test
+    @DisplayName("当前层级已标记通知过时直接跳过, 不再更新水位也不写待发记录")
+    void shouldSkip_whenAlreadyNotifiedAtSameTier() {
+        AlertEventEntity alert = alert(13L, "t1", 2, 2);
 
-    boolean enqueued = service.enqueue(alert, "alerts", "ALERT_ESCALATED", payload(13L, 2));
+        boolean enqueued = service.enqueue(alert, "alerts", "ALERT_ESCALATED", payload(13L, 2));
 
-    assertThat(enqueued).isFalse();
-    verify(alertEventMapper, never()).markEscalationNotified(any(), any(), anyInt(), anyInt());
-    verify(outboxMapper, never()).insert(any());
-  }
+        assertThat(enqueued).isFalse();
+        verify(alertEventMapper, never()).markEscalationNotified(any(), any(), anyInt(), anyInt());
+        verify(outboxMapper, never()).insert(any());
+    }
 
-  private static AlertEventEntity alert(long id, String tenantId, int tier, int notifiedTier) {
-    AlertEventEntity alert = new AlertEventEntity();
-    alert.setId(id);
-    alert.setTenantId(tenantId);
-    alert.setAlertType("SLA_BREACH");
-    alert.setSeverity("CRITICAL");
-    alert.setTitle("job stuck past SLA");
-    alert.setEscalationTier(tier);
-    alert.setEscalationNotifiedTier(notifiedTier);
-    alert.setTraceId("trace-" + id);
-    return alert;
-  }
+    private static AlertEventEntity alert(long id, String tenantId, int tier, int notifiedTier) {
+        AlertEventEntity alert = new AlertEventEntity();
+        alert.setId(id);
+        alert.setTenantId(tenantId);
+        alert.setAlertType("SLA_BREACH");
+        alert.setSeverity("CRITICAL");
+        alert.setTitle("job stuck past SLA");
+        alert.setEscalationTier(tier);
+        alert.setEscalationNotifiedTier(notifiedTier);
+        alert.setTraceId("trace-" + id);
+        return alert;
+    }
 
-  private static AlertEscalationNotifyPayload payload(long alertId, int tier) {
-    return new AlertEscalationNotifyPayload(
-        alertId, "SLA_BREACH", "CRITICAL", "job stuck past SLA", tier, "trace-" + alertId);
-  }
+    private static AlertEscalationNotifyPayload payload(long alertId, int tier) {
+        return new AlertEscalationNotifyPayload(
+                alertId, "SLA_BREACH", "CRITICAL", "job stuck past SLA", tier, "trace-" + alertId);
+    }
 }

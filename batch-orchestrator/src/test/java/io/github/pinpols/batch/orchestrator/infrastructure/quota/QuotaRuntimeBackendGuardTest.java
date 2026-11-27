@@ -23,97 +23,89 @@ import org.springframework.mock.env.MockEnvironment;
 @DisplayName("配额运行态后端守卫,验证期望后端的标识解析与未知存储类型的快速失败")
 class QuotaRuntimeBackendGuardTest {
 
-  @Test
-  @DisplayName("运行存储配置为 Redis 时,后端标识应包含主机,端口与库序号")
-  void shouldIncludeRedisLocationInGuardIdentity_whenRuntimeStoreIsRedis() {
-    QuotaProperties properties = new QuotaProperties();
-    properties.setRuntimeStore(QuotaRuntimeBackends.REDIS);
-    MockEnvironment environment = environment()
-        .withProperty(RuntimeInfrastructureInspector.REDIS_HOST_KEY, "valkey")
-        .withProperty(RuntimeInfrastructureInspector.REDIS_PORT_KEY, "6379")
-        .withProperty(RuntimeInfrastructureInspector.REDIS_DATABASE_KEY, "2");
+    @Test
+    @DisplayName("运行存储配置为 Redis 时,后端标识应包含主机,端口与库序号")
+    void shouldIncludeRedisLocationInGuardIdentity_whenRuntimeStoreIsRedis() {
+        QuotaProperties properties = new QuotaProperties();
+        properties.setRuntimeStore(QuotaRuntimeBackends.REDIS);
+        MockEnvironment environment = environment()
+                .withProperty(RuntimeInfrastructureInspector.REDIS_HOST_KEY, "valkey")
+                .withProperty(RuntimeInfrastructureInspector.REDIS_PORT_KEY, "6379")
+                .withProperty(RuntimeInfrastructureInspector.REDIS_DATABASE_KEY, "2");
 
-    StatefulBackendGuard.DesiredBackend desired = guard(properties, environment).desiredBackend();
+        StatefulBackendGuard.DesiredBackend desired =
+                guard(properties, environment).desiredBackend();
 
-    assertThat(desired.backend()).isEqualTo(QuotaRuntimeBackends.REDIS);
-    assertThat(desired.backendIdentity()).isEqualTo("host=valkey|port=6379|db=2");
-  }
-
-  @Test
-  @DisplayName("运行存储配置为数据库时,后端标识应包含平台数据库连接地址")
-  void shouldIncludePlatformJdbcLocationInGuardIdentity_whenRuntimeStoreIsDatabase() {
-    QuotaProperties properties = new QuotaProperties();
-    properties.setRuntimeStore(QuotaRuntimeBackends.DATABASE);
-
-    StatefulBackendGuard.DesiredBackend desired =
-        guard(properties, environment()).desiredBackend();
-
-    assertThat(desired.backend()).isEqualTo(QuotaRuntimeBackends.DATABASE);
-    assertThat(desired.backendIdentity())
-        .isEqualTo("jdbc=jdbc:postgresql://platform-db/batch_platform");
-  }
-
-  @Test
-  @DisplayName("运行存储配置为无法识别的取值时应直接失败,不得静默退化为无实现")
-  void shouldRejectUnknownRuntimeStore_whenNoImplementationMatches() {
-    QuotaProperties properties = new QuotaProperties();
-    properties.setRuntimeStore("redsi");
-
-    assertThatThrownBy(() -> guard(properties, environment()).desiredBackend())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("unsupported batch.quota.runtime-store");
-  }
-
-  @ParameterizedTest
-  @CsvSource({
-    "tr-TR,REDIS,redis",
-    "az-AZ,REDIS,redis",
-    "tr-TR,DATABASE,database",
-    "az-AZ,DATABASE,database"
-  })
-  @ResourceLock("java.util.Locale.default")
-  @DisplayName("配额存储类型转换不受主机语言影响，保留合法大写配置")
-  void shouldKeepConfiguredBackendStable_whenDefaultLocaleChanges(
-      String language, String configured, String expected) {
-    QuotaProperties properties = new QuotaProperties();
-    properties.setRuntimeStore(configured);
-    Locale previous = Locale.getDefault();
-    try {
-      Locale.setDefault(Locale.forLanguageTag(language));
-      StatefulBackendGuard.DesiredBackend desired =
-          guard(properties, environment()).desiredBackend();
-      assertThat(desired.backend()).isEqualTo(expected);
-    } finally {
-      Locale.setDefault(previous);
+        assertThat(desired.backend()).isEqualTo(QuotaRuntimeBackends.REDIS);
+        assertThat(desired.backendIdentity()).isEqualTo("host=valkey|port=6379|db=2");
     }
-  }
 
-  private QuotaRuntimeBackendGuard guard(QuotaProperties properties, MockEnvironment environment) {
-    @SuppressWarnings("unchecked")
-    ObjectProvider<DataRedisConnectionDetails> redis = mock(ObjectProvider.class);
-    // 本类验证守卫路由；配置绑定与覆盖优先级由真实Boot上下文测试独立验证。
-    when(redis.getIfAvailable()).thenReturn(new DataRedisConnectionDetails() {
-      @Override
-      public Standalone getStandalone() {
-        return Standalone.of(
-            environment.getProperty(RuntimeInfrastructureInspector.REDIS_HOST_KEY, "localhost"),
-            environment.getProperty(
-                RuntimeInfrastructureInspector.REDIS_PORT_KEY, Integer.class, 6379),
-            environment.getProperty(
-                RuntimeInfrastructureInspector.REDIS_DATABASE_KEY, Integer.class, 0));
-      }
-    });
-    RuntimeInfrastructureInspector inspector =
-        new RuntimeInfrastructureInspector(environment, redis);
-    return new QuotaRuntimeBackendGuard(
-        mock(DataSource.class), properties, new ApplicationNameProvider(environment), inspector);
-  }
+    @Test
+    @DisplayName("运行存储配置为数据库时,后端标识应包含平台数据库连接地址")
+    void shouldIncludePlatformJdbcLocationInGuardIdentity_whenRuntimeStoreIsDatabase() {
+        QuotaProperties properties = new QuotaProperties();
+        properties.setRuntimeStore(QuotaRuntimeBackends.DATABASE);
 
-  private MockEnvironment environment() {
-    return new MockEnvironment()
-        .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-orchestrator")
-        .withProperty(
-            RuntimeInfrastructureInspector.DATASOURCE_URL_KEY,
-            "jdbc:postgresql://platform-db/batch_platform");
-  }
+        StatefulBackendGuard.DesiredBackend desired =
+                guard(properties, environment()).desiredBackend();
+
+        assertThat(desired.backend()).isEqualTo(QuotaRuntimeBackends.DATABASE);
+        assertThat(desired.backendIdentity()).isEqualTo("jdbc=jdbc:postgresql://platform-db/batch_platform");
+    }
+
+    @Test
+    @DisplayName("运行存储配置为无法识别的取值时应直接失败,不得静默退化为无实现")
+    void shouldRejectUnknownRuntimeStore_whenNoImplementationMatches() {
+        QuotaProperties properties = new QuotaProperties();
+        properties.setRuntimeStore("redsi");
+
+        assertThatThrownBy(() -> guard(properties, environment()).desiredBackend())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("unsupported batch.quota.runtime-store");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"tr-TR,REDIS,redis", "az-AZ,REDIS,redis", "tr-TR,DATABASE,database", "az-AZ,DATABASE,database"})
+    @ResourceLock("java.util.Locale.default")
+    @DisplayName("配额存储类型转换不受主机语言影响，保留合法大写配置")
+    void shouldKeepConfiguredBackendStable_whenDefaultLocaleChanges(
+            String language, String configured, String expected) {
+        QuotaProperties properties = new QuotaProperties();
+        properties.setRuntimeStore(configured);
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag(language));
+            StatefulBackendGuard.DesiredBackend desired =
+                    guard(properties, environment()).desiredBackend();
+            assertThat(desired.backend()).isEqualTo(expected);
+        } finally {
+            Locale.setDefault(previous);
+        }
+    }
+
+    private QuotaRuntimeBackendGuard guard(QuotaProperties properties, MockEnvironment environment) {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<DataRedisConnectionDetails> redis = mock(ObjectProvider.class);
+        // 本类验证守卫路由；配置绑定与覆盖优先级由真实Boot上下文测试独立验证。
+        when(redis.getIfAvailable()).thenReturn(new DataRedisConnectionDetails() {
+            @Override
+            public Standalone getStandalone() {
+                return Standalone.of(
+                        environment.getProperty(RuntimeInfrastructureInspector.REDIS_HOST_KEY, "localhost"),
+                        environment.getProperty(RuntimeInfrastructureInspector.REDIS_PORT_KEY, Integer.class, 6379),
+                        environment.getProperty(RuntimeInfrastructureInspector.REDIS_DATABASE_KEY, Integer.class, 0));
+            }
+        });
+        RuntimeInfrastructureInspector inspector = new RuntimeInfrastructureInspector(environment, redis);
+        return new QuotaRuntimeBackendGuard(
+                mock(DataSource.class), properties, new ApplicationNameProvider(environment), inspector);
+    }
+
+    private MockEnvironment environment() {
+        return new MockEnvironment()
+                .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-orchestrator")
+                .withProperty(
+                        RuntimeInfrastructureInspector.DATASOURCE_URL_KEY,
+                        "jdbc:postgresql://platform-db/batch_platform");
+    }
 }

@@ -5,11 +5,11 @@ import java.time.Duration;
 /** 控制台写请求幂等存储端口。 */
 public interface ConsoleIdempotencyStore {
 
-  String get(String key);
+    String get(String key);
 
-  Boolean setIfAbsent(String key, String value, Duration ttl);
+    Boolean setIfAbsent(String key, String value, Duration ttl);
 
-  boolean compareAndSet(String key, String expected, String value, Duration ttl);
+    boolean compareAndSet(String key, String expected, String value, Duration ttl);
 
-  boolean deleteIfValue(String key, String expected);
+    boolean deleteIfValue(String key, String expected);
 }

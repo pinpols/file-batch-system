@@ -23,102 +23,100 @@ import java.util.Map;
  */
 public final class OutboundTrailerRecord {
 
-  private OutboundTrailerRecord() {}
+    private OutboundTrailerRecord() {}
 
-  /** {@code trailer_template.present=true} 时启用出站 trailer。 */
-  public static boolean enabled(Map<String, Object> trailerTemplate) {
-    return trailerTemplate != null
-        && !trailerTemplate.isEmpty()
-        && boolOr(trailerTemplate.get("present"), false);
-  }
+    /** {@code trailer_template.present=true} 时启用出站 trailer。 */
+    public static boolean enabled(Map<String, Object> trailerTemplate) {
+        return trailerTemplate != null && !trailerTemplate.isEmpty() && boolOr(trailerTemplate.get("present"), false);
+    }
 
-  /** 控制总额累加的明细列名(amountField / amount_field);未配则不累加金额。 */
-  public static String amountField(Map<String, Object> trailerTemplate) {
-    if (trailerTemplate == null) {
-      return null;
+    /** 控制总额累加的明细列名(amountField / amount_field);未配则不累加金额。 */
+    public static String amountField(Map<String, Object> trailerTemplate) {
+        if (trailerTemplate == null) {
+            return null;
+        }
+        Object raw = trailerTemplate.get("amountField");
+        if (raw == null) {
+            raw = trailerTemplate.get("amount_field");
+        }
+        String text = null;
+        if (EmptyChecks.isNotNull(raw)) {
+            String rawText = String.valueOf(raw);
+            text = rawText.trim();
+        }
+        return Texts.hasText(text) ? text : null;
     }
-    Object raw = trailerTemplate.get("amountField");
-    if (raw == null) {
-      raw = trailerTemplate.get("amount_field");
-    }
-    String text = null;
-    if (EmptyChecks.isNotNull(raw)) {
-      String rawText = String.valueOf(raw);
-      text = rawText.trim();
-    }
-    return Texts.hasText(text) ? text : null;
-  }
 
-  /**
-   * 按模板把 recordType / recordCount / controlTotal 放进各自 index,返回 trailer 行的逐列字符串值。{@code
-   * controlTotal} 为 null(未配金额列)时不写控制总额列。
-   */
-  public static List<String> buildValues(
-      Map<String, Object> trailerTemplate, long recordCount, BigDecimal controlTotal) {
-    int recordTypeIndex = intOr(trailerTemplate.get("recordTypeIndex"), 0);
-    Integer recordCountIndex = intOrNull(trailerTemplate.get("recordCountIndex"));
-    Integer controlTotalIndex = intOrNull(trailerTemplate.get("controlTotalIndex"));
-    int explicitFieldCount = intOr(trailerTemplate.get("fieldCount"), 0);
-    int maxIndex = recordTypeIndex;
-    maxIndex = Math.max(maxIndex, recordCountIndex == null ? 0 : recordCountIndex);
-    maxIndex = Math.max(maxIndex, controlTotalIndex == null ? 0 : controlTotalIndex);
-    int fieldCount = Math.max(explicitFieldCount, maxIndex + 1);
-    List<String> values = new ArrayList<>(Collections.nCopies(fieldCount, ""));
-    String marker = strOr(trailerTemplate.get("recordType"), "T");
-    setAt(values, recordTypeIndex, marker);
-    if (recordCountIndex != null) {
-      setAt(values, recordCountIndex, Long.toString(recordCount));
+    /**
+     * 按模板把 recordType / recordCount / controlTotal 放进各自 index,返回 trailer 行的逐列字符串值。{@code
+     * controlTotal} 为 null(未配金额列)时不写控制总额列。
+     */
+    public static List<String> buildValues(
+            Map<String, Object> trailerTemplate, long recordCount, BigDecimal controlTotal) {
+        int recordTypeIndex = intOr(trailerTemplate.get("recordTypeIndex"), 0);
+        Integer recordCountIndex = intOrNull(trailerTemplate.get("recordCountIndex"));
+        Integer controlTotalIndex = intOrNull(trailerTemplate.get("controlTotalIndex"));
+        int explicitFieldCount = intOr(trailerTemplate.get("fieldCount"), 0);
+        int maxIndex = recordTypeIndex;
+        maxIndex = Math.max(maxIndex, recordCountIndex == null ? 0 : recordCountIndex);
+        maxIndex = Math.max(maxIndex, controlTotalIndex == null ? 0 : controlTotalIndex);
+        int fieldCount = Math.max(explicitFieldCount, maxIndex + 1);
+        List<String> values = new ArrayList<>(Collections.nCopies(fieldCount, ""));
+        String marker = strOr(trailerTemplate.get("recordType"), "T");
+        setAt(values, recordTypeIndex, marker);
+        if (recordCountIndex != null) {
+            setAt(values, recordCountIndex, Long.toString(recordCount));
+        }
+        if (controlTotalIndex != null && controlTotal != null) {
+            setAt(values, controlTotalIndex, controlTotal.toPlainString());
+        }
+        return values;
     }
-    if (controlTotalIndex != null && controlTotal != null) {
-      setAt(values, controlTotalIndex, controlTotal.toPlainString());
-    }
-    return values;
-  }
 
-  private static void setAt(List<String> values, int index, String value) {
-    if (index >= 0 && index < values.size()) {
-      values.set(index, value);
+    private static void setAt(List<String> values, int index, String value) {
+        if (index >= 0 && index < values.size()) {
+            values.set(index, value);
+        }
     }
-  }
 
-  private static String strOr(Object value, String fallback) {
-    if (value == null) {
-      return fallback;
+    private static String strOr(Object value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        return Texts.hasText(text) ? text : fallback;
     }
-    String rawText = String.valueOf(value);
-    String text = rawText.trim();
-    return Texts.hasText(text) ? text : fallback;
-  }
 
-  private static Integer intOrNull(Object value) {
-    if (value instanceof Number number) {
-      return number.intValue();
+    private static Integer intOrNull(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            String textValue = String.valueOf(value);
+            String trimmedValue = textValue.trim();
+            return Integer.valueOf(trimmedValue);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
-    if (value == null) {
-      return null;
-    }
-    try {
-      String textValue = String.valueOf(value);
-      String trimmedValue = textValue.trim();
-      return Integer.valueOf(trimmedValue);
-    } catch (NumberFormatException ignored) {
-      return null;
-    }
-  }
 
-  private static int intOr(Object value, int fallback) {
-    Integer parsed = intOrNull(value);
-    return parsed == null ? fallback : parsed;
-  }
+    private static int intOr(Object value, int fallback) {
+        Integer parsed = intOrNull(value);
+        return parsed == null ? fallback : parsed;
+    }
 
-  private static boolean boolOr(Object value, boolean fallback) {
-    if (value instanceof Boolean bool) {
-      return bool;
+    private static boolean boolOr(Object value, boolean fallback) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (EmptyChecks.isNull(value)) {
+            return fallback;
+        }
+        String textValue = String.valueOf(value);
+        return Boolean.parseBoolean(textValue);
     }
-    if (EmptyChecks.isNull(value)) {
-      return fallback;
-    }
-    String textValue = String.valueOf(value);
-    return Boolean.parseBoolean(textValue);
-  }
 }

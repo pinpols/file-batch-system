@@ -6,27 +6,27 @@ import lombok.Data;
 @Data
 public class ArchivePolicyEntity {
 
-  private Long id;
+    private Long id;
 
-  private String tenantId;
+    private String tenantId;
 
-  private String targetTable;
+    private String targetTable;
 
-  private Integer retentionDays;
+    private Integer retentionDays;
 
-  private Boolean archiveEnabled;
+    private Boolean archiveEnabled;
 
-  private Boolean cleanupEnabled;
+    private Boolean cleanupEnabled;
 
-  private Integer batchSize;
+    private Integer batchSize;
 
-  private String description;
+    private String description;
 
-  private String createdBy;
+    private String createdBy;
 
-  private String updatedBy;
+    private String updatedBy;
 
-  private Instant createdAt;
+    private Instant createdAt;
 
-  private Instant updatedAt;
+    private Instant updatedAt;
 }

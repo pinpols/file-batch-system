@@ -44,340 +44,335 @@ import org.springframework.mock.env.MockEnvironment;
 @DisplayName("Worker 主循环基类: 注册幂等, 端口选择, 心跳与关闭委托")
 class AbstractWorkerLoopTest {
 
-  @Mock
-  private WorkerLifecycleManager workerLifecycleManager;
+    @Mock
+    private WorkerLifecycleManager workerLifecycleManager;
 
-  @Mock
-  private HeartbeatService heartbeatService;
+    @Mock
+    private HeartbeatService heartbeatService;
 
-  private TestWorkerLoop loop;
-  private BatchDateTimeSupport dateTimeSupport;
+    private TestWorkerLoop loop;
+    private BatchDateTimeSupport dateTimeSupport;
 
-  @BeforeEach
-  void setUp() {
-    WorkerRegistration registration = new WorkerRegistration();
-    registration.setWorkerId("test-worker-001");
-    registration.setTenantId("t1");
-    when(workerLifecycleManager.start(any())).thenReturn(registration);
+    @BeforeEach
+    void setUp() {
+        WorkerRegistration registration = new WorkerRegistration();
+        registration.setWorkerId("test-worker-001");
+        registration.setTenantId("t1");
+        when(workerLifecycleManager.start(any())).thenReturn(registration);
 
-    BatchTimezoneProvider timezoneProvider =
-        new BatchTimezoneProvider(new BatchTimezoneProperties());
-    dateTimeSupport = new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider);
-    loop = new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
-  }
-
-  @Test
-  @DisplayName("首次调用即完成注册并返回注册信息, 注册入口只被调用一次")
-  void ensureStarted_registersWorkerOnFirstCall() {
-    WorkerRegistration result = loop.ensureStarted();
-
-    assertThat(result).isNotNull();
-    assertThat(result.getWorkerId()).isEqualTo("test-worker-001");
-    verify(workerLifecycleManager, times(1)).start(any());
-  }
-
-  @Test
-  @DisplayName("重复调用注册方法保持幂等, 真正注册只发生一次")
-  void ensureStarted_isIdempotent_registersOnlyOnce() {
-    loop.ensureStarted();
-    loop.ensureStarted();
-    loop.ensureStarted();
-
-    verify(workerLifecycleManager, times(1)).start(any());
-  }
-
-  @Test
-  @DisplayName("注册信息从配置填充: 租户, 类型与分组大写归一, 端口及并发上限")
-  void ensureStarted_populatesRegistrationFromConfiguration() {
-    loop.ensureStarted();
-
-    ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
-    verify(workerLifecycleManager).start(captor.capture());
-
-    WorkerRegistration sent = captor.getValue();
-    assertThat(sent.getTenantId()).isEqualTo("t1");
-    assertThat(sent.getWorkerType()).isEqualTo("TEST");
-    // AbstractWorkerLoop.ensureStarted 源头归一 workerGroup 为大写（防大小写异常数据）
-    assertThat(sent.getWorkerGroup()).isEqualTo("TEST");
-    assertThat(sent.getPort()).isEqualTo(9999);
-    assertThat(sent.getMaxConcurrent()).isEqualTo(8);
-    assertThat(sent.getRegisteredAt()).isNotNull();
-    assertThat(sent.getLastHeartbeatAt()).isNotNull();
-  }
-
-  @Test
-  @DisplayName("实际主服务端口优先于配置端口, 不受独立管理服务端口影响")
-  void ensureStarted_usesRuntimeBoundMainPort() {
-    loop.setEnvironment(environmentWith("local.server.port", "19099", "server.port", "18083"));
-
-    assertThat(registered().getPort()).isEqualTo(19099);
-  }
-
-  @Test
-  @DisplayName("仅配置端口或管理端口而主服务未绑定时拒绝注册")
-  void ensureStarted_rejectsConfiguredOrManagementPortBeforeBinding() {
-    loop.setEnvironment(environmentWith("server.port", "18083", "local.management.port", "19090"));
-    assertThatThrownBy(loop::ensureStarted)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("main HTTP server");
-    verify(workerLifecycleManager, never()).start(any());
-  }
-
-  @Test
-  @DisplayName("没有 Spring 环境信息时拒绝注册, 不存在子类端口兜底")
-  void ensureStarted_rejectsMissingEnvironment() {
-    loop.setEnvironment(null);
-    assertThatThrownBy(loop::ensureStarted).isInstanceOf(IllegalStateException.class);
-    verify(workerLifecycleManager, never()).start(any());
-  }
-
-  @ParameterizedTest
-  @ValueSource(ints = {-1, 0, 65536})
-  @DisplayName("实际端口不在 TCP 端口范围内时拒绝注册")
-  void ensureStarted_rejectsInvalidBoundPort(int port) {
-    loop.setEnvironment(environmentWith("local.server.port", Integer.toString(port)));
-    assertThatThrownBy(loop::ensureStarted).isInstanceOf(IllegalStateException.class);
-    verify(workerLifecycleManager, never()).start(any());
-  }
-
-  @Test
-  @DisplayName("随机端口配置只在实际绑定后注册, 管理端口不能覆盖主服务端口")
-  void ensureStarted_canRetryAfterMainServerBinds() {
-    MockEnvironment environment =
-        environmentWith("server.port", "0", "local.management.port", "19090");
-    loop.setEnvironment(environment);
-    loop.doHeartbeat();
-    verify(workerLifecycleManager, never()).start(any());
-    verify(heartbeatService, never()).beat(any());
-
-    environment.setProperty("local.server.port", "19099");
-    assertThat(registered().getPort()).isEqualTo(19099);
-  }
-
-  /** 构造带属性的 MockEnvironment；参数按 key/value 成对传入。 */
-  private MockEnvironment environmentWith(String... keyValues) {
-    MockEnvironment environment = new MockEnvironment();
-    for (int index = 0; index < keyValues.length; index += 2) {
-      environment.setProperty(keyValues[index], keyValues[index + 1]);
-    }
-    return environment;
-  }
-
-  /** 触发一次幂等注册并返回实际提交给 WorkerLifecycleManager 的注册信息。 */
-  private WorkerRegistration registered() {
-    loop.ensureStarted();
-    ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
-    verify(workerLifecycleManager).start(captor.capture());
-    return captor.getValue();
-  }
-
-  @Test
-  @DisplayName("存在稳定 Worker 编码时以其作为 Worker 标识")
-  void ensureStarted_buildWorkerIdFromWorkerCode_whenPresent() {
-    loop.ensureStarted();
-
-    ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
-    verify(workerLifecycleManager).start(captor.capture());
-    assertThat(captor.getValue().getWorkerId()).isEqualTo("fixed-worker-code");
-  }
-
-  @Test
-  @DisplayName("稳定实例池编码与运行时实例标识分开, 标识追加规范化后的实例值")
-  void ensureStarted_separatesStablePoolCodeFromRuntimeInstanceId() {
-    WorkerIdentityProperties identity = new WorkerIdentityProperties();
-    identity.setInstanceId("pod/uid:01");
-    TestWorkerLoop instanceLoop =
-        new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport, identity);
-
-    instanceLoop.ensureStarted();
-
-    ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
-    verify(workerLifecycleManager).start(captor.capture());
-    assertThat(captor.getValue().getWorkerId()).isEqualTo("fixed-worker-code-pod_uid_01");
-    assertThat(captor.getValue().getWorkerCode()).isEqualTo("fixed-worker-code");
-  }
-
-  @Test
-  @DisplayName("注册完成后心跳委托给心跳服务并携带 Worker 标识")
-  void doHeartbeat_sendsHeartbeatAfterApplicationReady() {
-    loop.onReady();
-    loop.doHeartbeat();
-
-    verify(heartbeatService, times(1)).beat("test-worker-001");
-  }
-
-  @Test
-  @DisplayName("ApplicationReady 前的初始定时心跳不触发注册或网络请求")
-  void doHeartbeat_waitsUntilApplicationReady() {
-    TestWorkerLoop freshLoop =
-        new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
-    freshLoop.doHeartbeat();
-
-    verify(workerLifecycleManager, never()).start(any());
-    verify(heartbeatService, never()).beat(any());
-  }
-
-  @Test
-  @DisplayName("ApplicationReady 回调完成首次注册")
-  void onReady_registersWorkerBeforeStartupAudit() {
-    loop.onReady();
-
-    verify(workerLifecycleManager, times(1)).start(any());
-  }
-
-  @Test
-  @DisplayName("心跳服务抛异常时静默容忍, 不向调用方抛出")
-  void doHeartbeat_continuesGracefullyWhenFacadeThrows() {
-    loop.onReady();
-    doThrow(new RuntimeException("network error")).when(heartbeatService).beat(any());
-
-    assertThatCode(() -> loop.doHeartbeat()).doesNotThrowAnyException();
-  }
-
-  @Test
-  @DisplayName("上下文关闭后心跳不再触发注册与发送")
-  void doHeartbeat_skipsAfterContextClosed() {
-    loop.onContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
-
-    loop.doHeartbeat();
-
-    verify(workerLifecycleManager, never()).start(any());
-    verify(heartbeatService, never()).beat(any());
-  }
-
-  @Test
-  @DisplayName("已注册时关闭委托给生命周期管理器并携带 Worker 标识")
-  void shutdown_delegatesToFacade_whenStarted() {
-    loop.ensureStarted();
-    loop.shutdown();
-
-    verify(workerLifecycleManager, times(1)).shutdown("test-worker-001");
-  }
-
-  @Test
-  @DisplayName("从未注册时关闭为空操作, 不调用生命周期管理器")
-  void shutdown_isNoOp_whenNeverStarted() {
-    TestWorkerLoop freshLoop =
-        new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
-    freshLoop.shutdown();
-
-    verify(workerLifecycleManager, never()).shutdown(any());
-  }
-
-  @Test
-  @DisplayName("关闭过程抛异常时不向外传播, 委托调用仍已发生")
-  void shutdown_doesNotPropagateFacadeFailure() {
-    loop.ensureStarted();
-    doThrow(new RuntimeException("shutdown failed"))
-        .when(workerLifecycleManager)
-        .shutdown(any());
-
-    loop.shutdown();
-
-    verify(workerLifecycleManager, times(1)).shutdown("test-worker-001");
-  }
-
-  @Test
-  @DisplayName("实例标识过长时 Worker 标识截断为池前缀加 64 位实例后缀")
-  void ensureStarted_truncatesOversizedWorkerId() {
-    WorkerIdentityProperties identity = new WorkerIdentityProperties();
-    identity.setInstanceId("i".repeat(200));
-    TestWorkerLoop instanceLoop =
-        new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport, identity);
-
-    instanceLoop.ensureStarted();
-
-    ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
-    verify(workerLifecycleManager).start(captor.capture());
-    assertThat(captor.getValue().getWorkerId())
-        .isEqualTo("fixed-worker-code-" + "i".repeat(64))
-        .hasSize(82);
-  }
-
-  @Test
-  @DisplayName("注册失败且异常链没有消息时仍容忍启动, 不向调用方抛出")
-  void ensureStarted_toleratesFailureWithoutMessages() {
-    WorkerRegistryStartupProperties startupProperties = new WorkerRegistryStartupProperties();
-    startupProperties.setFailFastOnStartup(false);
-    TestWorkerLoop tolerantLoop = new TestWorkerLoop(
-        workerLifecycleManager, heartbeatService, dateTimeSupport, startupProperties);
-    RuntimeException failure =
-        new RuntimeException((String) null, new IllegalStateException((String) null));
-    doThrow(failure).when(workerLifecycleManager).start(any());
-
-    assertThatCode(tolerantLoop::onReady).doesNotThrowAnyException();
-
-    verify(workerLifecycleManager).start(any());
-  }
-
-  // ── 用于测试的最小具体子类 ──────────────────────────────
-
-  private static class TestWorkerLoop extends AbstractWorkerLoop {
-
-    TestWorkerLoop(
-        WorkerLifecycleManager lifecycleManager,
-        HeartbeatService heartbeatService,
-        BatchDateTimeSupport dateTimeSupport) {
-      super(lifecycleManager, heartbeatService, dateTimeSupport, 8);
-      setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
+        BatchTimezoneProvider timezoneProvider = new BatchTimezoneProvider(new BatchTimezoneProperties());
+        dateTimeSupport = new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider);
+        loop = new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
     }
 
-    TestWorkerLoop(
-        WorkerLifecycleManager lifecycleManager,
-        HeartbeatService heartbeatService,
-        BatchDateTimeSupport dateTimeSupport,
-        WorkerIdentityProperties identityProperties) {
-      super(lifecycleManager, heartbeatService, dateTimeSupport, 8, identityProperties);
-      setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
+    @Test
+    @DisplayName("首次调用即完成注册并返回注册信息, 注册入口只被调用一次")
+    void ensureStarted_registersWorkerOnFirstCall() {
+        WorkerRegistration result = loop.ensureStarted();
+
+        assertThat(result).isNotNull();
+        assertThat(result.getWorkerId()).isEqualTo("test-worker-001");
+        verify(workerLifecycleManager, times(1)).start(any());
     }
 
-    TestWorkerLoop(
-        WorkerLifecycleManager lifecycleManager,
-        HeartbeatService heartbeatService,
-        BatchDateTimeSupport dateTimeSupport,
-        WorkerRegistryStartupProperties startupProperties) {
-      super(
-          lifecycleManager,
-          heartbeatService,
-          dateTimeSupport,
-          8,
-          new WorkerIdentityProperties(),
-          startupProperties);
-      setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
+    @Test
+    @DisplayName("重复调用注册方法保持幂等, 真正注册只发生一次")
+    void ensureStarted_isIdempotent_registersOnlyOnce() {
+        loop.ensureStarted();
+        loop.ensureStarted();
+        loop.ensureStarted();
+
+        verify(workerLifecycleManager, times(1)).start(any());
     }
 
-    @Override
-    protected WorkerConfiguration workerConfiguration() {
-      return new WorkerConfiguration() {
-        public String workerCode() {
-          return "fixed-worker-code";
-        }
+    @Test
+    @DisplayName("注册信息从配置填充: 租户, 类型与分组大写归一, 端口及并发上限")
+    void ensureStarted_populatesRegistrationFromConfiguration() {
+        loop.ensureStarted();
 
-        public String workerType() {
-          return "TEST";
-        }
+        ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
+        verify(workerLifecycleManager).start(captor.capture());
 
-        public String tenantId() {
-          return "t1";
-        }
-
-        public Long heartbeatIntervalMillis() {
-          return 15000L;
-        }
-
-        public String topic() {
-          return "test-topic";
-        }
-
-        public String consumerGroupId() {
-          return "test-group";
-        }
-      };
+        WorkerRegistration sent = captor.getValue();
+        assertThat(sent.getTenantId()).isEqualTo("t1");
+        assertThat(sent.getWorkerType()).isEqualTo("TEST");
+        // AbstractWorkerLoop.ensureStarted 源头归一 workerGroup 为大写（防大小写异常数据）
+        assertThat(sent.getWorkerGroup()).isEqualTo("TEST");
+        assertThat(sent.getPort()).isEqualTo(9999);
+        assertThat(sent.getMaxConcurrent()).isEqualTo(8);
+        assertThat(sent.getRegisteredAt()).isNotNull();
+        assertThat(sent.getLastHeartbeatAt()).isNotNull();
     }
 
-    @Override
-    protected String workerGroup() {
-      return "test";
+    @Test
+    @DisplayName("实际主服务端口优先于配置端口, 不受独立管理服务端口影响")
+    void ensureStarted_usesRuntimeBoundMainPort() {
+        loop.setEnvironment(environmentWith("local.server.port", "19099", "server.port", "18083"));
+
+        assertThat(registered().getPort()).isEqualTo(19099);
     }
-  }
+
+    @Test
+    @DisplayName("仅配置端口或管理端口而主服务未绑定时拒绝注册")
+    void ensureStarted_rejectsConfiguredOrManagementPortBeforeBinding() {
+        loop.setEnvironment(environmentWith("server.port", "18083", "local.management.port", "19090"));
+        assertThatThrownBy(loop::ensureStarted)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("main HTTP server");
+        verify(workerLifecycleManager, never()).start(any());
+    }
+
+    @Test
+    @DisplayName("没有 Spring 环境信息时拒绝注册, 不存在子类端口兜底")
+    void ensureStarted_rejectsMissingEnvironment() {
+        loop.setEnvironment(null);
+        assertThatThrownBy(loop::ensureStarted).isInstanceOf(IllegalStateException.class);
+        verify(workerLifecycleManager, never()).start(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0, 65536})
+    @DisplayName("实际端口不在 TCP 端口范围内时拒绝注册")
+    void ensureStarted_rejectsInvalidBoundPort(int port) {
+        loop.setEnvironment(environmentWith("local.server.port", Integer.toString(port)));
+        assertThatThrownBy(loop::ensureStarted).isInstanceOf(IllegalStateException.class);
+        verify(workerLifecycleManager, never()).start(any());
+    }
+
+    @Test
+    @DisplayName("随机端口配置只在实际绑定后注册, 管理端口不能覆盖主服务端口")
+    void ensureStarted_canRetryAfterMainServerBinds() {
+        MockEnvironment environment = environmentWith("server.port", "0", "local.management.port", "19090");
+        loop.setEnvironment(environment);
+        loop.doHeartbeat();
+        verify(workerLifecycleManager, never()).start(any());
+        verify(heartbeatService, never()).beat(any());
+
+        environment.setProperty("local.server.port", "19099");
+        assertThat(registered().getPort()).isEqualTo(19099);
+    }
+
+    /** 构造带属性的 MockEnvironment；参数按 key/value 成对传入。 */
+    private MockEnvironment environmentWith(String... keyValues) {
+        MockEnvironment environment = new MockEnvironment();
+        for (int index = 0; index < keyValues.length; index += 2) {
+            environment.setProperty(keyValues[index], keyValues[index + 1]);
+        }
+        return environment;
+    }
+
+    /** 触发一次幂等注册并返回实际提交给 WorkerLifecycleManager 的注册信息。 */
+    private WorkerRegistration registered() {
+        loop.ensureStarted();
+        ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
+        verify(workerLifecycleManager).start(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("存在稳定 Worker 编码时以其作为 Worker 标识")
+    void ensureStarted_buildWorkerIdFromWorkerCode_whenPresent() {
+        loop.ensureStarted();
+
+        ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
+        verify(workerLifecycleManager).start(captor.capture());
+        assertThat(captor.getValue().getWorkerId()).isEqualTo("fixed-worker-code");
+    }
+
+    @Test
+    @DisplayName("稳定实例池编码与运行时实例标识分开, 标识追加规范化后的实例值")
+    void ensureStarted_separatesStablePoolCodeFromRuntimeInstanceId() {
+        WorkerIdentityProperties identity = new WorkerIdentityProperties();
+        identity.setInstanceId("pod/uid:01");
+        TestWorkerLoop instanceLoop =
+                new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport, identity);
+
+        instanceLoop.ensureStarted();
+
+        ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
+        verify(workerLifecycleManager).start(captor.capture());
+        assertThat(captor.getValue().getWorkerId()).isEqualTo("fixed-worker-code-pod_uid_01");
+        assertThat(captor.getValue().getWorkerCode()).isEqualTo("fixed-worker-code");
+    }
+
+    @Test
+    @DisplayName("注册完成后心跳委托给心跳服务并携带 Worker 标识")
+    void doHeartbeat_sendsHeartbeatAfterApplicationReady() {
+        loop.onReady();
+        loop.doHeartbeat();
+
+        verify(heartbeatService, times(1)).beat("test-worker-001");
+    }
+
+    @Test
+    @DisplayName("ApplicationReady 前的初始定时心跳不触发注册或网络请求")
+    void doHeartbeat_waitsUntilApplicationReady() {
+        TestWorkerLoop freshLoop = new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
+        freshLoop.doHeartbeat();
+
+        verify(workerLifecycleManager, never()).start(any());
+        verify(heartbeatService, never()).beat(any());
+    }
+
+    @Test
+    @DisplayName("ApplicationReady 回调完成首次注册")
+    void onReady_registersWorkerBeforeStartupAudit() {
+        loop.onReady();
+
+        verify(workerLifecycleManager, times(1)).start(any());
+    }
+
+    @Test
+    @DisplayName("心跳服务抛异常时静默容忍, 不向调用方抛出")
+    void doHeartbeat_continuesGracefullyWhenFacadeThrows() {
+        loop.onReady();
+        doThrow(new RuntimeException("network error")).when(heartbeatService).beat(any());
+
+        assertThatCode(() -> loop.doHeartbeat()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("上下文关闭后心跳不再触发注册与发送")
+    void doHeartbeat_skipsAfterContextClosed() {
+        loop.onContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+
+        loop.doHeartbeat();
+
+        verify(workerLifecycleManager, never()).start(any());
+        verify(heartbeatService, never()).beat(any());
+    }
+
+    @Test
+    @DisplayName("已注册时关闭委托给生命周期管理器并携带 Worker 标识")
+    void shutdown_delegatesToFacade_whenStarted() {
+        loop.ensureStarted();
+        loop.shutdown();
+
+        verify(workerLifecycleManager, times(1)).shutdown("test-worker-001");
+    }
+
+    @Test
+    @DisplayName("从未注册时关闭为空操作, 不调用生命周期管理器")
+    void shutdown_isNoOp_whenNeverStarted() {
+        TestWorkerLoop freshLoop = new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
+        freshLoop.shutdown();
+
+        verify(workerLifecycleManager, never()).shutdown(any());
+    }
+
+    @Test
+    @DisplayName("关闭过程抛异常时不向外传播, 委托调用仍已发生")
+    void shutdown_doesNotPropagateFacadeFailure() {
+        loop.ensureStarted();
+        doThrow(new RuntimeException("shutdown failed"))
+                .when(workerLifecycleManager)
+                .shutdown(any());
+
+        loop.shutdown();
+
+        verify(workerLifecycleManager, times(1)).shutdown("test-worker-001");
+    }
+
+    @Test
+    @DisplayName("实例标识过长时 Worker 标识截断为池前缀加 64 位实例后缀")
+    void ensureStarted_truncatesOversizedWorkerId() {
+        WorkerIdentityProperties identity = new WorkerIdentityProperties();
+        identity.setInstanceId("i".repeat(200));
+        TestWorkerLoop instanceLoop =
+                new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport, identity);
+
+        instanceLoop.ensureStarted();
+
+        ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
+        verify(workerLifecycleManager).start(captor.capture());
+        assertThat(captor.getValue().getWorkerId())
+                .isEqualTo("fixed-worker-code-" + "i".repeat(64))
+                .hasSize(82);
+    }
+
+    @Test
+    @DisplayName("注册失败且异常链没有消息时仍容忍启动, 不向调用方抛出")
+    void ensureStarted_toleratesFailureWithoutMessages() {
+        WorkerRegistryStartupProperties startupProperties = new WorkerRegistryStartupProperties();
+        startupProperties.setFailFastOnStartup(false);
+        TestWorkerLoop tolerantLoop =
+                new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport, startupProperties);
+        RuntimeException failure = new RuntimeException((String) null, new IllegalStateException((String) null));
+        doThrow(failure).when(workerLifecycleManager).start(any());
+
+        assertThatCode(tolerantLoop::onReady).doesNotThrowAnyException();
+
+        verify(workerLifecycleManager).start(any());
+    }
+
+    // ── 用于测试的最小具体子类 ──────────────────────────────
+
+    private static class TestWorkerLoop extends AbstractWorkerLoop {
+
+        TestWorkerLoop(
+                WorkerLifecycleManager lifecycleManager,
+                HeartbeatService heartbeatService,
+                BatchDateTimeSupport dateTimeSupport) {
+            super(lifecycleManager, heartbeatService, dateTimeSupport, 8);
+            setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
+        }
+
+        TestWorkerLoop(
+                WorkerLifecycleManager lifecycleManager,
+                HeartbeatService heartbeatService,
+                BatchDateTimeSupport dateTimeSupport,
+                WorkerIdentityProperties identityProperties) {
+            super(lifecycleManager, heartbeatService, dateTimeSupport, 8, identityProperties);
+            setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
+        }
+
+        TestWorkerLoop(
+                WorkerLifecycleManager lifecycleManager,
+                HeartbeatService heartbeatService,
+                BatchDateTimeSupport dateTimeSupport,
+                WorkerRegistryStartupProperties startupProperties) {
+            super(
+                    lifecycleManager,
+                    heartbeatService,
+                    dateTimeSupport,
+                    8,
+                    new WorkerIdentityProperties(),
+                    startupProperties);
+            setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
+        }
+
+        @Override
+        protected WorkerConfiguration workerConfiguration() {
+            return new WorkerConfiguration() {
+                public String workerCode() {
+                    return "fixed-worker-code";
+                }
+
+                public String workerType() {
+                    return "TEST";
+                }
+
+                public String tenantId() {
+                    return "t1";
+                }
+
+                public Long heartbeatIntervalMillis() {
+                    return 15000L;
+                }
+
+                public String topic() {
+                    return "test-topic";
+                }
+
+                public String consumerGroupId() {
+                    return "test-group";
+                }
+            };
+        }
+
+        @Override
+        protected String workerGroup() {
+            return "test";
+        }
+    }
 }

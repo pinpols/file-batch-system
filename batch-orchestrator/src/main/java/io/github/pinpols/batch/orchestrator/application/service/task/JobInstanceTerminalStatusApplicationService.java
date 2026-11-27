@@ -23,51 +23,49 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class JobInstanceTerminalStatusApplicationService {
 
-  private final JobTerminalOutboxService terminalOutbox;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final JobInstanceTerminalChildStateReconciler terminalChildStateReconciler;
-  private final JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder;
-  private final TimedOutWorkflowNodeProgression timedOutWorkflowNodeProgression;
+    private final JobTerminalOutboxService terminalOutbox;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final JobInstanceTerminalChildStateReconciler terminalChildStateReconciler;
+    private final JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder;
+    private final TimedOutWorkflowNodeProgression timedOutWorkflowNodeProgression;
 
-  /** CAS 更新实例终态并收敛非终态分区/任务；返回受影响行数（0 表示并发抢占或未命中）。 */
-  @Transactional
-  public int updateTerminalStatusAndReconcileChildren(JobInstanceTerminalStatusCommand command) {
-    return updateTerminalStatusAndReconcileChildren(command, false);
-  }
-
-  private int updateTerminalStatusAndReconcileChildren(
-      JobInstanceTerminalStatusCommand command, boolean requireRunningTask) {
-    // 与 report 共用实例锁，必须在实例/分区/任务的任何行锁之前获取，避免父子锁序反转。
-    jobInstanceMapper.acquireInstanceAdvisoryLock(command.tenantId(), command.id());
-    JobInstanceUpdateStatusParam jobInstanceUpdateStatusParam =
-        JobInstanceUpdateStatusParam.builder()
-            .tenantId(command.tenantId())
-            .id(command.id())
-            .instanceStatus(command.terminalInstanceStatus())
-            .finishedAt(command.finishedAt())
-            .expectedVersion(command.expectedVersion())
-            .build();
-    int rows = requireRunningTask
-        ? jobInstanceMapper.updateStatusWhenTaskRunning(jobInstanceUpdateStatusParam)
-        : jobInstanceMapper.updateStatus(jobInstanceUpdateStatusParam);
-    if (rows > 0) {
-      terminalChildStateReconciler.reconcile(
-          command.tenantId(), command.id(), command.terminalInstanceStatus());
-      terminalOutbox.writeTerminalEvent(command.tenantId(), command.id());
-      jobLifecycleMetricsRecorder.recordCompletionAfterCommit(
-          command.tenantId(), command.id(), command.terminalInstanceStatus(), command.finishedAt());
+    /** CAS 更新实例终态并收敛非终态分区/任务；返回受影响行数（0 表示并发抢占或未命中）。 */
+    @Transactional
+    public int updateTerminalStatusAndReconcileChildren(JobInstanceTerminalStatusCommand command) {
+        return updateTerminalStatusAndReconcileChildren(command, false);
     }
-    return rows;
-  }
 
-  /** 原子应用超时回退，并推进所属 Workflow DAG。 */
-  @Transactional
-  public int enforceTimeoutAndReconcileWorkflow(JobInstanceTerminalStatusCommand command) {
-    int rows = updateTerminalStatusAndReconcileChildren(command, true);
-    if (rows > 0) {
-      timedOutWorkflowNodeProgression.advanceTimedOutWorkflowNode(
-          command.tenantId(), command.id(), command.finishedAt());
+    private int updateTerminalStatusAndReconcileChildren(
+            JobInstanceTerminalStatusCommand command, boolean requireRunningTask) {
+        // 与 report 共用实例锁，必须在实例/分区/任务的任何行锁之前获取，避免父子锁序反转。
+        jobInstanceMapper.acquireInstanceAdvisoryLock(command.tenantId(), command.id());
+        JobInstanceUpdateStatusParam jobInstanceUpdateStatusParam = JobInstanceUpdateStatusParam.builder()
+                .tenantId(command.tenantId())
+                .id(command.id())
+                .instanceStatus(command.terminalInstanceStatus())
+                .finishedAt(command.finishedAt())
+                .expectedVersion(command.expectedVersion())
+                .build();
+        int rows = requireRunningTask
+                ? jobInstanceMapper.updateStatusWhenTaskRunning(jobInstanceUpdateStatusParam)
+                : jobInstanceMapper.updateStatus(jobInstanceUpdateStatusParam);
+        if (rows > 0) {
+            terminalChildStateReconciler.reconcile(command.tenantId(), command.id(), command.terminalInstanceStatus());
+            terminalOutbox.writeTerminalEvent(command.tenantId(), command.id());
+            jobLifecycleMetricsRecorder.recordCompletionAfterCommit(
+                    command.tenantId(), command.id(), command.terminalInstanceStatus(), command.finishedAt());
+        }
+        return rows;
     }
-    return rows;
-  }
+
+    /** 原子应用超时回退，并推进所属 Workflow DAG。 */
+    @Transactional
+    public int enforceTimeoutAndReconcileWorkflow(JobInstanceTerminalStatusCommand command) {
+        int rows = updateTerminalStatusAndReconcileChildren(command, true);
+        if (rows > 0) {
+            timedOutWorkflowNodeProgression.advanceTimedOutWorkflowNode(
+                    command.tenantId(), command.id(), command.finishedAt());
+        }
+        return rows;
+    }
 }

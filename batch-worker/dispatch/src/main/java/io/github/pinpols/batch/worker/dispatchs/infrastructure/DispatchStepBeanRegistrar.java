@@ -14,16 +14,16 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Component
 public class DispatchStepBeanRegistrar extends AbstractStepBeanRegistrar<DispatchStageStep> {
 
-  public DispatchStepBeanRegistrar(
-      ApplicationContext applicationContext,
-      StepRegistryMapper stepRegistryMapper,
-      PlatformTransactionManager transactionManager) {
-    super(
-        applicationContext,
-        stepRegistryMapper,
-        transactionManager,
-        DispatchStageStep.class,
-        "DISPATCH",
-        DispatchStageStep::implCode);
-  }
+    public DispatchStepBeanRegistrar(
+            ApplicationContext applicationContext,
+            StepRegistryMapper stepRegistryMapper,
+            PlatformTransactionManager transactionManager) {
+        super(
+                applicationContext,
+                stepRegistryMapper,
+                transactionManager,
+                DispatchStageStep.class,
+                "DISPATCH",
+                DispatchStageStep::implCode);
+    }
 }

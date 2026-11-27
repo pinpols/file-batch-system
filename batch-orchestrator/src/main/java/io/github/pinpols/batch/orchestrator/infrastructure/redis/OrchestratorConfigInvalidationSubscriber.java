@@ -39,248 +39,241 @@ import org.springframework.util.ErrorHandler;
 @Service
 public class OrchestratorConfigInvalidationSubscriber implements MessageListener {
 
-  static final String CHANNEL = "batch:config:invalidation";
-  private static final int REVISION_TRACKER_MAX_SIZE = 100_000;
+    static final String CHANNEL = "batch:config:invalidation";
+    private static final int REVISION_TRACKER_MAX_SIZE = 100_000;
 
-  /** 配置键修订号在最后一次访问后保留的时长。 */
-  private static final Duration REVISION_TRACKER_EXPIRE_AFTER_ACCESS = Duration.ofHours(12);
+    /** 配置键修订号在最后一次访问后保留的时长。 */
+    private static final Duration REVISION_TRACKER_EXPIRE_AFTER_ACCESS = Duration.ofHours(12);
 
-  private final StringRedisTemplate redisTemplate;
-  private final BatchRedisNamespace redisNamespace;
-  private final OrchestratorConfigCacheService cacheService;
-  private final AtomicBoolean running = new AtomicBoolean(false);
-  private final AtomicLong appliedRevision = new AtomicLong(0);
-  private final Cache<String, Long> keyRevisions = Caffeine.newBuilder()
-      .expireAfterAccess(REVISION_TRACKER_EXPIRE_AFTER_ACCESS)
-      .maximumSize(REVISION_TRACKER_MAX_SIZE)
-      .build();
+    private final StringRedisTemplate redisTemplate;
+    private final BatchRedisNamespace redisNamespace;
+    private final OrchestratorConfigCacheService cacheService;
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicLong appliedRevision = new AtomicLong(0);
+    private final Cache<String, Long> keyRevisions = Caffeine.newBuilder()
+            .expireAfterAccess(REVISION_TRACKER_EXPIRE_AFTER_ACCESS)
+            .maximumSize(REVISION_TRACKER_MAX_SIZE)
+            .build();
 
-  private final Counter receivedCounter;
-  private final Counter staleCounter;
-  private final Counter failureCounter;
-  private final Counter reconcileCounter;
-  private final Timer eventLagTimer;
+    private final Counter receivedCounter;
+    private final Counter staleCounter;
+    private final Counter failureCounter;
+    private final Counter reconcileCounter;
+    private final Timer eventLagTimer;
 
-  private RedisMessageListenerContainer listenerContainer;
+    private RedisMessageListenerContainer listenerContainer;
 
-  @Autowired
-  public OrchestratorConfigInvalidationSubscriber(
-      StringRedisTemplate redisTemplate,
-      BatchRedisNamespace redisNamespace,
-      OrchestratorConfigCacheService cacheService,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this(redisTemplate, redisNamespace, cacheService, meterRegistryProvider.getIfAvailable());
-  }
+    @Autowired
+    public OrchestratorConfigInvalidationSubscriber(
+            StringRedisTemplate redisTemplate,
+            BatchRedisNamespace redisNamespace,
+            OrchestratorConfigCacheService cacheService,
+            ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        this(redisTemplate, redisNamespace, cacheService, meterRegistryProvider.getIfAvailable());
+    }
 
-  OrchestratorConfigInvalidationSubscriber(
-      StringRedisTemplate redisTemplate,
-      OrchestratorConfigCacheService cacheService,
-      MeterRegistry meterRegistry) {
-    this(redisTemplate, new BatchRedisNamespace(""), cacheService, meterRegistry);
-  }
+    OrchestratorConfigInvalidationSubscriber(
+            StringRedisTemplate redisTemplate,
+            OrchestratorConfigCacheService cacheService,
+            MeterRegistry meterRegistry) {
+        this(redisTemplate, new BatchRedisNamespace(""), cacheService, meterRegistry);
+    }
 
-  OrchestratorConfigInvalidationSubscriber(
-      StringRedisTemplate redisTemplate,
-      BatchRedisNamespace redisNamespace,
-      OrchestratorConfigCacheService cacheService,
-      MeterRegistry meterRegistry) {
-    this.redisTemplate = redisTemplate;
-    this.redisNamespace = redisNamespace;
-    this.cacheService = cacheService;
-    if (EmptyChecks.isNull(meterRegistry)) {
-      this.receivedCounter = null;
-      this.staleCounter = null;
-      this.failureCounter = null;
-      this.reconcileCounter = null;
-      this.eventLagTimer = null;
-      return;
+    OrchestratorConfigInvalidationSubscriber(
+            StringRedisTemplate redisTemplate,
+            BatchRedisNamespace redisNamespace,
+            OrchestratorConfigCacheService cacheService,
+            MeterRegistry meterRegistry) {
+        this.redisTemplate = redisTemplate;
+        this.redisNamespace = redisNamespace;
+        this.cacheService = cacheService;
+        if (EmptyChecks.isNull(meterRegistry)) {
+            this.receivedCounter = null;
+            this.staleCounter = null;
+            this.failureCounter = null;
+            this.reconcileCounter = null;
+            this.eventLagTimer = null;
+            return;
+        }
+        meterRegistry.gauge("batch.orchestrator.config.invalidation.applied_revision", appliedRevision);
+        meterRegistry.gauge("batch.orchestrator.config.invalidation.tracked_keys", keyRevisions, Cache::estimatedSize);
+        this.receivedCounter =
+                meterRegistry.counter("batch.orchestrator.config.invalidation.event.total", "result", "applied");
+        this.staleCounter =
+                meterRegistry.counter("batch.orchestrator.config.invalidation.event.total", "result", "stale");
+        this.failureCounter =
+                meterRegistry.counter("batch.orchestrator.config.invalidation.event.total", "result", "failure");
+        this.reconcileCounter = meterRegistry.counter("batch.orchestrator.config.invalidation.reconcile.total");
+        this.eventLagTimer = Timer.builder("batch.orchestrator.config.invalidation.event_lag")
+                .publishPercentileHistogram()
+                .register(meterRegistry);
     }
-    meterRegistry.gauge("batch.orchestrator.config.invalidation.applied_revision", appliedRevision);
-    meterRegistry.gauge(
-        "batch.orchestrator.config.invalidation.tracked_keys", keyRevisions, Cache::estimatedSize);
-    this.receivedCounter = meterRegistry.counter(
-        "batch.orchestrator.config.invalidation.event.total", "result", "applied");
-    this.staleCounter = meterRegistry.counter(
-        "batch.orchestrator.config.invalidation.event.total", "result", "stale");
-    this.failureCounter = meterRegistry.counter(
-        "batch.orchestrator.config.invalidation.event.total", "result", "failure");
-    this.reconcileCounter =
-        meterRegistry.counter("batch.orchestrator.config.invalidation.reconcile.total");
-    this.eventLagTimer = Timer.builder("batch.orchestrator.config.invalidation.event_lag")
-        .publishPercentileHistogram()
-        .register(meterRegistry);
-  }
 
-  @PostConstruct
-  void start() {
-    if (!running.compareAndSet(false, true)) {
-      return;
+    @PostConstruct
+    void start() {
+        if (!running.compareAndSet(false, true)) {
+            return;
+        }
+        RedisConnectionFactory connectionFactory = redisTemplate.getConnectionFactory();
+        if (EmptyChecks.isNull(connectionFactory)) {
+            throw new IllegalStateException("redis connection factory is required for config invalidation subscriber");
+        }
+        listenerContainer = new RedisMessageListenerContainer();
+        listenerContainer.setConnectionFactory(connectionFactory);
+        listenerContainer.setErrorHandler(logErrorHandler());
+        String redisChannel = redisNamespace.channel(CHANNEL);
+        listenerContainer.addMessageListener(this, new ChannelTopic(redisChannel));
+        listenerContainer.afterPropertiesSet();
+        listenerContainer.start();
+        log.info("orchestrator config invalidation subscriber started: channel={}", redisChannel);
     }
-    RedisConnectionFactory connectionFactory = redisTemplate.getConnectionFactory();
-    if (EmptyChecks.isNull(connectionFactory)) {
-      throw new IllegalStateException(
-          "redis connection factory is required for config invalidation subscriber");
-    }
-    listenerContainer = new RedisMessageListenerContainer();
-    listenerContainer.setConnectionFactory(connectionFactory);
-    listenerContainer.setErrorHandler(logErrorHandler());
-    String redisChannel = redisNamespace.channel(CHANNEL);
-    listenerContainer.addMessageListener(this, new ChannelTopic(redisChannel));
-    listenerContainer.afterPropertiesSet();
-    listenerContainer.start();
-    log.info("orchestrator config invalidation subscriber started: channel={}", redisChannel);
-  }
 
-  @Override
-  public void onMessage(Message message, byte[] pattern) {
-    if (EmptyChecks.isNull(message)) {
-      return;
+    @Override
+    public void onMessage(Message message, byte[] pattern) {
+        if (EmptyChecks.isNull(message)) {
+            return;
+        }
+        byte[] body = message.getBody();
+        if (EmptyChecks.isNull(body) || body.length == 0) {
+            return;
+        }
+        ConfigCacheInvalidationEvent event;
+        try {
+            String payload = new String(body, StandardCharsets.UTF_8);
+            event = JsonUtils.fromJsonStrict(payload, ConfigCacheInvalidationEvent.class);
+            apply(event);
+        } catch (RuntimeException exception) {
+            increment(failureCounter);
+            log.warn("config invalidation event apply failed: reason={}", SwallowedExceptionLogger.summary(exception));
+            log.debug("config invalidation event apply failure", exception);
+        }
     }
-    byte[] body = message.getBody();
-    if (EmptyChecks.isNull(body) || body.length == 0) {
-      return;
-    }
-    ConfigCacheInvalidationEvent event;
-    try {
-      String payload = new String(body, StandardCharsets.UTF_8);
-      event = JsonUtils.fromJsonStrict(payload, ConfigCacheInvalidationEvent.class);
-      apply(event);
-    } catch (RuntimeException exception) {
-      increment(failureCounter);
-      log.warn(
-          "config invalidation event apply failed: reason={}",
-          SwallowedExceptionLogger.summary(exception));
-      log.debug("config invalidation event apply failure", exception);
-    }
-  }
 
-  @Scheduled(
-      fixedDelayString = "${batch.orchestrator.config-cache.reconcile-interval-millis:10000}")
-  public void reconcileRevisionGap() {
-    String rawRevision;
-    try {
-      rawRevision =
-          redisTemplate.opsForValue().get(BatchRedisKeys.configInvalidationGlobalRevision());
-    } catch (RuntimeException exception) {
-      log.debug(
-          "config invalidation revision reconcile skipped: reason={}",
-          SwallowedExceptionLogger.summary(exception));
-      return;
+    @Scheduled(fixedDelayString = "${batch.orchestrator.config-cache.reconcile-interval-millis:10000}")
+    public void reconcileRevisionGap() {
+        String rawRevision;
+        try {
+            rawRevision = redisTemplate.opsForValue().get(BatchRedisKeys.configInvalidationGlobalRevision());
+        } catch (RuntimeException exception) {
+            log.debug(
+                    "config invalidation revision reconcile skipped: reason={}",
+                    SwallowedExceptionLogger.summary(exception));
+            return;
+        }
+        if (EmptyChecks.isBlank(rawRevision)) {
+            return;
+        }
+        long publishedRevision;
+        try {
+            publishedRevision = Long.parseLong(rawRevision);
+        } catch (NumberFormatException exception) {
+            log.warn("config invalidation global revision is invalid: value={}", rawRevision);
+            return;
+        }
+        long current = appliedRevision.get();
+        if (publishedRevision <= current) {
+            return;
+        }
+        cacheService.evictAllLocal();
+        appliedRevision.accumulateAndGet(publishedRevision, Math::max);
+        increment(reconcileCounter);
+        log.info(
+                "config invalidation revision gap reconciled: previousRevision={}, publishedRevision={}",
+                current,
+                publishedRevision);
     }
-    if (EmptyChecks.isBlank(rawRevision)) {
-      return;
-    }
-    long publishedRevision;
-    try {
-      publishedRevision = Long.parseLong(rawRevision);
-    } catch (NumberFormatException exception) {
-      log.warn("config invalidation global revision is invalid: value={}", rawRevision);
-      return;
-    }
-    long current = appliedRevision.get();
-    if (publishedRevision <= current) {
-      return;
-    }
-    cacheService.evictAllLocal();
-    appliedRevision.accumulateAndGet(publishedRevision, Math::max);
-    increment(reconcileCounter);
-    log.info(
-        "config invalidation revision gap reconciled: previousRevision={}, publishedRevision={}",
-        current,
-        publishedRevision);
-  }
 
-  @EventListener(ContextClosedEvent.class)
-  void stopOnContextClosed(ContextClosedEvent event) {
-    stopContainer("context-closed");
-  }
+    @EventListener(ContextClosedEvent.class)
+    void stopOnContextClosed(ContextClosedEvent event) {
+        stopContainer("context-closed");
+    }
 
-  @PreDestroy
-  void shutdown() {
-    stopContainer("pre-destroy");
-  }
+    @PreDestroy
+    void shutdown() {
+        stopContainer("pre-destroy");
+    }
 
-  private synchronized void apply(ConfigCacheInvalidationEvent event) {
-    boolean invalidationRevisionIsInvalid =
-        EmptyChecks.isNull(event) || event.revision() <= 0 || event.keyRevision() <= 0;
-    if (invalidationRevisionIsInvalid) {
-      increment(failureCounter);
-      return;
+    private synchronized void apply(ConfigCacheInvalidationEvent event) {
+        boolean invalidationRevisionIsInvalid =
+                EmptyChecks.isNull(event) || event.revision() <= 0 || event.keyRevision() <= 0;
+        if (invalidationRevisionIsInvalid) {
+            increment(failureCounter);
+            return;
+        }
+        recordLag(event.changedAt());
+        long previousGlobalRevision = appliedRevision.get();
+        if (event.revision() > previousGlobalRevision + 1) {
+            cacheService.evictAllLocal();
+            keyRevisions.invalidateAll();
+            increment(reconcileCounter);
+            log.info(
+                    "config invalidation event revision gap reconciled: previousRevision={}, eventRevision={}",
+                    previousGlobalRevision,
+                    event.revision());
+        }
+        String key = eventKey(event);
+        Long previous = keyRevisions.getIfPresent(key);
+        if (EmptyChecks.isNotNull(previous) && event.keyRevision() <= previous) {
+            increment(staleCounter);
+            return;
+        }
+        keyRevisions.put(key, event.keyRevision());
+        cacheService.evictLocal(event.tenantId(), event.type(), event.code());
+        appliedRevision.accumulateAndGet(event.revision(), Math::max);
+        increment(receivedCounter);
     }
-    recordLag(event.changedAt());
-    long previousGlobalRevision = appliedRevision.get();
-    if (event.revision() > previousGlobalRevision + 1) {
-      cacheService.evictAllLocal();
-      keyRevisions.invalidateAll();
-      increment(reconcileCounter);
-      log.info(
-          "config invalidation event revision gap reconciled: previousRevision={}, eventRevision={}",
-          previousGlobalRevision,
-          event.revision());
-    }
-    String key = eventKey(event);
-    Long previous = keyRevisions.getIfPresent(key);
-    if (EmptyChecks.isNotNull(previous) && event.keyRevision() <= previous) {
-      increment(staleCounter);
-      return;
-    }
-    keyRevisions.put(key, event.keyRevision());
-    cacheService.evictLocal(event.tenantId(), event.type(), event.code());
-    appliedRevision.accumulateAndGet(event.revision(), Math::max);
-    increment(receivedCounter);
-  }
 
-  private String eventKey(ConfigCacheInvalidationEvent event) {
-    return "%s:%s:%s".formatted(event.tenantId(), event.type(), event.code());
-  }
+    private String eventKey(ConfigCacheInvalidationEvent event) {
+        return "%s:%s:%s".formatted(event.tenantId(), event.type(), event.code());
+    }
 
-  private void recordLag(Instant changedAt) {
-    if (EmptyChecks.isNull(eventLagTimer) || EmptyChecks.isNull(changedAt)) {
-      return;
+    private void recordLag(Instant changedAt) {
+        if (EmptyChecks.isNull(eventLagTimer) || EmptyChecks.isNull(changedAt)) {
+            return;
+        }
+        Instant observedAt = Instant.now();
+        Duration eventLag = Duration.between(changedAt, observedAt);
+        long measuredLagMillis = eventLag.toMillis();
+        long lagMillis = Math.max(0, measuredLagMillis);
+        eventLagTimer.record(lagMillis, TimeUnit.MILLISECONDS);
     }
-    Instant observedAt = Instant.now();
-    Duration eventLag = Duration.between(changedAt, observedAt);
-    long measuredLagMillis = eventLag.toMillis();
-    long lagMillis = Math.max(0, measuredLagMillis);
-    eventLagTimer.record(lagMillis, TimeUnit.MILLISECONDS);
-  }
 
-  private void stopContainer(String source) {
-    if (!running.compareAndSet(true, false)) {
-      return;
+    private void stopContainer(String source) {
+        if (!running.compareAndSet(true, false)) {
+            return;
+        }
+        if (EmptyChecks.isNull(listenerContainer)) {
+            return;
+        }
+        log.info("orchestrator config invalidation subscriber stopping: source={}", source);
+        try {
+            listenerContainer.stop();
+        } catch (RuntimeException exception) {
+            log.debug(
+                    "orchestrator config invalidation subscriber stop skipped: reason={}",
+                    SwallowedExceptionLogger.summary(exception),
+                    exception);
+        }
+        try {
+            listenerContainer.destroy();
+        } catch (Exception exception) {
+            log.debug(
+                    "orchestrator config invalidation subscriber destroy skipped: reason={}",
+                    SwallowedExceptionLogger.summary(exception),
+                    exception);
+        }
     }
-    if (EmptyChecks.isNull(listenerContainer)) {
-      return;
-    }
-    log.info("orchestrator config invalidation subscriber stopping: source={}", source);
-    try {
-      listenerContainer.stop();
-    } catch (RuntimeException exception) {
-      log.debug(
-          "orchestrator config invalidation subscriber stop skipped: reason={}",
-          SwallowedExceptionLogger.summary(exception),
-          exception);
-    }
-    try {
-      listenerContainer.destroy();
-    } catch (Exception exception) {
-      log.debug(
-          "orchestrator config invalidation subscriber destroy skipped: reason={}",
-          SwallowedExceptionLogger.summary(exception),
-          exception);
-    }
-  }
 
-  private ErrorHandler logErrorHandler() {
-    return throwable -> {
-      increment(failureCounter);
-      log.warn("orchestrator config invalidation subscriber error", throwable);
-    };
-  }
-
-  private void increment(Counter counter) {
-    if (EmptyChecks.isNotNull(counter)) {
-      counter.increment();
+    private ErrorHandler logErrorHandler() {
+        return throwable -> {
+            increment(failureCounter);
+            log.warn("orchestrator config invalidation subscriber error", throwable);
+        };
     }
-  }
+
+    private void increment(Counter counter) {
+        if (EmptyChecks.isNotNull(counter)) {
+            counter.increment();
+        }
+    }
 }

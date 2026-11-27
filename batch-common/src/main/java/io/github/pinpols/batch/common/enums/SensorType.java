@@ -20,11 +20,11 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum SensorType implements DictEnum {
-  FILE_ARRIVAL("FILE_ARRIVAL", "等待文件到达"),
-  HTTP_POLL("HTTP_POLL", "HTTP 轮询"),
-  KAFKA_OFFSET("KAFKA_OFFSET", "Kafka 位点"),
-  DB_ROW_EXISTS("DB_ROW_EXISTS", "数据库行存在");
+    FILE_ARRIVAL("FILE_ARRIVAL", "等待文件到达"),
+    HTTP_POLL("HTTP_POLL", "HTTP 轮询"),
+    KAFKA_OFFSET("KAFKA_OFFSET", "Kafka 位点"),
+    DB_ROW_EXISTS("DB_ROW_EXISTS", "数据库行存在");
 
-  private final String code;
-  private final String label;
+    private final String code;
+    private final String label;
 }

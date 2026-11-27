@@ -30,153 +30,150 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Service
 public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtimePort {
 
-  private static final String STREAM = "ops-summary";
-  private static final String EVENT_TYPE = "ops-summary-updated";
-  private static final long REFRESH_DEBOUNCE_MILLIS = 300L;
-  private static final long SUMMARY_CACHE_TTL_MILLIS = 1_000L;
+    private static final String STREAM = "ops-summary";
+    private static final String EVENT_TYPE = "ops-summary-updated";
+    private static final long REFRESH_DEBOUNCE_MILLIS = 300L;
+    private static final long SUMMARY_CACHE_TTL_MILLIS = 1_000L;
 
-  /** 摘要缓存条目写入后保留的秒数。 */
-  private static final int SUMMARY_CACHE_EXPIRE_SECONDS = 10;
+    /** 摘要缓存条目写入后保留的秒数。 */
+    private static final int SUMMARY_CACHE_EXPIRE_SECONDS = 10;
 
-  /** 摘要缓存最多保留的租户条目数。 */
-  private static final int SUMMARY_CACHE_MAX_ENTRIES = 1000;
+    /** 摘要缓存最多保留的租户条目数。 */
+    private static final int SUMMARY_CACHE_MAX_ENTRIES = 1000;
 
-  private final ConsoleOpsSummaryPort opsApplicationService;
-  private final ConsoleRealtimeEventHub realtimeEventHub;
-  private final RealtimeEventBus realtimeEventBusPublisher;
-  private final ConsoleRealtimeCursorFactory cursorFactory;
-  private final TenantIdResolver tenantGuard;
-  private final BatchDateTimeSupport dateTimeSupport;
-  // P0:scheduledRefreshes 在 finally 里有 remove,但异常 / cancel 路径下仍可能漏删,
-  // 加 maximumSize 回退防止租户基数增长后无界堆积。
-  private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledRefreshes =
-      new ConcurrentHashMap<>();
-  // P0:summaryCache 原裸 ConcurrentHashMap 仅在读路径判 TTL,从不删除,租户基数大时永久驻留。
-  // 改 Caffeine expireAfterWrite(10s) + maximumSize(1000),与 SUMMARY_CACHE_TTL_MILLIS 对齐。
-  private final Cache<String, CachedSummary> summaryCache = Caffeine.newBuilder()
-      .expireAfterWrite(SUMMARY_CACHE_EXPIRE_SECONDS, TimeUnit.SECONDS)
-      .maximumSize(SUMMARY_CACHE_MAX_ENTRIES)
-      .build();
-  private final TaskScheduler scheduler;
+    private final ConsoleOpsSummaryPort opsApplicationService;
+    private final ConsoleRealtimeEventHub realtimeEventHub;
+    private final RealtimeEventBus realtimeEventBusPublisher;
+    private final ConsoleRealtimeCursorFactory cursorFactory;
+    private final TenantIdResolver tenantGuard;
+    private final BatchDateTimeSupport dateTimeSupport;
+    // P0:scheduledRefreshes 在 finally 里有 remove,但异常 / cancel 路径下仍可能漏删,
+    // 加 maximumSize 回退防止租户基数增长后无界堆积。
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledRefreshes = new ConcurrentHashMap<>();
+    // P0:summaryCache 原裸 ConcurrentHashMap 仅在读路径判 TTL,从不删除,租户基数大时永久驻留。
+    // 改 Caffeine expireAfterWrite(10s) + maximumSize(1000),与 SUMMARY_CACHE_TTL_MILLIS 对齐。
+    private final Cache<String, CachedSummary> summaryCache = Caffeine.newBuilder()
+            .expireAfterWrite(SUMMARY_CACHE_EXPIRE_SECONDS, TimeUnit.SECONDS)
+            .maximumSize(SUMMARY_CACHE_MAX_ENTRIES)
+            .build();
+    private final TaskScheduler scheduler;
 
-  public ConsoleOpsSummaryRealtimeStream(
-      ConsoleOpsSummaryPort opsApplicationService,
-      ConsoleRealtimeEventHub realtimeEventHub,
-      RealtimeEventBus realtimeEventBusPublisher,
-      ConsoleRealtimeCursorFactory cursorFactory,
-      TenantIdResolver tenantGuard,
-      BatchDateTimeSupport dateTimeSupport,
-      @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
-    this.opsApplicationService = opsApplicationService;
-    this.realtimeEventHub = realtimeEventHub;
-    this.realtimeEventBusPublisher = realtimeEventBusPublisher;
-    this.cursorFactory = cursorFactory;
-    this.tenantGuard = tenantGuard;
-    this.dateTimeSupport = dateTimeSupport;
-    this.scheduler = scheduler;
-  }
-
-  public void publishRefresh(String tenantId) {
-    publishRefresh(tenantId, false);
-  }
-
-  private void publishRefresh(String tenantId, boolean force) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    Runnable publish = () -> {
-      if (force) {
-        publishSummarySnapshot(resolvedTenantId, true);
-        return;
-      }
-      scheduleCoalescedRefresh(resolvedTenantId);
-    };
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCommit() {
-          publish.run();
-        }
-      });
-      return;
+    public ConsoleOpsSummaryRealtimeStream(
+            ConsoleOpsSummaryPort opsApplicationService,
+            ConsoleRealtimeEventHub realtimeEventHub,
+            RealtimeEventBus realtimeEventBusPublisher,
+            ConsoleRealtimeCursorFactory cursorFactory,
+            TenantIdResolver tenantGuard,
+            BatchDateTimeSupport dateTimeSupport,
+            @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
+        this.opsApplicationService = opsApplicationService;
+        this.realtimeEventHub = realtimeEventHub;
+        this.realtimeEventBusPublisher = realtimeEventBusPublisher;
+        this.cursorFactory = cursorFactory;
+        this.tenantGuard = tenantGuard;
+        this.dateTimeSupport = dateTimeSupport;
+        this.scheduler = scheduler;
     }
-    publish.run();
-  }
 
-  public SseEmitter subscribe(String tenantId, Long heartbeatMillis) {
-    return subscribe(tenantId, heartbeatMillis, true);
-  }
-
-  public SseEmitter subscribe(String tenantId, Long heartbeatMillis, boolean initialSnapshot) {
-    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    SseEmitter emitter =
-        realtimeEventHub.subscribeAllEvents(resolvedTenantId, STREAM, heartbeatMillis);
-    if (initialSnapshot) {
-      publishRefresh(resolvedTenantId, true);
+    public void publishRefresh(String tenantId) {
+        publishRefresh(tenantId, false);
     }
-    return emitter;
-  }
 
-  @PreDestroy
-  void shutdown() {
-    // scheduler 由 Spring 容器管理 (consoleRealtimeScheduler bean) — 这里只取消未触发的 debounce 任务。
-    for (ScheduledFuture<?> future : scheduledRefreshes.values()) {
-      if (future != null) {
-        future.cancel(true);
-      }
-    }
-  }
-
-  private void scheduleCoalescedRefresh(String tenantId) {
-    scheduledRefreshes.compute(tenantId, (key, existing) -> {
-      if (existing != null && !existing.isDone()) {
-        return existing;
-      }
-      Instant scheduledNow = Instant.now();
-      Duration debounceDelay = Duration.ofMillis(REFRESH_DEBOUNCE_MILLIS);
-      Instant scheduledAt = scheduledNow.plus(debounceDelay);
-      return scheduler.schedule(
-          () -> {
-            try {
-              publishSummarySnapshot(tenantId, true);
-            } finally {
-              scheduledRefreshes.remove(tenantId);
+    private void publishRefresh(String tenantId, boolean force) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        Runnable publish = () -> {
+            if (force) {
+                publishSummarySnapshot(resolvedTenantId, true);
+                return;
             }
-          },
-          scheduledAt);
-    });
-  }
-
-  private void publishSummarySnapshot(String tenantId, boolean forceRefresh) {
-    ConsoleOpsSummaryResponse summary = loadSummary(tenantId, forceRefresh);
-    if (summary == null) {
-      return;
+            scheduleCoalescedRefresh(resolvedTenantId);
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    publish.run();
+                }
+            });
+            return;
+        }
+        publish.run();
     }
-    String cursor = cursorFactory.nextCursor();
-    Instant emittedAt = dateTimeSupport.nowInstant();
-    ConsoleSseEvent event =
-        new ConsoleSseEvent(tenantId, STREAM, EVENT_TYPE, cursor, summary, emittedAt);
-    realtimeEventHub.publish(event);
-    realtimeEventBusPublisher.publish(event);
-  }
 
-  public void publishSnapshot(String tenantId) {
-    publishSummarySnapshot(tenantId, true);
-  }
-
-  private ConsoleOpsSummaryResponse loadSummary(String tenantId, boolean forceRefresh) {
-    long now = dateTimeSupport.currentEpochMillis();
-    CachedSummary cached = summaryCache.getIfPresent(tenantId);
-    // 双重 TTL 控制:Caffeine expireAfterWrite 回退 10s,业务侧再用 cachedAtMillis 精确判过期
-    // —— 保留原逻辑等价语义,改动只是把无界存储换成有界 Caffeine。
-    boolean cachedSummaryIsReusable = !forceRefresh
-        && EmptyChecks.isNotNull(cached)
-        && now - cached.cachedAtMillis() <= SUMMARY_CACHE_TTL_MILLIS;
-    if (cachedSummaryIsReusable) {
-      return cached.summary();
+    public SseEmitter subscribe(String tenantId, Long heartbeatMillis) {
+        return subscribe(tenantId, heartbeatMillis, true);
     }
-    ConsoleOpsSummaryResponse summary = opsApplicationService.summary(tenantId);
-    summaryCache.put(tenantId, new CachedSummary(summary, now));
-    return summary;
-  }
 
-  private record CachedSummary(ConsoleOpsSummaryResponse summary, long cachedAtMillis) {}
+    public SseEmitter subscribe(String tenantId, Long heartbeatMillis, boolean initialSnapshot) {
+        String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+        SseEmitter emitter = realtimeEventHub.subscribeAllEvents(resolvedTenantId, STREAM, heartbeatMillis);
+        if (initialSnapshot) {
+            publishRefresh(resolvedTenantId, true);
+        }
+        return emitter;
+    }
+
+    @PreDestroy
+    void shutdown() {
+        // scheduler 由 Spring 容器管理 (consoleRealtimeScheduler bean) — 这里只取消未触发的 debounce 任务。
+        for (ScheduledFuture<?> future : scheduledRefreshes.values()) {
+            if (future != null) {
+                future.cancel(true);
+            }
+        }
+    }
+
+    private void scheduleCoalescedRefresh(String tenantId) {
+        scheduledRefreshes.compute(tenantId, (key, existing) -> {
+            if (existing != null && !existing.isDone()) {
+                return existing;
+            }
+            Instant scheduledNow = Instant.now();
+            Duration debounceDelay = Duration.ofMillis(REFRESH_DEBOUNCE_MILLIS);
+            Instant scheduledAt = scheduledNow.plus(debounceDelay);
+            return scheduler.schedule(
+                    () -> {
+                        try {
+                            publishSummarySnapshot(tenantId, true);
+                        } finally {
+                            scheduledRefreshes.remove(tenantId);
+                        }
+                    },
+                    scheduledAt);
+        });
+    }
+
+    private void publishSummarySnapshot(String tenantId, boolean forceRefresh) {
+        ConsoleOpsSummaryResponse summary = loadSummary(tenantId, forceRefresh);
+        if (summary == null) {
+            return;
+        }
+        String cursor = cursorFactory.nextCursor();
+        Instant emittedAt = dateTimeSupport.nowInstant();
+        ConsoleSseEvent event = new ConsoleSseEvent(tenantId, STREAM, EVENT_TYPE, cursor, summary, emittedAt);
+        realtimeEventHub.publish(event);
+        realtimeEventBusPublisher.publish(event);
+    }
+
+    public void publishSnapshot(String tenantId) {
+        publishSummarySnapshot(tenantId, true);
+    }
+
+    private ConsoleOpsSummaryResponse loadSummary(String tenantId, boolean forceRefresh) {
+        long now = dateTimeSupport.currentEpochMillis();
+        CachedSummary cached = summaryCache.getIfPresent(tenantId);
+        // 双重 TTL 控制:Caffeine expireAfterWrite 回退 10s,业务侧再用 cachedAtMillis 精确判过期
+        // —— 保留原逻辑等价语义,改动只是把无界存储换成有界 Caffeine。
+        boolean cachedSummaryIsReusable = !forceRefresh
+                && EmptyChecks.isNotNull(cached)
+                && now - cached.cachedAtMillis() <= SUMMARY_CACHE_TTL_MILLIS;
+        if (cachedSummaryIsReusable) {
+            return cached.summary();
+        }
+        ConsoleOpsSummaryResponse summary = opsApplicationService.summary(tenantId);
+        summaryCache.put(tenantId, new CachedSummary(summary, now));
+        return summary;
+    }
+
+    private record CachedSummary(ConsoleOpsSummaryResponse summary, long cachedAtMillis) {}
 }

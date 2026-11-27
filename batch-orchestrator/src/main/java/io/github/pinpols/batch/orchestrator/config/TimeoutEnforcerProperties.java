@@ -17,21 +17,21 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.timeout")
 public class TimeoutEnforcerProperties {
 
-  /** 是否启用 timeout enforcer。默认开启。 */
-  private boolean enabled = true;
+    /** 是否启用 timeout enforcer。默认开启。 */
+    private boolean enabled = true;
 
-  /** 扫描间隔（毫秒）。默认 60s — timeout 是分钟级语义，不需要更短。 */
-  private long pollIntervalMillis = 60_000L;
+    /** 扫描间隔（毫秒）。默认 60s — timeout 是分钟级语义，不需要更短。 */
+    private long pollIntervalMillis = 60_000L;
 
-  /** 单次扫描的批量大小，避免长事务。 */
-  private int batchSize = 100;
+    /** 单次扫描的批量大小，避免长事务。 */
+    private int batchSize = 100;
 
-  /**
-   * workflow_run stuck 判定阈值（秒）。
-   *
-   * <p>默认 1800s（30 分钟）— 比 timeout enforcer 60s 周期宽松，让 task outcome 有充分时间正常 propagate； 阈值过短可能误判正常长跑
-   * workflow。{@code WorkflowRunStuckReconciler} 选 RUNNING 中且 updated_at 早于 (now - 此值) 的
-   * workflow_run 进入候选。
-   */
-  private long workflowStuckThresholdSeconds = 1800L;
+    /**
+     * workflow_run stuck 判定阈值（秒）。
+     *
+     * <p>默认 1800s（30 分钟）— 比 timeout enforcer 60s 周期宽松，让 task outcome 有充分时间正常 propagate； 阈值过短可能误判正常长跑
+     * workflow。{@code WorkflowRunStuckReconciler} 选 RUNNING 中且 updated_at 早于 (now - 此值) 的
+     * workflow_run 进入候选。
+     */
+    private long workflowStuckThresholdSeconds = 1800L;
 }

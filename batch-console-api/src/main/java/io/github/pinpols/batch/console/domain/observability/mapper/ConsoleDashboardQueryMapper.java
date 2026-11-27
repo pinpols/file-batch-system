@@ -37,71 +37,64 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ConsoleDashboardQueryMapper {
 
-  // ── 简单聚合 ────────────────────────────────────────────────────────────────
+    // ── 简单聚合 ────────────────────────────────────────────────────────────────
 
-  List<StatusCountView> jobStatusCounts(
-      @Param("tenantId") String tenantId, @Param("days") int days);
+    List<StatusCountView> jobStatusCounts(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  List<TypeCountView> triggerTypeCounts(
-      @Param("tenantId") String tenantId, @Param("days") int days);
+    List<TypeCountView> triggerTypeCounts(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  List<StatusCountView> workerStatusCounts(@Param("tenantId") String tenantId);
+    List<StatusCountView> workerStatusCounts(@Param("tenantId") String tenantId);
 
-  List<WorkerGroupStatusCountView> workerGroupStatusCounts(@Param("tenantId") String tenantId);
+    List<WorkerGroupStatusCountView> workerGroupStatusCounts(@Param("tenantId") String tenantId);
 
-  List<ActivePartitionView> activePartitionsByWorker(@Param("tenantId") String tenantId);
+    List<ActivePartitionView> activePartitionsByWorker(@Param("tenantId") String tenantId);
 
-  List<SeverityCountView> alertSeverityCounts(
-      @Param("tenantId") String tenantId, @Param("days") int days);
+    List<SeverityCountView> alertSeverityCounts(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  List<ExecutionProgressView> executionProgress(
-      @Param("tenantId") String tenantId,
-      @Param("jobCode") String jobCode,
-      @Param("bizDate") String bizDate);
+    List<ExecutionProgressView> executionProgress(
+            @Param("tenantId") String tenantId, @Param("jobCode") String jobCode, @Param("bizDate") String bizDate);
 
-  // ── 日趋势 ──────────────────────────────────────────────────────────────────
+    // ── 日趋势 ──────────────────────────────────────────────────────────────────
 
-  List<DayStatusCountView> jobDailyTrend(
-      @Param("tenantId") String tenantId, @Param("days") int days);
+    List<DayStatusCountView> jobDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  List<DayCountView> triggerDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
+    List<DayCountView> triggerDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  List<DaySeverityCountView> alertDailyTrend(
-      @Param("tenantId") String tenantId, @Param("days") int days);
+    List<DaySeverityCountView> alertDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  List<SlaDayView> slaDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
+    List<SlaDayView> slaDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  // ── 配置依赖反查 ────────────────────────────────────────────────────────────
+    // ── 配置依赖反查 ────────────────────────────────────────────────────────────
 
-  List<ConfigDependentView> jobsByQueueCode(
-      @Param("tenantId") String tenantId, @Param("configCode") String configCode);
+    List<ConfigDependentView> jobsByQueueCode(
+            @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
-  List<ConfigDependentView> jobsByCalendarCode(
-      @Param("tenantId") String tenantId, @Param("configCode") String configCode);
+    List<ConfigDependentView> jobsByCalendarCode(
+            @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
-  List<ConfigDependentView> jobsByWindowCode(
-      @Param("tenantId") String tenantId, @Param("configCode") String configCode);
+    List<ConfigDependentView> jobsByWindowCode(
+            @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
-  List<ConfigDependentView> jobsByWorkerGroup(
-      @Param("tenantId") String tenantId, @Param("configCode") String configCode);
+    List<ConfigDependentView> jobsByWorkerGroup(
+            @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
-  // ── 计数 ────────────────────────────────────────────────────────────────────
+    // ── 计数 ────────────────────────────────────────────────────────────────────
 
-  Long countJobDefinitions(@Param("tenantId") String tenantId);
+    Long countJobDefinitions(@Param("tenantId") String tenantId);
 
-  Long countRecentJobInstances(@Param("tenantId") String tenantId, @Param("days") int days);
+    Long countRecentJobInstances(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  Long countWorkflowDefinitions(@Param("tenantId") String tenantId);
+    Long countWorkflowDefinitions(@Param("tenantId") String tenantId);
 
-  Long countRecentFiles(@Param("tenantId") String tenantId, @Param("days") int days);
+    Long countRecentFiles(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  Long countFileChannels(@Param("tenantId") String tenantId);
+    Long countFileChannels(@Param("tenantId") String tenantId);
 
-  Long countFileTemplates(@Param("tenantId") String tenantId);
+    Long countFileTemplates(@Param("tenantId") String tenantId);
 
-  // ── SLA ────────────────────────────────────────────────────────────────────
+    // ── SLA ────────────────────────────────────────────────────────────────────
 
-  SlaStatsView slaStats(@Param("tenantId") String tenantId, @Param("days") int days);
+    SlaStatsView slaStats(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  List<SlaJobReportView> slaJobReport(@Param("tenantId") String tenantId, @Param("days") int days);
+    List<SlaJobReportView> slaJobReport(@Param("tenantId") String tenantId, @Param("days") int days);
 }

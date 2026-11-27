@@ -12,9 +12,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class OrchestratorJobMappers {
 
-  public final JobInstanceMapper jobInstanceMapper;
-  public final JobPartitionMapper jobPartitionMapper;
-  public final JobTaskMapper jobTaskMapper;
-  public final JobStepInstanceMapper jobStepInstanceMapper;
-  public final TriggerRequestMapper triggerRequestMapper;
+    public final JobInstanceMapper jobInstanceMapper;
+    public final JobPartitionMapper jobPartitionMapper;
+    public final JobTaskMapper jobTaskMapper;
+    public final JobStepInstanceMapper jobStepInstanceMapper;
+    public final TriggerRequestMapper triggerRequestMapper;
 }

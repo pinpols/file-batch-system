@@ -32,59 +32,59 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleOidcController {
 
-  private final ConsoleOidcProperties properties;
-  private final ConsoleOidcIdentityService identityService;
-  private final ConsoleResponseFactory responseFactory;
+    private final ConsoleOidcProperties properties;
+    private final ConsoleOidcIdentityService identityService;
+    private final ConsoleResponseFactory responseFactory;
 
-  @GetMapping("/provider")
-  public CommonResponse<ConsoleOidcProviderResponse> provider() {
-    boolean enabled = properties.isEnabled();
-    boolean registrationAvailable = properties.isEnabled();
-    String registrationId = registrationAvailable ? properties.getRegistrationId() : null;
-    ConsoleOidcProviderResponse response = new ConsoleOidcProviderResponse(enabled, registrationId);
-    return responseFactory.success(response);
-  }
-
-  @GetMapping("/identities")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<List<ConsoleOidcIdentityResponse>> list(@RequestParam String tenantId) {
-    return responseFactory.success(identityService.list(tenantId));
-  }
-
-  @PostMapping("/identities")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  @AuditAction(
-      action = "auth.oidc.identity.bind",
-      aggregateType = "oidc_identity",
-      targetTenantParam = "#tenantId",
-      recordParams = false)
-  public CommonResponse<ConsoleOidcIdentityResponse> bind(
-      @RequestParam String tenantId,
-      @Valid @RequestBody ConsoleOidcIdentityRequest request,
-      Authentication authentication) {
-    String username = resolveUsername(authentication);
-    ConsoleOidcIdentityResponse identity = identityService.bind(tenantId, request, username);
-    return responseFactory.success(identity);
-  }
-
-  @DeleteMapping("/identities/{id}")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  @AuditAction(
-      action = "auth.oidc.identity.unbind",
-      aggregateType = "oidc_identity",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId",
-      recordParams = false)
-  public CommonResponse<Void> unbind(@PathVariable long id, @RequestParam String tenantId) {
-    identityService.unbind(tenantId, id);
-    return responseFactory.success(null);
-  }
-
-  private String resolveUsername(Authentication authentication) {
-    if (EmptyChecks.isNotNull(authentication)
-        && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal.username();
+    @GetMapping("/provider")
+    public CommonResponse<ConsoleOidcProviderResponse> provider() {
+        boolean enabled = properties.isEnabled();
+        boolean registrationAvailable = properties.isEnabled();
+        String registrationId = registrationAvailable ? properties.getRegistrationId() : null;
+        ConsoleOidcProviderResponse response = new ConsoleOidcProviderResponse(enabled, registrationId);
+        return responseFactory.success(response);
     }
-    return EmptyChecks.isNull(authentication) ? null : authentication.getName();
-  }
+
+    @GetMapping("/identities")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public CommonResponse<List<ConsoleOidcIdentityResponse>> list(@RequestParam String tenantId) {
+        return responseFactory.success(identityService.list(tenantId));
+    }
+
+    @PostMapping("/identities")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @AuditAction(
+            action = "auth.oidc.identity.bind",
+            aggregateType = "oidc_identity",
+            targetTenantParam = "#tenantId",
+            recordParams = false)
+    public CommonResponse<ConsoleOidcIdentityResponse> bind(
+            @RequestParam String tenantId,
+            @Valid @RequestBody ConsoleOidcIdentityRequest request,
+            Authentication authentication) {
+        String username = resolveUsername(authentication);
+        ConsoleOidcIdentityResponse identity = identityService.bind(tenantId, request, username);
+        return responseFactory.success(identity);
+    }
+
+    @DeleteMapping("/identities/{id}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @AuditAction(
+            action = "auth.oidc.identity.unbind",
+            aggregateType = "oidc_identity",
+            aggregateId = "#id",
+            targetTenantParam = "#tenantId",
+            recordParams = false)
+    public CommonResponse<Void> unbind(@PathVariable long id, @RequestParam String tenantId) {
+        identityService.unbind(tenantId, id);
+        return responseFactory.success(null);
+    }
+
+    private String resolveUsername(Authentication authentication) {
+        if (EmptyChecks.isNotNull(authentication)
+                && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal.username();
+        }
+        return EmptyChecks.isNull(authentication) ? null : authentication.getName();
+    }
 }

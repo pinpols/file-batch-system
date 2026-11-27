@@ -13,21 +13,21 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleOidcProfileGuard {
 
-  private final ConsoleOidcProperties properties;
-  private final Environment environment;
+    private final ConsoleOidcProperties properties;
+    private final Environment environment;
 
-  @PostConstruct
-  void validate() {
-    if (!properties.isAllowLoopbackHttp()) {
-      return;
+    @PostConstruct
+    void validate() {
+        if (!properties.isAllowLoopbackHttp()) {
+            return;
+        }
+        String[] activeProfiles = environment.getActiveProfiles();
+        boolean localOrTest = Arrays.stream(activeProfiles)
+                .map(profile -> profile.toLowerCase(Locale.ROOT))
+                .anyMatch(profile -> profile.equals("local") || profile.equals("test"));
+        if (!localOrTest || BatchProfileSupport.isProductionProfile(environment)) {
+            throw new IllegalStateException(
+                    "batch.console.sso.oidc.allow-loopback-http is allowed only in local/test profiles");
+        }
     }
-    String[] activeProfiles = environment.getActiveProfiles();
-    boolean localOrTest = Arrays.stream(activeProfiles)
-        .map(profile -> profile.toLowerCase(Locale.ROOT))
-        .anyMatch(profile -> profile.equals("local") || profile.equals("test"));
-    if (!localOrTest || BatchProfileSupport.isProductionProfile(environment)) {
-      throw new IllegalStateException(
-          "batch.console.sso.oidc.allow-loopback-http is allowed only in local/test profiles");
-    }
-  }
 }

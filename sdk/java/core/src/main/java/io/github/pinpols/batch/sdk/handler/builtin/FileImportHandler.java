@@ -30,89 +30,89 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class FileImportHandler extends SdkAbstractTaskHandler {
 
-  private final FileImportConfig config;
-  private final DataSource dataSource;
+    private final FileImportConfig config;
+    private final DataSource dataSource;
 
-  public FileImportHandler(FileImportConfig config, DataSource dataSource) {
-    this.config = Objects.requireNonNull(config, "config");
-    this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
-    if (config.columns().isEmpty()) {
-      throw new IllegalArgumentException("columns must not be empty");
+    public FileImportHandler(FileImportConfig config, DataSource dataSource) {
+        this.config = Objects.requireNonNull(config, "config");
+        this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
+        if (config.columns().isEmpty()) {
+            throw new IllegalArgumentException("columns must not be empty");
+        }
     }
-  }
 
-  @Override
-  public String taskType() {
-    return config.taskType();
-  }
+    @Override
+    public String taskType() {
+        return config.taskType();
+    }
 
-  @Override
-  protected SdkTaskResult doExecute(SdkTaskContext ctx) {
-    Path path = resolveFile(ctx);
-    String insertSql = buildInsert();
-    char delim = config.format().delimiter();
-    char quote = config.format().quote();
-    int colCount = config.columns().size();
-    SdkRowResult counts = new SdkRowResult();
-    try (Connection conn = dataSource.getConnection()) {
-      conn.setAutoCommit(false);
-      try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8);
-          PreparedStatement ps = conn.prepareStatement(insertSql)) {
-        long lineNo = 0;
-        int inBatch = 0;
-        String line;
-        while ((line = reader.readLine()) != null) {
-          lineNo++;
-          if (lineNo == 1 && config.format().header()) {
-            continue;
-          }
-          if (line.isBlank()) {
-            continue;
-          }
-          List<String> fields = DelimitedCodec.parse(line, delim, quote);
-          if (fields.size() != colCount) {
+    @Override
+    protected SdkTaskResult doExecute(SdkTaskContext ctx) {
+        Path path = resolveFile(ctx);
+        String insertSql = buildInsert();
+        char delim = config.format().delimiter();
+        char quote = config.format().quote();
+        int colCount = config.columns().size();
+        SdkRowResult counts = new SdkRowResult();
+        try (Connection conn = dataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8);
+                    PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                long lineNo = 0;
+                int inBatch = 0;
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    lineNo++;
+                    if (lineNo == 1 && config.format().header()) {
+                        continue;
+                    }
+                    if (line.isBlank()) {
+                        continue;
+                    }
+                    List<String> fields = DelimitedCodec.parse(line, delim, quote);
+                    if (fields.size() != colCount) {
+                        throw new IllegalArgumentException(
+                                "line " + lineNo + ": expected " + colCount + " fields, got " + fields.size());
+                    }
+                    for (int i = 0; i < colCount; i++) {
+                        ps.setObject(i + 1, fields.get(i));
+                    }
+                    ps.addBatch();
+                    counts.incSuccess();
+                    if (++inBatch >= config.batchSize()) {
+                        ps.executeBatch();
+                        inBatch = 0;
+                    }
+                }
+                if (inBatch > 0) {
+                    ps.executeBatch();
+                }
+            }
+            conn.commit();
+        } catch (Exception ex) {
+            log.error("import failed: targetTable={}", config.targetTable(), ex);
+            return SdkTaskResult.fail(ex);
+        }
+        return SdkTaskResult.ok("imported " + counts.success() + " rows", counts.toOutput());
+    }
+
+    private Path resolveFile(SdkTaskContext ctx) {
+        Object raw = ctx.parameters().get(config.filePathParam());
+        if (!(raw instanceof String p) || p.isBlank()) {
             throw new IllegalArgumentException(
-                "line " + lineNo + ": expected " + colCount + " fields, got " + fields.size());
-          }
-          for (int i = 0; i < colCount; i++) {
-            ps.setObject(i + 1, fields.get(i));
-          }
-          ps.addBatch();
-          counts.incSuccess();
-          if (++inBatch >= config.batchSize()) {
-            ps.executeBatch();
-            inBatch = 0;
-          }
+                    "missing required parameter '" + config.filePathParam() + "' (file path)");
         }
-        if (inBatch > 0) {
-          ps.executeBatch();
+        Path path = Path.of(p);
+        if (!Files.isReadable(path)) {
+            throw new IllegalArgumentException("file not readable: " + p);
         }
-      }
-      conn.commit();
-    } catch (Exception ex) {
-      log.error("import failed: targetTable={}", config.targetTable(), ex);
-      return SdkTaskResult.fail(ex);
+        return path;
     }
-    return SdkTaskResult.ok("imported " + counts.success() + " rows", counts.toOutput());
-  }
 
-  private Path resolveFile(SdkTaskContext ctx) {
-    Object raw = ctx.parameters().get(config.filePathParam());
-    if (!(raw instanceof String p) || p.isBlank()) {
-      throw new IllegalArgumentException(
-          "missing required parameter '" + config.filePathParam() + "' (file path)");
+    private String buildInsert() {
+        String cols = String.join(", ", config.columns());
+        String placeholders = "?,".repeat(config.columns().size());
+        placeholders = placeholders.substring(0, placeholders.length() - 1);
+        return "INSERT INTO " + config.targetTable() + " (" + cols + ") VALUES (" + placeholders + ")";
     }
-    Path path = Path.of(p);
-    if (!Files.isReadable(path)) {
-      throw new IllegalArgumentException("file not readable: " + p);
-    }
-    return path;
-  }
-
-  private String buildInsert() {
-    String cols = String.join(", ", config.columns());
-    String placeholders = "?,".repeat(config.columns().size());
-    placeholders = placeholders.substring(0, placeholders.length() - 1);
-    return "INSERT INTO " + config.targetTable() + " (" + cols + ") VALUES (" + placeholders + ")";
-  }
 }

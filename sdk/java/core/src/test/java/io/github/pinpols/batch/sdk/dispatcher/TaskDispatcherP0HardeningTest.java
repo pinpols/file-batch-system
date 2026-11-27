@@ -32,283 +32,273 @@ import org.slf4j.MDC;
 @DisplayName("TaskDispatcher 加固 — 排空标记、诊断上下文透传与容量许可背压")
 class TaskDispatcherP0HardeningTest {
 
-  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
-      .baseUrl("http://localhost:0")
-      .tenantId("tx")
-      .workerCode("w-1")
-      .kafkaBootstrap("k:9092")
-      .kafkaTopicPattern("p.*")
-      .kafkaGroupId("g")
-      .maxConcurrentTasks(2)
-      .build();
+    private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+            .baseUrl("http://localhost:0")
+            .tenantId("tx")
+            .workerCode("w-1")
+            .kafkaBootstrap("k:9092")
+            .kafkaTopicPattern("p.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(2)
+            .build();
 
-  private TaskDispatcher dispatcher;
+    private TaskDispatcher dispatcher;
 
-  private void stubCurrentClaim(PlatformHttpClient http, long taskId, String invocationId)
-      throws IOException {
-    PlatformHttpClient.TaskClaimResponse response =
-        new PlatformHttpClient.TaskClaimResponse(invocationId);
-    when(http.claim(eq(taskId), anyString(), any())).thenReturn(response);
-  }
+    private void stubCurrentClaim(PlatformHttpClient http, long taskId, String invocationId) throws IOException {
+        PlatformHttpClient.TaskClaimResponse response = new PlatformHttpClient.TaskClaimResponse(invocationId);
+        when(http.claim(eq(taskId), anyString(), any())).thenReturn(response);
+    }
 
-  @AfterEach
-  void tearDown() {
-    if (dispatcher != null) dispatcher.stop();
-    MDC.clear();
-  }
+    @AfterEach
+    void tearDown() {
+        if (dispatcher != null) dispatcher.stop();
+        MDC.clear();
+    }
 
-  // ─── P0-2: Draining flag ────────────────────────────────────────────────────
+    // ─── P0-2: Draining flag ────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("停止后置排空标记,用于区分正常停机与异常退出")
-  void shouldMarkDraining_whenStopped() {
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
-    assertThat(dispatcher.isDraining()).isFalse();
+    @Test
+    @DisplayName("停止后置排空标记,用于区分正常停机与异常退出")
+    void shouldMarkDraining_whenStopped() {
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
+        assertThat(dispatcher.isDraining()).isFalse();
 
-    dispatcher.stop();
+        dispatcher.stop();
 
-    assertThat(dispatcher.isDraining()).isTrue();
-    dispatcher = null; // 不在 tearDown 再 stop
-  }
+        assertThat(dispatcher.isDraining()).isTrue();
+        dispatcher = null; // 不在 tearDown 再 stop
+    }
 
-  @Test
-  @DisplayName("停机后到达的消息不认领也不进入处理器")
-  void shouldSkipMessage_whenDispatcherStopped() throws Exception {
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    AtomicReference<SdkTaskContext> seenCtx = new AtomicReference<>();
-    dispatcher = new TaskDispatcher(
-        config,
-        Map.of("tt", new SdkTaskHandler() {
-          @Override
-          public String taskType() {
+    @Test
+    @DisplayName("停机后到达的消息不认领也不进入处理器")
+    void shouldSkipMessage_whenDispatcherStopped() throws Exception {
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        AtomicReference<SdkTaskContext> seenCtx = new AtomicReference<>();
+        dispatcher = new TaskDispatcher(
+                config,
+                Map.of("tt", new SdkTaskHandler() {
+                    @Override
+                    public String taskType() {
+                        return "tt";
+                    }
+
+                    @Override
+                    public SdkTaskResult execute(SdkTaskContext ctx) {
+                        seenCtx.set(ctx);
+                        return SdkTaskResult.ok();
+                    }
+                }),
+                http);
+        dispatcher.stop();
+
+        dispatcher.onMessage(new TaskDispatchMessage(99L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+
+        // 不应调 claim 也不应进 handler
+        verify(http, never()).claim(anyLong(), anyString(), any());
+        assertThat(seenCtx.get()).isNull();
+        dispatcher = null;
+    }
+
+    // ─── P0-3: MDC 透传 ──────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("处理器执行时注入链路、租户与任务标识,便于日志串联")
+    void shouldPopulateDiagnosticContext_whenHandlerRuns() throws Exception {
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubCurrentClaim(http, 42L, "inv-42");
+        AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
+        CountDownLatch executed = new CountDownLatch(1);
+        dispatcher = new TaskDispatcher(
+                config,
+                Map.of("tt", new SdkTaskHandler() {
+                    @Override
+                    public String taskType() {
+                        return "tt";
+                    }
+
+                    @Override
+                    public SdkTaskResult execute(SdkTaskContext ctx) {
+                        Map<String, String> snap = MDC.getCopyOfContextMap();
+                        seenMdc.set(snap);
+                        executed.countDown();
+                        return SdkTaskResult.ok();
+                    }
+                }),
+                http);
+
+        dispatcher.onMessage(new TaskDispatchMessage(
+                42L, "tx", "j", "tt", "ti-9", Map.of(), Map.of("traceId", "tr-abc", "partitionInvocationId", "inv-1")));
+
+        assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
+        Map<String, String> mdc = seenMdc.get();
+        assertThat(mdc)
+                .isNotNull()
+                .containsEntry("traceId", "tr-abc")
+                .containsEntry("tenantId", "tx")
+                .containsEntry("taskId", "42");
+    }
+
+    @Test
+    @DisplayName("执行结束后诊断上下文被清理,不残留到后续任务")
+    void shouldClearDiagnosticContext_afterExecution() throws Exception {
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubCurrentClaim(http, 42L, "inv-42");
+        CountDownLatch executed = new CountDownLatch(1);
+        dispatcher = new TaskDispatcher(config, Map.of("tt", new CountDownHandler(executed)), http);
+
+        dispatcher.onMessage(new TaskDispatchMessage(42L, "tx", "j", "tt", "ti", Map.of(), Map.of("traceId", "tr-x")));
+
+        assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
+        // 处理完后,dispatcher 线程的 MDC 应被清掉(用线程局部 ThreadLocal,看主线程是 clean 的)
+        // 这里测试主线程 — 主线程从未被污染过,如果 dispatcher 线程残留也不会跨线程
+        assertThat(MDC.get("traceId")).isNull();
+        assertThat(MDC.get("tenantId")).isNull();
+        assertThat(MDC.get("taskId")).isNull();
+    }
+
+    @Test
+    @DisplayName("工作线程执行完毕后恢复调用方原有上下文,不丢失外层字段")
+    void shouldRestoreCallerContext_afterWorkerExecution() throws IOException {
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubCurrentClaim(http, 42L, "inv-42");
+        dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
+        MDC.put("traceId", "outer-trace");
+        MDC.put("tenantId", "outer-tenant");
+        MDC.put("hostContext", "preserved");
+
+        dispatcher.processInWorkerThread(
+                new TaskDispatchMessage(42L, "tx", "j", "tt", "ti", Map.of(), Map.of("traceId", "task-trace")));
+
+        assertThat(MDC.getCopyOfContextMap())
+                .containsEntry("traceId", "outer-trace")
+                .containsEntry("tenantId", "outer-tenant")
+                .containsEntry("hostContext", "preserved")
+                .doesNotContainKey("taskId");
+    }
+
+    @Test
+    @DisplayName("缺少链路标识时不注入该字段,其它上下文照常写入")
+    void shouldSkipTraceKey_whenTraceIdMissing() throws Exception {
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubCurrentClaim(http, 42L, "inv-42");
+        AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
+        CountDownLatch executed = new CountDownLatch(1);
+        dispatcher = new TaskDispatcher(
+                config,
+                Map.of("tt", new SdkTaskHandler() {
+                    @Override
+                    public String taskType() {
+                        return "tt";
+                    }
+
+                    @Override
+                    public SdkTaskResult execute(SdkTaskContext ctx) {
+                        seenMdc.set(MDC.getCopyOfContextMap());
+                        executed.countDown();
+                        return SdkTaskResult.ok();
+                    }
+                }),
+                http);
+
+        // 无 traceId 字段
+        dispatcher.onMessage(new TaskDispatchMessage(42L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+
+        assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
+        Map<String, String> mdc = seenMdc.get();
+        assertThat(mdc).doesNotContainKey("traceId"); // 不在则不 put
+        assertThat(mdc).containsEntry("tenantId", "tx").containsEntry("taskId", "42");
+    }
+
+    // ─── P0: 容量 permit backpressure(提交前占容量,满则 RETRY_LATER 不提交 offset)──────────
+
+    @Test
+    @DisplayName("并发许可用尽时拒收并延后处理,许可释放后容量归零")
+    void shouldReturnRetryLater_whenCapacityFull() throws Exception {
+        BatchPlatformClientConfig cap1 = BatchPlatformClientConfig.builder()
+                .baseUrl("http://localhost:0")
+                .tenantId("tx")
+                .workerCode("w-1")
+                .kafkaBootstrap("k:9092")
+                .kafkaTopicPattern("p.*")
+                .kafkaGroupId("g")
+                .maxConcurrentTasks(1)
+                .build();
+        PlatformHttpClient http = mock(PlatformHttpClient.class);
+        stubCurrentClaim(http, 1L, "inv-1");
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch gate = new CountDownLatch(1);
+        dispatcher = new TaskDispatcher(cap1, Map.of("tt", new GatedHandler(started, gate)), http);
+
+        // msg1 占满唯一 permit,worker 线程卡在 handler 内(permit 未释放)
+        TaskDispatcher.DispatchDecision d1 =
+                dispatcher.onMessage(new TaskDispatchMessage(1L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+        assertThat(d1).isEqualTo(TaskDispatcher.DispatchDecision.SUBMITTED);
+        assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(dispatcher.submittedCount()).isEqualTo(1);
+
+        // 容量满 → msg2 RETRY_LATER(KafkaTaskConsumer 据此 seek+pause,offset 不前移)
+        TaskDispatcher.DispatchDecision d2 =
+                dispatcher.onMessage(new TaskDispatchMessage(2L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+        assertThat(d2).isEqualTo(TaskDispatcher.DispatchDecision.RETRY_LATER);
+
+        // 放行 msg1 → permit 释放,容量恢复
+        gate.countDown();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (dispatcher.submittedCount() != 0 && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertThat(dispatcher.submittedCount()).isZero();
+    }
+
+    private record GatedHandler(CountDownLatch started, CountDownLatch gate) implements SdkTaskHandler {
+        @Override
+        public String taskType() {
             return "tt";
-          }
+        }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            seenCtx.set(ctx);
+        @Override
+        public SdkTaskResult execute(SdkTaskContext ctx) {
+            started.countDown();
+            try {
+                gate.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             return SdkTaskResult.ok();
-          }
-        }),
-        http);
-    dispatcher.stop();
+        }
+    }
 
-    dispatcher.onMessage(new TaskDispatchMessage(99L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+    private static SdkTaskHandler noopHandler() {
+        return new SdkTaskHandler() {
+            @Override
+            public String taskType() {
+                return "tt";
+            }
 
-    // 不应调 claim 也不应进 handler
-    verify(http, never()).claim(anyLong(), anyString(), any());
-    assertThat(seenCtx.get()).isNull();
-    dispatcher = null;
-  }
+            @Override
+            public SdkTaskResult execute(SdkTaskContext ctx) {
+                return SdkTaskResult.ok();
+            }
+        };
+    }
 
-  // ─── P0-3: MDC 透传 ──────────────────────────────────────────────────────────
-
-  @Test
-  @DisplayName("处理器执行时注入链路、租户与任务标识,便于日志串联")
-  void shouldPopulateDiagnosticContext_whenHandlerRuns() throws Exception {
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubCurrentClaim(http, 42L, "inv-42");
-    AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
-    CountDownLatch executed = new CountDownLatch(1);
-    dispatcher = new TaskDispatcher(
-        config,
-        Map.of("tt", new SdkTaskHandler() {
-          @Override
-          public String taskType() {
+    private record CountDownHandler(CountDownLatch latch) implements SdkTaskHandler {
+        @Override
+        public String taskType() {
             return "tt";
-          }
+        }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            Map<String, String> snap = MDC.getCopyOfContextMap();
-            seenMdc.set(snap);
-            executed.countDown();
+        @Override
+        public SdkTaskResult execute(SdkTaskContext ctx) {
+            latch.countDown();
             return SdkTaskResult.ok();
-          }
-        }),
-        http);
-
-    dispatcher.onMessage(new TaskDispatchMessage(
-        42L,
-        "tx",
-        "j",
-        "tt",
-        "ti-9",
-        Map.of(),
-        Map.of("traceId", "tr-abc", "partitionInvocationId", "inv-1")));
-
-    assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
-    Map<String, String> mdc = seenMdc.get();
-    assertThat(mdc)
-        .isNotNull()
-        .containsEntry("traceId", "tr-abc")
-        .containsEntry("tenantId", "tx")
-        .containsEntry("taskId", "42");
-  }
-
-  @Test
-  @DisplayName("执行结束后诊断上下文被清理,不残留到后续任务")
-  void shouldClearDiagnosticContext_afterExecution() throws Exception {
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubCurrentClaim(http, 42L, "inv-42");
-    CountDownLatch executed = new CountDownLatch(1);
-    dispatcher = new TaskDispatcher(config, Map.of("tt", new CountDownHandler(executed)), http);
-
-    dispatcher.onMessage(
-        new TaskDispatchMessage(42L, "tx", "j", "tt", "ti", Map.of(), Map.of("traceId", "tr-x")));
-
-    assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
-    // 处理完后,dispatcher 线程的 MDC 应被清掉(用线程局部 ThreadLocal,看主线程是 clean 的)
-    // 这里测试主线程 — 主线程从未被污染过,如果 dispatcher 线程残留也不会跨线程
-    assertThat(MDC.get("traceId")).isNull();
-    assertThat(MDC.get("tenantId")).isNull();
-    assertThat(MDC.get("taskId")).isNull();
-  }
-
-  @Test
-  @DisplayName("工作线程执行完毕后恢复调用方原有上下文,不丢失外层字段")
-  void shouldRestoreCallerContext_afterWorkerExecution() throws IOException {
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubCurrentClaim(http, 42L, "inv-42");
-    dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
-    MDC.put("traceId", "outer-trace");
-    MDC.put("tenantId", "outer-tenant");
-    MDC.put("hostContext", "preserved");
-
-    dispatcher.processInWorkerThread(new TaskDispatchMessage(
-        42L, "tx", "j", "tt", "ti", Map.of(), Map.of("traceId", "task-trace")));
-
-    assertThat(MDC.getCopyOfContextMap())
-        .containsEntry("traceId", "outer-trace")
-        .containsEntry("tenantId", "outer-tenant")
-        .containsEntry("hostContext", "preserved")
-        .doesNotContainKey("taskId");
-  }
-
-  @Test
-  @DisplayName("缺少链路标识时不注入该字段,其它上下文照常写入")
-  void shouldSkipTraceKey_whenTraceIdMissing() throws Exception {
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubCurrentClaim(http, 42L, "inv-42");
-    AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
-    CountDownLatch executed = new CountDownLatch(1);
-    dispatcher = new TaskDispatcher(
-        config,
-        Map.of("tt", new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
-
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            seenMdc.set(MDC.getCopyOfContextMap());
-            executed.countDown();
-            return SdkTaskResult.ok();
-          }
-        }),
-        http);
-
-    // 无 traceId 字段
-    dispatcher.onMessage(new TaskDispatchMessage(42L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
-
-    assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
-    Map<String, String> mdc = seenMdc.get();
-    assertThat(mdc).doesNotContainKey("traceId"); // 不在则不 put
-    assertThat(mdc).containsEntry("tenantId", "tx").containsEntry("taskId", "42");
-  }
-
-  // ─── P0: 容量 permit backpressure(提交前占容量,满则 RETRY_LATER 不提交 offset)──────────
-
-  @Test
-  @DisplayName("并发许可用尽时拒收并延后处理,许可释放后容量归零")
-  void shouldReturnRetryLater_whenCapacityFull() throws Exception {
-    BatchPlatformClientConfig cap1 = BatchPlatformClientConfig.builder()
-        .baseUrl("http://localhost:0")
-        .tenantId("tx")
-        .workerCode("w-1")
-        .kafkaBootstrap("k:9092")
-        .kafkaTopicPattern("p.*")
-        .kafkaGroupId("g")
-        .maxConcurrentTasks(1)
-        .build();
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    stubCurrentClaim(http, 1L, "inv-1");
-    CountDownLatch started = new CountDownLatch(1);
-    CountDownLatch gate = new CountDownLatch(1);
-    dispatcher = new TaskDispatcher(cap1, Map.of("tt", new GatedHandler(started, gate)), http);
-
-    // msg1 占满唯一 permit,worker 线程卡在 handler 内(permit 未释放)
-    TaskDispatcher.DispatchDecision d1 = dispatcher.onMessage(
-        new TaskDispatchMessage(1L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
-    assertThat(d1).isEqualTo(TaskDispatcher.DispatchDecision.SUBMITTED);
-    assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
-    assertThat(dispatcher.submittedCount()).isEqualTo(1);
-
-    // 容量满 → msg2 RETRY_LATER(KafkaTaskConsumer 据此 seek+pause,offset 不前移)
-    TaskDispatcher.DispatchDecision d2 = dispatcher.onMessage(
-        new TaskDispatchMessage(2L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
-    assertThat(d2).isEqualTo(TaskDispatcher.DispatchDecision.RETRY_LATER);
-
-    // 放行 msg1 → permit 释放,容量恢复
-    gate.countDown();
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
-    while (dispatcher.submittedCount() != 0 && System.nanoTime() < deadline) {
-      Thread.sleep(10);
-    }
-    assertThat(dispatcher.submittedCount()).isZero();
-  }
-
-  private record GatedHandler(CountDownLatch started, CountDownLatch gate)
-      implements SdkTaskHandler {
-    @Override
-    public String taskType() {
-      return "tt";
+        }
     }
 
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      started.countDown();
-      try {
-        gate.await(5, TimeUnit.SECONDS);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-      return SdkTaskResult.ok();
+    // 静态导入 mockito verify 简短引用
+    @SuppressWarnings("unused")
+    private static VerificationMode never2() {
+        return never();
     }
-  }
-
-  private static SdkTaskHandler noopHandler() {
-    return new SdkTaskHandler() {
-      @Override
-      public String taskType() {
-        return "tt";
-      }
-
-      @Override
-      public SdkTaskResult execute(SdkTaskContext ctx) {
-        return SdkTaskResult.ok();
-      }
-    };
-  }
-
-  private record CountDownHandler(CountDownLatch latch) implements SdkTaskHandler {
-    @Override
-    public String taskType() {
-      return "tt";
-    }
-
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      latch.countDown();
-      return SdkTaskResult.ok();
-    }
-  }
-
-  // 静态导入 mockito verify 简短引用
-  @SuppressWarnings("unused")
-  private static VerificationMode never2() {
-    return never();
-  }
 }

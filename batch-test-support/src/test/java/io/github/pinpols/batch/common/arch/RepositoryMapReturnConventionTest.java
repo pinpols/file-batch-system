@@ -29,85 +29,85 @@ import org.junit.jupiter.api.Test;
 @DisplayName("仓库出参约定:禁止新增 Map<String, Object> 出参,存量基线须与分类总账对齐")
 class RepositoryMapReturnConventionTest {
 
-  private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
+    private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
 
-  /**
-   * 扫描根 = **磁盘目录**。worker 是嵌套聚合模块，目录是 {@code batch-worker/<name>}，不是 artifactId
-   * {@code batch-worker-<name>}；写错会让 {@link Files#isDirectory} 为假并静默跳过整段覆盖。
-   */
-  private static final List<String> SCAN_MODULES = List.of(
-      "batch-common",
-      "batch-trigger",
-      "batch-orchestrator",
-      "batch-worker/core",
-      "batch-worker/import",
-      "batch-worker/export",
-      "batch-worker/process",
-      "batch-worker/dispatch",
-      "batch-console-api");
+    /**
+     * 扫描根 = **磁盘目录**。worker 是嵌套聚合模块，目录是 {@code batch-worker/<name>}，不是 artifactId
+     * {@code batch-worker-<name>}；写错会让 {@link Files#isDirectory} 为假并静默跳过整段覆盖。
+     */
+    private static final List<String> SCAN_MODULES = List.of(
+            "batch-common",
+            "batch-trigger",
+            "batch-orchestrator",
+            "batch-worker/core",
+            "batch-worker/import",
+            "batch-worker/export",
+            "batch-worker/process",
+            "batch-worker/dispatch",
+            "batch-console-api");
 
-  /** 只匹配 public 方法声明：方法名紧跟返回类型，避免命中方法体里的局部变量。 */
-  private static final Pattern MAP_RETURN =
-      Pattern.compile("public\\s+(?:List<Map<String,\\s*Object>>|Map<String,\\s*Object>)\\s+"
-          + "([A-Za-z_][A-Za-z0-9_]*)\\s*\\(");
+    /** 只匹配 public 方法声明：方法名紧跟返回类型，避免命中方法体里的局部变量。 */
+    private static final Pattern MAP_RETURN =
+            Pattern.compile("public\\s+(?:List<Map<String,\\s*Object>>|Map<String,\\s*Object>)\\s+"
+                    + "([A-Za-z_][A-Za-z0-9_]*)\\s*\\(");
 
-  private static final String CORE_INFRA =
-      "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/";
-  private static final String DISPATCH_INFRA =
-      "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/";
+    private static final String CORE_INFRA =
+            "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/";
+    private static final String DISPATCH_INFRA =
+            "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/";
 
-  private static final Set<String> BASELINE = Set.of(
-      CORE_INFRA + "PlatformFileRecordRepository.java#loadFileRecord",
-      CORE_INFRA + "PlatformFileRecordRepository.java#loadFileRecordByStoragePath",
-      CORE_INFRA + "PlatformFileTemplateRepository.java#loadLatestTemplateConfig",
-      CORE_INFRA + "PlatformPipelineRunRepository.java#loadLatestSucceededStepOutputSummary",
-      DISPATCH_INFRA + "FileDispatchRepository.java#loadChannel",
-      DISPATCH_INFRA + "FileDispatchRepository.java#loadFile");
+    private static final Set<String> BASELINE = Set.of(
+            CORE_INFRA + "PlatformFileRecordRepository.java#loadFileRecord",
+            CORE_INFRA + "PlatformFileRecordRepository.java#loadFileRecordByStoragePath",
+            CORE_INFRA + "PlatformFileTemplateRepository.java#loadLatestTemplateConfig",
+            CORE_INFRA + "PlatformPipelineRunRepository.java#loadLatestSucceededStepOutputSummary",
+            DISPATCH_INFRA + "FileDispatchRepository.java#loadChannel",
+            DISPATCH_INFRA + "FileDispatchRepository.java#loadFile");
 
-  @Test
-  @DisplayName("Repository 冒出未登记的 Map<String, Object> 出参时守卫失败,并在诊断里点名文件与方法")
-  void shouldRejectNewMapReturn_whenRepositoryAddsOne() throws IOException {
-    Set<String> found = new TreeSet<>();
-    Set<String> scannedFiles = new TreeSet<>();
-    List<String> newEntries = new ArrayList<>();
-    for (String module : SCAN_MODULES) {
-      Path root = REPO_ROOT.resolve(module).resolve("src").resolve("main").resolve("java");
-      assertThat(root)
-          .as("扫描模块目录必须存在：%s（worker 目录是 batch-worker/<name>，不是 artifactId）", module)
-          .isDirectory();
-      try (Stream<Path> stream = Files.walk(root)) {
-        for (Path file :
-            stream.filter(p -> p.toString().endsWith("Repository.java")).toList()) {
-          String relative = REPO_ROOT.relativize(file).toString().replace('\\', '/');
-          for (String method : mapReturnMethods(file)) {
-            scannedFiles.add(relative);
-            String entry = relative + "#" + method;
-            found.add(entry);
-            if (!BASELINE.contains(entry)) {
-              newEntries.add(entry);
+    @Test
+    @DisplayName("Repository 冒出未登记的 Map<String, Object> 出参时守卫失败,并在诊断里点名文件与方法")
+    void shouldRejectNewMapReturn_whenRepositoryAddsOne() throws IOException {
+        Set<String> found = new TreeSet<>();
+        Set<String> scannedFiles = new TreeSet<>();
+        List<String> newEntries = new ArrayList<>();
+        for (String module : SCAN_MODULES) {
+            Path root = REPO_ROOT.resolve(module).resolve("src").resolve("main").resolve("java");
+            assertThat(root)
+                    .as("扫描模块目录必须存在：%s（worker 目录是 batch-worker/<name>，不是 artifactId）", module)
+                    .isDirectory();
+            try (Stream<Path> stream = Files.walk(root)) {
+                for (Path file : stream.filter(p -> p.toString().endsWith("Repository.java"))
+                        .toList()) {
+                    String relative = REPO_ROOT.relativize(file).toString().replace('\\', '/');
+                    for (String method : mapReturnMethods(file)) {
+                        scannedFiles.add(relative);
+                        String entry = relative + "#" + method;
+                        found.add(entry);
+                        if (!BASELINE.contains(entry)) {
+                            newEntries.add(entry);
+                        }
+                    }
+                }
             }
-          }
         }
-      }
+        Set<String> baselineFiles = new TreeSet<>();
+        BASELINE.forEach(entry -> baselineFiles.add(entry.substring(0, entry.indexOf('#'))));
+        assertThat(scannedFiles).as("扫描必须覆盖基线涉及的每个仓储类").containsAll(baselineFiles);
+        assertThat(newEntries)
+                .as("Repository 不得新增 Map<String, Object> 出参（docs/coding-conventions.md §1.2）：固定行请改 typed"
+                        + " record 并用显式 <resultMap><constructor> 映射；确属动态边界或对外透传的，先在"
+                        + " docs/audit/java-readability-phase-0-classification-2026-08-12.md §4.2 登记理由，再补"
+                        + " BASELINE")
+                .isEmpty();
+        assertThat(found).as("基线条目应在仓库中仍可解析（若某条已被类型化，请从 BASELINE 删除）").containsAll(BASELINE);
     }
-    Set<String> baselineFiles = new TreeSet<>();
-    BASELINE.forEach(entry -> baselineFiles.add(entry.substring(0, entry.indexOf('#'))));
-    assertThat(scannedFiles).as("扫描必须覆盖基线涉及的每个仓储类").containsAll(baselineFiles);
-    assertThat(newEntries)
-        .as("Repository 不得新增 Map<String, Object> 出参（docs/coding-conventions.md §1.2）：固定行请改 typed"
-            + " record 并用显式 <resultMap><constructor> 映射；确属动态边界或对外透传的，先在"
-            + " docs/audit/java-readability-phase-0-classification-2026-08-12.md §4.2 登记理由，再补"
-            + " BASELINE")
-        .isEmpty();
-    assertThat(found).as("基线条目应在仓库中仍可解析（若某条已被类型化，请从 BASELINE 删除）").containsAll(BASELINE);
-  }
 
-  private static List<String> mapReturnMethods(Path file) throws IOException {
-    List<String> names = new ArrayList<>();
-    Matcher matcher = MAP_RETURN.matcher(Files.readString(file, StandardCharsets.UTF_8));
-    while (matcher.find()) {
-      names.add(matcher.group(1));
+    private static List<String> mapReturnMethods(Path file) throws IOException {
+        List<String> names = new ArrayList<>();
+        Matcher matcher = MAP_RETURN.matcher(Files.readString(file, StandardCharsets.UTF_8));
+        while (matcher.find()) {
+            names.add(matcher.group(1));
+        }
+        return names;
     }
-    return names;
-  }
 }

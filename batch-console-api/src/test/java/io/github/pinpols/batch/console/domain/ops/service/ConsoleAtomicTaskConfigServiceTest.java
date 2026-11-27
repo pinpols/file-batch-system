@@ -46,244 +46,238 @@ import org.mockito.stubbing.Answer;
 @DisplayName("原子任务配置服务:合法创建落库回读, 并对未知类型, 缺参, 多余键与凭据字段逐项拒入")
 class ConsoleAtomicTaskConfigServiceTest {
 
-  private static final String TENANT = "ta";
+    private static final String TENANT = "ta";
 
-  @Mock
-  private AtomicTaskConfigMapper mapper;
+    @Mock
+    private AtomicTaskConfigMapper mapper;
 
-  // schemaService 是无依赖单例,直接 @Spy 真实对象(测试要的是 catalog 数据,不需要 stub)
-  @Spy
-  private ConsoleAtomicTaskTypeSchemaService schemaService =
-      new ConsoleAtomicTaskTypeSchemaService();
+    // schemaService 是无依赖单例,直接 @Spy 真实对象(测试要的是 catalog 数据,不需要 stub)
+    @Spy
+    private ConsoleAtomicTaskTypeSchemaService schemaService = new ConsoleAtomicTaskTypeSchemaService();
 
-  @Spy
-  private ObjectMapper objectMapper = new ObjectMapper();
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
-  @Mock
-  private TenantIdResolver tenantGuard;
+    @Mock
+    private TenantIdResolver tenantGuard;
 
-  @InjectMocks
-  private ConsoleAtomicTaskConfigService service;
+    @InjectMocks
+    private ConsoleAtomicTaskConfigService service;
 
-  @BeforeEach
-  void resolveTenant() {
-    lenient().when(tenantGuard.resolveTenant(any())).thenAnswer(call -> call.getArgument(0));
-  }
-
-  @Test
-  @DisplayName("合法创建:参数与类型契约匹配时写入并回读, 返回带主键的实体")
-  void shouldCreateSqlConfig_whenParametersMatchSchema() {
-    // 准备
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("sql", "select 1");
-    params.put("statementTimeoutSeconds", 30);
-    when(mapper.insertAtomicTaskConfig(any())).thenAnswer(assignIdAndReturn(42L));
-    when(mapper.selectByTenantAndId(TENANT, 42L)).thenReturn(fixtureEntity(42L, "sql", "daily"));
-
-    // 执行
-    AtomicTaskConfigEntity created = service.create(TENANT, "sql", "daily", params, "alice");
-
-    // 断言
-    assertThat(created.getId()).isEqualTo(42L);
-    assertThat(created.getTaskType()).isEqualTo("sql");
-    verify(mapper).insertAtomicTaskConfig(any(AtomicTaskConfigCreateParam.class));
-  }
-
-  @Test
-  @DisplayName("类型未知:创建前即拒绝, 且不产生任何写入")
-  void shouldReject_whenTaskTypeUnknown() {
-    assertThatThrownBy(
-            () -> service.create(TENANT, "totally_unknown", "x", Map.of("sql", "select 1"), null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.atomic_task_config.task_type_unknown");
-    verify(mapper, never()).insertAtomicTaskConfig(any());
-  }
-
-  @Test
-  @DisplayName("必填缺失:空字符串等同缺失, 校验失败且不写入")
-  void shouldReject_whenRequiredParameterMissing() {
-    // sql.PARAM "sql" 必填,空字符串等同缺失
-    assertThatThrownBy(() -> service.create(TENANT, "sql", "missing", Map.of("sql", ""), null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.atomic_task_config.parameters_required_missing");
-    verify(mapper, never()).insertAtomicTaskConfig(any());
-  }
-
-  @Test
-  @DisplayName("多余键拒入:未在契约声明的参数键触发校验失败, 且不写入")
-  void shouldReject_whenParametersContainExtraneousKey() {
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("sql", "select 1");
-    params.put("notDeclaredInSchema", "evil"); // 非法 key
-    assertThatThrownBy(() -> service.create(TENANT, "sql", "x", params, null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.atomic_task_config.parameters_unknown_key");
-    verify(mapper, never()).insertAtomicTaskConfig(any());
-  }
-
-  @Test
-  @DisplayName("凭据闸:顶层参数含敏感字段时被拒, 且不写入")
-  void shouldRejectSensitiveKeyInParameters_viaSensitiveDataValidator() {
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("sql", "select 1");
-    params.put("dbPassword", "leak"); // contains "password" → SensitiveDataValidator 拒入
-    assertThatThrownBy(() -> service.create(TENANT, "sql", "x", params, null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.security.sensitive_in_payload");
-    verify(mapper, never()).insertAtomicTaskConfig(any());
-  }
-
-  @Test
-  @DisplayName("嵌套凭据闸:嵌套映射内的敏感字段同样被拦截, 创建失败")
-  void shouldRejectSensitiveKeyInNestedMap() {
-    Map<String, Object> auth = new LinkedHashMap<>();
-    auth.put("type", "basic");
-    auth.put("apiKey", "leak"); // nested 凭据
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("url", "https://example.com");
-    params.put("auth", auth);
-    assertThatThrownBy(() -> service.create(TENANT, "http", "x", params, null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.security.sensitive_in_payload");
-  }
-
-  @Test
-  @DisplayName("Shell 参数列表含内联令牌时创建前拒绝且不写库")
-  void shouldRejectInlineCredentialInShellArguments() {
-    Map<String, Object> params =
-        Map.of("command", "/usr/bin/echo", "args", List.of("--token=probe-secret"));
-
-    assertThatThrownBy(() -> service.create(TENANT, "shell", "unsafe", params, null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.security.sensitive_in_payload")
-        .hasMessageNotContaining("probe-secret");
-    verify(mapper, never()).insertAtomicTaskConfig(any());
-  }
-
-  @Test
-  @DisplayName("四类任务无效超时在配置保存前拒绝")
-  void shouldRejectInvalidExecutorTimeoutBeforeWrite() {
-    List<String> types = List.of("sql", "stored_proc", "shell", "http");
-    List<String> requiredKeys = List.of("sql", "procedureName", "command", "url");
-    List<String> requiredValues =
-        List.of("select 1", "batch.p", "/bin/echo", "https://example.com");
-    List<String> timeoutKeys = List.of(
-        "statementTimeoutSeconds", "statementTimeoutSeconds", "timeoutSeconds", "timeoutSeconds");
-    List<Object> invalidValues = List.of(0, -1, 1.5d, new BigInteger("18446744073709551617"));
-    for (int i = 0; i < types.size(); i++) {
-      int index = i;
-      for (Object invalid : invalidValues) {
-        Map<String, Object> parameters = Map.of(
-            requiredKeys.get(index), requiredValues.get(index), timeoutKeys.get(index), invalid);
-        assertThatThrownBy(
-                () -> service.create(TENANT, types.get(index), "invalid-timeout", parameters, null))
-            .isInstanceOf(BizException.class)
-            .hasMessageContaining("error.atomic_task_config.parameters_type_invalid");
-      }
+    @BeforeEach
+    void resolveTenant() {
+        lenient().when(tenantGuard.resolveTenant(any())).thenAnswer(call -> call.getArgument(0));
     }
-    verify(mapper, never()).insertAtomicTaskConfig(any());
-  }
 
-  @Test
-  @DisplayName("参数类型与 schema 不符时拒绝创建，且不写库或回显参数值")
-  void shouldRejectWrongParameterTypesBeforeWrite() {
-    List<Map<String, Object>> invalidParameters = List.of(
-        Map.of("command", "/usr/bin/echo", "args", "--token=probe-secret"),
-        Map.of("url", "https://example.com", "headers", "not-a-map"),
-        Map.of("sql", "select 1", "statementTimeoutSeconds", "30"),
-        Map.of("sql", "select 1", "autoCommit", "true"));
-    List<String> taskTypes = List.of("shell", "http", "sql", "sql");
+    @Test
+    @DisplayName("合法创建:参数与类型契约匹配时写入并回读, 返回带主键的实体")
+    void shouldCreateSqlConfig_whenParametersMatchSchema() {
+        // 准备
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("sql", "select 1");
+        params.put("statementTimeoutSeconds", 30);
+        when(mapper.insertAtomicTaskConfig(any())).thenAnswer(assignIdAndReturn(42L));
+        when(mapper.selectByTenantAndId(TENANT, 42L)).thenReturn(fixtureEntity(42L, "sql", "daily"));
 
-    for (int i = 0; i < invalidParameters.size(); i++) {
-      int index = i;
-      assertThatThrownBy(() -> service.create(
-              TENANT, taskTypes.get(index), "wrong-type", invalidParameters.get(index), null))
-          .isInstanceOf(BizException.class)
-          .hasMessageContaining("error.atomic_task_config.parameters_type_invalid")
-          .hasMessageNotContaining("probe-secret");
+        // 执行
+        AtomicTaskConfigEntity created = service.create(TENANT, "sql", "daily", params, "alice");
+
+        // 断言
+        assertThat(created.getId()).isEqualTo(42L);
+        assertThat(created.getTaskType()).isEqualTo("sql");
+        verify(mapper).insertAtomicTaskConfig(any(AtomicTaskConfigCreateParam.class));
     }
-    verify(mapper, never()).insertAtomicTaskConfig(any());
-  }
 
-  @Test
-  @DisplayName("Shell 列表多层嵌套的凭据字段在写库前拒绝")
-  void shouldRejectSensitiveKeyInNestedShellArgumentsBeforeWrite() {
-    Map<String, Object> params = Map.of(
-        "command", "/usr/bin/echo", "args", List.of(List.of(Map.of("token", "probe-secret"))));
+    @Test
+    @DisplayName("类型未知:创建前即拒绝, 且不产生任何写入")
+    void shouldReject_whenTaskTypeUnknown() {
+        assertThatThrownBy(() -> service.create(TENANT, "totally_unknown", "x", Map.of("sql", "select 1"), null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.atomic_task_config.task_type_unknown");
+        verify(mapper, never()).insertAtomicTaskConfig(any());
+    }
 
-    assertThatThrownBy(() -> service.create(TENANT, "shell", "nested", params, null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.security.sensitive_in_payload");
-    verify(mapper, never()).insertAtomicTaskConfig(any());
-  }
+    @Test
+    @DisplayName("必填缺失:空字符串等同缺失, 校验失败且不写入")
+    void shouldReject_whenRequiredParameterMissing() {
+        // sql.PARAM "sql" 必填,空字符串等同缺失
+        assertThatThrownBy(() -> service.create(TENANT, "sql", "missing", Map.of("sql", ""), null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.atomic_task_config.parameters_required_missing");
+        verify(mapper, never()).insertAtomicTaskConfig(any());
+    }
 
-  @Test
-  @DisplayName("Shell args 必须是字符串列表，不能把嵌套对象存为执行参数")
-  void shouldRejectNonStringShellArgumentsBeforeWrite() {
-    Map<String, Object> params =
-        Map.of("command", "/usr/bin/echo", "args", List.of(Map.of("mode", "summary")));
+    @Test
+    @DisplayName("多余键拒入:未在契约声明的参数键触发校验失败, 且不写入")
+    void shouldReject_whenParametersContainExtraneousKey() {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("sql", "select 1");
+        params.put("notDeclaredInSchema", "evil"); // 非法 key
+        assertThatThrownBy(() -> service.create(TENANT, "sql", "x", params, null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.atomic_task_config.parameters_unknown_key");
+        verify(mapper, never()).insertAtomicTaskConfig(any());
+    }
 
-    assertThatThrownBy(() -> service.create(TENANT, "shell", "non-string", params, null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.atomic_task_config.parameters_type_invalid");
-    verify(mapper, never()).insertAtomicTaskConfig(any());
-  }
+    @Test
+    @DisplayName("凭据闸:顶层参数含敏感字段时被拒, 且不写入")
+    void shouldRejectSensitiveKeyInParameters_viaSensitiveDataValidator() {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("sql", "select 1");
+        params.put("dbPassword", "leak"); // contains "password" → SensitiveDataValidator 拒入
+        assertThatThrownBy(() -> service.create(TENANT, "sql", "x", params, null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.security.sensitive_in_payload");
+        verify(mapper, never()).insertAtomicTaskConfig(any());
+    }
 
-  @Test
-  @DisplayName("列表查询:类型已知时按租户与类型返回全部记录")
-  void shouldListByTaskType_whenTaskTypeIsKnown() {
-    when(mapper.selectByTenantAndTaskType(TENANT, "sql"))
-        .thenReturn(List.of(fixtureEntity(1L, "sql", "a"), fixtureEntity(2L, "sql", "b")));
+    @Test
+    @DisplayName("嵌套凭据闸:嵌套映射内的敏感字段同样被拦截, 创建失败")
+    void shouldRejectSensitiveKeyInNestedMap() {
+        Map<String, Object> auth = new LinkedHashMap<>();
+        auth.put("type", "basic");
+        auth.put("apiKey", "leak"); // nested 凭据
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("url", "https://example.com");
+        params.put("auth", auth);
+        assertThatThrownBy(() -> service.create(TENANT, "http", "x", params, null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.security.sensitive_in_payload");
+    }
 
-    List<AtomicTaskConfigEntity> rows = service.listByTaskType(TENANT, "sql");
+    @Test
+    @DisplayName("Shell 参数列表含内联令牌时创建前拒绝且不写库")
+    void shouldRejectInlineCredentialInShellArguments() {
+        Map<String, Object> params = Map.of("command", "/usr/bin/echo", "args", List.of("--token=probe-secret"));
 
-    assertThat(rows).hasSize(2);
-    verify(mapper).selectByTenantAndTaskType(TENANT, "sql");
-  }
+        assertThatThrownBy(() -> service.create(TENANT, "shell", "unsafe", params, null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.security.sensitive_in_payload")
+                .hasMessageNotContaining("probe-secret");
+        verify(mapper, never()).insertAtomicTaskConfig(any());
+    }
 
-  @Test
-  @DisplayName("列表类型未知:查询前拒绝, 且不触达数据访问层")
-  void shouldRejectListing_whenTaskTypeUnknown() {
-    assertThatThrownBy(() -> service.listByTaskType(TENANT, "unknown"))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.atomic_task_config.task_type_unknown");
-    verify(mapper, never()).selectByTenantAndTaskType(anyString(), anyString());
-  }
+    @Test
+    @DisplayName("四类任务无效超时在配置保存前拒绝")
+    void shouldRejectInvalidExecutorTimeoutBeforeWrite() {
+        List<String> types = List.of("sql", "stored_proc", "shell", "http");
+        List<String> requiredKeys = List.of("sql", "procedureName", "command", "url");
+        List<String> requiredValues = List.of("select 1", "batch.p", "/bin/echo", "https://example.com");
+        List<String> timeoutKeys =
+                List.of("statementTimeoutSeconds", "statementTimeoutSeconds", "timeoutSeconds", "timeoutSeconds");
+        List<Object> invalidValues = List.of(0, -1, 1.5d, new BigInteger("18446744073709551617"));
+        for (int i = 0; i < types.size(); i++) {
+            int index = i;
+            for (Object invalid : invalidValues) {
+                Map<String, Object> parameters =
+                        Map.of(requiredKeys.get(index), requiredValues.get(index), timeoutKeys.get(index), invalid);
+                assertThatThrownBy(() -> service.create(TENANT, types.get(index), "invalid-timeout", parameters, null))
+                        .isInstanceOf(BizException.class)
+                        .hasMessageContaining("error.atomic_task_config.parameters_type_invalid");
+            }
+        }
+        verify(mapper, never()).insertAtomicTaskConfig(any());
+    }
 
-  @Test
-  @DisplayName("类型空白:仅空白字符的类型视为缺失, 拒绝创建")
-  void shouldRejectBlankTaskType() {
-    assertThatThrownBy(() -> service.create(TENANT, " ", "x", Map.of(), null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.atomic_task_config.task_type_required");
-  }
+    @Test
+    @DisplayName("参数类型与 schema 不符时拒绝创建，且不写库或回显参数值")
+    void shouldRejectWrongParameterTypesBeforeWrite() {
+        List<Map<String, Object>> invalidParameters = List.of(
+                Map.of("command", "/usr/bin/echo", "args", "--token=probe-secret"),
+                Map.of("url", "https://example.com", "headers", "not-a-map"),
+                Map.of("sql", "select 1", "statementTimeoutSeconds", "30"),
+                Map.of("sql", "select 1", "autoCommit", "true"));
+        List<String> taskTypes = List.of("shell", "http", "sql", "sql");
 
-  @Test
-  @DisplayName("名称空白:仅空白字符的名称视为缺失, 拒绝创建")
-  void shouldRejectBlankName() {
-    assertThatThrownBy(() -> service.create(TENANT, "sql", "  ", Map.of("sql", "select 1"), null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.atomic_task_config.name_required");
-  }
+        for (int i = 0; i < invalidParameters.size(); i++) {
+            int index = i;
+            assertThatThrownBy(() -> service.create(
+                            TENANT, taskTypes.get(index), "wrong-type", invalidParameters.get(index), null))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("error.atomic_task_config.parameters_type_invalid")
+                    .hasMessageNotContaining("probe-secret");
+        }
+        verify(mapper, never()).insertAtomicTaskConfig(any());
+    }
 
-  // ---------- helpers ----------
+    @Test
+    @DisplayName("Shell 列表多层嵌套的凭据字段在写库前拒绝")
+    void shouldRejectSensitiveKeyInNestedShellArgumentsBeforeWrite() {
+        Map<String, Object> params =
+                Map.of("command", "/usr/bin/echo", "args", List.of(List.of(Map.of("token", "probe-secret"))));
 
-  private static AtomicTaskConfigEntity fixtureEntity(long id, String taskType, String name) {
-    AtomicTaskConfigEntity e = new AtomicTaskConfigEntity();
-    e.setId(id);
-    e.setTenantId(TENANT);
-    e.setTaskType(taskType);
-    e.setName(name);
-    e.setParameters("{}");
-    return e;
-  }
+        assertThatThrownBy(() -> service.create(TENANT, "shell", "nested", params, null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.security.sensitive_in_payload");
+        verify(mapper, never()).insertAtomicTaskConfig(any());
+    }
 
-  /** 模拟 mapper.insertAtomicTaskConfig 的 useGeneratedKeys 副作用:回写 id 到 param。 */
-  private static Answer<Integer> assignIdAndReturn(long id) {
-    return (InvocationOnMock inv) -> {
-      AtomicTaskConfigCreateParam param = inv.getArgument(0);
-      param.setId(id);
-      return 1;
-    };
-  }
+    @Test
+    @DisplayName("Shell args 必须是字符串列表，不能把嵌套对象存为执行参数")
+    void shouldRejectNonStringShellArgumentsBeforeWrite() {
+        Map<String, Object> params = Map.of("command", "/usr/bin/echo", "args", List.of(Map.of("mode", "summary")));
+
+        assertThatThrownBy(() -> service.create(TENANT, "shell", "non-string", params, null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.atomic_task_config.parameters_type_invalid");
+        verify(mapper, never()).insertAtomicTaskConfig(any());
+    }
+
+    @Test
+    @DisplayName("列表查询:类型已知时按租户与类型返回全部记录")
+    void shouldListByTaskType_whenTaskTypeIsKnown() {
+        when(mapper.selectByTenantAndTaskType(TENANT, "sql"))
+                .thenReturn(List.of(fixtureEntity(1L, "sql", "a"), fixtureEntity(2L, "sql", "b")));
+
+        List<AtomicTaskConfigEntity> rows = service.listByTaskType(TENANT, "sql");
+
+        assertThat(rows).hasSize(2);
+        verify(mapper).selectByTenantAndTaskType(TENANT, "sql");
+    }
+
+    @Test
+    @DisplayName("列表类型未知:查询前拒绝, 且不触达数据访问层")
+    void shouldRejectListing_whenTaskTypeUnknown() {
+        assertThatThrownBy(() -> service.listByTaskType(TENANT, "unknown"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.atomic_task_config.task_type_unknown");
+        verify(mapper, never()).selectByTenantAndTaskType(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("类型空白:仅空白字符的类型视为缺失, 拒绝创建")
+    void shouldRejectBlankTaskType() {
+        assertThatThrownBy(() -> service.create(TENANT, " ", "x", Map.of(), null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.atomic_task_config.task_type_required");
+    }
+
+    @Test
+    @DisplayName("名称空白:仅空白字符的名称视为缺失, 拒绝创建")
+    void shouldRejectBlankName() {
+        assertThatThrownBy(() -> service.create(TENANT, "sql", "  ", Map.of("sql", "select 1"), null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.atomic_task_config.name_required");
+    }
+
+    // ---------- helpers ----------
+
+    private static AtomicTaskConfigEntity fixtureEntity(long id, String taskType, String name) {
+        AtomicTaskConfigEntity e = new AtomicTaskConfigEntity();
+        e.setId(id);
+        e.setTenantId(TENANT);
+        e.setTaskType(taskType);
+        e.setName(name);
+        e.setParameters("{}");
+        return e;
+    }
+
+    /** 模拟 mapper.insertAtomicTaskConfig 的 useGeneratedKeys 副作用:回写 id 到 param。 */
+    private static Answer<Integer> assignIdAndReturn(long id) {
+        return (InvocationOnMock inv) -> {
+            AtomicTaskConfigCreateParam param = inv.getArgument(0);
+            param.setId(id);
+            return 1;
+        };
+    }
 }

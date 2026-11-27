@@ -7,6 +7,6 @@ import java.time.LocalDate;
 
 /** 在原请求尚未建档时设置放弃围栏。 */
 public record BatchDayCatchUpAbandonRequest(
-    @NotBlank @Size(max = 128) String tenantId,
-    @NotNull LocalDate bizDate,
-    @NotBlank @Size(max = 128) String calendarCode) {}
+        @NotBlank @Size(max = 128) String tenantId,
+        @NotNull LocalDate bizDate,
+        @NotBlank @Size(max = 128) String calendarCode) {}

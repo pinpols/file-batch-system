@@ -6,51 +6,49 @@ import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 /** 根据最新 Kafka lag 样本，以 AIMD 方式计算单 Trigger 进程的有效发布速率。 */
 final class TriggerOutboxReleaseGovernor {
 
-  private final TriggerOutboxRelayProperties properties;
-  private final TriggerLaunchLagMonitor lagMonitor;
-  private long appliedSequence = Long.MIN_VALUE;
-  private int effectiveLimit;
-  private boolean knownSampleReceived;
+    private final TriggerOutboxRelayProperties properties;
+    private final TriggerLaunchLagMonitor lagMonitor;
+    private long appliedSequence = Long.MIN_VALUE;
+    private int effectiveLimit;
+    private boolean knownSampleReceived;
 
-  TriggerOutboxReleaseGovernor(
-      TriggerOutboxRelayProperties properties, TriggerLaunchLagMonitor lagMonitor) {
-    this.properties = properties;
-    this.lagMonitor = lagMonitor;
-    this.effectiveLimit = properties.getMaxPublishEventsPerSecond();
-  }
-
-  synchronized int effectiveLimit() {
-    int configuredLimit = properties.getMaxPublishEventsPerSecond();
-    if (!properties.isAdaptiveReleaseEnabled() || configuredLimit <= 0) {
-      effectiveLimit = configuredLimit;
-      return effectiveLimit;
+    TriggerOutboxReleaseGovernor(TriggerOutboxRelayProperties properties, TriggerLaunchLagMonitor lagMonitor) {
+        this.properties = properties;
+        this.lagMonitor = lagMonitor;
+        this.effectiveLimit = properties.getMaxPublishEventsPerSecond();
     }
 
-    LagSnapshot sample = lagMonitor.current();
-    if (sample.sequence() == appliedSequence) {
-      return effectiveLimit;
+    synchronized int effectiveLimit() {
+        int configuredLimit = properties.getMaxPublishEventsPerSecond();
+        if (!properties.isAdaptiveReleaseEnabled() || configuredLimit <= 0) {
+            effectiveLimit = configuredLimit;
+            return effectiveLimit;
+        }
+
+        LagSnapshot sample = lagMonitor.current();
+        if (sample.sequence() == appliedSequence) {
+            return effectiveLimit;
+        }
+        appliedSequence = sample.sequence();
+        int minimum = Math.min(properties.getMinPublishEventsPerSecond(), configuredLimit);
+        long lag = sample.lag();
+        if (lag == TriggerLaunchLagMonitor.UNKNOWN_LAG) {
+            effectiveLimit = minimum;
+        } else if (lag >= properties.getLagHardThreshold()) {
+            knownSampleReceived = true;
+            int halvedLimit = Math.floorDiv(effectiveLimit + 1, 2);
+            effectiveLimit = Math.max(minimum, halvedLimit);
+        } else if (lag >= properties.getLagSoftThreshold()) {
+            knownSampleReceived = true;
+            int quarterRateReduction = Math.max(1, effectiveLimit / 4);
+            int reducedLimit = effectiveLimit - quarterRateReduction;
+            effectiveLimit = Math.max(minimum, reducedLimit);
+        } else if (!knownSampleReceived) {
+            knownSampleReceived = true;
+            effectiveLimit = configuredLimit;
+        } else {
+            effectiveLimit = Math.min(configuredLimit, effectiveLimit + properties.getAdaptiveIncreaseStep());
+        }
+        return effectiveLimit;
     }
-    appliedSequence = sample.sequence();
-    int minimum = Math.min(properties.getMinPublishEventsPerSecond(), configuredLimit);
-    long lag = sample.lag();
-    if (lag == TriggerLaunchLagMonitor.UNKNOWN_LAG) {
-      effectiveLimit = minimum;
-    } else if (lag >= properties.getLagHardThreshold()) {
-      knownSampleReceived = true;
-      int halvedLimit = Math.floorDiv(effectiveLimit + 1, 2);
-      effectiveLimit = Math.max(minimum, halvedLimit);
-    } else if (lag >= properties.getLagSoftThreshold()) {
-      knownSampleReceived = true;
-      int quarterRateReduction = Math.max(1, effectiveLimit / 4);
-      int reducedLimit = effectiveLimit - quarterRateReduction;
-      effectiveLimit = Math.max(minimum, reducedLimit);
-    } else if (!knownSampleReceived) {
-      knownSampleReceived = true;
-      effectiveLimit = configuredLimit;
-    } else {
-      effectiveLimit =
-          Math.min(configuredLimit, effectiveLimit + properties.getAdaptiveIncreaseStep());
-    }
-    return effectiveLimit;
-  }
 }

@@ -32,87 +32,86 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class JobSlaScheduler {
 
-  private final JobMonitoringMapper jobMonitoringMapper;
-  private final BatchOrchestratorGovernanceProperties governance;
-  private final MeterRegistry meterRegistry;
-  private final JobSlaViolationProcessor violationProcessor;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final AtomicLong violationCount = new AtomicLong();
-  private final AtomicLong escalationCount = new AtomicLong();
+    private final JobMonitoringMapper jobMonitoringMapper;
+    private final BatchOrchestratorGovernanceProperties governance;
+    private final MeterRegistry meterRegistry;
+    private final JobSlaViolationProcessor violationProcessor;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final AtomicLong violationCount = new AtomicLong();
+    private final AtomicLong escalationCount = new AtomicLong();
 
-  @PostConstruct
-  void initializeMeters() {
-    meterRegistry.gauge("batch.job.sla.violation.count", violationCount);
-    meterRegistry.gauge("batch.job.sla.escalation.count", escalationCount);
-  }
+    @PostConstruct
+    void initializeMeters() {
+        meterRegistry.gauge("batch.job.sla.violation.count", violationCount);
+        meterRegistry.gauge("batch.job.sla.escalation.count", escalationCount);
+    }
 
-  @Scheduled(fixedDelayString = "${batch.sla.poll-interval-millis:30000}")
-  @SchedulerLock(name = "job_sla_scan", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
-  public void scanViolations() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    @Scheduled(fixedDelayString = "${batch.sla.poll-interval-millis:30000}")
+    @SchedulerLock(name = "job_sla_scan", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
+    public void scanViolations() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!governance.sla().isEnabled()) {
+            return;
+        }
+        violationCount.set(jobMonitoringMapper.countSlaViolationCandidates());
+        List<JobSlaCandidate> candidates = jobMonitoringMapper.selectSlaViolationCandidates(
+                governance.sla().getBatchSize());
+        Instant now = BatchDateTimeSupport.utcNow();
+        for (JobSlaCandidate candidate : candidates) {
+            if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
+                continue;
+            }
+            try {
+                RlsTenantContextHolder.runWithTenant(
+                        candidate.getTenantId(), () -> violationProcessor.process(candidate, now));
+            } catch (RuntimeException e) {
+                log.error(
+                        "failed to persist job SLA violation; candidate will be retried: tenantId={}, jobInstanceId={}",
+                        candidate.getTenantId(),
+                        candidate.getId(),
+                        e);
+            }
+        }
+        scanEscalations(now);
     }
-    if (!governance.sla().isEnabled()) {
-      return;
-    }
-    violationCount.set(jobMonitoringMapper.countSlaViolationCandidates());
-    List<JobSlaCandidate> candidates =
-        jobMonitoringMapper.selectSlaViolationCandidates(governance.sla().getBatchSize());
-    Instant now = BatchDateTimeSupport.utcNow();
-    for (JobSlaCandidate candidate : candidates) {
-      if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
-        continue;
-      }
-      try {
-        RlsTenantContextHolder.runWithTenant(
-            candidate.getTenantId(), () -> violationProcessor.process(candidate, now));
-      } catch (RuntimeException e) {
-        log.error(
-            "failed to persist job SLA violation; candidate will be retried: tenantId={}, jobInstanceId={}",
-            candidate.getTenantId(),
-            candidate.getId(),
-            e);
-      }
-    }
-    scanEscalations(now);
-  }
 
-  /**
-   * 升级再触发：首次告警后 instance 仍非终态、sla_alerted_at 早于 {@code now - escalationDelay} 的实例 → 以 ERROR 级再发一条
-   * {@code JOB_SLA_VIOLATION_ESCALATED}。alert_event 表按 fingerprint 去重（{@code tenant + alertType +
-   * resourceKey}），重复扫描会 merge 到同一行而非产生日志噪音；本地不写 execution log，避免日志量过大。
-   */
-  private void scanEscalations(Instant now) {
-    long delaySeconds = governance.sla().getEscalationDelaySeconds();
-    if (delaySeconds <= 0L) {
-      escalationCount.set(0L);
-      return;
+    /**
+     * 升级再触发：首次告警后 instance 仍非终态、sla_alerted_at 早于 {@code now - escalationDelay} 的实例 → 以 ERROR 级再发一条
+     * {@code JOB_SLA_VIOLATION_ESCALATED}。alert_event 表按 fingerprint 去重（{@code tenant + alertType +
+     * resourceKey}），重复扫描会 merge 到同一行而非产生日志噪音；本地不写 execution log，避免日志量过大。
+     */
+    private void scanEscalations(Instant now) {
+        long delaySeconds = governance.sla().getEscalationDelaySeconds();
+        if (delaySeconds <= 0L) {
+            escalationCount.set(0L);
+            return;
+        }
+        Instant escalationBefore = now.minusSeconds(delaySeconds);
+        escalationCount.set(jobMonitoringMapper.countSlaEscalationCandidates(escalationBefore));
+        List<JobSlaCandidate> escalations = jobMonitoringMapper.selectSlaEscalationCandidates(
+                escalationBefore, governance.sla().getBatchSize());
+        if (EmptyChecks.isEmpty(escalations)) {
+            return;
+        }
+        String severity = governance.sla().getEscalationSeverity();
+        String resolvedSeverity = severity == null || severity.isBlank() ? "ERROR" : severity;
+        for (JobSlaCandidate candidate : escalations) {
+            if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
+                continue;
+            }
+            try {
+                RlsTenantContextHolder.runWithTenant(
+                        candidate.getTenantId(),
+                        () -> violationProcessor.processEscalation(candidate, now, delaySeconds, resolvedSeverity));
+            } catch (RuntimeException failure) {
+                log.error(
+                        "failed to persist job SLA escalation; candidate will be retried: tenantId={}, jobInstanceId={}",
+                        candidate.getTenantId(),
+                        candidate.getId(),
+                        failure);
+            }
+        }
     }
-    Instant escalationBefore = now.minusSeconds(delaySeconds);
-    escalationCount.set(jobMonitoringMapper.countSlaEscalationCandidates(escalationBefore));
-    List<JobSlaCandidate> escalations = jobMonitoringMapper.selectSlaEscalationCandidates(
-        escalationBefore, governance.sla().getBatchSize());
-    if (EmptyChecks.isEmpty(escalations)) {
-      return;
-    }
-    String severity = governance.sla().getEscalationSeverity();
-    String resolvedSeverity = severity == null || severity.isBlank() ? "ERROR" : severity;
-    for (JobSlaCandidate candidate : escalations) {
-      if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
-        continue;
-      }
-      try {
-        RlsTenantContextHolder.runWithTenant(
-            candidate.getTenantId(),
-            () -> violationProcessor.processEscalation(
-                candidate, now, delaySeconds, resolvedSeverity));
-      } catch (RuntimeException failure) {
-        log.error(
-            "failed to persist job SLA escalation; candidate will be retried: tenantId={}, jobInstanceId={}",
-            candidate.getTenantId(),
-            candidate.getId(),
-            failure);
-      }
-    }
-  }
 }

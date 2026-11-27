@@ -24,87 +24,86 @@ import org.springframework.stereotype.Component;
 @Component
 public class SmsNotificationSender implements NotificationSender {
 
-  private final Map<String, SmsProvider> providersByCode;
-  private final SmsProperties properties;
-  private final ObjectMapper objectMapper;
+    private final Map<String, SmsProvider> providersByCode;
+    private final SmsProperties properties;
+    private final ObjectMapper objectMapper;
 
-  public SmsNotificationSender(
-      List<SmsProvider> providers, SmsProperties properties, ObjectMapper objectMapper) {
-    this.providersByCode = indexProviders(providers);
-    this.properties = properties;
-    this.objectMapper = objectMapper;
-  }
-
-  @Override
-  public String channelType() {
-    return "SMS";
-  }
-
-  @Override
-  public WebhookDeliveryResult send(NotificationMessage message) {
-    List<String> phoneNumbers = parsePhoneNumbers(message.configJson());
-    if (phoneNumbers.isEmpty()) {
-      return WebhookDeliveryResult.failure(null, "missing sms phoneNumbers");
+    public SmsNotificationSender(List<SmsProvider> providers, SmsProperties properties, ObjectMapper objectMapper) {
+        this.providersByCode = indexProviders(providers);
+        this.properties = properties;
+        this.objectMapper = objectMapper;
     }
-    String providerName = properties.getProvider();
-    if (EmptyChecks.isBlank(providerName) || "none".equalsIgnoreCase(providerName)) {
-      return WebhookDeliveryResult.failure(null, "sms provider not configured");
-    }
-    SmsProvider provider = resolve(providerName);
-    if (EmptyChecks.isNull(provider)) {
-      String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
-      log.warn(
-          "SMS channel selected but no provider impl for '{}'; skipping: channelCode={}",
-          providerName,
-          sanitizedChannelCode);
-      return WebhookDeliveryResult.failure(null, "sms provider not available: " + providerName);
-    }
-    return provider.send(phoneNumbers, message);
-  }
 
-  private SmsProvider resolve(String providerName) {
-    String normalizedProviderName = providerName.trim();
-    String providerCode = normalizedProviderName.toLowerCase(Locale.ROOT);
-    return providersByCode.get(providerCode);
-  }
-
-  private static Map<String, SmsProvider> indexProviders(List<SmsProvider> providers) {
-    Map<String, SmsProvider> registered = new LinkedHashMap<>();
-    for (SmsProvider provider : providers) {
-      String code = provider.providerCode();
-      if (EmptyChecks.isBlank(code)) {
-        throw new IllegalStateException(
-            "SmsProvider providerCode must not be blank: " + provider.getClass().getName());
-      }
-      String trimmedCode = code.trim();
-      String normalized = trimmedCode.toLowerCase(Locale.ROOT);
-      SmsProvider duplicate = registered.putIfAbsent(normalized, provider);
-      if (EmptyChecks.isNotNull(duplicate)) {
-        throw new IllegalStateException("duplicate SmsProvider providerCode: " + normalized);
-      }
+    @Override
+    public String channelType() {
+        return "SMS";
     }
-    return Map.copyOf(registered);
-  }
 
-  private List<String> parsePhoneNumbers(String configJson) {
-    List<String> result = new ArrayList<>();
-    if (EmptyChecks.isBlank(configJson)) {
-      return result;
-    }
-    try {
-      JsonNode node = objectMapper.readTree(configJson).get("phoneNumbers");
-      if (EmptyChecks.isNull(node) || node.isNull()) {
-        return result;
-      }
-      for (String raw : node.asText().split(",")) {
-        String trimmed = raw.trim();
-        if (!trimmed.isBlank()) {
-          result.add(trimmed);
+    @Override
+    public WebhookDeliveryResult send(NotificationMessage message) {
+        List<String> phoneNumbers = parsePhoneNumbers(message.configJson());
+        if (phoneNumbers.isEmpty()) {
+            return WebhookDeliveryResult.failure(null, "missing sms phoneNumbers");
         }
-      }
-    } catch (Exception ex) {
-      log.warn("SMS config_json parse failed: cause={}", ex.getClass().getSimpleName());
+        String providerName = properties.getProvider();
+        if (EmptyChecks.isBlank(providerName) || "none".equalsIgnoreCase(providerName)) {
+            return WebhookDeliveryResult.failure(null, "sms provider not configured");
+        }
+        SmsProvider provider = resolve(providerName);
+        if (EmptyChecks.isNull(provider)) {
+            String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
+            log.warn(
+                    "SMS channel selected but no provider impl for '{}'; skipping: channelCode={}",
+                    providerName,
+                    sanitizedChannelCode);
+            return WebhookDeliveryResult.failure(null, "sms provider not available: " + providerName);
+        }
+        return provider.send(phoneNumbers, message);
     }
-    return result;
-  }
+
+    private SmsProvider resolve(String providerName) {
+        String normalizedProviderName = providerName.trim();
+        String providerCode = normalizedProviderName.toLowerCase(Locale.ROOT);
+        return providersByCode.get(providerCode);
+    }
+
+    private static Map<String, SmsProvider> indexProviders(List<SmsProvider> providers) {
+        Map<String, SmsProvider> registered = new LinkedHashMap<>();
+        for (SmsProvider provider : providers) {
+            String code = provider.providerCode();
+            if (EmptyChecks.isBlank(code)) {
+                throw new IllegalStateException("SmsProvider providerCode must not be blank: "
+                        + provider.getClass().getName());
+            }
+            String trimmedCode = code.trim();
+            String normalized = trimmedCode.toLowerCase(Locale.ROOT);
+            SmsProvider duplicate = registered.putIfAbsent(normalized, provider);
+            if (EmptyChecks.isNotNull(duplicate)) {
+                throw new IllegalStateException("duplicate SmsProvider providerCode: " + normalized);
+            }
+        }
+        return Map.copyOf(registered);
+    }
+
+    private List<String> parsePhoneNumbers(String configJson) {
+        List<String> result = new ArrayList<>();
+        if (EmptyChecks.isBlank(configJson)) {
+            return result;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(configJson).get("phoneNumbers");
+            if (EmptyChecks.isNull(node) || node.isNull()) {
+                return result;
+            }
+            for (String raw : node.asText().split(",")) {
+                String trimmed = raw.trim();
+                if (!trimmed.isBlank()) {
+                    result.add(trimmed);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("SMS config_json parse failed: cause={}", ex.getClass().getSimpleName());
+        }
+        return result;
+    }
 }

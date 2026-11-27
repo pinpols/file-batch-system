@@ -29,85 +29,76 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-    name = "batch.quota.runtime-store",
-    havingValue = "redis",
-    matchIfMissing = true)
+@ConditionalOnProperty(name = "batch.quota.runtime-store", havingValue = "redis", matchIfMissing = true)
 @RequiredArgsConstructor
 public class QuotaRuntimeStateSnapshotScheduler {
 
-  private final QuotaRuntimeStateSnapshotWriter snapshotWriter;
-  private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
-  private final ResourceQueueMapper resourceQueueMapper;
-  private final QuotaProperties quotaProperties;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+    private final QuotaRuntimeStateSnapshotWriter snapshotWriter;
+    private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+    private final ResourceQueueMapper resourceQueueMapper;
+    private final QuotaProperties quotaProperties;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(fixedDelayString = "${batch.quota.snapshot.interval-millis:300000}")
-  @SchedulerLock(name = "quota_runtime_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
-  public void scheduledSnapshot() {
-    snapshot();
-  }
+    @Scheduled(fixedDelayString = "${batch.quota.snapshot.interval-millis:300000}")
+    @SchedulerLock(name = "quota_runtime_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
+    public void scheduledSnapshot() {
+        snapshot();
+    }
 
-  public void snapshot() {
-    if (gracefulShutdown.isDraining()) {
-      return;
+    public void snapshot() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
+        if (!quotaProperties.getSnapshot().isEnabled()) {
+            return;
+        }
+        List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();
+        int snapshotted = 0;
+        for (String tenantId : tenantIds) {
+            if (tenantId == null || tenantId.isBlank()) {
+                continue;
+            }
+            try {
+                // RLS Phase B 起 biz.* 表强制 app.tenant_id IS NOT NULL；per-tenant 循环必须绑租户上下文，
+                // 否则 mapper SELECT/UPDATE/INSERT 在严格策略下静默 0 行。try/catch 必须包在 runWithTenant 外，
+                // 保证 finally 清 ThreadLocal。
+                int delta = RlsTenantContextHolder.runWithTenant(tenantId, () -> snapshotTenant(tenantId));
+                snapshotted += delta;
+            } catch (DataAccessException ex) {
+                // 单个租户失败不影响其他租户：下一轮自然重试
+                String causeSummary = SwallowedExceptionLogger.summary(ex);
+                log.warn("quota snapshot failed for tenant={}: {}", tenantId, causeSummary);
+            }
+        }
+        if (snapshotted > 0) {
+            log.debug("quota snapshot tick wrote {} rows across {} tenants", snapshotted, tenantIds.size());
+        }
     }
-    if (!quotaProperties.getSnapshot().isEnabled()) {
-      return;
-    }
-    List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();
-    int snapshotted = 0;
-    for (String tenantId : tenantIds) {
-      if (tenantId == null || tenantId.isBlank()) {
-        continue;
-      }
-      try {
-        // RLS Phase B 起 biz.* 表强制 app.tenant_id IS NOT NULL；per-tenant 循环必须绑租户上下文，
-        // 否则 mapper SELECT/UPDATE/INSERT 在严格策略下静默 0 行。try/catch 必须包在 runWithTenant 外，
-        // 保证 finally 清 ThreadLocal。
-        int delta = RlsTenantContextHolder.runWithTenant(tenantId, () -> snapshotTenant(tenantId));
-        snapshotted += delta;
-      } catch (DataAccessException ex) {
-        // 单个租户失败不影响其他租户：下一轮自然重试
-        String causeSummary = SwallowedExceptionLogger.summary(ex);
-        log.warn("quota snapshot failed for tenant={}: {}", tenantId, causeSummary);
-      }
-    }
-    if (snapshotted > 0) {
-      log.debug(
-          "quota snapshot tick wrote {} rows across {} tenants", snapshotted, tenantIds.size());
-    }
-  }
 
-  private int snapshotTenant(String tenantId) {
-    int written = 0;
-    for (TenantQuotaPolicyEntity p :
-        tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true)) {
-      String tenantJobsResetPolicy = p.quotaResetPolicy();
-      int tenantJobsBurstLimit = nonNegativeBurstLimit(p.burstLimit());
-      written += snapshotWriter.writeIfActive(
-          tenantId, "TENANT_JOBS", tenantId, tenantJobsResetPolicy, tenantJobsBurstLimit);
-      String tenantPartitionsResetPolicy = p.quotaResetPolicy();
-      int tenantPartitionsBurstLimit = nonNegativeBurstLimit(p.partitionBurstLimit());
-      written += snapshotWriter.writeIfActive(
-          tenantId,
-          "TENANT_PARTITIONS",
-          tenantId,
-          tenantPartitionsResetPolicy,
-          tenantPartitionsBurstLimit);
+    private int snapshotTenant(String tenantId) {
+        int written = 0;
+        for (TenantQuotaPolicyEntity p : tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true)) {
+            String tenantJobsResetPolicy = p.quotaResetPolicy();
+            int tenantJobsBurstLimit = nonNegativeBurstLimit(p.burstLimit());
+            written += snapshotWriter.writeIfActive(
+                    tenantId, "TENANT_JOBS", tenantId, tenantJobsResetPolicy, tenantJobsBurstLimit);
+            String tenantPartitionsResetPolicy = p.quotaResetPolicy();
+            int tenantPartitionsBurstLimit = nonNegativeBurstLimit(p.partitionBurstLimit());
+            written += snapshotWriter.writeIfActive(
+                    tenantId, "TENANT_PARTITIONS", tenantId, tenantPartitionsResetPolicy, tenantPartitionsBurstLimit);
+        }
+        for (ResourceQueueEntity q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
+            int qburst = nonNegativeBurstLimit(q.burstLimit());
+            written +=
+                    snapshotWriter.writeIfActive(tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
+            // 队列分区维度的 burst 当前与队列 burst 共用 burstLimit；如未来分离再追加 partition 列
+            written += snapshotWriter.writeIfActive(
+                    tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
+        }
+        return written;
     }
-    for (ResourceQueueEntity q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
-      int qburst = nonNegativeBurstLimit(q.burstLimit());
-      written += snapshotWriter.writeIfActive(
-          tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
-      // 队列分区维度的 burst 当前与队列 burst 共用 burstLimit；如未来分离再追加 partition 列
-      written += snapshotWriter.writeIfActive(
-          tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
-    }
-    return written;
-  }
 
-  private int nonNegativeBurstLimit(Integer burstLimit) {
-    return EmptyChecks.isNull(burstLimit) ? 0 : Math.max(0, burstLimit);
-  }
+    private int nonNegativeBurstLimit(Integer burstLimit) {
+        return EmptyChecks.isNull(burstLimit) ? 0 : Math.max(0, burstLimit);
+    }
 }

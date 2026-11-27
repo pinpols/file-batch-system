@@ -288,6 +288,8 @@ python3 scripts/ci/check-comment-language.py --paths scripts load-tests/scripts 
 `check-java-fqn-diff.py` 供本地 pre-push 使用：以提交版 Java 源码掩去注释、字符串和文本块，再检查新增行中的全限定类型名；执行失败会阻断推送。回归测试为 `python3 -m unittest scripts/ci/tests/test_check_java_fqn_diff.py`。
 SDK 使用自己的 `internal.EmptyChecks`，不依赖后端公共模块。
 
+为避免整仓格式化被逐行 diff 误判，门禁按文件比较模式出现次数：格式化只改变换行/缩进时次数不变，不产生违规；真正新增的判断仍会阻断。回归测试为 `python3 -m unittest scripts.ci.tests.test_check_empty_checks`。
+
 ```bash
 python3 scripts/ci/check-empty-checks.py
 python3 scripts/ci/check-empty-checks.py --base origin/main

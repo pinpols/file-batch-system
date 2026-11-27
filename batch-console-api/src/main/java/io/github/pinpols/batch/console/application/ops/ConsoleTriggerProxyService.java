@@ -8,17 +8,17 @@ import java.util.List;
 /** 触发器代理服务：转发控制台对调度器与触发器管理接口的操作。 */
 public interface ConsoleTriggerProxyService {
 
-  ConsoleSchedulerCommandResponse schedulerStatus();
+    ConsoleSchedulerCommandResponse schedulerStatus();
 
-  ConsoleSchedulerCommandResponse schedulerPauseAll();
+    ConsoleSchedulerCommandResponse schedulerPauseAll();
 
-  ConsoleSchedulerCommandResponse schedulerResumeAll();
+    ConsoleSchedulerCommandResponse schedulerResumeAll();
 
-  List<ConsoleTriggerStatusResponse> triggerList();
+    List<ConsoleTriggerStatusResponse> triggerList();
 
-  ConsoleTriggerActionResponse triggerAction(String tenantId, String workflowCode, String action);
+    ConsoleTriggerActionResponse triggerAction(String tenantId, String workflowCode, String action);
 
-  ConsoleTriggerActionResponse pauseByTenant(String tenantId);
+    ConsoleTriggerActionResponse pauseByTenant(String tenantId);
 
-  ConsoleTriggerActionResponse resumeByTenant(String tenantId);
+    ConsoleTriggerActionResponse resumeByTenant(String tenantId);
 }

@@ -27,39 +27,39 @@ import org.junit.jupiter.api.Test;
 @DisplayName("发件箱事件写入入口的架构守护,验证生产源码中只有唯一发布器可以执行该写入")
 class OutboxWriteChokePointArchTest {
 
-  /** 允许调用 outboxEventMapper.insert( 的唯一类。 */
-  private static final String ALLOWED_WRITER = "OutboxDomainEventPublisher.java";
+    /** 允许调用 outboxEventMapper.insert( 的唯一类。 */
+    private static final String ALLOWED_WRITER = "OutboxDomainEventPublisher.java";
 
-  /** 识别 domain-event 写入调用(排除 archive 表的 archiveOutboxEventsByIds 等其他 insert)。 */
-  private static final String INSERT_CALL = "outboxEventMapper.insert(";
+    /** 识别 domain-event 写入调用(排除 archive 表的 archiveOutboxEventsByIds 等其他 insert)。 */
+    private static final String INSERT_CALL = "outboxEventMapper.insert(";
 
-  @Test
-  @DisplayName("扫描生产源码时,白名单之外的类若直接写入发件箱事件应被判定为违规")
-  void shouldOnlyAllowPublisherToInsertOutboxEvent_whenScanningMainSources() throws IOException {
-    Path mainDir = Paths.get("src/main/java");
-    if (!Files.exists(mainDir)) {
-      return;
-    }
-    List<String> violations = new ArrayList<>();
-    try (Stream<Path> files = Files.walk(mainDir)) {
-      files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
-        String src;
-        try {
-          src = Files.readString(p);
-        } catch (IOException ex) {
-          violations.add(p + " — read failed");
-          return;
+    @Test
+    @DisplayName("扫描生产源码时,白名单之外的类若直接写入发件箱事件应被判定为违规")
+    void shouldOnlyAllowPublisherToInsertOutboxEvent_whenScanningMainSources() throws IOException {
+        Path mainDir = Paths.get("src/main/java");
+        if (!Files.exists(mainDir)) {
+            return;
         }
-        if (src.contains(INSERT_CALL) && !p.getFileName().toString().equals(ALLOWED_WRITER)) {
-          violations.add(p.getFileName()
-              + " — 直接调用 outboxEventMapper.insert(,绕过 OutboxDomainEventPublisher 的 NOT"
-              + " EXISTS 去重(分区下 outbox 幂等承重在此 choke point,见"
-              + " partition-idempotency-decision.md)");
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(mainDir)) {
+            files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+                String src;
+                try {
+                    src = Files.readString(p);
+                } catch (IOException ex) {
+                    violations.add(p + " — read failed");
+                    return;
+                }
+                if (src.contains(INSERT_CALL) && !p.getFileName().toString().equals(ALLOWED_WRITER)) {
+                    violations.add(p.getFileName()
+                            + " — 直接调用 outboxEventMapper.insert(,绕过 OutboxDomainEventPublisher 的 NOT"
+                            + " EXISTS 去重(分区下 outbox 幂等承重在此 choke point,见"
+                            + " partition-idempotency-decision.md)");
+                }
+            });
         }
-      });
+        assertThat(violations)
+                .as("outbox_event 写入必须只经 OutboxDomainEventPublisher(NOT EXISTS 去重 choke point)")
+                .isEmpty();
     }
-    assertThat(violations)
-        .as("outbox_event 写入必须只经 OutboxDomainEventPublisher(NOT EXISTS 去重 choke point)")
-        .isEmpty();
-  }
 }

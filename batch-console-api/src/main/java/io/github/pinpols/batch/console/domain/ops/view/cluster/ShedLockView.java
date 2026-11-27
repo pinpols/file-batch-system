@@ -7,22 +7,21 @@ import java.time.Instant;
  *
  * <p>保留手写 {@code getXxx()} accessor，供需要 bean 风格属性读取的调用方使用。
  */
-public record ShedLockView(
-    String name, Instant lockUntil, Instant lockedAt, String lockedBy, Boolean active) {
+public record ShedLockView(String name, Instant lockUntil, Instant lockedAt, String lockedBy, Boolean active) {
 
-  public String getName() {
-    return name;
-  }
+    public String getName() {
+        return name;
+    }
 
-  public Instant getLockUntil() {
-    return lockUntil;
-  }
+    public Instant getLockUntil() {
+        return lockUntil;
+    }
 
-  public Instant getLockedAt() {
-    return lockedAt;
-  }
+    public Instant getLockedAt() {
+        return lockedAt;
+    }
 
-  public String getLockedBy() {
-    return lockedBy;
-  }
+    public String getLockedBy() {
+        return lockedBy;
+    }
 }

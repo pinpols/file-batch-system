@@ -95,684 +95,617 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplicationService {
 
-  private static final int TRACE_SNAPSHOT_PAGE_SIZE = 200;
+    private static final int TRACE_SNAPSHOT_PAGE_SIZE = 200;
 
-  private final ConsoleJobQueryService jobQueryService;
-  private final ConsoleFileQueryService fileQueryService;
-  private final ConsoleWorkflowQueryService workflowQueryService;
-  private final ConsoleOpsQueryPort opsQueryService;
-  private final OperationAuditQueryService operationAuditQueryService;
-  private final JobDefinitionMapper jobDefinitionMapper;
-  private final TenantIdResolver tenantGuard;
+    private final ConsoleJobQueryService jobQueryService;
+    private final ConsoleFileQueryService fileQueryService;
+    private final ConsoleWorkflowQueryService workflowQueryService;
+    private final ConsoleOpsQueryPort opsQueryService;
+    private final OperationAuditQueryService operationAuditQueryService;
+    private final JobDefinitionMapper jobDefinitionMapper;
+    private final TenantIdResolver tenantGuard;
 
-  @Override
-  public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
-    return opsQueryService.auditLogs(request);
-  }
-
-  @Override
-  public PageResponse<ConsoleAuditLogResponse> executionLogs(AuditLogQueryRequest request) {
-    return opsQueryService.executionLogs(request);
-  }
-
-  @Override
-  public ConsoleTraceSnapshotResponse traceSnapshot(String tenantId, String traceId) {
-    String normalizedTraceId = traceId == null ? "" : traceId.trim();
-    if (normalizedTraceId.isEmpty()) {
-      return ConsoleTraceSnapshotResponse.builder()
-          .traceId("")
-          .jobInstances(List.of())
-          .workflowRuns(List.of())
-          .workflowNodeRuns(List.of())
-          .files(List.of())
-          .filePipelines(List.of())
-          .auditLogs(List.of())
-          .operationAudits(List.of())
-          .executionLogs(List.of())
-          .outboxDeliveries(List.of())
-          .alerts(List.of())
-          .deadLetters(List.of())
-          .timeline(List.of())
-          .truncatedDomains(List.of())
-          .build();
+    @Override
+    public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
+        return opsQueryService.auditLogs(request);
     }
 
-    TraceSnapshotRequests requests = traceSnapshotRequests(tenantId, normalizedTraceId);
-    TraceSnapshotPages pages = queryTraceSnapshotPages(requests);
-    return buildTraceSnapshotResponse(normalizedTraceId, pages);
-  }
-
-  private TraceSnapshotRequests traceSnapshotRequests(String tenantId, String traceId) {
-    JobInstanceQueryRequest jobs = traceRequest(new JobInstanceQueryRequest());
-    jobs.setTenantId(tenantId);
-    jobs.setTraceId(traceId);
-    WorkflowRunQueryRequest workflows = traceRequest(new WorkflowRunQueryRequest());
-    workflows.setTenantId(tenantId);
-    workflows.setTraceId(traceId);
-    WorkflowNodeRunQueryRequest workflowNodes = traceRequest(new WorkflowNodeRunQueryRequest());
-    workflowNodes.setTenantId(tenantId);
-    workflowNodes.setTraceId(traceId);
-    FileChainQueryRequest files = traceRequest(new FileChainQueryRequest());
-    files.setTenantId(tenantId);
-    files.setTraceId(traceId);
-    FilePipelineQueryRequest pipelines = traceRequest(new FilePipelineQueryRequest());
-    pipelines.setTenantId(tenantId);
-    pipelines.setTraceId(traceId);
-    AuditLogQueryRequest audits = traceRequest(new AuditLogQueryRequest());
-    audits.setTenantId(tenantId);
-    audits.setTraceId(traceId);
-    OperationAuditQueryRequest operationAudits = traceRequest(new OperationAuditQueryRequest());
-    operationAudits.setTenantId(tenantId);
-    operationAudits.setTraceId(traceId);
-    JobExecutionLogQueryRequest executionLogs = traceRequest(new JobExecutionLogQueryRequest());
-    executionLogs.setTenantId(tenantId);
-    executionLogs.setTraceId(traceId);
-    OutboxDeliveryLogQueryRequest outbox = traceRequest(new OutboxDeliveryLogQueryRequest());
-    outbox.setTenantId(tenantId);
-    outbox.setTraceId(traceId);
-    AlertEventQueryRequest alerts = traceRequest(new AlertEventQueryRequest());
-    alerts.setTenantId(tenantId);
-    alerts.setTraceId(traceId);
-    DeadLetterQueryRequest deadLetters = traceRequest(new DeadLetterQueryRequest());
-    deadLetters.setTenantId(tenantId);
-    deadLetters.setTraceId(traceId);
-    return TraceSnapshotRequests.builder()
-        .jobs(jobs)
-        .workflows(workflows)
-        .workflowNodes(workflowNodes)
-        .files(files)
-        .pipelines(pipelines)
-        .audits(audits)
-        .operationAudits(operationAudits)
-        .executionLogs(executionLogs)
-        .outbox(outbox)
-        .alerts(alerts)
-        .deadLetters(deadLetters)
-        .build();
-  }
-
-  private TraceSnapshotPages queryTraceSnapshotPages(TraceSnapshotRequests requests) {
-    PageResponse<ConsoleJobInstanceResponse> jobs = jobInstances(requests.jobs());
-    PageResponse<ConsoleWorkflowRunResponse> workflows = workflowRuns(requests.workflows());
-    PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodes =
-        workflowNodeRuns(requests.workflowNodes());
-    PageResponse<ConsoleFileRecordResponse> files = fileChains(requests.files());
-    PageResponse<ConsoleFilePipelineResponse> pipelines = filePipelines(requests.pipelines());
-    PageResponse<ConsoleAuditLogResponse> audits = auditLogs(requests.audits());
-    PageResponse<ConsoleOperationAuditResponse> operationAudits =
-        operationAuditQueryService.query(requests.operationAudits());
-    PageResponse<ConsoleJobExecutionLogResponse> executionLogs =
-        jobExecutionLogs(requests.executionLogs());
-    PageResponse<ConsoleOutboxDeliveryLogResponse> outbox = outboxDeliveries(requests.outbox());
-    PageResponse<ConsoleAlertEventResponse> alerts = alertEvents(requests.alerts());
-    PageResponse<ConsoleDeadLetterTaskResponse> deadLetters = deadLetters(requests.deadLetters());
-    return TraceSnapshotPages.builder()
-        .jobs(jobs)
-        .workflows(workflows)
-        .workflowNodes(workflowNodes)
-        .files(files)
-        .pipelines(pipelines)
-        .audits(audits)
-        .operationAudits(operationAudits)
-        .executionLogs(executionLogs)
-        .outbox(outbox)
-        .alerts(alerts)
-        .deadLetters(deadLetters)
-        .build();
-  }
-
-  private ConsoleTraceSnapshotResponse buildTraceSnapshotResponse(
-      String traceId, TraceSnapshotPages pages) {
-    List<String> truncatedDomains = new ArrayList<>();
-    addIfTruncated(truncatedDomains, "jobInstances", pages.jobs());
-    addIfTruncated(truncatedDomains, "workflowRuns", pages.workflows());
-    addIfTruncated(truncatedDomains, "workflowNodeRuns", pages.workflowNodes());
-    addIfTruncated(truncatedDomains, "files", pages.files());
-    addIfTruncated(truncatedDomains, "filePipelines", pages.pipelines());
-    addIfTruncated(truncatedDomains, "auditLogs", pages.audits());
-    addIfTruncated(truncatedDomains, "operationAudits", pages.operationAudits());
-    addIfTruncated(truncatedDomains, "executionLogs", pages.executionLogs());
-    addIfTruncated(truncatedDomains, "outboxDeliveries", pages.outbox());
-    addIfTruncated(truncatedDomains, "alerts", pages.alerts());
-    addIfTruncated(truncatedDomains, "deadLetters", pages.deadLetters());
-
-    TraceTimelineSources timelineSources = TraceTimelineSources.builder()
-        .traceId(traceId)
-        .jobInstances(pages.jobs().items())
-        .workflowRuns(pages.workflows().items())
-        .workflowNodeRuns(pages.workflowNodes().items())
-        .files(pages.files().items())
-        .filePipelines(pages.pipelines().items())
-        .auditLogs(pages.audits().items())
-        .operationAudits(pages.operationAudits().items())
-        .executionLogs(pages.executionLogs().items())
-        .outboxDeliveries(pages.outbox().items())
-        .alerts(pages.alerts().items())
-        .deadLetters(pages.deadLetters().items())
-        .build();
-    List<ConsoleTraceTimelineItem> timeline = buildTimeline(timelineSources);
-    List<String> truncatedDomainSnapshot = List.copyOf(truncatedDomains);
-    return ConsoleTraceSnapshotResponse.builder()
-        .traceId(traceId)
-        .jobInstances(timelineSources.jobInstances())
-        .workflowRuns(timelineSources.workflowRuns())
-        .workflowNodeRuns(timelineSources.workflowNodeRuns())
-        .files(timelineSources.files())
-        .filePipelines(timelineSources.filePipelines())
-        .auditLogs(timelineSources.auditLogs())
-        .operationAudits(timelineSources.operationAudits())
-        .executionLogs(timelineSources.executionLogs())
-        .outboxDeliveries(timelineSources.outboxDeliveries())
-        .alerts(timelineSources.alerts())
-        .deadLetters(timelineSources.deadLetters())
-        .timeline(timeline)
-        .truncatedDomains(truncatedDomainSnapshot)
-        .build();
-  }
-
-  private static void addIfTruncated(
-      List<String> truncatedDomains, String domain, PageResponse<?> page) {
-    if (page.hasMore() || page.total() > page.items().size()) {
-      truncatedDomains.add(domain);
+    @Override
+    public PageResponse<ConsoleAuditLogResponse> executionLogs(AuditLogQueryRequest request) {
+        return opsQueryService.executionLogs(request);
     }
-  }
 
-  private static List<ConsoleTraceTimelineItem> buildTimeline(TraceTimelineSources sources) {
-    List<ConsoleTraceTimelineItem> items = new ArrayList<>();
-    addJobInstanceItems(items, sources.traceId(), sources.jobInstances());
-    addWorkflowRunItems(items, sources.traceId(), sources.workflowRuns());
-    addWorkflowNodeRunItems(items, sources.traceId(), sources.workflowNodeRuns());
-    addFileItems(items, sources.traceId(), sources.files());
-    addFilePipelineItems(items, sources.traceId(), sources.filePipelines());
-    addAuditLogItems(items, sources.auditLogs());
-    addOperationAuditItems(items, sources.operationAudits());
-    addExecutionLogItems(items, sources.executionLogs());
-    addOutboxDeliveryItems(items, sources.outboxDeliveries());
-    addAlertItems(items, sources.alerts());
-    addDeadLetterItems(items, sources.deadLetters());
-    Comparator<ConsoleTraceTimelineItem> timelineOrder = Comparator.comparing(
-            ConsoleTraceTimelineItem::occurredAt, Comparator.nullsLast(Comparator.naturalOrder()))
-        .thenComparing(
-            ConsoleTraceTimelineItem::source, Comparator.nullsLast(Comparator.naturalOrder()))
-        .thenComparing(
-            ConsoleTraceTimelineItem::referenceId, Comparator.nullsLast(Comparator.naturalOrder()));
-    items.sort(timelineOrder);
-    return List.copyOf(items);
-  }
+    @Override
+    public ConsoleTraceSnapshotResponse traceSnapshot(String tenantId, String traceId) {
+        String normalizedTraceId = traceId == null ? "" : traceId.trim();
+        if (normalizedTraceId.isEmpty()) {
+            return ConsoleTraceSnapshotResponse.builder()
+                    .traceId("")
+                    .jobInstances(List.of())
+                    .workflowRuns(List.of())
+                    .workflowNodeRuns(List.of())
+                    .files(List.of())
+                    .filePipelines(List.of())
+                    .auditLogs(List.of())
+                    .operationAudits(List.of())
+                    .executionLogs(List.of())
+                    .outboxDeliveries(List.of())
+                    .alerts(List.of())
+                    .deadLetters(List.of())
+                    .timeline(List.of())
+                    .truncatedDomains(List.of())
+                    .build();
+        }
 
-  private static void addJobInstanceItems(
-      List<ConsoleTraceTimelineItem> items,
-      String traceId,
-      List<ConsoleJobInstanceResponse> jobInstances) {
-    jobInstances.forEach(item -> {
-      Instant occurredAt = firstNonNull(item.startedAt(), item.finishedAt());
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "JOB_INSTANCE",
-          "STATUS",
-          item.id(),
-          item.instanceStatus(),
-          item.jobCode(),
-          occurredAt,
-          traceId);
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addWorkflowRunItems(
-      List<ConsoleTraceTimelineItem> items,
-      String traceId,
-      List<ConsoleWorkflowRunResponse> workflowRuns) {
-    workflowRuns.forEach(item -> {
-      Instant occurredAt = firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt());
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "WORKFLOW_RUN",
-          "STATUS",
-          item.id(),
-          item.runStatus(),
-          item.currentNodeCode(),
-          occurredAt,
-          traceId);
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addWorkflowNodeRunItems(
-      List<ConsoleTraceTimelineItem> items,
-      String traceId,
-      List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns) {
-    workflowNodeRuns.forEach(item -> {
-      Instant occurredAt = firstNonNull(item.startedAt(), item.finishedAt());
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "WORKFLOW_NODE_RUN",
-          "STATUS",
-          item.id(),
-          item.nodeStatus(),
-          item.nodeCode(),
-          occurredAt,
-          traceId);
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addFileItems(
-      List<ConsoleTraceTimelineItem> items, String traceId, List<ConsoleFileRecordResponse> files) {
-    files.forEach(item -> {
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "FILE_RECORD",
-          "STATUS",
-          item.id(),
-          item.fileStatus(),
-          item.fileName(),
-          item.createdAt(),
-          traceId);
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addFilePipelineItems(
-      List<ConsoleTraceTimelineItem> items,
-      String traceId,
-      List<ConsoleFilePipelineResponse> filePipelines) {
-    filePipelines.forEach(item -> {
-      Instant occurredAt = firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt());
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "FILE_PIPELINE",
-          "STATUS",
-          item.id(),
-          item.runStatus(),
-          item.currentStage(),
-          occurredAt,
-          traceId);
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addAuditLogItems(
-      List<ConsoleTraceTimelineItem> items, List<ConsoleAuditLogResponse> auditLogs) {
-    auditLogs.forEach(item -> {
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "FILE_AUDIT",
-          item.operationType(),
-          item.id(),
-          item.operationResult(),
-          item.detailSummary(),
-          item.createdAt(),
-          item.traceId());
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addOperationAuditItems(
-      List<ConsoleTraceTimelineItem> items, List<ConsoleOperationAuditResponse> operationAudits) {
-    operationAudits.forEach(item -> {
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "OPERATION_AUDIT",
-          item.action(),
-          item.id(),
-          item.result(),
-          item.errorMessage(),
-          item.createdAt(),
-          item.traceId());
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addExecutionLogItems(
-      List<ConsoleTraceTimelineItem> items, List<ConsoleJobExecutionLogResponse> executionLogs) {
-    executionLogs.forEach(item -> {
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "EXECUTION_LOG",
-          item.logType(),
-          item.id(),
-          item.logLevel(),
-          item.message(),
-          item.createdAt(),
-          item.traceId());
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addOutboxDeliveryItems(
-      List<ConsoleTraceTimelineItem> items,
-      List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries) {
-    outboxDeliveries.forEach(item -> {
-      Instant occurredAt = firstNonNull(item.createdAt(), item.updatedAt());
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "OUTBOX_DELIVERY",
-          item.eventType(),
-          item.id(),
-          item.deliveryStatus(),
-          item.errorMessage(),
-          occurredAt,
-          item.traceId());
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addAlertItems(
-      List<ConsoleTraceTimelineItem> items, List<ConsoleAlertEventResponse> alerts) {
-    alerts.forEach(item -> {
-      Instant occurredAt = firstNonNull(item.lastSeenAt(), item.createdAt(), item.updatedAt());
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "ALERT",
-          item.alertType(),
-          item.id(),
-          item.status(),
-          item.title(),
-          occurredAt,
-          item.traceId());
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addDeadLetterItems(
-      List<ConsoleTraceTimelineItem> items, List<ConsoleDeadLetterTaskResponse> deadLetters) {
-    deadLetters.forEach(item -> {
-      Instant occurredAt = firstNonNull(item.createdAt(), item.updatedAt());
-      ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
-          "DEAD_LETTER",
-          item.sourceType(),
-          item.id(),
-          item.replayStatus(),
-          item.deadLetterReason(),
-          occurredAt,
-          item.traceId());
-      addTimeline(items, timelineItem);
-    });
-  }
-
-  private static void addTimeline(
-      List<ConsoleTraceTimelineItem> items, ConsoleTraceTimelineItem timelineItem) {
-    if (timelineItem.occurredAt() != null) {
-      items.add(timelineItem);
+        TraceSnapshotRequests requests = traceSnapshotRequests(tenantId, normalizedTraceId);
+        TraceSnapshotPages pages = queryTraceSnapshotPages(requests);
+        return buildTraceSnapshotResponse(normalizedTraceId, pages);
     }
-  }
 
-  @Builder
-  private record TraceSnapshotRequests(
-      JobInstanceQueryRequest jobs,
-      WorkflowRunQueryRequest workflows,
-      WorkflowNodeRunQueryRequest workflowNodes,
-      FileChainQueryRequest files,
-      FilePipelineQueryRequest pipelines,
-      AuditLogQueryRequest audits,
-      OperationAuditQueryRequest operationAudits,
-      JobExecutionLogQueryRequest executionLogs,
-      OutboxDeliveryLogQueryRequest outbox,
-      AlertEventQueryRequest alerts,
-      DeadLetterQueryRequest deadLetters) {}
-
-  @Builder
-  private record TraceSnapshotPages(
-      PageResponse<ConsoleJobInstanceResponse> jobs,
-      PageResponse<ConsoleWorkflowRunResponse> workflows,
-      PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodes,
-      PageResponse<ConsoleFileRecordResponse> files,
-      PageResponse<ConsoleFilePipelineResponse> pipelines,
-      PageResponse<ConsoleAuditLogResponse> audits,
-      PageResponse<ConsoleOperationAuditResponse> operationAudits,
-      PageResponse<ConsoleJobExecutionLogResponse> executionLogs,
-      PageResponse<ConsoleOutboxDeliveryLogResponse> outbox,
-      PageResponse<ConsoleAlertEventResponse> alerts,
-      PageResponse<ConsoleDeadLetterTaskResponse> deadLetters) {}
-
-  @Builder
-  private record TraceTimelineSources(
-      String traceId,
-      List<ConsoleJobInstanceResponse> jobInstances,
-      List<ConsoleWorkflowRunResponse> workflowRuns,
-      List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns,
-      List<ConsoleFileRecordResponse> files,
-      List<ConsoleFilePipelineResponse> filePipelines,
-      List<ConsoleAuditLogResponse> auditLogs,
-      List<ConsoleOperationAuditResponse> operationAudits,
-      List<ConsoleJobExecutionLogResponse> executionLogs,
-      List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
-      List<ConsoleAlertEventResponse> alerts,
-      List<ConsoleDeadLetterTaskResponse> deadLetters) {}
-
-  @SafeVarargs
-  private static <T> T firstNonNull(T... values) {
-    for (T value : values) {
-      if (Objects.nonNull(value)) {
-        return value;
-      }
+    private TraceSnapshotRequests traceSnapshotRequests(String tenantId, String traceId) {
+        JobInstanceQueryRequest jobs = traceRequest(new JobInstanceQueryRequest());
+        jobs.setTenantId(tenantId);
+        jobs.setTraceId(traceId);
+        WorkflowRunQueryRequest workflows = traceRequest(new WorkflowRunQueryRequest());
+        workflows.setTenantId(tenantId);
+        workflows.setTraceId(traceId);
+        WorkflowNodeRunQueryRequest workflowNodes = traceRequest(new WorkflowNodeRunQueryRequest());
+        workflowNodes.setTenantId(tenantId);
+        workflowNodes.setTraceId(traceId);
+        FileChainQueryRequest files = traceRequest(new FileChainQueryRequest());
+        files.setTenantId(tenantId);
+        files.setTraceId(traceId);
+        FilePipelineQueryRequest pipelines = traceRequest(new FilePipelineQueryRequest());
+        pipelines.setTenantId(tenantId);
+        pipelines.setTraceId(traceId);
+        AuditLogQueryRequest audits = traceRequest(new AuditLogQueryRequest());
+        audits.setTenantId(tenantId);
+        audits.setTraceId(traceId);
+        OperationAuditQueryRequest operationAudits = traceRequest(new OperationAuditQueryRequest());
+        operationAudits.setTenantId(tenantId);
+        operationAudits.setTraceId(traceId);
+        JobExecutionLogQueryRequest executionLogs = traceRequest(new JobExecutionLogQueryRequest());
+        executionLogs.setTenantId(tenantId);
+        executionLogs.setTraceId(traceId);
+        OutboxDeliveryLogQueryRequest outbox = traceRequest(new OutboxDeliveryLogQueryRequest());
+        outbox.setTenantId(tenantId);
+        outbox.setTraceId(traceId);
+        AlertEventQueryRequest alerts = traceRequest(new AlertEventQueryRequest());
+        alerts.setTenantId(tenantId);
+        alerts.setTraceId(traceId);
+        DeadLetterQueryRequest deadLetters = traceRequest(new DeadLetterQueryRequest());
+        deadLetters.setTenantId(tenantId);
+        deadLetters.setTraceId(traceId);
+        return TraceSnapshotRequests.builder()
+                .jobs(jobs)
+                .workflows(workflows)
+                .workflowNodes(workflowNodes)
+                .files(files)
+                .pipelines(pipelines)
+                .audits(audits)
+                .operationAudits(operationAudits)
+                .executionLogs(executionLogs)
+                .outbox(outbox)
+                .alerts(alerts)
+                .deadLetters(deadLetters)
+                .build();
     }
-    return null;
-  }
 
-  private <T extends PageQueryRequest> T traceRequest(T request) {
-    request.setPageNo(1);
-    request.setPageSize(TRACE_SNAPSHOT_PAGE_SIZE);
-    return request;
-  }
+    private TraceSnapshotPages queryTraceSnapshotPages(TraceSnapshotRequests requests) {
+        PageResponse<ConsoleJobInstanceResponse> jobs = jobInstances(requests.jobs());
+        PageResponse<ConsoleWorkflowRunResponse> workflows = workflowRuns(requests.workflows());
+        PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodes = workflowNodeRuns(requests.workflowNodes());
+        PageResponse<ConsoleFileRecordResponse> files = fileChains(requests.files());
+        PageResponse<ConsoleFilePipelineResponse> pipelines = filePipelines(requests.pipelines());
+        PageResponse<ConsoleAuditLogResponse> audits = auditLogs(requests.audits());
+        PageResponse<ConsoleOperationAuditResponse> operationAudits =
+                operationAuditQueryService.query(requests.operationAudits());
+        PageResponse<ConsoleJobExecutionLogResponse> executionLogs = jobExecutionLogs(requests.executionLogs());
+        PageResponse<ConsoleOutboxDeliveryLogResponse> outbox = outboxDeliveries(requests.outbox());
+        PageResponse<ConsoleAlertEventResponse> alerts = alertEvents(requests.alerts());
+        PageResponse<ConsoleDeadLetterTaskResponse> deadLetters = deadLetters(requests.deadLetters());
+        return TraceSnapshotPages.builder()
+                .jobs(jobs)
+                .workflows(workflows)
+                .workflowNodes(workflowNodes)
+                .files(files)
+                .pipelines(pipelines)
+                .audits(audits)
+                .operationAudits(operationAudits)
+                .executionLogs(executionLogs)
+                .outbox(outbox)
+                .alerts(alerts)
+                .deadLetters(deadLetters)
+                .build();
+    }
 
-  @Override
-  public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(
-      OutboxRetryLogQueryRequest request) {
-    return opsQueryService.outboxRetries(request);
-  }
+    private ConsoleTraceSnapshotResponse buildTraceSnapshotResponse(String traceId, TraceSnapshotPages pages) {
+        List<String> truncatedDomains = new ArrayList<>();
+        addIfTruncated(truncatedDomains, "jobInstances", pages.jobs());
+        addIfTruncated(truncatedDomains, "workflowRuns", pages.workflows());
+        addIfTruncated(truncatedDomains, "workflowNodeRuns", pages.workflowNodes());
+        addIfTruncated(truncatedDomains, "files", pages.files());
+        addIfTruncated(truncatedDomains, "filePipelines", pages.pipelines());
+        addIfTruncated(truncatedDomains, "auditLogs", pages.audits());
+        addIfTruncated(truncatedDomains, "operationAudits", pages.operationAudits());
+        addIfTruncated(truncatedDomains, "executionLogs", pages.executionLogs());
+        addIfTruncated(truncatedDomains, "outboxDeliveries", pages.outbox());
+        addIfTruncated(truncatedDomains, "alerts", pages.alerts());
+        addIfTruncated(truncatedDomains, "deadLetters", pages.deadLetters());
 
-  @Override
-  public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(
-      OutboxDeliveryLogQueryRequest request) {
-    return opsQueryService.outboxDeliveries(request);
-  }
+        TraceTimelineSources timelineSources = TraceTimelineSources.builder()
+                .traceId(traceId)
+                .jobInstances(pages.jobs().items())
+                .workflowRuns(pages.workflows().items())
+                .workflowNodeRuns(pages.workflowNodes().items())
+                .files(pages.files().items())
+                .filePipelines(pages.pipelines().items())
+                .auditLogs(pages.audits().items())
+                .operationAudits(pages.operationAudits().items())
+                .executionLogs(pages.executionLogs().items())
+                .outboxDeliveries(pages.outbox().items())
+                .alerts(pages.alerts().items())
+                .deadLetters(pages.deadLetters().items())
+                .build();
+        List<ConsoleTraceTimelineItem> timeline = buildTimeline(timelineSources);
+        List<String> truncatedDomainSnapshot = List.copyOf(truncatedDomains);
+        return ConsoleTraceSnapshotResponse.builder()
+                .traceId(traceId)
+                .jobInstances(timelineSources.jobInstances())
+                .workflowRuns(timelineSources.workflowRuns())
+                .workflowNodeRuns(timelineSources.workflowNodeRuns())
+                .files(timelineSources.files())
+                .filePipelines(timelineSources.filePipelines())
+                .auditLogs(timelineSources.auditLogs())
+                .operationAudits(timelineSources.operationAudits())
+                .executionLogs(timelineSources.executionLogs())
+                .outboxDeliveries(timelineSources.outboxDeliveries())
+                .alerts(timelineSources.alerts())
+                .deadLetters(timelineSources.deadLetters())
+                .timeline(timeline)
+                .truncatedDomains(truncatedDomainSnapshot)
+                .build();
+    }
 
-  @Override
-  public PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request) {
-    return opsQueryService.aiAuditLogs(request);
-  }
+    private static void addIfTruncated(List<String> truncatedDomains, String domain, PageResponse<?> page) {
+        if (page.hasMore() || page.total() > page.items().size()) {
+            truncatedDomains.add(domain);
+        }
+    }
 
-  @Override
-  public PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request) {
-    return opsQueryService.deadLetters(request);
-  }
+    private static List<ConsoleTraceTimelineItem> buildTimeline(TraceTimelineSources sources) {
+        List<ConsoleTraceTimelineItem> items = new ArrayList<>();
+        addJobInstanceItems(items, sources.traceId(), sources.jobInstances());
+        addWorkflowRunItems(items, sources.traceId(), sources.workflowRuns());
+        addWorkflowNodeRunItems(items, sources.traceId(), sources.workflowNodeRuns());
+        addFileItems(items, sources.traceId(), sources.files());
+        addFilePipelineItems(items, sources.traceId(), sources.filePipelines());
+        addAuditLogItems(items, sources.auditLogs());
+        addOperationAuditItems(items, sources.operationAudits());
+        addExecutionLogItems(items, sources.executionLogs());
+        addOutboxDeliveryItems(items, sources.outboxDeliveries());
+        addAlertItems(items, sources.alerts());
+        addDeadLetterItems(items, sources.deadLetters());
+        Comparator<ConsoleTraceTimelineItem> timelineOrder = Comparator.comparing(
+                        ConsoleTraceTimelineItem::occurredAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(ConsoleTraceTimelineItem::source, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(ConsoleTraceTimelineItem::referenceId, Comparator.nullsLast(Comparator.naturalOrder()));
+        items.sort(timelineOrder);
+        return List.copyOf(items);
+    }
 
-  @Override
-  public PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request) {
-    return opsQueryService.retries(request);
-  }
+    private static void addJobInstanceItems(
+            List<ConsoleTraceTimelineItem> items, String traceId, List<ConsoleJobInstanceResponse> jobInstances) {
+        jobInstances.forEach(item -> {
+            Instant occurredAt = firstNonNull(item.startedAt(), item.finishedAt());
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "JOB_INSTANCE", "STATUS", item.id(), item.instanceStatus(), item.jobCode(), occurredAt, traceId);
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(
-      PendingCatchUpQueryRequest request) {
-    return opsQueryService.pendingCatchUps(request);
-  }
+    private static void addWorkflowRunItems(
+            List<ConsoleTraceTimelineItem> items, String traceId, List<ConsoleWorkflowRunResponse> workflowRuns) {
+        workflowRuns.forEach(item -> {
+            Instant occurredAt = firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt());
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "WORKFLOW_RUN", "STATUS", item.id(), item.runStatus(), item.currentNodeCode(), occurredAt, traceId);
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public PageResponse<ConsoleWorkerRegistryResponse> workers(WorkerRegistryQueryRequest request) {
-    return opsQueryService.workers(request);
-  }
+    private static void addWorkflowNodeRunItems(
+            List<ConsoleTraceTimelineItem> items,
+            String traceId,
+            List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns) {
+        workflowNodeRuns.forEach(item -> {
+            Instant occurredAt = firstNonNull(item.startedAt(), item.finishedAt());
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "WORKFLOW_NODE_RUN", "STATUS", item.id(), item.nodeStatus(), item.nodeCode(), occurredAt, traceId);
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request) {
-    return opsQueryService.alertEvents(request);
-  }
+    private static void addFileItems(
+            List<ConsoleTraceTimelineItem> items, String traceId, List<ConsoleFileRecordResponse> files) {
+        files.forEach(item -> {
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "FILE_RECORD", "STATUS", item.id(), item.fileStatus(), item.fileName(), item.createdAt(), traceId);
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public PageResponse<ConsoleBatchDayResponse> batchDays(BatchDayQueryRequest request) {
-    return opsQueryService.batchDays(request);
-  }
+    private static void addFilePipelineItems(
+            List<ConsoleTraceTimelineItem> items, String traceId, List<ConsoleFilePipelineResponse> filePipelines) {
+        filePipelines.forEach(item -> {
+            Instant occurredAt = firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt());
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "FILE_PIPELINE", "STATUS", item.id(), item.runStatus(), item.currentStage(), occurredAt, traceId);
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public ConsoleBatchDayWindowResponse batchDayWindow(
-      String bizDate, BatchDayWindowQueryRequest request) {
-    return opsQueryService.batchDayWindow(bizDate, request);
-  }
+    private static void addAuditLogItems(
+            List<ConsoleTraceTimelineItem> items, List<ConsoleAuditLogResponse> auditLogs) {
+        auditLogs.forEach(item -> {
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "FILE_AUDIT",
+                    item.operationType(),
+                    item.id(),
+                    item.operationResult(),
+                    item.detailSummary(),
+                    item.createdAt(),
+                    item.traceId());
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public PageResponse<ConsoleApprovalCommandResponse> approvals(
-      ApprovalCommandQueryRequest request) {
-    return opsQueryService.approvals(request);
-  }
+    private static void addOperationAuditItems(
+            List<ConsoleTraceTimelineItem> items, List<ConsoleOperationAuditResponse> operationAudits) {
+        operationAudits.forEach(item -> {
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "OPERATION_AUDIT",
+                    item.action(),
+                    item.id(),
+                    item.result(),
+                    item.errorMessage(),
+                    item.createdAt(),
+                    item.traceId());
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
-    return fileQueryService.fileChains(request);
-  }
+    private static void addExecutionLogItems(
+            List<ConsoleTraceTimelineItem> items, List<ConsoleJobExecutionLogResponse> executionLogs) {
+        executionLogs.forEach(item -> {
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "EXECUTION_LOG",
+                    item.logType(),
+                    item.id(),
+                    item.logLevel(),
+                    item.message(),
+                    item.createdAt(),
+                    item.traceId());
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public ConsoleFileSummaryResponse fileSummary(String tenantId) {
-    return fileQueryService.fileSummary(tenantId);
-  }
+    private static void addOutboxDeliveryItems(
+            List<ConsoleTraceTimelineItem> items, List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries) {
+        outboxDeliveries.forEach(item -> {
+            Instant occurredAt = firstNonNull(item.createdAt(), item.updatedAt());
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "OUTBOX_DELIVERY",
+                    item.eventType(),
+                    item.id(),
+                    item.deliveryStatus(),
+                    item.errorMessage(),
+                    occurredAt,
+                    item.traceId());
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request) {
-    return fileQueryService.filePipelines(request);
-  }
+    private static void addAlertItems(List<ConsoleTraceTimelineItem> items, List<ConsoleAlertEventResponse> alerts) {
+        alerts.forEach(item -> {
+            Instant occurredAt = firstNonNull(item.lastSeenAt(), item.createdAt(), item.updatedAt());
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "ALERT", item.alertType(), item.id(), item.status(), item.title(), occurredAt, item.traceId());
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(
-      FilePipelineStepQueryRequest request) {
-    return fileQueryService.filePipelineSteps(request);
-  }
+    private static void addDeadLetterItems(
+            List<ConsoleTraceTimelineItem> items, List<ConsoleDeadLetterTaskResponse> deadLetters) {
+        deadLetters.forEach(item -> {
+            Instant occurredAt = firstNonNull(item.createdAt(), item.updatedAt());
+            ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
+                    "DEAD_LETTER",
+                    item.sourceType(),
+                    item.id(),
+                    item.replayStatus(),
+                    item.deadLetterReason(),
+                    occurredAt,
+                    item.traceId());
+            addTimeline(items, timelineItem);
+        });
+    }
 
-  @Override
-  public ConsoleFilePipelineProgressResponse pipelineProgress(Long pipelineInstanceId) {
-    return fileQueryService.pipelineProgress(pipelineInstanceId);
-  }
+    private static void addTimeline(List<ConsoleTraceTimelineItem> items, ConsoleTraceTimelineItem timelineItem) {
+        if (timelineItem.occurredAt() != null) {
+            items.add(timelineItem);
+        }
+    }
 
-  @Override
-  public PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(
-      FileDispatchRecordQueryRequest request) {
-    return fileQueryService.fileDispatchRecords(request);
-  }
+    @Builder
+    private record TraceSnapshotRequests(
+            JobInstanceQueryRequest jobs,
+            WorkflowRunQueryRequest workflows,
+            WorkflowNodeRunQueryRequest workflowNodes,
+            FileChainQueryRequest files,
+            FilePipelineQueryRequest pipelines,
+            AuditLogQueryRequest audits,
+            OperationAuditQueryRequest operationAudits,
+            JobExecutionLogQueryRequest executionLogs,
+            OutboxDeliveryLogQueryRequest outbox,
+            AlertEventQueryRequest alerts,
+            DeadLetterQueryRequest deadLetters) {}
 
-  @Override
-  public PageResponse<ConsoleFileChannelResponse> fileChannels(FileChannelQueryRequest request) {
-    return fileQueryService.fileChannels(request);
-  }
+    @Builder
+    private record TraceSnapshotPages(
+            PageResponse<ConsoleJobInstanceResponse> jobs,
+            PageResponse<ConsoleWorkflowRunResponse> workflows,
+            PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodes,
+            PageResponse<ConsoleFileRecordResponse> files,
+            PageResponse<ConsoleFilePipelineResponse> pipelines,
+            PageResponse<ConsoleAuditLogResponse> audits,
+            PageResponse<ConsoleOperationAuditResponse> operationAudits,
+            PageResponse<ConsoleJobExecutionLogResponse> executionLogs,
+            PageResponse<ConsoleOutboxDeliveryLogResponse> outbox,
+            PageResponse<ConsoleAlertEventResponse> alerts,
+            PageResponse<ConsoleDeadLetterTaskResponse> deadLetters) {}
 
-  @Override
-  public PageResponse<ConsoleFileTemplateResponse> fileTemplates(FileTemplateQueryRequest request) {
-    return fileQueryService.fileTemplates(request);
-  }
+    @Builder
+    private record TraceTimelineSources(
+            String traceId,
+            List<ConsoleJobInstanceResponse> jobInstances,
+            List<ConsoleWorkflowRunResponse> workflowRuns,
+            List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns,
+            List<ConsoleFileRecordResponse> files,
+            List<ConsoleFilePipelineResponse> filePipelines,
+            List<ConsoleAuditLogResponse> auditLogs,
+            List<ConsoleOperationAuditResponse> operationAudits,
+            List<ConsoleJobExecutionLogResponse> executionLogs,
+            List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
+            List<ConsoleAlertEventResponse> alerts,
+            List<ConsoleDeadLetterTaskResponse> deadLetters) {}
 
-  @Override
-  public PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(
-      FileArrivalGroupQueryRequest request) {
-    return fileQueryService.fileArrivalGroups(request);
-  }
+    @SafeVarargs
+    private static <T> T firstNonNull(T... values) {
+        for (T value : values) {
+            if (Objects.nonNull(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
 
-  @Override
-  public PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(
-      FileErrorRecordQueryRequest request) {
-    return fileQueryService.fileErrorRecords(request);
-  }
+    private <T extends PageQueryRequest> T traceRequest(T request) {
+        request.setPageNo(1);
+        request.setPageSize(TRACE_SNAPSHOT_PAGE_SIZE);
+        return request;
+    }
 
-  @Override
-  public ConsoleFileChannelResponse fileChannelDetail(String tenantId, String channelCode) {
-    return fileQueryService.fileChannelDetail(tenantId, channelCode);
-  }
+    @Override
+    public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request) {
+        return opsQueryService.outboxRetries(request);
+    }
 
-  @Override
-  public ConsoleFileTemplateResponse fileTemplateDetail(
-      String tenantId, String templateCode, Integer version) {
-    return fileQueryService.fileTemplateDetail(tenantId, templateCode, version);
-  }
+    @Override
+    public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(OutboxDeliveryLogQueryRequest request) {
+        return opsQueryService.outboxDeliveries(request);
+    }
 
-  @Override
-  public ConsoleFileRecordDetailResponse fileRecordDetail(String tenantId, Long fileId) {
-    return fileQueryService.fileRecordDetail(tenantId, fileId);
-  }
+    @Override
+    public PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request) {
+        return opsQueryService.aiAuditLogs(request);
+    }
 
-  @Override
-  public ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {
-    return fileQueryService.filePipelineDetail(tenantId, id);
-  }
+    @Override
+    public PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request) {
+        return opsQueryService.deadLetters(request);
+    }
 
-  @Override
-  public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(
-      JobDefinitionQueryRequest request) {
-    return jobQueryService.jobDefinitions(request);
-  }
+    @Override
+    public PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request) {
+        return opsQueryService.retries(request);
+    }
 
-  @Override
-  public List<CodeNameOption> jobDefinitionCodes(String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return jobDefinitionMapper.selectActiveCodeNames(resolved).stream()
-        .map(row -> new CodeNameOption(row.code(), row.name()))
-        .toList();
-  }
+    @Override
+    public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(PendingCatchUpQueryRequest request) {
+        return opsQueryService.pendingCatchUps(request);
+    }
 
-  @Override
-  public PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
-    return jobQueryService.jobInstances(request);
-  }
+    @Override
+    public PageResponse<ConsoleWorkerRegistryResponse> workers(WorkerRegistryQueryRequest request) {
+        return opsQueryService.workers(request);
+    }
 
-  @Override
-  public ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {
-    return jobQueryService.jobInstance(tenantId, id);
-  }
+    @Override
+    public PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request) {
+        return opsQueryService.alertEvents(request);
+    }
 
-  @Override
-  public PageResponse<ConsoleJobExecutionLogResponse> jobExecutionLogs(
-      JobExecutionLogQueryRequest request) {
-    return jobQueryService.jobExecutionLogs(request);
-  }
+    @Override
+    public PageResponse<ConsoleBatchDayResponse> batchDays(BatchDayQueryRequest request) {
+        return opsQueryService.batchDays(request);
+    }
 
-  @Override
-  public List<ConsoleJobInstanceResponse> batchInstanceStatus(
-      String tenantId, List<String> instanceNos) {
-    return jobQueryService.batchInstanceStatus(tenantId, instanceNos);
-  }
+    @Override
+    public ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request) {
+        return opsQueryService.batchDayWindow(bizDate, request);
+    }
 
-  @Override
-  public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(
-      JobStepInstanceQueryRequest request) {
-    return jobQueryService.jobStepInstances(request);
-  }
+    @Override
+    public PageResponse<ConsoleApprovalCommandResponse> approvals(ApprovalCommandQueryRequest request) {
+        return opsQueryService.approvals(request);
+    }
 
-  @Override
-  public ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id) {
-    return jobQueryService.jobStepInstance(tenantId, id);
-  }
+    @Override
+    public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
+        return fileQueryService.fileChains(request);
+    }
 
-  @Override
-  public PageResponse<ConsoleJobPartitionResponse> jobPartitions(JobPartitionQueryRequest request) {
-    return jobQueryService.jobPartitions(request);
-  }
+    @Override
+    public ConsoleFileSummaryResponse fileSummary(String tenantId) {
+        return fileQueryService.fileSummary(tenantId);
+    }
 
-  @Override
-  public PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(
-      WorkflowDefinitionQueryRequest request) {
-    return workflowQueryService.workflowDefinitions(request);
-  }
+    @Override
+    public PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request) {
+        return fileQueryService.filePipelines(request);
+    }
 
-  @Override
-  public PageResponse<ConsoleWorkflowNodeResponse> workflowNodes(WorkflowNodeQueryRequest request) {
-    return workflowQueryService.workflowNodes(request);
-  }
+    @Override
+    public PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(FilePipelineStepQueryRequest request) {
+        return fileQueryService.filePipelineSteps(request);
+    }
 
-  @Override
-  public PageResponse<ConsoleWorkflowEdgeResponse> workflowEdges(WorkflowEdgeQueryRequest request) {
-    return workflowQueryService.workflowEdges(request);
-  }
+    @Override
+    public ConsoleFilePipelineProgressResponse pipelineProgress(Long pipelineInstanceId) {
+        return fileQueryService.pipelineProgress(pipelineInstanceId);
+    }
 
-  @Override
-  public PageResponse<ConsoleWorkflowRunResponse> workflowRuns(WorkflowRunQueryRequest request) {
-    return workflowQueryService.workflowRuns(request);
-  }
+    @Override
+    public PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(FileDispatchRecordQueryRequest request) {
+        return fileQueryService.fileDispatchRecords(request);
+    }
 
-  @Override
-  public ConsoleWorkflowRunResponse workflowRun(String tenantId, Long id) {
-    return workflowQueryService.workflowRun(tenantId, id);
-  }
+    @Override
+    public PageResponse<ConsoleFileChannelResponse> fileChannels(FileChannelQueryRequest request) {
+        return fileQueryService.fileChannels(request);
+    }
 
-  @Override
-  public PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(
-      WorkflowNodeRunQueryRequest request) {
-    return workflowQueryService.workflowNodeRuns(request);
-  }
+    @Override
+    public PageResponse<ConsoleFileTemplateResponse> fileTemplates(FileTemplateQueryRequest request) {
+        return fileQueryService.fileTemplates(request);
+    }
 
-  @Override
-  public ConsoleWorkflowNodeRunResponse workflowNodeRun(String tenantId, Long id) {
-    return workflowQueryService.workflowNodeRun(tenantId, id);
-  }
+    @Override
+    public PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(FileArrivalGroupQueryRequest request) {
+        return fileQueryService.fileArrivalGroups(request);
+    }
 
-  @Override
-  public ConsoleWorkflowTopologyResponse workflowTopology(WorkflowTopologyQueryRequest request) {
-    return workflowQueryService.workflowTopology(request);
-  }
+    @Override
+    public PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(FileErrorRecordQueryRequest request) {
+        return fileQueryService.fileErrorRecords(request);
+    }
+
+    @Override
+    public ConsoleFileChannelResponse fileChannelDetail(String tenantId, String channelCode) {
+        return fileQueryService.fileChannelDetail(tenantId, channelCode);
+    }
+
+    @Override
+    public ConsoleFileTemplateResponse fileTemplateDetail(String tenantId, String templateCode, Integer version) {
+        return fileQueryService.fileTemplateDetail(tenantId, templateCode, version);
+    }
+
+    @Override
+    public ConsoleFileRecordDetailResponse fileRecordDetail(String tenantId, Long fileId) {
+        return fileQueryService.fileRecordDetail(tenantId, fileId);
+    }
+
+    @Override
+    public ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {
+        return fileQueryService.filePipelineDetail(tenantId, id);
+    }
+
+    @Override
+    public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request) {
+        return jobQueryService.jobDefinitions(request);
+    }
+
+    @Override
+    public List<CodeNameOption> jobDefinitionCodes(String tenantId) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        return jobDefinitionMapper.selectActiveCodeNames(resolved).stream()
+                .map(row -> new CodeNameOption(row.code(), row.name()))
+                .toList();
+    }
+
+    @Override
+    public PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
+        return jobQueryService.jobInstances(request);
+    }
+
+    @Override
+    public ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {
+        return jobQueryService.jobInstance(tenantId, id);
+    }
+
+    @Override
+    public PageResponse<ConsoleJobExecutionLogResponse> jobExecutionLogs(JobExecutionLogQueryRequest request) {
+        return jobQueryService.jobExecutionLogs(request);
+    }
+
+    @Override
+    public List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos) {
+        return jobQueryService.batchInstanceStatus(tenantId, instanceNos);
+    }
+
+    @Override
+    public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request) {
+        return jobQueryService.jobStepInstances(request);
+    }
+
+    @Override
+    public ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id) {
+        return jobQueryService.jobStepInstance(tenantId, id);
+    }
+
+    @Override
+    public PageResponse<ConsoleJobPartitionResponse> jobPartitions(JobPartitionQueryRequest request) {
+        return jobQueryService.jobPartitions(request);
+    }
+
+    @Override
+    public PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(WorkflowDefinitionQueryRequest request) {
+        return workflowQueryService.workflowDefinitions(request);
+    }
+
+    @Override
+    public PageResponse<ConsoleWorkflowNodeResponse> workflowNodes(WorkflowNodeQueryRequest request) {
+        return workflowQueryService.workflowNodes(request);
+    }
+
+    @Override
+    public PageResponse<ConsoleWorkflowEdgeResponse> workflowEdges(WorkflowEdgeQueryRequest request) {
+        return workflowQueryService.workflowEdges(request);
+    }
+
+    @Override
+    public PageResponse<ConsoleWorkflowRunResponse> workflowRuns(WorkflowRunQueryRequest request) {
+        return workflowQueryService.workflowRuns(request);
+    }
+
+    @Override
+    public ConsoleWorkflowRunResponse workflowRun(String tenantId, Long id) {
+        return workflowQueryService.workflowRun(tenantId, id);
+    }
+
+    @Override
+    public PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(WorkflowNodeRunQueryRequest request) {
+        return workflowQueryService.workflowNodeRuns(request);
+    }
+
+    @Override
+    public ConsoleWorkflowNodeRunResponse workflowNodeRun(String tenantId, Long id) {
+        return workflowQueryService.workflowNodeRun(tenantId, id);
+    }
+
+    @Override
+    public ConsoleWorkflowTopologyResponse workflowTopology(WorkflowTopologyQueryRequest request) {
+        return workflowQueryService.workflowTopology(request);
+    }
 }

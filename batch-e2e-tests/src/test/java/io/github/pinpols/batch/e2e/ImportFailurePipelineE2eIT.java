@@ -41,148 +41,144 @@ import org.springframework.test.context.jdbc.Sql;
  * </ul>
  */
 @E2eSpringBootTest(
-    classes = E2eImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.import.worker-type=IMPORT")
+        classes = E2eImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.import.worker-type=IMPORT")
 @E2eBusinessSchema
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @Sql(
-    scripts = {
-      E2eTestSql.IMPORT_TEMPLATE_SEED,
-    })
+        scripts = {
+            E2eTestSql.IMPORT_TEMPLATE_SEED,
+        })
 @Tag("critical")
 @DisplayName("端到端测试: 导入失败链路从触发受理, 事件派发, 任务领取到失败回报的闭环, 验证解析异常与对账不一致均收敛为失败且不写入业务数据")
 class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+    private static final String TENANT = "t1";
+    private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
-  private final WorkflowRunLaunchService launchService;
-  private final JdbcTemplate jdbcTemplate;
-  private final DataSource businessDataSource;
-  private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
+    private final WorkflowRunLaunchService launchService;
+    private final JdbcTemplate jdbcTemplate;
+    private final DataSource businessDataSource;
+    private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  ImportFailurePipelineE2eIT(
-      WorkflowRunLaunchService launchService,
-      JdbcTemplate jdbcTemplate,
-      @Qualifier("importBusinessDataSource") DataSource businessDataSource,
-      E2eOutboxPublishSupport e2eOutboxPublishSupport) {
-    this.launchService = launchService;
-    this.jdbcTemplate = jdbcTemplate;
-    this.businessDataSource = businessDataSource;
-    this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
-  }
+    ImportFailurePipelineE2eIT(
+            WorkflowRunLaunchService launchService,
+            JdbcTemplate jdbcTemplate,
+            @Qualifier("importBusinessDataSource") DataSource businessDataSource,
+            E2eOutboxPublishSupport e2eOutboxPublishSupport) {
+        this.launchService = launchService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.businessDataSource = businessDataSource;
+        this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
+    }
 
-  @Test
-  @DisplayName("输入内容不是可解析的 JSON 时解析环节失败, 任务收敛为失败终态, 作业实例终态为失败或部分失败")
-  void shouldReportFailed_whenImportContentIsUnparseable() {
-    final String selectTaskStatusSql = """
+    @Test
+    @DisplayName("输入内容不是可解析的 JSON 时解析环节失败, 任务收敛为失败终态, 作业实例终态为失败或部分失败")
+    void shouldReportFailed_whenImportContentIsUnparseable() {
+        final String selectTaskStatusSql = """
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
                       """;
-    final String selectInstanceStatusSql = """
+        final String selectInstanceStatusSql = """
         select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?
     """;
 
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("fileFormatType", "JSON");
-    params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
-    params.put("bizType", "CUSTOMER");
-    // 故意提供无效 JSON；ParseStep 应抛出异常并返回 IMPORT_PARSE_FAILED。
-    params.put("content", "THIS_IS_NOT_VALID_JSON_CONTENT");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("fileFormatType", "JSON");
+        params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
+        params.put("bizType", "CUSTOMER");
+        // 故意提供无效 JSON；ParseStep 应抛出异常并返回 IMPORT_PARSE_FAILED。
+        params.put("content", "THIS_IS_NOT_VALID_JSON_CONTENT");
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-import-fail",
-        params));
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-import-fail",
+                params));
 
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(
-              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
-          assertThat(status).isEqualTo("FAILED");
-        });
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    String status =
+                            jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+                    assertThat(status).isEqualTo("FAILED");
+                });
 
-    // 校验 job_instance 状态也已反映此次失败。
-    String instanceStatus =
-        jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, seed.dedupKey());
-    assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
-  }
+        // 校验 job_instance 状态也已反映此次失败。
+        String instanceStatus =
+                jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, seed.dedupKey());
+        assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
+    }
 
-  @Test
-  @DisplayName("定界文件尾行声明的记录数与合计金额不一致时校验阻断, 任务失败且明细不进入业务表")
-  void shouldReportFailed_whenTrailerControlTotalsMismatch() {
-    final String selectCountSql = """
+    @Test
+    @DisplayName("定界文件尾行声明的记录数与合计金额不一致时校验阻断, 任务失败且明细不进入业务表")
+    void shouldReportFailed_whenTrailerControlTotalsMismatch() {
+        final String selectCountSql = """
         select count(*)::int from biz.customer_account where tenant_id = ? and customer_no in (?, ?)
     """;
 
-    final String selectTaskStatusSql = """
+        final String selectTaskStatusSql = """
                       select t.task_status, t.error_code, ji.instance_status
                       from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
                       """;
 
-    String templateCode = "IMP-CONTROL-TOTAL-E2E-" + System.nanoTime();
-    insertControlTotalTemplate(templateCode);
+        String templateCode = "IMP-CONTROL-TOTAL-E2E-" + System.nanoTime();
+        insertControlTotalTemplate(templateCode);
 
-    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("fileFormatType", "DELIMITED");
-    params.put("templateCode", templateCode);
-    params.put("bizType", "CUSTOMER");
-    params.put("content", """
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("fileFormatType", "DELIMITED");
+        params.put("templateCode", templateCode);
+        params.put("bizType", "CUSTOMER");
+        params.put("content", """
             customerNo,customerName,customerType,creditLimit,currencyCode,email,phone,status,openDate,remark
             CTL-1,A,PERSONAL,100.00,CNY,a@example.test,1381,ACTIVE,2026-01-15,ok
             CTL-2,B,PERSONAL,200.00,CNY,b@example.test,1382,ACTIVE,2026-01-15,ok
             T,3,999.00
             """);
 
-    launchService.launch(new LaunchRequest(
-        TENANT,
-        seed.workflowDefinitionId(),
-        BIZ_DATE,
-        TriggerType.API,
-        seed.requestId(),
-        "e2e-tr-import-control-total",
-        params));
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.workflowDefinitionId(),
+                BIZ_DATE,
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-import-control-total",
+                params));
 
-    e2eOutboxPublishSupport.publishAllPending(TENANT);
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          Map<String, Object> row =
-              jdbcTemplate.queryForMap(selectTaskStatusSql, TENANT, seed.dedupKey());
-          assertThat(row.get("task_status")).isEqualTo("FAILED");
-          assertThat(row.get("instance_status")).isIn("FAILED", "PARTIAL_FAILED");
-          assertThat(String.valueOf(row.get("error_code")))
-              .containsAnyOf("IMPORT_VALIDATE_CONTROL_RECORD", "IMPORT_VALIDATE_CONTROL_TOTAL");
-        });
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    Map<String, Object> row = jdbcTemplate.queryForMap(selectTaskStatusSql, TENANT, seed.dedupKey());
+                    assertThat(row.get("task_status")).isEqualTo("FAILED");
+                    assertThat(row.get("instance_status")).isIn("FAILED", "PARTIAL_FAILED");
+                    assertThat(String.valueOf(row.get("error_code")))
+                            .containsAnyOf("IMPORT_VALIDATE_CONTROL_RECORD", "IMPORT_VALIDATE_CONTROL_TOTAL");
+                });
 
-    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Integer importedRows =
-        businessJdbc.queryForObject(selectCountSql, Integer.class, TENANT, "CTL-1", "CTL-2");
-    assertThat(importedRows).isZero();
-  }
+        JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+        Integer importedRows = businessJdbc.queryForObject(selectCountSql, Integer.class, TENANT, "CTL-1", "CTL-2");
+        assertThat(importedRows).isZero();
+    }
 
-  private void insertControlTotalTemplate(String templateCode) {
-    final String insertFileTemplateConfigSql = """
+    private void insertControlTotalTemplate(String templateCode) {
+        final String insertFileTemplateConfigSql = """
         insert into batch.file_template_config (
           tenant_id, template_code, template_name, template_type, biz_type,
           file_format_type, charset, target_charset, with_bom,
@@ -210,14 +206,14 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
         limit 1
         """;
 
-    jdbcTemplate.update(
-        insertFileTemplateConfigSql,
-        templateCode,
-        "Control total e2e import",
-        "{\"present\":true,\"delimiter\":\",\",\"recordType\":\"T\",\"recordTypeIndex\":0,"
-            + "\"recordCountIndex\":1,\"controlTotalIndex\":2}",
-        "{\"controlRecordCheck\":{\"enabled\":true,\"blocker\":true},"
-            + "\"controlTotalCheck\":{\"amountField\":\"creditLimit\",\"blocker\":true}}",
-        TENANT);
-  }
+        jdbcTemplate.update(
+                insertFileTemplateConfigSql,
+                templateCode,
+                "Control total e2e import",
+                "{\"present\":true,\"delimiter\":\",\",\"recordType\":\"T\",\"recordTypeIndex\":0,"
+                        + "\"recordCountIndex\":1,\"controlTotalIndex\":2}",
+                "{\"controlRecordCheck\":{\"enabled\":true,\"blocker\":true},"
+                        + "\"controlTotalCheck\":{\"amountField\":\"creditLimit\",\"blocker\":true}}",
+                TENANT);
+    }
 }

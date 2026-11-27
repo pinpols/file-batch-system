@@ -24,256 +24,249 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class TaskDispatcherRetryCoordinator {
 
-  private final BatchPlatformClientConfig config;
-  private final PlatformHttpClient httpClient;
-  private final ThrottledLogger throttledLog;
-  private final AtomicBoolean fatal = new AtomicBoolean(false);
-  private final AtomicInteger consecutiveClientErrors = new AtomicInteger(0);
+    private final BatchPlatformClientConfig config;
+    private final PlatformHttpClient httpClient;
+    private final ThrottledLogger throttledLog;
+    private final AtomicBoolean fatal = new AtomicBoolean(false);
+    private final AtomicInteger consecutiveClientErrors = new AtomicInteger(0);
 
-  TaskDispatcherRetryCoordinator(
-      BatchPlatformClientConfig config,
-      PlatformHttpClient httpClient,
-      ThrottledLogger throttledLog) {
-    this.config = config;
-    this.httpClient = httpClient;
-    this.throttledLog = throttledLog;
-  }
-
-  boolean isFatal() {
-    return fatal.get();
-  }
-
-  int consecutiveClientErrors() {
-    return consecutiveClientErrors.get();
-  }
-
-  void resetClientErrorStreak() {
-    consecutiveClientErrors.set(0);
-  }
-
-  /** CLAIM 遇到平台瞬时错误时有限重试；鉴权错误和已被竞争者占有的任务直接结束。 */
-  ClaimResult claimWithRetry(
-      TaskDispatchMessage message, String idempotencyKey, Map<String, Object> body) {
-    int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
-    Duration configuredBaseDelay = config.getClaimRetryBaseDelay();
-    long configuredBaseDelayMillis = configuredBaseDelay.toMillis();
-    long baseDelayMs = Math.max(0L, configuredBaseDelayMillis);
-    int attempt = 0;
-    while (true) {
-      try {
-        PlatformHttpClient.TaskClaimResponse response =
-            httpClient.claim(message.taskId(), idempotencyKey, body);
-        resetClientErrorStreak();
-        PlatformHttpClient.TaskClaimResponse claimResponse = EmptyChecks.isNull(response)
-            ? new PlatformHttpClient.TaskClaimResponse(null)
-            : response;
-        return new ClaimResult(true, true, claimResponse);
-      } catch (PlatformHttpException httpEx) {
-        if (httpEx.isAuthError()) {
-          markFatal(
-              "CLAIM auth failed (HTTP {}) for taskId={}, marking dispatcher FATAL — "
-                  + "check apiKey / tenant ACL; SDK will reject subsequent dispatches",
-              httpEx.statusCode(),
-              message.taskId());
-          return ClaimResult.notClaimed();
-        }
-        if (httpEx.isConflict()) {
-          log.info("CLAIM 409 for taskId={} (taken by peer), skipping", message.taskId());
-          return ClaimResult.alreadyHandled();
-        }
-        if (httpEx.statusCode() == 404) {
-          // 历史派单的任务可能已终态或清理，正常不可领取不应累计为客户端协议故障。
-          log.debug("CLAIM 404 for taskId={} (no longer claimable), skipping", message.taskId());
-          return ClaimResult.alreadyHandled();
-        }
-        if (httpEx.isServerError()) {
-          if (attempt >= maxRetries) {
-            throttledLog.warn(
-                "claim_5xx_exhausted",
-                "CLAIM 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
-                    + "(message remains uncommitted for retry)",
-                httpEx.statusCode(),
-                message.taskId(),
-                maxRetries);
-            return ClaimResult.notClaimed();
-          }
-          long delayMs = backoffWithJitter(baseDelayMs, attempt);
-          log.info(
-              "CLAIM 5xx (HTTP {}) for taskId={} attempt={} retry in {}ms",
-              httpEx.statusCode(),
-              message.taskId(),
-              attempt + 1,
-              delayMs);
-          if (!sleepInterruptible(delayMs)) {
-            return ClaimResult.notClaimed();
-          }
-          attempt++;
-          continue;
-        }
-        throttledLog.warn(
-            "claim_client_error_" + httpEx.statusCode(),
-            "CLAIM client error (HTTP {}) for taskId={}, giving up: {}",
-            httpEx.statusCode(),
-            message.taskId(),
-            ExceptionLogSummary.of(httpEx));
-        recordClientError(httpEx.statusCode(), message.taskId(), "CLAIM");
-        return ClaimResult.notClaimed();
-      } catch (IOException ioEx) {
-        if (attempt >= maxRetries) {
-          throttledLog.warn(
-              "claim_transport_exhausted",
-              "CLAIM transport error for taskId={} exhausted {} retries, giving up: {}",
-              message.taskId(),
-              maxRetries,
-              ExceptionLogSummary.of(ioEx));
-          return ClaimResult.notClaimed();
-        }
-        long delayMs = backoffWithJitter(baseDelayMs, attempt);
-        log.info(
-            "CLAIM transport error for taskId={} attempt={} retry in {}ms: {}",
-            message.taskId(),
-            attempt + 1,
-            delayMs,
-            ExceptionLogSummary.of(ioEx));
-        if (!sleepInterruptible(delayMs)) {
-          return ClaimResult.notClaimed();
-        }
-        attempt++;
-      }
-    }
-  }
-
-  /** REPORT 仅对 5xx 与传输错误重试；失败交回任务协调层，由 lease 超时触发平台重派。 */
-  void reportWithRetry(Long taskId, String idempotencyKey, Map<String, Object> body)
-      throws IOException {
-    int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
-    Duration configuredBaseDelay = config.getClaimRetryBaseDelay();
-    long configuredBaseDelayMillis = configuredBaseDelay.toMillis();
-    long baseDelayMs = Math.max(0L, configuredBaseDelayMillis);
-    int attempt = 0;
-    while (true) {
-      try {
-        httpClient.report(taskId, idempotencyKey, body);
-        return;
-      } catch (PlatformHttpException httpEx) {
-        if (httpEx.isAuthError()) {
-          markFatal(
-              "REPORT auth failed (HTTP {}) for taskId={}, marking dispatcher FATAL — "
-                  + "check apiKey / tenant ACL; SDK will reject subsequent dispatches",
-              httpEx.statusCode(),
-              taskId);
-          throw httpEx;
-        }
-        if (!httpEx.isServerError()) {
-          throw httpEx;
-        }
-        if (attempt >= maxRetries) {
-          throttledLog.warn(
-              "report_5xx_exhausted",
-              "REPORT 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
-                  + "(orchestrator will reclaim on lease timeout)",
-              httpEx.statusCode(),
-              taskId,
-              maxRetries);
-          throw httpEx;
-        }
-        long delayMs = backoffWithJitter(baseDelayMs, attempt);
-        log.info(
-            "REPORT 5xx (HTTP {}) for taskId={} attempt={} retry in {}ms",
-            httpEx.statusCode(),
-            taskId,
-            attempt + 1,
-            delayMs);
-        if (!sleepInterruptible(delayMs)) {
-          throw new IOException("report retry interrupted for taskId=" + taskId);
-        }
-        attempt++;
-      } catch (IOException ioEx) {
-        if (attempt >= maxRetries) {
-          throttledLog.warn(
-              "report_transport_exhausted",
-              "REPORT transport error for taskId={} exhausted {} retries, giving up: {}",
-              taskId,
-              maxRetries,
-              ExceptionLogSummary.of(ioEx));
-          throw ioEx;
-        }
-        long delayMs = backoffWithJitter(baseDelayMs, attempt);
-        log.info(
-            "REPORT transport error for taskId={} attempt={} retry in {}ms: {}",
-            taskId,
-            attempt + 1,
-            delayMs,
-            ExceptionLogSummary.of(ioEx));
-        if (!sleepInterruptible(delayMs)) {
-          throw new IOException("report retry interrupted for taskId=" + taskId, ioEx);
-        }
-        attempt++;
-      }
-    }
-  }
-
-  /** Error 原样向调用线程传播，SDK 健康状态同时失败，阻止线程池重建后继续接收新派发。 */
-  void markExecutionFatal(Error executionError) {
-    String errorType = executionError.getClass().getSimpleName();
-    markFatal("SDK execution ended with {}; dispatcher is FATAL until restart", errorType);
-  }
-
-  void recordClientError(int statusCode, long taskId, String operation) {
-    int threshold = config.getClientErrorFailFastThreshold();
-    int count = consecutiveClientErrors.incrementAndGet();
-    boolean enteredFatalState =
-        threshold > 0 && count >= threshold && fatal.compareAndSet(false, true);
-    if (enteredFatalState) {
-      log.error(
-          "{} client error (HTTP {}) for taskId={} reached {} consecutive 4xx — marking dispatcher"
-              + " FATAL; likely SDK/contract mismatch, SDK will reject subsequent dispatches and"
-              + " report unhealthy for K8s restart",
-          operation,
-          statusCode,
-          taskId,
-          count);
-    }
-  }
-
-  /** 指数退避并加入 0～10% jitter，避免多个 worker 在同一时间再次撞击控制面。 */
-  static long backoffWithJitter(long baseDelayMs, int attempt) {
-    if (baseDelayMs <= 0L) {
-      return 0L;
-    }
-    long safeAttempt = Math.min(attempt, 30);
-    long exponentialMs = baseDelayMs << safeAttempt;
-    long jitterCeilExclusive = Math.max(1L, exponentialMs / 10L);
-    long jitterMs = ThreadLocalRandom.current().nextLong(0L, jitterCeilExclusive);
-    return exponentialMs + jitterMs;
-  }
-
-  private void markFatal(String message, Object... args) {
-    fatal.set(true);
-    log.error(message, args);
-  }
-
-  private static boolean sleepInterruptible(long millis) {
-    if (millis <= 0L) {
-      return true;
-    }
-    try {
-      Thread.sleep(millis);
-      return true;
-    } catch (InterruptedException interrupted) {
-      Thread.currentThread().interrupt();
-      return false;
-    }
-  }
-
-  record ClaimResult(
-      boolean claimed, boolean commitSafe, PlatformHttpClient.TaskClaimResponse response) {
-    static ClaimResult notClaimed() {
-      return new ClaimResult(false, false, new PlatformHttpClient.TaskClaimResponse(null));
+    TaskDispatcherRetryCoordinator(
+            BatchPlatformClientConfig config, PlatformHttpClient httpClient, ThrottledLogger throttledLog) {
+        this.config = config;
+        this.httpClient = httpClient;
+        this.throttledLog = throttledLog;
     }
 
-    static ClaimResult alreadyHandled() {
-      return new ClaimResult(false, true, new PlatformHttpClient.TaskClaimResponse(null));
+    boolean isFatal() {
+        return fatal.get();
     }
-  }
+
+    int consecutiveClientErrors() {
+        return consecutiveClientErrors.get();
+    }
+
+    void resetClientErrorStreak() {
+        consecutiveClientErrors.set(0);
+    }
+
+    /** CLAIM 遇到平台瞬时错误时有限重试；鉴权错误和已被竞争者占有的任务直接结束。 */
+    ClaimResult claimWithRetry(TaskDispatchMessage message, String idempotencyKey, Map<String, Object> body) {
+        int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
+        Duration configuredBaseDelay = config.getClaimRetryBaseDelay();
+        long configuredBaseDelayMillis = configuredBaseDelay.toMillis();
+        long baseDelayMs = Math.max(0L, configuredBaseDelayMillis);
+        int attempt = 0;
+        while (true) {
+            try {
+                PlatformHttpClient.TaskClaimResponse response =
+                        httpClient.claim(message.taskId(), idempotencyKey, body);
+                resetClientErrorStreak();
+                PlatformHttpClient.TaskClaimResponse claimResponse =
+                        EmptyChecks.isNull(response) ? new PlatformHttpClient.TaskClaimResponse(null) : response;
+                return new ClaimResult(true, true, claimResponse);
+            } catch (PlatformHttpException httpEx) {
+                if (httpEx.isAuthError()) {
+                    markFatal(
+                            "CLAIM auth failed (HTTP {}) for taskId={}, marking dispatcher FATAL — "
+                                    + "check apiKey / tenant ACL; SDK will reject subsequent dispatches",
+                            httpEx.statusCode(),
+                            message.taskId());
+                    return ClaimResult.notClaimed();
+                }
+                if (httpEx.isConflict()) {
+                    log.info("CLAIM 409 for taskId={} (taken by peer), skipping", message.taskId());
+                    return ClaimResult.alreadyHandled();
+                }
+                if (httpEx.statusCode() == 404) {
+                    // 历史派单的任务可能已终态或清理，正常不可领取不应累计为客户端协议故障。
+                    log.debug("CLAIM 404 for taskId={} (no longer claimable), skipping", message.taskId());
+                    return ClaimResult.alreadyHandled();
+                }
+                if (httpEx.isServerError()) {
+                    if (attempt >= maxRetries) {
+                        throttledLog.warn(
+                                "claim_5xx_exhausted",
+                                "CLAIM 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
+                                        + "(message remains uncommitted for retry)",
+                                httpEx.statusCode(),
+                                message.taskId(),
+                                maxRetries);
+                        return ClaimResult.notClaimed();
+                    }
+                    long delayMs = backoffWithJitter(baseDelayMs, attempt);
+                    log.info(
+                            "CLAIM 5xx (HTTP {}) for taskId={} attempt={} retry in {}ms",
+                            httpEx.statusCode(),
+                            message.taskId(),
+                            attempt + 1,
+                            delayMs);
+                    if (!sleepInterruptible(delayMs)) {
+                        return ClaimResult.notClaimed();
+                    }
+                    attempt++;
+                    continue;
+                }
+                throttledLog.warn(
+                        "claim_client_error_" + httpEx.statusCode(),
+                        "CLAIM client error (HTTP {}) for taskId={}, giving up: {}",
+                        httpEx.statusCode(),
+                        message.taskId(),
+                        ExceptionLogSummary.of(httpEx));
+                recordClientError(httpEx.statusCode(), message.taskId(), "CLAIM");
+                return ClaimResult.notClaimed();
+            } catch (IOException ioEx) {
+                if (attempt >= maxRetries) {
+                    throttledLog.warn(
+                            "claim_transport_exhausted",
+                            "CLAIM transport error for taskId={} exhausted {} retries, giving up: {}",
+                            message.taskId(),
+                            maxRetries,
+                            ExceptionLogSummary.of(ioEx));
+                    return ClaimResult.notClaimed();
+                }
+                long delayMs = backoffWithJitter(baseDelayMs, attempt);
+                log.info(
+                        "CLAIM transport error for taskId={} attempt={} retry in {}ms: {}",
+                        message.taskId(),
+                        attempt + 1,
+                        delayMs,
+                        ExceptionLogSummary.of(ioEx));
+                if (!sleepInterruptible(delayMs)) {
+                    return ClaimResult.notClaimed();
+                }
+                attempt++;
+            }
+        }
+    }
+
+    /** REPORT 仅对 5xx 与传输错误重试；失败交回任务协调层，由 lease 超时触发平台重派。 */
+    void reportWithRetry(Long taskId, String idempotencyKey, Map<String, Object> body) throws IOException {
+        int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
+        Duration configuredBaseDelay = config.getClaimRetryBaseDelay();
+        long configuredBaseDelayMillis = configuredBaseDelay.toMillis();
+        long baseDelayMs = Math.max(0L, configuredBaseDelayMillis);
+        int attempt = 0;
+        while (true) {
+            try {
+                httpClient.report(taskId, idempotencyKey, body);
+                return;
+            } catch (PlatformHttpException httpEx) {
+                if (httpEx.isAuthError()) {
+                    markFatal(
+                            "REPORT auth failed (HTTP {}) for taskId={}, marking dispatcher FATAL — "
+                                    + "check apiKey / tenant ACL; SDK will reject subsequent dispatches",
+                            httpEx.statusCode(),
+                            taskId);
+                    throw httpEx;
+                }
+                if (!httpEx.isServerError()) {
+                    throw httpEx;
+                }
+                if (attempt >= maxRetries) {
+                    throttledLog.warn(
+                            "report_5xx_exhausted",
+                            "REPORT 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
+                                    + "(orchestrator will reclaim on lease timeout)",
+                            httpEx.statusCode(),
+                            taskId,
+                            maxRetries);
+                    throw httpEx;
+                }
+                long delayMs = backoffWithJitter(baseDelayMs, attempt);
+                log.info(
+                        "REPORT 5xx (HTTP {}) for taskId={} attempt={} retry in {}ms",
+                        httpEx.statusCode(),
+                        taskId,
+                        attempt + 1,
+                        delayMs);
+                if (!sleepInterruptible(delayMs)) {
+                    throw new IOException("report retry interrupted for taskId=" + taskId);
+                }
+                attempt++;
+            } catch (IOException ioEx) {
+                if (attempt >= maxRetries) {
+                    throttledLog.warn(
+                            "report_transport_exhausted",
+                            "REPORT transport error for taskId={} exhausted {} retries, giving up: {}",
+                            taskId,
+                            maxRetries,
+                            ExceptionLogSummary.of(ioEx));
+                    throw ioEx;
+                }
+                long delayMs = backoffWithJitter(baseDelayMs, attempt);
+                log.info(
+                        "REPORT transport error for taskId={} attempt={} retry in {}ms: {}",
+                        taskId,
+                        attempt + 1,
+                        delayMs,
+                        ExceptionLogSummary.of(ioEx));
+                if (!sleepInterruptible(delayMs)) {
+                    throw new IOException("report retry interrupted for taskId=" + taskId, ioEx);
+                }
+                attempt++;
+            }
+        }
+    }
+
+    /** Error 原样向调用线程传播，SDK 健康状态同时失败，阻止线程池重建后继续接收新派发。 */
+    void markExecutionFatal(Error executionError) {
+        String errorType = executionError.getClass().getSimpleName();
+        markFatal("SDK execution ended with {}; dispatcher is FATAL until restart", errorType);
+    }
+
+    void recordClientError(int statusCode, long taskId, String operation) {
+        int threshold = config.getClientErrorFailFastThreshold();
+        int count = consecutiveClientErrors.incrementAndGet();
+        boolean enteredFatalState = threshold > 0 && count >= threshold && fatal.compareAndSet(false, true);
+        if (enteredFatalState) {
+            log.error(
+                    "{} client error (HTTP {}) for taskId={} reached {} consecutive 4xx — marking dispatcher"
+                            + " FATAL; likely SDK/contract mismatch, SDK will reject subsequent dispatches and"
+                            + " report unhealthy for K8s restart",
+                    operation,
+                    statusCode,
+                    taskId,
+                    count);
+        }
+    }
+
+    /** 指数退避并加入 0～10% jitter，避免多个 worker 在同一时间再次撞击控制面。 */
+    static long backoffWithJitter(long baseDelayMs, int attempt) {
+        if (baseDelayMs <= 0L) {
+            return 0L;
+        }
+        long safeAttempt = Math.min(attempt, 30);
+        long exponentialMs = baseDelayMs << safeAttempt;
+        long jitterCeilExclusive = Math.max(1L, exponentialMs / 10L);
+        long jitterMs = ThreadLocalRandom.current().nextLong(0L, jitterCeilExclusive);
+        return exponentialMs + jitterMs;
+    }
+
+    private void markFatal(String message, Object... args) {
+        fatal.set(true);
+        log.error(message, args);
+    }
+
+    private static boolean sleepInterruptible(long millis) {
+        if (millis <= 0L) {
+            return true;
+        }
+        try {
+            Thread.sleep(millis);
+            return true;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    record ClaimResult(boolean claimed, boolean commitSafe, PlatformHttpClient.TaskClaimResponse response) {
+        static ClaimResult notClaimed() {
+            return new ClaimResult(false, false, new PlatformHttpClient.TaskClaimResponse(null));
+        }
+
+        static ClaimResult alreadyHandled() {
+            return new ClaimResult(false, true, new PlatformHttpClient.TaskClaimResponse(null));
+        }
+    }
 }

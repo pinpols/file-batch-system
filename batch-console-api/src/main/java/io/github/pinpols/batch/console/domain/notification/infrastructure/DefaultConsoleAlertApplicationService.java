@@ -24,82 +24,79 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplicationService {
 
-  private final TenantIdResolver tenantGuard;
-  private final AlertEventMapper alertEventMapper;
-  private final ConsoleRealtimeEventPort domainEventPublisher;
-  private final AlertmanagerSilenceBridge alertmanagerSilenceBridge;
+    private final TenantIdResolver tenantGuard;
+    private final AlertEventMapper alertEventMapper;
+    private final ConsoleRealtimeEventPort domainEventPublisher;
+    private final AlertmanagerSilenceBridge alertmanagerSilenceBridge;
 
-  @Override
-  @Transactional
-  public ConsoleAlertActionResponse ack(
-      Long alertId, AlertActionRequest request, String idempotencyKey) {
-    return transition(alertId, request, AlertStatus.ACKED.code(), "ack");
-  }
-
-  @Override
-  @Transactional
-  public ConsoleAlertActionResponse silence(
-      Long alertId, AlertActionRequest request, String idempotencyKey) {
-    return transition(alertId, request, AlertStatus.SUPPRESSED.code(), "silence");
-  }
-
-  @Override
-  @Transactional
-  public ConsoleAlertActionResponse close(
-      Long alertId, AlertActionRequest request, String idempotencyKey) {
-    return transition(alertId, request, AlertStatus.CLOSED.code(), "close");
-  }
-
-  private ConsoleAlertActionResponse transition(
-      Long alertId, AlertActionRequest request, String nextStatus, String action) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
-    Guard.requireFound(entity, "alert event not found");
-    String currentStatus = normalizeStatus(entity.getStatus());
-    if (nextStatus.equals(currentStatus)) {
-      return new ConsoleAlertActionResponse(alertId, tenantId, action, currentStatus);
+    @Override
+    @Transactional
+    public ConsoleAlertActionResponse ack(Long alertId, AlertActionRequest request, String idempotencyKey) {
+        return transition(alertId, request, AlertStatus.ACKED.code(), "ack");
     }
-    // 走到这里 nextStatus 必不等于 currentStatus（上方已同态早返），
-    // 因此 closed 状态下任何状态迁移都禁止：告警关闭后不可再打开/确认/静默。
-    if (AlertStatus.CLOSED.code().equals(currentStatus)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.alert.closed_cannot_reopen");
-    }
-    int updated = alertEventMapper.updateStatus(tenantId, alertId, nextStatus);
-    if (updated == 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.alert.update_status_failed");
-    }
-    domainEventPublisher.publishChanged(tenantId, "alerts", "alert-updated");
-    domainEventPublisher.publishSummaryRefresh(tenantId);
-    // silence/close → AM 单向桥接(迁移方案 §3.5,失败隔离):fbs 状态与审计已在事务内落定,桥接尽力而为。
-    bridgeToAlertmanager(entity, nextStatus);
-    return new ConsoleAlertActionResponse(alertId, tenantId, action, nextStatus);
-  }
 
-  private void bridgeToAlertmanager(AlertEventEntity entity, String nextStatus) {
-    // M-1:与 emit 直连一致,桥接放事务提交后 —— 提交失败时 AM 不该已收到 silence/resolved。
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCommit() {
-          dispatchBridge(entity, nextStatus);
+    @Override
+    @Transactional
+    public ConsoleAlertActionResponse silence(Long alertId, AlertActionRequest request, String idempotencyKey) {
+        return transition(alertId, request, AlertStatus.SUPPRESSED.code(), "silence");
+    }
+
+    @Override
+    @Transactional
+    public ConsoleAlertActionResponse close(Long alertId, AlertActionRequest request, String idempotencyKey) {
+        return transition(alertId, request, AlertStatus.CLOSED.code(), "close");
+    }
+
+    private ConsoleAlertActionResponse transition(
+            Long alertId, AlertActionRequest request, String nextStatus, String action) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
+        Guard.requireFound(entity, "alert event not found");
+        String currentStatus = normalizeStatus(entity.getStatus());
+        if (nextStatus.equals(currentStatus)) {
+            return new ConsoleAlertActionResponse(alertId, tenantId, action, currentStatus);
         }
-      });
-    } else {
-      dispatchBridge(entity, nextStatus);
+        // 走到这里 nextStatus 必不等于 currentStatus（上方已同态早返），
+        // 因此 closed 状态下任何状态迁移都禁止：告警关闭后不可再打开/确认/静默。
+        if (AlertStatus.CLOSED.code().equals(currentStatus)) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.alert.closed_cannot_reopen");
+        }
+        int updated = alertEventMapper.updateStatus(tenantId, alertId, nextStatus);
+        if (updated == 0) {
+            throw BizException.of(ResultCode.STATE_CONFLICT, "error.alert.update_status_failed");
+        }
+        domainEventPublisher.publishChanged(tenantId, "alerts", "alert-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
+        // silence/close → AM 单向桥接(迁移方案 §3.5,失败隔离):fbs 状态与审计已在事务内落定,桥接尽力而为。
+        bridgeToAlertmanager(entity, nextStatus);
+        return new ConsoleAlertActionResponse(alertId, tenantId, action, nextStatus);
     }
-  }
 
-  private void dispatchBridge(AlertEventEntity entity, String nextStatus) {
-    if (AlertStatus.SUPPRESSED.code().equals(nextStatus)) {
-      // 时长走桥接默认(AlertActionRequest 无时长维度);后续如需可扩展请求字段。
-      alertmanagerSilenceBridge.silence(entity, null);
-    } else if (AlertStatus.CLOSED.code().equals(nextStatus)) {
-      // AM 按 fingerprint 区分实体；同组其它告警不应阻止当前实体解除。
-      alertmanagerSilenceBridge.resolve(entity);
+    private void bridgeToAlertmanager(AlertEventEntity entity, String nextStatus) {
+        // M-1:与 emit 直连一致,桥接放事务提交后 —— 提交失败时 AM 不该已收到 silence/resolved。
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    dispatchBridge(entity, nextStatus);
+                }
+            });
+        } else {
+            dispatchBridge(entity, nextStatus);
+        }
     }
-  }
 
-  private String normalizeStatus(String status) {
-    return Texts.hasText(status) ? status.toUpperCase() : AlertStatus.OPEN.code();
-  }
+    private void dispatchBridge(AlertEventEntity entity, String nextStatus) {
+        if (AlertStatus.SUPPRESSED.code().equals(nextStatus)) {
+            // 时长走桥接默认(AlertActionRequest 无时长维度);后续如需可扩展请求字段。
+            alertmanagerSilenceBridge.silence(entity, null);
+        } else if (AlertStatus.CLOSED.code().equals(nextStatus)) {
+            // AM 按 fingerprint 区分实体；同组其它告警不应阻止当前实体解除。
+            alertmanagerSilenceBridge.resolve(entity);
+        }
+    }
+
+    private String normalizeStatus(String status) {
+        return Texts.hasText(status) ? status.toUpperCase() : AlertStatus.OPEN.code();
+    }
 }

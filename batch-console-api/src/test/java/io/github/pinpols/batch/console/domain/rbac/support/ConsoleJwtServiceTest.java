@@ -48,323 +48,314 @@ import org.springframework.security.oauth2.jwt.JwtException;
 @DisplayName("控制台令牌服务:签发与验证往返, 发行方与会话版本校验, 生产环境密钥强度启动期强校验")
 class ConsoleJwtServiceTest {
 
-  private static final String STRONG_SECRET = "a-very-strong-jwt-secret-2026-with-enough-entropy";
+    private static final String STRONG_SECRET = "a-very-strong-jwt-secret-2026-with-enough-entropy";
 
-  private ConsoleSecurityProperties properties;
-  private ConsoleSessionRegistry sessionRegistry;
-  private MockEnvironment environment;
+    private ConsoleSecurityProperties properties;
+    private ConsoleSessionRegistry sessionRegistry;
+    private MockEnvironment environment;
 
-  @BeforeEach
-  void setUp() {
-    properties = new ConsoleSecurityProperties();
-    properties.setJwtIssuer("test-issuer");
-    properties.setJwtSecret(STRONG_SECRET);
-    properties.setJwtTtl(Duration.ofHours(1));
-    properties.setJwtClockSkew(Duration.ofSeconds(30));
-    sessionRegistry = mock(ConsoleSessionRegistry.class);
-    when(sessionRegistry.currentSessionVersion(anyString(), anyString())).thenReturn(1L);
-    when(sessionRegistry.isCurrentSession(anyString(), anyString(), anyLong())).thenReturn(true);
-    environment = new MockEnvironment();
-  }
+    @BeforeEach
+    void setUp() {
+        properties = new ConsoleSecurityProperties();
+        properties.setJwtIssuer("test-issuer");
+        properties.setJwtSecret(STRONG_SECRET);
+        properties.setJwtTtl(Duration.ofHours(1));
+        properties.setJwtClockSkew(Duration.ofSeconds(30));
+        sessionRegistry = mock(ConsoleSessionRegistry.class);
+        when(sessionRegistry.currentSessionVersion(anyString(), anyString())).thenReturn(1L);
+        when(sessionRegistry.isCurrentSession(anyString(), anyString(), anyLong()))
+                .thenReturn(true);
+        environment = new MockEnvironment();
+    }
 
-  private ConsoleJwtService newService() {
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    // 模拟 Spring PostConstruct
-    svc.validateSecuritySecrets();
-    return svc;
-  }
+    private ConsoleJwtService newService() {
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
+        // 模拟 Spring PostConstruct
+        svc.validateSecuritySecrets();
+        return svc;
+    }
 
-  // ─── 完整签发 + 验证往返 ────────────────────────────────────────────
+    // ─── 完整签发 + 验证往返 ────────────────────────────────────────────
 
-  @Test
-  @DisplayName("签发验证往返:令牌非空且解析出用户名, 租户与角色集合一致")
-  void issueAndAuthenticate_roundtripSucceeds() {
-    ConsoleJwtService svc = newService();
-    ConsoleAuthTokenResponse resp =
-        svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN", "ROLE_AUDITOR"));
-    assertThat(resp.accessToken()).isNotBlank();
+    @Test
+    @DisplayName("签发验证往返:令牌非空且解析出用户名, 租户与角色集合一致")
+    void issueAndAuthenticate_roundtripSucceeds() {
+        ConsoleJwtService svc = newService();
+        ConsoleAuthTokenResponse resp = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN", "ROLE_AUDITOR"));
+        assertThat(resp.accessToken()).isNotBlank();
 
-    ConsolePrincipal principal = svc.authenticate(resp.accessToken());
-    assertThat(principal.username()).isEqualTo("alice");
-    assertThat(principal.tenantId()).isEqualTo("t1");
-    assertThat(principal.authorities()).containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_AUDITOR");
-  }
+        ConsolePrincipal principal = svc.authenticate(resp.accessToken());
+        assertThat(principal.username()).isEqualTo("alice");
+        assertThat(principal.tenantId()).isEqualTo("t1");
+        assertThat(principal.authorities()).containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_AUDITOR");
+    }
 
-  @Test
-  @DisplayName("签发入参:租户标识为空时抛出业务异常")
-  void issueToken_blankTenantId_throws() {
-    ConsoleJwtService svc = newService();
-    assertThatThrownBy(() -> svc.issueToken("alice", "", Set.of("ROLE_ADMIN")))
-        .isInstanceOf(BizException.class);
-  }
+    @Test
+    @DisplayName("签发入参:租户标识为空时抛出业务异常")
+    void issueToken_blankTenantId_throws() {
+        ConsoleJwtService svc = newService();
+        assertThatThrownBy(() -> svc.issueToken("alice", "", Set.of("ROLE_ADMIN")))
+                .isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("令牌过期但处于时钟容忍期时，注销后仍须拒绝认证")
-  void revoke_expiredTokenStillWithinClockSkew() {
-    properties.setJwtTtl(Duration.ofSeconds(2));
-    Set<String> revoked = new HashSet<>();
-    ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
-    when(store.isRevoked(anyString()))
-        .thenAnswer(invocation -> revoked.contains(invocation.getArgument(0)));
-    doAnswer(invocation -> {
-          revoked.add(invocation.getArgument(0));
-          return null;
-        })
-        .when(store)
-        .revoke(anyString(), any(Duration.class));
-    @SuppressWarnings("unchecked")
-    ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(store);
-    ConsoleJwtService svc =
-        new ConsoleJwtService(properties, sessionRegistry, environment, provider);
-    ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
+    @Test
+    @DisplayName("令牌过期但处于时钟容忍期时，注销后仍须拒绝认证")
+    void revoke_expiredTokenStillWithinClockSkew() {
+        properties.setJwtTtl(Duration.ofSeconds(2));
+        Set<String> revoked = new HashSet<>();
+        ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
+        when(store.isRevoked(anyString())).thenAnswer(invocation -> revoked.contains(invocation.getArgument(0)));
+        doAnswer(invocation -> {
+                    revoked.add(invocation.getArgument(0));
+                    return null;
+                })
+                .when(store)
+                .revoke(anyString(), any(Duration.class));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(store);
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+        ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
 
-    await().atMost(Duration.ofSeconds(8)).until(() -> Instant.now().isAfter(token.expiresAt()));
-    assertThat(svc.authenticate(token.accessToken()).username()).isEqualTo("alice");
-    svc.revoke(token.accessToken());
-    assertThatThrownBy(() -> svc.authenticate(token.accessToken()))
-        .isInstanceOf(BizException.class);
-  }
+        await().atMost(Duration.ofSeconds(8)).until(() -> Instant.now().isAfter(token.expiresAt()));
+        assertThat(svc.authenticate(token.accessToken()).username()).isEqualTo("alice");
+        svc.revoke(token.accessToken());
+        assertThatThrownBy(() -> svc.authenticate(token.accessToken())).isInstanceOf(BizException.class);
+    }
 
-  @Test
-  @DisplayName("注销存储期限覆盖令牌有效期及其时钟容忍期")
-  void revoke_ttlIncludesClockSkew() {
-    ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
-    @SuppressWarnings("unchecked")
-    ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(store);
-    ConsoleJwtService svc =
-        new ConsoleJwtService(properties, sessionRegistry, environment, provider);
-    ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
+    @Test
+    @DisplayName("注销存储期限覆盖令牌有效期及其时钟容忍期")
+    void revoke_ttlIncludesClockSkew() {
+        ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(store);
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+        ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
 
-    svc.revoke(token.accessToken());
+        svc.revoke(token.accessToken());
 
-    ArgumentCaptor<Duration> ttl = ArgumentCaptor.forClass(Duration.class);
-    verify(store).revoke(anyString(), ttl.capture());
-    Instant acceptanceEnd =
-        token.expiresAt().truncatedTo(ChronoUnit.SECONDS).plus(properties.getJwtClockSkew());
-    assertThat(Instant.now().plus(ttl.getValue())).isAfter(acceptanceEnd);
-  }
+        ArgumentCaptor<Duration> ttl = ArgumentCaptor.forClass(Duration.class);
+        verify(store).revoke(anyString(), ttl.capture());
+        Instant acceptanceEnd =
+                token.expiresAt().truncatedTo(ChronoUnit.SECONDS).plus(properties.getJwtClockSkew());
+        assertThat(Instant.now().plus(ttl.getValue())).isAfter(acceptanceEnd);
+    }
 
-  @Test
-  @DisplayName("零时钟容忍期按令牌自身的有效期计算撤销期限")
-  void revoke_ttlWithZeroClockSkew() {
-    properties.setJwtClockSkew(Duration.ZERO);
-    ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
-    @SuppressWarnings("unchecked")
-    ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(store);
-    ConsoleJwtService svc =
-        new ConsoleJwtService(properties, sessionRegistry, environment, provider);
-    ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
+    @Test
+    @DisplayName("零时钟容忍期按令牌自身的有效期计算撤销期限")
+    void revoke_ttlWithZeroClockSkew() {
+        properties.setJwtClockSkew(Duration.ZERO);
+        ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(store);
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+        ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
 
-    svc.revoke(token.accessToken());
+        svc.revoke(token.accessToken());
 
-    ArgumentCaptor<Duration> ttl = ArgumentCaptor.forClass(Duration.class);
-    verify(store).revoke(anyString(), ttl.capture());
-    Instant acceptanceEnd = token.expiresAt().truncatedTo(ChronoUnit.SECONDS);
-    Instant storageEnd = Instant.now().plus(ttl.getValue());
-    assertThat(storageEnd).isAfter(acceptanceEnd).isBefore(acceptanceEnd.plusSeconds(3));
-  }
+        ArgumentCaptor<Duration> ttl = ArgumentCaptor.forClass(Duration.class);
+        verify(store).revoke(anyString(), ttl.capture());
+        Instant acceptanceEnd = token.expiresAt().truncatedTo(ChronoUnit.SECONDS);
+        Instant storageEnd = Instant.now().plus(ttl.getValue());
+        assertThat(storageEnd).isAfter(acceptanceEnd).isBefore(acceptanceEnd.plusSeconds(3));
+    }
 
-  @Test
-  @DisplayName("撤销存储失败时异常向调用方传播")
-  void revoke_storageFailurePropagates() {
-    ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
-    doThrow(new IllegalStateException("撤销存储不可用"))
-        .when(store)
-        .revoke(anyString(), any(Duration.class));
-    @SuppressWarnings("unchecked")
-    ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(store);
-    ConsoleJwtService svc =
-        new ConsoleJwtService(properties, sessionRegistry, environment, provider);
-    ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
+    @Test
+    @DisplayName("撤销存储失败时异常向调用方传播")
+    void revoke_storageFailurePropagates() {
+        ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
+        doThrow(new IllegalStateException("撤销存储不可用")).when(store).revoke(anyString(), any(Duration.class));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(store);
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+        ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
 
-    assertThatThrownBy(() -> svc.revoke(token.accessToken()))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("撤销存储不可用");
-  }
+        assertThatThrownBy(() -> svc.revoke(token.accessToken()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("撤销存储不可用");
+    }
 
-  // ─── tokenType 门 ────────────────────────────────────────────────────
+    // ─── tokenType 门 ────────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("发行方校验:其它发行方签发的令牌被拒, 报无效令牌")
-  void authenticate_wrongIssuerRejected() {
-    properties.setJwtIssuer("other-issuer");
-    ConsoleJwtService otherSvc = newService();
-    String fakeToken = otherSvc.issueToken("eve", "t1", Set.of("ROLE_ADMIN")).accessToken();
+    @Test
+    @DisplayName("发行方校验:其它发行方签发的令牌被拒, 报无效令牌")
+    void authenticate_wrongIssuerRejected() {
+        properties.setJwtIssuer("other-issuer");
+        ConsoleJwtService otherSvc = newService();
+        String fakeToken =
+                otherSvc.issueToken("eve", "t1", Set.of("ROLE_ADMIN")).accessToken();
 
-    properties.setJwtIssuer("test-issuer");
-    // 清缓存使 PostConstruct 重建
-    ConsoleJwtService victimSvc = newService();
-    assertThatThrownBy(() -> victimSvc.authenticate(fakeToken))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.console_jwt.invalid");
-  }
+        properties.setJwtIssuer("test-issuer");
+        // 清缓存使 PostConstruct 重建
+        ConsoleJwtService victimSvc = newService();
+        assertThatThrownBy(() -> victimSvc.authenticate(fakeToken))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.console_jwt.invalid");
+    }
 
-  // ─── singleSession ───────────────────────────────────────────────────
+    // ─── singleSession ───────────────────────────────────────────────────
 
-  @Test
-  @DisplayName("会话版本:单会话开启后旧版本令牌被拒, 报无效令牌")
-  void authenticate_singleSession_oldVersionRejected() {
-    properties.setSingleSessionEnabled(true);
-    when(sessionRegistry.currentSessionVersion("alice", "t1")).thenReturn(5L);
-    when(sessionRegistry.isCurrentSession("alice", "t1", 5L)).thenReturn(true);
+    @Test
+    @DisplayName("会话版本:单会话开启后旧版本令牌被拒, 报无效令牌")
+    void authenticate_singleSession_oldVersionRejected() {
+        properties.setSingleSessionEnabled(true);
+        when(sessionRegistry.currentSessionVersion("alice", "t1")).thenReturn(5L);
+        when(sessionRegistry.isCurrentSession("alice", "t1", 5L)).thenReturn(true);
 
-    ConsoleJwtService svc = newService();
-    String oldToken = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"), 3L).accessToken();
+        ConsoleJwtService svc = newService();
+        String oldToken =
+                svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"), 3L).accessToken();
 
-    // 模拟新登录后 sessionVersion 推进到 5，旧 token 的 v=3 不再是 current
-    when(sessionRegistry.isCurrentSession("alice", "t1", 3L)).thenReturn(false);
+        // 模拟新登录后 sessionVersion 推进到 5，旧 token 的 v=3 不再是 current
+        when(sessionRegistry.isCurrentSession("alice", "t1", 3L)).thenReturn(false);
 
-    assertThatThrownBy(() -> svc.authenticate(oldToken))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.console_jwt.invalid");
-  }
+        assertThatThrownBy(() -> svc.authenticate(oldToken))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.console_jwt.invalid");
+    }
 
-  @Test
-  @DisplayName("会话版本:当前版本令牌通过校验, 解析出用户名")
-  void authenticate_singleSession_currentVersionAccepted() {
-    properties.setSingleSessionEnabled(true);
-    when(sessionRegistry.currentSessionVersion("alice", "t1")).thenReturn(7L);
-    when(sessionRegistry.isCurrentSession("alice", "t1", 7L)).thenReturn(true);
+    @Test
+    @DisplayName("会话版本:当前版本令牌通过校验, 解析出用户名")
+    void authenticate_singleSession_currentVersionAccepted() {
+        properties.setSingleSessionEnabled(true);
+        when(sessionRegistry.currentSessionVersion("alice", "t1")).thenReturn(7L);
+        when(sessionRegistry.isCurrentSession("alice", "t1", 7L)).thenReturn(true);
 
-    ConsoleJwtService svc = newService();
-    String token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"), 7L).accessToken();
+        ConsoleJwtService svc = newService();
+        String token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"), 7L).accessToken();
 
-    ConsolePrincipal principal = svc.authenticate(token);
-    assertThat(principal.username()).isEqualTo("alice");
-  }
+        ConsolePrincipal principal = svc.authenticate(token);
+        assertThat(principal.username()).isEqualTo("alice");
+    }
 
-  // ─── prod profile 启动期强校验 ───────────────────────────────────────
+    // ─── prod profile 启动期强校验 ───────────────────────────────────────
 
-  @Test
-  @DisplayName("生产密钥:仍为占位符时启动期抛出状态异常")
-  void prodProfile_placeholderJwtSecret_fatalAtConstruct() {
-    environment.setActiveProfiles("prod");
-    properties.setJwtSecret("change-me-jwt-secret-not-real");
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    assertThatThrownBy(() -> svc.validateSecuritySecrets())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("still contains the default placeholder");
-  }
+    @Test
+    @DisplayName("生产密钥:仍为占位符时启动期抛出状态异常")
+    void prodProfile_placeholderJwtSecret_fatalAtConstruct() {
+        environment.setActiveProfiles("prod");
+        properties.setJwtSecret("change-me-jwt-secret-not-real");
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
+        assertThatThrownBy(() -> svc.validateSecuritySecrets())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("still contains the default placeholder");
+    }
 
-  @Test
-  @DisplayName("生产密钥:长度不足 32 字符时启动期抛出状态异常")
-  void prodProfile_jwtSecretTooShort_fatalAtConstruct() {
-    environment.setActiveProfiles("prod");
-    properties.setJwtSecret("only31charsxxxxxxxxxxxxxxxxxxxx"); // 31 < 32
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    assertThatThrownBy(() -> svc.validateSecuritySecrets())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("shorter than 32 characters");
-  }
+    @Test
+    @DisplayName("生产密钥:长度不足 32 字符时启动期抛出状态异常")
+    void prodProfile_jwtSecretTooShort_fatalAtConstruct() {
+        environment.setActiveProfiles("prod");
+        properties.setJwtSecret("only31charsxxxxxxxxxxxxxxxxxxxx"); // 31 < 32
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
+        assertThatThrownBy(() -> svc.validateSecuritySecrets())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("shorter than 32 characters");
+    }
 
-  @Test
-  @DisplayName("生产密钥:密钥为空时启动期抛出状态异常")
-  void prodProfile_blankJwtSecret_fatalAtConstruct() {
-    environment.setActiveProfiles("prod");
-    properties.setJwtSecret("");
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    assertThatThrownBy(() -> svc.validateSecuritySecrets())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("is empty");
-  }
+    @Test
+    @DisplayName("生产密钥:密钥为空时启动期抛出状态异常")
+    void prodProfile_blankJwtSecret_fatalAtConstruct() {
+        environment.setActiveProfiles("prod");
+        properties.setJwtSecret("");
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
+        assertThatThrownBy(() -> svc.validateSecuritySecrets())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("is empty");
+    }
 
-  @Test
-  @DisplayName("类生产环境:预发配置同样执行强校验并抛出状态异常")
-  void stagingProfile_isProductionLike_strongCheck() {
-    environment.setActiveProfiles("staging");
-    properties.setJwtSecret("change-me-jwt");
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    assertThatThrownBy(() -> svc.validateSecuritySecrets())
-        .isInstanceOf(IllegalStateException.class);
-  }
+    @Test
+    @DisplayName("类生产环境:预发配置同样执行强校验并抛出状态异常")
+    void stagingProfile_isProductionLike_strongCheck() {
+        environment.setActiveProfiles("staging");
+        properties.setJwtSecret("change-me-jwt");
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
+        assertThatThrownBy(() -> svc.validateSecuritySecrets()).isInstanceOf(IllegalStateException.class);
+    }
 
-  @Test
-  @DisplayName("本地环境:弱密钥不强制, 启动校验通过")
-  void localProfile_weakSecretAllowed() {
-    environment.setActiveProfiles("local");
-    properties.setJwtSecret("change-me-anything-goes-locally");
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
+    @Test
+    @DisplayName("本地环境:弱密钥不强制, 启动校验通过")
+    void localProfile_weakSecretAllowed() {
+        environment.setActiveProfiles("local");
+        properties.setJwtSecret("change-me-anything-goes-locally");
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
 
-    assertThatCode(() -> svc.validateSecuritySecrets()).doesNotThrowAnyException();
-  }
+        assertThatCode(() -> svc.validateSecuritySecrets()).doesNotThrowAnyException();
+    }
 
-  // ─── encoder/decoder 缓存 + clock skew ───────────────────────────────
+    // ─── encoder/decoder 缓存 + clock skew ───────────────────────────────
 
-  @Test
-  @DisplayName("延迟初始化:未执行启动校验时仍可签发并解析令牌")
-  void decoder_lazyInitAppliesClockSkewValidator() {
-    // R4-P2-6：fallback 路径也必须带 JwtTimestampValidator(skew)；通过完整签发→验证 roundtrip 间接验证 decoder 可用
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    // 不调 PostConstruct，强制走 lazy fallback
-    String token = svc.issueToken("bob", "t2", Set.of("ROLE_TENANT_USER")).accessToken();
-    ConsolePrincipal principal = svc.authenticate(token);
-    assertThat(principal.username()).isEqualTo("bob");
-  }
+    @Test
+    @DisplayName("延迟初始化:未执行启动校验时仍可签发并解析令牌")
+    void decoder_lazyInitAppliesClockSkewValidator() {
+        // R4-P2-6：fallback 路径也必须带 JwtTimestampValidator(skew)；通过完整签发→验证 roundtrip 间接验证 decoder 可用
+        ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
+        // 不调 PostConstruct，强制走 lazy fallback
+        String token = svc.issueToken("bob", "t2", Set.of("ROLE_TENANT_USER")).accessToken();
+        ConsolePrincipal principal = svc.authenticate(token);
+        assertThat(principal.username()).isEqualTo("bob");
+    }
 
-  @Test
-  @DisplayName("角色集合:空集合时拒绝签发, 报角色集合非法")
-  void issueToken_emptyAuthorities_rejected() {
-    ConsoleJwtService svc = newService();
-    assertThatThrownBy(() -> svc.issueToken("alice", "t1", Set.of()))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.account.invalid_role_set");
-  }
+    @Test
+    @DisplayName("角色集合:空集合时拒绝签发, 报角色集合非法")
+    void issueToken_emptyAuthorities_rejected() {
+        ConsoleJwtService svc = newService();
+        assertThatThrownBy(() -> svc.issueToken("alice", "t1", Set.of()))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.account.invalid_role_set");
+    }
 
-  @Test
-  @DisplayName("角色集合:空值时拒绝签发, 报角色集合非法")
-  void issueToken_nullAuthorities_rejected() {
-    ConsoleJwtService svc = newService();
-    assertThatThrownBy(() -> svc.issueToken("alice", "t1", null))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.account.invalid_role_set");
-  }
+    @Test
+    @DisplayName("角色集合:空值时拒绝签发, 报角色集合非法")
+    void issueToken_nullAuthorities_rejected() {
+        ConsoleJwtService svc = newService();
+        assertThatThrownBy(() -> svc.issueToken("alice", "t1", null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.account.invalid_role_set");
+    }
 
-  @Test
-  @DisplayName("角色集合:含历史或未知角色时拒绝签发, 报角色集合非法")
-  void issueToken_legacyOrUnknownAuthorities_rejected() {
-    ConsoleJwtService svc = newService();
-    assertThatThrownBy(() -> svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN", "ROLE_USER")))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("error.account.invalid_role_set");
-  }
+    @Test
+    @DisplayName("角色集合:含历史或未知角色时拒绝签发, 报角色集合非法")
+    void issueToken_legacyOrUnknownAuthorities_rejected() {
+        ConsoleJwtService svc = newService();
+        assertThatThrownBy(() -> svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN", "ROLE_USER")))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("error.account.invalid_role_set");
+    }
 
-  // ─── 不可使用其它 issuer 签发的 JWT ──────────────────────────────────
+    // ─── 不可使用其它 issuer 签发的 JWT ──────────────────────────────────
 
-  @Test
-  @DisplayName("非法令牌:格式错误的内容解析失败并抛出令牌异常")
-  void authenticate_garbageTokenRejected() {
-    ConsoleJwtService svc = newService();
-    assertThatThrownBy(() -> svc.authenticate("not.a.jwt")).isInstanceOf(JwtException.class);
-    // ConsoleJwtService 直接调 decoder.decode，Nimbus 抛 JwtException；不被包装成 BizException
-    // —— 这是已知行为，调用方（ConsoleAuthenticationFilter）catch 后转 ResultCode.UNAUTHORIZED
-  }
+    @Test
+    @DisplayName("非法令牌:格式错误的内容解析失败并抛出令牌异常")
+    void authenticate_garbageTokenRejected() {
+        ConsoleJwtService svc = newService();
+        assertThatThrownBy(() -> svc.authenticate("not.a.jwt")).isInstanceOf(JwtException.class);
+        // ConsoleJwtService 直接调 decoder.decode，Nimbus 抛 JwtException；不被包装成 BizException
+        // —— 这是已知行为，调用方（ConsoleAuthenticationFilter）catch 后转 ResultCode.UNAUTHORIZED
+    }
 
-  @Test
-  @DisplayName("JWT 密钥轮换:旧实例与新实例不互认令牌,轮换后的新令牌只由新密钥验签")
-  void rotateSigningSecret_invalidatesOldTokensAndRejectsMixedKeyInstances() {
-    ConsoleJwtService oldKeyInstance = newService();
-    String oldToken =
-        oldKeyInstance.issueToken("alice", "t1", Set.of("ROLE_ADMIN")).accessToken();
+    @Test
+    @DisplayName("JWT 密钥轮换:旧实例与新实例不互认令牌,轮换后的新令牌只由新密钥验签")
+    void rotateSigningSecret_invalidatesOldTokensAndRejectsMixedKeyInstances() {
+        ConsoleJwtService oldKeyInstance = newService();
+        String oldToken =
+                oldKeyInstance.issueToken("alice", "t1", Set.of("ROLE_ADMIN")).accessToken();
 
-    properties.setJwtSecret("rotated-signing-secret-2026-with-sufficient-entropy");
-    ConsoleJwtService newKeyInstance = newService();
-    String newToken =
-        newKeyInstance.issueToken("alice", "t1", Set.of("ROLE_ADMIN")).accessToken();
+        properties.setJwtSecret("rotated-signing-secret-2026-with-sufficient-entropy");
+        ConsoleJwtService newKeyInstance = newService();
+        String newToken =
+                newKeyInstance.issueToken("alice", "t1", Set.of("ROLE_ADMIN")).accessToken();
 
-    assertThatThrownBy(() -> newKeyInstance.authenticate(oldToken))
-        .isInstanceOf(JwtException.class);
-    assertThatCode(() -> newKeyInstance.authenticate(newToken)).doesNotThrowAnyException();
-    assertThatThrownBy(() -> oldKeyInstance.authenticate(newToken))
-        .isInstanceOf(JwtException.class);
-  }
+        assertThatThrownBy(() -> newKeyInstance.authenticate(oldToken)).isInstanceOf(JwtException.class);
+        assertThatCode(() -> newKeyInstance.authenticate(newToken)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> oldKeyInstance.authenticate(newToken)).isInstanceOf(JwtException.class);
+    }
 
-  // 必要的 ArgumentMatchers any() 使用以保留 lenient stubbing 模式
-  @SuppressWarnings("unused")
-  private void unused() {
-    any();
-  }
+    // 必要的 ArgumentMatchers any() 使用以保留 lenient stubbing 模式
+    @SuppressWarnings("unused")
+    private void unused() {
+        any();
+    }
 }

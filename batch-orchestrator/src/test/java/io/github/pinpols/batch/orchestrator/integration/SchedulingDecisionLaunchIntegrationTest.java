@@ -22,73 +22,69 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 集成测试：{@link io.github.pinpols.batch.orchestrator.scheduler.ResourceScheduler} 资源门控 —— 仅当有 ONLINE
  * 状态的 Worker 匹配 {@code worker_group} 时才派发 outbox；否则分区保持等待且不生成派发 outbox。
  */
-@SpringBootTest(
-    classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("调度决策派发,验证存在在线执行节点匹配作业组时才产生派发事件,否则分区保持等待且不派发")
 class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1";
+    private static final String TENANT = "t1";
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+    @Autowired
+    private WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Test
-  @DisplayName("存在在线执行节点匹配作业组时,派发事件至少落库一条")
-  void shouldCreateOutboxWhenWorkerMatchesWorkerGroup() {
-    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
-        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.SCHEDULED);
+    @Test
+    @DisplayName("存在在线执行节点匹配作业组时,派发事件至少落库一条")
+    void shouldCreateOutboxWhenWorkerMatchesWorkerGroup() {
+        WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+                jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.SCHEDULED);
 
-    LaunchRequest schedRequest = LaunchRequest.builder()
-        .tenantId(TENANT)
-        .workflowDefinitionId(seed.workflowDefinitionId())
-        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
-        .triggerType(TriggerType.SCHEDULED)
-        .requestId(seed.requestId())
-        .traceId("tr-sched")
-        .params(Map.of())
-        .build();
-    workflowRunLaunchService.launch(schedRequest);
+        LaunchRequest schedRequest = LaunchRequest.builder()
+                .tenantId(TENANT)
+                .workflowDefinitionId(seed.workflowDefinitionId())
+                .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
+                .triggerType(TriggerType.SCHEDULED)
+                .requestId(seed.requestId())
+                .traceId("tr-sched")
+                .params(Map.of())
+                .build();
+        workflowRunLaunchService.launch(schedRequest);
 
-    assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT"))
-        .isGreaterThanOrEqualTo(1L);
-  }
+        assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT"))
+                .isGreaterThanOrEqualTo(1L);
+    }
 
-  @Test
-  @DisplayName("无在线执行节点匹配作业组时,新增派发事件为零且分区保持等待")
-  void shouldNotWriteDispatchOutboxWhenNoOnlineWorkerForWorkerGroup() {
-    long outboxBefore =
-        LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
-    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
-        jdbcTemplate, TENANT, "IMPORT", "NO_WORKER_GROUP_" + System.nanoTime(), TriggerType.API);
+    @Test
+    @DisplayName("无在线执行节点匹配作业组时,新增派发事件为零且分区保持等待")
+    void shouldNotWriteDispatchOutboxWhenNoOnlineWorkerForWorkerGroup() {
+        long outboxBefore = LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
+        WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
+                jdbcTemplate, TENANT, "IMPORT", "NO_WORKER_GROUP_" + System.nanoTime(), TriggerType.API);
 
-    LaunchRequest blockRequest = LaunchRequest.builder()
-        .tenantId(TENANT)
-        .workflowDefinitionId(seed.workflowDefinitionId())
-        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
-        .triggerType(TriggerType.API)
-        .requestId(seed.requestId())
-        .traceId("tr-block")
-        .params(Map.of())
-        .build();
-    var response = workflowRunLaunchService.launch(blockRequest);
+        LaunchRequest blockRequest = LaunchRequest.builder()
+                .tenantId(TENANT)
+                .workflowDefinitionId(seed.workflowDefinitionId())
+                .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
+                .triggerType(TriggerType.API)
+                .requestId(seed.requestId())
+                .traceId("tr-block")
+                .params(Map.of())
+                .build();
+        var response = workflowRunLaunchService.launch(blockRequest);
 
-    long outboxAfter =
-        LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
-    assertThat(outboxAfter - outboxBefore).isZero();
+        long outboxAfter = LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
+        assertThat(outboxAfter - outboxBefore).isZero();
 
-    String waitingPartitionCountSql = """
+        String waitingPartitionCountSql = """
             select count(*)::int from batch.job_partition jp
             join batch.job_instance ji on ji.id = jp.job_instance_id
             where ji.tenant_id = ? and ji.id = ? and jp.partition_status = 'WAITING'
             """;
-    Long launchedJobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
-        jdbcTemplate, TENANT, response.instanceNo());
-    Integer waiting = jdbcTemplate.queryForObject(
-        waitingPartitionCountSql, Integer.class, TENANT, launchedJobInstanceId);
-    assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
-  }
+        Long launchedJobInstanceId =
+                LaunchIntegrationFixture.selectDispatchedJobInstanceId(jdbcTemplate, TENANT, response.instanceNo());
+        Integer waiting =
+                jdbcTemplate.queryForObject(waitingPartitionCountSql, Integer.class, TENANT, launchedJobInstanceId);
+        assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
+    }
 }

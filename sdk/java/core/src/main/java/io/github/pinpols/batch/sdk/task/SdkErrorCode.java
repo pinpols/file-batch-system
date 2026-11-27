@@ -15,32 +15,32 @@ package io.github.pinpols.batch.sdk.task;
  */
 public final class SdkErrorCode {
 
-  private SdkErrorCode() {}
+    private SdkErrorCode() {}
 
-  /** 成功(对应 {@code success=true};errorCode 通常不下发)。 */
-  public static final String SUCCESS = "SUCCESS";
+    /** 成功(对应 {@code success=true};errorCode 通常不下发)。 */
+    public static final String SUCCESS = "SUCCESS";
 
-  /** 执行超 task 配置 timeout(failureClass TRANSIENT)。 */
-  public static final String TIMEOUT = "TIMEOUT";
+    /** 执行超 task 配置 timeout(failureClass TRANSIENT)。 */
+    public static final String TIMEOUT = "TIMEOUT";
 
-  /**
-   * cancelRequested 触发的协作式主动停(failureClass TERMINAL_USER);与 {@link SdkTaskResult#CANCELLED_CODE}
-   * 同值。
-   */
-  public static final String CANCELLED = "CANCELLED";
+    /**
+     * cancelRequested 触发的协作式主动停(failureClass TERMINAL_USER);与 {@link SdkTaskResult#CANCELLED_CODE}
+     * 同值。
+     */
+    public static final String CANCELLED = "CANCELLED";
 
-  /** 被强制杀停(failureClass TERMINAL_USER)。 */
-  public static final String KILLED = "KILLED";
+    /** 被强制杀停(failureClass TERMINAL_USER)。 */
+    public static final String KILLED = "KILLED";
 
-  /** SensitiveDataValidator 拦截 / 凭据放进 parameters(failureClass TERMINAL_CONFIG)。 */
-  public static final String SECURITY_REJECTED = "SECURITY_REJECTED";
+    /** SensitiveDataValidator 拦截 / 凭据放进 parameters(failureClass TERMINAL_CONFIG)。 */
+    public static final String SECURITY_REJECTED = "SECURITY_REJECTED";
 
-  /** 业务逻辑抛异常的默认回退分类(failureClass BUSINESS)—— 未捕获 handler 异常统一映射到此。 */
-  public static final String EXECUTION_FAILED = "EXECUTION_FAILED";
+    /** 业务逻辑抛异常的默认回退分类(failureClass BUSINESS)—— 未捕获 handler 异常统一映射到此。 */
+    public static final String EXECUTION_FAILED = "EXECUTION_FAILED";
 
-  /** EffectiveTaskConfig 校验失败 / 缺必填(failureClass TERMINAL_CONFIG)。 */
-  public static final String CONFIG_INVALID = "CONFIG_INVALID";
+    /** EffectiveTaskConfig 校验失败 / 缺必填(failureClass TERMINAL_CONFIG)。 */
+    public static final String CONFIG_INVALID = "CONFIG_INVALID";
 
-  /** 内存 / 磁盘 / 连接池耗尽(failureClass TRANSIENT)。 */
-  public static final String RESOURCE_EXHAUSTED = "RESOURCE_EXHAUSTED";
+    /** 内存 / 磁盘 / 连接池耗尽(failureClass TRANSIENT)。 */
+    public static final String RESOURCE_EXHAUSTED = "RESOURCE_EXHAUSTED";
 }

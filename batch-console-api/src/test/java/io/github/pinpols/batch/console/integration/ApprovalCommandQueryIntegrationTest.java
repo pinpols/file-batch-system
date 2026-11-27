@@ -15,98 +15,96 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-@SpringBootTest(
-    classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("审批命令查询映射: 状态,申请人,关键字三类过滤与配套计数口径")
 class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private ApprovalCommandMapper approvalCommandMapper;
+    @Autowired
+    private ApprovalCommandMapper approvalCommandMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-  @Test
-  @DisplayName("无数据租户: 列表查询返回空结果")
-  void shouldReturnEmptyWhenNoApprovalsExist() {
-    ApprovalCommandQuery query = new ApprovalCommandQuery();
-    query.setTenantId("no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis());
-    query.setPageRequest(new PageRequest(1, 10));
-    assertThat(approvalCommandMapper.selectByQuery(query)).isEmpty();
-  }
+    @Test
+    @DisplayName("无数据租户: 列表查询返回空结果")
+    void shouldReturnEmptyWhenNoApprovalsExist() {
+        ApprovalCommandQuery query = new ApprovalCommandQuery();
+        query.setTenantId("no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis());
+        query.setPageRequest(new PageRequest(1, 10));
+        assertThat(approvalCommandMapper.selectByQuery(query)).isEmpty();
+    }
 
-  @Test
-  @DisplayName("按状态过滤: 只返回该状态的审批单,同口径计数为 1")
-  void shouldQueryApprovalsByStatusAndCount() {
-    String tenantId = "t-approval-" + BatchDateTimeSupport.utcEpochMillis();
-    insertApproval(tenantId, "apr-1", "COMPENSATION", "COMPENSATION", "PENDING");
-    insertApproval(tenantId, "apr-2", "DOWNLOAD", "DOWNLOAD", "EXECUTED");
+    @Test
+    @DisplayName("按状态过滤: 只返回该状态的审批单,同口径计数为 1")
+    void shouldQueryApprovalsByStatusAndCount() {
+        String tenantId = "t-approval-" + BatchDateTimeSupport.utcEpochMillis();
+        insertApproval(tenantId, "apr-1", "COMPENSATION", "COMPENSATION", "PENDING");
+        insertApproval(tenantId, "apr-2", "DOWNLOAD", "DOWNLOAD", "EXECUTED");
 
-    ApprovalCommandQuery query = new ApprovalCommandQuery();
-    query.setTenantId(tenantId);
-    query.setApprovalStatus("PENDING");
-    query.setPageRequest(new PageRequest(1, 10));
+        ApprovalCommandQuery query = new ApprovalCommandQuery();
+        query.setTenantId(tenantId);
+        query.setApprovalStatus("PENDING");
+        query.setPageRequest(new PageRequest(1, 10));
 
-    assertThat(approvalCommandMapper.selectByQuery(query)).hasSize(1);
-    assertThat(approvalCommandMapper.countByStatus(tenantId, "PENDING")).isEqualTo(1);
-  }
+        assertThat(approvalCommandMapper.selectByQuery(query)).hasSize(1);
+        assertThat(approvalCommandMapper.countByStatus(tenantId, "PENDING")).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("按申请人过滤: 只返回该申请人的审批单,计数口径与列表一致")
-  void shouldQueryApprovalsByRequesterId() {
-    String tenantId = "t-approval-req-" + BatchDateTimeSupport.utcEpochMillis();
-    insertApprovalRich(tenantId, "apr-r1", "alice", "JOB", "100");
-    insertApprovalRich(tenantId, "apr-r2", "bob", "JOB", "101");
+    @Test
+    @DisplayName("按申请人过滤: 只返回该申请人的审批单,计数口径与列表一致")
+    void shouldQueryApprovalsByRequesterId() {
+        String tenantId = "t-approval-req-" + BatchDateTimeSupport.utcEpochMillis();
+        insertApprovalRich(tenantId, "apr-r1", "alice", "JOB", "100");
+        insertApprovalRich(tenantId, "apr-r2", "bob", "JOB", "101");
 
-    ApprovalCommandQuery query = new ApprovalCommandQuery();
-    query.setTenantId(tenantId);
-    query.setRequesterId("alice");
-    query.setPageRequest(new PageRequest(1, 10));
+        ApprovalCommandQuery query = new ApprovalCommandQuery();
+        query.setTenantId(tenantId);
+        query.setRequesterId("alice");
+        query.setPageRequest(new PageRequest(1, 10));
 
-    assertThat(approvalCommandMapper.selectByQuery(query)).hasSize(1);
-    assertThat(approvalCommandMapper.countByQuery(query)).isEqualTo(1);
-  }
+        assertThat(approvalCommandMapper.selectByQuery(query)).hasSize(1);
+        assertThat(approvalCommandMapper.countByQuery(query)).isEqualTo(1);
+    }
 
-  @Test
-  @DisplayName("关键字过滤: 大小写不敏感,审批单号与目标类型两列各命中一行")
-  void shouldQueryApprovalsByKeywordAcrossColumns() {
-    String tenantId = "t-approval-kw-" + BatchDateTimeSupport.utcEpochMillis();
-    insertApprovalRich(tenantId, "PAYROLL-001", "alice", "JOB", "100");
-    insertApprovalRich(tenantId, "apr-x", "bob", "PAYROLL_BATCH", "200");
-    insertApprovalRich(tenantId, "apr-y", "carol", "WORKFLOW", "300");
+    @Test
+    @DisplayName("关键字过滤: 大小写不敏感,审批单号与目标类型两列各命中一行")
+    void shouldQueryApprovalsByKeywordAcrossColumns() {
+        String tenantId = "t-approval-kw-" + BatchDateTimeSupport.utcEpochMillis();
+        insertApprovalRich(tenantId, "PAYROLL-001", "alice", "JOB", "100");
+        insertApprovalRich(tenantId, "apr-x", "bob", "PAYROLL_BATCH", "200");
+        insertApprovalRich(tenantId, "apr-y", "carol", "WORKFLOW", "300");
 
-    ApprovalCommandQuery query = new ApprovalCommandQuery();
-    query.setTenantId(tenantId);
-    query.setKeyword("payroll");
-    query.setPageRequest(new PageRequest(1, 10));
+        ApprovalCommandQuery query = new ApprovalCommandQuery();
+        query.setTenantId(tenantId);
+        query.setKeyword("payroll");
+        query.setPageRequest(new PageRequest(1, 10));
 
-    // 命中 approval_no(PAYROLL-001)与 target_type(PAYROLL_BATCH)两行,大小写不敏感
-    assertThat(approvalCommandMapper.selectByQuery(query)).hasSize(2);
-    assertThat(approvalCommandMapper.countByQuery(query)).isEqualTo(2);
-  }
+        // 命中 approval_no(PAYROLL-001)与 target_type(PAYROLL_BATCH)两行,大小写不敏感
+        assertThat(approvalCommandMapper.selectByQuery(query)).hasSize(2);
+        assertThat(approvalCommandMapper.countByQuery(query)).isEqualTo(2);
+    }
 
-  @Test
-  @DisplayName("排除类型: 普通列表去掉补跑单,计数与列表一致")
-  void shouldExcludeApprovalTypesFromListAndCount() {
-    String tenantId = "t-approval-ex-" + BatchDateTimeSupport.utcEpochMillis();
-    insertApproval(tenantId, "apr-catch", "CATCH_UP", "CATCH_UP", "PENDING");
-    insertApproval(tenantId, "apr-comp", "COMPENSATION", "COMPENSATION", "PENDING");
+    @Test
+    @DisplayName("排除类型: 普通列表去掉补跑单,计数与列表一致")
+    void shouldExcludeApprovalTypesFromListAndCount() {
+        String tenantId = "t-approval-ex-" + BatchDateTimeSupport.utcEpochMillis();
+        insertApproval(tenantId, "apr-catch", "CATCH_UP", "CATCH_UP", "PENDING");
+        insertApproval(tenantId, "apr-comp", "COMPENSATION", "COMPENSATION", "PENDING");
 
-    ApprovalCommandQuery query = new ApprovalCommandQuery();
-    query.setTenantId(tenantId);
-    query.setExcludeApprovalTypes(List.of("CATCH_UP"));
-    query.setPageRequest(new PageRequest(1, 10));
+        ApprovalCommandQuery query = new ApprovalCommandQuery();
+        query.setTenantId(tenantId);
+        query.setExcludeApprovalTypes(List.of("CATCH_UP"));
+        query.setPageRequest(new PageRequest(1, 10));
 
-    assertThat(approvalCommandMapper.selectByQuery(query))
-        .extracting(row -> row.getApprovalType())
-        .containsExactly("COMPENSATION");
-    assertThat(approvalCommandMapper.countByQuery(query)).isEqualTo(1);
-  }
+        assertThat(approvalCommandMapper.selectByQuery(query))
+                .extracting(row -> row.getApprovalType())
+                .containsExactly("COMPENSATION");
+        assertThat(approvalCommandMapper.countByQuery(query)).isEqualTo(1);
+    }
 
-  private void insertApproval(
-      String tenantId, String approvalNo, String approvalType, String actionType, String status) {
-    final String insertApprovalSql = """
+    private void insertApproval(
+            String tenantId, String approvalNo, String approvalType, String actionType, String status) {
+        final String insertApprovalSql = """
     INSERT INTO batch.approval_command
     (tenant_id, approval_no, approval_type, action_type, target_type, target_id, payload_json,
     approval_status, requester_id, source_trace_id, source_idempotency_key, approval_reason,
@@ -115,20 +113,20 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
     ?, 'u1', ?, ?, 'reason',
     now(), now())
     """;
-    jdbcTemplate.update(
-        insertApprovalSql,
-        tenantId,
-        approvalNo,
-        approvalType,
-        actionType,
-        status,
-        "trace-" + approvalNo,
-        "idem-" + approvalNo);
-  }
+        jdbcTemplate.update(
+                insertApprovalSql,
+                tenantId,
+                approvalNo,
+                approvalType,
+                actionType,
+                status,
+                "trace-" + approvalNo,
+                "idem-" + approvalNo);
+    }
 
-  private void insertApprovalRich(
-      String tenantId, String approvalNo, String requesterId, String targetType, String targetId) {
-    final String insertRichApprovalSql = """
+    private void insertApprovalRich(
+            String tenantId, String approvalNo, String requesterId, String targetType, String targetId) {
+        final String insertRichApprovalSql = """
     INSERT INTO batch.approval_command
     (tenant_id, approval_no, approval_type, action_type, target_type, target_id, payload_json,
     approval_status, requester_id, source_trace_id, source_idempotency_key, approval_reason,
@@ -137,14 +135,14 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
     'PENDING', ?, ?, ?, 'reason',
     now(), now())
     """;
-    jdbcTemplate.update(
-        insertRichApprovalSql,
-        tenantId,
-        approvalNo,
-        targetType,
-        targetId,
-        requesterId,
-        "trace-" + approvalNo,
-        "idem-" + approvalNo);
-  }
+        jdbcTemplate.update(
+                insertRichApprovalSql,
+                tenantId,
+                approvalNo,
+                targetType,
+                targetId,
+                requesterId,
+                "trace-" + approvalNo,
+                "idem-" + approvalNo);
+    }
 }
