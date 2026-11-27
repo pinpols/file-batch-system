@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.common.utils;
 
-import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-
 /** 用于告警去重的稳定指纹（租户 + 类型 + 资源范围），最长 128 字符。 */
 @SuppressWarnings("java:S2583")
 public final class AlertFingerprints {
@@ -16,22 +11,7 @@ public final class AlertFingerprints {
         String type = alertType == null ? "" : alertType;
         String resource = resourceKey == null ? "" : resourceKey;
         String raw = tenant + "|" + type + "|" + resource;
-        String fingerprintHex = sha256Hex(raw);
+        String fingerprintHex = Hashes.sha256Hex(raw);
         return fingerprintHex.substring(0, 64);
-    }
-
-    private static String sha256Hex(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-            byte[] encodedValue = value.getBytes(StandardCharsets.UTF_8);
-            byte[] hash = digest.digest(encodedValue);
-            StringBuilder builder = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                builder.append(String.format("%02x", b));
-            }
-            return builder.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
     }
 }

@@ -19,6 +19,7 @@ import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIden
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
@@ -235,7 +236,7 @@ public class ImportIngressScanner {
                 String suffix = scannerProperties.getBatchManifestSuffix();
                 boolean manifest =
                         EmptyChecks.isNotBlank(suffix) && object.key().endsWith(suffix);
-                scanRepository.observe(next, sha256(object.key()), object, manifest);
+                scanRepository.observe(next, Hashes.sha256Hex(object.key()), object, manifest);
             }
             scanRepository.saveProgress(next);
         });
@@ -288,7 +289,7 @@ public class ImportIngressScanner {
                 return null;
             }
             if (invalidChanged.get()) {
-                log.warn("批次清单暂不可用，等待处理: objectDigest={}, reason={}", sha256(observed.key()), invalidReason);
+                log.warn("批次清单暂不可用，等待处理: objectDigest={}, reason={}", Hashes.sha256Hex(observed.key()), invalidReason);
             }
             current = current.toBuilder().afterObjectId(observed.id()).build();
         }
@@ -308,7 +309,7 @@ public class ImportIngressScanner {
         }
         if (!sameVersion(observed, decision.verified())) {
             ImportIngressScanRepository repository = scanRepository;
-            String objectDigest = sha256(decision.verified().key());
+            String objectDigest = Hashes.sha256Hex(decision.verified().key());
             repository.observe(objectLease, objectDigest, decision.verified(), true);
             return;
         }
@@ -418,7 +419,7 @@ public class ImportIngressScanner {
                     "导入扫描等待权威批次清单: tenantId={}, bizDate={}, objectDigest={}, reason={}",
                     prepared.resolvedTenant(),
                     prepared.fileDate(),
-                    sha256(observed.key()),
+                    Hashes.sha256Hex(observed.key()),
                     prepared.changedWaitReason().get());
         }
         return committed;
@@ -501,7 +502,7 @@ public class ImportIngressScanner {
             scanRepository.removeObject(lease, resolution.previousId());
         } else if (EmptyChecks.isNotNull(verifiedAuthority)) {
             ImportIngressScanRepository repository = scanRepository;
-            String authorityDigest = sha256(verifiedAuthority.key());
+            String authorityDigest = Hashes.sha256Hex(verifiedAuthority.key());
             repository.observe(lease, authorityDigest, verifiedAuthority, true);
         }
         if (prepared.eligible() && scannerProperties.isBatchManifestEnabled()) {
@@ -516,7 +517,7 @@ public class ImportIngressScanner {
             scanRepository.removeObject(lease, observed.id());
         } else if (!prepared.verifiedVersion()) {
             ImportIngressScanRepository repository = scanRepository;
-            String objectDigest = sha256(verified.key());
+            String objectDigest = Hashes.sha256Hex(verified.key());
             repository.observe(lease, objectDigest, verified, prepared.batchManifestObject());
         } else {
             boolean readyToRegister = prepared.eligible()
@@ -550,7 +551,7 @@ public class ImportIngressScanner {
                 .replace("{bizDate}", bizDate.toString())
                 .replace("{bizDateCompact}", bizDate.format(DateTimeFormatter.BASIC_ISO_DATE));
         ObjectSummary latest = findExactObject(key);
-        Optional<Observed> previous = scanRepository.findObject(lease, sha256(key));
+        Optional<Observed> previous = scanRepository.findObject(lease, Hashes.sha256Hex(key));
         if (previous.isPresent() && !key.equals(previous.get().key())) {
             throw new IllegalStateException("扫描清单摘要冲突，无法安全匹配对象");
         }
@@ -726,7 +727,7 @@ public class ImportIngressScanner {
                         .thenComparing(ImportScannerProperties.ManifestBinding::getManifestKeyTemplate))
                 .toList();
         rules.put("manifestBindings", manifestBindings);
-        return sha256(writeJson(rules));
+        return Hashes.sha256Hex(writeJson(rules));
     }
 
     private record EffectiveBindings(
@@ -788,16 +789,6 @@ public class ImportIngressScanner {
 
     private boolean validResourceCode(String value) {
         return EmptyChecks.isNotNull(value) && value.matches(ValidResourceCode.REGEX);
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("无法计算扫描身份摘要", ex);
-        }
     }
 
     private String writeJson(Object value) {

@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
@@ -13,9 +13,6 @@ import io.github.pinpols.batch.console.domain.notification.param.JobPushDeviceIn
 import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.PushPayload;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -64,7 +61,7 @@ public class JobPushIntakeService {
         Object jobCode = job.get("jobCode");
         String title = "任务 " + jobCode + " " + statusLabel(state);
         String body = "tenant=" + tenant + " · instance #" + jobId;
-        String tag = "job-" + digest(eventKey);
+        String tag = "job-" + Hashes.sha256Hex(eventKey);
         String url = "/m/jobs/" + jobId + "?tenantId=" + URLEncoder.encode(tenant, StandardCharsets.UTF_8);
         PushPayload pushPayload = new PushPayload(title, body, tag, url);
         String payload = JsonUtils.toJson(pushPayload);
@@ -91,7 +88,7 @@ public class JobPushIntakeService {
                 device.getP256dhKey(),
                 device.getAuthSecret());
         String serializedFingerprint = JsonUtils.toJson(fingerprintFields);
-        return digest(serializedFingerprint);
+        return Hashes.sha256Hex(serializedFingerprint);
     }
 
     /** 推送标题只描述终态结果；其余状态原样展示状态码，便于排查上游数据。 */
@@ -104,16 +101,5 @@ public class JobPushIntakeService {
             case TERMINATED -> "已终止";
             default -> state.code();
         };
-    }
-
-    private static String digest(String value) {
-        try {
-            MessageDigest sha256 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-            byte[] inputBytes = value.getBytes(StandardCharsets.UTF_8);
-            byte[] digest = sha256.digest(inputBytes);
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 unavailable", impossible);
-        }
     }
 }

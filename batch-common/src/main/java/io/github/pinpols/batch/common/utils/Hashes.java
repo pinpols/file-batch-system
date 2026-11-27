@@ -44,4 +44,20 @@ public final class Hashes {
             return null;
         }
     }
+
+    /** SHA-256 后按小写 hex 输出完整摘要,用于幂等键、快照指纹等需要完整长度的比对。 */
+    public static String sha256Hex(String raw) {
+        return sha256Hex(raw.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** 字节形态的 SHA-256 小写 hex;文件内容或已序列化载荷直接传入,避免再包一层字符串。 */
+    public static String sha256Hex(byte[] raw) {
+        try {
+            return HexFormat.of()
+                    .formatHex(
+                            MessageDigest.getInstance(CryptoAlgorithms.SHA_256).digest(raw));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
 }
