@@ -324,6 +324,8 @@ fbs 是**批量运行控制面 + 文件/任务交付闭环**,不是通用工作�
 2. 调用侧语义不变：`allowRedisCall` → `tryAcquirePermission`，`recordSuccess` / `recordFailure` → `onSuccess` / `onError`，`isOpen` → `getState() == OPEN`。保留 `batch.console.rate_limit.redis.failure` 与 `batch.console.rate_limit.redis.circuit.open` 两个指标名和 fail-open 方向。
 3. 验收：`RedisRateLimitCircuitBreakerTest`、`ConsoleRateLimitFilterTest`、`ConsoleOidcAuthorizationRateLimitFilterTest`；补充「阈值前放行、达到阈值后短路、冷却期仅一个探针、成功后清零」用例，并核对指标名未变。
 
+> **2026-11-27 实施**：状态机改为 Resilience4j（共享 `CircuitBreakerRegistry`，实例名 `consoleRateLimitRedis`）；调用侧保留 `allowRedisCall` / `recordSuccess` / `recordFailure` / `isOpen` 四个方法，进程内不再维护计数与冷却时间。`RedisRateLimitCircuitBreakerTest` 扩为 6 个用例（阈值前放行、达到阈值、半开单探针、探测成功关闭、探测失败重开、指标名），与 `ConsoleRateLimitFilterTest`、`ConsoleOidcAuthorizationRateLimitFilterTest` 合计 24/24。
+
 ### 8.5 暂缓项的触发条件
 
 - **限流统一到 Bucket4j**：先取得 login/敏感操作的阈值清单与边界突发要求，再用同一组场景对照严格窗口与 greedy refill 的放行差异；差异可接受才进入实施。当前两套算法各自有注释说明取舍，不在本批合并。
