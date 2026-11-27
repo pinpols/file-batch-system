@@ -247,7 +247,7 @@ class DefaultConsoleAiApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("request 与 header 都缺 tenantId → INVALID_ARGUMENT（Guard.requireText）")
+    @DisplayName("request 与 header 都缺 tenantId → INVALID_ARGUMENT（Preconditions.requireText）")
     void shouldThrowInvalidArgument_whenTenantIdMissingFromBoth() {
         when(requestMetadataResolver.current()).thenReturn(meta(null, "req-1", "trace-1"));
 

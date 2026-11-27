@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.service;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
@@ -40,9 +40,9 @@ public class TriggerScheduledOccurrencePlanner {
     public int materialize(TriggerDescriptor descriptor, ScheduledFireTimeSource trigger, Instant now) {
         boolean occurrenceInputIsIncomplete = descriptor == null
                 || trigger == null
-                || EmptyChecks.isBlank(descriptor.getTenantId())
+                || EmptyValues.isBlank(descriptor.getTenantId())
                 || descriptor.getWorkflowDefinitionId() == null
-                || EmptyChecks.isBlank(descriptor.getWorkflowCode());
+                || EmptyValues.isBlank(descriptor.getWorkflowCode());
         if (occurrenceInputIsIncomplete) {
             return 0;
         }
@@ -87,7 +87,7 @@ public class TriggerScheduledOccurrencePlanner {
                 batch.clear();
             }
         }
-        if (EmptyChecks.isNotEmpty(batch)) {
+        if (EmptyValues.isNotEmpty(batch)) {
             insertBatch(descriptor, scheduleVersion, calendarCode, batch);
         }
         occurrenceMapper.supersedeFuturePlanned(

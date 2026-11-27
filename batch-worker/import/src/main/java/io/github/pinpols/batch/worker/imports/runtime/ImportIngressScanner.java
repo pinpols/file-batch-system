@@ -18,8 +18,7 @@ import io.github.pinpols.batch.common.storage.ObjectSummary;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam.FileAuditParamBuilder;
@@ -234,7 +233,7 @@ public class ImportIngressScanner {
                 }
                 String suffix = scannerProperties.getBatchManifestSuffix();
                 boolean manifest =
-                        EmptyChecks.isNotBlank(suffix) && object.key().endsWith(suffix);
+                        EmptyValues.isNotBlank(suffix) && object.key().endsWith(suffix);
                 scanRepository.observe(next, sha256(object.key()), object, manifest);
             }
             scanRepository.saveProgress(next);
@@ -321,7 +320,7 @@ public class ImportIngressScanner {
         boolean exportTrigger = parsed != null
                 && scannerProperties.getArrival().isEnabled()
                 && parsed.isManifestOnlyExport()
-                && Texts.hasText(parsed.fileGroupCode());
+                && EmptyValues.hasText(parsed.fileGroupCode());
         if (exportTrigger) {
             registerExportTrigger(snapshot(observed), parsed);
         }
@@ -427,13 +426,13 @@ public class ImportIngressScanner {
     private PreparedObject prepareObject(Lease lease, Observed observed, EffectiveBindings bindings) {
         String manifestSuffix = scannerProperties.getBatchManifestSuffix();
         boolean batchManifestObject =
-                EmptyChecks.isNotBlank(manifestSuffix) && observed.key().endsWith(manifestSuffix);
+                EmptyValues.isNotBlank(manifestSuffix) && observed.key().endsWith(manifestSuffix);
         boolean protocolObject = observed.key().endsWith(scannerProperties.getDoneFileSuffix()) || batchManifestObject;
         ObjectSummary latest = findExactObject(observed.key());
         boolean unchanged = latest != null && sameVersion(observed, latest);
         boolean eligible = !protocolObject && unchanged && stable(observed);
         String tenant = resolveTenantFromObjectName(observed.key());
-        if (!Texts.hasText(tenant)) {
+        if (!EmptyValues.hasText(tenant)) {
             tenant = workerConfiguration.tenantId();
         }
         String resolvedTenant = tenant;
@@ -447,7 +446,7 @@ public class ImportIngressScanner {
                 || (eligible && objectStore.exists(s3StorageProperties.getBucket(), marker));
         boolean alreadyRegistered = eligible
                 && done
-                && Texts.hasText(resolvedTenant)
+                && EmptyValues.hasText(resolvedTenant)
                 && fileRecords.existsFileRecordByStoragePath(
                         resolvedTenant, s3StorageProperties.getBucket(), observed.key());
         Map<String, Object> existingRecord = alreadyRegistered
@@ -534,7 +533,7 @@ public class ImportIngressScanner {
 
     private ManifestResolution resolveAuthoritativeManifest(
             Lease lease, String tenant, LocalDate bizDate, String objectName, EffectiveBindings bindings) {
-        if (!Texts.hasText(tenant) || bizDate == null) {
+        if (!EmptyValues.hasText(tenant) || bizDate == null) {
             return new ManifestResolution(null, "IDENTITY_UNRESOLVED", null, null, null);
         }
         Optional<ImportScannerProperties.ManifestBinding> binding = bindings.manifests().stream()
@@ -610,18 +609,19 @@ public class ImportIngressScanner {
             BatchManifest manifest, String waitReason, String key, ObjectSummary snapshot, Long previousId) {}
 
     private BatchManifest normalizeManifest(BatchManifest manifest, String objectName, String trustedTenant) {
-        boolean manifestOnlyExport = !Texts.hasText(trustedTenant) && manifest.isManifestOnlyExport();
-        String tenant = Texts.hasText(trustedTenant) ? trustedTenant : resolveTenantFromObjectName(objectName);
-        if (!Texts.hasText(tenant)) {
-            tenant = manifestOnlyExport && Texts.hasText(manifest.tenantId())
+        boolean manifestOnlyExport = !EmptyValues.hasText(trustedTenant) && manifest.isManifestOnlyExport();
+        String tenant = EmptyValues.hasText(trustedTenant) ? trustedTenant : resolveTenantFromObjectName(objectName);
+        if (!EmptyValues.hasText(tenant)) {
+            tenant = manifestOnlyExport && EmptyValues.hasText(manifest.tenantId())
                     ? manifest.tenantId()
                     : workerConfiguration.tenantId();
         }
-        if (!Texts.hasText(tenant) || (Texts.hasText(manifest.tenantId()) && !tenant.equals(manifest.tenantId()))) {
+        if (!EmptyValues.hasText(tenant)
+                || (EmptyValues.hasText(manifest.tenantId()) && !tenant.equals(manifest.tenantId()))) {
             return null;
         }
         LocalDate date;
-        if (Texts.hasText(manifest.bizDate())) {
+        if (EmptyValues.hasText(manifest.bizDate())) {
             date = parseManifestBizDate(manifest.bizDate());
             if (date == null && !manifestOnlyExport) {
                 return null;
@@ -746,8 +746,8 @@ public class ImportIngressScanner {
             String tenant = binding.tenantId();
             String directory = binding.objectPrefix();
             if (!binding.enabled()
-                    || !Texts.hasText(tenant)
-                    || !Texts.hasText(directory)
+                    || !EmptyValues.hasText(tenant)
+                    || !EmptyValues.hasText(directory)
                     || !directory.matches(".+/")
                     || !directory.startsWith(prefix)
                     || !seen.add(List.of(binding.type(), tenant, directory))) {
@@ -761,7 +761,7 @@ public class ImportIngressScanner {
                 value.setManifestKeyTemplate(binding.manifestKeyTemplate());
                 if (!validResourceCode(value.getFileGroupCode())
                         || !value.isManifestKeyTemplateValid()
-                        || !Texts.hasText(scannerProperties.getBatchManifestSuffix())
+                        || !EmptyValues.hasText(scannerProperties.getBatchManifestSuffix())
                         || !value.getManifestKeyTemplate().endsWith(scannerProperties.getBatchManifestSuffix())) {
                     throw new IllegalStateException("入站归属声明中的权威清单绑定无效");
                 }
@@ -806,10 +806,11 @@ public class ImportIngressScanner {
 
     private void registerExportTrigger(ObjectSnapshot snapshot, BatchManifest manifest) {
         String resolvedTenant = resolveTenantFromObjectName(snapshot.objectName());
-        if (!Texts.hasText(resolvedTenant)) {
-            resolvedTenant = Texts.hasText(manifest.tenantId()) ? manifest.tenantId() : workerConfiguration.tenantId();
+        if (!EmptyValues.hasText(resolvedTenant)) {
+            resolvedTenant =
+                    EmptyValues.hasText(manifest.tenantId()) ? manifest.tenantId() : workerConfiguration.tenantId();
         }
-        if (!Texts.hasText(resolvedTenant)) {
+        if (!EmptyValues.hasText(resolvedTenant)) {
             return;
         }
         // 幂等:trigger 记录以清单对象路径为 storage_path,已登记则跳过 → 同一导出清单只发射一次
@@ -874,7 +875,7 @@ public class ImportIngressScanner {
     }
 
     private LocalDate parseManifestBizDate(String bizDate) {
-        if (!Texts.hasText(bizDate)) {
+        if (!EmptyValues.hasText(bizDate)) {
             return null;
         }
         try {
@@ -895,7 +896,7 @@ public class ImportIngressScanner {
         if (objectName == null) {
             return "";
         }
-        String key = Texts.hasText(prefix) && objectName.startsWith(prefix)
+        String key = EmptyValues.hasText(prefix) && objectName.startsWith(prefix)
                 ? objectName.substring(prefix.length())
                 : objectName;
         int slash = key.indexOf('/');
@@ -918,15 +919,15 @@ public class ImportIngressScanner {
             return;
         }
         String manifestSuffix = scannerProperties.getBatchManifestSuffix();
-        if (EmptyChecks.isNotBlank(manifestSuffix) && snapshot.objectName().endsWith(manifestSuffix)) {
+        if (EmptyValues.isNotBlank(manifestSuffix) && snapshot.objectName().endsWith(manifestSuffix)) {
             return; // 协议清单归属不随处理开关改变，关闭时也不能落入普通数据入口。
         }
         // 多租户:从 prefix 解析 tenant;解析不到时 fallback 到 worker 自身 tenantId(兼容旧布局)
         String resolvedTenant = resolveTenantFromObjectName(snapshot.objectName());
-        if (!Texts.hasText(resolvedTenant)) {
+        if (!EmptyValues.hasText(resolvedTenant)) {
             resolvedTenant = workerConfiguration.tenantId();
         }
-        if (!Texts.hasText(resolvedTenant)) {
+        if (!EmptyValues.hasText(resolvedTenant)) {
             log.warn(
                     "import ingress scanner skipped object without tenant prefix nor fallback tenantId:"
                             + " objectName={}",
@@ -989,7 +990,9 @@ public class ImportIngressScanner {
         Map<String, Object> existing = parseRecordMetadata(fileRecord);
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("scannerAccepted", true);
-        if (scannerProperties.getArrival().isEnabled() && Texts.hasText(group) && Texts.hasText(requiredFiles)) {
+        if (scannerProperties.getArrival().isEnabled()
+                && EmptyValues.hasText(group)
+                && EmptyValues.hasText(requiredFiles)) {
             putArrivalMetadata(metadata, group, requiredFiles);
         }
         if (sidecar != null) {
@@ -1064,8 +1067,8 @@ public class ImportIngressScanner {
         String detectedAtText = detectedAt.toString();
         metadata.put("detectedAt", detectedAtText);
         boolean arrivalGroupCanBeRecorded = scannerProperties.getArrival().isEnabled()
-                && Texts.hasText(effectiveGroupCode)
-                && Texts.hasText(effectiveRequiredFileSet);
+                && EmptyValues.hasText(effectiveGroupCode)
+                && EmptyValues.hasText(effectiveRequiredFileSet);
         if (arrivalGroupCanBeRecorded) {
             putArrivalMetadata(metadata, effectiveGroupCode, effectiveRequiredFileSet);
         }
@@ -1092,7 +1095,7 @@ public class ImportIngressScanner {
                 .charset(StandardCharsets.UTF_8.name())
                 .fileSizeBytes(snapshot.size());
         String inputChecksumType =
-                manifest != null && Texts.hasText(manifest.checksumType()) ? manifest.checksumType() : "NONE";
+                manifest != null && EmptyValues.hasText(manifest.checksumType()) ? manifest.checksumType() : "NONE";
         inputFileRecordBuilder
                 .checksumType(inputChecksumType)
                 .checksumValue(manifest == null ? null : manifest.checksumValue())
@@ -1122,8 +1125,9 @@ public class ImportIngressScanner {
         String fileName = baseName(snapshot.objectName());
         String group = (String) metadata.get("fileGroupCode");
         String requiredFiles = (String) metadata.get(KEY_REQUIRED_FILE_SET);
-        boolean arrivalGroupAuditCanBeRecorded =
-                scannerProperties.getArrival().isEnabled() && Texts.hasText(group) && Texts.hasText(requiredFiles);
+        boolean arrivalGroupAuditCanBeRecorded = scannerProperties.getArrival().isEnabled()
+                && EmptyValues.hasText(group)
+                && EmptyValues.hasText(requiredFiles);
         if (arrivalGroupAuditCanBeRecorded) {
             FileAuditParamBuilder arrivalAuditBuilder = FileAuditParam.builder()
                     .fileId(fileId)
@@ -1183,7 +1187,7 @@ public class ImportIngressScanner {
         metadata.put("manifestSchemaVersion", manifest.schemaVersion());
         metadata.put(
                 "manifestChecksumScope",
-                Texts.hasText(manifest.checksumScope()) ? manifest.checksumScope() : "RAW_OBJECT");
+                EmptyValues.hasText(manifest.checksumScope()) ? manifest.checksumScope() : "RAW_OBJECT");
         metadata.put("integrityState", FileIntegrityState.VERIFIED.code());
         Instant integrityVerifiedAt = BatchDateTimeSupport.utcNow();
         String integrityVerifiedAtText = integrityVerifiedAt.toString();
@@ -1198,7 +1202,7 @@ public class ImportIngressScanner {
         if (fromName != null) {
             return fromName;
         }
-        if (!Texts.hasText(scannerProperties.getDefaultBizDate())) {
+        if (!EmptyValues.hasText(scannerProperties.getDefaultBizDate())) {
             log.warn(
                     "import ingress scanner skipped object without bizDatePattern match and no"
                             + " defaultBizDate: objectName={}, bizDatePattern={}",
@@ -1223,7 +1227,7 @@ public class ImportIngressScanner {
 
     private LocalDate parseBizDateFromObjectName(String objectName) {
         String pattern = scannerProperties.getBizDatePattern();
-        if (!Texts.hasText(pattern) || objectName == null) {
+        if (!EmptyValues.hasText(pattern) || objectName == null) {
             return null;
         }
         try {
@@ -1232,7 +1236,7 @@ public class ImportIngressScanner {
                 return null;
             }
             String token = extractBizDateToken(matcher);
-            if (EmptyChecks.isBlank(token)) {
+            if (EmptyValues.isBlank(token)) {
                 return null;
             }
             return LocalDate.parse(token, DateTimeFormatter.BASIC_ISO_DATE);
@@ -1335,7 +1339,7 @@ public class ImportIngressScanner {
         if (manifest.sizeBytes() < 0) {
             return false;
         }
-        if (!Texts.hasText(manifest.checksumType())) {
+        if (!EmptyValues.hasText(manifest.checksumType())) {
             return false;
         }
         Set<String> supportedChecksumTypes = Set.of("SHA-256", "SHA256");
@@ -1344,10 +1348,10 @@ public class ImportIngressScanner {
         if (!supportedChecksumTypes.contains(normalizedChecksumType)) {
             return false;
         }
-        if (!Texts.hasText(manifest.checksumValue())) {
+        if (!EmptyValues.hasText(manifest.checksumValue())) {
             return false;
         }
-        boolean checksumScopeHasText = Texts.hasText(manifest.checksumScope());
+        boolean checksumScopeHasText = EmptyValues.hasText(manifest.checksumScope());
         String checksumScope = checksumScopeHasText ? manifest.checksumScope().trim() : "RAW_OBJECT";
         if (!"RAW_OBJECT".equalsIgnoreCase(checksumScope)) {
             return false;
@@ -1423,7 +1427,7 @@ public class ImportIngressScanner {
         }
         Map<String, Object> fileRecord = fileRecords.loadFileRecordByStoragePath(
                 tenantId, s3StorageProperties.getBucket(), snapshot.objectName());
-        if (EmptyChecks.isEmpty(fileRecord)) {
+        if (EmptyValues.isEmpty(fileRecord)) {
             return;
         }
         Long fileId = PlatformRuntimeValues.toLong(fileRecord.get("id"));
@@ -1479,7 +1483,7 @@ public class ImportIngressScanner {
                 .targetRefFor(fileName)
                 .ifPresent(targetRef -> putMetadataValue(
                         metadata, existingMetadata, "bundleTargetRef", targetRef, onlyMissingOrChanged));
-        if (Texts.hasText(matchedBatch.workflowCode())) {
+        if (EmptyValues.hasText(matchedBatch.workflowCode())) {
             putMetadataValue(
                     metadata,
                     existingMetadata,
@@ -1508,7 +1512,7 @@ public class ImportIngressScanner {
             return false;
         }
         String requiredFileSet = String.valueOf(value);
-        return Texts.hasText(requiredFileSet);
+        return EmptyValues.hasText(requiredFileSet);
     }
 
     private Map<String, Object> parseRecordMetadata(Map<String, Object> fileRecord) {
@@ -1528,11 +1532,11 @@ public class ImportIngressScanner {
     private BatchManifest matchBatchManifest(List<BatchManifest> manifests, String tenantId, String fileName) {
         for (BatchManifest m : manifests) {
             boolean manifestFileGroupIsIncomplete =
-                    m.requiredFiles() == null || m.requiredFiles().isEmpty() || !Texts.hasText(m.fileGroupCode());
+                    m.requiredFiles() == null || m.requiredFiles().isEmpty() || !EmptyValues.hasText(m.fileGroupCode());
             if (manifestFileGroupIsIncomplete) {
                 continue;
             }
-            if (Texts.hasText(m.tenantId()) && !m.tenantId().equals(tenantId)) {
+            if (EmptyValues.hasText(m.tenantId()) && !m.tenantId().equals(tenantId)) {
                 continue;
             }
             if (m.requiredFiles().contains(fileName)) {

@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunFinishCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunKey;
@@ -127,7 +127,7 @@ final class TaskOutcomeDagProgressor {
         WorkflowNodeRunEntity nodeRun = workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
                 ctx.workflowRun().getId(), ctx.currentNodeCode());
         String protectedPayload = nodeRun == null ? null : nodeRun.getSourcePayloadProtected();
-        if (EmptyChecks.isNotBlank(protectedPayload)) {
+        if (EmptyValues.isNotBlank(protectedPayload)) {
             return secretPayloadProtector.reveal(protectedPayload);
         }
         return null;
@@ -179,7 +179,7 @@ final class TaskOutcomeDagProgressor {
     private String resolveCurrentNodeType(JobTaskEntity task) {
         String nodeType = TaskOutcomePayloadSupport.payloadStringValue(
                 task == null ? null : task.getTaskPayload(), "workflowNodeType");
-        return EmptyChecks.isBlank(nodeType) ? WorkflowNodeType.TASK.code() : nodeType;
+        return EmptyValues.isBlank(nodeType) ? WorkflowNodeType.TASK.code() : nodeType;
     }
 
     @Builder

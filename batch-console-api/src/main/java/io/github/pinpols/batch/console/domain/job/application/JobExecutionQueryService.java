@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
 import io.github.pinpols.batch.common.enums.SystemPipelineDefinition;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.file.FilePipelineProgressSnapshotService;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.JobExecutionProgressResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.JobExecutionProgressResponse.Stage;
@@ -100,7 +100,7 @@ public class JobExecutionQueryService {
             return stages;
         }
         List<PipelineStepProgressSnapshot> liveSteps = filePipelineProgress.stepsAuthorized(tenant, pipelineId);
-        if (EmptyChecks.isEmpty(liveSteps)) return stages;
+        if (EmptyValues.isEmpty(liveSteps)) return stages;
         Map<Long, PipelineStepProgressSnapshot> byId =
                 liveSteps.stream().collect(Collectors.toMap(PipelineStepProgressSnapshot::stepId, Function.identity()));
         return stages.stream()

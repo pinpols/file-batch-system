@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -21,10 +21,10 @@ final class BatchDayCatchUpProgress {
     record Item(String jobCode, String sourceKey, ItemStatus status, String referenceNo) {
 
         Item {
-            if (!Texts.hasText(jobCode) || !Texts.hasText(sourceKey) || status == null) {
+            if (!EmptyValues.hasText(jobCode) || !EmptyValues.hasText(sourceKey) || status == null) {
                 throw new IllegalArgumentException("invalid catch-up item identity");
             }
-            if ((status == ItemStatus.ACCEPTED && !Texts.hasText(referenceNo))
+            if ((status == ItemStatus.ACCEPTED && !EmptyValues.hasText(referenceNo))
                     || (status != ItemStatus.ACCEPTED && referenceNo != null)) {
                 throw new IllegalArgumentException("invalid catch-up receipt");
             }
@@ -65,7 +65,7 @@ final class BatchDayCatchUpProgress {
     /** 调用前必须核验回执与原请求的租户、来源键和完整业务载荷一致。 */
     static List<Item> accept(List<Item> items, String sourceKey, String referenceNo) {
         validate(items);
-        if (!Texts.hasText(referenceNo)) {
+        if (!EmptyValues.hasText(referenceNo)) {
             throw new IllegalArgumentException("catch-up receipt is required");
         }
         int index = find(items, sourceKey);

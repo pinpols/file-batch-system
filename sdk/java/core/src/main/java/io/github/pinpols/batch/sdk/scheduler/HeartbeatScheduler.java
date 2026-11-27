@@ -4,9 +4,9 @@ import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.client.WorkerIdentity;
 import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -177,7 +177,7 @@ public class HeartbeatScheduler implements AutoCloseable {
     }
 
     private static void putIfPresent(Map<String, Object> body, String key, String value) {
-        if (EmptyChecks.isNotBlank(value)) {
+        if (SdkEmptyValues.isNotBlank(value)) {
             body.put(key, value);
         }
     }

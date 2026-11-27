@@ -2,7 +2,7 @@ package io.github.pinpols.batch.common.health;
 
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectListing;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -43,7 +43,7 @@ public class ObjectStoreStartupCheck implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        if (EmptyChecks.isBlank(bucket)) {
+        if (EmptyValues.isBlank(bucket)) {
             throw new IllegalStateException(
                     "object store startup check: bucket is not configured (batch.storage.s3.bucket)");
         }
@@ -75,7 +75,7 @@ public class ObjectStoreStartupCheck implements ApplicationRunner {
                 throw fail("list 未列出刚写入的探针对象", key, null);
             }
             String presignedUrl = objectStore.presign(bucket, key, Duration.ofMinutes(1));
-            if (EmptyChecks.isBlank(presignedUrl)) {
+            if (EmptyValues.isBlank(presignedUrl)) {
                 throw fail("presign 返回空 URL", key, null);
             }
             log.info(

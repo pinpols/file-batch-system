@@ -2,7 +2,7 @@ package io.github.pinpols.batch.sdk.checkpoint;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -142,7 +142,7 @@ public final class JdbcSdkCheckpoint implements SdkCheckpoint {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> readBreakPosition(String json) throws JsonProcessingException {
-        if (EmptyChecks.isBlank(json)) {
+        if (SdkEmptyValues.isBlank(json)) {
             return Map.of();
         }
         return objectMapper.readValue(json, Map.class);

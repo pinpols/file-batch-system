@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.readiness;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessService;
 import io.github.pinpols.batch.orchestrator.domain.command.ReadinessWaitHandoverCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReadinessWaitEntity;
@@ -49,9 +48,9 @@ public class ReadinessWaitService {
     /** 接管一条 readiness 等待；幂等（同一 fire 身份只登记一次）。 */
     public boolean handover(ReadinessWaitHandoverCommand command) {
         boolean identityIsIncomplete = command == null
-                || !Texts.hasText(command.tenantId())
+                || !EmptyValues.hasText(command.tenantId())
                 || command.workflowDefinitionId() == null
-                || EmptyChecks.isEmpty(command.dependsOnJobCodes())
+                || EmptyValues.isEmpty(command.dependsOnJobCodes())
                 || command.bizDate() == null
                 || command.scheduledFireTime() == null
                 || command.deadline() == null;
@@ -82,7 +81,7 @@ public class ReadinessWaitService {
     /** 单轮扫描；返回本轮释放/超窗计数。 */
     public SweepOutcome sweep(int limit) {
         List<ReadinessWaitEntity> pendingWaits = readinessWaitMapper.selectDue(Math.max(1, limit));
-        if (EmptyChecks.isEmpty(pendingWaits)) {
+        if (EmptyValues.isEmpty(pendingWaits)) {
             return new SweepOutcome(0, 0, 0);
         }
         Instant now = BatchDateTimeSupport.utcNow();
@@ -169,7 +168,7 @@ public class ReadinessWaitService {
 
     /** 正常 fire 成功后由 Trigger 回调取消等待，避免重复恢复启动。 */
     public boolean cancel(String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {
-        if (!Texts.hasText(tenantId) || workflowDefinitionId == null || scheduledFireTime == null) {
+        if (!EmptyValues.hasText(tenantId) || workflowDefinitionId == null || scheduledFireTime == null) {
             return false;
         }
         List<ReadinessWaitEntity> matches =
@@ -202,16 +201,16 @@ public class ReadinessWaitService {
                 return false;
             }
         }
-        return EmptyChecks.isNotEmpty(dependencies);
+        return EmptyValues.isNotEmpty(dependencies);
     }
 
     private List<String> splitDependencies(String joinedDependencies) {
-        if (!Texts.hasText(joinedDependencies)) {
+        if (!EmptyValues.hasText(joinedDependencies)) {
             return List.of();
         }
         return Arrays.stream(joinedDependencies.split(","))
                 .map(String::trim)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .distinct()
                 .toList();
     }
@@ -219,7 +218,7 @@ public class ReadinessWaitService {
     private String normalizeDependencies(List<String> dependencies) {
         return dependencies.stream()
                 .map(String::trim)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .distinct()
                 .collect(Collectors.joining(","));
     }

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.job.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.job.entity.JobInstanceEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
@@ -54,7 +54,7 @@ public class ConsoleSelfServiceJobService {
         String tenantId = tenantGuard.resolveTenant(param.tenantId());
         String targetInstanceNo = param.targetInstanceNo();
         boolean jobCompensationTargetIsInvalid =
-                !"JOB".equalsIgnoreCase(param.compensationType()) || EmptyChecks.isBlank(targetInstanceNo);
+                !"JOB".equalsIgnoreCase(param.compensationType()) || EmptyValues.isBlank(targetInstanceNo);
         if (jobCompensationTargetIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }

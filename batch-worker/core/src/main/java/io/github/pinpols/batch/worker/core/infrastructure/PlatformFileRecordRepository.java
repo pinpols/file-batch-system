@@ -8,9 +8,8 @@ import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.FileStateMachine;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRecordView;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import io.github.pinpols.batch.worker.core.param.PlatformFileInsertParam;
@@ -32,7 +31,7 @@ public class PlatformFileRecordRepository {
     private final PlatformFileRuntimeMapper mapper;
 
     public Map<String, Object> loadFileRecord(String tenantId, Long fileId) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return Map.of();
         }
         PlatformFileRecordView row = mapper.selectFileRecord(tenantId, fileId);
@@ -40,7 +39,7 @@ public class PlatformFileRecordRepository {
     }
 
     public boolean existsFileRecordByStoragePath(String tenantId, String storageBucket, String storagePath) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(storagePath)) {
             return false;
         }
         Long count = mapper.countFileRecordByStoragePath(tenantId, storageBucket, storagePath);
@@ -48,7 +47,7 @@ public class PlatformFileRecordRepository {
     }
 
     public Map<String, Object> loadFileRecordByStoragePath(String tenantId, String storageBucket, String storagePath) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(storagePath)) {
             return Map.of();
         }
         PlatformFileRecordView row = mapper.selectFileRecordByStoragePath(tenantId, storageBucket, storagePath);
@@ -66,20 +65,20 @@ public class PlatformFileRecordRepository {
         String storagePath = param.getStoragePath();
         String sourceType = param.getSourceType();
         String fileStatus = param.getFileStatus();
-        boolean fileRecordHasMissingRequiredFields = !Texts.hasText(tenantId)
-                || !Texts.hasText(fileCategory)
-                || !Texts.hasText(fileName)
-                || !Texts.hasText(fileFormatType)
-                || !Texts.hasText(storageType)
-                || !Texts.hasText(storagePath)
-                || !Texts.hasText(sourceType)
-                || !Texts.hasText(fileStatus);
+        boolean fileRecordHasMissingRequiredFields = !EmptyValues.hasText(tenantId)
+                || !EmptyValues.hasText(fileCategory)
+                || !EmptyValues.hasText(fileName)
+                || !EmptyValues.hasText(fileFormatType)
+                || !EmptyValues.hasText(storageType)
+                || !EmptyValues.hasText(storagePath)
+                || !EmptyValues.hasText(sourceType)
+                || !EmptyValues.hasText(fileStatus);
         if (fileRecordHasMissingRequiredFields) {
             return null;
         }
         FileStateMachine.assertInitialStatus(fileStatus);
         int nextGenerationNo = 1;
-        if (Texts.hasText(fileCode)) {
+        if (EmptyValues.hasText(fileCode)) {
             // 先锁逻辑身份，再以独立查询取得锁等待后的新快照；已有行的更新锁无法保护 MAX+1。
             mapper.lockFileGeneration(tenantId, fileCode);
             Integer maxGeneration = mapper.selectMaxFileGenerationNo(tenantId, fileCode);
@@ -87,7 +86,8 @@ public class PlatformFileRecordRepository {
         }
         String checksumValue = param.getChecksumValue();
         String storageBucket = param.getStorageBucket();
-        String fileVersion = Texts.hasText(param.getFileVersion()) ? param.getFileVersion() : "v" + nextGenerationNo;
+        String fileVersion =
+                EmptyValues.hasText(param.getFileVersion()) ? param.getFileVersion() : "v" + nextGenerationNo;
         LocalDate bizDate = param.getBizDate();
         String bizType = param.getBizType();
         String originalFileName = param.getOriginalFileName();
@@ -128,12 +128,12 @@ public class PlatformFileRecordRepository {
                 .build();
 
         // 无 checksum 的重试先按存储路径复用既有记录，避免唯一约束冲突后事务进入 aborted 状态。
-        if (!Texts.hasText(checksumValue)) {
+        if (!EmptyValues.hasText(checksumValue)) {
             PlatformFileRecordView existing =
                     mapper.selectFileRecordByStoragePath(tenantId, storageBucket, storagePath);
             if (existing != null && existing.id() != null) {
                 String existingChecksum = existing.checksumValue();
-                if (EmptyChecks.isBlank(existingChecksum)) {
+                if (EmptyValues.isBlank(existingChecksum)) {
                     log.info(
                             "file_record dedup pre-check hit (tenant={} storage_path={}), reuse existing"
                                     + " fileId={}",
@@ -145,14 +145,14 @@ public class PlatformFileRecordRepository {
             }
         }
         // 复用已有文件不会产生新版本，不能取消当前最新标记；只在确实要插入时更新历史版本。
-        if (Texts.hasText(fileCode)) {
+        if (EmptyValues.hasText(fileCode)) {
             mapper.markHistoricalFileNotLatest(tenantId, fileCode);
         }
         try {
             mapper.insertFileRecord(values);
             return values.getId();
         } catch (DuplicateKeyException ex) {
-            if (!Texts.hasText(checksumValue)) {
+            if (!EmptyValues.hasText(checksumValue)) {
                 log.warn(
                         "file_record dedup race lost (tenant={} storage_path={}): another transaction"
                                 + " inserted concurrently — current task will retry via outer mechanism",
@@ -164,11 +164,11 @@ public class PlatformFileRecordRepository {
     }
 
     public void updateFileStatus(Long fileId, String fileStatus, Object metadata) {
-        if (fileId == null || !Texts.hasText(fileStatus)) {
+        if (fileId == null || !EmptyValues.hasText(fileStatus)) {
             return;
         }
         String currentStatus = currentFileStatus(fileId);
-        if (!Texts.hasText(currentStatus)) {
+        if (!EmptyValues.hasText(currentStatus)) {
             return;
         }
         FileStateMachine.assertTransition(currentStatus, fileStatus);
@@ -210,14 +210,14 @@ public class PlatformFileRecordRepository {
     }
 
     private String resolveFileExt(String fileName) {
-        if (!Texts.hasText(fileName) || !fileName.contains(".")) {
+        if (!EmptyValues.hasText(fileName) || !fileName.contains(".")) {
             return null;
         }
         return fileName.substring(fileName.lastIndexOf('.') + 1);
     }
 
     private String resolveMimeType(String fileFormatType) {
-        if (!Texts.hasText(fileFormatType)) {
+        if (!EmptyValues.hasText(fileFormatType)) {
             return BatchFileConstants.CONTENT_TYPE_OCTET_STREAM;
         }
         FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, fileFormatType);

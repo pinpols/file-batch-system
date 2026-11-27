@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.scheduler;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
@@ -59,7 +59,7 @@ public class TenantSchedulerSnapshotService {
     private final ResourceSchedulerProperties resourceSchedulerProperties;
 
     public SchedulerSnapshotResponse buildLive(String tenantId) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return new SchedulerSnapshotResponse(
                     BatchDateTimeSupport.utcNow(), tenantId, List.of(), List.of(), List.of());
         }
@@ -89,7 +89,7 @@ public class TenantSchedulerSnapshotService {
         // R7-A3-P1: 把 N 条 countActiveByFairShareGroup 单查改成 1 条 GROUP BY 预聚合。
         Set<String> groups = new LinkedHashSet<>();
         for (TenantQuotaPolicyEntity p : quotaRows) {
-            if (Texts.hasText(p.fairShareGroup())) {
+            if (EmptyValues.hasText(p.fairShareGroup())) {
                 groups.add(p.fairShareGroup());
             }
         }
@@ -103,7 +103,7 @@ public class TenantSchedulerSnapshotService {
         }
         for (TenantQuotaPolicyEntity p : quotaRows) {
             long groupJobs =
-                    Texts.hasText(p.fairShareGroup()) ? groupCountMap.getOrDefault(p.fairShareGroup(), 0L) : 0L;
+                    EmptyValues.hasText(p.fairShareGroup()) ? groupCountMap.getOrDefault(p.fairShareGroup(), 0L) : 0L;
             int baseJobs = p.maxRunningJobsPerTenant() == null ? 0 : p.maxRunningJobsPerTenant();
             int burst = p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit());
             int effJobs = baseJobs > 0 ? baseJobs + burst : 0;
@@ -272,7 +272,7 @@ public class TenantSchedulerSnapshotService {
         if (effectiveJobCap > 0 && activeJobs >= effectiveJobCap) {
             return BOTTLENECK_QUEUE_JOB_LIMIT;
         }
-        if (Texts.hasText(queue.workerGroup())) {
+        if (EmptyValues.hasText(queue.workerGroup())) {
             String normalizedWorkerGroup = queue.workerGroup().toLowerCase(Locale.ROOT);
             if (!onlineWorkerGroups.contains(normalizedWorkerGroup)) {
                 return BOTTLENECK_NO_ONLINE_WORKER;
@@ -284,7 +284,7 @@ public class TenantSchedulerSnapshotService {
     private static Set<String> onlineWorkerGroups(List<SchedulerSnapshotResponse.WorkerLoadSnapshot> workers) {
         Set<String> groups = new HashSet<>();
         for (SchedulerSnapshotResponse.WorkerLoadSnapshot worker : workers) {
-            if (Texts.hasText(worker.workerGroup())) {
+            if (EmptyValues.hasText(worker.workerGroup())) {
                 groups.add(worker.workerGroup().toLowerCase(Locale.ROOT));
             }
         }

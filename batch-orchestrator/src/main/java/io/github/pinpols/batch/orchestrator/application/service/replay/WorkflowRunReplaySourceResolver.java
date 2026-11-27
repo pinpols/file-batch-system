@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -42,7 +42,7 @@ public class WorkflowRunReplaySourceResolver {
     @Transactional(readOnly = true)
     public Source resolve(String tenantId, Long workflowRunId) {
         boolean replaySourceIdentityIsInvalid =
-                EmptyChecks.isBlank(tenantId) || workflowRunId == null || workflowRunId <= 0;
+                EmptyValues.isBlank(tenantId) || workflowRunId == null || workflowRunId <= 0;
         if (replaySourceIdentityIsInvalid) {
             throw invalidSource();
         }
@@ -64,7 +64,7 @@ public class WorkflowRunReplaySourceResolver {
                 || !WorkflowNodeType.START.code().equals(startNode.getNodeType())
                 || !WorkflowNodeRunStatus.SUCCESS.code().equals(startNode.getNodeStatus())
                 || startNode.getSourcePayloadProtected() == null
-                || EmptyChecks.isBlank(Objects.requireNonNull(startNode.getSourcePayloadProtected()));
+                || EmptyValues.isBlank(Objects.requireNonNull(startNode.getSourcePayloadProtected()));
         if (startNodeIsNotValidReplaySource) {
             throw invalidSource();
         }

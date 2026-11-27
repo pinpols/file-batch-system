@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatResponse;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerRegistryClient;
 import java.time.Duration;
@@ -117,12 +117,12 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
     private String resolveBaseUrl() {
         String configuredBaseUrl = properties.getBaseUrl();
-        boolean configuredBaseUrlIsUsable = Texts.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${");
+        boolean configuredBaseUrlIsUsable = EmptyValues.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${");
         if (configuredBaseUrlIsUsable) {
             return configuredBaseUrl;
         }
         String localPort = environment.getProperty("local.server.port");
-        if (Texts.hasText(localPort)) {
+        if (EmptyValues.hasText(localPort)) {
             return "http://127.0.0.1:" + localPort;
         }
         throw new IllegalStateException("batch.orchestrator.base-url is required but not configured");

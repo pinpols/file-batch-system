@@ -16,7 +16,7 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
@@ -126,7 +126,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         String calendarCode = frozenSnapshot != null
                 ? frozenSnapshot.workflowCalendarCode()
                 : resolveCurrentCalendarCode(workflowRun);
-        if (EmptyChecks.isBlank(calendarCode) || workflowRun.getBizDate() == null) {
+        if (EmptyValues.isBlank(calendarCode) || workflowRun.getBizDate() == null) {
             return 0;
         }
         // 与子请求准入的加锁顺序保持一致：先获取批次日围栏，再锁定父记录。
@@ -221,7 +221,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         boolean deferredChildRequestCannotBeRejected = original == null
                 || !TriggerRequestStatus.REJECTED.code().equals(original.getRequestStatus())
                 || original.getParentWorkflowRunId() == null
-                || EmptyChecks.isBlank(original.getParentNodeCode())
+                || EmptyValues.isBlank(original.getParentNodeCode())
                 || waitingLaunchMapper.hasJobInstanceForRequest(tenantId, original.getId());
         if (deferredChildRequestCannotBeRejected) {
             return;
@@ -278,7 +278,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         if (definition == null || !Objects.equals(definition.getRelatedJobCode(), original.getJobCode())) {
             return;
         }
-        String sourcePayload = EmptyChecks.isBlank(node.getSourcePayloadProtected())
+        String sourcePayload = EmptyValues.isBlank(node.getSourcePayloadProtected())
                 ? null
                 : secretPayloadProtector.reveal(node.getSourcePayloadProtected());
         BizException rejection = BizException.of(
@@ -331,7 +331,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             WorkflowDagService.DagNodeResolution node,
             String sourcePayload) {
         String jsonSpec = workflowNode.getCrossDayDependencies();
-        if (EmptyChecks.isBlank(jsonSpec)) {
+        if (EmptyValues.isBlank(jsonSpec)) {
             return CrossDayDependencyOutcome.proceed(sourcePayload);
         }
         String tenantId = jobInstance == null ? workflowRun.getTenantId() : jobInstance.getTenantId();
@@ -462,7 +462,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     }
 
     private boolean sameDependencySpec(String sourceSpec, String currentSpec) {
-        if (EmptyChecks.isBlank(sourceSpec) || EmptyChecks.isBlank(currentSpec)) {
+        if (EmptyValues.isBlank(sourceSpec) || EmptyValues.isBlank(currentSpec)) {
             return Objects.equals(sourceSpec, currentSpec);
         }
         Object source = JsonUtils.fromJson(sourceSpec, Object.class);
@@ -483,11 +483,11 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     /** 把 resolver 返回的 alias map 合并到 sourcePayload 的 {@code crossDay} 字段下，供 ADR-009 DSL 引用。 */
     @SuppressWarnings("unchecked")
     private String mergeCrossDayPayload(String sourcePayload, Map<String, Object> crossDay) {
-        if (EmptyChecks.isEmpty(crossDay)) {
+        if (EmptyValues.isEmpty(crossDay)) {
             return sourcePayload;
         }
         Map<String, Object> base;
-        if (EmptyChecks.isBlank(sourcePayload)) {
+        if (EmptyValues.isBlank(sourcePayload)) {
             base = new LinkedHashMap<>();
         } else {
             Object parsedPayload = JsonUtils.fromJson(sourcePayload, Map.class);
@@ -581,7 +581,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         SchedulePlan plan = buildTaskNodeSchedulePlan(baseTaskPayload, jobInstance, targetJobCode);
         boolean planIsMissingOrHasNoPartitions = plan == null
                 || plan.getPartitions() == null
-                || EmptyChecks.isEmpty(Objects.requireNonNull(plan.getPartitions()));
+                || EmptyValues.isEmpty(Objects.requireNonNull(plan.getPartitions()));
         if (planIsMissingOrHasNoPartitions) {
             return 0;
         }
@@ -591,7 +591,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         // → 整个 TriggerLaunchConsumer 无限循环重试 → DLQ 跳过。这里 fail-fast 拒绝派发，
         // 把节点 ready 状态留给重试 / 运维补 job_definition 后再次触发。
         String defaultWorkerType = plan.getDefaultWorkerType();
-        if (EmptyChecks.isBlank(defaultWorkerType)) {
+        if (EmptyValues.isBlank(defaultWorkerType)) {
             log.error(
                     "workflow node task_type unresolved (job_definition missing or disabled): "
                             + "tenantId={} workflowRunId={} nodeCode={} targetJobCode={}",
@@ -692,9 +692,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             SchedulePlan plan, WorkflowNodeEntity workflowNode, JobInstanceEntity jobInstance) {
         plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
         String windowCode = workflowNode.getWindowCode();
-        plan.setWindowCode(EmptyChecks.isBlank(windowCode) ? plan.getWindowCode() : windowCode);
+        plan.setWindowCode(EmptyValues.isBlank(windowCode) ? plan.getWindowCode() : windowCode);
         boolean hasNonBlankWorkerGroupOverride = workflowNode.getWorkerGroup() != null
-                && !EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getWorkerGroup()));
+                && !EmptyValues.isBlank(Objects.requireNonNull(workflowNode.getWorkerGroup()));
         if (hasNonBlankWorkerGroupOverride) {
             plan.setWorkerGroup(workflowNode.getWorkerGroup());
         }
@@ -912,7 +912,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     private String resolveSelectedWorkerId(SchedulePlan plan, JobPartitionEntity partition) {
         boolean partitionHasAssignedWorker = partition != null
                 && partition.getWorkerCode() != null
-                && !EmptyChecks.isBlank(Objects.requireNonNull(partition.getWorkerCode()));
+                && !EmptyValues.isBlank(Objects.requireNonNull(partition.getWorkerCode()));
         if (partitionHasAssignedWorker) {
             return partition.getWorkerCode();
         }
@@ -931,6 +931,6 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     }
 
     private String protectSourcePayload(String sourcePayload) {
-        return EmptyChecks.isBlank(sourcePayload) ? null : secretPayloadProtector.protect(sourcePayload);
+        return EmptyValues.isBlank(sourcePayload) ? null : secretPayloadProtector.protect(sourcePayload);
     }
 }

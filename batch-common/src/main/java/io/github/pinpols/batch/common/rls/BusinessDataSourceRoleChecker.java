@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.rls;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -69,7 +69,7 @@ public final class BusinessDataSourceRoleChecker {
 
     public record Result(List<String> unsafeRoles) {
         public boolean isClean() {
-            return EmptyChecks.isEmpty(unsafeRoles);
+            return EmptyValues.isEmpty(unsafeRoles);
         }
     }
 }

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
 import io.github.pinpols.batch.common.verifier.ContentVerifierRegistry;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
@@ -158,7 +158,7 @@ public class PipelineVerifierHook {
     }
 
     private static JobType resolveJobType(String pipelineType) {
-        if (EmptyChecks.isBlank(pipelineType)) {
+        if (EmptyValues.isBlank(pipelineType)) {
             return null;
         }
         String trimmedPipelineType = pipelineType.trim();

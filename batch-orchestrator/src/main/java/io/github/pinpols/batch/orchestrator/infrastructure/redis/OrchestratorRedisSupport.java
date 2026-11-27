@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -88,7 +88,7 @@ public class OrchestratorRedisSupport {
 
     public <T> T getJson(String key, Class<T> type) {
         String raw = getStringCache(key);
-        if (EmptyChecks.isBlank(raw)) {
+        if (EmptyValues.isBlank(raw)) {
             return null;
         }
         try {
@@ -164,7 +164,7 @@ public class OrchestratorRedisSupport {
 
     public void putHashAll(String key, Map<String, String> fields, Duration ttl) {
         cacheWrite(key, () -> {
-            if (EmptyChecks.isEmpty(fields)) {
+            if (EmptyValues.isEmpty(fields)) {
                 return;
             }
             List<String> args = new ArrayList<>(fields.size() * 2 + 1);

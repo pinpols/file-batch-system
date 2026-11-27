@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
@@ -176,7 +176,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
      */
     private void rejectMissingWorkerGroup(WorkerHeartbeatDto request) {
         String workerGroup = request == null ? null : request.workerGroup();
-        if (EmptyChecks.isBlank(workerGroup)) {
+        if (EmptyValues.isBlank(workerGroup)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.worker.missing_worker_group");
         }
     }
@@ -191,7 +191,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
      */
     private void rejectUnsupportedProtocolVersion(WorkerHeartbeatDto request) {
         String protocolVersion = request.protocolVersion();
-        if (EmptyChecks.isBlank(protocolVersion)) {
+        if (EmptyValues.isBlank(protocolVersion)) {
             return;
         }
         if (!SdkProtocolVersions.isSupportedMajor(protocolVersion)) {
@@ -220,12 +220,12 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
      */
     private void rejectOutdatedSdkVersion(WorkerHeartbeatDto request) {
         String reportedSdkVersion = request.sdkVersion();
-        if (EmptyChecks.isBlank(reportedSdkVersion)) {
+        if (EmptyValues.isBlank(reportedSdkVersion)) {
             return;
         }
         String requiredMinVersion =
                 systemParameterMapper.selectParamValue(request.tenantId(), MIN_SDK_VERSION_PARAM_KEY);
-        if (EmptyChecks.isBlank(requiredMinVersion)) {
+        if (EmptyValues.isBlank(requiredMinVersion)) {
             return;
         }
         Integer requiredMajor = SdkVersions.parseMajor(requiredMinVersion);
@@ -263,7 +263,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
      */
     private void upsertDeclaredTaskTypes(WorkerHeartbeatDto request) {
         List<WorkerTaskTypeDescriptorDto> taskTypes = request.taskTypes();
-        if (EmptyChecks.isEmpty(taskTypes)) {
+        if (EmptyValues.isEmpty(taskTypes)) {
             return;
         }
         for (WorkerTaskTypeDescriptorDto descriptor : taskTypes) {
@@ -271,7 +271,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
                 continue;
             }
             String taskTypeCode = descriptor.code();
-            if (EmptyChecks.isBlank(taskTypeCode)) {
+            if (EmptyValues.isBlank(taskTypeCode)) {
                 continue;
             }
             // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
@@ -404,7 +404,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
 
     private String resolveWorkerPoolCode(WorkerHeartbeatDto request) {
         String requestedWorkerPoolCode = request.workerPoolCode();
-        if (EmptyChecks.isBlank(requestedWorkerPoolCode)) {
+        if (EmptyValues.isBlank(requestedWorkerPoolCode)) {
             return request.workerCode();
         }
         return requestedWorkerPoolCode;
@@ -418,11 +418,11 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         // 防非枚举值(如 "RUNNING")直写违反 ck_worker_registry_status CHECK → 500
         // (契约 fixtures 01/03-06:请求 status=RUNNING → 存储/响应 ONLINE)。
         boolean requestedRegistryStatusIsValid =
-                EmptyChecks.isNotBlank(requestedStatus) && isValidRegistryStatus(requestedStatus);
+                EmptyValues.isNotBlank(requestedStatus) && isValidRegistryStatus(requestedStatus);
         if (requestedRegistryStatusIsValid) {
             return requestedStatus;
         }
-        if (EmptyChecks.isBlank(defaultStatus)) {
+        if (EmptyValues.isBlank(defaultStatus)) {
             return currentStatus;
         }
         return defaultStatus;

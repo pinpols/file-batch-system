@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.trigger.config;
 
 import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import org.quartz.Scheduler;
@@ -36,7 +36,7 @@ public class QuartzMisfireRecoveryConfiguration {
     }
 
     static String schedulerName(String deploymentNamespace) {
-        if (EmptyChecks.isBlank(deploymentNamespace)) {
+        if (EmptyValues.isBlank(deploymentNamespace)) {
             return "BatchTriggerScheduler";
         }
         return "BatchTriggerScheduler-" + deploymentNamespace.trim();

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.workflow.application;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowMonitoringPolicyRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
@@ -60,6 +60,6 @@ public class WorkflowMonitoringPolicyService {
 
     private void requireDefinition(String tenantId, Long definitionId) {
         WorkflowDefinitionEntity definition = definitionMapper.selectById(tenantId, definitionId);
-        Guard.requireFound(definition, "Workflow definition not found");
+        Preconditions.requireFound(definition, "Workflow definition not found");
     }
 }

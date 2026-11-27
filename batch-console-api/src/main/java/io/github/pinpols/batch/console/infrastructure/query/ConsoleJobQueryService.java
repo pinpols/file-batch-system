@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.common.utils.SecretMasking;
@@ -451,7 +451,7 @@ public class ConsoleJobQueryService {
 
     /** 步骤摘要中的 taskPayload 和结构化 Worker resultSummary 是内嵌 JSON 字符串。 */
     private static String maskStepResultSummary(String rawResultSummary) {
-        if (EmptyChecks.isBlank(rawResultSummary)) {
+        if (EmptyValues.isBlank(rawResultSummary)) {
             return rawResultSummary;
         }
         Object parsed = JsonUtils.fromJson(rawResultSummary, Object.class);
@@ -493,7 +493,7 @@ public class ConsoleJobQueryService {
 
     /** Comma-separated -> trimmed list,null/空 → null。供「多状态过滤」入口复用。 */
     private static List<String> parseCsv(String csv) {
-        if (EmptyChecks.isBlank(csv)) return null;
+        if (EmptyValues.isBlank(csv)) return null;
         List<String> out = Arrays.stream(csv.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())

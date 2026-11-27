@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,7 +46,7 @@ public class SmsNotificationSender implements NotificationSender {
             return WebhookDeliveryResult.failure(null, "missing sms phoneNumbers");
         }
         String providerName = properties.getProvider();
-        if (EmptyChecks.isBlank(providerName) || "none".equalsIgnoreCase(providerName)) {
+        if (EmptyValues.isBlank(providerName) || "none".equalsIgnoreCase(providerName)) {
             return WebhookDeliveryResult.failure(null, "sms provider not configured");
         }
         SmsProvider provider = resolve(providerName);
@@ -71,7 +71,7 @@ public class SmsNotificationSender implements NotificationSender {
         Map<String, SmsProvider> registered = new LinkedHashMap<>();
         for (SmsProvider provider : providers) {
             String code = provider.providerCode();
-            if (EmptyChecks.isBlank(code)) {
+            if (EmptyValues.isBlank(code)) {
                 throw new IllegalStateException("SmsProvider providerCode must not be blank: "
                         + provider.getClass().getName());
             }
@@ -87,7 +87,7 @@ public class SmsNotificationSender implements NotificationSender {
 
     private List<String> parsePhoneNumbers(String configJson) {
         List<String> result = new ArrayList<>();
-        if (EmptyChecks.isBlank(configJson)) {
+        if (EmptyValues.isBlank(configJson)) {
             return result;
         }
         try {

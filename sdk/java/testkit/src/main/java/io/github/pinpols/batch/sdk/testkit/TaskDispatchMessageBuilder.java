@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.sdk.testkit;
 
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.task.SdkSchedulingContext;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,7 +36,7 @@ public final class TaskDispatchMessageBuilder {
     private SdkSchedulingContext schedulingContext;
 
     private TaskDispatchMessageBuilder(String taskType) {
-        if (EmptyChecks.isBlank(taskType)) {
+        if (SdkEmptyValues.isBlank(taskType)) {
             throw new IllegalArgumentException("taskType must be non-blank");
         }
         this.taskType = taskType;

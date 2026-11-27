@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.processes.stage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity;
@@ -47,7 +47,7 @@ public class PlatformProcessInvocationFence implements ProcessInvocationFence {
         String invocationId = invocationValue == null ? null : String.valueOf(invocationValue);
         String workerId = context.getWorkerId();
         boolean hasRequiredInvocationFenceIdentity =
-                Texts.hasText(tenantId) && Texts.hasText(workerId) && Texts.hasText(invocationId);
+                EmptyValues.hasText(tenantId) && EmptyValues.hasText(workerId) && EmptyValues.hasText(invocationId);
         if (!hasRequiredInvocationFenceIdentity) {
             throw staleInvocation();
         }

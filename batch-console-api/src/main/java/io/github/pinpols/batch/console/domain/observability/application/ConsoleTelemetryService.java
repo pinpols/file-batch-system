@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.observability.application;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest.Event;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +18,7 @@ public class ConsoleTelemetryService {
                 log.error(
                         "[frontend:error] telemetry event received nameLength={} pagePresent={} propsKeys={}",
                         event.name().length(),
-                        EmptyChecks.isNotBlank(event.page()),
+                        EmptyValues.isNotBlank(event.page()),
                         propsKeys);
             } else {
                 String eventType =
@@ -30,7 +30,7 @@ public class ConsoleTelemetryService {
                         "[frontend] telemetry event received type={} nameLength={} pagePresent={} propsKeys={}",
                         eventType,
                         event.name().length(),
-                        EmptyChecks.isNotBlank(event.page()),
+                        EmptyValues.isNotBlank(event.page()),
                         propsKeys);
             }
         }

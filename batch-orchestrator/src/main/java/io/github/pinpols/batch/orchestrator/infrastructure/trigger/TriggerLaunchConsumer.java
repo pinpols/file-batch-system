@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
@@ -75,7 +75,7 @@ public class TriggerLaunchConsumer {
     private static final long MAX_COUNTER_CACHE_SIZE = 2_048L;
 
     private String normalizeTenantTag(String tenantId) {
-        if (EmptyChecks.isBlank(tenantId)) {
+        if (EmptyValues.isBlank(tenantId)) {
             return "unknown";
         }
         if (OBSERVED_TENANTS.size() < MAX_TENANT_TAG_CARDINALITY) {
@@ -147,7 +147,7 @@ public class TriggerLaunchConsumer {
             final String boundTenantId = tenantId;
             final LaunchRequest boundRequest = request;
             LaunchResponse response;
-            if (EmptyChecks.isNotBlank(boundTenantId) && !"unknown".equals(boundTenantId)) {
+            if (EmptyValues.isNotBlank(boundTenantId) && !"unknown".equals(boundTenantId)) {
                 response = RlsTenantContextHolder.runWithTenant(
                         boundTenantId, () -> launchApplicationService.launchFromTrustedQueue(boundRequest));
             } else {

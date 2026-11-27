@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.jdbc;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collection;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -13,7 +13,7 @@ public final class JdbcMappedSqlValidator {
     private JdbcMappedSqlValidator() {}
 
     public static String requireIdentifier(String name, String role) {
-        if (EmptyChecks.isBlank(name)) {
+        if (EmptyValues.isBlank(name)) {
             throw new IllegalArgumentException(role + " is required");
         }
         String trimmedName = name.trim();
@@ -26,7 +26,7 @@ public final class JdbcMappedSqlValidator {
 
     public static void requireInAllowlist(String schema, Collection<String> allowedSchemas) {
         String s = requireIdentifier(schema, "schema");
-        if (EmptyChecks.isEmpty(allowedSchemas)) {
+        if (EmptyValues.isEmpty(allowedSchemas)) {
             throw new IllegalStateException("jdbc-mapped allowed schemas not configured");
         }
         if (!allowedSchemas.contains(s)) {

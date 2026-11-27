@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
@@ -63,7 +63,7 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
 
     @Override
     public void shutdown(String workerId) {
-        if (EmptyChecks.isBlank(workerId)) {
+        if (EmptyValues.isBlank(workerId)) {
             return;
         }
         WorkerRegistration activeRegistration = workerRuntimeState.get(workerId);

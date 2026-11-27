@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -54,7 +54,7 @@ public class FileTemplateSnapshotService {
             throw invalidSnapshot();
         }
         Set<String> codes = templateCodes(type, definition.jobCode(), pinned);
-        if (EmptyChecks.isEmpty(codes)) {
+        if (EmptyValues.isEmpty(codes)) {
             return pinned;
         }
         ConfigVersionPolicy policy = configPolicy(parameters);
@@ -75,10 +75,10 @@ public class FileTemplateSnapshotService {
             }
         }
         if (type.isBundle()) {
-            if (EmptyChecks.isNotEmpty(snapshots)) {
+            if (EmptyValues.isNotEmpty(snapshots)) {
                 pinned.put(FrozenFileTemplateSnapshot.COLLECTION_KEY, snapshots);
             }
-        } else if (EmptyChecks.isNotEmpty(snapshots)) {
+        } else if (EmptyValues.isNotEmpty(snapshots)) {
             Object firstPayloadSnapshot = snapshots.values().iterator().next();
             pinned.put(FrozenFileTemplateSnapshot.PAYLOAD_KEY, firstPayloadSnapshot);
         }
@@ -99,7 +99,7 @@ public class FileTemplateSnapshotService {
         if (type == null
                 || !Set.of(JobType.IMPORT, JobType.EXPORT, JobType.BUNDLE_IMPORT, JobType.BUNDLE_EXPORT)
                         .contains(type)) {
-            if (EmptyChecks.isNotEmpty(binding.protectedFileTemplateSnapshots())) {
+            if (EmptyValues.isNotEmpty(binding.protectedFileTemplateSnapshots())) {
                 throw invalidSnapshot();
             }
             return pinned;
@@ -107,7 +107,7 @@ public class FileTemplateSnapshotService {
 
         Set<String> codes = templateCodes(type, definition.jobCode(), pinned);
         Map<String, String> protectedSnapshots = binding.protectedFileTemplateSnapshots();
-        if (EmptyChecks.isEmpty(codes) || !codes.equals(protectedSnapshots.keySet())) {
+        if (EmptyValues.isEmpty(codes) || !codes.equals(protectedSnapshots.keySet())) {
             throw invalidSnapshot();
         }
         protectedSnapshots.forEach((code, protectedSnapshot) ->
@@ -143,13 +143,13 @@ public class FileTemplateSnapshotService {
             return new ReplayTemplateSelection(Map.of(), null);
         }
         boolean definitionCannotUseCurrentTemplateSnapshot = !tenantId.equals(definition.tenantId())
-                || EmptyChecks.isBlank(definition.jobCode())
+                || EmptyValues.isBlank(definition.jobCode())
                 || policy == ConfigVersionPolicy.USE_SPECIFIED_VERSION;
         if (definitionCannotUseCurrentTemplateSnapshot) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.rerun.file_template_version_unavailable");
         }
         Set<String> codes = templateCodes(type, definition.jobCode(), effectiveParams);
-        if (EmptyChecks.isEmpty(codes)) {
+        if (EmptyValues.isEmpty(codes)) {
             throw invalidSnapshot();
         }
 
@@ -160,13 +160,13 @@ public class FileTemplateSnapshotService {
             String protectedSnapshot = policy == ConfigVersionPolicy.USE_ORIGINAL_CONFIG
                     ? originalSnapshot(tenantId, code, type.workerTypeCode(), originalEffectiveParams)
                     : captureLatest(tenantId, code, type.workerTypeCode());
-            if (EmptyChecks.isBlank(protectedSnapshot)) {
+            if (EmptyValues.isBlank(protectedSnapshot)) {
                 throw invalidSnapshot();
             }
             FrozenFileTemplateSnapshot frozen = reveal(protectedSnapshot, tenantId, code, type);
             protectedSnapshots.put(code, protectedSnapshot);
             String pluginId = resolveReplayPlugin(type.workerTypeCode(), frozen.configuration());
-            if (EmptyChecks.isNotBlank(pluginId)) {
+            if (EmptyValues.isNotBlank(pluginId)) {
                 selectedPlugins.add(pluginId);
             } else {
                 everyTemplateSelectsPlugin = false;
@@ -199,7 +199,7 @@ public class FileTemplateSnapshotService {
             return codes;
         }
         Object value = parameters.get("templateCode");
-        if (value instanceof String code && EmptyChecks.isNotBlank(code)) {
+        if (value instanceof String code && EmptyValues.isNotBlank(code)) {
             codes.add(code);
         } else if (type == JobType.EXPORT) {
             codes.add(jobCode + "_TPL");
@@ -209,7 +209,7 @@ public class FileTemplateSnapshotService {
 
     private String captureLatest(String tenantId, String code, String type) {
         String configurationJson = templates.selectLatestConfiguration(tenantId, code, type);
-        if (EmptyChecks.isBlank(configurationJson)) {
+        if (EmptyValues.isBlank(configurationJson)) {
             // 普通仅载荷执行曾允许没有匹配模板。
             return null;
         }
@@ -240,7 +240,7 @@ public class FileTemplateSnapshotService {
                 && definition.jobCode().equals(source.getJobCode())
                 && definition.id().equals(source.getJobDefinitionId())
                 && Objects.equals(request.bizDate(), source.getBizDate())
-                && !EmptyChecks.isBlank(source.getParamsSnapshot());
+                && !EmptyValues.isBlank(source.getParamsSnapshot());
         if (!sourceSnapshotMatchesDispatch) {
             throw invalidSnapshot();
         }
@@ -282,19 +282,19 @@ public class FileTemplateSnapshotService {
     private String resolveReplayPlugin(String workerType, Map<String, Object> configuration) {
         if (JobType.IMPORT.workerTypeCode().equals(workerType)) {
             Object configuredPlugin = configuration.get("load_target_ref");
-            return configuredPlugin instanceof String text && EmptyChecks.isNotBlank(text)
+            return configuredPlugin instanceof String text && EmptyValues.isNotBlank(text)
                     ? text.trim()
                     : WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED;
         }
         if (JobType.EXPORT.workerTypeCode().equals(workerType)) {
             Object configuredPlugin = configuration.get("export_data_ref");
-            if (configuredPlugin instanceof String text && EmptyChecks.isNotBlank(text)) {
+            if (configuredPlugin instanceof String text && EmptyValues.isNotBlank(text)) {
                 return text.trim();
             }
             Object rawSchema = configuration.get("query_param_schema");
             if (rawSchema instanceof Map<?, ?> schema) {
                 Object nestedPlugin = schema.get("export_data_ref");
-                if (nestedPlugin instanceof String text && EmptyChecks.isNotBlank(text)) {
+                if (nestedPlugin instanceof String text && EmptyValues.isNotBlank(text)) {
                     return text.trim();
                 }
             }
@@ -327,7 +327,7 @@ public class FileTemplateSnapshotService {
                 || binding.replayOperationId() <= 0
                 || binding.workflowRunId() == null
                 || binding.workflowRunId() <= 0
-                || EmptyChecks.isBlank(binding.nodeCode())
+                || EmptyValues.isBlank(binding.nodeCode())
                 || guard == null;
         if (bindingIsIncomplete) {
             throw invalidSnapshot();
@@ -338,8 +338,8 @@ public class FileTemplateSnapshotService {
         }
         boolean requestDoesNotMatchReplayIdentity = request == null
                 || definition == null
-                || EmptyChecks.isBlank(request.tenantId())
-                || EmptyChecks.isBlank(request.jobCode())
+                || EmptyValues.isBlank(request.tenantId())
+                || EmptyValues.isBlank(request.jobCode())
                 || !request.tenantId().equals(definition.tenantId())
                 || !request.jobCode().equals(definition.jobCode());
         if (requestDoesNotMatchReplayIdentity) {

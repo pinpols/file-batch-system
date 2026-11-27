@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.io.IOException;
@@ -51,13 +51,13 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
 
     @Override
     public CaptchaResult verify(String token, String clientIp) {
-        if (EmptyChecks.isBlank(token)) {
+        if (EmptyValues.isBlank(token)) {
             return CaptchaResult.fail("missing token");
         }
         StringBuilder body = new StringBuilder();
         body.append("secret=").append(encode(properties.getSecretKey()));
         body.append("&response=").append(encode(token));
-        if (EmptyChecks.isNotBlank(clientIp)) {
+        if (EmptyValues.isNotBlank(clientIp)) {
             body.append("&remoteip=").append(encode(clientIp));
         }
         try {

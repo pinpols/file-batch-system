@@ -6,8 +6,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementResults.InstanceAction;
@@ -66,7 +66,7 @@ public class InstanceManagementApplicationService {
 
     public InstanceAction cancel(String tenantId, Long id) {
         JobInstanceEntity loadedInstance = jobInstanceMapper.selectById(tenantId, id);
-        JobInstanceEntity instance = Guard.requireFound(loadedInstance, "job instance not found");
+        JobInstanceEntity instance = Preconditions.requireFound(loadedInstance, "job instance not found");
         if (JobInstanceStatus.RUNNING.code().equals(instance.getInstanceStatus())) {
             int requested = jobTaskMapper.requestCancelByInstance(tenantId, id);
             return new InstanceAction(id, instance.getInstanceNo(), "CANCEL_REQUESTED", requested);
@@ -95,7 +95,7 @@ public class InstanceManagementApplicationService {
      */
     private InstanceAction lifecycleTransition(String tenantId, Long id, Set<String> allowedFrom, String targetStatus) {
         JobInstanceEntity loadedInstance = jobInstanceMapper.selectById(tenantId, id);
-        JobInstanceEntity instance = Guard.requireFound(loadedInstance, "job instance not found");
+        JobInstanceEntity instance = Preconditions.requireFound(loadedInstance, "job instance not found");
         if (!allowedFrom.contains(instance.getInstanceStatus())) {
             throw BizException.of(
                     ResultCode.STATE_CONFLICT,
@@ -126,7 +126,7 @@ public class InstanceManagementApplicationService {
         List<JobTaskEntity> pendingTasks = partitionTasks.stream()
                 .filter(task -> TASK_CANCELLABLE.contains(task.getTaskStatus()))
                 .toList();
-        if (EmptyChecks.isEmpty(pendingTasks)) {
+        if (EmptyValues.isEmpty(pendingTasks)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
         }
         boolean hasRunningTask = partitionTasks.stream()
@@ -199,10 +199,10 @@ public class InstanceManagementApplicationService {
 
     public RetryFailedPartitions retryFailedPartitions(String tenantId, Long instanceId) {
         JobInstanceEntity selectedInstance = jobInstanceMapper.selectById(tenantId, instanceId);
-        JobInstanceEntity instance = Guard.requireFound(selectedInstance, "job instance not found");
+        JobInstanceEntity instance = Preconditions.requireFound(selectedInstance, "job instance not found");
         List<JobPartitionEntity> failedPartitions = jobPartitionMapper.selectByQuery(
                 new JobPartitionQuery(tenantId, instanceId, PartitionStatus.FAILED.code(), null));
-        if (EmptyChecks.isEmpty(failedPartitions)) {
+        if (EmptyValues.isEmpty(failedPartitions)) {
             return new RetryFailedPartitions(instanceId, instance.getInstanceNo(), 0, 0, 0, List.of());
         }
         int retried = 0;
@@ -225,7 +225,7 @@ public class InstanceManagementApplicationService {
 
     private JobPartitionEntity findPartition(String tenantId, Long id) {
         JobPartitionEntity loadedPartition = jobPartitionMapper.selectById(tenantId, id);
-        return Guard.requireFound(loadedPartition, "partition not found");
+        return Preconditions.requireFound(loadedPartition, "partition not found");
     }
 
     private String manualRetryEventKey(String tenantId, JobPartitionEntity partition) {
@@ -237,7 +237,7 @@ public class InstanceManagementApplicationService {
 
     private InstanceAction transition(String tenantId, Long id, Set<String> allowedFrom, String targetStatus) {
         JobInstanceEntity loadedInstance = jobInstanceMapper.selectById(tenantId, id);
-        JobInstanceEntity instance = Guard.requireFound(loadedInstance, "job instance not found");
+        JobInstanceEntity instance = Preconditions.requireFound(loadedInstance, "job instance not found");
         return transition(instance, tenantId, id, allowedFrom, targetStatus);
     }
 

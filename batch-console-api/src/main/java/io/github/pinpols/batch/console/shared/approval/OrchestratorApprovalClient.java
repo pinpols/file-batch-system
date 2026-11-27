@@ -5,9 +5,9 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -212,7 +212,7 @@ public class OrchestratorApprovalClient {
                 .retrieve()
                 .body(ApprovalRecordResponse.class);
         ApprovalRecord approvalRecord =
-                Guard.requireFound(response == null ? null : response.record(), "approval request not found");
+                Preconditions.requireFound(response == null ? null : response.record(), "approval request not found");
         String status = approvalRecord.approvalStatus();
         if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
@@ -221,7 +221,7 @@ public class OrchestratorApprovalClient {
     }
 
     private static boolean hasText(String text) {
-        return EmptyChecks.isNotBlank(text);
+        return EmptyValues.isNotBlank(text);
     }
 
     /**

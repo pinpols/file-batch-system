@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.validation;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import org.springframework.scheduling.support.CronExpression;
@@ -9,7 +9,7 @@ public class ValidCronValidator implements ConstraintValidator<ValidCron, String
 
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             // 空值不校验,@NotBlank 单独约束必填
             return true;
         }

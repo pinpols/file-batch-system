@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
@@ -32,12 +32,12 @@ public class DispatchReplayCapabilityResolver {
     }
 
     public ReplayCapabilityDeclaration resolve(StepExecutionRequest request) {
-        if (request == null || EmptyChecks.isBlank(request.tenantId())) {
+        if (request == null || EmptyValues.isBlank(request.tenantId())) {
             return DispatchReplayCapability.unknown();
         }
         Object payloadValue =
                 request.context() == null ? null : request.context().get(PipelineRuntimeKeys.PAYLOAD);
-        if (!(payloadValue instanceof String rawPayload) || EmptyChecks.isBlank(rawPayload)) {
+        if (!(payloadValue instanceof String rawPayload) || EmptyValues.isBlank(rawPayload)) {
             return DispatchReplayCapability.unknown();
         }
         try {
@@ -53,7 +53,7 @@ public class DispatchReplayCapabilityResolver {
             DispatchPayload dispatchPayload = objectMapper.treeToValue(payloadNode, DispatchPayload.class);
             boolean dispatchPayloadIsInvalid = dispatchPayload == null
                     || !hasPositiveFileId(dispatchPayload.fileId())
-                    || EmptyChecks.isBlank(dispatchPayload.channelCode());
+                    || EmptyValues.isBlank(dispatchPayload.channelCode());
             if (dispatchPayloadIsInvalid) {
                 return DispatchReplayCapability.unknown();
             }
@@ -74,7 +74,7 @@ public class DispatchReplayCapabilityResolver {
     }
 
     private boolean hasPositiveFileId(String fileId) {
-        if (EmptyChecks.isBlank(fileId)) {
+        if (EmptyValues.isBlank(fileId)) {
             return false;
         }
         try {

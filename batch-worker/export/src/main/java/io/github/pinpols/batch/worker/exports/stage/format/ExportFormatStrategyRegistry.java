@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,7 +35,7 @@ public class ExportFormatStrategyRegistry {
      * @return 对应的策略实现
      */
     public ExportFormatStrategy resolve(String fileFormatType) {
-        if (EmptyChecks.isBlank(fileFormatType)) {
+        if (EmptyValues.isBlank(fileFormatType)) {
             return require(FileTemplateFormat.JSON.code());
         }
         return require(fileFormatType);

@@ -3,8 +3,8 @@ package io.github.pinpols.batch.sdk.handler.builtin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
@@ -127,7 +127,7 @@ public class HttpDispatchHandler extends SdkAbstractTaskHandler {
 
     private void checkSsrf(URI uri) throws UnknownHostException {
         String host = uri.getHost();
-        if (EmptyChecks.isBlank(host)) {
+        if (SdkEmptyValues.isBlank(host)) {
             throw new IllegalArgumentException("invalid endpoint, no host: " + config.endpoint());
         }
         if (config.blockPrivateIps()) {

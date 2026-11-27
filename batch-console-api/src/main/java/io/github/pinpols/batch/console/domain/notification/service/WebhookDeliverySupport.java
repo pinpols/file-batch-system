@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import java.util.Map;
@@ -31,7 +31,7 @@ public final class WebhookDeliverySupport {
         String channelCode = context.channelCode();
         String channelType = context.channelType();
         String configJson = context.configJson();
-        if (EmptyChecks.isBlank(channelType)) {
+        if (EmptyValues.isBlank(channelType)) {
             return WebhookDeliveryResult.failure(null, "channel has no channel_type");
         }
         if (CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
@@ -57,7 +57,7 @@ public final class WebhookDeliverySupport {
             String tenantId, String channelCode, String configJson, Class<?> logOwner) {
         Map<String, Object> config = parseConfig(configJson, logOwner);
         String url = text(config, "url");
-        if (EmptyChecks.isBlank(url)) {
+        if (EmptyValues.isBlank(url)) {
             return null;
         }
         WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
@@ -70,7 +70,7 @@ public final class WebhookDeliverySupport {
     }
 
     private static Map<String, Object> parseConfig(String configJson, Class<?> logOwner) {
-        if (EmptyChecks.isBlank(configJson)) {
+        if (EmptyValues.isBlank(configJson)) {
             return Map.of();
         }
         try {

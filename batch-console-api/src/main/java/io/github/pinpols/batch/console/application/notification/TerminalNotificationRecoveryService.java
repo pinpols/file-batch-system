@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.support.OperationAuditEvent;
@@ -69,7 +69,7 @@ public class TerminalNotificationRecoveryService {
             TerminalDeliveryRetryRequest request,
             ConsoleRequestMetadata metadata) {
         String tenant = tenants.resolveTenant(tenantId);
-        if (!request.confirmedNotDelivered() || EmptyChecks.isBlank(metadata.operatorId())) {
+        if (!request.confirmedNotDelivered() || EmptyValues.isBlank(metadata.operatorId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.notification.recovery_confirmation_required");
         }
         String aggregateId = source.name() + ":" + id;

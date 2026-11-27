@@ -14,10 +14,9 @@ import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
@@ -134,7 +133,8 @@ public class RegisterStep implements ExportStageStep {
                 String.valueOf(attrs.getOrDefault(PipelineRuntimeKeys.CHECKSUM_TYPE, FileChecksumType.SHA_256.code()));
         FileRecordParam.FileRecordParamBuilder fileRecordBuilder =
                 FileRecordParam.builder().tenantId(context.getTenantId()).fileCode(exportPayload.fileCode());
-        String businessType = Texts.hasText(exportPayload.bizType()) ? exportPayload.bizType() : context.getJobCode();
+        String businessType =
+                EmptyValues.hasText(exportPayload.bizType()) ? exportPayload.bizType() : context.getJobCode();
         fileRecordBuilder
                 .bizType(businessType)
                 .fileCategory("OUTPUT")
@@ -195,8 +195,8 @@ public class RegisterStep implements ExportStageStep {
                     ERROR_OBJECT_MAPPER);
         }
         String existingChecksum = nullableText(existing.get("checksum_value"));
-        boolean existingFileRecordHasChecksumConflict = Texts.hasText(expectedChecksum)
-                && Texts.hasText(existingChecksum)
+        boolean existingFileRecordHasChecksumConflict = EmptyValues.hasText(expectedChecksum)
+                && EmptyValues.hasText(existingChecksum)
                 && !expectedChecksum.equalsIgnoreCase(existingChecksum);
         if (existingFileRecordHasChecksumConflict) {
             return ExportStageResult.failure(
@@ -326,13 +326,13 @@ public class RegisterStep implements ExportStageStep {
         if (taskId == null) {
             return false;
         }
-        if (!Texts.hasText(context.getWorkerId())) {
+        if (!EmptyValues.hasText(context.getWorkerId())) {
             return false;
         }
         if (!(invocationValue instanceof String invocationId)) {
             return false;
         }
-        if (!Texts.hasText(invocationId)) {
+        if (!EmptyValues.hasText(invocationId)) {
             return false;
         }
         try {
@@ -350,8 +350,8 @@ public class RegisterStep implements ExportStageStep {
     }
 
     private LocalDate parseBizDate(String payloadBizDate, String fallbackBizDate) {
-        String bizDate = Texts.hasText(payloadBizDate) ? payloadBizDate : fallbackBizDate;
-        if (!Texts.hasText(bizDate)) {
+        String bizDate = EmptyValues.hasText(payloadBizDate) ? payloadBizDate : fallbackBizDate;
+        if (!EmptyValues.hasText(bizDate)) {
             return null;
         }
         try {
@@ -368,11 +368,11 @@ public class RegisterStep implements ExportStageStep {
             return null;
         }
         String text = String.valueOf(value);
-        return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+        return EmptyValues.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
     }
 
     private void mergeUserMetadata(Map<String, Object> target, Map<String, Object> source) {
-        if (EmptyChecks.isEmpty(source)) {
+        if (EmptyValues.isEmpty(source)) {
             return;
         }
         for (Map.Entry<String, Object> entry : source.entrySet()) {
@@ -384,7 +384,7 @@ public class RegisterStep implements ExportStageStep {
     }
 
     private void mergeSecurityMetadata(Map<String, Object> target, Map<String, Object> attributes) {
-        if (EmptyChecks.isEmpty(attributes)) {
+        if (EmptyValues.isEmpty(attributes)) {
             return;
         }
         putIfPresent(target, attributes, "contentEncryptionEnabled");

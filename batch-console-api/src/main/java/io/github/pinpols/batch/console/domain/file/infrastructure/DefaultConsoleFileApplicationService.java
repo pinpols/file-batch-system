@@ -7,8 +7,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.ArchiveFileRequest;
@@ -298,18 +298,18 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
                     "content upload requires object-store backed file record");
         }
         String storagePath = fileRecord.storagePath();
-        if (!Texts.hasText(storagePath)) {
+        if (!EmptyValues.hasText(storagePath)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
         }
         String bucket = fileRecord.storageBucket();
-        if (!Texts.hasText(bucket)) {
+        if (!EmptyValues.hasText(bucket)) {
             bucket = s3StorageProperties.getBucket();
         }
         String contentType = file.getContentType();
-        if (!Texts.hasText(contentType)) {
+        if (!EmptyValues.hasText(contentType)) {
             contentType = fileRecord.mimeType();
         }
-        if (!Texts.hasText(contentType)) {
+        if (!EmptyValues.hasText(contentType)) {
             contentType = "application/octet-stream";
         }
         try (InputStream inputStream = file.getInputStream()) {

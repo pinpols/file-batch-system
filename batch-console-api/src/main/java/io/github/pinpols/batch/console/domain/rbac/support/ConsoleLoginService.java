@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleLoginRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -51,9 +51,9 @@ public class ConsoleLoginService {
     }
 
     public ConsoleAuthTokenResponse login(ConsoleLoginRequest request) {
-        Guard.require(request != null, "login request is required");
-        Guard.requireText(request.getUsername(), "username is required");
-        Guard.requireText(request.getPassword(), "password is required");
+        Preconditions.require(request != null, "login request is required");
+        Preconditions.requireText(request.getUsername(), "username is required");
+        Preconditions.requireText(request.getPassword(), "password is required");
         String username = request.getUsername();
         String clientIp = resolveClientIp();
         // 风控第一关:失败计数达阈值则要求验证码(不通过抛 CAPTCHA_REQUIRED);总开关关时静默放行。

@@ -5,7 +5,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -81,7 +81,7 @@ public final class ConfigPackageSampleDataFactory {
     }
 
     public static Set<String> normalizeScenarios(List<String> rawScenarios) {
-        if (EmptyChecks.isEmpty(rawScenarios)) {
+        if (EmptyValues.isEmpty(rawScenarios)) {
             return Set.of(SCENARIO_ALL);
         }
         LinkedHashSet<String> normalized = new LinkedHashSet<>();
@@ -92,11 +92,11 @@ public final class ConfigPackageSampleDataFactory {
             }
             normalized.add(scenario);
         }
-        return EmptyChecks.isEmpty(normalized) ? Set.of(SCENARIO_ALL) : normalized;
+        return EmptyValues.isEmpty(normalized) ? Set.of(SCENARIO_ALL) : normalized;
     }
 
     public static List<String> tenantTemplateScenarios(List<String> rawScenarios) {
-        if (EmptyChecks.isEmpty(rawScenarios) || rawScenarios.stream().anyMatch(EmptyChecks::isBlank)) {
+        if (EmptyValues.isEmpty(rawScenarios) || rawScenarios.stream().anyMatch(EmptyValues::isBlank)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_package.scenario_required");
         }
         Set<String> normalized = normalizeScenarios(rawScenarios);
@@ -114,7 +114,7 @@ public final class ConfigPackageSampleDataFactory {
     }
 
     public static String normalizeScenario(String rawScenario) {
-        if (EmptyChecks.isBlank(rawScenario)) {
+        if (EmptyValues.isBlank(rawScenario)) {
             return SCENARIO_ALL;
         }
         String trimmedScenario = rawScenario.trim();

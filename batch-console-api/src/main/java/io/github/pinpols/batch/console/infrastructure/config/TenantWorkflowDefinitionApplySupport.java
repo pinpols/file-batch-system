@@ -3,8 +3,8 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Nullables;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.workflow.application.command.WorkflowVersionSnapshotCommand;
@@ -55,7 +55,7 @@ final class TenantWorkflowDefinitionApplySupport {
     }
 
     WorkflowDefinitionEntity findWorkflowForImport(String tenantId, WorkflowDefinitionSpec spec) {
-        if (Texts.hasText(spec.getSingleJobCode())) {
+        if (EmptyValues.hasText(spec.getSingleJobCode())) {
             JobDefinitionView job = definitionMappers.jobDefinition.selectByUniqueKey(
                     tenantId, spec.getSingleJobCode().trim());
             if (job != null) {
@@ -71,7 +71,7 @@ final class TenantWorkflowDefinitionApplySupport {
 
     void upsertWorkflowDefinition(String tenantId, Long existingId, WorkflowDefinitionSpec spec, String operator) {
         Long singleJobDefinitionId = null;
-        if (Texts.hasText(spec.getSingleJobCode())) {
+        if (EmptyValues.hasText(spec.getSingleJobCode())) {
             JobDefinitionView singleJob = definitionMappers.jobDefinition.selectByUniqueKey(
                     tenantId, spec.getSingleJobCode().trim());
             if (singleJob == null) {

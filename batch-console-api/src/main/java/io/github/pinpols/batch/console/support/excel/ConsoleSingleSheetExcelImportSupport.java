@@ -3,8 +3,8 @@ package io.github.pinpols.batch.console.support.excel;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.BatchColumnNames;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.io.ByteArrayInputStream;
@@ -109,7 +109,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
             String sheetName = sheet.getSheetName();
             DataFormatter formatter = new DataFormatter();
             Row headerRow = sheet.getRow(sheet.getFirstRowNum());
-            Guard.require(headerRow != null, "excel header row is missing");
+            Preconditions.require(headerRow != null, "excel header row is missing");
             Map<String, Integer> headerIndex = readHeaderIndex(headerRow, formatter);
             validateHeaders(headerIndex, requiredHeaders);
             List<Map<String, String>> rows = new ArrayList<>();
@@ -186,7 +186,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
         if (columns.contains(COL_TENANT_ID)) {
             rowValues.put(
                     COL_TENANT_ID,
-                    Texts.hasText(rowValues.get(COL_TENANT_ID)) ? rowValues.get(COL_TENANT_ID) : tenantId);
+                    EmptyValues.hasText(rowValues.get(COL_TENANT_ID)) ? rowValues.get(COL_TENANT_ID) : tenantId);
         }
     }
 
@@ -225,7 +225,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
                 headerIndex = new LinkedHashMap<>();
                 currentCells.forEach((colIdx, value) -> {
                     String header = normalize(value);
-                    if (Texts.hasText(header)) {
+                    if (EmptyValues.hasText(header)) {
                         headerIndex.put(header, colIdx);
                     }
                 });
@@ -242,7 +242,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
                 }
                 fillTenantDefault(currentRow, columns, tenantId);
                 // 跳过全空行
-                boolean allBlank = currentRow.values().stream().noneMatch(Texts::hasText);
+                boolean allBlank = currentRow.values().stream().noneMatch(EmptyValues::hasText);
                 if (!allBlank) {
                     rows.add(currentRow);
                 }
@@ -271,7 +271,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
 
     public static ParsedSession loadSession(
             String uploadToken, SingleSheetImportSession session, ConsoleTenantGuard tenantGuard) {
-        Guard.requireFound(session, "excel upload session not found");
+        Preconditions.requireFound(session, "excel upload session not found");
         tenantGuard.assertTenantAllowed(session.tenantId());
         return new ParsedSession(
                 session.fileName(), session.tenantId(), session.sheetName(), session.uploadedAt(), session.rows());
@@ -322,14 +322,14 @@ public final class ConsoleSingleSheetExcelImportSupport {
     }
 
     private static String resolveFileName(String fileName, String defaultFileName) {
-        return Texts.hasText(fileName) ? fileName : defaultFileName;
+        return EmptyValues.hasText(fileName) ? fileName : defaultFileName;
     }
 
     private static Map<String, Integer> readHeaderIndex(Row headerRow, DataFormatter formatter) {
         Map<String, Integer> headerIndex = new LinkedHashMap<>();
         for (int cellIndex = headerRow.getFirstCellNum(); cellIndex < headerRow.getLastCellNum(); cellIndex++) {
             String header = normalize(formatter.formatCellValue(headerRow.getCell(cellIndex)));
-            if (Texts.hasText(header)) {
+            if (EmptyValues.hasText(header)) {
                 headerIndex.put(header, cellIndex);
             }
         }
@@ -351,7 +351,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
     private static boolean rowIsBlank(Row row, DataFormatter formatter) {
         for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
             String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
-            if (Texts.hasText(value)) {
+            if (EmptyValues.hasText(value)) {
                 return false;
             }
         }
@@ -369,7 +369,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
     }
 
     private static String normalize(String value) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return null;
         }
         return value.trim();

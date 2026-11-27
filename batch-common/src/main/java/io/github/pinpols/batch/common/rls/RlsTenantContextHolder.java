@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.rls;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
@@ -39,7 +39,7 @@ public final class RlsTenantContextHolder {
 
     /** 强制设值(慎用)— 推荐 {@link #runWithTenant} 自动清理。 */
     public static void set(String tenantId) {
-        if (Texts.hasText(tenantId)) {
+        if (EmptyValues.hasText(tenantId)) {
             HOLDER.set(tenantId);
         } else {
             HOLDER.remove();

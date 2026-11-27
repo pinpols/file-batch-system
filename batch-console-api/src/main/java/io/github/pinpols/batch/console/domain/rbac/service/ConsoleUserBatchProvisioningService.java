@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
 import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
@@ -130,7 +130,7 @@ public class ConsoleUserBatchProvisioningService {
         }
         byte[] bytes = file.getBytes();
         List<AccountRow> rows = ConsoleUserBatchWorkbookParser.parse(bytes);
-        if (EmptyChecks.isEmpty(rows)) throw invalid("Workbook contains no accounts");
+        if (EmptyValues.isEmpty(rows)) throw invalid("Workbook contains no accounts");
         UUID tokenId = UUID.randomUUID();
         String token = tokenId.toString();
         String digest = digest(bytes);
@@ -173,7 +173,7 @@ public class ConsoleUserBatchProvisioningService {
             throw BizException.of(ResultCode.CONFLICT, "Batch already applied; query by requestId");
         }
         Preview checked = validate(token, session);
-        if (EmptyChecks.isNotEmpty(checked.issues())) {
+        if (EmptyValues.isNotEmpty(checked.issues())) {
             throw BizException.of(ResultCode.CONFLICT, "Preview has validation errors; refresh and correct it");
         }
         String applying = APPLYING_PREFIX + UUID.randomUUID();
@@ -340,7 +340,7 @@ public class ConsoleUserBatchProvisioningService {
     private static String effectiveTenantFilter(String requestedTenantId, ConsolePrincipal principal) {
         if (!principal.authorities().contains(ConsoleRoles.ADMIN)) return principal.tenantId();
         String trimmed = trim(requestedTenantId);
-        return EmptyChecks.isEmpty(trimmed) ? null : trimmed;
+        return EmptyValues.isEmpty(trimmed) ? null : trimmed;
     }
 
     private void save(String token, Session session) {

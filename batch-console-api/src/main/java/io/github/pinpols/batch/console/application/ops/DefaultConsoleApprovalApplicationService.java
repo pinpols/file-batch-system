@@ -5,9 +5,9 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.PresignDownloadFileRequest;
@@ -126,7 +126,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 request.setApprovalId(approvalNo);
                 // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
                 // 「必须指定补偿类型」、审批单长期停滞无从补救。按目标类型确定性推导补偿粒度回退。
-                if (EmptyChecks.isBlank(request.getCompensationType())) {
+                if (EmptyValues.isBlank(request.getCompensationType())) {
                     String targetType = approvalRecord.getTargetType();
                     String compensationType = deriveCompensationType(targetType);
                     request.setCompensationType(compensationType);
@@ -180,12 +180,12 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 || payload.replayOperationId() == null
                 || payload.replayOperationId() <= 0
                 || !tenantId.equals(payload.tenantId())
-                || EmptyChecks.isBlank(operatorId);
+                || EmptyValues.isBlank(operatorId);
         if (workflowRunReplayApprovalIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
         }
         String approvedBy = approvalRecord.getApproverId();
-        if (EmptyChecks.isBlank(approvedBy)) {
+        if (EmptyValues.isBlank(approvedBy)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
         }
         orchestratorInternalRestClient.approveWorkflowRunReplayOperation(
@@ -252,7 +252,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     @Override
     public List<ConsoleBatchApprovalResultResponse> batchApprove(
             String tenantId, List<String> approvalNos, String operatorId, String reason) {
-        if (EmptyChecks.isEmpty(approvalNos)) {
+        if (EmptyValues.isEmpty(approvalNos)) {
             return List.of();
         }
         List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
@@ -275,7 +275,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     @Override
     public List<ConsoleBatchApprovalResultResponse> batchReject(
             String tenantId, List<String> approvalNos, String operatorId, String reason) {
-        if (EmptyChecks.isEmpty(approvalNos)) {
+        if (EmptyValues.isEmpty(approvalNos)) {
             return List.of();
         }
         List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
@@ -299,7 +299,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         ApprovalRecordResponse response =
                 orchestratorInternalRestClient.loadApproval(tenantId, approvalNo, ApprovalRecordResponse.class);
         ApprovalRecord approvalRecord = response == null ? null : response.getRecord();
-        Guard.requireFound(approvalRecord, "approval request not found");
+        Preconditions.requireFound(approvalRecord, "approval request not found");
         return response;
     }
 
@@ -366,7 +366,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             return;
         }
         String requesterId = approvalRecord.getRequesterId();
-        if (EmptyChecks.isBlank(requesterId) || EmptyChecks.isBlank(operatorId)) {
+        if (EmptyValues.isBlank(requesterId) || EmptyValues.isBlank(operatorId)) {
             return;
         }
         if (requesterId.equals(operatorId)) {

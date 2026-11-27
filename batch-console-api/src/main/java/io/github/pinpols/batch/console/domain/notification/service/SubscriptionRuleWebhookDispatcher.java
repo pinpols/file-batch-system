@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
@@ -135,7 +135,7 @@ public class SubscriptionRuleWebhookDispatcher {
         String normalizedEventType = dispatchPolicy.normalizeEventType(eventType);
         List<EnabledSubscriptionRuleRow> rules =
                 subscriptionRuleMapper.selectEnabledByEventType(tenantId, normalizedEventType);
-        if (EmptyChecks.isEmpty(rules)) {
+        if (EmptyValues.isEmpty(rules)) {
             return;
         }
         Map<String, Object> dataMap = dispatchPolicy.asDataMap(data);
@@ -232,7 +232,7 @@ public class SubscriptionRuleWebhookDispatcher {
     private WebhookSubscriptionEntity toSyntheticSubscription(String channelCode, EnabledSubscriptionRuleRow rule) {
         Map<String, Object> config = dispatchPolicy.parseConfig(rule.configJson());
         String url = str(config, CONFIG_KEY_URL);
-        if (EmptyChecks.isBlank(url)) {
+        if (EmptyValues.isBlank(url)) {
             log.warn("subscription_rule WEBHOOK channel missing config url; skipping: channelCode={}", channelCode);
             return null;
         }

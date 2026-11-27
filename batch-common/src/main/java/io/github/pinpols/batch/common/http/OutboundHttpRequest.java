@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.http;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Map;
@@ -33,10 +33,10 @@ public record OutboundHttpRequest(
         if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
             throw new IllegalArgumentException("outbound HTTP URI must use http or https");
         }
-        if (EmptyChecks.isBlank(uri.getHost())) {
+        if (EmptyValues.isBlank(uri.getHost())) {
             throw new IllegalArgumentException("outbound HTTP URI must contain a host");
         }
-        if (method == OutboundHttpMethod.POST && EmptyChecks.isBlank(mediaType)) {
+        if (method == OutboundHttpMethod.POST && EmptyValues.isBlank(mediaType)) {
             throw new IllegalArgumentException("outbound HTTP POST requires mediaType");
         }
         headers = headers == null ? Map.of() : Map.copyOf(headers);
@@ -93,7 +93,7 @@ public record OutboundHttpRequest(
     @Override
     public String toString() {
         String authority = uri.getHost();
-        String path = EmptyChecks.isBlank(uri.getPath()) ? "/" : uri.getPath();
+        String path = EmptyValues.isBlank(uri.getPath()) ? "/" : uri.getPath();
         return "OutboundHttpRequest[method="
                 + method
                 + ", uri="

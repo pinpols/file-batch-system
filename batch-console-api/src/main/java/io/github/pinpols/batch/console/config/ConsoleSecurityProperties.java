@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.config;
 
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
@@ -158,11 +158,11 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
      */
     @PostConstruct
     void validateCorsAllowedOrigins() {
-        if (EmptyChecks.isEmpty(corsAllowedOrigins)) {
+        if (EmptyValues.isEmpty(corsAllowedOrigins)) {
             return; // 空 = 同域,不发 CORS 头,放行
         }
         for (String origin : corsAllowedOrigins) {
-            if (EmptyChecks.isBlank(origin)) {
+            if (EmptyValues.isBlank(origin)) {
                 throw new IllegalStateException(
                         "FATAL: batch.console.security.cors-allowed-origins contains a blank entry;"
                                 + " each value must be an explicit origin (for example, https://console.example.com)");

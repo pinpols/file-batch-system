@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.ConsolePushSubscribeRequest;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
@@ -93,7 +93,7 @@ public class ConsolePushSubscriptionService {
     @Transactional
     public void unsubscribe(String tenantId, String username, String endpoint) {
         requireEnabled();
-        if (EmptyChecks.isBlank(endpoint)) {
+        if (EmptyValues.isBlank(endpoint)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.endpoint_required");
         }
         String resolvedTenantId = tenantGuard.resolveTenant(tenantId);

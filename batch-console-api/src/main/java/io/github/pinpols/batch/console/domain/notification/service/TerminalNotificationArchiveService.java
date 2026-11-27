@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper.Family;
@@ -54,7 +54,7 @@ public class TerminalNotificationArchiveService {
         int remaining = Math.max(1, properties.getBatchSize());
         int tenantLimit = Math.min(TENANT_PAGE_SIZE, remaining);
         List<String> tenants = archive.enabledTenants(afterTenant, tenantLimit);
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(tenants))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(tenants))) {
             afterTenant = "";
             tenants = archive.enabledTenants(afterTenant, tenantLimit);
         }

@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
 import io.github.pinpols.batch.common.constants.WorkerCapabilities;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import java.util.LinkedHashSet;
@@ -40,13 +40,13 @@ public final class SchedulePlanSupport {
             return List.of();
         }
         Set<String> channels = new LinkedHashSet<>();
-        if (EmptyChecks.isNotBlank(plan.getDownstreamChannelCode())) {
+        if (EmptyValues.isNotBlank(plan.getDownstreamChannelCode())) {
             channels.add(plan.getDownstreamChannelCode());
         }
         if (plan.getPartitions() != null) {
             plan.getPartitions().stream()
                     .map(SchedulePlan.PartitionPlan::getTargetRef)
-                    .filter(EmptyChecks::isNotBlank)
+                    .filter(EmptyValues::isNotBlank)
                     .forEach(channels::add);
         }
         return List.copyOf(channels);
@@ -56,10 +56,10 @@ public final class SchedulePlanSupport {
         if (plan == null || decision == null) {
             return;
         }
-        if (EmptyChecks.isNotBlank(decision.getQueueCode())) {
+        if (EmptyValues.isNotBlank(decision.getQueueCode())) {
             plan.setQueueCode(decision.getQueueCode());
         }
-        if (EmptyChecks.isNotBlank(decision.getWorkerGroup())) {
+        if (EmptyValues.isNotBlank(decision.getWorkerGroup())) {
             plan.setWorkerGroup(decision.getWorkerGroup());
         }
         if (decision.getPriority() != null) {

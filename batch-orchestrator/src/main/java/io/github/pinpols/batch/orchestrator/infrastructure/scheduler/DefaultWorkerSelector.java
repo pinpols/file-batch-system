@@ -4,9 +4,8 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.ThrottledLogger;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WorkerSelector;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
@@ -79,7 +78,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
         route.setPriority(priority);
         String routeResourceProfile = resolveResourceProfile(request, queue);
         route.setResourceProfile(routeResourceProfile);
-        if (request == null || !Texts.hasText(request.getTenantId())) {
+        if (request == null || !EmptyValues.hasText(request.getTenantId())) {
             route.setAvailable(false);
             return route;
         }
@@ -95,8 +94,9 @@ public class DefaultWorkerSelector implements WorkerSelector {
         // 按 batch.resource-scheduler.shared-tenant-fallback 配置的租户再查一次。
         // 生产 profile 不应设置此配置，以保留 docs/agent-baseline.md §多租户隔离 的原严格语义。
         String fallbackTenant = resourceSchedulerProperties.getSharedTenantFallback();
-        boolean fallbackTenantSelectionIsNeeded =
-                selected == null && Texts.hasText(fallbackTenant) && !fallbackTenant.equals(request.getTenantId());
+        boolean fallbackTenantSelectionIsNeeded = selected == null
+                && EmptyValues.hasText(fallbackTenant)
+                && !fallbackTenant.equals(request.getTenantId());
         if (fallbackTenantSelectionIsNeeded) {
             List<WorkerRegistryEntity> fallbackCandidates = findCandidates(fallbackTenant, workerGroup);
             WorkerRegistryEntity fallbackSelected =
@@ -121,7 +121,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
             //   - resourceTag 全不匹配说明 queue 配置与 worker 实际 tag 失配
             // 保留阻塞语义以确保任务不会跑到错误环境（安全优先，见 v3 A-3.2）。
             String reason =
-                    EmptyChecks.isEmpty(candidates) ? "no_online_workers_in_group" : "no_worker_matches_resource_tag";
+                    EmptyValues.isEmpty(candidates) ? "no_online_workers_in_group" : "no_worker_matches_resource_tag";
             String throttleKey = request.getTenantId() + '|' + workerGroup + '|' + reason;
             ThrottledLogger.Decision decision = noMatchLogThrottle.evaluate(throttleKey);
             if (decision.shouldLog()) {
@@ -146,7 +146,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
     }
 
     private List<WorkerRegistryEntity> findCandidates(String tenantId, String workerGroup) {
-        Supplier<List<WorkerRegistryEntity>> loader = () -> Texts.hasText(workerGroup)
+        Supplier<List<WorkerRegistryEntity>> loader = () -> EmptyValues.hasText(workerGroup)
                 ? workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
                         tenantId, workerGroup, WorkerRegistryStatus.ONLINE.code())
                 : workerRegistryMapper.selectByTenantAndStatus(tenantId, WorkerRegistryStatus.ONLINE.code());
@@ -163,7 +163,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
                         DefaultWorkerSelector::currentLoadOrZero)
                 .thenComparing(WorkerRegistryEntity::heartbeatAt, Comparator.nullsLast(Comparator.reverseOrder()));
         return candidates.stream()
-                .filter(candidate -> !Texts.hasText(requiredCapability)
+                .filter(candidate -> !EmptyValues.hasText(requiredCapability)
                         || capabilityTagsContain(candidate.capabilityTags(), requiredCapability))
                 .filter(candidate -> matchesResourceProfile(candidate, resourceProfile))
                 // V87 反压闸门: current_load >= max_concurrent 的 worker 满载, skip
@@ -207,7 +207,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
     }
 
     private boolean matchesResourceProfile(WorkerRegistryEntity candidate, String resourceProfile) {
-        if (!Texts.hasText(resourceProfile)) {
+        if (!EmptyValues.hasText(resourceProfile)) {
             return true;
         }
         if (resourceProfile.equalsIgnoreCase(candidate.resourceTag())) {
@@ -217,7 +217,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
     }
 
     private boolean capabilityTagsContain(JsonbString tags, String required) {
-        if (tags == null || !Texts.hasText(tags.getValue())) {
+        if (tags == null || !EmptyValues.hasText(tags.getValue())) {
             return false;
         }
         String[] parsed;
@@ -240,14 +240,14 @@ public class DefaultWorkerSelector implements WorkerSelector {
     }
 
     private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        if (request != null && Texts.hasText(request.getWorkerGroup())) {
+        if (request != null && EmptyValues.hasText(request.getWorkerGroup())) {
             return request.getWorkerGroup();
         }
         return queue == null ? null : queue.workerGroup();
     }
 
     private String resolveResourceProfile(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        if (request != null && Texts.hasText(request.getResourceProfile())) {
+        if (request != null && EmptyValues.hasText(request.getResourceProfile())) {
             return request.getResourceProfile();
         }
         return queue == null ? null : queue.resourceTag();

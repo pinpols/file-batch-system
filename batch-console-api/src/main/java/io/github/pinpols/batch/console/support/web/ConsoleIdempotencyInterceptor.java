@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.idempotency.ConsoleDurableIdempotencyStore;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import jakarta.annotation.PostConstruct;
@@ -162,7 +162,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
         }
 
         String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
-        if (!Texts.hasText(idempotencyKey)) {
+        if (!EmptyValues.hasText(idempotencyKey)) {
             // 标了 @Idempotent 的方法 fail-close：没 header 直接 400
             boolean handlerIsIdempotent = handler instanceof HandlerMethod hm
                     && (hm.getMethodAnnotation(Idempotent.class) != null

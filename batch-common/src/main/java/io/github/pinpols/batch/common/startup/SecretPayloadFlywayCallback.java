@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.startup;
 
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -82,13 +82,13 @@ public class SecretPayloadFlywayCallback implements Callback {
         int migrated = 0;
         while (true) {
             List<LegacySecretPayload> candidates = selectCandidates(connection);
-            if (EmptyChecks.isEmpty(candidates)) {
+            if (EmptyValues.isEmpty(candidates)) {
                 return migrated;
             }
             int migratedInBatch = updateCandidates(connection, candidates);
             if (migratedInBatch == 0) {
                 List<LegacySecretPayload> remainingCandidates = selectCandidates(connection);
-                if (EmptyChecks.isEmpty(remainingCandidates)) {
+                if (EmptyValues.isEmpty(remainingCandidates)) {
                     return migrated;
                 }
                 throw new FlywayException("legacy secret payload encryption made no progress");

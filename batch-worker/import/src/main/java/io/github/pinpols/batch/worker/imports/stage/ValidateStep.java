@@ -5,7 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
@@ -78,7 +78,7 @@ public class ValidateStep implements ImportStageStep {
     public ImportStageResult execute(ImportJobContext context) {
         String parsedRecordsPath =
                 ImportStageSupport.stringValue(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH));
-        if (!Texts.hasText(parsedRecordsPath)) {
+        if (!EmptyValues.hasText(parsedRecordsPath)) {
             return ImportStageResult.failure(
                     stage(),
                     ImportValidationErrorCode.NO_STREAM.code(),
@@ -189,7 +189,7 @@ public class ValidateStep implements ImportStageStep {
      */
     private void injectManifestExpectedCount(ImportJobContext context) {
         String fileIdRaw = context.getFileId();
-        if (!Texts.hasText(fileIdRaw)) {
+        if (!EmptyValues.hasText(fileIdRaw)) {
             return;
         }
         try {
@@ -292,7 +292,7 @@ public class ValidateStep implements ImportStageStep {
             long chunkStartRecordNo = 1L;
             String line;
             while ((line = reader.readLine()) != null) {
-                if (!Texts.hasText(line)) {
+                if (!EmptyValues.hasText(line)) {
                     continue;
                 }
                 recordNo++;
@@ -502,7 +502,7 @@ public class ValidateStep implements ImportStageStep {
         if (value instanceof List<?> list) {
             List<String> result = new ArrayList<>();
             for (Object item : list) {
-                if (item != null && Texts.hasText(String.valueOf(item))) {
+                if (item != null && EmptyValues.hasText(String.valueOf(item))) {
                     result.add(String.valueOf(item));
                 }
             }

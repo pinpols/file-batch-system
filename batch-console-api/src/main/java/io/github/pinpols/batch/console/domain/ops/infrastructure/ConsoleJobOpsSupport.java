@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
@@ -442,7 +442,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                 .retrieve()
                 .body(RecoveryOperationResponse.class);
         String operationNo = response == null ? null : response.operationNo();
-        if (EmptyChecks.isBlank(operationNo)) {
+        if (EmptyValues.isBlank(operationNo)) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.orchestrator.empty_recovery");
         }
         return operationNo;
@@ -481,12 +481,12 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
 
     @Override
     public boolean hasText(String text) {
-        return EmptyChecks.isNotBlank(text);
+        return EmptyValues.isNotBlank(text);
     }
 
     @Override
     public TriggerType resolveTriggerType(String triggerTypeValue, TriggerType defaultTriggerType) {
-        if (EmptyChecks.isBlank(triggerTypeValue)) {
+        if (EmptyValues.isBlank(triggerTypeValue)) {
             return defaultTriggerType;
         }
         try {
@@ -512,7 +512,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
 
     @Override
     public LocalDate parseOptionalBizDate(String bizDate) {
-        if (EmptyChecks.isBlank(bizDate)) {
+        if (EmptyValues.isBlank(bizDate)) {
             return null;
         }
         return parseBizDate(bizDate);
@@ -521,7 +521,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
     @SuppressWarnings("unchecked")
     @Override
     public Map<String, Object> parsePayload(String payloadJson) {
-        if (EmptyChecks.isBlank(payloadJson)) {
+        if (EmptyValues.isBlank(payloadJson)) {
             return Map.of();
         }
         Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);

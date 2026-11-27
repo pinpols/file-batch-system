@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
@@ -284,7 +284,7 @@ public class TriggerOutboxRelay {
         }
         List<TriggerOutboxEventEntity> batch = mapper.selectPending(
                 now, permittedBatchSize, OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
-        if (EmptyChecks.isEmpty(batch)) {
+        if (EmptyValues.isEmpty(batch)) {
             return;
         }
         log.debug("TriggerOutboxRelay loaded {} pending events", batch.size());
@@ -316,7 +316,7 @@ public class TriggerOutboxRelay {
                 .claimToken(claimToken)
                 .build();
         List<Long> claimed = mapper.markPublishingBatch(claim);
-        if (EmptyChecks.isEmpty(claimed)) {
+        if (EmptyValues.isEmpty(claimed)) {
             return;
         }
         Set<Long> claimedIds = new HashSet<>(claimed);
@@ -377,7 +377,7 @@ public class TriggerOutboxRelay {
     }
 
     private void awaitAcknowledgements(List<InFlight> inFlight) {
-        if (EmptyChecks.isNotEmpty(inFlight)) {
+        if (EmptyValues.isNotEmpty(inFlight)) {
             CompletableFuture<?>[] acknowledgementFutures =
                     inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new);
             CompletableFuture.allOf(acknowledgementFutures)
@@ -400,7 +400,7 @@ public class TriggerOutboxRelay {
                 markPublishFailure(item.event(), claimToken, result.errorMessage());
             }
         }
-        if (EmptyChecks.isNotEmpty(publishedIds)) {
+        if (EmptyValues.isNotEmpty(publishedIds)) {
             int updated = mapper.markPublishedBatch(
                     publishedIds,
                     OutboxPublishStatus.PUBLISHED.code(),

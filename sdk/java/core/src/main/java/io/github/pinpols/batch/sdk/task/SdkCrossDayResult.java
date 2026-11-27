@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.sdk.task;
 
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -19,7 +19,7 @@ public record SdkCrossDayResult(
         if (resultVersionId == null || resultVersionId <= 0) {
             throw new IllegalArgumentException("cross-day resultVersionId must be positive");
         }
-        if (EmptyChecks.isBlank(businessKey)) {
+        if (SdkEmptyValues.isBlank(businessKey)) {
             throw new IllegalArgumentException("cross-day businessKey is required");
         }
         if (versionNo == null || versionNo <= 0) {

@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.util.Map;
 import java.util.Objects;
@@ -57,12 +57,12 @@ public record WorkflowLaunchWaitSnapshot(
     }
 
     public void validate() {
-        boolean snapshotFieldsAreInvalid = EmptyChecks.isBlank(originalRequestJson)
-                || EmptyChecks.isBlank(launchParamsJson)
+        boolean snapshotFieldsAreInvalid = EmptyValues.isBlank(originalRequestJson)
+                || EmptyValues.isBlank(launchParamsJson)
                 || workflowVersion == null
                 || workflowVersion <= 0
-                || EmptyChecks.isBlank(traceId)
-                || EmptyChecks.isBlank(executionSnapshotJson);
+                || EmptyValues.isBlank(traceId)
+                || EmptyValues.isBlank(executionSnapshotJson);
         if (snapshotFieldsAreInvalid) {
             throw invalidSnapshot();
         }
@@ -71,14 +71,14 @@ public record WorkflowLaunchWaitSnapshot(
                 || original.workflowDefinitionId() == null
                 || original.workflowDefinitionId() <= 0
                 || original.jobCode() != null
-                || EmptyChecks.isBlank(original.tenantId())
-                || EmptyChecks.isBlank(original.requestId())
+                || EmptyValues.isBlank(original.tenantId())
+                || EmptyValues.isBlank(original.requestId())
                 || original.bizDate() == null;
         if (originalRequestIsInvalid) {
             throw invalidSnapshot();
         }
         WorkflowRunExecutionSnapshot parsed = executionSnapshot();
-        if (parsed == null || EmptyChecks.isBlank(parsed.workflowCalendarCode())) {
+        if (parsed == null || EmptyValues.isBlank(parsed.workflowCalendarCode())) {
             throw invalidSnapshot();
         }
         Map<String, Object> raw =

@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.observability.BatchMetricsNames;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
@@ -135,7 +135,7 @@ public class TaskControllerApplicationService {
             }
         }
         // 2.4 观测:批大小分布(看 K 实际多大=churn 省多少)+ 逐项 outcome 计数
-        if (EmptyChecks.isNotEmpty(items)) {
+        if (EmptyValues.isNotEmpty(items)) {
             meterRegistry.summary(BatchMetricsNames.BATCH_CLAIM_SIZE).record(items.size());
             meterRegistry
                     .counter(BatchMetricsNames.BATCH_CLAIM_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "claimed")
@@ -200,7 +200,7 @@ public class TaskControllerApplicationService {
             }
         }
         // 2.4 观测:批大小分布 + 逐项 outcome(批内部分失败可观测)
-        if (EmptyChecks.isNotEmpty(items)) {
+        if (EmptyValues.isNotEmpty(items)) {
             meterRegistry.summary(BatchMetricsNames.BATCH_REPORT_SIZE).record(items.size());
             meterRegistry
                     .counter(BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "ok")
@@ -261,7 +261,7 @@ public class TaskControllerApplicationService {
     public TaskLeaseRenewBatchResult renewBatch(TaskLeaseRenewBatchCommand request) {
         List<TaskLeaseRenewItemCommand> items =
                 request == null || request.items() == null ? List.of() : request.items();
-        if (EmptyChecks.isEmpty(items)) {
+        if (EmptyValues.isEmpty(items)) {
             return new TaskLeaseRenewBatchResult(List.of());
         }
         // PERF(5.3): set-based —— N 项一条 UPDATE ... RETURNING 完成续租 + cancelRequested 回读;
@@ -279,7 +279,7 @@ public class TaskControllerApplicationService {
             results.add(null);
         }
         List<TaskAssignmentService.TaskHeartbeatResult> outcomes =
-                EmptyChecks.isEmpty(commands) ? List.of() : taskAssignmentService.renewLeaseBatch(commands);
+                EmptyValues.isEmpty(commands) ? List.of() : taskAssignmentService.renewLeaseBatch(commands);
         if (outcomes == null) {
             outcomes = List.of();
         }

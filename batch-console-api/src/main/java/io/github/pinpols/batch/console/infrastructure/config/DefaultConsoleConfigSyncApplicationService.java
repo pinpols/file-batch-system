@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
@@ -123,8 +123,8 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.bundle_required");
         }
         List<String> targetTenantIds = request.getTargetTenantIds();
-        boolean targetTenantSelectionIsInvalid = EmptyChecks.isEmpty(targetTenantIds)
-                || targetTenantIds.stream().anyMatch(EmptyChecks::isBlank)
+        boolean targetTenantSelectionIsInvalid = EmptyValues.isEmpty(targetTenantIds)
+                || targetTenantIds.stream().anyMatch(EmptyValues::isBlank)
                 || new HashSet<>(targetTenantIds).size() != targetTenantIds.size();
         if (targetTenantSelectionIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
@@ -132,7 +132,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         TenantConfigBatchInitRequest initRequest = toInitRequest(request);
         ConsoleRequestMetadata metadata = metadataResolver.current();
         String operator = metadata.operatorId();
-        if (EmptyChecks.isBlank(operator)) {
+        if (EmptyValues.isBlank(operator)) {
             operator = "system";
         }
         UUID operationId = UUID.randomUUID();
@@ -242,7 +242,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         }
         AuditPlan plan = JsonUtils.fromJson(storedDetail.toString(), AuditPlan.class);
         List<String> targets = plan.targetTenantIds();
-        boolean syncPlanTargetsAreInvalid = EmptyChecks.isEmpty(targets)
+        boolean syncPlanTargetsAreInvalid = EmptyValues.isEmpty(targets)
                 || plan.summary() == null
                 || targets.size() != new HashSet<>(targets).size();
         if (syncPlanTargetsAreInvalid) {
@@ -276,7 +276,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
             Long logId, String tenantId, int expectedTenantCount, int itemsPerTenant, String reconciledBy) {}
 
     private static String requestKeyHash(String requestKey) {
-        if (EmptyChecks.isBlank(requestKey)) {
+        if (EmptyValues.isBlank(requestKey)) {
             return null;
         }
         try {

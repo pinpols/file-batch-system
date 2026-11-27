@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
@@ -92,7 +92,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
         Long workflowDefinitionId = data.containsKey(QuartzLaunchJob.WORKFLOW_DEFINITION_ID)
                 ? data.getLong(QuartzLaunchJob.WORKFLOW_DEFINITION_ID)
                 : null;
-        if (EmptyChecks.isBlank(tenantId) || workflowDefinitionId == null) {
+        if (EmptyValues.isBlank(tenantId) || workflowDefinitionId == null) {
             log.error(
                     "cannot persist Quartz misfire without Workflow identity: triggerKey={}, jobKey={}",
                     recoveryTriggerKey,
@@ -280,7 +280,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
             return null;
         }
         String tenantId = sourceJob.getJobDataMap().getString(QuartzLaunchJob.TENANT_ID);
-        if (EmptyChecks.isBlank(tenantId) || workflowDefinitionId == null) {
+        if (EmptyValues.isBlank(tenantId) || workflowDefinitionId == null) {
             log.error(
                     "cannot register durable misfire recovery without Workflow identity: jobKey={},"
                             + " tenantId={}, workflowDefinitionId={}",

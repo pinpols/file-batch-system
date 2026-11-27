@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
@@ -130,12 +130,12 @@ public class ConsoleWebhookService {
     }
 
     private String normalizeEventTypes(String eventTypes) {
-        Guard.requireText(eventTypes, "eventTypes is required");
+        Preconditions.requireText(eventTypes, "eventTypes is required");
         NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
         Stream<String> eventTypeTokens = Arrays.stream(eventTypes.split(","));
         Stream<String> trimmedEventTypes = eventTypeTokens.map(String::trim);
         Stream<String> nonBlankEventTypes =
-                trimmedEventTypes.filter(value -> !EmptyChecks.isBlank(Objects.requireNonNull(value)));
+                trimmedEventTypes.filter(value -> !EmptyValues.isBlank(Objects.requireNonNull(value)));
         Stream<String> normalizedEventTypes = nonBlankEventTypes.map(value -> value.toUpperCase(Locale.ROOT));
         Stream<String> distinctEventTypes = normalizedEventTypes.distinct();
         return distinctEventTypes

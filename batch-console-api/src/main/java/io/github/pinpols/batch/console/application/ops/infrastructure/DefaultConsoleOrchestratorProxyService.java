@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.application.ops.infrastructure;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.AssetPartitionReadinessResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.CapacityProfileResponse;
@@ -756,7 +756,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                                     .path("/internal/orchestrator/batch-day-replay/sessions")
                                     .queryParam(PARAM_TENANT_ID, resolved)
                                     .queryParam(PARAM_LIMIT, limit);
-                            if (EmptyChecks.isNotBlank(status)) {
+                            if (EmptyValues.isNotBlank(status)) {
                                 builder.queryParam("status", status);
                             }
                             return builder.build();
@@ -822,7 +822,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                                     .path("/internal/orchestrator/batch-day-replay/sessions/{id}/entries")
                                     .queryParam(PARAM_TENANT_ID, resolved)
                                     .queryParam(PARAM_LIMIT, limit);
-                            if (EmptyChecks.isNotBlank(status)) {
+                            if (EmptyValues.isNotBlank(status)) {
                                 builder.queryParam("status", status);
                             }
                             return builder.build(sessionId);
@@ -964,10 +964,10 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                                     .queryParam(PARAM_TENANT_ID, resolved)
                                     .queryParam("groupBy", groupBy)
                                     .queryParam(PARAM_LIMIT, limit);
-                            if (EmptyChecks.isNotBlank(from)) {
+                            if (EmptyValues.isNotBlank(from)) {
                                 builder.queryParam("from", from);
                             }
-                            if (EmptyChecks.isNotBlank(to)) {
+                            if (EmptyValues.isNotBlank(to)) {
                                 builder.queryParam("to", to);
                             }
                             return builder.build();

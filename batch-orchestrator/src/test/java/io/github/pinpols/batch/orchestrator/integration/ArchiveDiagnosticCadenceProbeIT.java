@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService;
@@ -291,7 +290,7 @@ class ArchiveDiagnosticCadenceProbeIT extends AbstractIntegrationTest {
             try {
                 cleanup(tenant);
             } catch (Throwable cleanupFailure) {
-                if (EmptyChecks.isNull(primary)) throw cleanupFailure;
+                if (primary == null) throw cleanupFailure;
                 primary.addSuppressed(cleanupFailure);
             }
         }
@@ -431,8 +430,8 @@ class ArchiveDiagnosticCadenceProbeIT extends AbstractIntegrationTest {
             Stats stats = active.get();
             MappedStatement mapped = (MappedStatement) invocation.getArgs()[0];
             String id = mapped.getId();
-            boolean statementNeedsNoDiagnosticStats = EmptyChecks.isNull(stats)
-                    || (!DIAGNOSTIC.equals(id) && !CANDIDATES.equals(id) && !DISABLE_JIT.equals(id));
+            boolean statementNeedsNoDiagnosticStats =
+                    stats == null || (!DIAGNOSTIC.equals(id) && !CANDIDATES.equals(id) && !DISABLE_JIT.equals(id));
             if (statementNeedsNoDiagnosticStats) {
                 return invocation.proceed();
             }
@@ -507,7 +506,7 @@ class ArchiveDiagnosticCadenceProbeIT extends AbstractIntegrationTest {
                 throw new IllegalStateException("archive wait sampler did not terminate");
             }
             RuntimeException error = failure.get();
-            if (EmptyChecks.isNotNull(error)) throw error;
+            if (error != null) throw error;
         }
     }
 

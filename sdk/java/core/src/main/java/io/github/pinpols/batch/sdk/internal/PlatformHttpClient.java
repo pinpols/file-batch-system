@@ -167,7 +167,7 @@ public class PlatformHttpClient {
                 .header("X-Batch-Tenant-Id", config.getTenantId())
                 .post(RequestBody.create(payload, JSON));
         String apiKey = config.getApiKey();
-        if (EmptyChecks.isNotBlank(apiKey)) {
+        if (SdkEmptyValues.isNotBlank(apiKey)) {
             req.header("X-Batch-Api-Key", apiKey);
             // 请求签名(方案 A,opt-in):HMAC + 时间戳 + nonce 防重放;须服务端 batch.request-signing.enabled 配合。
             if (config.isRequestSigningEnabled()) {
@@ -180,7 +180,7 @@ public class PlatformHttpClient {
                         .header("X-Batch-Signature", signature);
             }
         }
-        if (EmptyChecks.isNotBlank(idempotencyKey)) {
+        if (SdkEmptyValues.isNotBlank(idempotencyKey)) {
             req.header("Idempotency-Key", idempotencyKey);
         }
 
@@ -196,7 +196,7 @@ public class PlatformHttpClient {
             ResponseBody responseBody = resp.body();
             byte[] responseBytes = responseBody.bytes();
             if (resp.code() >= 200 && resp.code() < 300) {
-                if (responseType == Void.class || EmptyChecks.isEmpty(responseBytes)) {
+                if (responseType == Void.class || SdkEmptyValues.isEmpty(responseBytes)) {
                     return null;
                 }
                 return objectMapper.readValue(responseBytes, responseType);

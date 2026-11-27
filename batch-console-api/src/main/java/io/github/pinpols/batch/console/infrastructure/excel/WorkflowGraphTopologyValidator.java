@@ -17,8 +17,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.normalize;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.normalizeEnum;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.validation.WorkflowGraphs;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.util.ArrayList;
@@ -67,7 +66,7 @@ final class WorkflowGraphTopologyValidator {
     }
 
     private static String wfTopoKey(Map<String, String> row) {
-        String v = Texts.hasText(row.get(COL_WORKFLOW_VERSION))
+        String v = EmptyValues.hasText(row.get(COL_WORKFLOW_VERSION))
                 ? normalize(row.get(COL_WORKFLOW_VERSION))
                 : normalize(row.get(COL_VERSION));
         return normalize(row.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + v;
@@ -81,7 +80,7 @@ final class WorkflowGraphTopologyValidator {
         Map<String, Map<String, String>> byCode = new LinkedHashMap<>();
         for (Map<String, String> n : g.nodes) {
             String code = normalize(n.get(COL_NODE_CODE));
-            if (Texts.hasText(code)) {
+            if (EmptyValues.hasText(code)) {
                 byCode.putIfAbsent(code, n);
             }
         }
@@ -91,7 +90,7 @@ final class WorkflowGraphTopologyValidator {
         for (Map<String, String> e : g.edges) {
             String f = normalize(e.get(COL_FROM_NODE_CODE));
             String t = normalize(e.get(COL_TO_NODE_CODE));
-            if (!Texts.hasText(f) || !Texts.hasText(t)) {
+            if (!EmptyValues.hasText(f) || !EmptyValues.hasText(t)) {
                 continue;
             }
             outgoing.computeIfAbsent(f, k -> new ArrayList<>()).add(t);
@@ -110,14 +109,14 @@ final class WorkflowGraphTopologyValidator {
         }
         int fallbackRowNo = 2;
         // V11 — START 数量、END 数量、START 入边、END 出边
-        if (EmptyChecks.isEmpty(startCodes) && EmptyChecks.isNotEmpty(byCode)) {
+        if (EmptyValues.isEmpty(startCodes) && EmptyValues.isNotEmpty(byCode)) {
             // 没有 START 节点,挑首节点定位
             Map<String, String> first = byCode.values().iterator().next();
             int issueRowNo = excelRowNo(first, fallbackRowNo);
             issues.add(
                     new WorkbookIssue(WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "workflow graph missing START node"));
         }
-        if (EmptyChecks.isEmpty(endCodes) && EmptyChecks.isNotEmpty(byCode)) {
+        if (EmptyValues.isEmpty(endCodes) && EmptyValues.isNotEmpty(byCode)) {
             Map<String, String> first = byCode.values().iterator().next();
             int issueRowNo = excelRowNo(first, fallbackRowNo);
             issues.add(new WorkbookIssue(
@@ -135,7 +134,7 @@ final class WorkflowGraphTopologyValidator {
             }
         }
         for (String s : startCodes) {
-            if (EmptyChecks.isNotEmpty(incoming.getOrDefault(s, List.of()))) {
+            if (EmptyValues.isNotEmpty(incoming.getOrDefault(s, List.of()))) {
                 Map<String, String> n = byCode.get(s);
                 int issueRowNo = excelRowNo(n, fallbackRowNo);
                 issues.add(new WorkbookIssue(
@@ -143,7 +142,7 @@ final class WorkflowGraphTopologyValidator {
             }
         }
         for (String e : endCodes) {
-            if (EmptyChecks.isNotEmpty(outgoing.getOrDefault(e, List.of()))) {
+            if (EmptyValues.isNotEmpty(outgoing.getOrDefault(e, List.of()))) {
                 Map<String, String> n = byCode.get(e);
                 int issueRowNo = excelRowNo(n, fallbackRowNo);
                 issues.add(new WorkbookIssue(
@@ -155,7 +154,7 @@ final class WorkflowGraphTopologyValidator {
         for (Map<String, String> e : g.edges) {
             String f = normalize(e.get(COL_FROM_NODE_CODE));
             String t = normalize(e.get(COL_TO_NODE_CODE));
-            if (Texts.hasText(f) && f.equals(t)) {
+            if (EmptyValues.hasText(f) && f.equals(t)) {
                 int issueRowNo = excelRowNo(e, fallbackEdgeRow);
                 issues.add(
                         new WorkbookIssue(WF_EDGE_SHEET, issueRowNo, COL_TO_NODE_CODE, "self-loop edge on node: " + f));
@@ -170,7 +169,7 @@ final class WorkflowGraphTopologyValidator {
         }
         // V2——从 START 状态不可达。
         Set<String> reachFromStart = WorkflowGraphs.reachableFrom(startCodes, outgoing);
-        if (EmptyChecks.isNotEmpty(startCodes)) {
+        if (EmptyValues.isNotEmpty(startCodes)) {
             for (String code : byCode.keySet()) {
                 if (!reachFromStart.contains(code)) {
                     Map<String, String> n = byCode.get(code);
@@ -182,7 +181,7 @@ final class WorkflowGraphTopologyValidator {
         }
         // V3 — cannot reach END
         Set<String> reachToEnd = WorkflowGraphs.reachableFrom(endCodes, incoming);
-        if (EmptyChecks.isNotEmpty(endCodes)) {
+        if (EmptyValues.isNotEmpty(endCodes)) {
             for (String code : byCode.keySet()) {
                 boolean nonEndNodeCannotReachAnyEnd = !reachToEnd.contains(code) && !endCodes.contains(code);
                 if (nonEndNodeCannotReachAnyEnd) {
@@ -198,7 +197,7 @@ final class WorkflowGraphTopologyValidator {
         for (Map<String, String> e : g.edges) {
             String type = normalizeEnum(e.get(COL_EDGE_TYPE));
             String expr = normalize(e.get(COL_CONDITION_EXPR));
-            if ("CONDITION".equals(type) && !Texts.hasText(expr)) {
+            if ("CONDITION".equals(type) && !EmptyValues.hasText(expr)) {
                 int issueRowNo = excelRowNo(e, rowNo);
                 issues.add(new WorkbookIssue(
                         WF_EDGE_SHEET,
@@ -213,7 +212,7 @@ final class WorkflowGraphTopologyValidator {
         for (Map.Entry<String, Map<String, String>> e : byCode.entrySet()) {
             Map<String, String> n = e.getValue();
             String params = n.get(COL_NODE_PARAMS);
-            if (!Texts.hasText(params)) {
+            if (!EmptyValues.hasText(params)) {
                 continue;
             }
             for (String ref : WorkflowGraphs.dslNodeReferences(params)) {

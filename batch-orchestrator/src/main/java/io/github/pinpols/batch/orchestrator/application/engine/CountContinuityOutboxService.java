@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -47,11 +47,11 @@ public class CountContinuityOutboxService {
     /** 必须在节点输出写入后、同一事务中执行。 */
     @Transactional(propagation = Propagation.MANDATORY)
     public void checkContinuity(Long workflowRunId, String nodeCode, String currentOutputJson) {
-        if (workflowRunId == null || EmptyChecks.isBlank(nodeCode)) {
+        if (workflowRunId == null || EmptyValues.isBlank(nodeCode)) {
             return;
         }
         WorkflowRunEntity run = workflowRunMapper.selectByIdAnyTenant(workflowRunId);
-        if (run == null || EmptyChecks.isBlank(run.getTenantId())) {
+        if (run == null || EmptyValues.isBlank(run.getTenantId())) {
             return;
         }
         WorkflowNodeRunEntity current =
@@ -178,7 +178,7 @@ public class CountContinuityOutboxService {
                     Status.UNVERIFIED, "UNIT_MISMATCH", outputCount, inputCount, outputContext, inputContext);
         }
         boolean hasMissingDeltaEvidence = declaration.expectedDelta() > 0
-                && (inputContext.excludedCount() == null || EmptyChecks.isBlank(inputContext.exclusionEvidenceRef()));
+                && (inputContext.excludedCount() == null || EmptyValues.isBlank(inputContext.exclusionEvidenceRef()));
         if (hasMissingDeltaEvidence) {
             return new Decision(
                     Status.UNVERIFIED, "DELTA_EVIDENCE_MISSING", outputCount, inputCount, outputContext, inputContext);
@@ -282,7 +282,7 @@ public class CountContinuityOutboxService {
     }
 
     private String nonblankString(Object value) {
-        return value instanceof String text && EmptyChecks.isNotBlank(text) ? text : null;
+        return value instanceof String text && EmptyValues.isNotBlank(text) ? text : null;
     }
 
     private Long nonnegativeLong(Object value) {
@@ -302,7 +302,7 @@ public class CountContinuityOutboxService {
     }
 
     private Map<String, Object> readObject(String json) throws JsonProcessingException {
-        if (EmptyChecks.isBlank(json)) return Map.of();
+        if (EmptyValues.isBlank(json)) return Map.of();
         Map<String, Object> result = objectMapper.readValue(json, MAP_TYPE);
         return result == null ? Map.of() : result;
     }

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
@@ -137,7 +137,7 @@ class TenantConfigInitTenantExecutor {
                 tenantId,
                 dryRun,
                 new ItemStatsBundle(jobStats, workflowStats, windowStats, calendarStats, quotaStats, queueStats),
-                !EmptyChecks.isEmpty(jobSpecs));
+                !EmptyValues.isEmpty(jobSpecs));
         return TenantInitResult.builder()
                 .tenantId(tenantId)
                 .success(true)
@@ -198,7 +198,7 @@ class TenantConfigInitTenantExecutor {
     }
 
     private static List<JobDefinitionSpec> copyJobSpecs(List<JobDefinitionSpec> source) {
-        if (EmptyChecks.isEmpty(source)) {
+        if (EmptyValues.isEmpty(source)) {
             return new ArrayList<>();
         }
         List<JobDefinitionSpec> copies = new ArrayList<>(source.size());

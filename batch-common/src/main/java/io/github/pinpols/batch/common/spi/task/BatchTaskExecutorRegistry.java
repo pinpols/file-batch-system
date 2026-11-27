@@ -2,7 +2,7 @@ package io.github.pinpols.batch.common.spi.task;
 
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -107,7 +107,7 @@ public class BatchTaskExecutorRegistry {
 
     private static void register(Map<String, BatchTaskExecutor> merged, BatchTaskExecutor exec, String source) {
         String type = exec.taskType();
-        if (EmptyChecks.isBlank(type)) {
+        if (EmptyValues.isBlank(type)) {
             throw new IllegalStateException("BatchTaskExecutor "
                     + exec.getClass().getName()
                     + " returned null/blank taskType() (source="

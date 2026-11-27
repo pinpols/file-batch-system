@@ -3,8 +3,8 @@ package io.github.pinpols.batch.sdk.dispatcher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.client.BatchSdkClientException;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.time.Duration;
@@ -152,7 +152,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     }
 
     private static boolean notBlank(String s) {
-        return EmptyChecks.isNotBlank(s);
+        return SdkEmptyValues.isNotBlank(s);
     }
 
     /** 启动 poll loop。阻塞当前线程,通常在专用线程跑。 */
@@ -259,7 +259,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         boolean capacityResumeOk = inFlight < Math.max(1, max / 2);
         if (capacityPause || platformPaused) {
             boolean consumerIsUnpausedWithAssignedPartitions =
-                    !paused && !EmptyChecks.isEmpty(Objects.requireNonNull(consumer.assignment()));
+                    !paused && !SdkEmptyValues.isEmpty(Objects.requireNonNull(consumer.assignment()));
             if (consumerIsUnpausedWithAssignedPartitions) {
                 consumer.pause(consumer.assignment());
                 paused = true;
@@ -275,7 +275,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
                 // 恢复容量暂停时，尚未到重试时间的分区继续保持暂停。
                 Set<TopicPartition> assignment = new HashSet<>(consumer.assignment());
                 assignment.removeAll(withheldRetryAt.keySet());
-                if (!EmptyChecks.isEmpty(assignment)) {
+                if (!SdkEmptyValues.isEmpty(assignment)) {
                     consumer.resume(assignment);
                 }
                 paused = false;
@@ -302,7 +302,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
             }
         });
         ready.retainAll(consumer.assignment());
-        if (!EmptyChecks.isEmpty(ready)) {
+        if (!SdkEmptyValues.isEmpty(ready)) {
             consumer.resume(ready);
             ready.forEach(withheldRetryAt::remove);
         }

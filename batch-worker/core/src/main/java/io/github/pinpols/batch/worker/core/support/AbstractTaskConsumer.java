@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
@@ -227,7 +227,7 @@ public abstract class AbstractTaskConsumer
                 final WorkerRegistration finalRegistration = registration;
                 String tenantId = finalMessage.tenantId();
                 WorkerExecutionResult result;
-                boolean hasKnownTenantIdentity = EmptyChecks.isNotBlank(tenantId) && !"unknown".equals(tenantId);
+                boolean hasKnownTenantIdentity = EmptyValues.isNotBlank(tenantId) && !"unknown".equals(tenantId);
                 if (hasKnownTenantIdentity) {
                     result = RlsTenantContextHolder.runWithTenant(
                             tenantId,
@@ -320,7 +320,7 @@ public abstract class AbstractTaskConsumer
      * @return true=提交整批 offset;false=不提交(Kafka 重投整批,靠 partition 幂等去重已成功项)
      */
     protected boolean doConsumeBatch(List<String> payloads) {
-        if (EmptyChecks.isEmpty(payloads)) {
+        if (EmptyValues.isEmpty(payloads)) {
             return true;
         }
         if (backpressure.isPlatformDraining()) {

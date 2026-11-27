@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.resilience;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -35,7 +35,7 @@ public final class DegradedResponseHeaders {
         }
         Set<String> sources = new LinkedHashSet<>();
         String current = response.getHeader(HEADER_NAME);
-        if (EmptyChecks.isNotBlank(current)) {
+        if (EmptyValues.isNotBlank(current)) {
             for (String source : current.split(",")) {
                 String value = normalize(source);
                 if (value != null) {
@@ -48,11 +48,11 @@ public final class DegradedResponseHeaders {
     }
 
     private static String normalize(String value) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return null;
         }
         String trimmedValue = value.trim();
         String normalized = trimmedValue.replaceAll("[^A-Za-z0-9._-]", "_");
-        return EmptyChecks.isBlank(normalized) ? null : normalized;
+        return EmptyValues.isBlank(normalized) ? null : normalized;
     }
 }

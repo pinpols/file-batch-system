@@ -9,7 +9,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
@@ -36,7 +36,7 @@ public class TenantConfigPackageExcelApplyAuthorization {
         if (!authorities.contains(ConsoleRoles.TENANT_ADMIN)) {
             throw forbidden();
         }
-        boolean packageContainsPlatformManagedFields = EmptyChecks.isNotEmpty(result.validResourceQueues())
+        boolean packageContainsPlatformManagedFields = EmptyValues.isNotEmpty(result.validResourceQueues())
                 || hasValues(result.validJobs(), Set.of(COL_QUEUE_CODE, COL_WORKER_GROUP))
                 || hasValues(result.validWfNodes(), Set.of(COL_WORKER_GROUP))
                 || hasValues(result.validJobMonitoringPolicies(), PLATFORM_MONITORING_FIELDS);
@@ -59,7 +59,7 @@ public class TenantConfigPackageExcelApplyAuthorization {
     }
 
     private static boolean hasValues(List<Map<String, String>> rows, Set<String> fields) {
-        return rows.stream().anyMatch(row -> fields.stream().map(row::get).anyMatch(EmptyChecks::isNotEmpty));
+        return rows.stream().anyMatch(row -> fields.stream().map(row::get).anyMatch(EmptyValues::isNotEmpty));
     }
 
     private static BizException forbidden() {

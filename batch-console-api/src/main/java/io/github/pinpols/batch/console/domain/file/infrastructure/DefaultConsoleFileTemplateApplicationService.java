@@ -6,8 +6,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
@@ -91,7 +91,7 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
         String resolved = tenantGuard.resolveTenant(tenantId);
         FileTemplateConfigQueryView templateRow = mapper.selectById(resolved, id);
         FileTemplateConfigQueryView requiredTemplateRow =
-                Guard.requireFound(templateRow, "file template not found: " + id);
+                Preconditions.requireFound(templateRow, "file template not found: " + id);
         return ConsoleFileProjectionMapper.templateView(requiredTemplateRow);
     }
 
@@ -120,7 +120,7 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
     public ConsoleFileTemplateResponse update(Long id, FileTemplateUpdateRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         FileTemplateConfigQueryView existing =
-                Guard.requireFound(mapper.selectById(tenantId, id), "file template not found: " + id);
+                Preconditions.requireFound(mapper.selectById(tenantId, id), "file template not found: " + id);
         String operator = requestMetadataResolver.current().operatorId();
         String templateCode = existing.templateCode();
         // #9 (adv-review 2026-07-13)：update 不得改 version —— upsert 的 on conflict 键含 version，
@@ -141,7 +141,7 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
         String resolved = tenantGuard.resolveTenant(tenantId);
         if (Boolean.TRUE.equals(enabled)) {
             FileTemplateConfigQueryView existing =
-                    Guard.requireFound(mapper.selectById(resolved, id), "file template not found: " + id);
+                    Preconditions.requireFound(mapper.selectById(resolved, id), "file template not found: " + id);
             FixedWidthMappingValidation.validate(
                     objectMapper,
                     true,
@@ -400,12 +400,13 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
     }
 
     private String normalizeDirection(String direction) {
-        if (!Texts.hasText(direction)) {
+        if (!EmptyValues.hasText(direction)) {
             return "IMPORT";
         }
         String trimmedDirection = direction.trim();
         String normalized = trimmedDirection.toUpperCase(Locale.ROOT);
-        Guard.require("IMPORT".equals(normalized) || "EXPORT".equals(normalized), "direction must be IMPORT or EXPORT");
+        Preconditions.require(
+                "IMPORT".equals(normalized) || "EXPORT".equals(normalized), "direction must be IMPORT or EXPORT");
         return normalized;
     }
 

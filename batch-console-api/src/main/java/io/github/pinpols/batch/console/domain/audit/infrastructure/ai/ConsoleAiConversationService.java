@@ -7,8 +7,7 @@ import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
@@ -83,7 +82,7 @@ public class ConsoleAiConversationService {
             throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
         }
 
-        boolean creating = !Texts.hasText(requestedConversationId);
+        boolean creating = !EmptyValues.hasText(requestedConversationId);
         String conversationId = creating ? UUID.randomUUID().toString() : requestedConversationId;
         OffsetDateTime now = nowUtc();
         int retentionDays = properties.getPersistence().getRetentionDays();
@@ -245,7 +244,7 @@ public class ConsoleAiConversationService {
     }
 
     private CursorPosition decodeCursor(String cursor) {
-        if (!Texts.hasText(cursor)) {
+        if (!EmptyValues.hasText(cursor)) {
             return new CursorPosition(null, null);
         }
         if (cursor.length() > CURSOR_MAX_LENGTH) {
@@ -254,7 +253,7 @@ public class ConsoleAiConversationService {
         Map<String, Object> values = CursorCodec.decode(cursor);
         if (!(values.get("updatedAt") instanceof String updatedAt)
                 || !(values.get("id") instanceof String id)
-                || EmptyChecks.isBlank(id)
+                || EmptyValues.isBlank(id)
                 || id.length() > CONVERSATION_ID_MAX_LENGTH) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
         }
@@ -397,7 +396,7 @@ public class ConsoleAiConversationService {
     }
 
     private static void requireOwner(String ownerUserId) {
-        if (!Texts.hasText(ownerUserId)) {
+        if (!EmptyValues.hasText(ownerUserId)) {
             throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
         }
     }

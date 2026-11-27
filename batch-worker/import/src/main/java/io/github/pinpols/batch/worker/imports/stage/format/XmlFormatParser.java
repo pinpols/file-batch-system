@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -92,7 +92,7 @@ public class XmlFormatParser implements FormatParser {
         Object v = hints.get("xmlRecordElement");
         if (v != null) {
             String presenceText = String.valueOf(v);
-            if (Texts.hasText(presenceText)) {
+            if (EmptyValues.hasText(presenceText)) {
                 String rawRecordElement = String.valueOf(v);
                 return rawRecordElement.trim();
             }
@@ -101,7 +101,7 @@ public class XmlFormatParser implements FormatParser {
             Object direct = map.get("xml_record_element");
             if (direct != null) {
                 String presenceText = String.valueOf(direct);
-                if (Texts.hasText(presenceText)) {
+                if (EmptyValues.hasText(presenceText)) {
                     String rawRecordElement = String.valueOf(direct);
                     return rawRecordElement.trim();
                 }
@@ -112,7 +112,7 @@ public class XmlFormatParser implements FormatParser {
 
     private String localElementName(Element element) {
         String local = element.getLocalName();
-        if (Texts.hasText(local)) {
+        if (EmptyValues.hasText(local)) {
             return local;
         }
         String tag = element.getTagName();

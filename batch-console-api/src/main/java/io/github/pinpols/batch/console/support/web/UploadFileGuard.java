@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.support.web;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
@@ -71,7 +71,7 @@ public final class UploadFileGuard {
 
     private static void requireExtension(MultipartFile file, Set<String> allowed) {
         String name = file.getOriginalFilename();
-        if (EmptyChecks.isBlank(name)) {
+        if (EmptyValues.isBlank(name)) {
             throw invalidUpload(file, "uploaded file missing original filename");
         }
         int dot = name.lastIndexOf('.');

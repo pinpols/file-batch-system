@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
@@ -183,7 +183,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
 
     public List<ConsoleAiAttachmentEntity> validateDrafts(String tenantId, String ownerUserId, List<UUID> ids) {
         requireEnabled();
-        boolean attachmentIdsAreInvalid = EmptyChecks.isEmpty(ids)
+        boolean attachmentIdsAreInvalid = EmptyValues.isEmpty(ids)
                 || ids.size() > aiProperties.getImage().getMaxImages()
                 || ids.stream().distinct().count() != ids.size();
         if (attachmentIdsAreInvalid) {
@@ -216,7 +216,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
 
     public void bind(ConsoleAiAttachmentBindingInput input) {
         List<UUID> ids = input.ids();
-        if (EmptyChecks.isEmpty(ids)) return;
+        if (EmptyValues.isEmpty(ids)) return;
         String tenantId = input.tenantId();
         String ownerUserId = input.ownerUserId();
         String conversationId = input.conversationId();

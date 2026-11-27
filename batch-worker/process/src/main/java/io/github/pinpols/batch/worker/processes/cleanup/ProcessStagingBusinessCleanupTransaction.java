@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
 import io.github.pinpols.batch.worker.processes.query.ProcessStagingExpiredScanQuery;
 import java.time.Instant;
@@ -54,7 +54,7 @@ public class ProcessStagingBusinessCleanupTransaction {
         while (true) {
             List<ProcessStagingGenerationCandidate> generations =
                     mapper.listActiveGenerationsAfter(tenantId, cursor, batchSize);
-            if (EmptyChecks.isEmpty(Objects.requireNonNull(generations))) {
+            if (EmptyValues.isEmpty(Objects.requireNonNull(generations))) {
                 return oldest;
             }
             for (ProcessStagingGenerationCandidate generation : generations) {

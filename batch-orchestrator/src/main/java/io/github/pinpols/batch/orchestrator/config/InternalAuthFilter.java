@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.security.SecretComparator;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyCandidate;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
@@ -105,7 +105,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
         // Path 1: API Key (ADR-035 P2 租户自托管 worker)
         String apiKey = request.getHeader(HEADER_API_KEY);
         String tenantHeader = request.getHeader(HEADER_TENANT);
-        if (EmptyChecks.isNotBlank(apiKey)) {
+        if (EmptyValues.isNotBlank(apiKey)) {
             // 租户 API-Key 只允许自托管 worker 的执行/查询端点，以及显式 worker.ops scope 的运维变更端点；
             // 其它内部治理接口仍必须走 X-Internal-Secret，避免 per-tenant key 横向触达平台级内部能力。
             Optional<ApiKeyCandidate> rec = resolveApiKeyCandidate(request.getMethod(), path, apiKey, tenantHeader);

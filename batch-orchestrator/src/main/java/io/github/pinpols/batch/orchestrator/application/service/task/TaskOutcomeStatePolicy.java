@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleStatusCatalog;
@@ -26,11 +26,11 @@ final class TaskOutcomeStatePolicy {
 
     static Set<String> parseActiveNodes(String currentNodeCode) {
         Set<String> activeNodes = new LinkedHashSet<>();
-        if (EmptyChecks.isBlank(currentNodeCode)) {
+        if (EmptyValues.isBlank(currentNodeCode)) {
             return activeNodes;
         }
         for (String nodeCode : currentNodeCode.split(",")) {
-            if (EmptyChecks.isBlank(nodeCode)) {
+            if (EmptyValues.isBlank(nodeCode)) {
                 continue;
             }
             activeNodes.add(nodeCode.trim());
@@ -142,7 +142,7 @@ final class TaskOutcomeStatePolicy {
     }
 
     static String resolveWorkflowCurrentNode(Set<String> activeNodes, String workflowStatus, String fallbackNodeCode) {
-        if (EmptyChecks.isNotEmpty(activeNodes)) {
+        if (EmptyValues.isNotEmpty(activeNodes)) {
             return String.join(",", activeNodes);
         }
         if (isWorkflowTerminal(workflowStatus)) {

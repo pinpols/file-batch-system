@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.sdk.task;
 
 import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpoint;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -73,7 +73,7 @@ public record SdkTaskContext(
      * 遇到不支持的格式时按失败关闭处理，避免消费者静默替换为其他版本。
      */
     public List<SdkCrossDayResult> crossDayResults(String alias) {
-        if (EmptyChecks.isBlank(alias)) {
+        if (SdkEmptyValues.isBlank(alias)) {
             throw new IllegalArgumentException("cross-day alias is required");
         }
         Object rawCrossDay = parameters.get("crossDay");
@@ -159,7 +159,7 @@ public record SdkTaskContext(
     }
 
     private static String requiredString(Object value, String field, String alias) {
-        if (!(value instanceof String text) || EmptyChecks.isBlank(text)) {
+        if (!(value instanceof String text) || SdkEmptyValues.isBlank(text)) {
             throw new IllegalArgumentException("cross-day " + field + " is required: " + alias);
         }
         return text;

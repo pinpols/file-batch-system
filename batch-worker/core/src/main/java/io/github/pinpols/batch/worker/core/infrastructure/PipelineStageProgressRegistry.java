@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 import java.util.Comparator;
 import java.util.List;
@@ -53,7 +53,7 @@ public class PipelineStageProgressRegistry {
     }
 
     private static Key key(ExecutionContext context, String stageCode) {
-        if (context == null || !Texts.hasText(stageCode)) {
+        if (context == null || !EmptyValues.hasText(stageCode)) {
             return null;
         }
         Long taskId = longValue(context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));

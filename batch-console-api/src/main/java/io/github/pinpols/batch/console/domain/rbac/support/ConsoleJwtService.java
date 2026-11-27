@@ -10,9 +10,9 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
@@ -160,7 +160,7 @@ public class ConsoleJwtService {
     void validateSecuritySecrets() {
         if (isProductionProfile()) {
             String jwtSecret = properties.getJwtSecret();
-            if (!Texts.hasText(jwtSecret)) {
+            if (!EmptyValues.hasText(jwtSecret)) {
                 throw new IllegalStateException(
                         "FATAL: batch.console.security.jwt-secret is empty; production requires a real secret injected through an environment variable or secret manager");
             }
@@ -180,7 +180,7 @@ public class ConsoleJwtService {
             // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就用默认密钥签发 token"(审计 #4)。
             String jwtSecret = properties.getJwtSecret();
             String lower = jwtSecret == null ? "" : jwtSecret.toLowerCase(Locale.ROOT);
-            boolean jwtSecretIsEmptyOrWeak = !Texts.hasText(jwtSecret)
+            boolean jwtSecretIsEmptyOrWeak = !EmptyValues.hasText(jwtSecret)
                     || lower.contains("change-me")
                     || lower.contains("change_me")
                     || jwtSecret.length() < MIN_JWT_SECRET_LENGTH;
@@ -230,8 +230,8 @@ public class ConsoleJwtService {
     @SuppressWarnings({"java:S2259", "java:S2589"})
     public ConsoleAuthTokenResponse issueToken(
             String username, String tenantId, Set<String> authorities, long sessionVersion) {
-        Guard.requireText(username, "username is required");
-        if (!Texts.hasText(tenantId)) {
+        Preconditions.requireText(username, "username is required");
+        if (!EmptyValues.hasText(tenantId)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.required");
         }
         if (!ConsoleRoles.isFormalRoleSet(authorities)) {
@@ -274,7 +274,7 @@ public class ConsoleJwtService {
                 token, "Bearer", issuedAt, expiresAt, username, tenantId, new LinkedHashSet<>(authorities), false);
     }
 
-    // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 结果的空值保护。
+    // S2259 无法识别下方 EmptyValues 对 ObjectProvider 结果的空值保护。
     @SuppressWarnings("java:S2259")
     public ConsolePrincipal authenticate(String token) {
         Jwt jwt = decoder().decode(token);
@@ -314,7 +314,7 @@ public class ConsoleJwtService {
     /**
      * 把当前令牌加入撤销名单，保留至令牌的有效期及时间容忍期结束。调用方为登出接口。
      */
-    // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 和 JWT 过期时间的空值保护。
+    // S2259 无法识别下方 EmptyValues 对 ObjectProvider 和 JWT 过期时间的空值保护。
     @SuppressWarnings("java:S2259")
     public void revoke(String token) {
         ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();

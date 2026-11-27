@@ -7,10 +7,10 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConfigReleaseApplyService;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
 import io.github.pinpols.batch.console.application.contract.query.ConfigChangeLogQueryRequest;
@@ -229,7 +229,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         ConfigReleaseEntity previousEffectiveRelease = configReleaseMapper.selectPreviousEffective(
                 tenantId, release.getConfigType(), release.getConfigKey(), release.getVersionNo());
         ConfigReleaseEntity previous =
-                Guard.requireFound(previousEffectiveRelease, "previous effective config release not found");
+                Preconditions.requireFound(previousEffectiveRelease, "previous effective config release not found");
         configReleaseApplyService.apply(previous, currentOperator(), "config-rollback-" + release.getId());
         return changeReleaseStatus(release, request, ConfigLifecycleStatus.ROLLED_BACK.code(), "ROLLBACK");
     }
@@ -258,7 +258,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         secretVersionMapper.acquireVersionLock(tenantId, safeSecretRef);
         Integer latestVersionNo = secretVersionMapper.selectLatestVersionNo(tenantId, safeSecretRef);
         int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo + 1;
-        boolean hasRequestedSecretStatus = Texts.hasText(request.getSecretStatus());
+        boolean hasRequestedSecretStatus = EmptyValues.hasText(request.getSecretStatus());
         String nextStatus;
         if (hasRequestedSecretStatus) {
             String requestedSecretStatus = request.getSecretStatus();
@@ -333,7 +333,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
 
         SecretVersionEntity selectedVersion = secretVersionMapper.selectById(tenantId, secretVersionId);
         SecretVersionEntity version =
-                Guard.requireFound(selectedVersion, "secret version not found: " + secretVersionId);
+                Preconditions.requireFound(selectedVersion, "secret version not found: " + secretVersionId);
         if (ConfigLifecycleStatus.DRAFT.code().equals(version.getSecretStatus())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
         }
@@ -439,7 +439,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     private ConfigReleaseEntity loadRelease(String tenantId, Long releaseId) {
 
         ConfigReleaseEntity release = configReleaseMapper.selectById(tenantId, releaseId);
-        return Guard.requireFound(release, "config release not found");
+        return Preconditions.requireFound(release, "config release not found");
     }
 
     private void acquireReleaseLock(ConfigReleaseEntity release) {
@@ -471,7 +471,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     }
 
     private void validateJson(String value, String fieldName) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return;
         }
         Object parsedJson = safeParseJson(value);
@@ -487,7 +487,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
      * 在畸形 JSON 时抛 {@link IllegalArgumentException}, 穿透 ControllerAdvice 变 500;统一收敛在此。
      */
     private static Object safeParseJson(String value) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return null;
         }
         try {
@@ -498,7 +498,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     }
 
     private Instant parseInstant(String value, String fieldName) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return null;
         }
         try {
@@ -517,7 +517,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
 
     private String currentOperator() {
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-        String operatorId = Texts.hasText(metadata.operatorId()) ? metadata.operatorId() : "system";
+        String operatorId = EmptyValues.hasText(metadata.operatorId()) ? metadata.operatorId() : "system";
         return ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
     }
 
@@ -528,7 +528,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     }
 
     private String resolveSecretPayload(SecretVersionRotateRequest request) {
-        if (Texts.hasText(request.getSecretPayloadJson())) {
+        if (EmptyValues.hasText(request.getSecretPayloadJson())) {
             return request.getSecretPayloadJson();
         }
         if (request.getSecretPayload() != null) {
@@ -552,7 +552,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         String resolved = tenantGuard.resolveTenant(tenantId);
 
         ConfigReleaseEntity release = configReleaseMapper.selectById(resolved, releaseId);
-        ConfigReleaseEntity entity = Guard.requireFound(release, "config release not found: " + releaseId);
+        ConfigReleaseEntity entity = Preconditions.requireFound(release, "config release not found: " + releaseId);
         return toConfigReleaseResponse(entity);
     }
 
@@ -561,7 +561,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         String resolved = tenantGuard.resolveTenant(tenantId);
 
         SecretVersionEntity secretVersion = secretVersionMapper.selectById(resolved, secretVersionId);
-        SecretVersionEntity entity = Guard.requireFound(secretVersion, "secret version not found: " + secretVersionId);
+        SecretVersionEntity entity =
+                Preconditions.requireFound(secretVersion, "secret version not found: " + secretVersionId);
         return toSecretVersionResponse(entity);
     }
 
@@ -622,7 +623,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
 
     /** JSON 字符串由 Jackson 负责传输转义；HTML 转义会把引号改成实体并破坏客户端解析。 */
     private static String jsonResponse(String value) {
-        return Texts.hasText(value) ? value : EMPTY_JSON_OBJECT;
+        return EmptyValues.hasText(value) ? value : EMPTY_JSON_OBJECT;
     }
 
     private ConsoleSecretVersionResponse toSecretVersionResponse(SecretVersionEntity entity) {
@@ -701,7 +702,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     }
 
     private String canonicalDependencyType(String raw) {
-        if (!Texts.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             return "";
         }
         String trimmedRaw = raw.trim();

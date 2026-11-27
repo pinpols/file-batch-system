@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.workflow.WorkflowParamResolver;
@@ -73,7 +73,7 @@ public class WorkflowNodePayloadBuilder {
             JobInstanceEntity jobInstance,
             WorkflowRunEntity workflowRun) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        if (EmptyChecks.isNotBlank(sourcePayload)) {
+        if (EmptyValues.isNotBlank(sourcePayload)) {
             try {
                 Object payloadObject = JsonUtils.fromJson(sourcePayload, Object.class);
                 if (payloadObject instanceof Map<?, ?> payloadMap) {
@@ -128,7 +128,7 @@ public class WorkflowNodePayloadBuilder {
         JobPartitionQuery siblingPartitionQuery =
                 JobPartitionQuery.ofJobInstance(jobInstance.getTenantId(), jobInstance.getId());
         List<JobPartitionEntity> siblings = jobMappers.jobPartitionMapper.selectByQuery(siblingPartitionQuery);
-        if (EmptyChecks.isEmpty(siblings)) {
+        if (EmptyValues.isEmpty(siblings)) {
             return;
         }
         JobPartitionEntity latestSuccess = findLatestSuccessPartition(siblings);
@@ -195,7 +195,7 @@ public class WorkflowNodePayloadBuilder {
             return;
         }
         Long fileId = null;
-        if (EmptyChecks.isNotBlank(jobInstance.getTraceId())) {
+        if (EmptyValues.isNotBlank(jobInstance.getTraceId())) {
             fileId = safeFileIdLookup(
                     fileRecordLookupMapper::selectIdByTenantAndTraceId,
                     jobInstance.getTenantId(),
@@ -204,7 +204,7 @@ public class WorkflowNodePayloadBuilder {
         }
         if (fileId == null) {
             Object batchNo = payload.get("batchNo");
-            if (EmptyChecks.isNotBlank(String.valueOf(batchNo))) {
+            if (EmptyValues.isNotBlank(String.valueOf(batchNo))) {
                 fileId = safeFileIdLookup(
                         fileRecordLookupMapper::selectIdByTenantAndSourceRef,
                         jobInstance.getTenantId(),
@@ -248,7 +248,7 @@ public class WorkflowNodePayloadBuilder {
             return;
         }
         String raw = workflowNode.getNodeParams();
-        if (EmptyChecks.isBlank(raw)) {
+        if (EmptyValues.isBlank(raw)) {
             return;
         }
         try {
@@ -350,7 +350,7 @@ public class WorkflowNodePayloadBuilder {
 
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parsePayloadMap(String payloadJson) {
-        if (EmptyChecks.isBlank(payloadJson)) {
+        if (EmptyValues.isBlank(payloadJson)) {
             return Map.of();
         }
         try {
@@ -369,7 +369,7 @@ public class WorkflowNodePayloadBuilder {
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> parseOutputJson(String outputJson) {
-        if (EmptyChecks.isBlank(outputJson)) {
+        if (EmptyValues.isBlank(outputJson)) {
             return null;
         }
         try {

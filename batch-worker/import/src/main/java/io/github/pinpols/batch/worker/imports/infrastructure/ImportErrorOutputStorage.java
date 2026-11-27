@@ -4,10 +4,9 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportBadRecord;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -40,10 +39,10 @@ public class ImportErrorOutputStorage {
     private final BatchObjectStore objectStore;
 
     public String writeErrorOutput(String tenantId, String fileId, List<ImportBadRecord> badRecords) {
-        boolean errorOutputInputIsIncomplete = !Texts.hasText(tenantId)
-                || !Texts.hasText(fileId)
+        boolean errorOutputInputIsIncomplete = !EmptyValues.hasText(tenantId)
+                || !EmptyValues.hasText(fileId)
                 || badRecords == null
-                || EmptyChecks.isEmpty(badRecords);
+                || EmptyValues.isEmpty(badRecords);
         if (errorOutputInputIsIncomplete) {
             return null;
         }

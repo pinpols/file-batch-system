@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleLoginRequest;
@@ -96,7 +96,7 @@ public class ConsoleAuthApplicationService {
                 "RSA-OAEP-256", loginKeyPairService.publicKeyPem(), loginKeyPairService.fingerprint());
     }
 
-    // S2259 无法识别 authorities(Authentication) 中 EmptyChecks 提供的空值契约。
+    // S2259 无法识别 authorities(Authentication) 中 EmptyValues 提供的空值契约。
     @SuppressWarnings("java:S2259")
     public ConsoleAuthTokenResponse issueToken(Authentication authentication) {
         String username = username(authentication);
@@ -168,10 +168,10 @@ public class ConsoleAuthApplicationService {
         // 返回全 null 字段的 mock metadata；对 null 的链式调用会 NPE。这里整段防御。
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
         String resolved = metadata == null ? null : metadata.tenantId();
-        return EmptyChecks.isBlank(resolved) ? securityProperties.getDefaultTenantId() : resolved;
+        return EmptyValues.isBlank(resolved) ? securityProperties.getDefaultTenantId() : resolved;
     }
 
-    // S2259 无法识别 EmptyChecks 的空值契约及下方 instanceof 守卫。
+    // S2259 无法识别 EmptyValues 的空值契约及下方 instanceof 守卫。
     @SuppressWarnings("java:S2259")
     private Set<String> authorities(Authentication authentication) {
         Set<String> resolved = new LinkedHashSet<>();
@@ -185,7 +185,7 @@ public class ConsoleAuthApplicationService {
                 resolved.add(grantedAuthority.getAuthority());
             }
         }
-        if (EmptyChecks.isEmpty(resolved) && !hasConsolePrincipal) {
+        if (EmptyValues.isEmpty(resolved) && !hasConsolePrincipal) {
             resolved.clear();
             resolved.addAll(securityProperties.getDefaultAuthorities());
         }

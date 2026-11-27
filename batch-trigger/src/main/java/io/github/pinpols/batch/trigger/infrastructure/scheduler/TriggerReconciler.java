@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
@@ -225,13 +225,13 @@ public class TriggerReconciler {
      */
     private boolean hasScheduleDrift(JobKey key, TriggerDescriptor descriptor) {
         String type = descriptor.getScheduleType();
-        if (EmptyChecks.isBlank(type)) {
+        if (EmptyValues.isBlank(type)) {
             // descriptor 没声明 schedule_type（异常数据 / 旧测试 fixture）→ 保守不判 drift
             return false;
         }
         try {
             List<? extends Trigger> triggers = scheduler.getTriggersOfJob(key);
-            if (EmptyChecks.isEmpty(triggers)) {
+            if (EmptyValues.isEmpty(triggers)) {
                 // Quartz 里有 jobKey 但没 trigger（罕见）→ 保守不判 drift，下一轮再说
                 return false;
             }
@@ -315,7 +315,7 @@ public class TriggerReconciler {
     }
 
     private long parseSecondsOrMinusOne(String expression) {
-        if (EmptyChecks.isBlank(expression)) {
+        if (EmptyValues.isBlank(expression)) {
             return -1L;
         }
         try {

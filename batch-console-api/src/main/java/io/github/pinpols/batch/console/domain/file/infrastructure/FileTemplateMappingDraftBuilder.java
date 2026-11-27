@@ -5,8 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 import java.util.ArrayList;
@@ -30,7 +29,7 @@ final class FileTemplateMappingDraftBuilder {
             }
             String sourceColumn = firstText(field.sourceColumn(), field.targetColumn());
             String targetColumn = firstText(field.targetColumn(), sourceColumn);
-            if (!Texts.hasText(sourceColumn)) {
+            if (!EmptyValues.hasText(sourceColumn)) {
                 warnings.add("存在未填写 sourceColumn/targetColumn 的字段,已跳过");
                 continue;
             }
@@ -43,7 +42,7 @@ final class FileTemplateMappingDraftBuilder {
             putIfText(mapping, "format", field.format());
             fieldMappings.add(mapping);
 
-            if (!Boolean.FALSE.equals(field.persist()) && Texts.hasText(targetColumn)) {
+            if (!Boolean.FALSE.equals(field.persist()) && EmptyValues.hasText(targetColumn)) {
                 Map<String, Object> columnMapping = new LinkedHashMap<>();
                 columnMapping.put("from", sourceColumn);
                 columnMapping.put("to", targetColumn);
@@ -55,16 +54,16 @@ final class FileTemplateMappingDraftBuilder {
         putIfText(jdbcMappedImport, "schema", command.schemaName());
         putIfText(jdbcMappedImport, "table", command.tableName());
         jdbcMappedImport.put("tenantColumn", firstText(command.tenantColumn(), "tenant_id"));
-        if (EmptyChecks.isNotEmpty(columnMappings)) {
+        if (EmptyValues.isNotEmpty(columnMappings)) {
             jdbcMappedImport.put("columnMappings", columnMappings);
         }
-        if (EmptyChecks.isNotEmpty(command.conflictColumns())) {
+        if (EmptyValues.isNotEmpty(command.conflictColumns())) {
             jdbcMappedImport.put("conflictColumns", command.conflictColumns());
         }
         if (Boolean.TRUE.equals(command.standardAuditBindings())) {
             jdbcMappedImport.put("standardAuditBindings", true);
         }
-        if (!Texts.hasText(command.tableName())) {
+        if (!EmptyValues.hasText(command.tableName())) {
             warnings.add("未填写 tableName,保存前需要补齐 jdbcMappedImport.table");
         }
         Map<String, Object> queryParamSchema = new LinkedHashMap<>();
@@ -88,7 +87,7 @@ final class FileTemplateMappingDraftBuilder {
                 continue;
             }
             String sourceColumn = firstText(field.sourceColumn(), field.targetColumn());
-            if (!Texts.hasText(sourceColumn)) {
+            if (!EmptyValues.hasText(sourceColumn)) {
                 warnings.add("存在未填写 sourceColumn/targetColumn 的字段,已跳过");
                 continue;
             }
@@ -108,14 +107,14 @@ final class FileTemplateMappingDraftBuilder {
         Map<String, Object> sqlTemplateExport = new LinkedHashMap<>();
         putIfText(sqlTemplateExport, "schema", command.schemaName());
         putIfText(sqlTemplateExport, "table", command.tableName());
-        if (EmptyChecks.isNotEmpty(selectedColumns)) {
+        if (EmptyValues.isNotEmpty(selectedColumns)) {
             sqlTemplateExport.put("columns", selectedColumns);
         }
         sqlTemplateExport.put("cursorColumn", "id");
         Map<String, Object> queryParamSchema = new LinkedHashMap<>();
         queryParamSchema.put("export_data_ref", WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
         queryParamSchema.put("sqlTemplateExport", sqlTemplateExport);
-        if (EmptyChecks.isNotEmpty(csvColumns)) {
+        if (EmptyValues.isNotEmpty(csvColumns)) {
             // Worker 的文件列来自 csvColumns；SQL 游标列只服务分页，不应自动进入文件。
             queryParamSchema.put("csvColumns", csvColumns);
         }
@@ -144,7 +143,7 @@ final class FileTemplateMappingDraftBuilder {
     }
 
     private static void putIfText(Map<String, Object> map, String key, String value) {
-        if (Texts.hasText(value)) {
+        if (EmptyValues.hasText(value)) {
             map.put(key, value.trim());
         }
     }
@@ -156,10 +155,10 @@ final class FileTemplateMappingDraftBuilder {
     }
 
     private static String firstText(String preferred, String fallback) {
-        return Texts.hasText(preferred) ? preferred.trim() : blankToNull(fallback);
+        return EmptyValues.hasText(preferred) ? preferred.trim() : blankToNull(fallback);
     }
 
     static String blankToNull(String value) {
-        return Texts.hasText(value) ? value.trim() : null;
+        return EmptyValues.hasText(value) ? value.trim() : null;
     }
 }

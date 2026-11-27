@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.stateful;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -119,6 +119,6 @@ public final class StatefulBackendIdentity {
     }
 
     private static boolean hasText(String value) {
-        return EmptyChecks.isNotBlank(value);
+        return EmptyValues.isNotBlank(value);
     }
 }

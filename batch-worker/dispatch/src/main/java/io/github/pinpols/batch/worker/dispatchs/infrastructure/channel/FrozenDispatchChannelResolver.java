@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -31,11 +31,11 @@ public class FrozenDispatchChannelResolver {
     public Optional<Map<String, Object>> resolve(String tenantId, String channelCode, String rawPayload) {
         PayloadSelection selection = selectPayloadFields(rawPayload);
         String protectedSnapshot = selection.snapshots().get(channelCode);
-        if (EmptyChecks.isBlank(protectedSnapshot)) {
+        if (EmptyValues.isBlank(protectedSnapshot)) {
             if (ReplayOperationType.WORKFLOW_RUN.code().equals(selection.operationType())) {
                 throw invalidSnapshot();
             }
-            if (EmptyChecks.isEmpty(Objects.requireNonNull(selection.snapshots()))) {
+            if (EmptyValues.isEmpty(Objects.requireNonNull(selection.snapshots()))) {
                 return Optional.empty();
             }
             throw invalidSnapshot();
@@ -60,7 +60,7 @@ public class FrozenDispatchChannelResolver {
     }
 
     private PayloadSelection selectPayloadFields(String rawPayload) {
-        if (EmptyChecks.isBlank(rawPayload)) {
+        if (EmptyValues.isBlank(rawPayload)) {
             return new PayloadSelection(null, Map.of());
         }
         String operationType = null;
@@ -111,11 +111,11 @@ public class FrozenDispatchChannelResolver {
                 throw invalidSnapshot();
             }
             String channelCode = parser.currentName();
-            if (EmptyChecks.isBlank(channelCode) || parser.nextToken() != JsonToken.VALUE_STRING) {
+            if (EmptyValues.isBlank(channelCode) || parser.nextToken() != JsonToken.VALUE_STRING) {
                 throw invalidSnapshot();
             }
             String snapshotText = parser.getText();
-            if (EmptyChecks.isBlank(snapshotText)) {
+            if (EmptyValues.isBlank(snapshotText)) {
                 throw invalidSnapshot();
             }
             String snapshotForInsert = parser.getText();

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.common.security;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -58,7 +58,7 @@ public final class SensitiveDataValidator {
      *     不回显调用方提供的字段名
      */
     public static void rejectIfContainsSensitiveKeys(Map<String, ?> data, String contextLabel) {
-        if (EmptyChecks.isEmpty(data)) {
+        if (EmptyValues.isEmpty(data)) {
             return;
         }
         if (findFirstSensitiveKey(data) != null) {
@@ -72,7 +72,7 @@ public final class SensitiveDataValidator {
 
     /** boolean 版:dry-run / 警示路径使用,不阻断。 */
     public static boolean containsSensitiveKey(Map<String, ?> data) {
-        if (EmptyChecks.isEmpty(data)) {
+        if (EmptyValues.isEmpty(data)) {
             return false;
         }
         return findFirstSensitiveKey(data) != null;
@@ -80,7 +80,7 @@ public final class SensitiveDataValidator {
 
     /** 拒绝命令行参数或 URI 字符串中具有明确凭据语法的值；不在异常中回显原文。 */
     public static void rejectIfContainsInlineCredential(String value, String contextLabel) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return;
         }
         String option = value.stripLeading();

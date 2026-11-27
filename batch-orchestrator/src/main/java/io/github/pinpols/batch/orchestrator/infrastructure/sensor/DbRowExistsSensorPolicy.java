@@ -5,8 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeResult;
@@ -81,7 +80,7 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
         Map<String, Object> spec = ctx.sensorSpec();
         String schema = SensorSpecs.string(spec, "schema");
         String sql = SensorSpecs.string(spec, "sql");
-        if (!Texts.hasText(schema) || !Texts.hasText(sql)) {
+        if (!EmptyValues.hasText(schema) || !EmptyValues.hasText(sql)) {
             return SensorProbeResult.error(SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE, "schema/sql required"));
         }
         if (!props.getDbAllowedSchemas().contains(schema.toLowerCase(Locale.ROOT))) {
@@ -107,7 +106,7 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
     private SensorProbeResult probeRowsInTransaction(String sql, Map<String, Object> params) {
         RlsTenantSessionSupport.applyIfPresent(dataSource);
         List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
-        if (EmptyChecks.isEmpty(rows) || rows.get(0) == null) {
+        if (EmptyValues.isEmpty(rows) || rows.get(0) == null) {
             return SensorProbeResult.notYet();
         }
         Map<String, Object> output = new LinkedHashMap<>();

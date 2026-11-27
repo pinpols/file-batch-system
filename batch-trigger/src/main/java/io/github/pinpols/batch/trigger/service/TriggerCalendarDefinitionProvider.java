@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import io.github.pinpols.batch.trigger.support.CalendarHolidayRule;
@@ -26,7 +26,7 @@ public class TriggerCalendarDefinitionProvider {
 
     public CalendarBizDateDefinition load(String tenantId, String rawCalendarCode) {
         String calendarCode = CodeNormalizer.toConfigFormOrNull(rawCalendarCode);
-        if (!Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(calendarCode)) {
             return null;
         }
         TriggerCalendarConfig calendar =

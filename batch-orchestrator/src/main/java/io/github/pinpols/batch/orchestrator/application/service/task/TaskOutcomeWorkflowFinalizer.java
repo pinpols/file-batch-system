@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
@@ -50,7 +50,7 @@ final class TaskOutcomeWorkflowFinalizer {
     }
 
     void finalizeWorkflow(Context context) {
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(context.activeNodes()))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(context.activeNodes()))) {
             nodeTerminalFinalizer.finalizeIfAllNodesTerminal(context.workflowRun());
             return;
         }

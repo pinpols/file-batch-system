@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
@@ -147,7 +147,7 @@ public class JobSlaViolationProcessor {
         if (candidate.getParentWorkflowRunId() != null) {
             extra.put("workflowRunId", candidate.getParentWorkflowRunId().toString());
         }
-        if (!EmptyChecks.isBlank(candidate.getParentNodeCode())) {
+        if (!EmptyValues.isBlank(candidate.getParentNodeCode())) {
             extra.put("nodeCode", candidate.getParentNodeCode());
         }
         extra.put("instanceNo", candidate.getInstanceNo());

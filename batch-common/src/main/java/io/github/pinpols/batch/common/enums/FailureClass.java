@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.enums;
 
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -42,7 +42,7 @@ public enum FailureClass implements DictEnum {
 
     /** 空白回落 UNKNOWN; 未知 code 抛异常, 避免静默捕获并抑制。 */
     public static FailureClass fromCode(String code) {
-        if (EmptyChecks.isBlank(code)) {
+        if (EmptyValues.isBlank(code)) {
             return UNKNOWN;
         }
         FailureClass match = DictEnum.fromCode(FailureClass.class, code);

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.application;
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import java.util.Arrays;
 import java.util.List;
@@ -29,7 +29,7 @@ public class ConsoleAdminTestDataApplicationService {
         assertCleanupAllowed();
         List<String> tenantIds = Arrays.stream(ids.split(","))
                 .map(String::trim)
-                .filter(tenantId -> EmptyChecks.isNotEmpty(tenantId))
+                .filter(tenantId -> EmptyValues.isNotEmpty(tenantId))
                 .toList();
         return orchestratorPort.adminTestDataCleanupByExactTenantIds(tenantIds);
     }

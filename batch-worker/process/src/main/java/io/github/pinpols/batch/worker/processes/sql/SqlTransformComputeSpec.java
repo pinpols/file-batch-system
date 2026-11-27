@@ -5,8 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -90,14 +89,14 @@ public record SqlTransformComputeSpec(
 
     public static SqlTransformComputeSpec parse(Map<String, Object> stepParams, ObjectMapper objectMapper) {
         Map<String, Object> root = extractSpecRoot(stepParams, objectMapper);
-        if (EmptyChecks.isEmpty(root)) {
+        if (EmptyValues.isEmpty(root)) {
             throw new IllegalArgumentException("sqlTransformCompute spec missing in COMPUTE step parameters");
         }
 
         String sourceSql = required(root, "sourceSql", "source_sql", "querySql", "query_sql");
         Object configuredTargetSchema = firstNonNull(root.get("targetSchema"), root.get("schema"));
         String targetSchema = text(configuredTargetSchema);
-        if (!Texts.hasText(targetSchema)) {
+        if (!EmptyValues.hasText(targetSchema)) {
             targetSchema = "biz";
         }
         String targetTable = required(root, "targetTable", "target_table", "table");
@@ -106,7 +105,7 @@ public record SqlTransformComputeSpec(
         Object configuredStagingMode = firstNonNull(root.get("stagingMode"), root.get("staging_mode"));
         StagingMode stagingMode = parseStagingMode(configuredStagingMode);
         List<ColumnMapping> columns = parseColumns(root.get("columns"));
-        if (EmptyChecks.isEmpty(columns)) {
+        if (EmptyValues.isEmpty(columns)) {
             throw new IllegalArgumentException("sqlTransformCompute.columns is required");
         }
         Object configuredConflictColumns = firstNonNull(root.get("conflictColumns"), root.get("conflict_columns"));
@@ -151,7 +150,7 @@ public record SqlTransformComputeSpec(
         } else {
             String rawText = String.valueOf(raw);
             String text = rawText.trim();
-            if (EmptyChecks.isEmpty(text)) {
+            if (EmptyValues.isEmpty(text)) {
                 return DEFAULT_MAX_STAGED_ROWS;
             }
             try {
@@ -184,7 +183,7 @@ public record SqlTransformComputeSpec(
         String name = text(m.get("name"));
         Object configuredCheckSql = firstNonNull(m.get("checkSql"), m.get("check_sql"));
         String checkSql = text(configuredCheckSql);
-        return Texts.hasText(name) && Texts.hasText(checkSql)
+        return EmptyValues.hasText(name) && EmptyValues.hasText(checkSql)
                 ? Optional.of(new ValidationRule(name, checkSql))
                 : Optional.empty();
     }
@@ -207,16 +206,16 @@ public record SqlTransformComputeSpec(
         // 都必须可幂等重放;空 conflictColumns 配 raw INSERT 会在 publish 重放时双写 target 行。
         // 因此对所有 writeMode 强制要求 conflictColumns。INSERT 路径在 buildPublishSql 中按 DO NOTHING
         // 语义生成 ON CONFLICT 子句,语义 = at-least-once 安全的 append-only。
-        if (EmptyChecks.isEmpty(conflictColumns)) {
+        if (EmptyValues.isEmpty(conflictColumns)) {
             throw new IllegalArgumentException("sqlTransformCompute.conflictColumns is required for "
                     + writeMode
                     + " (PROCESS retries are at-least-once; conflictColumns 不能为空,否则重放会双写 target)");
         }
-        if (Texts.hasText(watermarkColumn)) {
+        if (EmptyValues.hasText(watermarkColumn)) {
             JdbcMappedSqlValidator.requireIdentifier(watermarkColumn, "watermarkColumn");
         }
         if (stagingMode == StagingMode.DIRECT) {
-            if (EmptyChecks.isNotEmpty(validations)) {
+            if (EmptyValues.isNotEmpty(validations)) {
                 throw new IllegalArgumentException(
                         "sqlTransformCompute.validations are not supported when stagingMode=DIRECT"
                                 + " (DIRECT does not write batch.process_staging)");
@@ -244,14 +243,14 @@ public record SqlTransformComputeSpec(
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> extractSpecRoot(Map<String, Object> stepParams, ObjectMapper objectMapper) {
-        if (EmptyChecks.isEmpty(stepParams)) {
+        if (EmptyValues.isEmpty(stepParams)) {
             return Map.of();
         }
         Object nested = firstNonNull(stepParams.get("sqlTransformCompute"), stepParams.get("sql_transform_compute"));
         if (nested instanceof Map<?, ?> m) {
             return copyMap(m);
         }
-        if (nested instanceof String text && Texts.hasText(text)) {
+        if (nested instanceof String text && EmptyValues.hasText(text)) {
             try {
                 return objectMapper.readValue(text, Map.class);
             } catch (Exception ignored) {
@@ -268,7 +267,7 @@ public record SqlTransformComputeSpec(
             return WriteMode.INSERT;
         }
         String value = text(raw);
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return WriteMode.INSERT;
         }
         String trimmedValue = value.trim();
@@ -287,7 +286,7 @@ public record SqlTransformComputeSpec(
             return EmptyResultPolicy.SUCCESS;
         }
         String value = text(raw);
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return EmptyResultPolicy.SUCCESS;
         }
         String trimmedValue = value.trim();
@@ -304,7 +303,7 @@ public record SqlTransformComputeSpec(
             return StagingMode.JSONB;
         }
         String value = text(raw);
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return StagingMode.JSONB;
         }
         String trimmedValue = value.trim();
@@ -327,7 +326,7 @@ public record SqlTransformComputeSpec(
     }
 
     private static Optional<ColumnMapping> parseColumnMapping(Object item) {
-        if (item instanceof String name && Texts.hasText(name)) {
+        if (item instanceof String name && EmptyValues.hasText(name)) {
             String column = name.trim();
             return Optional.of(new ColumnMapping(column, column));
         }
@@ -336,7 +335,7 @@ public record SqlTransformComputeSpec(
             String source = text(configuredSource);
             Object configuredTarget = firstNonNull(m.get("target"), m.get("to"));
             String target = text(configuredTarget);
-            return Texts.hasText(source) && Texts.hasText(target)
+            return EmptyValues.hasText(source) && EmptyValues.hasText(target)
                     ? Optional.of(new ColumnMapping(source, target))
                     : Optional.empty();
         }
@@ -349,7 +348,7 @@ public record SqlTransformComputeSpec(
         }
         return list.stream()
                 .map(SqlTransformComputeSpec::text)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .toList();
     }
 
@@ -370,7 +369,7 @@ public record SqlTransformComputeSpec(
         Object[] candidateValues = values(root, keys);
         Object configuredValue = firstNonNull(candidateValues);
         String value = text(configuredValue);
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             throw new IllegalArgumentException("sqlTransformCompute." + keys[0] + " is required");
         }
         return value;
@@ -390,6 +389,6 @@ public record SqlTransformComputeSpec(
         }
         String rawText = String.valueOf(value);
         String text = rawText.trim();
-        return Texts.hasText(text) ? text : null;
+        return EmptyValues.hasText(text) ? text : null;
     }
 }

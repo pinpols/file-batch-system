@@ -21,7 +21,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplayPreviewResponse.EdgePreview;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplayPreviewResponse.NodePreview;
@@ -128,7 +128,7 @@ public class WorkflowRunReplayPreviewService {
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public ReplayOperationEntity submitForApproval(WorkflowRunReplayCommand command) {
         Policies policies = validate(command);
-        if (command.operationKey() == null || EmptyChecks.isBlank(command.previewToken())) {
+        if (command.operationKey() == null || EmptyValues.isBlank(command.previewToken())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.workflow_run_replay_preview_required");
         }
         operationMapper.setTenantContext(command.tenantId());
@@ -201,7 +201,7 @@ public class WorkflowRunReplayPreviewService {
         String freshSnapshotHash = sha256(fresh.snapshotPayload());
         if (!freshSnapshotHash.equals(token.snapshotHash())
                 || fresh.response().nodes().stream()
-                        .anyMatch(node -> !EmptyChecks.isEmpty(Objects.requireNonNull(node.blockers())))) {
+                        .anyMatch(node -> !EmptyValues.isEmpty(Objects.requireNonNull(node.blockers())))) {
             throw previewChanged();
         }
         if (tokenMapper.consume(command.tenantId(), identity.tokenHash(), now) != 1) {
@@ -287,10 +287,10 @@ public class WorkflowRunReplayPreviewService {
 
     @Transactional
     public ReplayOperationEntity approve(String tenantId, Long operationId, String approver) {
-        boolean approvalRequestIsIncomplete = EmptyChecks.isBlank(tenantId)
+        boolean approvalRequestIsIncomplete = EmptyValues.isBlank(tenantId)
                 || operationId == null
                 || operationId <= 0
-                || EmptyChecks.isBlank(approver);
+                || EmptyValues.isBlank(approver);
         if (approvalRequestIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
         }
@@ -302,7 +302,7 @@ public class WorkflowRunReplayPreviewService {
         ApprovalCommandEntity approval = requireBoundWorkflowRunReplayApproval(operation);
         boolean approved = ApprovalCommandStatus.APPROVED.code().equals(approval.getApprovalStatus())
                 || ApprovalCommandStatus.EXECUTED.code().equals(approval.getApprovalStatus());
-        if (!approved || EmptyChecks.isBlank(approval.getApproverId())) {
+        if (!approved || EmptyValues.isBlank(approval.getApproverId())) {
             throw invalidApprovalDecision();
         }
         String normalizedApprover = approval.getApproverId().trim();
@@ -359,7 +359,7 @@ public class WorkflowRunReplayPreviewService {
         }
         TriggerRequestEntity accepted = triggerRequestMapper.selectByTenantAndRequestId(tenantId, requestId);
         boolean acceptedReplayLaunchIsIncomplete =
-                accepted == null || accepted.getId() == null || EmptyChecks.isBlank(accepted.getLaunchPayload());
+                accepted == null || accepted.getId() == null || EmptyValues.isBlank(accepted.getLaunchPayload());
         if (acceptedReplayLaunchIsIncomplete) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.trigger_target_mismatch");
         }
@@ -387,7 +387,7 @@ public class WorkflowRunReplayPreviewService {
 
     /** operationKey 已作为审批来源键唯一持久化，批准与拒绝都读取同一真实决策。 */
     private ApprovalCommandEntity requireBoundWorkflowRunReplayApproval(ReplayOperationEntity operation) {
-        if (EmptyChecks.isBlank(operation.operationKey())) {
+        if (EmptyValues.isBlank(operation.operationKey())) {
             throw invalidApprovalDecision();
         }
         ApprovalCommandEntity approval = approvalCommandMapper.selectByTenantAndSourceIdempotencyKey(
@@ -432,7 +432,7 @@ public class WorkflowRunReplayPreviewService {
         Policies policies = validate(command);
         Source source = sourceResolver.resolve(command.tenantId(), command.workflowRunId());
         if (source.run().getBizDate() == null
-                || EmptyChecks.isBlank(source.executionSnapshot().workflowCalendarCode())) {
+                || EmptyValues.isBlank(source.executionSnapshot().workflowCalendarCode())) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_source_snapshot_invalid");
         }
         List<WorkflowNodeRunEntity> sourceNodeRuns = nodeRunMapper.selectByWorkflowRunId(command.workflowRunId());
@@ -560,7 +560,7 @@ public class WorkflowRunReplayPreviewService {
             return nodePreview(node, null, null, null, blockers);
         }
         boolean shouldResolveCrossDayDependencies =
-                !Boolean.FALSE.equals(node.getEnabled()) && EmptyChecks.isNotBlank(node.getCrossDayDependencies());
+                !Boolean.FALSE.equals(node.getEnabled()) && EmptyValues.isNotBlank(node.getCrossDayDependencies());
         if (shouldResolveCrossDayDependencies) {
             boolean dependencyListIsEmptyArray =
                     node.getCrossDayDependencies().trim().matches("\\[\\s*\\]");
@@ -573,7 +573,7 @@ public class WorkflowRunReplayPreviewService {
                     node.getCrossDayDependencies(),
                     Boolean.TRUE.equals(context.source().run().getDryRun()));
             if (dependencyResults.isResolved()
-                    && EmptyChecks.isNotEmpty(dependencyResults.getResultVersionIdsByAlias())) {
+                    && EmptyValues.isNotEmpty(dependencyResults.getResultVersionIdsByAlias())) {
                 context.selectedConfigurations()
                         .selectedCrossDayDependencyResultVersionIds()
                         .put(node.getNodeCode(), dependencyResults.getResultVersionIdsByAlias());
@@ -593,7 +593,7 @@ public class WorkflowRunReplayPreviewService {
             return nodePreview(node, definition, null, null, blockers);
         }
         String pluginId = selectedPlugin(node, definition, context, blockers);
-        if (EmptyChecks.isBlank(pluginId)) {
+        if (EmptyValues.isBlank(pluginId)) {
             blockers.add(Blocker.PLUGIN_SELECTION_NOT_FROZEN.name());
         }
         WorkflowReplayCapabilityService.Assessment capability =
@@ -648,7 +648,7 @@ public class WorkflowRunReplayPreviewService {
                                 context.policies().config(),
                                 originalParams);
                 boolean templateSnapshotIsUnavailable = selection == null
-                        || EmptyChecks.isEmpty(Objects.requireNonNull(selection.protectedSnapshots()));
+                        || EmptyValues.isEmpty(Objects.requireNonNull(selection.protectedSnapshots()));
                 if (templateSnapshotIsUnavailable) {
                     blockers.add(Blocker.TEMPLATE_CONFIGURATION_NOT_FROZEN.name());
                     return null;
@@ -698,8 +698,8 @@ public class WorkflowRunReplayPreviewService {
             DispatchChannelSnapshotService.ReplayDispatchSelection selection =
                     dispatchChannelSnapshotService.captureForWorkflowReplay(captureRequest);
             boolean dispatchSelectionIsIncomplete = selection == null
-                    || EmptyChecks.isEmpty(Objects.requireNonNull(selection.protectedSnapshots()))
-                    || EmptyChecks.isBlank(selection.pluginId());
+                    || EmptyValues.isEmpty(Objects.requireNonNull(selection.protectedSnapshots()))
+                    || EmptyValues.isBlank(selection.pluginId());
             if (dispatchSelectionIsIncomplete) {
                 blockers.add(Blocker.CONFIGURATION_UNAVAILABLE.name());
                 return null;
@@ -707,7 +707,7 @@ public class WorkflowRunReplayPreviewService {
             context.selectedConfigurations()
                     .selectedDispatchChannelSnapshots()
                     .put(node.getNodeCode(), selection.protectedSnapshots());
-            if (!EmptyChecks.isEmpty(Objects.requireNonNull(selection.secretBindings()))) {
+            if (!EmptyValues.isEmpty(Objects.requireNonNull(selection.secretBindings()))) {
                 context.selectedConfigurations()
                         .selectedDispatchSecretBindings()
                         .put(node.getNodeCode(), selection.secretBindings());
@@ -729,7 +729,7 @@ public class WorkflowRunReplayPreviewService {
         }
         Map<String, Object> selectedBindings = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : bindings.entrySet()) {
-            if (!(entry.getKey() instanceof String channelCode) || EmptyChecks.isBlank(channelCode)) {
+            if (!(entry.getKey() instanceof String channelCode) || EmptyValues.isBlank(channelCode)) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_source_snapshot_invalid");
             }
             selectedBindings.put(channelCode, entry.getValue());
@@ -746,7 +746,7 @@ public class WorkflowRunReplayPreviewService {
         if (rootParams != null) {
             params.putAll(rootParams);
         }
-        if (EmptyChecks.isNotBlank(node.getNodeParams())) {
+        if (EmptyValues.isNotBlank(node.getNodeParams())) {
             try {
                 String serializedNodeParams = node.getNodeParams();
                 Map<String, Object> nodeParams =
@@ -781,7 +781,7 @@ public class WorkflowRunReplayPreviewService {
                 || sourceDefinition == null
                 || !Objects.equals(sourceDefinition.id(), sourceInstance.getJobDefinitionId())
                 || !Objects.equals(sourceDefinition.version(), sourceInstance.getJobDefinitionVersion())
-                || EmptyChecks.isBlank(sourceInstance.getParamsSnapshot());
+                || EmptyValues.isBlank(sourceInstance.getParamsSnapshot());
         if (sourceInstanceIsNotEligibleForReplay) {
             return null;
         }
@@ -814,9 +814,9 @@ public class WorkflowRunReplayPreviewService {
         } else if (JobType.ATOMIC == type || JobType.GENERAL == type) {
             Object subtype = params.get("taskType");
             // Match DefaultStepExecutionAdapter: explicit nonblank string, then task_type.
-            plugin = subtype instanceof String text && EmptyChecks.isNotBlank(text) ? text : jobType;
+            plugin = subtype instanceof String text && EmptyValues.isNotBlank(text) ? text : jobType;
         }
-        if (!(plugin instanceof String id) || EmptyChecks.isBlank(id) || id.contains("$.") || id.contains("${")) {
+        if (!(plugin instanceof String id) || EmptyValues.isBlank(id) || id.contains("$.") || id.contains("${")) {
             return null;
         }
         return id.trim();
@@ -831,7 +831,7 @@ public class WorkflowRunReplayPreviewService {
 
     private Map<String, WorkflowNodeRunEntity> latestNodeRuns(List<WorkflowNodeRunEntity> sourceNodes) {
         Map<String, WorkflowNodeRunEntity> latestByNode = new LinkedHashMap<>();
-        if (EmptyChecks.isEmpty(sourceNodes)) {
+        if (EmptyValues.isEmpty(sourceNodes)) {
             return latestByNode;
         }
         for (WorkflowNodeRunEntity candidate : sourceNodes) {
@@ -839,7 +839,7 @@ public class WorkflowRunReplayPreviewService {
                 continue;
             }
             String nodeCode = candidate.getNodeCode();
-            if (EmptyChecks.isBlank(nodeCode)) {
+            if (EmptyValues.isBlank(nodeCode)) {
                 continue;
             }
             WorkflowNodeRunEntity existing = latestByNode.get(nodeCode);
@@ -903,18 +903,18 @@ public class WorkflowRunReplayPreviewService {
 
     private Policies validate(WorkflowRunReplayCommand command) {
         boolean replaySubmitCommandIsIncomplete = command == null
-                || EmptyChecks.isBlank(command.tenantId())
+                || EmptyValues.isBlank(command.tenantId())
                 || command.workflowRunId() == null
                 || command.workflowRunId() <= 0
-                || EmptyChecks.isBlank(command.reason())
-                || EmptyChecks.isBlank(command.requestedBy());
+                || EmptyValues.isBlank(command.reason())
+                || EmptyValues.isBlank(command.requestedBy());
         if (replaySubmitCommandIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
         }
-        ConfigVersionPolicy config = EmptyChecks.isBlank(command.configVersionPolicy())
+        ConfigVersionPolicy config = EmptyValues.isBlank(command.configVersionPolicy())
                 ? ConfigVersionPolicy.USE_ORIGINAL_CONFIG
                 : ConfigVersionPolicy.fromCodeOrNull(command.configVersionPolicy());
-        ResultVersionPolicy result = EmptyChecks.isBlank(command.resultPolicy())
+        ResultVersionPolicy result = EmptyValues.isBlank(command.resultPolicy())
                 ? ResultVersionPolicy.CREATE_NEW_VERSION
                 : ResultVersionPolicy.fromCodeOrNull(command.resultPolicy());
         boolean replayPolicyPairSupported =

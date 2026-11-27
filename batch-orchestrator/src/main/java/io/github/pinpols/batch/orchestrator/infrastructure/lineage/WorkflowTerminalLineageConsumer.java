@@ -4,9 +4,8 @@ import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
@@ -86,7 +85,7 @@ public class WorkflowTerminalLineageConsumer {
         Long runId = number(data.get("workflowRunId"));
         String status = text(data.get("runStatus"));
         boolean workflowTerminalEventIsInvalid =
-                !Texts.hasText(tenantId) || runId == null || !WorkflowTerminalOutboxService.isTerminal(status);
+                !EmptyValues.hasText(tenantId) || runId == null || !WorkflowTerminalOutboxService.isTerminal(status);
         if (workflowTerminalEventIsInvalid) {
             throw new IllegalArgumentException("tenantId, workflowRunId or terminal status is invalid");
         }
@@ -111,7 +110,7 @@ public class WorkflowTerminalLineageConsumer {
         if (value instanceof Number number) {
             return number.longValue();
         }
-        if (value instanceof String text && EmptyChecks.isNotBlank(text)) {
+        if (value instanceof String text && EmptyValues.isNotBlank(text)) {
             try {
                 return Long.valueOf(text);
             } catch (NumberFormatException ignored) {
@@ -123,12 +122,12 @@ public class WorkflowTerminalLineageConsumer {
 
     private static Instant instant(Object value) {
         String text = text(value);
-        return Texts.hasText(text) ? Instant.parse(text) : null;
+        return EmptyValues.hasText(text) ? Instant.parse(text) : null;
     }
 
     private static LocalDate localDate(Object value) {
         String text = text(value);
-        return Texts.hasText(text) ? LocalDate.parse(text) : null;
+        return EmptyValues.hasText(text) ? LocalDate.parse(text) : null;
     }
 
     record TerminalSnapshot(WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {}

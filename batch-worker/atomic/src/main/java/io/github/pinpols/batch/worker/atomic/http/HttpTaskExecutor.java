@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
@@ -208,7 +208,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         return headers.entrySet().stream()
                 .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
                         && entry.getValue() instanceof String value
-                        && EmptyChecks.isNotBlank(value));
+                        && EmptyValues.isNotBlank(value));
     }
 
     @Override
@@ -283,7 +283,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> params = ctx.parameters();
 
         Object urlObj = params.get(PARAM_URL);
-        if (!(urlObj instanceof String urlString) || EmptyChecks.isBlank(urlString)) {
+        if (!(urlObj instanceof String urlString) || EmptyValues.isBlank(urlString)) {
             throw new HttpValidationException("parameters.url required");
         }
         URI uri;
@@ -483,7 +483,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
     private static String stringParam(Map<String, Object> p, String key, String fallback) {
         Object v = p.get(key);
-        return v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : fallback;
+        return v instanceof String string && EmptyValues.isNotBlank(string) ? string.trim() : fallback;
     }
 
     private void validateRequestBodySize(String body) {
@@ -516,7 +516,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
                 boolean serverFailureCanBeRetried = status != null
                         && status >= 500
                         && attempt < maxAttempts
-                        && (EmptyChecks.isEmpty(inv.expectedStatus) || !result.success());
+                        && (EmptyValues.isEmpty(inv.expectedStatus) || !result.success());
                 if (serverFailureCanBeRetried) {
                     log.warn("http 5xx, retrying: status={}, attempt={}/{}", status, attempt, maxAttempts);
                     sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
@@ -629,7 +629,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
         boolean serverError = statusCode >= 500 && statusCode < 600;
         boolean expectMatch =
-                EmptyChecks.isEmpty(inv.expectedStatus) ? !serverError : inv.expectedStatus.contains(statusCode);
+                EmptyValues.isEmpty(inv.expectedStatus) ? !serverError : inv.expectedStatus.contains(statusCode);
         if (!expectMatch) {
             AtomicErrorCode code = IDEMPOTENT_METHODS.contains(inv.method)
                     ? AtomicErrorCode.EXECUTION_FAILED
@@ -637,7 +637,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
             String outcomeNote = code == AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN
                     ? "; remote side effect may have committed, manual reconciliation is required"
                     : "";
-            String statusReason = EmptyChecks.isEmpty(inv.expectedStatus)
+            String statusReason = EmptyValues.isEmpty(inv.expectedStatus)
                     ? "is a server error"
                     : "not in expected " + inv.expectedStatus;
             return AtomicErrorCode.fail(
@@ -710,7 +710,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
             Set.of("set-cookie", "set-cookie2", "authorization", "proxy-authorization", "cookie");
 
     static Map<String, List<String>> sanitizeResponseHeaders(Map<String, List<String>> headers) {
-        if (EmptyChecks.isEmpty(headers)) {
+        if (EmptyValues.isEmpty(headers)) {
             return Map.of();
         }
         Map<String, List<String>> filtered = new LinkedHashMap<>(headers.size());

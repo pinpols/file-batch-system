@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
 
 /**
@@ -38,7 +38,7 @@ public final class HashAndSiloPlacementResolver implements BusinessPlacementReso
 
     @Override
     public String resolve(String tenantId) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return DEFAULT_KEY;
         }
         String silo = siloOverrides.get(tenantId);

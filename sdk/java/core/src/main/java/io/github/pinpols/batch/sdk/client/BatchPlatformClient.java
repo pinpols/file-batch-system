@@ -3,9 +3,9 @@ package io.github.pinpols.batch.sdk.client;
 import io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.scheduler.HeartbeatScheduler;
 import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
@@ -129,7 +129,7 @@ public class BatchPlatformClient {
         requestBuilder.sdkVersion(sdkVersion);
         RegisterRequest request = requestBuilder
                 .protocolVersion(RegisterRequest.CURRENT_PROTOCOL_VERSION)
-                .taskTypes(EmptyChecks.isEmpty(descriptors) ? null : descriptors)
+                .taskTypes(SdkEmptyValues.isEmpty(descriptors) ? null : descriptors)
                 .build();
         try {
             PlatformHttpClient.WorkerRegistrationResponse resp = httpClient.register(request);
@@ -330,7 +330,7 @@ public class BatchPlatformClient {
     }
 
     private static String optionalFingerprint(String value) {
-        return EmptyChecks.isBlank(value) ? null : value;
+        return SdkEmptyValues.isBlank(value) ? null : value;
     }
 
     /** 给业务可见的工具方法 — 让自己生成 idempotency-key。 */
@@ -409,7 +409,7 @@ public class BatchPlatformClient {
 
         public Builder register(SdkTaskHandler handler) {
             String type = handler.taskType();
-            if (EmptyChecks.isBlank(type)) {
+            if (SdkEmptyValues.isBlank(type)) {
                 throw new IllegalArgumentException("handler.taskType() must be non-blank");
             }
             SdkTaskHandler prev = handlers.putIfAbsent(type, handler);

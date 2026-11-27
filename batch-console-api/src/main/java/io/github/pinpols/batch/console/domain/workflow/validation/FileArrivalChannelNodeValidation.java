@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.workflow.validation;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
 import java.util.Map;
 
@@ -12,7 +12,7 @@ public final class FileArrivalChannelNodeValidation {
     private FileArrivalChannelNodeValidation() {}
 
     public static void validate(String nodeType, String nodeParams) {
-        if (!"WAIT".equalsIgnoreCase(nodeType) || !Texts.hasText(nodeParams)) {
+        if (!"WAIT".equalsIgnoreCase(nodeType) || !EmptyValues.hasText(nodeParams)) {
             return;
         }
         Map<?, ?> params;

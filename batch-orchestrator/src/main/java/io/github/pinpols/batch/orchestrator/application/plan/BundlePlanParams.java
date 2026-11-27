@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.plan;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -76,7 +76,7 @@ public final class BundlePlanParams {
             return;
         }
         List<BundleFile> bundleFiles = extract(params, bundleType);
-        if (EmptyChecks.isEmpty(bundleFiles)) {
+        if (EmptyValues.isEmpty(bundleFiles)) {
             throw invalidBundle("bundleFiles must contain usable bindings for " + bundleType);
         }
         if (bundleFiles.size() > MAX_BUNDLE_FILES) {
@@ -138,6 +138,6 @@ public final class BundlePlanParams {
         }
         String rawValue = String.valueOf(value);
         String trimmedValue = rawValue.trim();
-        return EmptyChecks.isEmpty(Objects.requireNonNull(trimmedValue)) ? null : trimmedValue;
+        return EmptyValues.isEmpty(Objects.requireNonNull(trimmedValue)) ? null : trimmedValue;
     }
 }

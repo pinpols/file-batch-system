@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.http;
 
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -98,7 +98,7 @@ public class OkHttpOutboundHttpTransport implements OutboundHttpTransport {
         String requestHost = request.uri().getHost();
         List<InetAddress> resolvedAddresses = guardedDns.lookup(requestHost);
         List<InetAddress> validatedAddresses = List.copyOf(resolvedAddresses);
-        if (EmptyChecks.isEmpty(validatedAddresses)) {
+        if (EmptyValues.isEmpty(validatedAddresses)) {
             throw new UnknownHostException("guarded DNS returned no address for " + requestHost);
         }
         clientBuilder

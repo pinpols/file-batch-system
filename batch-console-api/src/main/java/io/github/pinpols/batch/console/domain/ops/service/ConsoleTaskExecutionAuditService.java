@@ -6,9 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.ops.dto.TaskExecutionAuditResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
 import io.github.pinpols.batch.console.domain.ops.view.JobTaskExecutionAuditView;
@@ -99,7 +99,7 @@ public class ConsoleTaskExecutionAuditService {
 
     /** JSONB 文本解析为对象；空或解析失败返回 null，避免坏数据导致 500。 */
     private Map<String, Object> parse(String raw, Long taskId) {
-        if (!Texts.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             return null;
         }
         try {

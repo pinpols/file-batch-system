@@ -10,9 +10,8 @@ import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.param.FileGovernanceAuditInsertParam;
 import io.github.pinpols.batch.orchestrator.domain.param.FileGovernanceReconcileInsertParam;
 import io.github.pinpols.batch.orchestrator.domain.param.FileGovernanceStalePipelineParam;
@@ -102,21 +101,21 @@ public class FileGovernanceRepository {
     }
 
     public FileGovernanceViews.FileRecordRow loadFileRecord(String tenantId, Long fileId) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return null;
         }
         return fileGovernanceMapper.selectFileRecord(tenantId, fileId);
     }
 
     public FileGovernanceViews.TemplateSecurityRow loadTemplateSecurityForFile(String tenantId, Long fileId) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return null;
         }
         return fileGovernanceMapper.selectFileTemplateSecurity(tenantId, fileId);
     }
 
     public long countActivePipelineInstances(String tenantId, Long fileId) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return 0L;
         }
         FileGovernanceActivePipelineQuery statementParams = FileGovernanceActivePipelineQuery.builder()
@@ -131,7 +130,7 @@ public class FileGovernanceRepository {
     }
 
     public long countPendingDispatchRecords(String tenantId, Long fileId) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return 0L;
         }
         FileGovernancePendingDispatchQuery statementParams = FileGovernancePendingDispatchQuery.builder()
@@ -147,7 +146,7 @@ public class FileGovernanceRepository {
 
     public FileGovernanceViews.DispatchRecordRow loadLatestDispatchRecord(
             String tenantId, Long fileId, String channelCode) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return null;
         }
         return fileGovernanceMapper.selectLatestDispatchRecord(tenantId, fileId, channelCode);
@@ -161,7 +160,7 @@ public class FileGovernanceRepository {
     }
 
     public int resetDispatchRecordForRedispatch(String tenantId, Long dispatchRecordId) {
-        if (!Texts.hasText(tenantId) || dispatchRecordId == null) {
+        if (!EmptyValues.hasText(tenantId) || dispatchRecordId == null) {
             return 0;
         }
         return fileGovernanceMapper.resetDispatchRecordForRedispatch(
@@ -228,7 +227,7 @@ public class FileGovernanceRepository {
 
     public List<FileGovernanceArrivalViews.ArrivalGroupFileView> selectArrivalGroupFiles(
             String tenantId, String fileGroupCode, String bizDate) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(fileGroupCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(fileGroupCode)) {
             return List.of();
         }
         return fileGovernanceMapper.selectArrivalGroupFiles(tenantId, fileGroupCode, bizDate, storageId()).stream()
@@ -237,7 +236,7 @@ public class FileGovernanceRepository {
     }
 
     public long countArrivalDelayViolations(String tenantId, long thresholdSeconds) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return 0L;
         }
         Long count = fileGovernanceMapper.countArrivalDelayViolations(tenantId, thresholdSeconds);
@@ -245,7 +244,7 @@ public class FileGovernanceRepository {
     }
 
     public long maxArrivalDelaySeconds(String tenantId) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return 0L;
         }
         Long maxDelay = fileGovernanceMapper.selectMaxArrivalDelaySeconds(tenantId);
@@ -254,14 +253,14 @@ public class FileGovernanceRepository {
 
     public List<FileGovernanceViews.ArrivalDelaySampleRow> selectArrivalDelaySamples(
             String tenantId, long thresholdSeconds, int limit) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return List.of();
         }
         return fileGovernanceMapper.selectArrivalDelaySamples(tenantId, thresholdSeconds, limit);
     }
 
     public long countProcessingDelayViolations(String tenantId, long thresholdSeconds, long maxAgeSeconds) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return 0L;
         }
         Long count = fileGovernanceMapper.countProcessingDelayViolations(
@@ -270,7 +269,7 @@ public class FileGovernanceRepository {
     }
 
     public long maxProcessingDelaySeconds(String tenantId, long maxAgeSeconds) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return 0L;
         }
         Long maxDelay = fileGovernanceMapper.selectMaxProcessingDelaySeconds(
@@ -280,7 +279,7 @@ public class FileGovernanceRepository {
 
     public List<FileGovernanceViews.ProcessingDelaySampleRow> selectProcessingDelaySamples(
             String tenantId, long thresholdSeconds, long maxAgeSeconds, int limit) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return List.of();
         }
         FileGovernanceProcessingDelayQuery queryParams = FileGovernanceProcessingDelayQuery.builder()
@@ -294,7 +293,7 @@ public class FileGovernanceRepository {
     }
 
     public boolean existsFileRecordByStoragePath(String tenantId, String storageBucket, String storagePath) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(storagePath)) {
             return false;
         }
         Long count = fileGovernanceMapper.countFileRecordByStoragePath(tenantId, storageBucket, storagePath);
@@ -337,7 +336,7 @@ public class FileGovernanceRepository {
     }
 
     public List<Long> markStaleRunningPipelineInstancesFailed(String tenantId, long staleSeconds, int limit) {
-        if (!Texts.hasText(tenantId) || staleSeconds <= 0 || limit <= 0) {
+        if (!EmptyValues.hasText(tenantId) || staleSeconds <= 0 || limit <= 0) {
             return List.of();
         }
         FileGovernanceStalePipelineParam statementParams = FileGovernanceStalePipelineParam.builder()
@@ -360,7 +359,7 @@ public class FileGovernanceRepository {
     @Transactional
     public StaleSweepResult markStaleRunningPipelinesAndStepsFailed(String tenantId, long staleSeconds, int limit) {
         List<Long> failedPipelineIds = markStaleRunningPipelineInstancesFailed(tenantId, staleSeconds, limit);
-        if (EmptyChecks.isEmpty(failedPipelineIds)) {
+        if (EmptyValues.isEmpty(failedPipelineIds)) {
             return new StaleSweepResult(0, 0);
         }
         int failedSteps = markRunningPipelineStepsFailedForInstances(tenantId, failedPipelineIds);
@@ -368,7 +367,7 @@ public class FileGovernanceRepository {
     }
 
     public int markRunningPipelineStepsFailedForInstances(String tenantId, List<Long> pipelineInstanceIds) {
-        if (!Texts.hasText(tenantId) || EmptyChecks.isEmpty(pipelineInstanceIds)) {
+        if (!EmptyValues.hasText(tenantId) || EmptyValues.isEmpty(pipelineInstanceIds)) {
             return 0;
         }
         FileGovernanceStaleStepParam statementParams = FileGovernanceStaleStepParam.builder()
@@ -405,7 +404,7 @@ public class FileGovernanceRepository {
     }
 
     public void updateFileMetadata(String tenantId, Long fileId, Object metadata) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return;
         }
         String metadataJson = toJson(metadata);
@@ -414,7 +413,7 @@ public class FileGovernanceRepository {
     }
 
     public int updateArrivalGroupMetadataIfNonTerminal(String tenantId, Long fileId, Object metadata) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return 0;
         }
         String metadataJson = toJson(metadata);
@@ -423,7 +422,7 @@ public class FileGovernanceRepository {
     }
 
     public void markFileArrivalConfirmed(String tenantId, Long fileId, long fileSizeBytes, Object metadata) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return;
         }
         long normalizedFileSize = Math.max(fileSizeBytes, 0L);
@@ -434,10 +433,10 @@ public class FileGovernanceRepository {
 
     public void appendAudit(FileAuditCommand command) {
         boolean fileAuditCommandIsIncomplete = command == null
-                || !Texts.hasText(command.tenantId())
+                || !EmptyValues.hasText(command.tenantId())
                 || command.fileId() == null
-                || !Texts.hasText(command.operationType())
-                || !Texts.hasText(command.operationResult());
+                || !EmptyValues.hasText(command.operationType())
+                || !EmptyValues.hasText(command.operationResult());
         if (fileAuditCommandIsIncomplete) {
             return;
         }
@@ -474,18 +473,18 @@ public class FileGovernanceRepository {
     }
 
     private String defaultText(String value, String fallback) {
-        return Texts.hasText(value) ? value : fallback;
+        return EmptyValues.hasText(value) ? value : fallback;
     }
 
     private String resolveFileExt(String fileName) {
-        if (!Texts.hasText(fileName) || !fileName.contains(".")) {
+        if (!EmptyValues.hasText(fileName) || !fileName.contains(".")) {
             return null;
         }
         return fileName.substring(fileName.lastIndexOf('.') + 1);
     }
 
     private String resolveMimeType(String fileFormatType) {
-        if (!Texts.hasText(fileFormatType)) {
+        if (!EmptyValues.hasText(fileFormatType)) {
             return BatchFileConstants.CONTENT_TYPE_OCTET_STREAM;
         }
         FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, fileFormatType);

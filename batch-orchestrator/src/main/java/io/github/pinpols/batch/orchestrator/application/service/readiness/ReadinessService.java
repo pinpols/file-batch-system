@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.readiness;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +32,7 @@ public class ReadinessService {
      * @param bizDate 对齐后的批次日
      */
     public ReadinessResult checkJobReady(String tenantId, String jobCode, LocalDate bizDate) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(jobCode) || bizDate == null) {
             return ReadinessResult.ofNotReady("invalid-readiness-query");
         }
         return assetPartitionService

@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -38,7 +38,7 @@ public class UnknownExternalOutcomeCloser {
         JobPartitionEntity partition = jobPartitionMapper.selectById(task.getTenantId(), task.getJobPartitionId());
         if (partition == null
                 || partition.getCurrentInvocationId() == null
-                || EmptyChecks.isBlank(partition.getCurrentInvocationId())) {
+                || EmptyValues.isBlank(partition.getCurrentInvocationId())) {
             return false;
         }
         TaskOutcomeCommand command = TaskOutcomeCommand.builder()

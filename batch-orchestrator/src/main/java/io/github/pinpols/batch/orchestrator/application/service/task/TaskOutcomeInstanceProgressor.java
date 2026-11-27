@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -111,7 +111,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
             activeNodes.addAll(resolvedActiveNodes);
         }
 
-        boolean dagContinues = workflowRun != null && EmptyChecks.isNotEmpty(activeNodes);
+        boolean dagContinues = workflowRun != null && EmptyValues.isNotEmpty(activeNodes);
         // 节点 JobInstance 只拥有自己的分区。兄弟/后代 Workflow 节点会让
         // WorkflowRun 保持活动，但不能让此已完成的 JobInstance 继续占用准入名额。
         boolean jobFullyComplete = allPartitionsFinished;
@@ -287,7 +287,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
                 .workflowRun(workflowRun)
                 .failedPartitionCount(unsuccessfulCount)
                 .allPartitionsFinished(true)
-                .dagContinues(!EmptyChecks.isEmpty(Objects.requireNonNull(activeNodes)))
+                .dagContinues(!EmptyValues.isEmpty(Objects.requireNonNull(activeNodes)))
                 .jobFullyComplete(true)
                 .activeNodes(activeNodes)
                 .currentNodeCode(linkedNode.getNodeCode())
@@ -298,7 +298,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
     private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
         String nodeCode = TaskOutcomePayloadSupport.payloadStringValue(
                 task == null ? null : task.getTaskPayload(), "workflowNodeCode");
-        if (EmptyChecks.isNotBlank(nodeCode)) {
+        if (EmptyValues.isNotBlank(nodeCode)) {
             return nodeCode;
         }
         Set<String> activeNodes = workflowRun == null
@@ -310,7 +310,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
                     "error.workflow.task_payload_missing_node_code",
                     String.valueOf(task == null ? null : task.getId()));
         }
-        if (EmptyChecks.isNotEmpty(activeNodes)) {
+        if (EmptyValues.isNotEmpty(activeNodes)) {
             return activeNodes.iterator().next();
         }
         return WorkflowNodeCode.START.code();

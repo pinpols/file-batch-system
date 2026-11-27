@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
 import io.github.pinpols.batch.console.domain.ops.view.JobTaskHeartbeatView;
@@ -48,7 +48,7 @@ public class ConsoleTaskHeartbeatService {
 
     /** JSONB 文本解析成 JSON 结构;空 = null;解析异常降级为 null(不让坏数据 500),并 WARN 带 taskId。 */
     private Object parseDetails(String raw, Long taskId) {
-        if (EmptyChecks.isBlank(raw)) {
+        if (EmptyValues.isBlank(raw)) {
             return null;
         }
         try {

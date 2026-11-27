@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.List;
@@ -28,7 +27,7 @@ public final class PipelineStepFlowSupport {
     private PipelineStepFlowSupport() {}
 
     public static PipelineStepDefinition firstStep(List<PipelineStepDefinition> steps) {
-        return EmptyChecks.isEmpty(steps) ? null : steps.get(0);
+        return EmptyValues.isEmpty(steps) ? null : steps.get(0);
     }
 
     public static int maxTransitionGuard(List<PipelineStepDefinition> steps) {
@@ -51,19 +50,19 @@ public final class PipelineStepFlowSupport {
             return null;
         }
         String selector = popSelector(attributes);
-        if (!Texts.hasText(selector) && current != null) {
+        if (!EmptyValues.hasText(selector) && current != null) {
             selector = success
                     ? current.textParam(
                             "onSuccessNextStepCode", "onSuccessNextStageCode", "nextStepCode", "nextStageCode")
                     : current.textParam("onFailureNextStepCode", "onFailureNextStageCode");
         }
-        if (Texts.hasText(selector)) {
+        if (EmptyValues.hasText(selector)) {
             PipelineStepDefinition explicitNext = findByStepCodeOrStageCode(steps, selector);
             if (explicitNext != null) {
                 return explicitNext;
             }
         }
-        boolean stepFlowCannotAdvance = !success || current == null || EmptyChecks.isEmpty(steps);
+        boolean stepFlowCannotAdvance = !success || current == null || EmptyValues.isEmpty(steps);
         if (stepFlowCannotAdvance) {
             return null;
         }
@@ -78,7 +77,9 @@ public final class PipelineStepFlowSupport {
 
     private static String popSelector(Map<String, Object> attributes) {
         String stepCode = popText(attributes, PipelineRuntimeKeys.PIPELINE_NEXT_STEP_CODE);
-        return Texts.hasText(stepCode) ? stepCode : popText(attributes, PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+        return EmptyValues.hasText(stepCode)
+                ? stepCode
+                : popText(attributes, PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
     }
 
     private static String popText(Map<String, Object> attributes, String key) {
@@ -86,12 +87,12 @@ public final class PipelineStepFlowSupport {
             return null;
         }
         Object value = attributes.remove(key);
-        if (value instanceof String text && Texts.hasText(text)) {
+        if (value instanceof String text && EmptyValues.hasText(text)) {
             return text;
         }
         if (value != null) {
             String text = String.valueOf(value);
-            if (Texts.hasText(text) && !"null".equalsIgnoreCase(text)) {
+            if (EmptyValues.hasText(text) && !"null".equalsIgnoreCase(text)) {
                 return text;
             }
         }
@@ -100,7 +101,7 @@ public final class PipelineStepFlowSupport {
 
     private static PipelineStepDefinition findByStepCodeOrStageCode(
             List<PipelineStepDefinition> steps, String selector) {
-        if (steps == null || !Texts.hasText(selector)) {
+        if (steps == null || !EmptyValues.hasText(selector)) {
             return null;
         }
         for (PipelineStepDefinition step : steps) {
@@ -115,7 +116,7 @@ public final class PipelineStepFlowSupport {
 
     private static boolean stepCodeMatches(PipelineStepDefinition step, PipelineStepDefinition current) {
         return current != null
-                && Texts.hasText(current.stepCode())
+                && EmptyValues.hasText(current.stepCode())
                 && current.stepCode().equals(step.stepCode());
     }
 }

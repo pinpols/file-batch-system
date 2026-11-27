@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver;
@@ -76,7 +76,7 @@ public class CrossDayDependencyReconciler {
         Instant now = dateTimeSupport.nowInstant();
         List<WorkflowNodeRunEntity> waiting = workflowMappers.workflowNodeRunMapper.selectLatestByNodeStatus(
                 STATUS_WAITING_DEPENDENCY, properties.getBatchSize());
-        if (EmptyChecks.isEmpty(waiting)) {
+        if (EmptyValues.isEmpty(waiting)) {
             return;
         }
         for (WorkflowNodeRunEntity entry : waiting) {
@@ -101,7 +101,7 @@ public class CrossDayDependencyReconciler {
             return;
         }
         String tenantId = workflowRun.getTenantId();
-        if (EmptyChecks.isBlank(tenantId)) {
+        if (EmptyValues.isBlank(tenantId)) {
             return;
         }
         RlsTenantContextHolder.runWithTenant(tenantId, () -> reconcileOneBound(nodeRun, workflowRun, now));
@@ -116,7 +116,7 @@ public class CrossDayDependencyReconciler {
                 : snapshot.node(nodeRun.getNodeCode());
         boolean nodeHasNoCrossDayDependencies = workflowNode == null
                 || workflowNode.getCrossDayDependencies() == null
-                || EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getCrossDayDependencies()));
+                || EmptyValues.isBlank(Objects.requireNonNull(workflowNode.getCrossDayDependencies()));
         if (nodeHasNoCrossDayDependencies) {
             // 无可用依赖声明时失败关闭，避免无依据地派发。
             markFailed(nodeRun, "CROSS_DAY_DEP_SPEC_MISSING", now);

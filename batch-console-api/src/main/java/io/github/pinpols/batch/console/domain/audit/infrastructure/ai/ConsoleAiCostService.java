@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
 import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
@@ -36,7 +36,7 @@ public class ConsoleAiCostService {
     private final ConsoleAiProperties properties;
 
     public void validateProviders(List<String> providerNames) {
-        if (EmptyChecks.isEmpty(usableRates())) {
+        if (EmptyValues.isEmpty(usableRates())) {
             if (properties.getCost().getMonthlyBudgetUsd().signum() > 0) {
                 throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
             }
@@ -56,7 +56,7 @@ public class ConsoleAiCostService {
     @Transactional
     public Reservation reserve(String tenantId, String promptPayload, String systemPrompt, int imageCount) {
         ConsoleAiProperties.Cost config = properties.getCost();
-        if (EmptyChecks.isEmpty(usableRates())) {
+        if (EmptyValues.isEmpty(usableRates())) {
             if (imageCount > 0 || config.getMonthlyBudgetUsd().signum() > 0) {
                 throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
             }
@@ -251,7 +251,7 @@ public class ConsoleAiCostService {
     public record MeasuredUsage(String provider, int promptTokens, int completionTokens) {
         public MeasuredUsage {
             Objects.requireNonNull(provider, "provider");
-            if (EmptyChecks.isBlank(provider)) {
+            if (EmptyValues.isBlank(provider)) {
                 throw new IllegalArgumentException("provider must not be blank");
             }
             if (promptTokens < 0 || completionTokens < 0) {

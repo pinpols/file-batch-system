@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.ConfigChangeLogQueryRequest;
@@ -195,7 +195,7 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
             }
             return headers;
         }
-        if (EmptyChecks.isNotEmpty(rows) && rows.get(0) instanceof Map<?, ?> map) {
+        if (EmptyValues.isNotEmpty(rows) && rows.get(0) instanceof Map<?, ?> map) {
             return map.keySet().stream().map(String::valueOf).toList();
         }
         try {

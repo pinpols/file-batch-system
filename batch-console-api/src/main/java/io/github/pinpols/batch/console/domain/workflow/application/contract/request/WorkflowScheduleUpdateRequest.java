@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.workflow.application.contract.request;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -42,7 +42,7 @@ public class WorkflowScheduleUpdateRequest {
 
     @AssertTrue(message = "workflow schedule expression or timezone is invalid")
     public boolean isScheduleConfigurationValid() {
-        if (EmptyChecks.isNotBlank(timezone)) {
+        if (EmptyValues.isNotBlank(timezone)) {
             try {
                 ZoneId.of(timezone);
             } catch (RuntimeException exception) {
@@ -53,7 +53,7 @@ public class WorkflowScheduleUpdateRequest {
             return false;
         }
         String effectiveTriggerMode = triggerMode;
-        if (EmptyChecks.isBlank(effectiveTriggerMode)) {
+        if (EmptyValues.isBlank(effectiveTriggerMode)) {
             effectiveTriggerMode = switch (scheduleType) {
                 case "CRON", "FIXED_RATE" -> "SCHEDULED";
                 case "EVENT" -> "EVENT";
@@ -80,7 +80,7 @@ public class WorkflowScheduleUpdateRequest {
             return false;
         }
         if ("CRON".equals(scheduleType)) {
-            if (EmptyChecks.isBlank(scheduleExpr)) {
+            if (EmptyValues.isBlank(scheduleExpr)) {
                 return false;
             }
             try {
@@ -92,7 +92,7 @@ public class WorkflowScheduleUpdateRequest {
                 return false;
             }
         } else if ("FIXED_RATE".equals(scheduleType)) {
-            if (EmptyChecks.isBlank(scheduleExpr)) {
+            if (EmptyValues.isBlank(scheduleExpr)) {
                 return false;
             }
             try {

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.service;
 
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchResponse;
@@ -36,8 +36,8 @@ public class TriggerApiApplicationService {
             String traceId) {
         requestPolicy.authorizeLaunch(principal, input.triggerType(), input.tenantId(), input.externalEventSource());
         drainService.ensureAcceptingLaunches();
-        String finalRequestId = EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
-        String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
+        String finalRequestId = EmptyValues.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
+        String finalTraceId = EmptyValues.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
         TriggerLaunchCommand command = new TriggerLaunchCommand(input, idempotencyKey, finalRequestId, finalTraceId);
         return launchAdmissionService.execute(() -> triggerService.launch(command));
     }
@@ -50,8 +50,8 @@ public class TriggerApiApplicationService {
             String traceId) {
         requestPolicy.authorizeExternalEvent(principal, input.tenantId());
         drainService.ensureAcceptingLaunches();
-        String finalRequestId = EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("event") : requestId;
-        String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
+        String finalRequestId = EmptyValues.isBlank(requestId) ? IdGenerator.newBusinessNo("event") : requestId;
+        String finalTraceId = EmptyValues.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
         ExternalEventLaunchCommand command = new ExternalEventLaunchCommand(
                 input, principal.keyName(), idempotencyKey, finalRequestId, finalTraceId);
         return launchAdmissionService.execute(() -> triggerService.launchExternalEvent(command));
@@ -60,8 +60,8 @@ public class TriggerApiApplicationService {
     public ScheduledOccurrenceCatchUpResponse catchUpRejectedOccurrence(
             ScheduledOccurrenceCatchUpInput input, String idempotencyKey, String requestId, String traceId) {
         drainService.ensureAcceptingLaunches();
-        String finalRequestId = EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
-        String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
+        String finalRequestId = EmptyValues.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
+        String finalTraceId = EmptyValues.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
         ScheduledOccurrenceCatchUpCommand command =
                 new ScheduledOccurrenceCatchUpCommand(input, idempotencyKey, finalRequestId, finalTraceId);
         return launchAdmissionService.execute(() -> triggerService.catchUpRejectedOccurrence(command));

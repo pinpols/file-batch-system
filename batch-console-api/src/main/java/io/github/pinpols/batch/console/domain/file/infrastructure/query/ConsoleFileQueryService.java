@@ -14,11 +14,10 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.query.FileChainQueryRequest;
 import io.github.pinpols.batch.console.application.file.FilePipelineProgressSnapshotService;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
@@ -112,7 +111,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
                 ? new PageRequest(1, request.getPageSize())
                 : new PageRequest(request.getPageNo(), request.getPageSize());
         String tenantId = resolveTenant(tenantGuard, request.getTenantId());
-        boolean usePipelineTypeFallback = !Texts.hasText(request.getBizType());
+        boolean usePipelineTypeFallback = !EmptyValues.hasText(request.getBizType());
         String bizType = usePipelineTypeFallback ? request.getPipelineType() : request.getBizType();
         Long fileId = parseLong(request.getFileId(), "fileId");
         LocalDate startDate = parseLocalDate(request.getStartDate(), "startDate");
@@ -299,7 +298,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     /** 仅当运行中步骤的持久化处理行数为空时，才查询编排器节点缓存。 */
     private Map<String, ConsolePipelineProgressItemResponse> resolveLiveProgress(
             String tenantId, Long pipelineInstanceId, List<FilePipelineProgressStepView> rawSteps) {
-        if (EmptyChecks.isEmpty(rawSteps)) {
+        if (EmptyValues.isEmpty(rawSteps)) {
             return Map.of();
         }
         boolean needsBridge = rawSteps.stream()
@@ -311,7 +310,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         }
         List<ConsolePipelineProgressItemResponse> cache =
                 orchestratorProxy.pipelineProgressByInstance(tenantId, pipelineInstanceId);
-        if (EmptyChecks.isEmpty(cache)) {
+        if (EmptyValues.isEmpty(cache)) {
             return Map.of();
         }
         Map<String, ConsolePipelineProgressItemResponse> progressByStage = cache.stream()
@@ -448,7 +447,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         PageRequest pageSingle = new PageRequest(1, 1);
         FilePipelineQuery detailQuery = FilePipelineQuery.ofPipeline(resolved, id, pageSingle);
         List<FilePipelineQueryView> rows = fileMappers.filePipelineMapper.selectByQuery(detailQuery);
-        if (EmptyChecks.isEmpty(rows) || rows.get(0) == null) {
+        if (EmptyValues.isEmpty(rows) || rows.get(0) == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.pipeline.instance_not_found", id);
         }
         return toFilePipelineResponse(rows.get(0));
@@ -467,7 +466,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     private FileTemplateSecurityFlagsView fileContentMaskingPolicy(
             String tenantId, Long fileId, Map<Long, Optional<FileTemplateSecurityFlagsView>> policies) {
         boolean fileMaskingRequestIsIneligible =
-                batchSecurityProperties.isBypassMode() || fileId == null || !Texts.hasText(tenantId);
+                batchSecurityProperties.isBypassMode() || fileId == null || !EmptyValues.hasText(tenantId);
         if (fileMaskingRequestIsIneligible) {
             return null;
         }
@@ -477,7 +476,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
 
     private FileTemplateSecurityFlagsView findFileContentPolicy(String tenantId, Long fileId) {
         String templateCode = fileMappers.fileRecordMapper.selectTemplateCodeByFileId(tenantId, fileId);
-        if (!Texts.hasText(templateCode)) {
+        if (!EmptyValues.hasText(templateCode)) {
             return null;
         }
         return fileMappers.fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, templateCode);
@@ -579,7 +578,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         ConsolePipelineProgressItemResponse live = liveProgress.get(display(row.stageCode()));
         // 跨服务查询不共享数据库快照；必须再次核对缓存来源阶段ID，避免新尝试计数污染旧快照。
         List<Long> stepRunIds = live == null ? null : live.stepRunIds();
-        boolean sameAttempt = EmptyChecks.isNotEmpty(stepRunIds) && stepRunIds.contains(row.stepId());
+        boolean sameAttempt = EmptyValues.isNotEmpty(stepRunIds) && stepRunIds.contains(row.stepId());
         Long rowsProcessed = row.rowsProcessed();
         Long totalRowsHint = row.totalRowsHint();
         boolean running = STEP_STATUS_RUNNING.equals(display(row.stepStatus()));

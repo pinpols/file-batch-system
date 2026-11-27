@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
@@ -213,7 +213,7 @@ public class ConsoleAiProperties {
             throw new IllegalStateException("AI monthly budget requires at least one provider rate");
         }
         cost.getProviderRates().forEach((providerName, rate) -> {
-            boolean providerRateIsInvalid = EmptyChecks.isBlank(providerName)
+            boolean providerRateIsInvalid = EmptyValues.isBlank(providerName)
                     || rate == null
                     || rate.getInputUsdPerMillionTokens() == null
                     || rate.getOutputUsdPerMillionTokens() == null

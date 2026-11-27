@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,7 +51,8 @@ public class DispatchChannelGateway {
         // P0: 旧实现走 String.valueOf(null) 得到字面量 "null",再 supports("null") 一路 false 抛
         // IllegalStateException,被外层包成 INFRA_ERROR,掩盖"配置漏字段"这一业务原因。改为提前
         // 判 null 返回业务失败,根因可读。
-        boolean channelTypeIsMissingOrBlank = rawChannelType == null || !Texts.hasText(String.valueOf(rawChannelType));
+        boolean channelTypeIsMissingOrBlank =
+                rawChannelType == null || !EmptyValues.hasText(String.valueOf(rawChannelType));
         if (channelTypeIsMissingOrBlank) {
             deliveryMetrics.recordDelivery(null, false, false);
             return DispatchResult.failureWithoutReceipt("channel_type missing in channel_config");
@@ -113,7 +114,8 @@ public class DispatchChannelGateway {
         Map<String, Object> channelConfig = command.channelConfig();
         Object rawChannelType =
                 channelConfig == null ? null : channelConfig.get(DispatchGatewayConstants.CHANNEL_TYPE_KEY);
-        boolean channelTypeIsMissingOrBlank = rawChannelType == null || !Texts.hasText(String.valueOf(rawChannelType));
+        boolean channelTypeIsMissingOrBlank =
+                rawChannelType == null || !EmptyValues.hasText(String.valueOf(rawChannelType));
         if (channelTypeIsMissingOrBlank) {
             return OptionalLong.empty();
         }

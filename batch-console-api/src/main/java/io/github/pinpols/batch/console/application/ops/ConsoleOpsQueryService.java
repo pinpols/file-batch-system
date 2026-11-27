@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
@@ -584,7 +584,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         List<BatchDayScheduledOccurrenceView> occurrences =
                 opsMappers.batchDayMapper.selectScheduledOccurrences(tenantId, calendarCode, bizDate);
         Map<OccurrenceKey, List<ConsoleScheduledOccurrenceFireResponse>> firesByOccurrence = new HashMap<>();
-        if (EmptyChecks.isNotEmpty(occurrences)) {
+        if (EmptyValues.isNotEmpty(occurrences)) {
             opsMappers.batchDayMapper.setTenantContext(tenantId);
             for (BatchDayScheduledOccurrenceFireView fire :
                     opsMappers.batchDayMapper.selectScheduledOccurrenceFires(tenantId, calendarCode, bizDate)) {
@@ -623,7 +623,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         }
         List<BatchDayJobSummaryView> rows =
                 opsMappers.batchDayMapper.selectJobSummaries(tenantId, calendarCode, bizDate);
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return List.of();
         }
         return rows.stream().map(this::toBatchDaySummaryResponse).toList();

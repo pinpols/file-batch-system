@@ -5,9 +5,8 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
@@ -108,7 +107,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     @Override
     public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
         String traceId = currentTraceId();
-        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         ClaimOutcome<EffectiveTaskConfig> outcome = executeClaimLike(
                 "claim",
                 () -> client().post()
@@ -127,7 +126,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     @Override
     public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
-        if (EmptyChecks.isEmpty(items)) {
+        if (EmptyValues.isEmpty(items)) {
             return List.of();
         }
         List<TaskClaimResult> out = new ArrayList<>(items.size());
@@ -151,7 +150,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
                         .map(it -> new ClaimBatchHttpItem(it.tenantId(), it.taskId(), it.workerId(), null))
                         .toList();
                 String traceId = currentTraceId();
-                String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+                String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
                 ClaimBatchHttpResponse response = client().post()
                         .uri("/internal/tasks/claim-batch")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -263,7 +262,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     public boolean markNonIdempotentExecutionStarted(
             String tenantId, Long taskId, String workerId, String partitionInvocationId) {
         String traceId = currentTraceId();
-        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         try {
             client().post()
                     .uri("/internal/tasks/{taskId}/non-idempotent-started", taskId)
@@ -286,7 +285,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     private TaskLeaseRenewResult renewLeaseWithResult(TaskLeaseRenewItem item) {
         String traceId = currentTraceId();
-        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         Object request;
         if (item.executionStarted()) {
             // 一次业务执行生成一次身份；下面的 HTTP 重试复用同一个 request。
@@ -313,7 +312,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     @Override
     public Map<Long, TaskLeaseRenewResult> renewLeasesBatch(List<TaskLeaseRenewItem> items) {
-        if (EmptyChecks.isEmpty(items)) {
+        if (EmptyValues.isEmpty(items)) {
             return Map.of();
         }
         Map<Long, TaskLeaseRenewResult> out = new LinkedHashMap<>();
@@ -348,7 +347,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
                 List<BatchRenewHttpItem> payload =
                         chunk.stream().map(this::toHttpItem).toList();
                 String traceId = currentTraceId();
-                String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+                String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
                 BatchRenewHttpResponse response = client().post()
                         .uri("/internal/tasks/leases/renew-batch")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -510,7 +509,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     private Set<Long> submitReportBatchOverHttp(List<TaskExecutionReport> reports) {
         TaskExecutionReport first = reports.getFirst();
         String traceId = firstNonBlank(first.getTraceId(), currentTraceId());
-        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         try {
             ReportBatchHttpRequest request = new ReportBatchHttpRequest(reports);
             ReportBatchHttpResponse response = client().post()
@@ -582,7 +581,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         String traceFallback = currentTraceId();
         while (state.canAttempt()) {
             String traceId = firstNonBlank(report.getTraceId(), traceFallback);
-            if (!Texts.hasText(traceId)) {
+            if (!EmptyValues.hasText(traceId)) {
                 traceId = IdGenerator.newTraceId();
             }
             try {
@@ -764,14 +763,14 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     private String currentTraceId() {
         String value = MDC.get(StructuredLogField.TRACE_ID);
-        return Texts.hasText(value) ? value : null;
+        return EmptyValues.hasText(value) ? value : null;
     }
 
     private static String firstNonBlank(String value, String fallback) {
-        if (Texts.hasText(value)) {
+        if (EmptyValues.hasText(value)) {
             return value;
         }
-        return Texts.hasText(fallback) ? fallback : null;
+        return EmptyValues.hasText(fallback) ? fallback : null;
     }
 
     private RestClient client() {
@@ -821,23 +820,23 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         if (properties.getBaseUrls() != null) {
             properties.getBaseUrls().stream()
                     .map(HttpTaskExecutionClient::normalizeBaseUrl)
-                    .filter(Texts::hasText)
+                    .filter(EmptyValues::hasText)
                     .forEach(resolved::add);
         }
         String configuredBaseUrl = properties.getBaseUrl();
-        if (EmptyChecks.isEmpty(resolved)) {
+        if (EmptyValues.isEmpty(resolved)) {
             String normalizedBaseUrl = normalizeBaseUrl(configuredBaseUrl);
-            if (Texts.hasText(normalizedBaseUrl)) {
+            if (EmptyValues.hasText(normalizedBaseUrl)) {
                 resolved.add(normalizedBaseUrl);
             }
         }
-        if (EmptyChecks.isEmpty(resolved)) {
+        if (EmptyValues.isEmpty(resolved)) {
             String localPort = environment.getProperty("local.server.port");
-            if (Texts.hasText(localPort)) {
+            if (EmptyValues.hasText(localPort)) {
                 resolved.add("http://127.0.0.1:" + localPort);
             }
         }
-        if (EmptyChecks.isEmpty(resolved)) {
+        if (EmptyValues.isEmpty(resolved)) {
             throw new IllegalStateException(
                     "Unable to resolve batch.worker.task-client.base-url/base-urls for task execution client");
         }
@@ -845,7 +844,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     }
 
     private static String normalizeBaseUrl(String value) {
-        if (!Texts.hasText(value) || value.contains("${")) {
+        if (!EmptyValues.hasText(value) || value.contains("${")) {
             return null;
         }
         String normalized = value.trim();

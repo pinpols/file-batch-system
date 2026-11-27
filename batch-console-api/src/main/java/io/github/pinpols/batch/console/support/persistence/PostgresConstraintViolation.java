@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.support.persistence;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.SQLException;
 import java.util.Objects;
 import java.util.Optional;
@@ -17,7 +17,7 @@ public record PostgresConstraintViolation(String sqlState, String schema, String
         Throwable root = NestedExceptionUtils.getMostSpecificCause(failure);
         if (!(root instanceof SQLException sql)
                 || !"org.postgresql.util.PSQLException".equals(root.getClass().getName())
-                || EmptyChecks.isBlank(sql.getSQLState())) {
+                || EmptyValues.isBlank(sql.getSQLState())) {
             return Optional.empty();
         }
         try {

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
@@ -164,7 +164,7 @@ public class TenantConfigInitApplyHandlers {
 
     private <T, E> ItemStats applySpecs(
             List<T> specs, ApplyContext ctx, SpecHandler<T, E> handler, Consumer<T> validate) {
-        if (EmptyChecks.isEmpty(specs)) {
+        if (EmptyValues.isEmpty(specs)) {
             return ItemStats.empty();
         }
         TransactionTemplate nested = new TransactionTemplate(transactionManager);

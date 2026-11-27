@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
@@ -77,7 +77,7 @@ final class ExcelStyleSupport {
      * 强制按文本处理。所有写 Cell 字符串的入口都应过这层。
      */
     static String escapeFormula(String value) {
-        if (EmptyChecks.isEmpty(value)) {
+        if (EmptyValues.isEmpty(value)) {
             return value;
         }
         char first = value.charAt(0);

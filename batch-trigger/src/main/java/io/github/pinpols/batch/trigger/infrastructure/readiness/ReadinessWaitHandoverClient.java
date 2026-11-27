@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
@@ -103,9 +102,9 @@ public class ReadinessWaitHandoverClient {
 
     /** 移交全部依赖：Orchestrator 接管后必须与 Trigger 主就绪闸口径一致。 */
     private List<String> resolveDependsOnJobCodes(TriggerDescriptor descriptor) {
-        if (EmptyChecks.isNotEmpty(descriptor.getDependsOnJobCodes())) {
+        if (EmptyValues.isNotEmpty(descriptor.getDependsOnJobCodes())) {
             return descriptor.getDependsOnJobCodes().stream()
-                    .filter(Texts::hasText)
+                    .filter(EmptyValues::hasText)
                     .map(String::trim)
                     .distinct()
                     .toList();

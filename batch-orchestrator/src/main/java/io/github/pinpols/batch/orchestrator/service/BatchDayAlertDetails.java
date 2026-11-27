@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.service;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -30,7 +30,7 @@ final class BatchDayAlertDetails {
         }
         boolean requestHasParentWorkflowNode = triggerRequest != null
                 && triggerRequest.getParentNodeCode() != null
-                && !EmptyChecks.isBlank(Objects.requireNonNull(triggerRequest.getParentNodeCode()));
+                && !EmptyValues.isBlank(Objects.requireNonNull(triggerRequest.getParentNodeCode()));
         if (requestHasParentWorkflowNode) {
             detail.put("nodeCode", triggerRequest.getParentNodeCode());
         }

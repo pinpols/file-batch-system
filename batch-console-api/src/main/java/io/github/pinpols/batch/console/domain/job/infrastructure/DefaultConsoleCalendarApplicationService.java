@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleCalendarApplicationService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.CalendarSaveRequest;
@@ -85,7 +85,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         BusinessCalendarTimezone.requireValid(request.getTimezone());
         CalendarQueryRow existingRow = calendarMapper.selectById(tenantId, id);
-        CalendarQueryRow existing = Guard.requireFound(existingRow, ERR_CALENDAR_NOT_FOUND);
+        CalendarQueryRow existing = Preconditions.requireFound(existingRow, ERR_CALENDAR_NOT_FOUND);
         // 维护请求不提供说明字段，保留配置包等入口写入的既有说明。
         BusinessCalendarUpdateParam params = BusinessCalendarUpdateParam.builder()
                 .id(id)
@@ -119,7 +119,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     public List<ConsoleHolidayResponse> holidays(Long id, String tenantId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         CalendarQueryRow calendar = calendarMapper.selectById(resolved, id);
-        Guard.requireFound(calendar, ERR_CALENDAR_NOT_FOUND);
+        Preconditions.requireFound(calendar, ERR_CALENDAR_NOT_FOUND);
         return holidayMapper.selectByCalendarId(id).stream()
                 .map(ConsoleHolidayResponse::from)
                 .toList();
@@ -129,7 +129,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     public void importHolidays(Long id, HolidayImportRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         CalendarQueryRow calendar = calendarMapper.selectById(tenantId, id);
-        Guard.requireFound(calendar, ERR_CALENDAR_NOT_FOUND);
+        Preconditions.requireFound(calendar, ERR_CALENDAR_NOT_FOUND);
         List<CalendarHolidayBatchInsertParam> list = request.getItems().stream()
                 .map(item -> CalendarHolidayBatchInsertParam.builder()
                         .tenantId(tenantId)
@@ -148,9 +148,9 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     public ConsoleHolidayResponse updateHoliday(Long id, Long holidayId, HolidaySaveRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         CalendarQueryRow calendar = calendarMapper.selectById(tenantId, id);
-        Guard.requireFound(calendar, ERR_CALENDAR_NOT_FOUND);
+        Preconditions.requireFound(calendar, ERR_CALENDAR_NOT_FOUND);
         CalendarHolidayRow existing = holidayMapper.selectByCalendarIdAndId(id, holidayId);
-        Guard.requireFound(existing, "holiday not found");
+        Preconditions.requireFound(existing, "holiday not found");
         // Mapper 层也带 parent calendar 条件，避免未来调用方绕过 service owner-check。
         requireHolidayBelongsToCalendar(existing, id);
         CalendarHolidayUpdateParam params = CalendarHolidayUpdateParam.builder()
@@ -170,9 +170,9 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     public void deleteHoliday(Long id, Long holidayId, String tenantId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         CalendarQueryRow calendar = calendarMapper.selectById(resolved, id);
-        Guard.requireFound(calendar, ERR_CALENDAR_NOT_FOUND);
+        Preconditions.requireFound(calendar, ERR_CALENDAR_NOT_FOUND);
         CalendarHolidayRow existing = holidayMapper.selectByCalendarIdAndId(id, holidayId);
-        Guard.requireFound(existing, "holiday not found");
+        Preconditions.requireFound(existing, "holiday not found");
         requireHolidayBelongsToCalendar(existing, id);
         int rows = holidayMapper.deleteByCalendarIdAndId(id, holidayId);
         if (rows == 0) {

@@ -8,8 +8,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.context.TriggerLaunchPersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -134,7 +134,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     /** 并发恢复场景下，同一 dedup_key 的实例可能已由原 trigger_request 创建但请求状态尚未回写。 */
     private JobInstanceEntity findConcurrentLaunchOfSameRequest(
             LaunchRequest request, TriggerRequestEntity triggerRequest) {
-        if (EmptyChecks.isBlank(triggerRequest.getDedupKey())) {
+        if (EmptyValues.isBlank(triggerRequest.getDedupKey())) {
             return null;
         }
         JobInstanceEntity instance =
@@ -236,7 +236,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
         Long parentWorkflowRunId = triggerRequest.getParentWorkflowRunId();
         String parentNodeCode = triggerRequest.getParentNodeCode();
         boolean parentWorkflowNodeIdentityIsIncomplete =
-                parentWorkflowRunId == null || EmptyChecks.isBlank(parentNodeCode);
+                parentWorkflowRunId == null || EmptyValues.isBlank(parentNodeCode);
         if (parentWorkflowNodeIdentityIsIncomplete) {
             return false;
         }
@@ -263,7 +263,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     }
 
     private void validate(LaunchRequest request) {
-        Guard.require(request != null, "launch request is required");
+        Preconditions.require(request != null, "launch request is required");
         if (request.tenantId() == null || request.tenantId().isBlank()) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
         }

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.batchday;
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
@@ -140,11 +140,11 @@ public class BatchDayCatchupControlService {
 
     private static void validate(PauseCommand command) {
         boolean hasRequiredFields = command != null
-                && Texts.hasText(command.tenantId())
-                && Texts.hasText(command.calendarCode())
-                && Texts.hasText(command.action())
-                && Texts.hasText(command.operatorId())
-                && Texts.hasText(command.reason());
+                && EmptyValues.hasText(command.tenantId())
+                && EmptyValues.hasText(command.calendarCode())
+                && EmptyValues.hasText(command.action())
+                && EmptyValues.hasText(command.operatorId())
+                && EmptyValues.hasText(command.reason());
         if (!hasRequiredFields) {
             throw new IllegalArgumentException("tenant, calendar, action, operator and reason are required");
         }
@@ -164,7 +164,7 @@ public class BatchDayCatchupControlService {
     }
 
     private static void validateIdentity(String tenantId, String calendarCode) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(calendarCode)) {
             throw new IllegalArgumentException("tenantId and calendarCode are required");
         }
     }

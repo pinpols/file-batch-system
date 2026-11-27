@@ -3,7 +3,7 @@ package io.github.pinpols.batch.trigger.auth;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.mapper.auth.TriggerApiKeyAuthMapper;
 import java.time.Duration;
 import java.time.Instant;
@@ -58,7 +58,7 @@ public class TriggerApiKeyVerifier {
 
     public Optional<TriggerApiKeyPrincipal> authenticate(String rawKey, String tenantId) {
         boolean apiKeyCredentialsAreIncomplete =
-                rawKey == null || rawKey.length() < KEY_PREFIX_LENGTH || EmptyChecks.isBlank(tenantId);
+                rawKey == null || rawKey.length() < KEY_PREFIX_LENGTH || EmptyValues.isBlank(tenantId);
         if (apiKeyCredentialsAreIncomplete) {
             return Optional.empty();
         }
@@ -110,7 +110,7 @@ public class TriggerApiKeyVerifier {
         }
         String serializedScopes = Objects.requireNonNullElse(principal.scopes(), "");
         String[] scopeTokens = serializedScopes.split("[,\\s]+");
-        Stream<String> nonBlankScopes = Arrays.stream(scopeTokens).filter(scope -> EmptyChecks.isNotBlank(scope));
+        Stream<String> nonBlankScopes = Arrays.stream(scopeTokens).filter(scope -> EmptyValues.isNotBlank(scope));
         return nonBlankScopes.anyMatch(EVENT_SCOPE::equals);
     }
 

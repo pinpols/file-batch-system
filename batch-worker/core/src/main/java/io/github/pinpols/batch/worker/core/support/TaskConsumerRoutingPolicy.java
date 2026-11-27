@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
@@ -42,7 +42,7 @@ final class TaskConsumerRoutingPolicy {
         String configuredWorkerCode = configuration.workerCode();
         String configuredBaseTopic = resolveBaseTopic(configuration);
         String baseTopic = topicNamespace.topic(configuredBaseTopic);
-        if (EmptyChecks.isBlank(configuredWorkerCode)) {
+        if (EmptyValues.isBlank(configuredWorkerCode)) {
             return new String[] {baseTopic};
         }
         String directDispatchTopic = BatchTopics.directDispatchTopic(baseTopic, configuredWorkerCode);
@@ -88,7 +88,7 @@ final class TaskConsumerRoutingPolicy {
                 ? List.of()
                 : properties.getTenantAllowlist();
         String tenantAlt = allow.stream()
-                .filter(EmptyChecks::isNotBlank)
+                .filter(EmptyValues::isNotBlank)
                 .map(TaskConsumerRoutingPolicy::escapeRegex)
                 .reduce((left, right) -> left + "|" + right)
                 .orElse(null);
@@ -125,17 +125,17 @@ final class TaskConsumerRoutingPolicy {
     static String resolveBaseTopic(WorkerConfiguration configuration) {
         String configuredWorkerCode = configuration.workerCode();
         String baseTopic = configuration.topic();
-        if (EmptyChecks.isBlank(baseTopic)) {
+        if (EmptyValues.isBlank(baseTopic)) {
             baseTopic = resolveTopicByWorkerType(configuration.workerType());
-            if (EmptyChecks.isBlank(baseTopic)) {
+            if (EmptyValues.isBlank(baseTopic)) {
                 baseTopic = resolveTopicByWorkerCode(configuredWorkerCode);
             }
         }
-        return EmptyChecks.isBlank(baseTopic) ? BatchTopics.TASK_DISPATCH_DISPATCH : baseTopic;
+        return EmptyValues.isBlank(baseTopic) ? BatchTopics.TASK_DISPATCH_DISPATCH : baseTopic;
     }
 
     private static String resolveTopicByWorkerType(String workerType) {
-        if (EmptyChecks.isBlank(workerType)) {
+        if (EmptyValues.isBlank(workerType)) {
             return null;
         }
         String normalizedWorkerType = workerType.toUpperCase(Locale.ROOT);
@@ -172,7 +172,7 @@ final class TaskConsumerRoutingPolicy {
     }
 
     private static String resolveNodeDirectSuffix(String baseTopic, String workerCode) {
-        if (EmptyChecks.isBlank(workerCode)) {
+        if (EmptyValues.isBlank(workerCode)) {
             return null;
         }
         String directTopic = BatchTopics.directDispatchTopic(baseTopic, workerCode);

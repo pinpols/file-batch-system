@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.atomic.sql;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -173,7 +173,7 @@ final class SqlStatementSplitter {
         private void flush() {
             String bufferedStatement = buf.toString();
             String s = bufferedStatement.trim();
-            if (EmptyChecks.isNotEmpty(s)) out.add(s);
+            if (EmptyValues.isNotEmpty(s)) out.add(s);
             buf.setLength(0);
         }
 
@@ -210,7 +210,7 @@ final class SqlStatementSplitter {
             char c = sql.charAt(j);
             if (c == '$') {
                 String tag = sql.substring(pos + 1, j);
-                return (EmptyChecks.isEmpty(tag) || isValidDollarTag(tag)) ? sql.substring(pos, j + 1) : null;
+                return (EmptyValues.isEmpty(tag) || isValidDollarTag(tag)) ? sql.substring(pos, j + 1) : null;
             }
             if (!(Character.isLetterOrDigit(c) || c == '_')) {
                 return null; // 标签里出现非法字符(空格/运算符)→ 普通 $,非 dollar-quote

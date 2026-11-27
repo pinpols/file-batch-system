@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -83,7 +83,7 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
         String endpoint = channelConfig.get("target_endpoint") == null
                 ? null
                 : String.valueOf(channelConfig.get("target_endpoint"));
-        if (EmptyChecks.isBlank(endpoint)) {
+        if (EmptyValues.isBlank(endpoint)) {
             return DispatchResult.failureWithoutReceipt("target endpoint missing");
         }
         String evidenceEndpoint = SecretMasking.maskEndpoint(endpoint);
@@ -107,14 +107,14 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
         if ("API_PUSH".equalsIgnoreCase(ct)) {
             Object apiKey = channelConfig.get("api_push_api_key");
             String apiKeyPresenceText = apiKey == null ? null : String.valueOf(apiKey);
-            if (apiKey != null && !EmptyChecks.isBlank(Objects.requireNonNull(apiKeyPresenceText))) {
+            if (apiKey != null && !EmptyValues.isBlank(Objects.requireNonNull(apiKeyPresenceText))) {
                 String rawApiKey = String.valueOf(apiKey);
                 String normalizedApiKey = rawApiKey.trim();
                 builder.addHeader("X-Api-Key", normalizedApiKey);
             }
             Object authorization = channelConfig.get("authorization");
             String authorizationPresenceText = authorization == null ? null : String.valueOf(authorization);
-            if (authorization != null && !EmptyChecks.isBlank(Objects.requireNonNull(authorizationPresenceText))) {
+            if (authorization != null && !EmptyValues.isBlank(Objects.requireNonNull(authorizationPresenceText))) {
                 String rawAuthorization = String.valueOf(authorization);
                 String normalizedAuthorization = rawAuthorization.trim();
                 builder.addHeader("Authorization", normalizedAuthorization);

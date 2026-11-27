@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobBundleApplicationService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleCreateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleImportRequest;
@@ -63,7 +63,7 @@ public class ConsoleJobBundleController {
 
     private String requestHash(HttpServletRequest request) {
         String key = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
-        if (!Texts.hasText(key)) {
+        if (!EmptyValues.hasText(key)) {
             return null;
         }
         String tenantHeader = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);

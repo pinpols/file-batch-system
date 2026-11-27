@@ -10,9 +10,8 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.application.workflow.ManagedJobWorkflowReferencePort;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
@@ -166,7 +165,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     public ConsoleBatchDayCatchUpResponse catchUpBatchDay(
             String bizDate, BatchDayCatchUpRequest request, String idempotencyKey) {
         String tenantId = ops.resolveTenant(request.getTenantId());
-        if (!Texts.hasText(idempotencyKey)) {
+        if (!EmptyValues.hasText(idempotencyKey)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }
         String calendarCode = ConsoleTextSanitizer.safeInput(request.getCalendarCode(), CALENDAR_CODE_MAX_LENGTH);
@@ -261,7 +260,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     }
 
     private List<String> sanitizedRequestedJobCodes(List<String> jobCodes) {
-        if (EmptyChecks.isEmpty(jobCodes)) {
+        if (EmptyValues.isEmpty(jobCodes)) {
             return null;
         }
         return jobCodes.stream()
@@ -463,7 +462,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
 
     private List<String> resolveJobCodes(
             String tenantId, String calendarCode, LocalDate bizDate, List<String> requestedJobCodes) {
-        if (EmptyChecks.isNotEmpty(requestedJobCodes)) {
+        if (EmptyValues.isNotEmpty(requestedJobCodes)) {
             return requestedJobCodes.stream()
                     .filter(ops::hasText)
                     .map(code -> ConsoleTextSanitizer.safeInput(code, JOB_CODE_MAX_LENGTH))

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.trigger.support;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Arrays;
 import java.util.List;
 import lombok.Data;
@@ -47,14 +47,14 @@ public class TriggerDescriptor {
             dependsOnJobCodes = null;
             return;
         }
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             dependsOnJobCodes = List.of();
             return;
         }
         String separator = String.valueOf((char) 31);
         dependsOnJobCodes = Arrays.stream(value.split(separator))
                 .map(String::trim)
-                .filter(code -> EmptyChecks.isNotEmpty(code))
+                .filter(code -> EmptyValues.isNotEmpty(code))
                 .toList();
     }
 

@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -104,7 +104,7 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
         }
         try {
             TaskResult result = executor.execute(ctx);
-            if (result.success() && !EmptyChecks.isEmpty(result.output())) {
+            if (result.success() && !EmptyValues.isEmpty(result.output())) {
                 request.context().put(PipelineRuntimeKeys.NODE_OUTPUTS, result.output());
             }
             return toResponse(result);
@@ -125,7 +125,7 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
         Map<String, Object> context = request.context();
         Long taskId = asLong(context == null ? null : context.get(PipelineRuntimeKeys.TASK_ID));
         Object invocationValue = context == null ? null : context.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
-        if (taskId == null || !(invocationValue instanceof String invocationId) || EmptyChecks.isBlank(invocationId)) {
+        if (taskId == null || !(invocationValue instanceof String invocationId) || EmptyValues.isBlank(invocationId)) {
             log.error("non-idempotent task execution rejected because its persisted lease identity is absent");
             return false;
         }

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.NotificationProperties;
 import java.util.Arrays;
 import java.util.List;
@@ -100,7 +100,7 @@ public class EmailNotificationSender implements NotificationSender {
         String body = buildBody(message);
         mailMessage.setText(body);
         String from = str(config, CONFIG_KEY_FROM);
-        if (EmptyChecks.isNotBlank(from)) {
+        if (EmptyValues.isNotBlank(from)) {
             mailMessage.setFrom(from);
         }
 
@@ -124,11 +124,11 @@ public class EmailNotificationSender implements NotificationSender {
     }
 
     private String resolveSubject(String configured, NotificationMessage message) {
-        if (EmptyChecks.isNotBlank(configured)) {
+        if (EmptyValues.isNotBlank(configured)) {
             return configured;
         }
         String eventType = message.payload() == null ? null : message.payload().eventType();
-        return "[batch] " + (EmptyChecks.isBlank(eventType) ? "notification" : eventType);
+        return "[batch] " + (EmptyValues.isBlank(eventType) ? "notification" : eventType);
     }
 
     private String buildBody(NotificationMessage message) {
@@ -138,7 +138,7 @@ public class EmailNotificationSender implements NotificationSender {
                 .append(eventType == null ? "UNKNOWN" : eventType)
                 .append('\n');
         String payloadJson = message.payloadJson();
-        if (EmptyChecks.isNotBlank(payloadJson)) {
+        if (EmptyValues.isNotBlank(payloadJson)) {
             body.append(truncate(payloadJson));
         }
         return body.toString();
@@ -152,7 +152,7 @@ public class EmailNotificationSender implements NotificationSender {
     }
 
     private String[] parseRecipients(String to) {
-        if (EmptyChecks.isBlank(to)) {
+        if (EmptyValues.isBlank(to)) {
             return new String[0];
         }
         return Arrays.stream(to.split(","))
@@ -164,7 +164,7 @@ public class EmailNotificationSender implements NotificationSender {
     /** 按域名白名单过滤收件人;白名单为空 = 不限制。 */
     private String[] filterAllowedRecipients(String[] recipients) {
         List<String> allowed = notificationProperties.getEmailAllowedDomains();
-        if (EmptyChecks.isEmpty(allowed)) {
+        if (EmptyValues.isEmpty(allowed)) {
             return recipients;
         }
         return Arrays.stream(recipients)
@@ -194,7 +194,7 @@ public class EmailNotificationSender implements NotificationSender {
     }
 
     private Map<String, Object> parseConfig(String configJson) {
-        if (EmptyChecks.isBlank(configJson)) {
+        if (EmptyValues.isBlank(configJson)) {
             return Map.of();
         }
         try {

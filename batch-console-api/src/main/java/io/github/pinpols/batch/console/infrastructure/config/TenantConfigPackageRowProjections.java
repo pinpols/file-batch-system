@@ -49,9 +49,8 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
@@ -126,9 +125,9 @@ public class TenantConfigPackageRowProjections {
 
     private String dependencyBizDateAlignments(JobDefinitionView entity) {
         List<JobDependencyRuleView> dependencyRules = entity.getJobDependencyRules();
-        boolean dependencyRulesAreMissing = EmptyChecks.isEmpty(dependencyRules);
+        boolean dependencyRulesAreMissing = EmptyValues.isEmpty(dependencyRules);
         if (dependencyRulesAreMissing) {
-            return Texts.hasText(entity.getDependsOnJobCode()) ? "SAME_DAY" : null;
+            return EmptyValues.hasText(entity.getDependsOnJobCode()) ? "SAME_DAY" : null;
         }
         return dependencyRules.stream().map(rule -> rule.bizDateAlignment()).collect(Collectors.joining(","));
     }

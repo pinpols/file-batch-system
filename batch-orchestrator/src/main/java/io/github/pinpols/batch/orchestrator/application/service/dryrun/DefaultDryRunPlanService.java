@@ -3,8 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.dryrun;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
@@ -84,7 +83,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     private void validateJobParams(JobDefinitionView job, DryRunPlanRequest request, List<DryRunFinding> findings) {
         Map<String, Object> schema = job.paramSchema();
         Map<String, Object> provided = request.params() == null ? Map.of() : new LinkedHashMap<>(request.params());
-        if (EmptyChecks.isEmpty(schema)) {
+        if (EmptyValues.isEmpty(schema)) {
             findings.add(DryRunFinding.pass("JOB_PARAMS_NO_SCHEMA", SCOPE_JOB, "no paramSchema defined; skip"));
             return;
         }
@@ -100,7 +99,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
                 missing.add(name);
             }
         }
-        if (EmptyChecks.isEmpty(missing)) {
+        if (EmptyValues.isEmpty(missing)) {
             findings.add(DryRunFinding.pass("JOB_PARAMS_OK", SCOPE_JOB, "all required params present"));
         } else {
             findings.add(DryRunFinding.error("JOB_PARAMS_MISSING", SCOPE_JOB, "missing required params", missing));
@@ -190,10 +189,10 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     }
 
     private void requireRequest(DryRunPlanRequest request) {
-        if (request == null || !Texts.hasText(request.tenantId())) {
+        if (request == null || !EmptyValues.hasText(request.tenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.dryrun.tenant_required");
         }
-        if (!Texts.hasText(request.jobCode())) {
+        if (!EmptyValues.hasText(request.jobCode())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.dryrun.job_code_required");
         }
     }

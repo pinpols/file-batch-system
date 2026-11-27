@@ -7,8 +7,8 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReadinessWaitEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import java.io.IOException;
@@ -52,7 +52,7 @@ public class TriggerReadinessRecoveryClient {
     }
 
     public RecoveryOutcome recover(ReadinessWaitEntity wait) {
-        if (wait == null || !Texts.hasText(internalSecret)) {
+        if (wait == null || !EmptyValues.hasText(internalSecret)) {
             return RecoveryOutcome.FAILED;
         }
         try {

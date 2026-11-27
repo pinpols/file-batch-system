@@ -3,8 +3,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -104,7 +103,7 @@ public final class ChannelConfigMerge {
     private ChannelConfigMerge() {}
 
     public static Map<String, Object> merge(Map<String, Object> row, ObjectMapper objectMapper) {
-        if (EmptyChecks.isEmpty(row)) {
+        if (EmptyValues.isEmpty(row)) {
             return Map.of();
         }
         Map<String, Object> out = new LinkedHashMap<>();
@@ -117,7 +116,7 @@ public final class ChannelConfigMerge {
             mergeConfigJson(out, m);
             return out;
         }
-        boolean configJsonHasTextAndParserIsAvailable = objectMapper != null && Texts.hasText(String.valueOf(cj));
+        boolean configJsonHasTextAndParserIsAvailable = objectMapper != null && EmptyValues.hasText(String.valueOf(cj));
         if (configJsonHasTextAndParserIsAvailable) {
             try {
                 String configJsonText = String.valueOf(cj);

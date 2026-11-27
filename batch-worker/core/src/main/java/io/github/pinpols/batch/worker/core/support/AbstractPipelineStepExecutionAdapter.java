@@ -12,9 +12,8 @@ import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
@@ -179,7 +178,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         }
         Map<String, Object> fileRecord =
                 fileId == null ? Map.of() : fileRecords.loadFileRecord(request.tenantId(), fileId);
-        if (fileId != null && EmptyChecks.isEmpty(Objects.requireNonNull(fileRecord))) {
+        if (fileId != null && EmptyValues.isEmpty(Objects.requireNonNull(fileRecord))) {
             BizException exception = BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
             return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
         }
@@ -358,7 +357,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         Object configured = attributes.get(SystemPipelineTaskKeys.STEP_PARAMS);
         if (configured == null) {
             Object rawPayload = attributes.get(PipelineRuntimeKeys.PAYLOAD);
-            if (rawPayload instanceof String payload && EmptyChecks.isNotBlank(payload)) {
+            if (rawPayload instanceof String payload && EmptyValues.isNotBlank(payload)) {
                 try {
                     Object parsed = JsonUtils.fromJson(payload, Object.class);
                     if (parsed instanceof Map<?, ?> map) {
@@ -385,11 +384,11 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     private BizException validateSystemPipelineIdentity(
             Map<String, Object> attributes, SystemPipelineDefinition expected) {
         String requestedCode = resolveText(attributes, PipelineRuntimeKeys.SYSTEM_PIPELINE_CODE);
-        if (!Texts.hasText(requestedCode)) {
+        if (!EmptyValues.hasText(requestedCode)) {
             requestedCode = extractFromPayloadJson(attributes, PipelineRuntimeKeys.SYSTEM_PIPELINE_CODE);
         }
         String requestedVersion = resolveText(attributes, PipelineRuntimeKeys.SYSTEM_PIPELINE_VERSION);
-        if (!Texts.hasText(requestedVersion)) {
+        if (!EmptyValues.hasText(requestedVersion)) {
             requestedVersion = extractFromPayloadJson(attributes, PipelineRuntimeKeys.SYSTEM_PIPELINE_VERSION);
         }
         if (expected.code().equals(requestedCode)
@@ -442,17 +441,19 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
 
     protected String resolveTraceId(Map<String, Object> attributes) {
         String traceId = resolveText(attributes, PipelineRuntimeKeys.TRACE_ID, "sourceTraceId");
-        return Texts.hasText(traceId) ? traceId : pipelineType().toLowerCase(Locale.ROOT) + "-" + UUID.randomUUID();
+        return EmptyValues.hasText(traceId)
+                ? traceId
+                : pipelineType().toLowerCase(Locale.ROOT) + "-" + UUID.randomUUID();
     }
 
     protected String resolveJobCode(StepExecutionRequest request, Map<String, Object> attributes) {
         // 显式目标优先于通用作业键；payload 也可能以 JSON 字符串保存在 attributes 中，需要单独解析。
         // 当前 Workflow JOB 节点派发独立 JobInstance；此处只解析作业身份，不查询定义表或切换阶段模板。
         String targetJobCode = resolveText(attributes, "targetJobCode");
-        if (!Texts.hasText(targetJobCode)) {
+        if (!EmptyValues.hasText(targetJobCode)) {
             targetJobCode = extractFromPayloadJson(attributes, "targetJobCode");
         }
-        if (Texts.hasText(targetJobCode)) {
+        if (EmptyValues.hasText(targetJobCode)) {
             return targetJobCode;
         }
         String jobCode = resolveText(
@@ -462,13 +463,13 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
                 // 只留没有归属常量的历史键名:"jobCode" 与 JOB_CODE 同值,再写一份字面量只会在常量改名时
                 // 静默分叉(check-pipeline-summary-keys.py 的 KEY_LITERAL_AND_CONSTANT 规则)。
                 "pipelineCode");
-        if (Texts.hasText(jobCode)) {
+        if (EmptyValues.hasText(jobCode)) {
             return jobCode;
         }
-        if (request != null && Texts.hasText(request.jobCode())) {
+        if (request != null && EmptyValues.hasText(request.jobCode())) {
             return request.jobCode();
         }
-        if (request != null && Texts.hasText(request.stepCode())) {
+        if (request != null && EmptyValues.hasText(request.stepCode())) {
             return request.stepCode();
         }
         return pipelineType();
@@ -488,7 +489,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
             Object parsed = JsonUtils.fromJson(payload, Object.class);
             if (parsed instanceof Map<?, ?> map) {
                 Object value = ((Map<String, Object>) map).get(fieldName);
-                if (value instanceof String text && Texts.hasText(text)) {
+                if (value instanceof String text && EmptyValues.hasText(text)) {
                     return text;
                 }
                 if (value instanceof Number number) {
@@ -543,12 +544,12 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     protected String resolveText(Map<String, Object> attributes, String... keys) {
         for (String key : keys) {
             Object value = attributes.get(key);
-            if (value instanceof String text && Texts.hasText(text)) {
+            if (value instanceof String text && EmptyValues.hasText(text)) {
                 return text;
             }
             if (value != null) {
                 String text = String.valueOf(value);
-                if (Texts.hasText(text) && !"null".equalsIgnoreCase(text)) {
+                if (EmptyValues.hasText(text) && !"null".equalsIgnoreCase(text)) {
                     return text;
                 }
             }

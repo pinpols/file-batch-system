@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRecoveryResponse;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigBatchOperationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
@@ -38,7 +38,7 @@ public class ConsoleConfigBatchRecoveryController {
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             HttpServletRequest request) {
         tenantGuard.assertTenantAllowed(auditTenantId);
-        if (!Texts.hasText(idempotencyKey)) {
+        if (!EmptyValues.hasText(idempotencyKey)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }
         String originalPath =

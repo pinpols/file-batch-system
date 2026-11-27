@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.enums;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -35,7 +35,7 @@ public interface DictEnum {
 
     /** 按 code 查枚举常量；code 为空或未匹配返回 null。调用者需要默认值或抛异常时，在 callsite 判断。 */
     static <E extends Enum<E> & DictEnum> E fromCode(Class<E> enumClass, String code) {
-        if (EmptyChecks.isBlank(code)) {
+        if (EmptyValues.isBlank(code)) {
             return null;
         }
         String normalized = code.trim();

@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import io.github.pinpols.batch.console.support.notification.ConsoleNotificationCryptoSupport;
@@ -90,7 +90,7 @@ public class AliyunSmsProvider implements SmsProvider {
 
     @Override
     public WebhookDeliveryResult send(List<String> phoneNumbers, NotificationMessage message) {
-        if (EmptyChecks.isEmpty(phoneNumbers)) {
+        if (EmptyValues.isEmpty(phoneNumbers)) {
             return WebhookDeliveryResult.failure(null, "missing sms phoneNumbers");
         }
         String joinedPhoneNumbers = String.join(",", phoneNumbers);
@@ -111,15 +111,15 @@ public class AliyunSmsProvider implements SmsProvider {
             return WebhookDeliveryResult.failure(null, "invalid sms config");
         }
 
-        if (EmptyChecks.isBlank(signName)) {
+        if (EmptyValues.isBlank(signName)) {
             return WebhookDeliveryResult.failure(null, "missing sms signName");
         }
-        if (EmptyChecks.isBlank(templateCode)) {
+        if (EmptyValues.isBlank(templateCode)) {
             return WebhookDeliveryResult.failure(null, "missing sms templateCode");
         }
 
         String endpoint = properties.getAliyunEndpoint();
-        if (EmptyChecks.isBlank(endpoint)) {
+        if (EmptyValues.isBlank(endpoint)) {
             return WebhookDeliveryResult.failure(null, "missing sms endpoint");
         }
 
@@ -240,7 +240,7 @@ public class AliyunSmsProvider implements SmsProvider {
                     .append(':')
                     .append(e.getValue().trim())
                     .append('\n');
-            if (EmptyChecks.isNotEmpty(signedHeadersStr)) {
+            if (EmptyValues.isNotEmpty(signedHeadersStr)) {
                 signedHeadersStr.append(';');
             }
             signedHeadersStr.append(e.getKey());
@@ -275,7 +275,7 @@ public class AliyunSmsProvider implements SmsProvider {
     private static String canonicalQueryString(SortedMap<String, String> params) {
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, String> e : params.entrySet()) {
-            if (EmptyChecks.isNotEmpty(sb)) {
+            if (EmptyValues.isNotEmpty(sb)) {
                 sb.append('&');
             }
             String encodedKey = percentEncode(e.getKey());

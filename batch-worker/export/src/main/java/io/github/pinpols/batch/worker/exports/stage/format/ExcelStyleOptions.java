@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -31,7 +31,7 @@ record ExcelStyleOptions(
     }
 
     static ExcelStyleOptions from(Map<String, Object> templateConfig, AbstractExportFormat helper) {
-        if (EmptyChecks.isEmpty(templateConfig)) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             return NONE;
         }
         Map<String, Object> style = helper.toMap(

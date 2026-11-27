@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.rbac.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleResourceTagMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
@@ -32,7 +32,7 @@ public class ConsoleResourceTagService {
 
     public List<ResourceTagEntity> listByTagKey(String tenantId, String tagKey, String tagValue) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        if (EmptyChecks.isNotBlank(tagValue)) {
+        if (EmptyValues.isNotBlank(tagValue)) {
             return repository.findByTagKeyAndValue(resolved, tagKey, tagValue);
         }
         return repository.findByTagKey(resolved, tagKey);
@@ -51,7 +51,7 @@ public class ConsoleResourceTagService {
         String tagKey = input.tagKey();
         String tagValue = input.tagValue();
         String operator = input.operator();
-        Guard.requireText(resourceCode, "resourceCode is required");
+        Preconditions.requireText(resourceCode, "resourceCode is required");
         repository.lockResourceTagIdentity(resolvedTenant, normalizedType, resourceCode);
         if (repository.selectResourceTagTarget(resolvedTenant, normalizedType, resourceCode) == null) {
             throw BizException.of(
@@ -85,7 +85,7 @@ public class ConsoleResourceTagService {
     }
 
     private String validateResourceType(String resourceType) {
-        Guard.requireText(resourceType, "resourceType is required");
+        Preconditions.requireText(resourceType, "resourceType is required");
         String normalized = resourceType.toUpperCase(Locale.ROOT);
         if (!VALID_RESOURCE_TYPES.contains(normalized)) {
             throw BizException.of(

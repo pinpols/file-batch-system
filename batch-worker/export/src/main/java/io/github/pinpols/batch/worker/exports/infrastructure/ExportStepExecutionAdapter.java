@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.exports.infrastructure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -87,7 +87,7 @@ public class ExportStepExecutionAdapter
         Object exportPayload = contextMap.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
         boolean rawExportPayloadNeedsDecoding = exportPayload == null
                 && context.getRawPayload() != null
-                && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
+                && !EmptyValues.isBlank(Objects.requireNonNull(context.getRawPayload()));
         if (rawExportPayloadNeedsDecoding) {
             exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
             context.getAttributes().put(ExportRuntimeKeys.EXPORT_PAYLOAD, exportPayload);
@@ -170,6 +170,6 @@ public class ExportStepExecutionAdapter
             attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
         }
         return new StepExecutionResponse(
-                true, "SUCCESS", EmptyChecks.isBlank(objectName) ? "export stage completed" : objectName);
+                true, "SUCCESS", EmptyValues.isBlank(objectName) ? "export stage completed" : objectName);
     }
 }

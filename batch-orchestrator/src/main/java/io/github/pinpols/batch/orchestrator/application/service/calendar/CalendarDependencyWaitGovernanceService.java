@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.calendar;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
@@ -107,11 +107,11 @@ public class CalendarDependencyWaitGovernanceService {
 
     private static void validate(ManualActionCommand command) {
         boolean manualActionCommandIsInvalid = command == null
-                || !Texts.hasText(command.tenantId())
-                || !Texts.hasText(command.calendarCode())
+                || !EmptyValues.hasText(command.tenantId())
+                || !EmptyValues.hasText(command.calendarCode())
                 || command.bizDate() == null
-                || !Texts.hasText(command.operatorId())
-                || !Texts.hasText(command.reason())
+                || !EmptyValues.hasText(command.operatorId())
+                || !EmptyValues.hasText(command.reason())
                 || command.operatorId().trim().length() > MANUAL_OPERATOR_ID_MAX_LENGTH
                 || command.reason().trim().length() > MANUAL_REASON_MAX_LENGTH;
         if (manualActionCommandIsInvalid) {
@@ -129,7 +129,7 @@ public class CalendarDependencyWaitGovernanceService {
     }
 
     private static String normalizeStatus(String value) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return null;
         }
         String trimmedValue = value.trim();
@@ -137,7 +137,7 @@ public class CalendarDependencyWaitGovernanceService {
     }
 
     private static void requireText(String value, String field) {
-        if (!Texts.hasText(value)) throw new IllegalArgumentException(field + " is required");
+        if (!EmptyValues.hasText(value)) throw new IllegalArgumentException(field + " is required");
     }
 
     public record ManualActionCommand(

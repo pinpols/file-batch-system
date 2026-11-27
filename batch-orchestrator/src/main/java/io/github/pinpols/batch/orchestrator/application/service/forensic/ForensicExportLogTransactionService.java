@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.forensic;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ForensicExportLogMapper;
 import java.time.Instant;
@@ -28,7 +27,7 @@ class ForensicExportLogTransactionService {
     public void insertProcessingRow(
             ForensicExportRequest request, String exportId, String format, Instant requestedAt) {
         String scopeJson = JsonUtils.toJson(List.of("job_instances", "batch_day_operation_audits", "manifest"));
-        String jobCodesJson = EmptyChecks.isEmpty(request.jobCodes()) ? null : JsonUtils.toJson(request.jobCodes());
+        String jobCodesJson = EmptyValues.isEmpty(request.jobCodes()) ? null : JsonUtils.toJson(request.jobCodes());
         ForensicExportLogEntity exportLogEntity = ForensicExportLogEntity.builder()
                 .tenantId(request.tenantId())
                 .exportId(exportId)
@@ -38,7 +37,7 @@ class ForensicExportLogTransactionService {
                 .scopeJson(scopeJson)
                 .exportFormat(format)
                 .status("PROCESSING")
-                .requestedBy(Texts.hasText(request.requestedBy()) ? request.requestedBy() : "UNKNOWN")
+                .requestedBy(EmptyValues.hasText(request.requestedBy()) ? request.requestedBy() : "UNKNOWN")
                 .requestedAt(requestedAt)
                 .traceId(request.traceId())
                 .build();

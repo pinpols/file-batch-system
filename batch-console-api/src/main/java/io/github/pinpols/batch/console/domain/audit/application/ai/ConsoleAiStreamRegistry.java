@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.application.ai;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -44,7 +44,9 @@ public class ConsoleAiStreamRegistry {
 
     private ConsoleRequestMetadata currentIdentity() {
         ConsoleRequestMetadata metadata = metadataResolver.current();
-        if (metadata == null || !Texts.hasText(metadata.tenantId()) || !Texts.hasText(metadata.operatorId())) {
+        if (metadata == null
+                || !EmptyValues.hasText(metadata.tenantId())
+                || !EmptyValues.hasText(metadata.operatorId())) {
             throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
         }
         return metadata;

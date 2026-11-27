@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.trigger.service;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -69,7 +69,7 @@ public class CalendarBizDateResolver {
         LocalDateTime localCutoff = date.atTime(cutoff);
         ZoneRules rules = zoneId.getRules();
         List<ZoneOffset> offsets = rules.getValidOffsets(localCutoff);
-        if (EmptyChecks.isEmpty(offsets)) {
+        if (EmptyValues.isEmpty(offsets)) {
             ZoneOffsetTransition transition = rules.getTransition(localCutoff);
             return transition.getInstant();
         }
@@ -80,7 +80,7 @@ public class CalendarBizDateResolver {
     private ZoneId resolveZoneId(ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
         if (calendar != null) {
             String timezone = calendar.timezone();
-            if (EmptyChecks.isNotBlank(timezone)) {
+            if (EmptyValues.isNotBlank(timezone)) {
                 return ZoneId.of(timezone);
             }
         }

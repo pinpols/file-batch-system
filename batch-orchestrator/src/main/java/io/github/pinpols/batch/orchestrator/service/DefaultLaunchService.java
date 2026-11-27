@@ -19,10 +19,10 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.application.service.failure.PersistenceConflictDetectionPort;
@@ -500,13 +500,13 @@ public class DefaultLaunchService implements LaunchService {
         TriggerRequestEntity triggerRequest = loaded.triggerRequest();
         WorkflowNodeRunEntity nodeRun = workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
                 triggerRequest.getParentWorkflowRunId(), triggerRequest.getParentNodeCode());
-        Guard.require(
+        Preconditions.require(
                 nodeRun != null && nodeRun.getId() != null,
                 ResultCode.STATE_CONFLICT,
                 "error.workflow.parent_node_launch_invalid");
         int linked = workflowMappers.workflowNodeRunMapper.attachJobInstance(
                 triggerRequest.getTenantId(), nodeRun.getId(), jobInstance.getId());
-        Guard.require(linked > 0, ResultCode.STATE_CONFLICT, "error.workflow.node_job_instance_link_conflict");
+        Preconditions.require(linked > 0, ResultCode.STATE_CONFLICT, "error.workflow.node_job_instance_link_conflict");
     }
 
     private boolean hasWorkflowNodeParent(LaunchLoadResult loaded, JobInstanceEntity jobInstance) {
@@ -665,7 +665,7 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     private static String firstNonBlank(String preferred, String fallback) {
-        return (EmptyChecks.isNotBlank(preferred)) ? preferred : fallback;
+        return (EmptyValues.isNotBlank(preferred)) ? preferred : fallback;
     }
 
     /**
@@ -684,7 +684,7 @@ public class DefaultLaunchService implements LaunchService {
         }
         String highWaterMarkOut =
                 jobMappers.jobInstanceMapper.selectMaxEffectiveHighWaterMarkOut(tenantId, jobDefinitionId);
-        return EmptyChecks.isBlank(highWaterMarkOut) ? null : highWaterMarkOut;
+        return EmptyValues.isBlank(highWaterMarkOut) ? null : highWaterMarkOut;
     }
 
     /**

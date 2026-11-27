@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.DispatchAdmissionLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.DownstreamAdmissionGuard;
@@ -203,7 +203,9 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private ResourceCheck checkBatchWindow(ResourceSchedulingRequest request) {
-        if (request == null || !Texts.hasText(request.getTenantId()) || !Texts.hasText(request.getWindowCode())) {
+        if (request == null
+                || !EmptyValues.hasText(request.getTenantId())
+                || !EmptyValues.hasText(request.getWindowCode())) {
             return ResourceCheck.allow();
         }
         BatchWindowEntity window =
@@ -239,7 +241,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        if (request != null && Texts.hasText(request.getWorkerGroup())) {
+        if (request != null && EmptyValues.hasText(request.getWorkerGroup())) {
             return request.getWorkerGroup();
         }
         return queue == null ? null : queue.workerGroup();
@@ -281,7 +283,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private int resolveTenantWeight(String tenantId) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return 1;
         }
         TenantQuotaPolicyEntity policy = configCacheService.findEnabledQuotaPolicy(tenantId);
@@ -310,7 +312,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private int resolveTenantActiveJobs(ResourceSchedulingRequest request) {
-        if (request == null || !Texts.hasText(request.getTenantId())) {
+        if (request == null || !EmptyValues.hasText(request.getTenantId())) {
             return 0;
         }
         String tenantId = request.getTenantId();
@@ -319,7 +321,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private int resolveTenantActivePartitions(ResourceSchedulingRequest request) {
-        if (request == null || !Texts.hasText(request.getTenantId())) {
+        if (request == null || !EmptyValues.hasText(request.getTenantId())) {
             return 0;
         }
         String tenantId = request.getTenantId();
@@ -339,9 +341,9 @@ public class DefaultResourceScheduler implements ResourceScheduler {
 
     private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
         boolean queueJobQueryContextIncomplete = request == null
-                || !Texts.hasText(request.getTenantId())
+                || !EmptyValues.hasText(request.getTenantId())
                 || queue == null
-                || !Texts.hasText(queue.queueCode());
+                || !EmptyValues.hasText(queue.queueCode());
         if (queueJobQueryContextIncomplete) {
             return 0;
         }
@@ -355,9 +357,9 @@ public class DefaultResourceScheduler implements ResourceScheduler {
 
     private int resolveQueueActivePartitions(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
         boolean queuePartitionQueryContextIncomplete = request == null
-                || !Texts.hasText(request.getTenantId())
+                || !EmptyValues.hasText(request.getTenantId())
                 || queue == null
-                || !Texts.hasText(queue.workerGroup());
+                || !EmptyValues.hasText(queue.workerGroup());
         if (queuePartitionQueryContextIncomplete) {
             return 0;
         }

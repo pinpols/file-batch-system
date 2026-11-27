@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.progress;
 
 import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressClaimView;
 import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressStageView;
 import java.time.Clock;
@@ -45,7 +45,7 @@ public class PipelineStageProgressCache {
     /** 兼容旧心跳清理；带认领身份的样本由数据库有效性和 TTL 淘汰，防止旧进程空心跳删除新认领。 */
     public synchronized void publish(
             String tenantId, String workerCode, List<WorkerPipelineProgressDto> pipelineProgress) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(workerCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(workerCode)) {
             return;
         }
         WorkerKey workerKey = new WorkerKey(tenantId, workerCode);
@@ -90,14 +90,14 @@ public class PipelineStageProgressCache {
         if (previousKeys != null) {
             previousKeys.stream()
                     .filter(previous -> !currentKeys.contains(previous))
-                    .filter(previous -> previous.stepRunId() == null || !Texts.hasText(previous.invocationId()))
+                    .filter(previous -> previous.stepRunId() == null || !EmptyValues.hasText(previous.invocationId()))
                     .forEach(previous -> removeIfOwnedBy(previous, workerKey));
         }
     }
 
     /** 旧协议缓存行为的包内测试入口；生产查询必须传入数据库有效认领和阶段。 */
     synchronized List<PipelineSnapshot> snapshotByPipeline(String tenantId, Long pipelineInstanceId) {
-        if (!Texts.hasText(tenantId) || pipelineInstanceId == null) {
+        if (!EmptyValues.hasText(tenantId) || pipelineInstanceId == null) {
             return List.of();
         }
         Instant cutoff = clock.instant().minus(TTL);
@@ -140,7 +140,7 @@ public class PipelineStageProgressCache {
             if (!Objects.equals(tenantId, key.tenantId())
                     || !Objects.equals(pipelineInstanceId, key.pipelineInstanceId())
                     || entry.getValue().heartbeatAt().isBefore(cutoff)
-                    || !Texts.hasText(key.invocationId())
+                    || !EmptyValues.hasText(key.invocationId())
                     || key.stepRunId() == null) {
                 continue;
             }
@@ -206,7 +206,7 @@ public class PipelineStageProgressCache {
     private static boolean isValid(WorkerPipelineProgressDto item) {
         return item.taskId() != null
                 && item.pipelineInstanceId() != null
-                && Texts.hasText(item.stageCode())
+                && EmptyValues.hasText(item.stageCode())
                 && item.rowsProcessed() != null;
     }
 

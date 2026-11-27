@@ -7,8 +7,8 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.service.failure.TechnicalFailureClassificationPort;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
@@ -57,7 +57,7 @@ public class TriggerLaunchRecoveryService {
      */
     @Transactional
     public boolean park(String envelopeJson, String traceId) {
-        if (!Texts.hasText(envelopeJson)) {
+        if (!EmptyValues.hasText(envelopeJson)) {
             return false;
         }
         LaunchEnvelope envelope;
@@ -73,14 +73,14 @@ public class TriggerLaunchRecoveryService {
             return false;
         }
         LaunchRequest request = envelope.launchRequest();
-        if (!Texts.hasText(request.tenantId()) || !Texts.hasText(request.requestId())) {
+        if (!EmptyValues.hasText(request.tenantId()) || !EmptyValues.hasText(request.requestId())) {
             return false;
         }
         int inserted = mapper.insertPending(
                 request.tenantId(),
                 request.requestId(),
                 payloadProtector.protect(envelopeJson),
-                Texts.hasText(traceId) ? traceId : request.traceId());
+                EmptyValues.hasText(traceId) ? traceId : request.traceId());
         ParkOutcome outcome = inserted == 1 ? ParkOutcome.PARKED : handleExistingAnchor(request, envelope);
         if (outcome == ParkOutcome.UNSAFE) {
             return false;

@@ -7,11 +7,10 @@ import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
@@ -247,7 +246,7 @@ public class ParseStep implements ImportStageStep {
         if (resolveSpoolPath(context) != null || attrs.get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD) != null) {
             throw new IllegalArgumentException("trailer control record is not supported for spool/binary payload");
         }
-        if (!Texts.hasText(payloadText)) {
+        if (!EmptyValues.hasText(payloadText)) {
             return payloadText;
         }
         String body = payloadText;
@@ -297,7 +296,7 @@ public class ParseStep implements ImportStageStep {
             String rawMarker = String.valueOf(marker);
             expected = rawMarker.trim();
         }
-        if (EmptyChecks.isBlank(expected)) {
+        if (EmptyValues.isBlank(expected)) {
             return true;
         }
         String delimiter = strOr(template.get("delimiter"), ",");
@@ -334,7 +333,7 @@ public class ParseStep implements ImportStageStep {
         }
         String rawText = String.valueOf(value);
         String text = rawText.trim();
-        return Texts.hasText(text) ? text : fallback;
+        return EmptyValues.hasText(text) ? text : fallback;
     }
 
     private int intOr(Object value, int fallback) {
@@ -366,7 +365,7 @@ public class ParseStep implements ImportStageStep {
                 return result;
             }
             String jsonText = jsonText(raw);
-            if (Texts.hasText(jsonText)) {
+            if (EmptyValues.hasText(jsonText)) {
                 try {
                     return support.objectMapper().readValue(jsonText, new TypeReference<>() {});
                 } catch (Exception ignored) {
@@ -467,16 +466,16 @@ public class ParseStep implements ImportStageStep {
     }
 
     private String resolveFormat(ImportPayload importPayload, Object templateConfigObject, String payloadText) {
-        if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.fileFormatType())) {
             return importPayload.fileFormatType();
         }
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object value = templateConfig.get("file_format_type");
-            if (value != null && Texts.hasText(String.valueOf(value))) {
+            if (value != null && EmptyValues.hasText(String.valueOf(value))) {
                 return String.valueOf(value);
             }
         }
-        if (Texts.hasText(payloadText)) {
+        if (EmptyValues.hasText(payloadText)) {
             String trim = payloadText.trim();
             if (trim.startsWith("{") || trim.startsWith("[")) {
                 return FileTemplateFormat.JSON.code();
@@ -488,12 +487,12 @@ public class ParseStep implements ImportStageStep {
     private Charset resolvePayloadTextCharset(ImportPayload importPayload, Object templateConfigObject) {
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object charset = templateConfig.get("charset");
-            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+            if (charset != null && EmptyValues.hasText(String.valueOf(charset))) {
                 String charsetName = String.valueOf(charset);
                 return EncodingUtils.resolve(charsetName);
             }
         }
-        if (importPayload != null && Texts.hasText(importPayload.charset())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.charset())) {
             return EncodingUtils.resolve(importPayload.charset());
         }
         return StandardCharsets.UTF_8;

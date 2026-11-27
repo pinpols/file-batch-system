@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.service.readiness;
 
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
@@ -36,7 +36,7 @@ public class ReadinessRecoveryService {
      *     NOT_FOUND 定义不存在；INVALID_REQUEST 身份不完整；FAILED 其他启动异常。
      */
     public RecoveryLaunchOutcome recover(String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {
-        if (EmptyChecks.isBlank(tenantId)
+        if (EmptyValues.isBlank(tenantId)
                 || workflowDefinitionId == null
                 || workflowDefinitionId <= 0
                 || scheduledFireTime == null) {

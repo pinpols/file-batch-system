@@ -8,8 +8,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.logging.ThrottledLogger;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
@@ -244,7 +243,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
                     objectMapper);
         }
 
-        if (Texts.hasText(spec.watermarkColumn())) {
+        if (EmptyValues.hasText(spec.watermarkColumn())) {
             Object highWaterMarkOut = queryMaxWatermark(spec, context);
             if (highWaterMarkOut != null) {
                 String highWaterMarkText = String.valueOf(highWaterMarkOut);
@@ -489,7 +488,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         // 配 {} 会"压住"PREPARE/VALIDATE 等同步 step 上配置的 validations / emptyResultPolicy,
         // 静默通过。原代码只 null check,空 map 命中后导致 spec.validations() 为空。
         boolean computeStepParamsNeedFallback =
-                value == null || (value instanceof Map<?, ?> m && EmptyChecks.isEmpty(m));
+                value == null || (value instanceof Map<?, ?> m && EmptyValues.isEmpty(m));
         if (computeStepParamsNeedFallback) {
             Object current = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS);
             if (current != null) {
@@ -501,7 +500,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             map.forEach((key, item) -> out.put(String.valueOf(key), item));
             return out;
         }
-        if (value instanceof String text && Texts.hasText(text)) {
+        if (value instanceof String text && EmptyValues.hasText(text)) {
             try {
                 return objectMapper.readValue(text, Map.class);
             } catch (Exception e) {
@@ -524,7 +523,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
     private String requireBatchKey(ProcessJobContext context) {
         String batchKey = context.getBatchKey();
-        if (!Texts.hasText(batchKey)) {
+        if (!EmptyValues.hasText(batchKey)) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.process.batch_key_missing");
         }
         return batchKey;
@@ -532,7 +531,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
     private String requireStagingGenerationId(ProcessJobContext context) {
         String generationId = context.getStagingGenerationId();
-        if (!Texts.hasText(generationId)) {
+        if (!EmptyValues.hasText(generationId)) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.process.staging_generation_missing");
         }
         return generationId;
@@ -665,7 +664,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         Object rawProcessPayload = context.getAttributes().get(PipelineRuntimeKeys.PROCESS_PAYLOAD);
         if (rawProcessPayload instanceof ProcessPayload typedPayload) {
             String payloadBizDate = typedPayload.bizDate();
-            if (Texts.hasText(payloadBizDate)) {
+            if (EmptyValues.hasText(payloadBizDate)) {
                 params.put(PipelineRuntimeKeys.BIZ_DATE, payloadBizDate);
             }
             Map<String, Object> payloadMetadata = typedPayload.metadata();
@@ -686,7 +685,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     }
 
     private void putMetadataParam(Map<String, Object> params, String key, Object value) {
-        if (EmptyChecks.isBlank(key)) {
+        if (EmptyValues.isBlank(key)) {
             return;
         }
         boolean metadataValueIsUnsupportedStructure = value != null
@@ -717,7 +716,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     private ProcessStageResult commitDirect(ProcessJobContext context, SqlTransformComputeSpec spec) {
         Map<String, Object> params = buildSqlParams(context, spec);
         int publishedRows;
-        if (Texts.hasText(spec.watermarkColumn())) {
+        if (EmptyValues.hasText(spec.watermarkColumn())) {
             String directPublishMetricsSql = SqlTransformComputeSqlBuilder.buildDirectPublishMetricsSql(spec);
             Map<String, Object> result = jdbc.queryForMap(directPublishMetricsSql, params);
             Object rawPublishedRows = result.get("published_rows");

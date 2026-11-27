@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.support.excel;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -36,7 +36,7 @@ public final class ExcelMapRowReader {
     /** 必填文本：blank → "key is required"；超长 → 截断 + "key too long"。 */
     public static String requireText(Map<String, String> values, String key, int maxLength, List<String> issues) {
         String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             issues.add(key + " is required");
             return null;
         }
@@ -50,7 +50,7 @@ public final class ExcelMapRowReader {
     /** 选填文本：blank → null（不报错）；超长 → 截断 + "key too long"。 */
     public static String optionalText(Map<String, String> values, String key, int maxLength, List<String> issues) {
         String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return null;
         }
         if (normalized.length() > maxLength) {
@@ -77,7 +77,7 @@ public final class ExcelMapRowReader {
     /** 必填整数（带最小值回退）：blank / 非整数 → 返回 min 并报错；&lt; min → 报错但仍返回原值。 */
     public static Integer requireInteger(Map<String, String> values, String key, int min, List<String> issues) {
         String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             issues.add(key + " is required");
             return min;
         }
@@ -99,7 +99,7 @@ public final class ExcelMapRowReader {
     public static Boolean optionalBoolean(
             Map<String, String> values, String key, Boolean defaultValue, List<String> issues) {
         String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return defaultValue;
         }
         String upper = normalized.toUpperCase(Locale.ROOT);
@@ -116,7 +116,7 @@ public final class ExcelMapRowReader {
     /** 必填日期（yyyy-MM-dd）：blank / 解析失败 → 返回 null 并报错。 */
     public static LocalDate requireDate(Map<String, String> values, String key, List<String> issues) {
         String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             issues.add(key + " is required");
             return null;
         }
@@ -133,7 +133,7 @@ public final class ExcelMapRowReader {
     /** 选填 JSON 文本：blank → null；解析失败 → 报错但返回原文（保留以便上层观察）。 */
     public static String optionalJson(Map<String, String> values, String key, List<String> issues) {
         String normalized = ConsoleTextSanitizer.normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return null;
         }
         try {

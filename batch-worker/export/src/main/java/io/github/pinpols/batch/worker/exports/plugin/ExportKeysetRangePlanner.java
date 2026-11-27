@@ -3,10 +3,9 @@ package io.github.pinpols.batch.worker.exports.plugin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.common.utils.Texts;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -59,7 +58,7 @@ public class ExportKeysetRangePlanner {
 
     private boolean optedIn(ExportDataContext context) {
         Map<String, Object> tc = context.templateConfig();
-        if (EmptyChecks.isEmpty(tc)) {
+        if (EmptyValues.isEmpty(tc)) {
             return false;
         }
         Object templateRangeSetting = firstNonNull(tc.get("partition_keyset_range"), tc.get("partitionKeysetRange"));
@@ -103,7 +102,7 @@ public class ExportKeysetRangePlanner {
             return out;
         }
         String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
-        if (Texts.hasText(text)) {
+        if (EmptyValues.hasText(text)) {
             try {
                 return OBJECT_MAPPER.readValue(text, Map.class);
             } catch (Exception ex) {

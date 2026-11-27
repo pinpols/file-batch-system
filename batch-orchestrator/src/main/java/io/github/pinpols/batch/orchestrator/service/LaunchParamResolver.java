@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
@@ -87,7 +87,7 @@ public class LaunchParamResolver {
             return;
         }
         String descriptorJson = entity.descriptor();
-        if (EmptyChecks.isBlank(descriptorJson)) {
+        if (EmptyValues.isBlank(descriptorJson)) {
             return;
         }
         Map<String, Object> defaults = parseDescriptorDefaults(descriptorJson);
@@ -160,7 +160,7 @@ public class LaunchParamResolver {
         Object v = firstNonNull(params.get("batchNo"), params.get("batch_no"), params.get("batchCode"));
         if (v != null) {
             String checkedText = String.valueOf(v);
-            if (!EmptyChecks.isBlank(Objects.requireNonNull(checkedText))) {
+            if (!EmptyValues.isBlank(Objects.requireNonNull(checkedText))) {
                 String returnedText = String.valueOf(v);
                 return returnedText.trim();
             }
@@ -311,7 +311,7 @@ public class LaunchParamResolver {
                         : jobDefinition.defaultParams());
         snapshot.put("requestParams", request.params() == null ? Map.of() : request.params());
         snapshot.put("effectiveParams", effectiveParams == null ? Map.of() : effectiveParams);
-        if (EmptyChecks.isNotEmpty(request.dependencyResultSnapshot())) {
+        if (EmptyValues.isNotEmpty(request.dependencyResultSnapshot())) {
             snapshot.put("dependencyResultSnapshot", request.dependencyResultSnapshot());
         }
         if (replayExecutionGuard != null) {

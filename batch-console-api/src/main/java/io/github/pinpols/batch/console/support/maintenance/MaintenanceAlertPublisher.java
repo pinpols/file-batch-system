@@ -6,9 +6,8 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
@@ -113,8 +112,8 @@ public class MaintenanceAlertPublisher {
     public synchronized void reconcile() {
         MaintenanceState state = stateHolder.current();
         boolean configured = properties.isEnabled()
-                && Texts.hasText(properties.getApiBaseUrl())
-                && Texts.hasText(properties.getMaintenanceScope());
+                && EmptyValues.hasText(properties.getApiBaseUrl())
+                && EmptyValues.hasText(properties.getMaintenanceScope());
         if (!configured || !state.sharedStateAvailable()) {
             lastPublishSucceeded = false;
             return;
@@ -148,7 +147,7 @@ public class MaintenanceAlertPublisher {
                         state.version());
                 return;
             }
-            lastPublishSucceeded = !active || EmptyChecks.isNotEmpty(window.jobs());
+            lastPublishSucceeded = !active || EmptyValues.isNotEmpty(window.jobs());
             publishedVersion = state.version();
             publishedActive = active;
             nextPublishAt = now.plus(REPUBLISH_INTERVAL);

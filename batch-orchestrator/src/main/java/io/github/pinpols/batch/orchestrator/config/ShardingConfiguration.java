@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.infrastructure.sharding.RedisShardAssignmentProvider;
 import io.github.pinpols.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
 import io.github.pinpols.batch.orchestrator.infrastructure.sharding.StaticShardAssignmentProvider;
@@ -58,7 +58,7 @@ public class ShardingConfiguration {
         if (heartbeatMs <= 0) {
             throw new IllegalStateException("batch.outbox.sharding.heartbeat-interval-ms must be greater than 0");
         }
-        if (EmptyChecks.isBlank(sharding.getMembersKey())) {
+        if (EmptyValues.isBlank(sharding.getMembersKey())) {
             throw new IllegalStateException("batch.outbox.sharding.members-key must not be blank");
         }
         if (memberTtlMs <= 0 || heartbeatMs > memberTtlMs / 3) {
@@ -69,12 +69,12 @@ public class ShardingConfiguration {
 
     private String resolveMemberId(OutboxProperties props) {
         String configured = props.getSharding().getMemberId();
-        if (EmptyChecks.isNotBlank(configured)) {
+        if (EmptyValues.isNotBlank(configured)) {
             return configured;
         }
         // K8s Downward API 注入的 POD_NAME 优先；否则 hostname 回退
         String pod = System.getenv("POD_NAME");
-        if (EmptyChecks.isNotBlank(pod)) {
+        if (EmptyValues.isNotBlank(pod)) {
             return pod;
         }
         try {

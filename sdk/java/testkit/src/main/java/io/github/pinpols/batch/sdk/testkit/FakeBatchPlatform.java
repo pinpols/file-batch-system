@@ -7,7 +7,7 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig.BatchPlatformClientConfigBuilder;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -154,7 +154,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
      * 便于测试就绪状态；SDK 无提交位点时从 earliest 读取，先派单后启动由真实 Kafka E2E 覆盖。
      */
     public void dispatch(TaskDispatchMessage msg) {
-        if (msg == null || msg.taskId() == null || EmptyChecks.isBlank(msg.tenantId())) {
+        if (msg == null || msg.taskId() == null || SdkEmptyValues.isBlank(msg.tenantId())) {
             throw new IllegalArgumentException("taskId and tenantId are required");
         }
         awaitTopicAssignment(ASSIGNMENT_TIMEOUT);
@@ -307,7 +307,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
         String tenantId = asString(body.get("tenantId"));
         String workerId = asString(body.get("workerId"));
         DispatchedTask dispatched = taskId == null ? null : dispatchedTasks.get(taskId);
-        if (dispatched == null || !dispatched.tenantId().equals(tenantId) || EmptyChecks.isBlank(workerId)) {
+        if (dispatched == null || !dispatched.tenantId().equals(tenantId) || SdkEmptyValues.isBlank(workerId)) {
             return null;
         }
         ClaimedExecution candidate =

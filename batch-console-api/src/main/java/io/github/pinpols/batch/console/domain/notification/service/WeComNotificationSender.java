@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.time.Duration;
 import java.util.Map;
@@ -55,7 +55,7 @@ public class WeComNotificationSender implements NotificationSender {
     @Override
     public WebhookDeliveryResult send(NotificationMessage message) {
         String url = resolveUrl(message.configJson());
-        if (!Texts.hasText(url)) {
+        if (!EmptyValues.hasText(url)) {
             return WebhookDeliveryResult.failure(null, "missing wecom url");
         }
         String body = buildTextMessage(message);
@@ -82,7 +82,7 @@ public class WeComNotificationSender implements NotificationSender {
     }
 
     private String resolveUrl(String configJson) {
-        if (!Texts.hasText(configJson)) {
+        if (!EmptyValues.hasText(configJson)) {
             return null;
         }
         try {
@@ -107,10 +107,10 @@ public class WeComNotificationSender implements NotificationSender {
     private String summarize(NotificationMessage message) {
         StringBuilder sb = new StringBuilder();
         WebhookEventPayload payload = message.payload();
-        if (payload != null && Texts.hasText(payload.eventType())) {
+        if (payload != null && EmptyValues.hasText(payload.eventType())) {
             sb.append('[').append(payload.eventType()).append("] ");
         }
-        if (Texts.hasText(message.payloadJson())) {
+        if (EmptyValues.hasText(message.payloadJson())) {
             sb.append(message.payloadJson());
         }
         String content = sb.toString().strip();
@@ -136,7 +136,7 @@ public class WeComNotificationSender implements NotificationSender {
     }
 
     private int parseErrcode(String body) {
-        if (!Texts.hasText(body)) {
+        if (!EmptyValues.hasText(body)) {
             // 无 body 视为非 0，触发 failure 而非误判成功
             return -1;
         }

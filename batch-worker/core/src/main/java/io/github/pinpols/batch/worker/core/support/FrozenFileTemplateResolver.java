@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
@@ -43,7 +43,7 @@ public class FrozenFileTemplateResolver {
             throw invalidSnapshot();
         }
         Object existing = attributes.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-        if (existing instanceof Map<?, ?> configuration && EmptyChecks.isNotEmpty(configuration)) {
+        if (existing instanceof Map<?, ?> configuration && EmptyValues.isNotEmpty(configuration)) {
             Map<String, Object> copy = new LinkedHashMap<>();
             configuration.forEach((key, value) -> {
                 if (!(key instanceof String text)) {
@@ -53,7 +53,7 @@ public class FrozenFileTemplateResolver {
             });
             return copy;
         }
-        if (EmptyChecks.isBlank(request.tenantId()) || EmptyChecks.isBlank(request.templateCode())) {
+        if (EmptyValues.isBlank(request.tenantId()) || EmptyValues.isBlank(request.templateCode())) {
             return Map.of();
         }
         Map<String, Object> configuration = definitions.loadLatestTemplateConfig(
@@ -63,7 +63,7 @@ public class FrozenFileTemplateResolver {
 
     private Map<String, Object> reveal(Object protectedValue, FileTemplateConfigRequest request) {
         try {
-            if (!(protectedValue instanceof String ciphertext) || EmptyChecks.isBlank(ciphertext)) {
+            if (!(protectedValue instanceof String ciphertext) || EmptyValues.isBlank(ciphertext)) {
                 throw invalidSnapshot();
             }
             String plaintext = secretPayloadProtector.revealEncrypted(ciphertext);
@@ -84,7 +84,7 @@ public class FrozenFileTemplateResolver {
     }
 
     private Map<String, Object> parsePayload(String rawPayload) {
-        if (EmptyChecks.isBlank(rawPayload)) {
+        if (EmptyValues.isBlank(rawPayload)) {
             return Map.of();
         }
         Map<String, Object> selectedFields = new LinkedHashMap<>();
@@ -116,7 +116,7 @@ public class FrozenFileTemplateResolver {
             }
             return selectedFields;
         } catch (IOException invalidRawPayload) {
-            if (EmptyChecks.isNotEmpty(selectedFields)) {
+            if (EmptyValues.isNotEmpty(selectedFields)) {
                 throw invalidSnapshot();
             }
             // 缺少原始 JSON 时，既有类型化阶段上下文可提供自身载荷。

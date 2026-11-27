@@ -45,7 +45,7 @@ public final class ContentMaskingUtils {
     }
 
     private static String maskText(@Nullable String text, @Nullable String ruleSetCode, int depth) {
-        if (EmptyChecks.isEmpty(text)) {
+        if (EmptyValues.isEmpty(text)) {
             return text;
         }
         String trimmed = text.stripLeading();

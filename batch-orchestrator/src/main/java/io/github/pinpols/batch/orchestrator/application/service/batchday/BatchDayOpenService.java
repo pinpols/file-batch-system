@@ -3,9 +3,8 @@ package io.github.pinpols.batch.orchestrator.application.service.batchday;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.config.BatchDayScanProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
@@ -153,7 +152,9 @@ public class BatchDayOpenService {
     }
 
     void openOne(BusinessCalendarEntity calendar, Instant now) {
-        if (calendar == null || !Texts.hasText(calendar.tenantId()) || !Texts.hasText(calendar.calendarCode())) {
+        if (calendar == null
+                || !EmptyValues.hasText(calendar.tenantId())
+                || !EmptyValues.hasText(calendar.calendarCode())) {
             return;
         }
         ZoneId zoneId = timezoneProvider.resolveOrDefault(calendar.timezone());
@@ -281,7 +282,7 @@ public class BatchDayOpenService {
     private String checkCalendarDependencies(BusinessCalendarEntity calendar, LocalDate bizDate, Instant now) {
         List<CalendarDependencyEntity> deps =
                 calendarDependencyMapper.selectEnabledByDownstream(calendar.tenantId(), calendar.calendarCode());
-        if (EmptyChecks.isEmpty(deps)) {
+        if (EmptyValues.isEmpty(deps)) {
             return null;
         }
         for (CalendarDependencyEntity dep : deps) {
@@ -392,7 +393,7 @@ public class BatchDayOpenService {
     private void reconcileDependencyWaits(BusinessCalendarEntity calendar, Instant now) {
         List<CalendarDependencyWaitEntity> pending = calendarDependencyWaitMapper.selectWaitingForUpdate(
                 calendar.tenantId(), calendar.calendarCode(), now, DEPENDENCY_WAIT_BATCH_SIZE);
-        if (EmptyChecks.isEmpty(pending)) return;
+        if (EmptyValues.isEmpty(pending)) return;
         for (CalendarDependencyWaitEntity wait : pending) {
             BatchDayInstanceEntity existing = batchDayInstanceMapper.selectByTenantCalendarBizDate(
                     wait.tenantId(), wait.calendarCode(), wait.bizDate());

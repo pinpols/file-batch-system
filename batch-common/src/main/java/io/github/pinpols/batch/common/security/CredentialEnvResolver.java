@@ -2,7 +2,7 @@ package io.github.pinpols.batch.common.security;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -55,7 +55,7 @@ public final class CredentialEnvResolver {
         }
         String name = matcher.group(1);
         String value = envLookup.apply(name);
-        if (EmptyChecks.isEmpty(value)) {
+        if (EmptyValues.isEmpty(value)) {
             throw BizException.of(ResultCode.CREDENTIAL_REF_UNRESOLVED, "error.credential.env_ref_unresolved", name);
         }
         return value;

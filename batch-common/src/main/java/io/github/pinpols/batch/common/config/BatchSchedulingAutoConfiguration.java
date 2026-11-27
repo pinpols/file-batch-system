@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -101,7 +101,7 @@ public class BatchSchedulingAutoConfiguration {
                 cur = cur.getCause();
             }
             String message = cur.getMessage();
-            return EmptyChecks.isBlank(message) ? cur.getClass().getSimpleName() : message;
+            return EmptyValues.isBlank(message) ? cur.getClass().getSimpleName() : message;
         }
     }
 }

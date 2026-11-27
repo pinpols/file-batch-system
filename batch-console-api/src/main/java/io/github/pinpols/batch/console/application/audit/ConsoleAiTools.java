@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.application.audit;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobExecutionLogQueryRequest;
@@ -165,7 +165,7 @@ public class ConsoleAiTools {
         if (diagnosis == null) {
             return "未找到实例诊断数据:jobInstanceId=" + jobInstanceId;
         }
-        String findings = EmptyChecks.isEmpty(diagnosis.findings())
+        String findings = EmptyValues.isEmpty(diagnosis.findings())
                 ? "无异常发现"
                 : diagnosis.findings().stream()
                         .map(finding -> finding.severity()
@@ -295,7 +295,7 @@ public class ConsoleAiTools {
     }
 
     private static String nullToDash(String value) {
-        return EmptyChecks.isBlank(value) ? "-" : value;
+        return EmptyValues.isBlank(value) ? "-" : value;
     }
 
     private static String truncate(String value, int maxLength) {

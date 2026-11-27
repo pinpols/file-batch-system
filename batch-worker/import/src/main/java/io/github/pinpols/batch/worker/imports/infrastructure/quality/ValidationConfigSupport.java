@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.domain.CustomerImportPayload;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,7 +42,7 @@ public class ValidationConfigSupport {
     public Map<String, Object> firstMap(Map<String, Object> container, String... keys) {
         for (String key : keys) {
             Map<String, Object> candidate = toMap(container.get(key));
-            if (EmptyChecks.isNotEmpty(candidate)) {
+            if (EmptyValues.isNotEmpty(candidate)) {
                 return candidate;
             }
         }

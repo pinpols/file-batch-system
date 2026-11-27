@@ -10,8 +10,8 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest;
@@ -89,7 +89,7 @@ public class ConsoleTenantApplicationService {
     /** sourceTenantId 为 null/blank 表示不复制配置；mode 为 null 时落 SKIP_EXISTING 默认。 */
     public record ConfigInitOption(String sourceTenantId, InitMode mode) {
         public boolean enabled() {
-            return EmptyChecks.isNotBlank(sourceTenantId);
+            return EmptyValues.isNotBlank(sourceTenantId);
         }
     }
 
@@ -135,7 +135,7 @@ public class ConsoleTenantApplicationService {
         // 全局角色(ADMIN / AUDITOR)可读任意租户。
         tenantGuard.assertTenantAllowed(tenantId);
         TenantRow tenantRow = tenantMapper.selectByTenantId(tenantId);
-        TenantRow foundTenant = Guard.requireFound(tenantRow, "tenant not found: " + tenantId);
+        TenantRow foundTenant = Preconditions.requireFound(tenantRow, "tenant not found: " + tenantId);
         return toResponse(foundTenant);
     }
 
@@ -338,7 +338,7 @@ public class ConsoleTenantApplicationService {
 
     private void assertExists(String tenantId) {
         TenantRow tenant = tenantMapper.selectByTenantId(tenantId);
-        Guard.requireFound(tenant, "tenant not found: " + tenantId);
+        Preconditions.requireFound(tenant, "tenant not found: " + tenantId);
     }
 
     private ConsoleTenantResponse toResponse(TenantRow row) {

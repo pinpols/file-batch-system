@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.security;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
 import io.github.pinpols.batch.common.web.CachedBodyHttpServletRequest;
@@ -46,7 +46,7 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
 
         String apiKey = request.getHeader(HEADER_API_KEY);
         boolean requestNeedsSignatureVerification =
-                properties.isEnabled() && isMutating(request.getMethod()) && Texts.hasText(apiKey);
+                properties.isEnabled() && isMutating(request.getMethod()) && EmptyValues.hasText(apiKey);
         if (!requestNeedsSignatureVerification) {
             chain.doFilter(request, response);
             return;

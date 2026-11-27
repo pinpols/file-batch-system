@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.plan;
 import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.Map;
@@ -36,12 +36,12 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
     }
 
     private long resolveOnlineWorkerCount(JobDefinitionView jobDefinition, Map<String, Object> params) {
-        if (jobDefinition == null || !Texts.hasText(jobDefinition.tenantId())) {
+        if (jobDefinition == null || !EmptyValues.hasText(jobDefinition.tenantId())) {
             Object onlineWorkerCount = params.get("onlineWorkerCount");
             Object legacyWorkerCount = params.get("workerCount");
             return firstPositiveLong(onlineWorkerCount, legacyWorkerCount);
         }
-        if (Texts.hasText(jobDefinition.workerGroup())) {
+        if (EmptyValues.hasText(jobDefinition.workerGroup())) {
             return workerRegistryMapper.countByTenantAndWorkerGroupAndStatus(
                     jobDefinition.tenantId(), jobDefinition.workerGroup(), WorkerRegistryStatus.ONLINE.code());
         }

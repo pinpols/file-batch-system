@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -31,7 +31,7 @@ public class WorkflowNodeReplayTargetResolver {
     @Transactional
     public WorkflowNodeReplayTarget resolve(String tenantId, Long workflowRunId, Long nodeRunId) {
         boolean nodeReplayIdentityIsIncomplete =
-                EmptyChecks.isBlank(tenantId) || workflowRunId == null || nodeRunId == null;
+                EmptyValues.isBlank(tenantId) || workflowRunId == null || nodeRunId == null;
         if (nodeReplayIdentityIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
         }

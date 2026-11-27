@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.WorkflowJoinThreshold;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.EdgeItem;
@@ -291,6 +291,6 @@ public class WorkflowDagValidator {
     }
 
     private static boolean isBlank(String s) {
-        return EmptyChecks.isBlank(s);
+        return EmptyValues.isBlank(s);
     }
 }

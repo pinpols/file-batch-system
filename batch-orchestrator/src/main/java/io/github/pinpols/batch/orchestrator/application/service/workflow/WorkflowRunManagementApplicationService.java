@@ -10,9 +10,9 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -234,7 +234,7 @@ public class WorkflowRunManagementApplicationService {
         }
         WorkflowNodeRunEntity latestNodeRun =
                 workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(id, nodeCode);
-        WorkflowNodeRunEntity nodeRun = Guard.requireFound(latestNodeRun, "node run not found: " + nodeCode);
+        WorkflowNodeRunEntity nodeRun = Preconditions.requireFound(latestNodeRun, "node run not found: " + nodeCode);
         if (!WorkflowNodeRunStatus.FAILED.code().equals(nodeRun.getNodeStatus())) {
             throw BizException.of(
                     ResultCode.STATE_CONFLICT,
@@ -291,10 +291,10 @@ public class WorkflowRunManagementApplicationService {
         extra.put("nodeRunId", nodeRunId);
         extra.put("bizDate", run.getBizDate() == null ? null : run.getBizDate().toString());
         extra.put("bizDate", run.getBizDate() == null ? null : run.getBizDate().toString());
-        extra.put("operatorId", Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
+        extra.put("operatorId", EmptyValues.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
         extra.put(
                 "operatorType",
-                Texts.hasText(operatorId)
+                EmptyValues.hasText(operatorId)
                         ? AuditLogConstants.OPERATOR_TYPE_REQUEST
                         : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
         extra.put("reason", reason);
@@ -408,6 +408,6 @@ public class WorkflowRunManagementApplicationService {
 
     private WorkflowRunEntity findRun(String tenantId, Long id) {
         WorkflowRunEntity loadedRun = workflowRunMapper.selectById(tenantId, id);
-        return Guard.requireFound(loadedRun, "workflow run not found");
+        return Preconditions.requireFound(loadedRun, "workflow run not found");
     }
 }

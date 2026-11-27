@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.DownstreamAdmissionGuard;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
@@ -23,12 +22,12 @@ public class DispatchChannelAdmissionGuard implements DownstreamAdmissionGuard {
     public ResourceCheck check(ResourceSchedulingRequest request) {
         boolean dispatchAdmissionIsNotApplicable = request == null
                 || !"DISPATCH".equalsIgnoreCase(request.getWorkerType())
-                || !Texts.hasText(request.getTenantId());
+                || !EmptyValues.hasText(request.getTenantId());
         if (dispatchAdmissionIsNotApplicable) {
             return ResourceCheck.allow();
         }
         List<String> channelCodes = resolveChannelCodes(request);
-        if (EmptyChecks.isEmpty(channelCodes)) {
+        if (EmptyValues.isEmpty(channelCodes)) {
             return ResourceCheck.allow();
         }
         if (downstreamAdmissionMapper.isAnyDispatchChannelBlocked(request.getTenantId(), channelCodes)) {
@@ -41,12 +40,12 @@ public class DispatchChannelAdmissionGuard implements DownstreamAdmissionGuard {
 
     private List<String> resolveChannelCodes(ResourceSchedulingRequest request) {
         Set<String> channelCodes = new LinkedHashSet<>();
-        if (Texts.hasText(request.getDownstreamChannelCode())) {
+        if (EmptyValues.hasText(request.getDownstreamChannelCode())) {
             channelCodes.add(request.getDownstreamChannelCode());
         }
         if (request.getDownstreamChannelCodes() != null) {
             request.getDownstreamChannelCodes().stream()
-                    .filter(Texts::hasText)
+                    .filter(EmptyValues::hasText)
                     .map(String::trim)
                     .forEach(channelCodes::add);
         }

@@ -4,7 +4,7 @@
 """阻止生产 Java 新增零散的字符串 / 集合 / 数组空判断。
 
 对象引用判空按编码规约 §1.8 使用原生 ``x == null`` / ``x != null``，不再纳入本门禁；
-字符串空白与集合/Map/数组空判断仍然统一到 ``EmptyChecks``，避免调用方各自组合
+字符串空白与集合/Map/数组空判断仍然统一到 ``EmptyValues``，避免调用方各自组合
 ``null || isEmpty()``。本检查只拦本次 diff 新增的生产代码，历史代码由专项迁移
 逐步收口，也避免把有明确语义的 ``Objects.equals``、``Optional`` 等误判为空值判断。
 
@@ -260,7 +260,7 @@ def main() -> int:
     violations = []
     bad_allows = []
     for path, line_no, source in added_lines(args.base):
-        if path.endswith("/EmptyChecks.java"):
+        if path.endswith(("/EmptyValues.java", "/SdkEmptyValues.java")):
             continue
         stripped = source.strip()
         if not stripped or stripped.startswith(("//", "/*", "*")):
@@ -286,7 +286,7 @@ def main() -> int:
 
     if violations:
         print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
-        print("发现新增零散字符串/集合空判断，请改用 EmptyChecks：", file=sys.stderr)
+        print("发现新增零散字符串/集合空判断，请改用 EmptyValues：", file=sys.stderr)
         for path, line_no, label, source in violations:
             print(f"  {path}:{line_no}: [{label}] {source}", file=sys.stderr)
         print("确需保留原生判断时，在同一行追加：// empty-check: allow - 原因", file=sys.stderr)

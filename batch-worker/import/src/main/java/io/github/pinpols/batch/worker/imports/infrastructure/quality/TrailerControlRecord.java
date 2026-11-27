@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -47,12 +46,12 @@ public final class TrailerControlRecord {
 
     /** trailer_template 是否声明了 trailer 行(present=true);ParseStep 用它决定是否剥离末行。 */
     public static boolean isPresentEnabled(Map<String, Object> trailerTemplate) {
-        return EmptyChecks.isNotEmpty(trailerTemplate) && boolOr(trailerTemplate.get("present"), false);
+        return EmptyValues.isNotEmpty(trailerTemplate) && boolOr(trailerTemplate.get("present"), false);
     }
 
     /** {@code trailerTemplate.present=true} 时按分隔符切 trailer 行取声明值;空模板 / 非 present 返回空记录。 */
     public static TrailerControlRecord parse(String trailerLine, Map<String, Object> trailerTemplate) {
-        if (trailerLine == null || EmptyChecks.isEmpty(trailerTemplate)) {
+        if (trailerLine == null || EmptyValues.isEmpty(trailerTemplate)) {
             return new TrailerControlRecord(null, null);
         }
         boolean present = boolOr(trailerTemplate.get("present"), false);
@@ -72,7 +71,7 @@ public final class TrailerControlRecord {
 
     private static Long fieldLong(String[] fields, int index) {
         String raw = fieldAt(fields, index);
-        if (raw == null || !Texts.hasText(raw)) {
+        if (raw == null || !EmptyValues.hasText(raw)) {
             return null;
         }
         try {
@@ -86,7 +85,7 @@ public final class TrailerControlRecord {
 
     private static BigDecimal fieldDecimal(String[] fields, int index) {
         String raw = fieldAt(fields, index);
-        if (raw == null || !Texts.hasText(raw)) {
+        if (raw == null || !EmptyValues.hasText(raw)) {
             return null;
         }
         try {
@@ -107,7 +106,7 @@ public final class TrailerControlRecord {
             return fallback;
         }
         String presenceText = String.valueOf(value);
-        if (!Texts.hasText(presenceText)) {
+        if (!EmptyValues.hasText(presenceText)) {
             return fallback;
         }
         String resultText = String.valueOf(value);

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
 
@@ -39,7 +39,7 @@ public final class DispatchReadbackVerifier {
             return null;
         }
         String presenceText = String.valueOf(raw);
-        if (!Texts.hasText(presenceText)) {
+        if (!EmptyValues.hasText(presenceText)) {
             return null;
         }
         String rawNumericValue = String.valueOf(raw);

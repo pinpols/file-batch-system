@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -35,7 +35,7 @@ public record BatchManifest(
         String generatedAt) {
 
     public boolean hasRetiredJobTarget() {
-        return EmptyChecks.isNotBlank(jobCode);
+        return EmptyValues.isNotBlank(jobCode);
     }
 
     /**
@@ -47,7 +47,7 @@ public record BatchManifest(
 
     /** 是否带 v2 的逐文件映射(束作业据此判断走异构展开)。 */
     public boolean hasFileMapping() {
-        return EmptyChecks.isNotEmpty(fileMapping);
+        return EmptyValues.isNotEmpty(fileMapping);
     }
 
     /** 查某文件声明的模板 code(导入束);无映射 / 未声明 / 入参为空时返回 empty。 */
@@ -78,19 +78,19 @@ public record BatchManifest(
      * 不等文件到达)。导入/分发束清单必有 requiredFiles(数据文件),故不会命中。
      */
     public boolean isManifestOnlyExport() {
-        if (EmptyChecks.isBlank(workflowCode)) {
+        if (EmptyValues.isBlank(workflowCode)) {
             return false;
         }
         if (hasRetiredJobTarget()) {
             return false;
         }
         boolean hasNoRequiredInputFiles =
-                requiredFiles == null || EmptyChecks.isEmpty(Objects.requireNonNull(requiredFiles));
+                requiredFiles == null || EmptyValues.isEmpty(Objects.requireNonNull(requiredFiles));
         if (!hasNoRequiredInputFiles) {
             return false;
         }
         List<String> declaredExportTemplateCodes = exportTemplateCodes();
-        return !EmptyChecks.isEmpty(Objects.requireNonNull(declaredExportTemplateCodes));
+        return !EmptyValues.isEmpty(Objects.requireNonNull(declaredExportTemplateCodes));
     }
 
     /** 导出束清单声明的导出模板 code 列表(fileMapping 里非空 templateCode,按声明顺序);无则空表。 */

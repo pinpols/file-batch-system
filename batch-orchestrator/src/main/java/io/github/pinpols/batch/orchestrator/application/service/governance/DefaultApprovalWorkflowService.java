@@ -3,9 +3,9 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ApproveCommandDecisionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RejectCommandDecisionParam;
@@ -31,7 +31,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     @Override
     @Transactional
     public String submit(ApprovalSubmitCommand command) {
-        if (Texts.hasText(command.sourceIdempotencyKey())) {
+        if (EmptyValues.hasText(command.sourceIdempotencyKey())) {
             ApprovalCommandEntity existing = findBySourceIdempotencyKey(command);
             if (existing != null) {
                 ensureSameSubmission(command, existing);
@@ -47,17 +47,17 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
         entity.setTargetType(command.targetType());
         entity.setTargetId(command.targetId());
         String payloadJson = command.payloadJson();
-        String resolvedPayloadJson = Texts.hasText(payloadJson) ? payloadJson : "{}";
+        String resolvedPayloadJson = EmptyValues.hasText(payloadJson) ? payloadJson : "{}";
         entity.setPayloadJson(resolvedPayloadJson);
         entity.setApprovalStatus(ApprovalCommandStatus.PENDING.code());
         entity.setRequesterId(command.requesterId());
         entity.setSourceTraceId(command.sourceTraceId());
         entity.setSourceIdempotencyKey(
-                Texts.hasText(command.sourceIdempotencyKey()) ? command.sourceIdempotencyKey() : null);
+                EmptyValues.hasText(command.sourceIdempotencyKey()) ? command.sourceIdempotencyKey() : null);
         entity.setApprovalReason(command.approvalReason());
         entity.setSourceApprovalReason(command.approvalReason());
         int inserted = approvalCommandMapper.insert(entity);
-        if (inserted == 0 && Texts.hasText(command.sourceIdempotencyKey())) {
+        if (inserted == 0 && EmptyValues.hasText(command.sourceIdempotencyKey())) {
             ApprovalCommandEntity existing = findBySourceIdempotencyKey(command);
             if (existing != null) {
                 ensureSameSubmission(command, existing);
@@ -76,7 +76,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     }
 
     private void ensureSameSubmission(ApprovalSubmitCommand command, ApprovalCommandEntity existing) {
-        String payloadJson = Texts.hasText(command.payloadJson()) ? command.payloadJson() : "{}";
+        String payloadJson = EmptyValues.hasText(command.payloadJson()) ? command.payloadJson() : "{}";
         Object submittedPayload = JsonUtils.fromJson(payloadJson, Object.class);
         Object existingPayload = JsonUtils.fromJson(existing.getPayloadJson(), Object.class);
         boolean samePayload = submittedPayload.equals(existingPayload);
@@ -180,7 +180,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     @Override
     @Transactional(readOnly = true)
     public ApprovalRecord getBySourceKey(String tenantId, String sourceIdempotencyKey) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(sourceIdempotencyKey)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(sourceIdempotencyKey)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }
         ApprovalCommandEntity entity =

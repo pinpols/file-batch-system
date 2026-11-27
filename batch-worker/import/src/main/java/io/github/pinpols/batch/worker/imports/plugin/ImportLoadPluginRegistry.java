@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.imports.plugin;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,7 +35,7 @@ public class ImportLoadPluginRegistry {
     }
 
     public ImportLoadPlugin require(String id) {
-        if (EmptyChecks.isBlank(id)) {
+        if (EmptyValues.isBlank(id)) {
             id = WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED;
         }
         ImportLoadPlugin plugin = byId.get(id.toLowerCase(Locale.ROOT));

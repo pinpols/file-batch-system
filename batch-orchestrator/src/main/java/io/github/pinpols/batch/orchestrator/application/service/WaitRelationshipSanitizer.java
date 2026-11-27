@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipRow;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -130,7 +130,7 @@ public class WaitRelationshipSanitizer {
 
     private static String sanitizeReadiness(String raw) {
         List<String> codes = List.of(raw.split(",", -1));
-        if (EmptyChecks.isEmpty(codes) || codes.size() > MAX_DEPENDENCIES) throw new IllegalArgumentException();
+        if (EmptyValues.isEmpty(codes) || codes.size() > MAX_DEPENDENCIES) throw new IllegalArgumentException();
         return codes.stream().map(WaitRelationshipSanitizer::code).collect(java.util.stream.Collectors.joining(","));
     }
 
@@ -140,7 +140,7 @@ public class WaitRelationshipSanitizer {
     }
 
     private static String code(String value) {
-        if (EmptyChecks.isBlank(value)
+        if (EmptyValues.isBlank(value)
                 || value.length() > CODE_MAX_LENGTH
                 || value.chars().anyMatch(Character::isISOControl)) throw new IllegalArgumentException();
         return value;

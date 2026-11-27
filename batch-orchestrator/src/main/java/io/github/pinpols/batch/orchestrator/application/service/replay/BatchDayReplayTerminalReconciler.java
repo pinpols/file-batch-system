@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplayEntryStatus;
@@ -40,11 +40,11 @@ public class BatchDayReplayTerminalReconciler {
     @Transactional(propagation = Propagation.REQUIRED)
     public void reconcileOnTerminal(
             String tenantId, Long replaySessionId, String jobCode, Long jobInstanceId, String instanceStatus) {
-        boolean terminalReplayIdentityIsIncomplete = !Texts.hasText(tenantId)
+        boolean terminalReplayIdentityIsIncomplete = !EmptyValues.hasText(tenantId)
                 || replaySessionId == null
                 || jobInstanceId == null
-                || !Texts.hasText(jobCode)
-                || !Texts.hasText(instanceStatus);
+                || !EmptyValues.hasText(jobCode)
+                || !EmptyValues.hasText(instanceStatus);
         if (terminalReplayIdentityIsIncomplete) {
             return;
         }

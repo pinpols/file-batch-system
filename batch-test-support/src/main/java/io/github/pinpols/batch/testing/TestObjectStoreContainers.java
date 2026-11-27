@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.testing;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** S3 兼容对象存储测试端点统一工厂，避免测试直接绑定具体实现。 */
 public final class TestObjectStoreContainers {
@@ -37,7 +37,7 @@ public final class TestObjectStoreContainers {
 
     private static String requiredProperty(String name) {
         String value = System.getProperty(name);
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             throw new IllegalArgumentException("required system property is not set: " + name);
         }
         return value.trim();

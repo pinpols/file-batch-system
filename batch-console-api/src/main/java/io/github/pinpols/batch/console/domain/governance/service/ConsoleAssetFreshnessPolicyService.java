@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.response.AssetFreshnessPolicyResponse;
 import io.github.pinpols.batch.console.domain.governance.command.AssetFreshnessPolicyUpsertCommand;
 import io.github.pinpols.batch.console.domain.governance.entity.AssetFreshnessPolicyEntity;
@@ -46,7 +46,7 @@ public class ConsoleAssetFreshnessPolicyService {
             String tenantId, String assetCode, Boolean enabled, int pageNo, int pageSize) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         PageRequest page = new PageRequest(pageNo, pageSize);
-        String normalizedAssetCode = Texts.hasText(assetCode) ? assetCode.trim() : null;
+        String normalizedAssetCode = EmptyValues.hasText(assetCode) ? assetCode.trim() : null;
         long total = mapper.countByTenant(resolved, normalizedAssetCode, enabled);
         List<AssetFreshnessPolicyEntity> items = mapper.findByTenant(resolved, normalizedAssetCode, enabled, page);
         List<AssetFreshnessPolicyResponse> responses =
@@ -121,7 +121,8 @@ public class ConsoleAssetFreshnessPolicyService {
         }
         String tenantId = tenantGuard.resolveTenant(param.tenantId());
         String assetCode = requireText(param.assetCode(), "assetCode is required");
-        String assetType = Texts.hasText(param.assetType()) ? param.assetType().trim() : ASSET_TYPE_JOB;
+        String assetType =
+                EmptyValues.hasText(param.assetType()) ? param.assetType().trim() : ASSET_TYPE_JOB;
         assetType = assetType.toUpperCase(Locale.ROOT);
         if (!ASSET_TYPE_JOB.equals(assetType)) {
             throw BizException.of(
@@ -130,7 +131,7 @@ public class ConsoleAssetFreshnessPolicyService {
                     "assetType only supports JOB");
         }
         String timezone =
-                Texts.hasText(param.timezone()) ? param.timezone().trim() : CommonConstants.DEFAULT_TIMEZONE_ID;
+                EmptyValues.hasText(param.timezone()) ? param.timezone().trim() : CommonConstants.DEFAULT_TIMEZONE_ID;
         validateTimezone(timezone);
         int staleAfterSeconds =
                 param.staleAfterSeconds() == null ? DEFAULT_STALE_AFTER_SECONDS : param.staleAfterSeconds();
@@ -148,7 +149,7 @@ public class ConsoleAssetFreshnessPolicyService {
                     "lookbackDays must be between 1 and 31");
         }
         String severity = DEFAULT_SEVERITY;
-        if (Texts.hasText(param.severity())) {
+        if (EmptyValues.hasText(param.severity())) {
             String trimmedSeverity = param.severity().trim();
             severity = trimmedSeverity.toUpperCase(Locale.ROOT);
         }
@@ -173,7 +174,7 @@ public class ConsoleAssetFreshnessPolicyService {
     }
 
     private static String requireText(String value, String message) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), message);
         }
         return value.trim();

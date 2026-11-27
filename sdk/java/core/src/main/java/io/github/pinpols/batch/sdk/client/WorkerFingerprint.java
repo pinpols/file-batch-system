@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.sdk.client;
 
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
@@ -30,7 +30,7 @@ public final class WorkerFingerprint {
             return localHost.getHostName();
         } catch (UnknownHostException e) {
             String env = System.getenv("HOSTNAME");
-            return EmptyChecks.isBlank(env) ? null : env;
+            return SdkEmptyValues.isBlank(env) ? null : env;
         }
     }
 

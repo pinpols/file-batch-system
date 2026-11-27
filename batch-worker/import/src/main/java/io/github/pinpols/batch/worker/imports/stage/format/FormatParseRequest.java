@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -103,6 +103,6 @@ public record FormatParseRequest(
 
     /** 是否有可消费的文本内容（spool 文件或非空 payloadText）。 */
     public boolean hasText() {
-        return spoolPath != null || (EmptyChecks.isNotEmpty(payloadText));
+        return spoolPath != null || (EmptyValues.isNotEmpty(payloadText));
     }
 }

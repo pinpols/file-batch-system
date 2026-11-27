@@ -12,8 +12,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.entity.ExternalEventDeliveryEntity;
 import io.github.pinpols.batch.trigger.event.TriggerOutboxDomainEventPublisher;
@@ -133,7 +133,7 @@ final class TriggerRequestPersistence {
                     launchRequest.workflowDefinitionId(),
                     launchRequest.externalEventSource(),
                     launchRequest.externalEventId());
-            Guard.requireFound(eventExisting, "conflicting external event request not found");
+            Preconditions.requireFound(eventExisting, "conflicting external event request not found");
             assertSameExternalEvent(eventExisting, launchRequest);
             registerExternalEventIdempotencyAlias(eventExisting, launchRequest, dedupKey);
             return new LaunchResponse(eventExisting.getRequestId(), eventExisting.getTraceId());

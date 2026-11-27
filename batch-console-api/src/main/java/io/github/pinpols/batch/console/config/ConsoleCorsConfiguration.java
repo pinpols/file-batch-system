@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.config;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -34,7 +34,7 @@ public class ConsoleCorsConfiguration {
     public CorsConfigurationSource consoleCorsConfigurationSource() {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         List<String> origins = properties.getCorsAllowedOrigins();
-        if (EmptyChecks.isEmpty(origins)) {
+        if (EmptyValues.isEmpty(origins)) {
             // 同域部署:不发 CORS 头,浏览器同源策略生效。返回空 source,DispatcherServlet 不应用 CORS。
             return source;
         }

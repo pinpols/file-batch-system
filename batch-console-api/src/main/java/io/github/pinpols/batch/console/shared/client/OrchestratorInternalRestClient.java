@@ -6,8 +6,8 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
 import java.time.Duration;
 import java.util.function.Supplier;
@@ -64,7 +64,7 @@ public class OrchestratorInternalRestClient {
             Environment environment) {
         String baseUrl = ConsoleInternalBaseUrlResolver.resolve(
                 environment, orchestratorClientProperties.getBaseUrl(), "batch.console.orchestrator.base-url");
-        Guard.requireText(baseUrl, "orchestrator base url is not configured");
+        Preconditions.requireText(baseUrl, "orchestrator base url is not configured");
         String secret = batchSecurityProperties.getInternalSecret();
         HttpClientSettings httpClientSettings = HttpClientSettings.defaults();
         Duration connectTimeout = Duration.ofMillis(orchestratorClientProperties.getConnectTimeoutMillis());
@@ -78,7 +78,7 @@ public class OrchestratorInternalRestClient {
                 .baseUrl(baseUrl)
                 .requestInterceptor(new AcceptLanguageRequestInterceptor())
                 .requestFactory(requestFactory);
-        if (Texts.hasText(secret)) {
+        if (EmptyValues.hasText(secret)) {
             builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
         }
         return builder.build();
@@ -149,7 +149,7 @@ public class OrchestratorInternalRestClient {
 
     private ApprovalDecision requireDecision(ApprovalDecisionResponse response, String tenantId, String approvalNo) {
         ApprovalDecision decision = response == null ? null : response.record();
-        if (decision == null || !Texts.hasText(decision.approvalStatus())) {
+        if (decision == null || !EmptyValues.hasText(decision.approvalStatus())) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
         }
         if (!tenantId.equals(decision.tenantId()) || !approvalNo.equals(decision.approvalNo())) {

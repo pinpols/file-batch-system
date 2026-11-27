@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -90,7 +90,7 @@ public class ConsoleAiConfiguration {
         optionsBuilder.timeout(compatible.getTimeout());
         OpenAiChatOptions options = optionsBuilder.build();
         OpenAiChatModel model = OpenAiChatModel.builder().options(options).build();
-        String providerName = Texts.hasText(compatible.getProviderName())
+        String providerName = EmptyValues.hasText(compatible.getProviderName())
                 ? compatible.getProviderName().trim()
                 : providerName(ConsoleAiProperties.Provider.OPENAI_COMPATIBLE);
         ChatClient compatibleChatClient = ChatClient.create(model);
@@ -108,7 +108,7 @@ public class ConsoleAiConfiguration {
     }
 
     private static void requireCompatibleText(String value, String propertyName) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             throw new IllegalStateException(propertyName + " must be configured for openai-compatible");
         }
     }

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.support.maintenance;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.entity.MaintenanceStateEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
@@ -121,7 +121,7 @@ public class MaintenanceStateHolder {
                 .etaAt(normalized.etaAt())
                 .startsAt(normalized.startsAt())
                 .affectedServicesJson(servicesJson)
-                .updatedBy(EmptyChecks.isBlank(operator) ? "console-admin" : operator)
+                .updatedBy(EmptyValues.isBlank(operator) ? "console-admin" : operator)
                 .expectedVersion(current.version())
                 .build();
         int updated = mapper.updateIfVersion(updateParam);

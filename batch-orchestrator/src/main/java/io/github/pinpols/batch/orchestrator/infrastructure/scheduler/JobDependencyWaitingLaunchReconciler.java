@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
@@ -61,7 +61,7 @@ public class JobDependencyWaitingLaunchReconciler {
             return;
         }
         List<String> tenantIds = tenantDirectoryMapper.selectRunnableTenantIds();
-        if (EmptyChecks.isEmpty(tenantIds)) {
+        if (EmptyValues.isEmpty(tenantIds)) {
             return;
         }
         for (String tenantId : tenantIds) {
@@ -197,7 +197,7 @@ public class JobDependencyWaitingLaunchReconciler {
         if (triggerRequest.getParentWorkflowRunId() != null) {
             detail.put("workflowRunId", triggerRequest.getParentWorkflowRunId());
         }
-        if (!EmptyChecks.isBlank(triggerRequest.getParentNodeCode())) {
+        if (!EmptyValues.isBlank(triggerRequest.getParentNodeCode())) {
             detail.put("nodeCode", triggerRequest.getParentNodeCode());
         }
         AlertEmitCommand alertRequest = AlertEmitCommand.builder()

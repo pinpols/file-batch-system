@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.support.excel;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -275,7 +275,7 @@ public final class ConsoleExcelStyles {
      * <p>以 {@code = + - @} 开头的单元格值会被 Excel 解析为公式；加前缀 {@code '} 强制按文本处理。所有写 Cell 字符串的入口都应过这层。
      */
     public static String escapeFormula(String value) {
-        if (EmptyChecks.isEmpty(value)) {
+        if (EmptyValues.isEmpty(value)) {
             return value;
         }
         char first = value.charAt(0);
@@ -574,6 +574,6 @@ public final class ConsoleExcelStyles {
     }
 
     private static boolean hasText(String value) {
-        return EmptyChecks.isNotBlank(value);
+        return EmptyValues.isNotBlank(value);
     }
 }

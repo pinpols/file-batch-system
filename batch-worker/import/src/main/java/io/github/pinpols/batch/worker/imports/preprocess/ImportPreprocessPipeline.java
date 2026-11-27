@@ -4,10 +4,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.ByteArrayInputStream;
@@ -215,7 +214,7 @@ public final class ImportPreprocessPipeline {
         appendImplicitStep(implicit, IMPLICIT_COMPRESS_STEPS, stringProp(template, "compress_type"));
         String enc = stringProp(template, "encrypt_type");
         boolean implicitEncryptStepIsUnsupported = !appendImplicitStep(implicit, IMPLICIT_ENCRYPT_STEPS, enc)
-                && Texts.hasText(enc)
+                && EmptyValues.hasText(enc)
                 && !POLICY_NONE.equalsIgnoreCase(enc)
                 && !bypassMode;
         if (implicitEncryptStepIsUnsupported) {
@@ -229,7 +228,7 @@ public final class ImportPreprocessPipeline {
     /** 按查表结果追加隐式 step；命中返回 true，未命中（含空值）返回 false 交由调用方决定是否报错。 */
     private static boolean appendImplicitStep(
             List<Map<String, Object>> implicit, Map<String, String> lookup, String rawType) {
-        if (!Texts.hasText(rawType)) {
+        if (!EmptyValues.hasText(rawType)) {
             return false;
         }
         String normalizedType = trimToNull(rawType);
@@ -258,7 +257,7 @@ public final class ImportPreprocessPipeline {
             }
             return out;
         }
-        if (raw instanceof String text && Texts.hasText(text)) {
+        if (raw instanceof String text && EmptyValues.hasText(text)) {
             try {
                 return objectMapper.readValue(text, new TypeReference<List<Map<String, Object>>>() {});
             } catch (Exception ex) {
@@ -272,12 +271,12 @@ public final class ImportPreprocessPipeline {
     private static byte[] unzip(
             byte[] input, Map<String, Object> step, ImportPayload payload, WorkerImportPayloadProperties properties) {
         String entryName = stringProp(step, "entryName");
-        if (!Texts.hasText(entryName) && payload != null) {
+        if (!EmptyValues.hasText(entryName) && payload != null) {
             Map<String, Object> payloadMetadata = payload.metadata();
             if (payloadMetadata != null) {
                 Object metadataEntryName = payloadMetadata.get("zipEntryName");
                 boolean hasMetadataEntryName =
-                        metadataEntryName != null && Texts.hasText(String.valueOf(metadataEntryName));
+                        metadataEntryName != null && EmptyValues.hasText(String.valueOf(metadataEntryName));
                 if (hasMetadataEntryName) {
                     entryName = String.valueOf(metadataEntryName);
                 }
@@ -289,7 +288,7 @@ public final class ImportPreprocessPipeline {
                 if (entry.isDirectory()) {
                     continue;
                 }
-                if (EmptyChecks.isNotBlank(entryName) && !entryName.equals(entry.getName())) {
+                if (EmptyValues.isNotBlank(entryName) && !entryName.equals(entry.getName())) {
                     continue;
                 }
                 return boundedReadAll(zis, input.length, "UNZIP", properties);
@@ -312,12 +311,12 @@ public final class ImportPreprocessPipeline {
     private static byte[] untar(
             byte[] input, Map<String, Object> step, ImportPayload payload, WorkerImportPayloadProperties properties) {
         String entryName = stringProp(step, "entryName");
-        if (!Texts.hasText(entryName) && payload != null) {
+        if (!EmptyValues.hasText(entryName) && payload != null) {
             Map<String, Object> payloadMetadata = payload.metadata();
             if (payloadMetadata != null) {
                 Object metadataEntryName = payloadMetadata.get("tarEntryName");
                 boolean hasMetadataEntryName =
-                        metadataEntryName != null && Texts.hasText(String.valueOf(metadataEntryName));
+                        metadataEntryName != null && EmptyValues.hasText(String.valueOf(metadataEntryName));
                 if (hasMetadataEntryName) {
                     entryName = String.valueOf(metadataEntryName);
                 }
@@ -329,7 +328,7 @@ public final class ImportPreprocessPipeline {
                 if (entry.isDirectory() || !entry.isFile()) {
                     continue;
                 }
-                if (Texts.hasText(entryName) && !entryName.equals(entry.getName())) {
+                if (EmptyValues.hasText(entryName) && !entryName.equals(entry.getName())) {
                     continue;
                 }
                 return boundedReadAll(tis, input.length, "UNTAR", properties);
@@ -450,11 +449,11 @@ public final class ImportPreprocessPipeline {
 
     private static String digestAlgorithm(Map<String, Object> template, ImportPayload payload) {
         String payloadChecksumType = payload == null ? null : payload.checksumType();
-        if (Texts.hasText(payloadChecksumType) && !POLICY_NONE.equalsIgnoreCase(payloadChecksumType)) {
+        if (EmptyValues.hasText(payloadChecksumType) && !POLICY_NONE.equalsIgnoreCase(payloadChecksumType)) {
             return normalizeDigestName(payloadChecksumType);
         }
         String fromTemplate = stringProp(template, "checksum_type");
-        if (Texts.hasText(fromTemplate) && !POLICY_NONE.equalsIgnoreCase(fromTemplate)) {
+        if (EmptyValues.hasText(fromTemplate) && !POLICY_NONE.equalsIgnoreCase(fromTemplate)) {
             return normalizeDigestName(fromTemplate);
         }
         return POLICY_NONE;
@@ -481,7 +480,7 @@ public final class ImportPreprocessPipeline {
     }
 
     private static String checksumExpected(ImportPayload payload) {
-        if (payload == null || !Texts.hasText(payload.checksumValue())) {
+        if (payload == null || !EmptyValues.hasText(payload.checksumValue())) {
             return null;
         }
         return payload.checksumValue().trim();
@@ -631,6 +630,6 @@ public final class ImportPreprocessPipeline {
             return null;
         }
         String trimmed = value.trim();
-        return EmptyChecks.isEmpty(trimmed) ? null : trimmed;
+        return EmptyValues.isEmpty(trimmed) ? null : trimmed;
     }
 }

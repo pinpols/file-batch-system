@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import io.github.pinpols.batch.orchestrator.config.WorkerDrainProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
@@ -51,7 +51,7 @@ public class WorkerDrainTimeoutScheduler {
                 continue;
             }
             String tenantId = worker.tenantId();
-            if (EmptyChecks.isBlank(tenantId)) {
+            if (EmptyValues.isBlank(tenantId)) {
                 continue;
             }
             if (!worker.drainDeadlineAt().isAfter(now)) {

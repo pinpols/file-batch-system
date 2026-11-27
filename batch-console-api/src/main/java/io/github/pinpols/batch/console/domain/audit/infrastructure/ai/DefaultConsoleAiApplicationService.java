@@ -15,10 +15,9 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.audit.ConsoleAiTools;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
@@ -208,7 +207,9 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
 
     private ConsoleRequestMetadata requireRequestIdentity(ConsoleRequestMetadata metadata) {
-        if (metadata == null || !Texts.hasText(metadata.tenantId()) || !Texts.hasText(metadata.operatorId())) {
+        if (metadata == null
+                || !EmptyValues.hasText(metadata.tenantId())
+                || !EmptyValues.hasText(metadata.operatorId())) {
             throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
         }
         return metadata;
@@ -365,7 +366,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         if (chatClients == null || chatClients.primary() == null) {
             throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
         }
-        boolean hasImages = EmptyChecks.isNotEmpty(request.getAttachmentIds());
+        boolean hasImages = EmptyValues.isNotEmpty(request.getAttachmentIds());
         boolean imageInputIsUnavailable = hasImages
                 && (!aiProperties.getPersistence().isEnabled()
                         || !chatClients.primary().imageInput());
@@ -602,7 +603,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         response.setRefusalReason(null);
         response.setSources(execution.snippets().stream()
                 .map(ConsoleAiKnowledgeBase.Snippet::source)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .distinct()
                 .map(AiSourceResponse::new)
                 .toList());
@@ -645,7 +646,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                 throw primaryFailure;
             }
             boolean fallbackProviderCannotHandleImages =
-                    EmptyChecks.isNotEmpty(images) && !providers.fallback().imageInput();
+                    EmptyValues.isNotEmpty(images) && !providers.fallback().imageInput();
             if (fallbackProviderCannotHandleImages) {
                 throw primaryFailure;
             }
@@ -696,7 +697,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         boolean toolsEnabled = tools != null;
         String systemPrompt = buildSystemPrompt(snippets, toolsEnabled);
         spec = spec.system(systemPrompt);
-        if (EmptyChecks.isEmpty(images)) {
+        if (EmptyValues.isEmpty(images)) {
             spec = spec.user(promptPayload);
         } else {
             if (!provider.imageInput()) throw new IllegalStateException("image input not enabled for model");
@@ -752,7 +753,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                         metadata.set(chunk.getMetadata());
                     }
                     String delta = extractContent(chunk);
-                    if (EmptyChecks.isNotEmpty(delta) && answer.length() < aiProperties.getMaxResponseLength()) {
+                    if (EmptyValues.isNotEmpty(delta) && answer.length() < aiProperties.getMaxResponseLength()) {
                         int remaining = aiProperties.getMaxResponseLength() - answer.length();
                         String boundedDelta = delta.substring(0, Math.min(delta.length(), remaining));
                         answer.append(boundedDelta);
@@ -813,7 +814,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                 .map(ChatResponse::getMetadata)
                 .map(ChatResponseMetadata::getModel)
                 .orElse(null);
-        return provider.provider() + ":" + (Texts.hasText(model) ? model : "unknown");
+        return provider.provider() + ":" + (EmptyValues.hasText(model) ? model : "unknown");
     }
 
     private record ModelCallResult(ChatResponse response, ConsoleAiClients.ProviderClient provider) {}
@@ -887,7 +888,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     private void enforceRateLimit(String tenantId, String operatorId) {
         int limit = aiProperties.getRateLimitPerMinute();
         if (limit > 0) {
-            String user = Texts.hasText(operatorId) ? operatorId : "anonymous";
+            String user = EmptyValues.hasText(operatorId) ? operatorId : "anonymous";
             String key = "ai:chat:tenant:" + tenantId + ":user:" + user;
             boolean allowed;
             try {
@@ -1141,19 +1142,19 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
 
     private String resolveTenantId(String requestTenantId, String headerTenantId) {
-        boolean requestTenantConflictsWithHeader = Texts.hasText(requestTenantId)
-                && Texts.hasText(headerTenantId)
+        boolean requestTenantConflictsWithHeader = EmptyValues.hasText(requestTenantId)
+                && EmptyValues.hasText(headerTenantId)
                 && !requestTenantId.equals(headerTenantId);
         if (requestTenantConflictsWithHeader) {
             throw BizException.of(ResultCode.FORBIDDEN, "error.common.tenant_id_mismatch");
         }
-        String tenantId = Texts.hasText(requestTenantId) ? requestTenantId : headerTenantId;
-        Guard.requireText(tenantId, "tenantId is required");
+        String tenantId = EmptyValues.hasText(requestTenantId) ? requestTenantId : headerTenantId;
+        Preconditions.requireText(tenantId, "tenantId is required");
         return tenantId;
     }
 
     private String resolveSessionId(String sessionId, String fallbackRequestId) {
-        if (Texts.hasText(sessionId)) {
+        if (EmptyValues.hasText(sessionId)) {
             return sessionId;
         }
         return fallbackRequestId;
@@ -1195,7 +1196,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
 
     private String firstNonBlank(String value, String fallback) {
-        return Texts.hasText(value) ? value : fallback;
+        return EmptyValues.hasText(value) ? value : fallback;
     }
 
     @Builder

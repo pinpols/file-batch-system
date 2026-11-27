@@ -5,8 +5,8 @@ import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.SensorTimeoutAction;
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
@@ -42,7 +42,7 @@ final class WorkflowWaitSensorSpecValidator {
     private void validateSensorSpec(WorkflowNodeEntity node, List<ValidationIssue> errors) {
         Map<String, Object> params;
         try {
-            params = Texts.hasText(node.getNodeParams())
+            params = EmptyValues.hasText(node.getNodeParams())
                     ? JsonUtils.fromJson(node.getNodeParams(), SENSOR_MAP_TYPE)
                     : Map.of();
         } catch (Exception e) {
@@ -55,7 +55,7 @@ final class WorkflowWaitSensorSpecValidator {
         if (params == null) params = Map.of();
 
         String sensorType = asString(params.get("sensor_type"));
-        if (!Texts.hasText(sensorType)) {
+        if (!EmptyValues.hasText(sensorType)) {
             errors.add(issue("V16-a", "WAIT node missing sensor_type", node.getNodeCode()));
             return;
         }
@@ -89,7 +89,7 @@ final class WorkflowWaitSensorSpecValidator {
         }
 
         String onTimeout = asString(params.get("on_timeout"));
-        if (!Texts.hasText(onTimeout)) {
+        if (!EmptyValues.hasText(onTimeout)) {
             errors.add(issue("V16-e", "WAIT on_timeout missing", node.getNodeCode()));
         } else if (!SENSOR_TIMEOUT_ACTIONS.contains(onTimeout)) {
             String validationMessage =
@@ -123,7 +123,7 @@ final class WorkflowWaitSensorSpecValidator {
         }
         Object patternValue = spec.get("pattern");
         String pattern = asString(patternValue);
-        if (!Texts.hasText(pattern)) {
+        if (!EmptyValues.hasText(pattern)) {
             errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.pattern required", nodeCode));
         }
         Long parsedMaxAge = SensorSpecs.longValue(spec, "maxAgeSeconds");
@@ -134,7 +134,7 @@ final class WorkflowWaitSensorSpecValidator {
         if (Boolean.TRUE.equals(spec.get("requireCompleteGroup"))) {
             Object fileGroupCodeValue = spec.get("fileGroupCode");
             String fileGroupCode = asString(fileGroupCodeValue);
-            if (!Texts.hasText(fileGroupCode)) {
+            if (!EmptyValues.hasText(fileGroupCode)) {
                 errors.add(issue(
                         V16C,
                         "FILE_ARRIVAL sensor_spec.fileGroupCode required when requireCompleteGroup=true",
@@ -143,7 +143,7 @@ final class WorkflowWaitSensorSpecValidator {
         }
         String bizDate = asString(spec.get("bizDate"));
         boolean completeGroupHasNoBusinessDateBinding = Boolean.TRUE.equals(spec.get("requireCompleteGroup"))
-                && !Texts.hasText(bizDate)
+                && !EmptyValues.hasText(bizDate)
                 && !Boolean.TRUE.equals(spec.get("bindWorkflowBizDate"));
         if (completeGroupHasNoBusinessDateBinding) {
             errors.add(issue(
@@ -151,11 +151,11 @@ final class WorkflowWaitSensorSpecValidator {
                     "FILE_ARRIVAL sensor_spec.bizDate or bindWorkflowBizDate required when requireCompleteGroup=true",
                     nodeCode));
         }
-        if (Boolean.TRUE.equals(spec.get("bindWorkflowBizDate")) && Texts.hasText(bizDate)) {
+        if (Boolean.TRUE.equals(spec.get("bindWorkflowBizDate")) && EmptyValues.hasText(bizDate)) {
             errors.add(
                     issue(V16C, "FILE_ARRIVAL sensor_spec configure either bizDate or bindWorkflowBizDate", nodeCode));
         }
-        if (Texts.hasText(bizDate)) {
+        if (EmptyValues.hasText(bizDate)) {
             try {
                 LocalDate.parse(bizDate);
             } catch (DateTimeParseException invalidDate) {
@@ -167,12 +167,12 @@ final class WorkflowWaitSensorSpecValidator {
     private void validateHttpPollSensorSpec(Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
         Object urlValue = spec.get("url");
         String url = asString(urlValue);
-        if (!Texts.hasText(url)) {
+        if (!EmptyValues.hasText(url)) {
             errors.add(issue(V16C, "HTTP_POLL sensor_spec.url required", nodeCode));
         }
         Object matchExpressionValue = spec.get("matchExpr");
         String matchExpression = asString(matchExpressionValue);
-        if (!Texts.hasText(matchExpression)) {
+        if (!EmptyValues.hasText(matchExpression)) {
             errors.add(issue(V16C, "HTTP_POLL sensor_spec.matchExpr required", nodeCode));
         }
     }
@@ -181,7 +181,7 @@ final class WorkflowWaitSensorSpecValidator {
             Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
         Object topicValue = spec.get("topic");
         String topic = asString(topicValue);
-        if (!Texts.hasText(topic)) {
+        if (!EmptyValues.hasText(topic)) {
             errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.topic required", nodeCode));
         }
         Integer partition = SensorSpecs.intValue(spec, "partition");
@@ -199,12 +199,12 @@ final class WorkflowWaitSensorSpecValidator {
             Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
         Object schemaValue = spec.get("schema");
         String schema = asString(schemaValue);
-        if (!Texts.hasText(schema)) {
+        if (!EmptyValues.hasText(schema)) {
             errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.schema required", nodeCode));
         }
         Object sqlValue = spec.get("sql");
         String sql = asString(sqlValue);
-        if (!Texts.hasText(sql)) {
+        if (!EmptyValues.hasText(sql)) {
             errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.sql required", nodeCode));
         }
     }

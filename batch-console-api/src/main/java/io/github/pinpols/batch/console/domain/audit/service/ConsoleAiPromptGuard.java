@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.enums.AiPromptDecision;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
 import java.util.Locale;
@@ -94,7 +94,7 @@ public class ConsoleAiPromptGuard {
                     AiPromptCategory.OUT_OF_SCOPE,
                     CommonErrorMessages.AI_ASSISTANT_DISABLED);
         }
-        if (!Texts.hasText(prompt)) {
+        if (!EmptyValues.hasText(prompt)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.prompt.required");
         }
         if (prompt.length() > properties.getMaxPromptLength()) {
@@ -136,7 +136,7 @@ public class ConsoleAiPromptGuard {
     }
 
     private boolean contains(String normalized, String lower, String keyword) {
-        if (!Texts.hasText(keyword)) {
+        if (!EmptyValues.hasText(keyword)) {
             return false;
         }
         String needle = keyword.toLowerCase(Locale.ROOT);

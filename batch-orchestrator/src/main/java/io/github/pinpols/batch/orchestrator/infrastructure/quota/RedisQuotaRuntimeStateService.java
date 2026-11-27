@@ -5,8 +5,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.QuotaResetPolicy;
@@ -145,7 +144,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
         this.redis = redis;
         this.timezoneProvider = timezoneProvider;
         String configuredMode = quotaProperties.getRedis().getFailureMode();
-        this.redisFailureMode = Texts.hasText(configuredMode) ? configuredMode.trim() : "FAIL_CLOSED";
+        this.redisFailureMode = EmptyValues.hasText(configuredMode) ? configuredMode.trim() : "FAIL_CLOSED";
     }
 
     @Override
@@ -220,7 +219,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
             return waitForCapacity(unavailableBackendRequest);
         }
 
-        if (EmptyChecks.isEmpty(result)) {
+        if (EmptyValues.isEmpty(result)) {
             return ResourceCheck.allow();
         }
         long allowed = parseLong(asString(result.get(0)));
@@ -252,7 +251,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
         int burstLimit = Math.max(0, request.burstLimit());
         QuotaResetPolicy policy = QuotaResetPolicy.from(request.quotaResetPolicy());
 
-        if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(quotaScope) || !EmptyValues.hasText(ownerCode)) {
             return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
         }
         if (!policy.isRuntimeManaged() || burstLimit <= 0) {
@@ -277,7 +276,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
                     causeSummary);
             return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
         }
-        if (EmptyChecks.isEmpty(entries)) {
+        if (EmptyValues.isEmpty(entries)) {
             return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
         }
 
@@ -319,7 +318,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
     }
 
     private static long parseLong(String s) {
-        if (EmptyChecks.isBlank(s)) {
+        if (EmptyValues.isBlank(s)) {
             return 0L;
         }
         try {

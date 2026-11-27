@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import java.util.Map;
@@ -50,7 +50,7 @@ public abstract class AbstractObjectStoreRunCompensator implements PipelineCompe
             Map<String, Object> fileRecord = resolveFileRecord(tenantId, fileId, attributes);
             String storagePath = stringValue(fileRecord.get("storage_path"));
             String storageBucket = stringValue(fileRecord.get("storage_bucket"));
-            if (!Texts.hasText(storagePath)) {
+            if (!EmptyValues.hasText(storagePath)) {
                 return CompensationResult.skipped(
                         "file_record(fileId=" + fileId + ") has no storage_path — nothing to reverse");
             }

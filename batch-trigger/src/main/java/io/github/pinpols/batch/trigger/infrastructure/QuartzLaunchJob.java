@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.MisfireHandler;
@@ -99,8 +99,8 @@ public class QuartzLaunchJob implements Job {
         String workflowCode = descriptor.getWorkflowCode();
         boolean workflowIdentityIsIncomplete = workflowDefinitionId == null
                 || workflowDefinitionId <= 0
-                || EmptyChecks.isBlank(tenantId)
-                || EmptyChecks.isBlank(workflowCode);
+                || EmptyValues.isBlank(tenantId)
+                || EmptyValues.isBlank(workflowCode);
         if (workflowIdentityIsIncomplete) {
             throw new JobExecutionException(
                     "scheduled Quartz task requires an explicit tenant and Workflow identity", false);
@@ -384,7 +384,7 @@ public class QuartzLaunchJob implements Job {
         if (rawValue instanceof Number number) {
             return number.intValue();
         }
-        if (rawValue instanceof String string && EmptyChecks.isNotBlank(string)) {
+        if (rawValue instanceof String string && EmptyValues.isNotBlank(string)) {
             return Integer.parseInt(string);
         }
         return null;

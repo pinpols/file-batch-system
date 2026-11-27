@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.rls;
 
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -50,7 +50,7 @@ public final class RlsTenantSessionSupport {
      */
     public static void applyIfPresent(DataSource dataSource) {
         String tenantId = RlsTenantContextHolder.get();
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             throw new IllegalStateException(
                     "RLS tenant context is missing; refusing to access tenant-scoped business data");
         }

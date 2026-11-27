@@ -3,8 +3,7 @@ package io.github.pinpols.batch.worker.exports.sql;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -27,7 +26,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn, Strin
      * @throws IllegalArgumentException 配置缺失或 SQL 为空时抛出
      */
     public static SqlTemplateExportSpec parse(Map<String, Object> templateConfig, ObjectMapper objectMapper) {
-        if (EmptyChecks.isEmpty(templateConfig)) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             throw new WorkerConfigException("template config missing");
         }
         Object rawDetailSql = firstNonNull(
@@ -51,7 +50,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn, Strin
 
         Object rawCursorColumn = firstNonNull(spec.get("cursorColumn"), spec.get("cursor_column"));
         String cursorColumn = textValue(rawCursorColumn);
-        if (!Texts.hasText(cursorColumn)) {
+        if (!EmptyValues.hasText(cursorColumn)) {
             cursorColumn = "id";
         }
         cursorColumn = JdbcMappedSqlValidator.requireIdentifier(cursorColumn, "cursorColumn");
@@ -91,7 +90,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn, Strin
 
     /** 是否配置了唯一排序后缀；配置后分页使用 (cursorColumn, cursorTiebreakerColumn) 复合游标。 */
     public boolean tiebreakerColumnIsConfigured() {
-        return EmptyChecks.isNotEmpty(cursorTiebreakerColumn);
+        return EmptyValues.isNotEmpty(cursorTiebreakerColumn);
     }
 
     /** 词界扫描：识别 `\b<name>\b` 是否出现在 SQL 中（不区分大小写）。 */
@@ -118,6 +117,6 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn, Strin
             return null;
         }
         String text = String.valueOf(value);
-        return Texts.hasText(text) ? text.trim() : null;
+        return EmptyValues.hasText(text) ? text.trim() : null;
     }
 }

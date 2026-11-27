@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ApprovalType;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushApprovalNotificationEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushApprovalNotificationMapper;
@@ -132,7 +132,7 @@ public class ConsolePushApprovalNotifier {
         String typeLabel = typeLabel(p.getApprovalType());
         String title = String.format("%s 申请%s", typeLabel, statusLabel);
         String reason = "REJECTED".equals(p.getApprovalStatus()) ? p.getRejectionReason() : p.getApprovalReason();
-        boolean reasonMissing = EmptyChecks.isBlank(reason);
+        boolean reasonMissing = EmptyValues.isBlank(reason);
         String approverId = nullToDash(p.getApproverId());
         String body = reasonMissing
                 ? String.format("approver=%s · %s", approverId, p.getApprovalNo())
@@ -164,7 +164,7 @@ public class ConsolePushApprovalNotifier {
     }
 
     private static String nullToDash(String s) {
-        return EmptyChecks.isBlank(s) ? "-" : s;
+        return EmptyValues.isBlank(s) ? "-" : s;
     }
 
     private static String truncate(String s, int max) {

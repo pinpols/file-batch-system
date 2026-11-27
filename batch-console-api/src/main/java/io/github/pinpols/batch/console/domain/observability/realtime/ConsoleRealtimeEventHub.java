@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
@@ -220,7 +220,7 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     }
 
     private void replay(Subscription subscription) {
-        if (EmptyChecks.isBlank(subscription.cursor)) {
+        if (EmptyValues.isBlank(subscription.cursor)) {
             return;
         }
         RealtimeReplayStore.ReplayBatch replayBatch = replayStore.replay(
@@ -287,11 +287,11 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     }
 
     private String normalizeStream(String stream) {
-        return (EmptyChecks.isBlank(stream)) ? DEFAULT_STREAM : stream.trim();
+        return (EmptyValues.isBlank(stream)) ? DEFAULT_STREAM : stream.trim();
     }
 
     private String normalizeFilter(String value) {
-        return EmptyChecks.isBlank(value) ? null : value.trim();
+        return EmptyValues.isBlank(value) ? null : value.trim();
     }
 
     private static ConsoleSseEventResponse toResponse(ConsoleSseEvent event) {

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.workflow.param;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Builder;
 
 /**
@@ -26,7 +26,7 @@ public record WorkflowDefinitionVersionUpdateParam(
         String description) {
 
     public WorkflowDefinitionVersionUpdateParam {
-        if (EmptyChecks.isBlank(tenantId) || id == null || expectedVersion == null) {
+        if (EmptyValues.isBlank(tenantId) || id == null || expectedVersion == null) {
             throw new IllegalArgumentException(
                     "tenantId, id and expectedVersion are required for Workflow replacement");
         }

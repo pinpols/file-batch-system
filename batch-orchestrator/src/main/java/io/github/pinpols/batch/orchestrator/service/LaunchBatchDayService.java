@@ -7,8 +7,8 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
@@ -116,7 +116,7 @@ public class LaunchBatchDayService {
             return;
         }
         calendarCode = LaunchParamResolver.textValue(calendarCode);
-        if (!Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(calendarCode)) {
             return;
         }
         BatchDayUpsertContext ctx = buildUpsertContext(request, calendarCode, effectiveParams);
@@ -156,7 +156,7 @@ public class LaunchBatchDayService {
         String timezoneSnapshot = resolveCalendarTimezone(request.tenantId(), calendarCode);
         String dstPolicySnapshot = resolveDstPolicySnapshot(request.tenantId(), calendarCode);
         String operatorId = LaunchParamResolver.resolveOperatorId(effectiveParams);
-        boolean hasOperator = Texts.hasText(operatorId);
+        boolean hasOperator = EmptyValues.hasText(operatorId);
         return BatchDayUpsertContext.builder()
                 .calendarCode(calendarCode)
                 .now(now)
@@ -336,7 +336,7 @@ public class LaunchBatchDayService {
      */
     String resolveCalendarTimezone(String tenantId, String calendarCode) {
         BusinessCalendarEntity calendar = configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
-        if (calendar != null && Texts.hasText(calendar.timezone())) {
+        if (calendar != null && EmptyValues.hasText(calendar.timezone())) {
             return calendar.timezone();
         }
         return timezoneProvider.defaultZone().getId();
@@ -382,7 +382,7 @@ public class LaunchBatchDayService {
     }
 
     boolean isWithinLateArrivalTolerance(BatchDayInstanceEntity batchDay, String calendarCode) {
-        if (batchDay == null || !Texts.hasText(calendarCode)) {
+        if (batchDay == null || !EmptyValues.hasText(calendarCode)) {
             return false;
         }
         Instant cutoffAt = batchDay.cutoffAt();
@@ -454,7 +454,7 @@ public class LaunchBatchDayService {
             return request;
         }
         String calendarCode = LaunchParamResolver.textValue(loaded.effectiveCalendarCode());
-        if (!Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(calendarCode)) {
             return request;
         }
         BatchDayInstanceEntity batchDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
@@ -554,7 +554,7 @@ public class LaunchBatchDayService {
                         : batchDay.cutoffAt().toString());
         String resourceKey = request.tenantId()
                 + ":"
-                + (Texts.hasText(calendarCode) ? calendarCode + ":" : "")
+                + (EmptyValues.hasText(calendarCode) ? calendarCode + ":" : "")
                 + request.jobCode()
                 + ":"
                 + (request.bizDate() == null ? "" : request.bizDate());

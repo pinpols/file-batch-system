@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.config;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -106,7 +106,7 @@ public class TriggerApiAdmissionGuard {
      * 只有队列为空时才能直接占用许可。否则后到的请求会在先到请求被唤醒前抢走刚释放的名额。
      */
     private boolean takePermitWhenIdle() {
-        if (activeRequests < effectiveLimit() && EmptyChecks.isEmpty(waitQueue)) {
+        if (activeRequests < effectiveLimit() && EmptyValues.isEmpty(waitQueue)) {
             activeRequests++;
             return true;
         }
@@ -153,7 +153,7 @@ public class TriggerApiAdmissionGuard {
 
     /** 按入队顺序把当前空闲许可发给队头，直到并发上限或队列耗尽。 */
     private void grantQueuedPermits() {
-        while (activeRequests < effectiveLimit() && EmptyChecks.isNotEmpty(waitQueue)) {
+        while (activeRequests < effectiveLimit() && EmptyValues.isNotEmpty(waitQueue)) {
             AdmissionWaiter waiter = waitQueue.removeFirst();
             waiter.granted = true;
             activeRequests++;

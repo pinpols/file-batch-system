@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.AlertSeverity;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -32,7 +32,7 @@ public class NotificationRoutePreviewService {
         String event = eventType.trim().toUpperCase(Locale.ROOT);
         Map<String, Object> data = new HashMap<>();
         boolean jobEvent = "JOB_SUCCESS".equals(event) || "JOB_FAILED".equals(event);
-        if (jobEvent && EmptyChecks.isBlank(jobCode)) {
+        if (jobEvent && EmptyValues.isBlank(jobCode)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.notification.preview_job_required");
         }
         // 与各生产者的实际载荷对齐：Job 终态有 jobCode，升级告警有 severity。

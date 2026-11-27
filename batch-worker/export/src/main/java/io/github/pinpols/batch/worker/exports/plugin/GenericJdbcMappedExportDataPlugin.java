@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.exports.config.JdbcMappedExportSecurityProperties;
 import io.github.pinpols.batch.worker.exports.jdbc.JdbcMappedExportSpec;
 import java.math.BigDecimal;
@@ -98,7 +98,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
             RlsTenantSessionSupport.applyIfPresent(businessDataSource);
             return jdbcTemplate.queryForList(sql, context.tenantId(), context.batchNo());
         });
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return Map.of();
         }
         Map<String, Object> firstRow = rows.get(0);
@@ -147,7 +147,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
                 RlsTenantSessionSupport.applyIfPresent(businessDataSource);
                 return jdbcTemplate.queryForList(nullProbeSql, batchId);
             });
-            if (EmptyChecks.isNotEmpty(nullSortValues)) {
+            if (EmptyValues.isNotEmpty(nullSortValues)) {
                 throw new WorkerConfigException("jdbc_mapped_export sort column is NULL for batchId="
                         + batchId
                         + " (orderByColumn="
@@ -168,7 +168,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
             RlsTenantSessionSupport.applyIfPresent(businessDataSource);
             return jdbcTemplate.queryForList(finalSql, sqlArgs);
         });
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return DetailPage.empty();
         }
         boolean hasOverflowRow = rows.size() > limit;
@@ -207,7 +207,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
 
     /** 位点形状必须与当前冻结配置一致; 排序语义变化后旧的单列位点不能继续使用。 */
     private static void requireCursorShape(JdbcMappedExportSpec spec, List<Object> cursorValues, boolean composite) {
-        if (EmptyChecks.isEmpty(cursorValues) || cursorValues.size() == (composite ? 2 : 1)) {
+        if (EmptyValues.isEmpty(cursorValues) || cursorValues.size() == (composite ? 2 : 1)) {
             return;
         }
         throw new WorkerConfigException(
@@ -348,7 +348,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
      */
     private static void appendCursorPredicate(
             StringBuilder sql, List<Object> args, String ob, String tb, List<Object> cursorValues) {
-        if (EmptyChecks.isEmpty(cursorValues)) {
+        if (EmptyValues.isEmpty(cursorValues)) {
             return;
         }
         Object primary = cursorValues.getFirst();

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.redis;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 public final class BatchRedisKeys {
 
@@ -67,7 +67,7 @@ public final class BatchRedisKeys {
     }
 
     private static String safe(String value) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return "_";
         }
         return value.replace(':', '_');

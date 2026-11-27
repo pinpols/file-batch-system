@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -94,7 +94,7 @@ final class TaskOutcomeSummaryBuilder {
      * 列。null/empty 直接返回 null(不写空对象),让 DSL 解析按"无产出"语义 fallback。
      */
     static String serializeOutputs(Map<String, Object> outputs) {
-        if (EmptyChecks.isEmpty(outputs)) {
+        if (EmptyValues.isEmpty(outputs)) {
             return null;
         }
         return JsonUtils.toJson(outputs);
@@ -112,12 +112,12 @@ final class TaskOutcomeSummaryBuilder {
     static Map<String, Object> aggregateSuccessfulPartitionOutputs(
             List<JobPartitionEntity> partitions, TaskOutcomeCommand command) {
         List<JobPartitionEntity> successful = successfulPartitions(partitions);
-        if (EmptyChecks.isEmpty(successful)) {
+        if (EmptyValues.isEmpty(successful)) {
             return successfulCommandOutputs(command);
         }
         if (successful.size() == 1) {
             Map<String, Object> outputs = extractOutputs(successful.get(0));
-            if (EmptyChecks.isEmpty(outputs)) {
+            if (EmptyValues.isEmpty(outputs)) {
                 return successfulCommandOutputs(command);
             }
             return outputs;
@@ -142,7 +142,7 @@ final class TaskOutcomeSummaryBuilder {
     }
 
     static List<JobPartitionEntity> filterPartitionsByIds(List<JobPartitionEntity> partitions, Set<Long> partitionIds) {
-        if (EmptyChecks.isEmpty(partitions) || EmptyChecks.isEmpty(partitionIds)) {
+        if (EmptyValues.isEmpty(partitions) || EmptyValues.isEmpty(partitionIds)) {
             return List.of();
         }
         Set<Long> selectedIds = new LinkedHashSet<>(partitionIds);
@@ -174,7 +174,7 @@ final class TaskOutcomeSummaryBuilder {
     }
 
     private static List<JobPartitionEntity> successfulPartitions(List<JobPartitionEntity> partitions) {
-        if (EmptyChecks.isEmpty(partitions)) {
+        if (EmptyValues.isEmpty(partitions)) {
             return List.of();
         }
         List<JobPartitionEntity> successful = new ArrayList<>();
@@ -192,7 +192,7 @@ final class TaskOutcomeSummaryBuilder {
             return null;
         }
         String outputSummary = partition.getOutputSummary();
-        if (EmptyChecks.isBlank(outputSummary)) {
+        if (EmptyValues.isBlank(outputSummary)) {
             return null;
         }
         Object parsed = JsonUtils.fromJson(outputSummary, Object.class);
@@ -211,7 +211,7 @@ final class TaskOutcomeSummaryBuilder {
             return Collections.emptyMap();
         }
         Map<String, Object> outputs = command.outputs();
-        if (EmptyChecks.isEmpty(outputs)) {
+        if (EmptyValues.isEmpty(outputs)) {
             return Collections.emptyMap();
         }
         return outputs;

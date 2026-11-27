@@ -6,9 +6,9 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.config.ConfigReleaseApplyService;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApprovalApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigApprovalActionRequest;
@@ -235,13 +235,13 @@ public class DefaultConsoleConfigApprovalApplicationService implements ConsoleCo
 
     private ConfigApprovalRow requireApproval(String tenantId, Long approvalId) {
         ConfigApprovalRow approval = configApprovalMapper.selectById(tenantId, approvalId);
-        return Guard.requireFound(approval, "config approval not found");
+        return Preconditions.requireFound(approval, "config approval not found");
     }
 
     private ConfigReleaseEntity loadRelease(String tenantId, Long releaseId) {
 
         ConfigReleaseEntity release = configReleaseMapper.selectById(tenantId, releaseId);
-        return Guard.requireFound(release, "config release not found");
+        return Preconditions.requireFound(release, "config release not found");
     }
 
     private void acquireReleaseLock(ConfigReleaseEntity release) {
@@ -277,7 +277,7 @@ public class DefaultConsoleConfigApprovalApplicationService implements ConsoleCo
 
     private String currentOperator() {
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-        String operatorId = Texts.hasText(metadata.operatorId()) ? metadata.operatorId() : "system";
+        String operatorId = EmptyValues.hasText(metadata.operatorId()) ? metadata.operatorId() : "system";
         return ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
     }
 

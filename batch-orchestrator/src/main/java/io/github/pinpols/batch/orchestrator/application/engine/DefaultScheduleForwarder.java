@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.observability.BatchMetricsNames;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.outbox.OutboxChildRecordService;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
@@ -264,7 +264,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
      * `future.getNow(false)` 已经对失败结果（false / 异常 / 仍未完成）做正确处理。
      */
     private void awaitAcknowledgements(List<InFlight> inFlight) {
-        if (EmptyChecks.isNotEmpty(inFlight)) {
+        if (EmptyValues.isNotEmpty(inFlight)) {
             CompletableFuture<?>[] acknowledgementFutures =
                     inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new);
             CompletableFuture.allOf(acknowledgementFutures)

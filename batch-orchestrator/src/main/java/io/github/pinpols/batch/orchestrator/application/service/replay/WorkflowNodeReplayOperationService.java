@@ -7,8 +7,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkflowNodeReplayTargetResolver;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkflowNodeReplayTargetResolver.WorkflowNodeReplayTarget;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
@@ -241,16 +241,16 @@ public class WorkflowNodeReplayOperationService {
 
     private void validate(WorkflowNodeReplayCommand command, boolean submission) {
         boolean requiredReplayIdentityIsInvalid = command == null
-                || !Texts.hasText(command.tenantId())
+                || !EmptyValues.hasText(command.tenantId())
                 || command.workflowRunId() == null
                 || command.workflowNodeRunId() == null
-                || !Texts.hasText(command.reason())
-                || !Texts.hasText(command.requestedBy());
+                || !EmptyValues.hasText(command.reason())
+                || !EmptyValues.hasText(command.requestedBy());
         if (requiredReplayIdentityIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
         }
         boolean submissionFieldsAreInvalid =
-                submission && (command.operationKey() == null || !Texts.hasText(command.previewToken()));
+                submission && (command.operationKey() == null || !EmptyValues.hasText(command.previewToken()));
         if (submissionFieldsAreInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
         }
@@ -271,10 +271,10 @@ public class WorkflowNodeReplayOperationService {
         if (command == null) {
             return null;
         }
-        String resultPolicy = Texts.hasText(command.resultPolicy())
+        String resultPolicy = EmptyValues.hasText(command.resultPolicy())
                 ? command.resultPolicy()
                 : ResultVersionPolicy.CREATE_NEW_VERSION.code();
-        String configVersionPolicy = Texts.hasText(command.configVersionPolicy())
+        String configVersionPolicy = EmptyValues.hasText(command.configVersionPolicy())
                 ? command.configVersionPolicy()
                 : ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code();
         return WorkflowNodeReplayCommand.builder()

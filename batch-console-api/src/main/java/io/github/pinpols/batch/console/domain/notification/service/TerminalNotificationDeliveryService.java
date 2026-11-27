@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
@@ -252,7 +252,7 @@ public class TerminalNotificationDeliveryService {
         String configJson = channel.configJson();
         if ("WEBHOOK".equals(type)) {
             Map<?, ?> config = JsonUtils.fromJson(configJson, Map.class);
-            if (config == null || !(config.get("url") instanceof String url) || EmptyChecks.isBlank(url)) {
+            if (config == null || !(config.get("url") instanceof String url) || EmptyValues.isBlank(url)) {
                 return Destination.unavailable(payload, "webhook channel URL missing");
             }
             WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();

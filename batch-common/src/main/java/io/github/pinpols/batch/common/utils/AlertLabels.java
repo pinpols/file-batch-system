@@ -43,7 +43,7 @@ public final class AlertLabels {
 
     /** fbs severity 枚举 → AM severity 小写词形。未知值兜底 lowercase（并把 {@code warn} 归一到 {@code warning}）。 */
     public static String amSeverity(@Nullable String severity) {
-        if (EmptyChecks.isBlank(severity)) {
+        if (EmptyValues.isBlank(severity)) {
             return "warning";
         }
         String trimmedSeverity = severity.trim();
@@ -63,7 +63,7 @@ public final class AlertLabels {
 
     /** alert_type 关键字 → AM alert_group（route 分类主键之一）。 */
     public static String alertGroup(@Nullable String alertType) {
-        if (EmptyChecks.isBlank(alertType)) {
+        if (EmptyValues.isBlank(alertType)) {
             return GROUP_DEFAULT;
         }
         String lower = alertType.toLowerCase(Locale.ROOT);
@@ -129,7 +129,7 @@ public final class AlertLabels {
     }
 
     private static boolean hasText(@Nullable String value) {
-        return EmptyChecks.isNotBlank(value);
+        return EmptyValues.isNotBlank(value);
     }
 
     /** 由 alert_group 派生 team（v1 收敛：group→team 一一对应，供 route 二次分流/展示）。 */

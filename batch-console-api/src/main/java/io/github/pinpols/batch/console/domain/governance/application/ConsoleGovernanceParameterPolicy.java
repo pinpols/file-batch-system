@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.governance.application;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -39,7 +39,7 @@ public class ConsoleGovernanceParameterPolicy {
 
     /** 判断参数是否属于治理命名空间；未知的治理参数保留兼容性，允许作为自定义扩展保存。 */
     public boolean isGovernanceKey(String key) {
-        return EmptyChecks.isNotBlank(key) && key.startsWith(PREFIX);
+        return EmptyValues.isNotBlank(key) && key.startsWith(PREFIX);
     }
 
     /** 返回审计描述，已知参数使用明确名称，扩展参数统一标为 custom。 */

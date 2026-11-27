@@ -6,10 +6,10 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChannelApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileChannelQueryRequest;
@@ -66,7 +66,7 @@ public class DefaultConsoleFileChannelApplicationService implements ConsoleFileC
     public ConsoleFileChannelResponse get(Long id, String tenantId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         FileChannelConfigQueryView row = mapper.selectById(resolved, id);
-        FileChannelConfigQueryView foundRow = Guard.requireFound(row, "file channel not found: " + id);
+        FileChannelConfigQueryView foundRow = Preconditions.requireFound(row, "file channel not found: " + id);
         return ConsoleFileProjectionMapper.channelView(foundRow);
     }
 
@@ -112,7 +112,7 @@ public class DefaultConsoleFileChannelApplicationService implements ConsoleFileC
     public ConsoleFileChannelResponse update(Long id, FileChannelUpdateRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         FileChannelConfigQueryView existing =
-                Guard.requireFound(mapper.selectById(tenantId, id), "file channel not found: " + id);
+                Preconditions.requireFound(mapper.selectById(tenantId, id), "file channel not found: " + id);
         String operator = requestMetadataResolver.current().operatorId();
         FileChannelConfigUpdateParam param = new FileChannelConfigUpdateParam();
         param.setTenantId(tenantId);
@@ -168,7 +168,7 @@ public class DefaultConsoleFileChannelApplicationService implements ConsoleFileC
     }
 
     private static String normalizeConfigJson(String configJson) {
-        if (EmptyChecks.isBlank(configJson)) {
+        if (EmptyValues.isBlank(configJson)) {
             return "{}";
         }
         try {

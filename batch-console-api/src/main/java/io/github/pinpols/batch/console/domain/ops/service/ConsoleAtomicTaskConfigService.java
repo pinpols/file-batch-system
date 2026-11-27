@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.ParamSpec;
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
@@ -156,7 +156,7 @@ public class ConsoleAtomicTaskConfigService {
             Object value = parameters.get(spec.name());
             boolean requiredParameterIsMissing = value == null
                     || (value instanceof String strValue && strValue.isBlank())
-                    || (value instanceof Map<?, ?> mapValue && EmptyChecks.isEmpty(mapValue));
+                    || (value instanceof Map<?, ?> mapValue && EmptyValues.isEmpty(mapValue));
             if (requiredParameterIsMissing) {
                 requiredMissing.add(spec.name());
             }
@@ -178,7 +178,7 @@ public class ConsoleAtomicTaskConfigService {
                 wrongTypes.add(spec.name());
             }
         }
-        if (EmptyChecks.isNotEmpty(wrongTypes)) {
+        if (EmptyValues.isNotEmpty(wrongTypes)) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT,
                     "error.atomic_task_config.parameters_type_invalid",
@@ -220,14 +220,14 @@ public class ConsoleAtomicTaskConfigService {
     }
 
     private static String requireTaskType(String taskType) {
-        if (EmptyChecks.isBlank(taskType)) {
+        if (EmptyValues.isBlank(taskType)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.atomic_task_config.task_type_required");
         }
         return taskType.trim();
     }
 
     private static String requireName(String name) {
-        if (EmptyChecks.isBlank(name)) {
+        if (EmptyValues.isBlank(name)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.atomic_task_config.name_required");
         }
         return name.trim();

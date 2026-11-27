@@ -8,9 +8,8 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper;
@@ -183,7 +182,7 @@ public class OpenLineageEmitter {
 
     private List<OpenLineageDatasetRow> datasetsFor(WorkflowRunEntity run) {
         OpenLineageDatasetMapper mapper = datasetMapperProvider.getIfAvailable();
-        if (mapper == null || run == null || !Texts.hasText(run.getTenantId())) {
+        if (mapper == null || run == null || !EmptyValues.hasText(run.getTenantId())) {
             return List.of();
         }
         try {
@@ -196,7 +195,7 @@ public class OpenLineageEmitter {
     }
 
     private List<Map<String, Object>> buildDatasets(List<OpenLineageDatasetRow> rows, boolean input) {
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return List.of();
         }
         List<Map<String, Object>> result = new ArrayList<>();
@@ -228,19 +227,19 @@ public class OpenLineageEmitter {
 
     private String datasetNamespace(OpenLineageDatasetRow row) {
         String storageType =
-                Texts.hasText(row.storageType()) ? row.storageType().toLowerCase(Locale.ROOT) : "file";
-        if (Texts.hasText(row.storageBucket())) {
+                EmptyValues.hasText(row.storageType()) ? row.storageType().toLowerCase(Locale.ROOT) : "file";
+        if (EmptyValues.hasText(row.storageBucket())) {
             return storageType + "://" + row.storageBucket();
         }
-        String tenantId = Texts.hasText(row.tenantId()) ? row.tenantId() : "unknown";
+        String tenantId = EmptyValues.hasText(row.tenantId()) ? row.tenantId() : "unknown";
         return props.getNamespace() + "/tenant/" + tenantId + "/" + storageType;
     }
 
     private String datasetName(OpenLineageDatasetRow row) {
-        if (Texts.hasText(row.storagePath())) {
+        if (EmptyValues.hasText(row.storagePath())) {
             return row.storagePath();
         }
-        if (Texts.hasText(row.fileName())) {
+        if (EmptyValues.hasText(row.fileName())) {
             return row.fileName();
         }
         return "file_record:" + row.fileId();

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure.kafka;
 
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.application.TriggerLaunchLagQueryPort;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import jakarta.annotation.PreDestroy;
@@ -65,7 +65,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
         requests.keySet().stream()
                 .filter(partition -> !committed.containsKey(partition))
                 .forEach(partition -> earliestRequests.put(partition, OffsetSpec.earliest()));
-        Map<TopicPartition, ListOffsetsResultInfo> earliestOffsets = EmptyChecks.isEmpty(earliestRequests)
+        Map<TopicPartition, ListOffsetsResultInfo> earliestOffsets = EmptyValues.isEmpty(earliestRequests)
                 ? Map.<TopicPartition, ListOffsetsResultInfo>of()
                 : admin.listOffsets(earliestRequests).all().get(timeout, TimeUnit.MILLISECONDS);
         long lag = 0L;

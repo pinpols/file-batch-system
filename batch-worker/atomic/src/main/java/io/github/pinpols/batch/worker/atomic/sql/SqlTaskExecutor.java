@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
@@ -166,7 +166,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> params = ctx.parameters();
 
         Object sqlObj = params.get(PARAM_SQL);
-        if (!(sqlObj instanceof String sqlString) || EmptyChecks.isBlank(sqlString)) {
+        if (!(sqlObj instanceof String sqlString) || EmptyValues.isBlank(sqlString)) {
             throw new SqlValidationException("parameters.sql required (non-blank string)");
         }
         String sql = sqlString.trim();
@@ -225,7 +225,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     String resolveDataSourceBeanName(Map<String, Object> params) {
         String configured = props.getDataSourceBeanName();
         Object v = params.get(PARAM_DS_BEAN);
-        String paramBean = v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : null;
+        String paramBean = v instanceof String string && EmptyValues.isNotBlank(string) ? string.trim() : null;
 
         if (paramBean == null || paramBean.equals(configured)) {
             return configured;

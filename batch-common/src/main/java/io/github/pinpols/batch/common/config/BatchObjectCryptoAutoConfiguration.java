@@ -2,7 +2,7 @@ package io.github.pinpols.batch.common.config;
 
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Set;
@@ -39,7 +39,7 @@ public class BatchObjectCryptoAutoConfiguration {
     static void validateKmsKeys(BatchKmsProperties kmsProperties, Environment environment) {
         Map<String, String> keys = kmsProperties.getKeys();
         String defaultKeyRef = kmsProperties.getDefaultKeyRef();
-        if (EmptyChecks.isBlank(defaultKeyRef) || !keys.containsKey(defaultKeyRef)) {
+        if (EmptyValues.isBlank(defaultKeyRef) || !keys.containsKey(defaultKeyRef)) {
             throw new IllegalStateException(
                     "FATAL: batch.security.kms.default-key-ref must reference an existing batch.security.kms.keys entry");
         }
@@ -62,7 +62,7 @@ public class BatchObjectCryptoAutoConfiguration {
     }
 
     private static byte[] decodeKmsKey(String keyRef, String value) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             throw new IllegalStateException("FATAL: batch.security.kms.keys." + keyRef + " must not be blank");
         }
         try {

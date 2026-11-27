@@ -16,8 +16,7 @@ import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
@@ -490,7 +489,7 @@ public class ConfigPackageExcelValidator {
             if (hasText(window.windowCode()) && !seen.add(window.windowCode())) {
                 ri.add("duplicate window_code in excel: " + window.windowCode());
             }
-            if (EmptyChecks.isEmpty(ri)) {
+            if (EmptyValues.isEmpty(ri)) {
                 validateWindowSettings(window, row, ri);
             }
         });
@@ -502,7 +501,7 @@ public class ConfigPackageExcelValidator {
             BatchWindowRules.validate(window.timezone(), window.startTime(), window.endTime(), window.allowCrossDay());
         } catch (BizException invalid) {
             boolean needsExistingCrossDay =
-                    !Texts.hasText(values.get(ConfigPackageExcelSchema.BatchWindow.COL_ALLOW_CROSS_DAY))
+                    !EmptyValues.hasText(values.get(ConfigPackageExcelSchema.BatchWindow.COL_ALLOW_CROSS_DAY))
                             && BatchWindowRules.WINDOW_RANGE_FIELD.equals(invalid.getMessageArgs()[0]);
             if (needsExistingCrossDay) {
                 BatchWindowRow existing = batchWindowMapper.selectByUniqueKey(window.tenantId(), window.windowCode());
@@ -818,13 +817,13 @@ public class ConfigPackageExcelValidator {
     private List<WorkbookIssue> validateCrossReferences(String tenantId, ValidatedReferenceRows rows) {
         Set<String> jobCodesInExcel = rows.jobs().stream()
                 .map(r -> normalize(r.get(COL_JOB_CODE)))
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .collect(Collectors.toSet());
         Set<String> fileTemplatesInExcel = ConfigPackageExcelRowValidators.buildFileTemplateKeys(rows.fileTemplates());
         Set<String> queueCodesInExcel = extractCodes(rows.resourceQueues(), COL_QUEUE_CODE);
         Set<String> calendarCodesInExcel = rows.businessCalendars().stream()
                 .map(r -> CodeNormalizer.toConfigFormOrNull(r.get(COL_CALENDAR_CODE)))
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .collect(Collectors.toSet());
         Set<String> windowCodesInExcel = extractCodes(rows.batchWindows(), COL_WINDOW_CODE);
         List<WorkbookIssue> issues = new ArrayList<>();
@@ -848,7 +847,7 @@ public class ConfigPackageExcelValidator {
                 }
             }
             String calendarCode = CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE));
-            boolean referencedCalendarIsMissing = Texts.hasText(calendarCode)
+            boolean referencedCalendarIsMissing = EmptyValues.hasText(calendarCode)
                     && !calendarCodesInExcel.contains(calendarCode)
                     && !businessCalendarExists(tenantId, calendarCode);
             if (referencedCalendarIsMissing) {
@@ -912,12 +911,12 @@ public class ConfigPackageExcelValidator {
                         COL_QUEUE_CODE,
                         "queue_code references unknown resource_queue: " + queueCode));
             }
-            String configuredDependencies = Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))
+            String configuredDependencies = EmptyValues.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))
                     ? row.get(COL_DEPENDS_ON_JOB_CODES)
                     : row.get(COL_DEPENDS_ON_JOB_CODE);
             List<String> dependencyCodes = splitDependencyCodes(configuredDependencies);
             List<String> dependencyAlignments = splitAlignmentValues(row.get(COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS));
-            if (EmptyChecks.isNotEmpty(dependencyAlignments) && dependencyAlignments.size() != dependencyCodes.size()) {
+            if (EmptyValues.isNotEmpty(dependencyAlignments) && dependencyAlignments.size() != dependencyCodes.size()) {
                 issues.add(new WorkbookIssue(
                         JOB_SHEET,
                         rowNo,
@@ -986,7 +985,7 @@ public class ConfigPackageExcelValidator {
         Map<String, Set<String>> graph = new HashMap<>();
         Set<String> replacedJobs = rows.stream()
                 .map(row -> normalize(row.get(COL_JOB_CODE)))
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .collect(Collectors.toSet());
         List<JobDefinitionMapper.JobDependencyEdge> existingDependencies =
                 jobDefinitionMapper.selectAllDependencies(tenantId);
@@ -1000,7 +999,7 @@ public class ConfigPackageExcelValidator {
         }
         for (Map<String, String> row : rows) {
             String downstream = normalize(row.get(COL_JOB_CODE));
-            String configuredDependencies = Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))
+            String configuredDependencies = EmptyValues.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))
                     ? row.get(COL_DEPENDS_ON_JOB_CODES)
                     : row.get(COL_DEPENDS_ON_JOB_CODE);
             graph.computeIfAbsent(downstream, ignored -> new HashSet<>())
@@ -1009,7 +1008,7 @@ public class ConfigPackageExcelValidator {
         Set<String> visited = new HashSet<>();
         for (String jobCode : graph.keySet()) {
             if (dependencyGraphHasCycle(jobCode, graph, new HashSet<>(), visited)) {
-                int rowNo = EmptyChecks.isEmpty(rows) ? 0 : excelRowNo(rows.getFirst(), 2);
+                int rowNo = EmptyValues.isEmpty(rows) ? 0 : excelRowNo(rows.getFirst(), 2);
                 issues.add(new WorkbookIssue(
                         JOB_SHEET, rowNo, COL_DEPENDS_ON_JOB_CODES, "job dependency graph contains a cycle"));
                 break;
@@ -1071,7 +1070,7 @@ public class ConfigPackageExcelValidator {
     private static Set<String> extractCodes(List<Map<String, String>> rows, String column) {
         return rows.stream()
                 .map(r -> normalize(r.get(column)))
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .collect(Collectors.toSet());
     }
 
@@ -1083,7 +1082,7 @@ public class ConfigPackageExcelValidator {
 
     static int excelRowNo(Map<String, String> row, int fallbackRowNo) {
         String raw = row.get(INTERNAL_ROW_NO);
-        if (!Texts.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             return fallbackRowNo;
         }
         try {
@@ -1131,7 +1130,7 @@ public class ConfigPackageExcelValidator {
     }
 
     public static boolean hasText(String value) {
-        return Texts.hasText(value);
+        return EmptyValues.hasText(value);
     }
 
     private static void addIssues(List<String> rowIssues, String sheetName, int rowNo, List<WorkbookIssue> issues) {

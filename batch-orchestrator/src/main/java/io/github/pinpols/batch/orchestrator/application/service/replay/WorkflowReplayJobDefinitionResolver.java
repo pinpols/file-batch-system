@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -59,9 +59,9 @@ public class WorkflowReplayJobDefinitionResolver {
 
     private void validateRequest(WorkflowReplayJobDefinitionRequest request) {
         boolean requestHasRequiredFields = request != null
-                && EmptyChecks.isNotBlank(request.tenantId())
-                && EmptyChecks.isNotBlank(request.nodeCode())
-                && EmptyChecks.isNotBlank(request.jobCode())
+                && EmptyValues.isNotBlank(request.tenantId())
+                && EmptyValues.isNotBlank(request.nodeCode())
+                && EmptyValues.isNotBlank(request.jobCode())
                 && request.sourceSnapshot() != null
                 && request.policy() != null;
         boolean requestPolicyIsValid = requestHasRequiredFields

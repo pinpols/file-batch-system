@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.storage;
 
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,7 +35,7 @@ public final class FilesystemPresignTokens {
      * @return Base64-URL 签名串
      */
     public static String sign(String bucket, String key, Instant expiresAt, String secret) {
-        if (EmptyChecks.isBlank(secret)) {
+        if (EmptyValues.isBlank(secret)) {
             throw new IllegalArgumentException("presign secret must not be blank");
         }
         long expEpochSec = expiresAt.getEpochSecond();
@@ -53,7 +53,7 @@ public final class FilesystemPresignTokens {
      * @return true 表示签名匹配且未过期
      */
     public static boolean verify(String bucket, String key, long expEpochSec, String signature, String secret) {
-        if (signature == null || EmptyChecks.isBlank(secret)) {
+        if (signature == null || EmptyValues.isBlank(secret)) {
             return false;
         }
         long currentEpochSecond = Instant.now().getEpochSecond();

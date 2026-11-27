@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
 import io.github.pinpols.batch.common.config.HikariPgSessionSupport;
 import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
 import io.github.pinpols.batch.common.tenant.routing.MyBatisTenantPlacementRepository;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Objects;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -64,7 +64,7 @@ public class OrchestratorDataSourceConfiguration {
         hikariConfig.setUsername(properties.determineUsername());
         hikariConfig.setPassword(properties.determinePassword());
         if (hikariConfig.getDriverClassName() == null
-                || EmptyChecks.isBlank(Objects.requireNonNull(hikariConfig.getDriverClassName()))) {
+                || EmptyValues.isBlank(Objects.requireNonNull(hikariConfig.getDriverClassName()))) {
             hikariConfig.setDriverClassName(properties.determineDriverClassName());
         }
         String applicationName = ApplicationNameProvider.resolve(environment, "batch-orchestrator");

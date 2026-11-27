@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -39,7 +39,7 @@ public class NotificationSenderRegistry {
     }
 
     private static String normalize(String value) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return null;
         }
         String trimmedValue = value.trim();

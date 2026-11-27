@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.validation;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import java.time.LocalDate;
@@ -17,7 +17,7 @@ public class ValidBizDateValidator implements ConstraintValidator<ValidBizDate, 
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
         // 允许空值：是否必填由 @NotBlank 决定；本校验只负责“格式/可解析性”。
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return true;
         }
         try {

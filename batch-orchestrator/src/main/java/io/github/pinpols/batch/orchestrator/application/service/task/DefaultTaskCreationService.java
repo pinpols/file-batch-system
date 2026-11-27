@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
@@ -63,7 +63,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
     @Override
     @Transactional
     public List<JobTaskEntity> createTasks(List<JobTaskEntity> tasks) {
-        if (EmptyChecks.isEmpty(tasks)) {
+        if (EmptyValues.isEmpty(tasks)) {
             return tasks == null ? List.of() : tasks;
         }
         // 先整批校验再写：任何一项非法（task_type 缺失）整批不落库，避免半批状态。
@@ -81,7 +81,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
                 }
                 stepInstances.add(buildStepInstance(task));
             }
-            if (EmptyChecks.isNotEmpty(stepInstances)) {
+            if (EmptyValues.isNotEmpty(stepInstances)) {
                 BatchInsertChunks.insertInChunks(
                         stepInstances, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobStepInstanceMapper::insertBatch);
             }
@@ -97,7 +97,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
                 ServerErrorMessage error = sql.getServerErrorMessage();
                 String constraint = error == null ? null : error.getConstraint();
                 boolean isTaskOwnershipConstraintViolation =
-                        EmptyChecks.isNotBlank(constraint) && OWNERSHIP_CONSTRAINTS.contains(constraint);
+                        EmptyValues.isNotBlank(constraint) && OWNERSHIP_CONSTRAINTS.contains(constraint);
                 if (isTaskOwnershipConstraintViolation) {
                     return BizException.of(ResultCode.CONFLICT, "error.job_task.reference_changed", failure);
                 }
@@ -117,7 +117,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
         // dispatch 路径在 targetJobCode 解析不到 jobDefinition 时会传 null，撞 PSQLException
         // 导致 TriggerLaunchConsumer 无限循环。上游 DefaultWorkflowNodeDispatchService 已经
         // fail-fast，这里再加一层回退，把 DB 抛错前置成业务异常，错误信息更可读。
-        boolean taskTypeMissingFromPresentTask = task != null && EmptyChecks.isBlank(task.getTaskType());
+        boolean taskTypeMissingFromPresentTask = task != null && EmptyValues.isBlank(task.getTaskType());
         if (taskTypeMissingFromPresentTask) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT, "error.job_task.task_type_required", task.getJobInstanceId());
@@ -166,12 +166,12 @@ public class DefaultTaskCreationService implements TaskCreationService {
 
     private String resolveStepCode(JobTaskEntity task) {
         String workflowNodeCode = payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeCode");
-        if (EmptyChecks.isNotBlank(workflowNodeCode)) {
+        if (EmptyValues.isNotBlank(workflowNodeCode)) {
             return workflowNodeCode;
         }
         String taskType = task == null ? null : task.getTaskType();
         Integer taskSeq = task == null ? null : task.getTaskSeq();
-        boolean hasTaskType = EmptyChecks.isNotBlank(taskType);
+        boolean hasTaskType = EmptyValues.isNotBlank(taskType);
         int sequence = taskSeq == null ? 1 : taskSeq;
         if (hasTaskType) {
             return taskType + ":" + sequence;
@@ -181,7 +181,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
 
     private String resolveStepType(JobTaskEntity task) {
         String workflowNodeType = payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeType");
-        if (EmptyChecks.isNotBlank(workflowNodeType)) {
+        if (EmptyValues.isNotBlank(workflowNodeType)) {
             return workflowNodeType;
         }
         return task == null ? "EXECUTION" : task.getTaskType();
@@ -208,7 +208,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
 
     @SuppressWarnings("unchecked")
     private String payloadStringValue(String payloadJson, String fieldName) {
-        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+        if (EmptyValues.isBlank(payloadJson) || EmptyValues.isBlank(fieldName)) {
             return null;
         }
         try {
@@ -228,7 +228,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
 
     @SuppressWarnings("unchecked")
     private Long payloadLongValue(String payloadJson, String fieldName) {
-        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+        if (EmptyValues.isBlank(payloadJson) || EmptyValues.isBlank(fieldName)) {
             return null;
         }
         try {
@@ -252,7 +252,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
         }
         String rawText = String.valueOf(candidate);
         String text = rawText.trim();
-        if (EmptyChecks.isEmpty(text)) {
+        if (EmptyValues.isEmpty(text)) {
             return null;
         }
         try {

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.processes.cleanup;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import io.micrometer.core.instrument.Counter;
@@ -174,7 +174,7 @@ public class ProcessStagingOrphanCleaner {
             while (deleted < batchSize) {
                 List<ProcessStagingGenerationCandidate> candidates = businessCleanup.listExpiredAfter(
                         tenantId, retentionHours, batchSize, cursorTime, cursorGenerationId);
-                if (EmptyChecks.isEmpty(Objects.requireNonNull(candidates))) {
+                if (EmptyValues.isEmpty(Objects.requireNonNull(candidates))) {
                     break;
                 }
                 for (ProcessStagingGenerationCandidate candidate : candidates) {

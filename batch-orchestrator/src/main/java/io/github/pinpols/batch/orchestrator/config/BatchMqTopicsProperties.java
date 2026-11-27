@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -26,7 +26,7 @@ public class BatchMqTopicsProperties {
     private String taskRetry = BatchTopics.TASK_RETRY;
 
     public String resolveDispatchTopic(String workerType) {
-        if (!Texts.hasText(workerType)) {
+        if (!EmptyValues.hasText(workerType)) {
             return null;
         }
         if (JobType.IMPORT.code().equalsIgnoreCase(workerType)) {

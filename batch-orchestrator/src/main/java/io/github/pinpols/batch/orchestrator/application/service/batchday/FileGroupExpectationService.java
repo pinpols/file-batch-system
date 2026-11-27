@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.batchday;
 
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -258,7 +258,7 @@ public class FileGroupExpectationService {
     }
 
     private static boolean valid(String value, int maxLength) {
-        return Texts.hasText(value) && value.trim().length() <= maxLength;
+        return EmptyValues.hasText(value) && value.trim().length() <= maxLength;
     }
 
     public record DefinitionRequest(

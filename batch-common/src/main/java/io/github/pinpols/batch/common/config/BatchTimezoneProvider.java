@@ -2,7 +2,7 @@ package io.github.pinpols.batch.common.config;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.annotation.PostConstruct;
 import java.time.DateTimeException;
 import java.time.ZoneId;
@@ -33,7 +33,7 @@ public class BatchTimezoneProvider {
 
     public BatchTimezoneProvider(BatchTimezoneProperties properties) {
         String raw = properties == null ? null : properties.getDefaultZone();
-        this.configuredDefaultZone = Texts.hasText(raw) ? raw.trim() : FALLBACK_ZONE.getId();
+        this.configuredDefaultZone = EmptyValues.hasText(raw) ? raw.trim() : FALLBACK_ZONE.getId();
         this.defaultZone = parseDefaultZone(this.configuredDefaultZone);
     }
 
@@ -69,7 +69,7 @@ public class BatchTimezoneProvider {
      * <p>为空或非法时，回退到平台默认业务时区。
      */
     public ZoneId resolveOrDefault(String preferred) {
-        if (!Texts.hasText(preferred)) {
+        if (!EmptyValues.hasText(preferred)) {
             return defaultZone;
         }
 

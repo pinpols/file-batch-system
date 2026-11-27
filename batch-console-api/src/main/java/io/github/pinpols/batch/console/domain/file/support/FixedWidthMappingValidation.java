@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 
 /** 校验已提供的映射，同时允许尚未填写完整的模板骨架。 */
 public final class FixedWidthMappingValidation {
@@ -17,7 +17,7 @@ public final class FixedWidthMappingValidation {
         if (!Boolean.TRUE.equals(enabled)
                 || !"IMPORT".equalsIgnoreCase(type)
                 || !"FIXED_WIDTH".equalsIgnoreCase(format)
-                || !Texts.hasText(mappingsJson)) {
+                || !EmptyValues.hasText(mappingsJson)) {
             return;
         }
         JsonNode mappings;
@@ -34,14 +34,14 @@ public final class FixedWidthMappingValidation {
                         || (mappings.isObject() && mappings.isEmpty()))) { // empty-check: allow - Jackson 对象节点判空
             return;
         }
-        Guard.require(
+        Preconditions.require(
                 mappings != null && mappings.isArray() && !mappings.isEmpty(), // empty-check: allow - Jackson 数组节点判空
                 "FIXED_WIDTH field mappings must be a non-empty array");
         for (JsonNode entry : mappings) {
             JsonNode target = entry.path("target");
             JsonNode start = entry.path("start");
             JsonNode length = entry.path("length");
-            Guard.require(
+            Preconditions.require(
                     isValidMapping(target, start, length),
                     "FIXED_WIDTH field mappings require non-blank target, non-negative start and positive length");
         }
@@ -49,7 +49,7 @@ public final class FixedWidthMappingValidation {
 
     private static boolean isValidMapping(JsonNode target, JsonNode start, JsonNode length) {
         return target.isTextual()
-                && Texts.hasText(target.textValue())
+                && EmptyValues.hasText(target.textValue())
                 && start.isIntegralNumber()
                 && start.canConvertToInt()
                 && start.intValue() >= 0

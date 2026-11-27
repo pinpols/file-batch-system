@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.router;
 
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.orchestrator.application.route.WorkerRoutingPolicy;
 import java.util.Comparator;
@@ -20,7 +20,7 @@ public class DefaultWorkerRoutingPolicy implements WorkerRoutingPolicy {
 
     @Override
     public WorkerRouteModel select(List<WorkerRouteModel> candidates) {
-        if (EmptyChecks.isEmpty(candidates)) {
+        if (EmptyValues.isEmpty(candidates)) {
             return null;
         }
         WorkerRouteModel fallback =

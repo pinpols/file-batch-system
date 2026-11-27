@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
@@ -66,7 +66,7 @@ public class JobMonitoringAlertEmissionService {
         if (candidate.triggerRequestId() != null) {
             detail.put("triggerRequestId", candidate.triggerRequestId().toString());
         }
-        if (!EmptyChecks.isBlank(candidate.nodeCode())) {
+        if (!EmptyValues.isBlank(candidate.nodeCode())) {
             detail.put("nodeCode", candidate.nodeCode());
         }
         detail.put("jobCode", candidate.jobCode());
@@ -97,7 +97,7 @@ public class JobMonitoringAlertEmissionService {
                 .tenantId(candidate.tenantId())
                 .serviceName("batch-orchestrator")
                 .alertType(violation.alertType())
-                .severity(EmptyChecks.isBlank(candidate.severity()) ? "WARN" : candidate.severity())
+                .severity(EmptyValues.isBlank(candidate.severity()) ? "WARN" : candidate.severity())
                 .title(violation.title(candidate.jobCode()))
                 .detailJson(detailJson)
                 .resourceKey(

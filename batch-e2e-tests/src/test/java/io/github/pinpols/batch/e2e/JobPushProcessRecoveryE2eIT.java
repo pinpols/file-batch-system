@@ -7,7 +7,6 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
@@ -96,7 +95,7 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
 
     @BeforeAll
     static void startReceiver() throws Exception {
-        if (EmptyChecks.isNull(Security.getProvider("BC"))) Security.addProvider(new BouncyCastleProvider());
+        if (Security.getProvider("BC") == null) Security.addProvider(new BouncyCastleProvider());
         vapid = keyPair();
         endpoint = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         endpoint.createContext("/device", exchange -> {
@@ -128,7 +127,7 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
     @AfterAll
     static void stopReceiver() {
         RELEASE_RESPONSE.countDown();
-        if (EmptyChecks.isNotNull(endpoint)) endpoint.stop(0);
+        if (endpoint != null) endpoint.stop(0);
     }
 
     @Test

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileChannelType;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -33,7 +33,7 @@ final class DispatchChannelTypePolicy {
     }
 
     static Optional<String> normalize(String channelType) {
-        if (!Texts.hasText(channelType)) {
+        if (!EmptyValues.hasText(channelType)) {
             return Optional.empty();
         }
         String trimmedChannelType = channelType.trim();

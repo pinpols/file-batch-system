@@ -2,9 +2,9 @@ package io.github.pinpols.batch.console.support.cache;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -118,7 +118,7 @@ public class ConsoleQueryCacheService {
         String fullKey = PREFIX + cacheKey;
         try {
             String cached = redisTemplate.opsForValue().get(fullKey);
-            if (Texts.hasText(cached)) {
+            if (EmptyValues.hasText(cached)) {
                 return decoder.apply(cached);
             }
         } catch (Exception e) {
@@ -151,7 +151,7 @@ public class ConsoleQueryCacheService {
      * <p>使用 Redis SCAN（非 KEYS）增量扫描 + 分批 DEL，避免 KEYS 命令 O(N) 阻塞主线程。
      */
     public void evictByPrefix(String keyPrefix) {
-        if (!Texts.hasText(keyPrefix)) {
+        if (!EmptyValues.hasText(keyPrefix)) {
             return;
         }
         String pattern = PREFIX + keyPrefix + "*";
@@ -182,7 +182,7 @@ public class ConsoleQueryCacheService {
      * <p>cache key 保留短可读前缀；遇到长值或特殊字符时追加短 hash，避免高基数字段拉长 key，也避免冒号等分隔符造成前缀误伤。
      */
     public static String keySegment(String value) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return "_";
         }
         String trimmed = value.trim();

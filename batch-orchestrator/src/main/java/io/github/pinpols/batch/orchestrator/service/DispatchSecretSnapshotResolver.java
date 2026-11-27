@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.domain.view.DispatchSecretBindingView;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
@@ -41,7 +41,7 @@ public class DispatchSecretSnapshotResolver {
             channelCodes = new LinkedHashSet<>();
             collectChannels(trustedParams, channelCodes);
         }
-        if (EmptyChecks.isEmpty(channelCodes)) {
+        if (EmptyValues.isEmpty(channelCodes)) {
             return trustedParams;
         }
 
@@ -65,7 +65,7 @@ public class DispatchSecretSnapshotResolver {
             reference.put("versionNo", binding.versionNo());
             bindings.put(binding.channelCode(), reference);
         }
-        if (EmptyChecks.isNotEmpty(bindings)) {
+        if (EmptyValues.isNotEmpty(bindings)) {
             pinned.put(DispatchTaskKeys.SECRET_BINDINGS, bindings);
         }
         return pinned;
@@ -87,7 +87,7 @@ public class DispatchSecretSnapshotResolver {
                 Object nested = entry.getValue();
                 if (CHANNEL_KEYS.contains(key) && nested != null) {
                     String checkedChannel = String.valueOf(nested);
-                    if (EmptyChecks.isNotBlank(checkedChannel)) {
+                    if (EmptyValues.isNotBlank(checkedChannel)) {
                         String channel = String.valueOf(nested);
                         channels.add(channel.trim());
                     }

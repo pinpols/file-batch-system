@@ -2,8 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.config.ConfigReleaseApplyService;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
@@ -30,7 +29,7 @@ public class DefaultConfigReleaseApplyService implements ConfigReleaseApplyServi
 
     @Override
     public void apply(ConfigReleaseEntity release, String operatorId, String operationId) {
-        if (release == null || !Texts.hasText(release.getTenantId())) {
+        if (release == null || !EmptyValues.hasText(release.getTenantId())) {
             throw invalid("release tenant is required");
         }
         TenantConfigBatchInitRequest request = buildRequest(
@@ -38,13 +37,13 @@ public class DefaultConfigReleaseApplyService implements ConfigReleaseApplyServi
         TenantConfigBatchInitResponse result = tenantConfigInitService.batchInit(request, operatorId, operationId);
         boolean tenantApplyDidNotSucceedExactlyOnce = result.failureTenants() != 0 || result.successTenants() != 1;
         if (tenantApplyDidNotSucceedExactlyOnce) {
-            String detail = EmptyChecks.isEmpty(result.results())
+            String detail = EmptyValues.isEmpty(result.results())
                     ? "configuration apply returned no tenant result"
                     : result.results().getFirst().errorMessage();
             throw BizException.of(
                     ResultCode.STATE_CONFLICT,
                     "error.config.release_apply_failed",
-                    Texts.hasText(detail) ? detail : "configuration apply failed");
+                    EmptyValues.hasText(detail) ? detail : "configuration apply failed");
         }
         typeRegistry.evictRuntimeCache(
                 cacheInvalidationService, release.getTenantId(), release.getConfigType(), release.getConfigKey());
@@ -52,7 +51,7 @@ public class DefaultConfigReleaseApplyService implements ConfigReleaseApplyServi
 
     private TenantConfigBatchInitRequest buildRequest(
             String tenantId, String configType, String configKey, String payload) {
-        if (!Texts.hasText(configKey) || !Texts.hasText(payload)) {
+        if (!EmptyValues.hasText(configKey) || !EmptyValues.hasText(payload)) {
             throw invalid("configKey and configPayloadJson are required");
         }
         TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();

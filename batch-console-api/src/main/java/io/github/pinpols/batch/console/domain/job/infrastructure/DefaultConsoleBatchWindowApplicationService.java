@@ -4,8 +4,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchWindowApplicationService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchWindowCreateRequest;
@@ -78,7 +78,7 @@ public class DefaultConsoleBatchWindowApplicationService implements ConsoleBatch
     public ConsoleBatchWindowResponse update(Long id, BatchWindowUpdateRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         BatchWindowRow selectedWindow = batchWindowMapper.selectById(tenantId, id);
-        BatchWindowRow existing = Guard.requireFound(selectedWindow, "batch window not found");
+        BatchWindowRow existing = Preconditions.requireFound(selectedWindow, "batch window not found");
         String windowName = Nullables.coalesce(request.getWindowName(), existing.windowName());
         String timezone = Nullables.coalesce(request.getTimezone(), existing.timezone());
         String effectiveStartTime = Nullables.coalesce(request.getStartTime(), existing.startTime());

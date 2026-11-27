@@ -13,7 +13,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.observability.OtelTracePropagation;
 import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.BizDateArithmetic;
@@ -144,7 +144,7 @@ public class TaskDispatchOutboxService {
         // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
         // 回退:jobInstance.priority(老逻辑);都缺走 DomainEvent 不传 → DB DEFAULT 5。
         Integer priority = task.getPriority() != null ? task.getPriority() : jobInstance.getPriority();
-        String resolvedKey = EmptyChecks.isBlank(eventKey) ? task.getTenantId() + ":" + task.getId() : eventKey;
+        String resolvedKey = EmptyValues.isBlank(eventKey) ? task.getTenantId() + ":" + task.getId() : eventKey;
         DomainEvent.Builder eventBuilder = DomainEvent.builder(task.getTenantId());
         Long eventAggregateId = task.getId();
         eventBuilder.aggregate("JOB_TASK", eventAggregateId);
@@ -246,7 +246,7 @@ public class TaskDispatchOutboxService {
             int parsed = number.intValue();
             return parsed > 0 ? parsed : null;
         }
-        if (value instanceof String text && EmptyChecks.isNotBlank(text)) {
+        if (value instanceof String text && EmptyValues.isNotBlank(text)) {
             try {
                 String trimmedText = text.trim();
                 int parsed = Integer.parseInt(trimmedText);
@@ -308,7 +308,7 @@ public class TaskDispatchOutboxService {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> parsePayloadMap(String payloadJson) {
-        if (EmptyChecks.isBlank(payloadJson)) {
+        if (EmptyValues.isBlank(payloadJson)) {
             return new LinkedHashMap<>();
         }
         try {
@@ -326,7 +326,7 @@ public class TaskDispatchOutboxService {
 
     // C-9.1: idempotencyKey 不含 version，避免 Kafka 投递成功但 DB 回滚时因 version 变化生成新幂等键导致重复执行
     private static String resolveIdempotencyKeyWithoutPartition(JobTaskEntity task, String eventKey) {
-        if (EmptyChecks.isNotBlank(eventKey)) {
+        if (EmptyValues.isNotBlank(eventKey)) {
             return eventKey;
         }
         return task.getTenantId() + ":task:" + task.getId() + ":instance:" + task.getJobInstanceId();

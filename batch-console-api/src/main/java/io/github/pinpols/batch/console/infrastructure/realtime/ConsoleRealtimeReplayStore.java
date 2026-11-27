@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.realtime;
 
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeMetrics;
@@ -67,7 +67,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
                 || stream == null
                 || stream.isBlank()
                 || afterCursor == null
-                || EmptyChecks.isBlank(afterCursor);
+                || EmptyValues.isBlank(afterCursor);
         if (replayRequestIsIncomplete) {
             return new ReplayBatch(List.of(), true);
         }
@@ -76,7 +76,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
         long maxEntries = realtimeProperties.getReplayMaxEntries();
         long endIndex = maxEntries > 0 ? maxEntries - 1 : -1L;
         List<String> rawEntries = redisTemplate.opsForList().range(bufferKey(tenantId, stream), 0, endIndex);
-        if (EmptyChecks.isEmpty(rawEntries)) {
+        if (EmptyValues.isEmpty(rawEntries)) {
             return new ReplayBatch(List.of(), false);
         }
         List<ConsoleRealtimeStreamEnvelope> envelopes = new ArrayList<>(rawEntries.size());
@@ -111,7 +111,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
         for (int index = startIndex; index < envelopes.size(); index++) {
             ConsoleRealtimeStreamEnvelope envelope = envelopes.get(index);
             boolean eventTypeDoesNotMatchFilter =
-                    EmptyChecks.isNotBlank(eventType) && !eventType.equals(envelope.eventType());
+                    EmptyValues.isNotBlank(eventType) && !eventType.equals(envelope.eventType());
             if (eventTypeDoesNotMatchFilter) {
                 continue;
             }

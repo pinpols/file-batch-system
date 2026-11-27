@@ -17,7 +17,7 @@ import io.github.pinpols.batch.common.mq.MqPublishResult;
 import io.github.pinpols.batch.common.observability.OtelTracePropagation;
 import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
@@ -322,7 +322,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     }
 
     private static String safeDeliveryErrorArgs(String argsJson) {
-        if (EmptyChecks.isBlank(argsJson)) { // empty-check: allow - 保留 JDK 字符串空白判定
+        if (EmptyValues.isBlank(argsJson)) { // empty-check: allow - 保留 JDK 字符串空白判定
             return argsJson;
         }
         try {
@@ -360,7 +360,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
 
     @SuppressWarnings("unchecked")
     private static String sanitizePayload(String payloadJson) {
-        if (EmptyChecks.isBlank(payloadJson)) {
+        if (EmptyValues.isBlank(payloadJson)) {
             return payloadJson;
         }
         try {

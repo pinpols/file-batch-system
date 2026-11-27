@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRecordView;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchRecordSnapshot;
 import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
@@ -33,7 +33,7 @@ public class FileDispatchRepository {
     private final FileDispatchMapper fileDispatchMapper;
 
     public Map<String, Object> loadFile(String tenantId, String fileId) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(fileId)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(fileId)) {
             return Map.of();
         }
         Long parsedFileId = Long.valueOf(fileId);
@@ -41,7 +41,7 @@ public class FileDispatchRepository {
     }
 
     public Map<String, Object> loadFile(String tenantId, Long fileId) {
-        if (!Texts.hasText(tenantId) || fileId == null) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null) {
             return Map.of();
         }
         PlatformFileRecordView fileRecord = fileDispatchMapper.selectFileRecord(tenantId, fileId);
@@ -49,7 +49,7 @@ public class FileDispatchRepository {
     }
 
     public Map<String, Object> loadChannel(String tenantId, String channelCode) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(channelCode)) {
             return Map.of();
         }
         DispatchChannelConfigView channelConfig = fileDispatchMapper.selectChannelConfig(tenantId, channelCode);
@@ -57,14 +57,14 @@ public class FileDispatchRepository {
     }
 
     public boolean isChannelActive(String tenantId, String channelCode) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(channelCode)) {
             return false;
         }
         return fileDispatchMapper.isChannelActive(tenantId, channelCode);
     }
 
     public Optional<DispatchRecordSnapshot> latestDispatchRecord(String tenantId, Long fileId, String channelCode) {
-        if (!Texts.hasText(tenantId) || fileId == null || !Texts.hasText(channelCode)) {
+        if (!EmptyValues.hasText(tenantId) || fileId == null || !EmptyValues.hasText(channelCode)) {
             return Optional.empty();
         }
         DispatchRecordSnapshot latestRecord =
@@ -114,9 +114,9 @@ public class FileDispatchRepository {
 
     public int beginVerifiedExternalOutcomeAttempt(
             String tenantId, Long fileId, String channelCode, Long jobInstanceId, Long pipelineInstanceId) {
-        boolean contextMissing = !Texts.hasText(tenantId)
+        boolean contextMissing = !EmptyValues.hasText(tenantId)
                 || fileId == null
-                || !Texts.hasText(channelCode)
+                || !EmptyValues.hasText(channelCode)
                 || jobInstanceId == null
                 || pipelineInstanceId == null;
         if (contextMissing) {

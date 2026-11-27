@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowExecutionProgressResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowExecutionProgressResponse.Edge;
@@ -54,7 +54,7 @@ public final class WorkflowExecutionGraphAssembler {
                         .finishedAt(run.getFinishedAt())
                         .generatedAt(BatchDateTimeSupport.utcNow());
         String executionSnapshot = run.getExecutionSnapshot();
-        if (EmptyChecks.isBlank(executionSnapshot)) {
+        if (EmptyValues.isBlank(executionSnapshot)) {
             return response.snapshotAvailable(false)
                     .nodes(List.of())
                     .edges(List.of())
@@ -73,7 +73,7 @@ public final class WorkflowExecutionGraphAssembler {
         boolean snapshotIdentityIsInvalid = !Objects.equals(snapshot.schemaVersion(), 2)
                 || !Objects.equals(snapshot.workflowDefinitionId(), run.getWorkflowDefinitionId())
                 || !Objects.equals(snapshot.workflowVersion(), run.getWorkflowVersionSnapshot());
-        if (snapshotIdentityIsInvalid || EmptyChecks.isEmpty(frozenNodes) || snapshot.edges() == null) {
+        if (snapshotIdentityIsInvalid || EmptyValues.isEmpty(frozenNodes) || snapshot.edges() == null) {
             throw invalidSnapshot();
         }
         Map<String, WorkflowExecutionNodeView> latest = new HashMap<>();
@@ -98,7 +98,7 @@ public final class WorkflowExecutionGraphAssembler {
         for (FrozenNode frozen : frozenNodes) {
             if (Boolean.FALSE.equals(frozen.enabled())) continue;
             String nodeCode = frozen.nodeCode();
-            if (EmptyChecks.isBlank(nodeCode) || frozen.nodeType() == null || !codes.add(nodeCode))
+            if (EmptyValues.isBlank(nodeCode) || frozen.nodeType() == null || !codes.add(nodeCode))
                 throw invalidSnapshot();
             WorkflowExecutionNodeView current = latest.get(nodeCode);
             NodeProgress.NodeProgressBuilder node = NodeProgress.builder()
@@ -124,7 +124,7 @@ public final class WorkflowExecutionGraphAssembler {
                                 + zero(current.getTerminatedPartitions());
                 String activeStepText = current.getActiveSteps();
                 List<String> activeSteps =
-                        EmptyChecks.isBlank(activeStepText) ? List.of() : Arrays.asList(activeStepText.split(","));
+                        EmptyValues.isBlank(activeStepText) ? List.of() : Arrays.asList(activeStepText.split(","));
                 nodes.add(node.nodeStatus(current.getNodeStatus())
                         .nodeRunId(current.getId())
                         .runSeq(current.getRunSeq())

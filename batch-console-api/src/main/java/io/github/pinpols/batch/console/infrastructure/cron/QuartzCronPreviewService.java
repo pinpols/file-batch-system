@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.response.CronPreviewResponse;
 import io.github.pinpols.batch.console.domain.observability.application.CronPreviewService;
 import java.text.ParseException;
@@ -36,7 +36,7 @@ public class QuartzCronPreviewService implements CronPreviewService {
             previewCount = Math.max(1, countAtMaximum);
         }
         String trimmed = expression == null ? "" : expression.trim();
-        if (EmptyChecks.isEmpty(trimmed)) {
+        if (EmptyValues.isEmpty(trimmed)) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "expr is required");
         }

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.support.CompensationResult;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensator;
@@ -102,7 +102,7 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
                                 + "."
                                 + spec.table());
             }
-            if (!Texts.hasText(runScope.runValue())) {
+            if (!EmptyValues.hasText(runScope.runValue())) {
                 return CompensationResult.skipped("run-identifier column '"
                         + runScope.runColumn()
                         + "' resolved to blank value at compensation time; cannot scope reverse — SKIPPED");
@@ -192,7 +192,7 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
     /** 与 LoadStep.buildLoadContext 一致:batchNo 取 importPayload.batchNo,缺省回退 bizDate。 */
     private String resolveBatchNo(Map<String, Object> attributes) {
         Object payloadObj = attributes.get(PipelineRuntimeKeys.IMPORT_PAYLOAD);
-        if (payloadObj instanceof ImportPayload payload && Texts.hasText(payload.batchNo())) {
+        if (payloadObj instanceof ImportPayload payload && EmptyValues.hasText(payload.batchNo())) {
             return payload.batchNo();
         }
         Object bizDate = attributes.get(PipelineRuntimeKeys.BIZ_DATE);

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
@@ -47,10 +47,10 @@ public class JobPushIntakeService {
                 ? "DRY_RUN"
                 : !properties.isEnabled() || !properties.getJobNotify().isEnabled()
                         ? "DISABLED"
-                        : EmptyChecks.isBlank(operator) ? "NO_OPERATOR" : "QUEUED";
+                        : EmptyValues.isBlank(operator) ? "NO_OPERATOR" : "QUEUED";
         List<ConsolePushSubscriptionEntity> devices =
                 "QUEUED".equals(decision) ? subscriptions.findByTenantAndUser(tenant, operator) : List.of();
-        if ("QUEUED".equals(decision) && EmptyChecks.isEmpty(Objects.requireNonNull(devices)))
+        if ("QUEUED".equals(decision) && EmptyValues.isEmpty(Objects.requireNonNull(devices)))
             decision = "NO_SUBSCRIPTIONS";
         for (ConsolePushSubscriptionEntity device : devices) {
             boolean deviceDoesNotMatchFrozenJobOperator = !tenant.equals(device.getTenantId())

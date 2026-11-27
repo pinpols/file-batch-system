@@ -4,10 +4,10 @@ import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
@@ -50,7 +50,7 @@ final class LocalOutboxDispatchSupport {
             String endpoint = channelConfig.get("target_endpoint") == null
                     ? null
                     : String.valueOf(channelConfig.get("target_endpoint"));
-            boolean privateTarget = !Texts.hasText(endpoint) || isDefaultOutboxEndpoint(endpoint);
+            boolean privateTarget = !EmptyValues.hasText(endpoint) || isDefaultOutboxEndpoint(endpoint);
             Path directory = prepareLocalDirectory(endpoint, privateTarget, properties);
             String configuredChannelCode =
                     String.valueOf(channelConfig.getOrDefault("channel_code", DEFAULT_CHANNEL_CODE));
@@ -156,7 +156,7 @@ final class LocalOutboxDispatchSupport {
     private static Path validateLocalDirectory(Path directory, DispatchRuntimeProperties properties) throws Exception {
         Path realDirectory = directory.toRealPath();
         String sandboxRootRaw = properties.getLocalSandboxRoot();
-        if (Texts.hasText(sandboxRootRaw)) {
+        if (EmptyValues.hasText(sandboxRootRaw)) {
             Path configuredSandboxRoot = Path.of(sandboxRootRaw);
             Path absoluteSandboxRoot = configuredSandboxRoot.toAbsolutePath();
             Path normalizedSandboxRoot = absoluteSandboxRoot.normalize();
@@ -191,7 +191,7 @@ final class LocalOutboxDispatchSupport {
     }
 
     private static String sanitizeFileSegment(String raw) {
-        if (!Texts.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             return DEFAULT_CHANNEL_CODE;
         }
         String trimmedValue = raw.trim();

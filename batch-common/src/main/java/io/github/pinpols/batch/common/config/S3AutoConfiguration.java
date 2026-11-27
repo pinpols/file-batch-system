@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.config;
 
 import io.github.pinpols.batch.common.health.S3HealthIndicator;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.URI;
 import java.time.Duration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -52,7 +52,7 @@ public class S3AutoConfiguration {
                 .requestChecksumCalculation(p.getRequestChecksumCalculation())
                 .responseChecksumValidation(p.getResponseChecksumValidation())
                 .httpClientBuilder(http)
-                .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
+                .region(EmptyValues.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
         RetryStrategy retryStrategy = buildRetryStrategy(p);
         if (retryStrategy != null) {
             b.overrideConfiguration(ClientOverrideConfiguration.builder()
@@ -92,7 +92,7 @@ public class S3AutoConfiguration {
                 .build();
         return presignerBuilder
                 .serviceConfiguration(serviceConfiguration)
-                .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
+                .region(EmptyValues.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
                 .build();
     }
 

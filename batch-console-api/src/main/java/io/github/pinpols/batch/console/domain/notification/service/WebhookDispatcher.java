@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
@@ -194,7 +194,7 @@ public class WebhookDispatcher {
     private List<PendingWebhookDelivery> persistPendingDeliveries(
             String tenantId, String eventType, String stream, String cursor, Object data, Instant emittedAt) {
         List<WebhookSubscriptionEntity> subscriptions = webhookService.findEnabledSubscriptions(tenantId);
-        if (EmptyChecks.isEmpty(subscriptions)) {
+        if (EmptyValues.isEmpty(subscriptions)) {
             return List.of();
         }
         String normalizedEventType = normalizeEventType(eventType);
@@ -300,7 +300,7 @@ public class WebhookDispatcher {
                 || ("job-instances".equals(payload.stream())
                         && ("JOB_SUCCESS".equals(payload.eventType()) || "JOB_FAILED".equals(payload.eventType())));
         boolean receiverCanDeduplicate = alertmanagerNotification || terminalBusinessEvent;
-        if (receiverCanDeduplicate && EmptyChecks.isNotBlank(payload.cursor())) {
+        if (receiverCanDeduplicate && EmptyValues.isNotBlank(payload.cursor())) {
             Base64.Encoder idempotencyKeyEncoder = Base64.getUrlEncoder().withoutPadding();
             byte[] cursorBytes = payload.cursor().getBytes(StandardCharsets.UTF_8);
             String idempotencyKey = idempotencyKeyEncoder.encodeToString(cursorBytes);

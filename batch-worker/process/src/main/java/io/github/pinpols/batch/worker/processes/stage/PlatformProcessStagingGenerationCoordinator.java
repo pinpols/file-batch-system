@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.processes.stage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity;
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import io.github.pinpols.batch.worker.processes.param.ProcessInvocationFenceRotateCurrentStagingGenerationParam;
@@ -83,7 +83,7 @@ public class PlatformProcessStagingGenerationCoordinator implements ProcessStagi
                             .build();
             return mapper.selectCurrentStagingGeneration(processInvocationFenceCurrentStagingGenerationQuery);
         });
-        if (EmptyChecks.isBlank(generationId)) {
+        if (EmptyValues.isBlank(generationId)) {
             throw stateConflict();
         }
         return generationId;

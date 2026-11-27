@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,7 +28,7 @@ final class DispatchReceiptSupport {
     }
 
     private static boolean hasText(String value) {
-        return EmptyChecks.isNotBlank(value);
+        return EmptyValues.isNotBlank(value);
     }
 
     record Receipt(String externalRequestId, String receiptCode, boolean acknowledged, boolean pending) {}

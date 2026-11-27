@@ -8,11 +8,10 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
@@ -110,7 +109,7 @@ public class BundleArrivalLauncher {
     /** 到达组满足条件时调用;非束组(无 bundleWorkflowCode)直接返回,不发 launch。 */
     public LaunchOutcome launchIfBundle(
             String tenantId, String fileGroupCode, List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
-        if (EmptyChecks.isEmpty(groupFiles) || !Texts.hasText(tenantId)) {
+        if (EmptyValues.isEmpty(groupFiles) || !EmptyValues.hasText(tenantId)) {
             return LaunchOutcome.NOT_BUNDLE;
         }
         return RlsTenantContextHolder.runWithTenant(
@@ -143,7 +142,7 @@ public class BundleArrivalLauncher {
             bundleWorkflowCode = mergeWorkflowCode(tenantId, fileGroupCode, bundleWorkflowCode, workflowCode);
             bizDate = mergeBizDate(tenantId, fileGroupCode, bizDate, toLocalDate(file.bizDate()));
             boolean workflowIsMissingForExportTargets = workflowCode == null
-                    && (!EmptyChecks.isEmpty(exportTemplates) || templateCode != null || targetRef != null);
+                    && (!EmptyValues.isEmpty(exportTemplates) || templateCode != null || targetRef != null);
             if (workflowIsMissingForExportTargets) {
                 bindingWithoutWorkflowCode = true;
             }
@@ -263,7 +262,7 @@ public class BundleArrivalLauncher {
                     + candidate.bundleWorkflowCode());
         }
         String calendarCode = workflow.calendarCode();
-        if (!Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(calendarCode)) {
             throw new IllegalStateException("bundle target Workflow has no business calendar: tenantId="
                     + tenantId
                     + ", workflowCode="
@@ -318,7 +317,7 @@ public class BundleArrivalLauncher {
                 .params(Map.of("bundleFiles", candidate.bundleFiles()))
                 .build();
         LaunchResponse response = workflowRunLaunchServiceProvider.getObject().launch(request);
-        LaunchOutcome outcome = response != null && Texts.hasText(response.instanceNo())
+        LaunchOutcome outcome = response != null && EmptyValues.hasText(response.instanceNo())
                 ? LaunchOutcome.LAUNCHED
                 : persistedOutcome(tenantId, requestId);
         if (outcome == null) {
@@ -401,8 +400,8 @@ public class BundleArrivalLauncher {
             LaunchOutcome outcome) {
         String calendarCode = workflow.calendarCode();
         Long workflowDefinitionId = workflow.id();
-        boolean bundleLaunchNeedsNoCalendarRegistration =
-                !Texts.hasText(calendarCode) || (outcome != LaunchOutcome.LAUNCHED && outcome != LaunchOutcome.WAITING);
+        boolean bundleLaunchNeedsNoCalendarRegistration = !EmptyValues.hasText(calendarCode)
+                || (outcome != LaunchOutcome.LAUNCHED && outcome != LaunchOutcome.WAITING);
         if (bundleLaunchNeedsNoCalendarRegistration) {
             return;
         }
@@ -482,7 +481,7 @@ public class BundleArrivalLauncher {
         // org.postgresql.util.PGobject(不是 String)。只认 String 会让本方法恒返回空表 → bundleWorkflowCode 读不到
         // → 静默 NOT_BUNDLE、到达组永不 launch(无日志无异常)。故用仓库既有 PostgresqlJsonbTexts 归一化。
         String json = metadataJson instanceof String text ? text : PostgresqlJsonbTexts.tryExtract(metadataJson);
-        if (EmptyChecks.isBlank(json)) {
+        if (EmptyValues.isBlank(json)) {
             return Map.of();
         }
         try {
@@ -499,7 +498,7 @@ public class BundleArrivalLauncher {
         }
         String rawText = String.valueOf(value);
         String trimmedText = rawText.trim();
-        return EmptyChecks.isEmpty(Objects.requireNonNull(trimmedText)) ? null : trimmedText;
+        return EmptyValues.isEmpty(Objects.requireNonNull(trimmedText)) ? null : trimmedText;
     }
 
     /** 把 metadata 里的「字符串列表」字段(如 bundleExportTemplates)归一成非空 trim 后的 List;非 List / 空 → 空表。 */

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.observability;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
@@ -34,7 +34,7 @@ public final class OtelTracePropagation {
         Map<String, String> carrier = new LinkedHashMap<>(2);
         PROPAGATOR.inject(Context.current(), carrier, Map::put);
         String traceparent = carrier.get(TRACE_PARENT);
-        if (EmptyChecks.isBlank(traceparent)) {
+        if (EmptyValues.isBlank(traceparent)) {
             return null;
         }
         return new W3cTraceContext(traceparent, carrier.get(TRACE_STATE));
@@ -46,12 +46,12 @@ public final class OtelTracePropagation {
      * <p>载荷缺失或无效时保持当前上下文不变，避免覆盖已有的有效链路。
      */
     public static Scope restore(@Nullable W3cTraceContext traceContext) {
-        if (traceContext == null || EmptyChecks.isBlank(traceContext.traceparent())) {
+        if (traceContext == null || EmptyValues.isBlank(traceContext.traceparent())) {
             return () -> {};
         }
         Map<String, String> carrier = new LinkedHashMap<>(2);
         carrier.put(TRACE_PARENT, traceContext.traceparent());
-        if (EmptyChecks.isNotBlank(traceContext.tracestate())) {
+        if (EmptyValues.isNotBlank(traceContext.tracestate())) {
             carrier.put(TRACE_STATE, traceContext.tracestate());
         }
         Context extracted = PROPAGATOR.extract(Context.root(), carrier, GETTER);

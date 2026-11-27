@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.shared.query.TenantScopeResolver;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
@@ -67,7 +67,7 @@ public class ConsoleTenantGuard implements TenantScopeResolver {
         String authenticatedTenantId = authenticatedTenantId();
         String effectiveTenantId =
                 authenticatedTenantId != null ? authenticatedTenantId : metadata != null ? metadata.tenantId() : null;
-        if (EmptyChecks.isBlank(effectiveTenantId)) {
+        if (EmptyValues.isBlank(effectiveTenantId)) {
             // M1 (#780 评审) fail-closed 收口：JWT tenant claim 与 request metadata 双缺失时，
             // 仅在<b>系统 / @Async 路径</b>（SecurityContext 无 ConsolePrincipal）回退到调用方
             // 携带的 requestTenantId 以支持定时任务 / 异步推送等无 principal 的内部路径。
@@ -78,7 +78,7 @@ public class ConsoleTenantGuard implements TenantScopeResolver {
                 effectiveTenantId = normalized;
             }
         }
-        if (EmptyChecks.isBlank(effectiveTenantId)) {
+        if (EmptyValues.isBlank(effectiveTenantId)) {
             // 认证已通过(JWT 解析成功)但租户上下文判定失败(JWT 缺 tenant claim / 损坏 / RequestScope 缺失且无 fallback)
             // → 严格语义是 FORBIDDEN(授权失败),而非 UNAUTHORIZED(认证失败)
             throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
@@ -129,7 +129,7 @@ public class ConsoleTenantGuard implements TenantScopeResolver {
         ConsoleRequestMetadata metadata = currentMetadataOrNull();
         String effectiveTenantId =
                 authenticatedTenantId != null ? authenticatedTenantId : metadata != null ? metadata.tenantId() : null;
-        if (EmptyChecks.isBlank(effectiveTenantId)) {
+        if (EmptyValues.isBlank(effectiveTenantId)) {
             throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
         }
         return effectiveTenantId;

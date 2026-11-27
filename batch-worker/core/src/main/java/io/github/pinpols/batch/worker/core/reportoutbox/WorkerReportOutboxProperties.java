@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.core.reportoutbox;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.nio.file.Path;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -52,7 +52,7 @@ public class WorkerReportOutboxProperties {
     private long stalePublishingRecoverIntervalMillis = 60_000L;
 
     public Path resolveSqlitePath() {
-        if (Texts.hasText(sqlitePath)) {
+        if (EmptyValues.hasText(sqlitePath)) {
             return Path.of(sqlitePath);
         }
         return Path.of(System.getProperty("user.home"), ".batch-platform", "worker-report-outbox.db");

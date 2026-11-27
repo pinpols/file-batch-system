@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sharding;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
@@ -54,10 +54,10 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
      */
     public RedisShardAssignmentProvider(
             StringRedisTemplate redis, String memberId, String membersKey, Duration memberTtl) {
-        if (EmptyChecks.isBlank(memberId)) {
+        if (EmptyValues.isBlank(memberId)) {
             throw new IllegalArgumentException("memberId must not be blank");
         }
-        if (EmptyChecks.isBlank(membersKey)) {
+        if (EmptyValues.isBlank(membersKey)) {
             throw new IllegalArgumentException("membersKey must not be blank");
         }
         this.redis = redis;
@@ -124,14 +124,14 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
             redis.opsForZSet().removeRangeByScore(membersKey, 0, cutoff);
             // 取活成员（按 score 升序 = 按心跳时间升序，但我们要确定性顺序，所以 toArray 后字典序排）
             Set<ZSetOperations.TypedTuple<String>> tuples = redis.opsForZSet().rangeWithScores(membersKey, 0, -1);
-            if (EmptyChecks.isEmpty(tuples)) {
+            if (EmptyValues.isEmpty(tuples)) {
                 // 空集合：可能自己心跳还没发（首次 current() 在 heartbeat 之前），降级为单实例
                 coordinationHealthy.set(false);
                 return lastKnown.get();
             }
             String[] members = tuples.stream()
                     .map(ZSetOperations.TypedTuple::getValue)
-                    .filter(v -> EmptyChecks.isNotBlank(v))
+                    .filter(v -> EmptyValues.isNotBlank(v))
                     .sorted()
                     .toArray(String[]::new);
 

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.kafka;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 public final class BatchTopics {
 
@@ -35,7 +35,7 @@ public final class BatchTopics {
     private BatchTopics() {}
 
     public static String directDispatchTopic(String baseTopic, String workerId) {
-        if (baseTopic == null || EmptyChecks.isBlank(workerId)) {
+        if (baseTopic == null || EmptyValues.isBlank(workerId)) {
             return baseTopic;
         }
         return baseTopic + ".node." + sanitizeTopicSegment(workerId);

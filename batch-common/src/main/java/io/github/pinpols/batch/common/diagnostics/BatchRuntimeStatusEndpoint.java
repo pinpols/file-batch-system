@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
 import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -63,19 +63,21 @@ public class BatchRuntimeStatusEndpoint {
         Map<String, Object> storage = new LinkedHashMap<>();
         storage.put("backend", backend);
         StorageBackendGuardProperties guard = guardProvider.getIfAvailable();
-        storage.put("backendCutoverConfigured", guard != null && Texts.hasText(guard.getCutoverId()));
+        storage.put("backendCutoverConfigured", guard != null && EmptyValues.hasText(guard.getCutoverId()));
         S3StorageProperties s3 = s3Provider.getIfAvailable();
         if ("s3".equalsIgnoreCase(backend) && s3 != null) {
             String endpointHost = hostOf(s3.getEndpoint());
             storage.put("endpointHost", endpointHost);
-            storage.put("bucketConfigured", Texts.hasText(s3.getBucket()));
-            storage.put("credentialsConfigured", Texts.hasText(s3.getAccessKey()) && Texts.hasText(s3.getSecretKey()));
+            storage.put("bucketConfigured", EmptyValues.hasText(s3.getBucket()));
+            storage.put(
+                    "credentialsConfigured",
+                    EmptyValues.hasText(s3.getAccessKey()) && EmptyValues.hasText(s3.getSecretKey()));
         }
         FilesystemStorageProperties filesystem = filesystemProvider.getIfAvailable();
         if ("filesystem".equalsIgnoreCase(backend) && filesystem != null) {
-            storage.put("rootConfigured", Texts.hasText(filesystem.getRoot()));
-            storage.put("downloadBaseUrlConfigured", Texts.hasText(filesystem.getDownloadBaseUrl()));
-            storage.put("presignSecretConfigured", Texts.hasText(filesystem.getPresignSecret()));
+            storage.put("rootConfigured", EmptyValues.hasText(filesystem.getRoot()));
+            storage.put("downloadBaseUrlConfigured", EmptyValues.hasText(filesystem.getDownloadBaseUrl()));
+            storage.put("presignSecretConfigured", EmptyValues.hasText(filesystem.getPresignSecret()));
         }
         return storage;
     }
@@ -84,7 +86,8 @@ public class BatchRuntimeStatusEndpoint {
         Map<String, Object> security = new LinkedHashMap<>();
         BatchSecurityProperties properties = securityProvider.getIfAvailable();
         security.put("bypassMode", properties != null && properties.isBypassMode());
-        security.put("internalSecretConfigured", properties != null && Texts.hasText(properties.getInternalSecret()));
+        security.put(
+                "internalSecretConfigured", properties != null && EmptyValues.hasText(properties.getInternalSecret()));
         return security;
     }
 
@@ -98,7 +101,7 @@ public class BatchRuntimeStatusEndpoint {
     }
 
     private static String hostOf(String endpoint) {
-        if (!Texts.hasText(endpoint)) {
+        if (!EmptyValues.hasText(endpoint)) {
             return "";
         }
         try {

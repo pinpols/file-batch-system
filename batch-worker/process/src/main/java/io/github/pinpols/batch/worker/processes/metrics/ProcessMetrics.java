@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.processes.metrics;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -160,6 +160,6 @@ public class ProcessMetrics {
     }
 
     private static String normalize(String value) {
-        return EmptyChecks.isBlank(value) ? UNKNOWN_TAG : value;
+        return EmptyValues.isBlank(value) ? UNKNOWN_TAG : value;
     }
 }

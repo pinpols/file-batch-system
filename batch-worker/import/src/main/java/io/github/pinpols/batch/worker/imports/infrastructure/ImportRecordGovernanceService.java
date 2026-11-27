@@ -10,8 +10,8 @@ import io.github.pinpols.batch.common.enums.SkipThresholdMode;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam.FileAuditParamBuilder;
 import io.github.pinpols.batch.worker.core.infrastructure.FileErrorRecordParam;
@@ -76,7 +76,7 @@ public class ImportRecordGovernanceService {
     }
 
     public boolean isSkippable(String errorCode) {
-        if (!isSkipEnabled() || !Texts.hasText(errorCode)) {
+        if (!isSkipEnabled() || !EmptyValues.hasText(errorCode)) {
             return false;
         }
         Set<String> allowedErrorCodes = resolveAllowedErrorCodes();
@@ -180,7 +180,7 @@ public class ImportRecordGovernanceService {
         Map<String, Object> attrs = context.getAttributes();
         Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
         Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
-        boolean hasRequiredFileContext = fileId != null && Texts.hasText(context.getTenantId());
+        boolean hasRequiredFileContext = fileId != null && EmptyValues.hasText(context.getTenantId());
         if (!hasRequiredFileContext) {
             return;
         }
@@ -221,7 +221,7 @@ public class ImportRecordGovernanceService {
         boolean manualReviewRequired =
                 Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED)) || shouldManualReview();
         metadata.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, manualReviewRequired);
-        if (Texts.hasText(errorOutputPath)) {
+        if (EmptyValues.hasText(errorOutputPath)) {
             metadata.put("errorOutputPath", errorOutputPath);
         }
         fileRecords.updateFileMetadata(fileId, metadata);
@@ -462,20 +462,20 @@ public class ImportRecordGovernanceService {
             return 0L;
         }
         String text = String.valueOf(value);
-        if (!Texts.hasText(text)) {
+        if (!EmptyValues.hasText(text)) {
             return 0L;
         }
         return Long.parseLong(text);
     }
 
     private Set<String> resolveAllowedErrorCodes() {
-        if (!Texts.hasText(skipProperties.skipErrorCodes())) {
+        if (!EmptyValues.hasText(skipProperties.skipErrorCodes())) {
             return Set.of();
         }
         Set<String> codes = new HashSet<>();
         for (String item : skipProperties.skipErrorCodes().split(",")) {
             String code = item.trim();
-            if (Texts.hasText(code)) {
+            if (EmptyValues.hasText(code)) {
                 codes.add(code);
             }
         }

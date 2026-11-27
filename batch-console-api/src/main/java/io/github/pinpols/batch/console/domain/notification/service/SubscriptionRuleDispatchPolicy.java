@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
@@ -108,7 +108,7 @@ final class SubscriptionRuleDispatchPolicy {
     }
 
     boolean isDuplicateWithinWindow(String tenantId, String channelCode, String eventType, String payloadJson) {
-        String fingerprint = EmptyChecks.isEmpty(payloadJson) ? "empty" : Hashes.sha256Short(payloadJson);
+        String fingerprint = EmptyValues.isEmpty(payloadJson) ? "empty" : Hashes.sha256Short(payloadJson);
         String key = "notify:dedup:" + tenantId + ":" + channelCode + ":" + eventType + ":" + fingerprint;
         try {
             boolean firstInWindow = sendRateLimiter.tryAcquire(key, DEDUP_WINDOW_LIMIT);
@@ -180,7 +180,7 @@ final class SubscriptionRuleDispatchPolicy {
     }
 
     Map<String, Object> parseConfig(String configJson) {
-        if (EmptyChecks.isBlank(configJson)) {
+        if (EmptyValues.isBlank(configJson)) {
             return Map.of();
         }
         try {
@@ -193,7 +193,7 @@ final class SubscriptionRuleDispatchPolicy {
     }
 
     static boolean eventTypeMatches(String configuredEventTypes, String eventType) {
-        if (EmptyChecks.isBlank(configuredEventTypes)) {
+        if (EmptyValues.isBlank(configuredEventTypes)) {
             return false;
         }
         if ("*".equals(configuredEventTypes.trim())) {
@@ -203,7 +203,7 @@ final class SubscriptionRuleDispatchPolicy {
     }
 
     private static boolean filterMatches(String filter, Map<String, Object> dataMap, List<String> dataKeys) {
-        if (EmptyChecks.isBlank(filter)) {
+        if (EmptyValues.isBlank(filter)) {
             return true;
         }
         Collection<String> allowed = splitUpper(filter);
@@ -234,7 +234,7 @@ final class SubscriptionRuleDispatchPolicy {
 
     private static String firstNonBlank(String... values) {
         for (String value : values) {
-            if (EmptyChecks.isNotBlank(value)) {
+            if (EmptyValues.isNotBlank(value)) {
                 return value;
             }
         }

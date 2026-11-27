@@ -7,8 +7,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
@@ -169,7 +168,7 @@ public class DispatchChannelHealthService {
     }
 
     public boolean allowDispatch(Map<String, Object> channelConfig) {
-        boolean channelHealthCheckIsUnavailable = !properties.isEnabled() || EmptyChecks.isEmpty(channelConfig);
+        boolean channelHealthCheckIsUnavailable = !properties.isEnabled() || EmptyValues.isEmpty(channelConfig);
         if (channelHealthCheckIsUnavailable) {
             return true;
         }
@@ -211,7 +210,7 @@ public class DispatchChannelHealthService {
 
     public void recordDispatchOutcome(
             Map<String, Object> channelConfig, boolean success, String message, String evidence) {
-        boolean channelFailureTrackingIsUnavailable = !properties.isEnabled() || EmptyChecks.isEmpty(channelConfig);
+        boolean channelFailureTrackingIsUnavailable = !properties.isEnabled() || EmptyValues.isEmpty(channelConfig);
         if (channelFailureTrackingIsUnavailable) {
             return;
         }
@@ -491,7 +490,7 @@ public class DispatchChannelHealthService {
             return null;
         }
         String text = String.valueOf(value);
-        return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text.trim() : null;
+        return EmptyValues.hasText(text) && !"null".equalsIgnoreCase(text) ? text.trim() : null;
     }
 
     /**
@@ -508,11 +507,11 @@ public class DispatchChannelHealthService {
         }
 
         boolean isTargetable() {
-            return Texts.hasText(tenantId) && Texts.hasText(channelCode);
+            return EmptyValues.hasText(tenantId) && EmptyValues.hasText(channelCode);
         }
 
         boolean isFullyIdentified() {
-            return isTargetable() && Texts.hasText(channelType);
+            return isTargetable() && EmptyValues.hasText(channelType);
         }
     }
 

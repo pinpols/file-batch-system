@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowNodeReplayPreviewResponse;
@@ -230,7 +230,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
             ops.requireApprovedApproval(tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
         }
         String compensationType = request.getCompensationType() == null
-                        || EmptyChecks.isBlank(Objects.requireNonNull(request.getCompensationType()))
+                        || EmptyValues.isBlank(Objects.requireNonNull(request.getCompensationType()))
                 ? "JOB"
                 : request.getCompensationType();
         CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder = CompensationPayload.builder()

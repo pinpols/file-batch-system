@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -139,7 +139,7 @@ public class ConsoleSessionRegistry {
         String key = key(username, tenantId);
         try {
             String raw = sessionStore.get(key);
-            if (!Texts.hasText(raw)) {
+            if (!EmptyValues.hasText(raw)) {
                 return 0L;
             }
             try {

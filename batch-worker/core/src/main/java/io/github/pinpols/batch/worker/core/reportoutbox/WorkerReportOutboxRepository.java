@@ -3,10 +3,9 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
 import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgGiveUpRowParam;
@@ -113,13 +112,13 @@ public class WorkerReportOutboxRepository {
     }
 
     private static void requireClaim(WorkerReportOutboxRow row) {
-        if (row == null || !Texts.hasText(row.claimToken())) {
+        if (row == null || !EmptyValues.hasText(row.claimToken())) {
             throw new IllegalArgumentException("A current report outbox claim token is required");
         }
     }
 
     void upsert(TaskExecutionReport report) {
-        if (report.getTaskId() == null || !Texts.hasText(report.getTenantId())) {
+        if (report.getTaskId() == null || !EmptyValues.hasText(report.getTenantId())) {
             throw new IllegalArgumentException("report.taskId and report.tenantId are required for outbox");
         }
         long now = BatchDateTimeSupport.utcEpochMillis();
@@ -265,7 +264,7 @@ public class WorkerReportOutboxRepository {
         public Optional<WorkerReportOutboxRow> claimNext(long nowEpochMillis, String claimToken) {
             List<WorkerReportOutboxRow> rows = mapper.claimNextReturning(
                     nowEpochMillis, OutboxPublishStatus.NEW.code(), OutboxPublishStatus.PUBLISHING.code(), claimToken);
-            return EmptyChecks.isEmpty(rows) ? Optional.empty() : Optional.of(rows.getFirst());
+            return EmptyValues.isEmpty(rows) ? Optional.empty() : Optional.of(rows.getFirst());
         }
 
         @Override

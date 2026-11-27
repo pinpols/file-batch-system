@@ -13,7 +13,7 @@ import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
@@ -117,7 +117,7 @@ public class LoadStep implements ImportStageStep {
         }
         String validatedRecordsPath =
                 ImportStageSupport.stringValue(context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
-        if (Texts.hasText(validatedRecordsPath)) {
+        if (EmptyValues.hasText(validatedRecordsPath)) {
             Path validatedRecordsFile = Path.of(validatedRecordsPath);
             return executeStreaming(context, validatedRecordsFile);
         }
@@ -267,7 +267,7 @@ public class LoadStep implements ImportStageStep {
             String line;
             while ((line = reader.readLine()) != null) {
                 currentLineNo++;
-                if (!Texts.hasText(line)) {
+                if (!EmptyValues.hasText(line)) {
                     continue;
                 }
                 Map<String, Object> parsedRecord = objectMapper.readValue(line, MAP_TYPE);
@@ -545,9 +545,9 @@ public class LoadStep implements ImportStageStep {
                 return true;
             }
             boolean hasPersistedExecutionIdentity = taskId != null
-                    && Texts.hasText(tenantId)
-                    && Texts.hasText(workerId)
-                    && Texts.hasText(partitionInvocationId);
+                    && EmptyValues.hasText(tenantId)
+                    && EmptyValues.hasText(workerId)
+                    && EmptyValues.hasText(partitionInvocationId);
             if (!hasPersistedExecutionIdentity) {
                 return false;
             }
@@ -627,10 +627,10 @@ public class LoadStep implements ImportStageStep {
     private ImportLoadContext buildLoadContext(
             ImportJobContext context, ImportPayload importPayload, String sourceFileName) {
         Map<String, Object> tc = templateConfigMap(context);
-        String batchNo = importPayload == null || !Texts.hasText(importPayload.batchNo())
+        String batchNo = importPayload == null || !EmptyValues.hasText(importPayload.batchNo())
                 ? context.getBizDate()
                 : importPayload.batchNo();
-        String bizType = importPayload != null && Texts.hasText(importPayload.bizType())
+        String bizType = importPayload != null && EmptyValues.hasText(importPayload.bizType())
                 ? importPayload.bizType()
                 : context.getJobCode();
         String templateCode = importPayload != null ? importPayload.templateCode() : null;
@@ -680,7 +680,7 @@ public class LoadStep implements ImportStageStep {
         Map<String, Object> resolvedConfig = templateConfig == null ? Map.of() : templateConfig;
         Object v = resolvedConfig.get("load_target_ref");
         String presenceText = v == null ? null : String.valueOf(v);
-        if (v != null && Texts.hasText(presenceText)) {
+        if (v != null && EmptyValues.hasText(presenceText)) {
             String rawLoadTarget = String.valueOf(v);
             return rawLoadTarget.trim();
         }
@@ -736,7 +736,7 @@ public class LoadStep implements ImportStageStep {
 
     private Path resolvePath(Object value) {
         String text = ImportStageSupport.stringValue(value);
-        if (!Texts.hasText(text)) {
+        if (!EmptyValues.hasText(text)) {
             return null;
         }
         return Path.of(text);
@@ -752,7 +752,7 @@ public class LoadStep implements ImportStageStep {
         }
         String validatedPath =
                 ImportStageSupport.stringValue(context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
-        if (!Texts.hasText(validatedPath)) {
+        if (!EmptyValues.hasText(validatedPath)) {
             return 0L;
         }
         Path path = Path.of(validatedPath);
@@ -760,7 +760,7 @@ public class LoadStep implements ImportStageStep {
             return 0L;
         }
         try (Stream<String> stream = Files.lines(path, StandardCharsets.UTF_8)) {
-            return stream.filter(Texts::hasText).count();
+            return stream.filter(EmptyValues::hasText).count();
         } catch (Exception ignored) {
             // dry-run 的落库行数只是预估值：文件读不出来（IO 错误或非 UTF-8）时按 0 展示，不能让预估拖垮 dry-run
             return 0L;

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -75,7 +75,7 @@ public class ProcessStepExecutionAdapter
         // 注意:稳定 batchKey 配合 P0-2 staging tenant/target 强校验,跨 tenant 复用同 batchKey 仍会被
         // commit/feedback 的 WHERE 过滤兜住。
         if (attributes.get(PipelineRuntimeKeys.PROCESS_PAYLOAD) instanceof ProcessPayload typed
-                && EmptyChecks.isNotBlank(typed.batchKey())) {
+                && EmptyValues.isNotBlank(typed.batchKey())) {
             context.setBatchKey(typed.batchKey());
         }
         return context;
@@ -104,7 +104,7 @@ public class ProcessStepExecutionAdapter
     @SuppressWarnings("unchecked")
     private void enrichProcessAttributes(String rawPayload, Map<String, Object> attributes)
             throws JsonProcessingException {
-        if (EmptyChecks.isBlank(rawPayload)) {
+        if (EmptyValues.isBlank(rawPayload)) {
             return;
         }
         Object parsed = objectMapper.readValue(rawPayload, Object.class);
@@ -187,7 +187,7 @@ public class ProcessStepExecutionAdapter
                 outputs,
                 PipelineRuntimeKeys.HIGH_WATER_MARK_OUT,
                 attributes.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
-        if (EmptyChecks.isNotEmpty(outputs)) {
+        if (EmptyValues.isNotEmpty(outputs)) {
             attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
         }
         return new StepExecutionResponse(true, "SUCCESS", "process stage completed");

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
 
 final class DispatchChannelConfigSupport {
@@ -19,7 +19,7 @@ final class DispatchChannelConfigSupport {
         }
         if (value != null) {
             String presenceCheckValue = String.valueOf(value);
-            if (Texts.hasText(presenceCheckValue)) {
+            if (EmptyValues.hasText(presenceCheckValue)) {
                 String rawValue = String.valueOf(value);
                 String normalizedValue = rawValue.trim();
                 return Integer.parseInt(normalizedValue);

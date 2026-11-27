@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
@@ -260,7 +260,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
     private void scheduleCronDescriptor(TriggerDescriptor descriptor) {
         String expression = descriptor.getScheduleExpression();
-        if (EmptyChecks.isBlank(expression) || !CronExpression.isValidExpression(expression)) {
+        if (EmptyValues.isBlank(expression) || !CronExpression.isValidExpression(expression)) {
             throw new IllegalArgumentException(
                     "invalid cron expression for job " + descriptor.getJobCode() + ": '" + expression + "'");
         }
@@ -285,7 +285,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         }
         String timezone = descriptor.getTimezone();
         // 调度时区属于持久定义,不能静默回退平台默认值而改变已有 fire 的业务日。
-        if (EmptyChecks.isBlank(timezone)) {
+        if (EmptyValues.isBlank(timezone)) {
             throw new IllegalArgumentException("missing timezone for workflow " + descriptor.getWorkflowCode());
         }
         try {
@@ -380,7 +380,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         }
         String tenantId = descriptor.getTenantId();
         String workflowCode = descriptor.getWorkflowCode();
-        boolean workflowScheduleDescriptorIsIncomplete = tenantId == null || EmptyChecks.isBlank(workflowCode);
+        boolean workflowScheduleDescriptorIsIncomplete = tenantId == null || EmptyValues.isBlank(workflowCode);
         if (workflowScheduleDescriptorIsIncomplete) {
             throw new IllegalArgumentException("Scheduled triggers require a Workflow identity");
         }
@@ -418,7 +418,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
             return;
         }
         List<? extends Trigger> attachedTriggers = scheduler.getTriggersOfJob(workflowJobKey);
-        if (EmptyChecks.isEmpty(attachedTriggers)) {
+        if (EmptyValues.isEmpty(attachedTriggers)) {
             return;
         }
         String tenantId = sourceData.getString(QuartzLaunchJob.TENANT_ID);
@@ -513,7 +513,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
     private int parseFixedRateIntervalSeconds(TriggerDescriptor descriptor) {
         String expression = descriptor.getScheduleExpression();
-        if (EmptyChecks.isBlank(expression)) {
+        if (EmptyValues.isBlank(expression)) {
             throw new IllegalArgumentException("FIXED_RATE schedule_expr must be a positive integer (seconds) for job: "
                     + descriptor.getJobCode());
         }

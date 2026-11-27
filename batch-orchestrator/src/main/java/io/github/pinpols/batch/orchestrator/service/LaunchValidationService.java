@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.service;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
@@ -52,7 +52,7 @@ public interface LaunchValidationService {
         }
 
         public String effectiveCalendarCode() {
-            if (EmptyChecks.isNotBlank(workflowCalendarCode)) {
+            if (EmptyValues.isNotBlank(workflowCalendarCode)) {
                 return workflowCalendarCode;
             }
             return jobDefinition == null ? null : jobDefinition.calendarCode();

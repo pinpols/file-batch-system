@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
@@ -117,7 +117,7 @@ public class JobMonitoringScheduler {
     }
 
     private boolean scanCandidates(List<JobMonitoringAlertCandidate> candidates, Violation violation) {
-        if (EmptyChecks.isEmpty(candidates)) {
+        if (EmptyValues.isEmpty(candidates)) {
             return true;
         }
         boolean allAlertsPersisted = true;

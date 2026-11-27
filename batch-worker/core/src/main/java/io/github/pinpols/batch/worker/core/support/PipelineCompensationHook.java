@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -184,7 +184,7 @@ public class PipelineCompensationHook {
     }
 
     private PipelineCompensator resolveCompensator(String pipelineType) {
-        if (EmptyChecks.isBlank(pipelineType)) {
+        if (EmptyValues.isBlank(pipelineType)) {
             return null;
         }
         String trimmedPipelineType = pipelineType.trim();

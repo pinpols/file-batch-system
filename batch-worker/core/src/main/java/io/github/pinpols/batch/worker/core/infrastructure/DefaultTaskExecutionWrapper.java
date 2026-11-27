@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.config.WorkerCoreAsyncConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
@@ -151,7 +151,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         if (meterRegistry == null) {
             return null;
         }
-        String tag = EmptyChecks.isBlank(workerType) ? "unknown" : workerType;
+        String tag = EmptyValues.isBlank(workerType) ? "unknown" : workerType;
         return executionTimerByType.computeIfAbsent(
                 tag,
                 t -> Timer.builder("worker.task.execution.duration")
@@ -192,7 +192,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
         long claimStartedAtNanos = activeTaskLeaseRegistry.currentNanos();
         List<TaskClaimResult> results = taskExecutionClient.claimBatch(items);
-        boolean claimBatchHasNoTrackableItems = EmptyChecks.isEmpty(results) || EmptyChecks.isEmpty(items);
+        boolean claimBatchHasNoTrackableItems = EmptyValues.isEmpty(results) || EmptyValues.isEmpty(items);
         if (claimBatchHasNoTrackableItems) {
             return results;
         }
@@ -223,7 +223,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
     @Override
     public void registerClaimedBatch(List<PulledTask> tasks) {
-        if (EmptyChecks.isEmpty(tasks)) {
+        if (EmptyValues.isEmpty(tasks)) {
             return;
         }
         for (PulledTask task : tasks) {
@@ -342,7 +342,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     }
 
     private boolean isWorkflowReplayPayload(String payload) {
-        if (EmptyChecks.isBlank(payload)) {
+        if (EmptyValues.isBlank(payload)) {
             return false;
         }
         try {
@@ -575,7 +575,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         if (task.getPartitionInvocationId() != null) {
             executionContext.put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, task.getPartitionInvocationId());
         }
-        if (task.getDependencyResultSnapshot() != null && EmptyChecks.isNotEmpty(task.getDependencyResultSnapshot())) {
+        if (task.getDependencyResultSnapshot() != null && EmptyValues.isNotEmpty(task.getDependencyResultSnapshot())) {
             executionContext.put(PipelineRuntimeKeys.DEPENDENCY_RESULT_SNAPSHOT, task.getDependencyResultSnapshot());
         }
         executionContext.put("taskSeq", task.getTaskSeq());
@@ -695,7 +695,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     }
 
     private String resolveFailureClass(String errorCode) {
-        if (EmptyChecks.isBlank(errorCode)) {
+        if (EmptyValues.isBlank(errorCode)) {
             return null;
         }
         return FAILURE_CLASS_BY_CODE.get(errorCode);
@@ -703,7 +703,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
     @SuppressWarnings("unchecked")
     private String resolveRunMode(String payload) {
-        if (EmptyChecks.isBlank(payload)) {
+        if (EmptyValues.isBlank(payload)) {
             return null;
         }
         try {
@@ -721,7 +721,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
     @SuppressWarnings("unchecked")
     private Object resolveBundleSourceFileId(String payload) {
-        if (EmptyChecks.isBlank(payload)) {
+        if (EmptyValues.isBlank(payload)) {
             return null;
         }
         try {

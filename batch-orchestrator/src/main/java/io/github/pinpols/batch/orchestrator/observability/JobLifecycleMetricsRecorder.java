@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.observability;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
@@ -158,7 +158,7 @@ public class JobLifecycleMetricsRecorder {
      * error_code 列(error_code 在 job_task 粒度),用 failure_class 作为汇总粒度的错误码。
      */
     private String resolveErrorCode(String failureClass) {
-        return EmptyChecks.isBlank(failureClass) ? "unknown" : failureClass;
+        return EmptyValues.isBlank(failureClass) ? "unknown" : failureClass;
     }
 
     private String resolveJobType(Long jobDefinitionId) {

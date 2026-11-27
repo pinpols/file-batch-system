@@ -5,8 +5,8 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleClusterDiagnosticResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse;
@@ -203,7 +203,7 @@ public class ConsoleClusterDiagnosticService {
 
     public ConsoleInstanceDiagnosisResponse instanceDiagnosis(String tenantId, Long instanceId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        JobInstanceDiagnosticView instance = Guard.requireFound(
+        JobInstanceDiagnosticView instance = Preconditions.requireFound(
                 diagnosticMapper.selectJobInstanceSummary(resolved, instanceId), "job instance not found");
         List<ClusterStatusCountView> partitionStatusCounts =
                 diagnosticMapper.partitionStatusCounts(resolved, instanceId);
@@ -297,7 +297,7 @@ public class ConsoleClusterDiagnosticService {
         return new ConsoleInstanceDiagnosisResponse(
                 resolved,
                 instance.id(),
-                EmptyChecks.isEmpty(findings),
+                EmptyValues.isEmpty(findings),
                 instanceSummary(instance),
                 summary(partitionStatusCounts, taskStatusCounts, outboxStatusCounts, onlineWorkersForGroup),
                 findings);

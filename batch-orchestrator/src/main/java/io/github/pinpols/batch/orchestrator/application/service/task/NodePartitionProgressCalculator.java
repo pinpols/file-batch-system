@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.query.NodePartitionAssignment;
 import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
 import java.util.LinkedHashMap;
@@ -21,7 +21,7 @@ final class NodePartitionProgressCalculator {
             List<NodePartitionAssignment> assignments,
             String nodeCode,
             WorkflowRunEntity workflowRun) {
-        if (EmptyChecks.isBlank(nodeCode)) {
+        if (EmptyValues.isBlank(nodeCode)) {
             return new Result(0, 0, 0, 0, 0, Set.of());
         }
 
@@ -65,11 +65,11 @@ final class NodePartitionProgressCalculator {
 
     private static String resolveTaskNodeCode(
             String payloadNodeCode, WorkflowRunEntity workflowRun, String fallbackNodeCode) {
-        if (EmptyChecks.isNotBlank(payloadNodeCode)) {
+        if (EmptyValues.isNotBlank(payloadNodeCode)) {
             return payloadNodeCode;
         }
         String currentNodeCode = workflowRun == null ? null : workflowRun.getCurrentNodeCode();
-        if (EmptyChecks.isNotBlank(currentNodeCode)) {
+        if (EmptyValues.isNotBlank(currentNodeCode)) {
             Set<String> activeNodes = TaskOutcomeStatePolicy.parseActiveNodes(currentNodeCode);
             if (activeNodes.size() == 1) {
                 return activeNodes.iterator().next();

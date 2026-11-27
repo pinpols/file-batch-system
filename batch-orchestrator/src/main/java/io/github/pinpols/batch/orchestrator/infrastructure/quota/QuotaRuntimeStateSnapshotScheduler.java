@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
@@ -55,7 +55,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
         List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();
         int snapshotted = 0;
         for (String tenantId : tenantIds) {
-            if (EmptyChecks.isBlank(tenantId)) {
+            if (EmptyValues.isBlank(tenantId)) {
                 continue;
             }
             try {

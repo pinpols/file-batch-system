@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
@@ -38,7 +38,7 @@ public class WorkflowMonitoringAlertEmissionService {
                 .limit(1)
                 .build();
         List<WorkflowMonitoringAlertCandidate> current = mapper.selectCandidates(query);
-        if (EmptyChecks.isEmpty(current)) {
+        if (EmptyValues.isEmpty(current)) {
             return false;
         }
         WorkflowMonitoringAlertCandidate candidate = current.get(0);

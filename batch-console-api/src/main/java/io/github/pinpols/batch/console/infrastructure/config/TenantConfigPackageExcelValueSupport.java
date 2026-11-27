@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Locale;
 import java.util.Set;
 
@@ -29,7 +29,7 @@ final class TenantConfigPackageExcelValueSupport {
 
     static Integer parseInteger(String value) {
         String n = normalize(value);
-        if (!Texts.hasText(n)) {
+        if (!EmptyValues.hasText(n)) {
             return null;
         }
         try {
@@ -43,7 +43,7 @@ final class TenantConfigPackageExcelValueSupport {
 
     static Boolean parseBoolean(String value, Boolean defaultValue) {
         String n = normalize(value);
-        if (!Texts.hasText(n)) {
+        if (!EmptyValues.hasText(n)) {
             return defaultValue;
         }
         String upper = n.toUpperCase(Locale.ROOT);

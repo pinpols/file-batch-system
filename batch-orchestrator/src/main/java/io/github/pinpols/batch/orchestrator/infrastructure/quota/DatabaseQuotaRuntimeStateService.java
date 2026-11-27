@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.QuotaResetPolicy;
@@ -119,7 +119,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
         String quotaResetPolicy = request.quotaResetPolicy();
         int burstLimit = request.burstLimit();
         int slidingWindowHours = request.slidingWindowHours();
-        if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(quotaScope) || !EmptyValues.hasText(ownerCode)) {
             QuotaResetPolicy fallbackPolicy = QuotaResetPolicy.from(quotaResetPolicy);
             return QuotaRuntimeSnapshot.withoutWindow(fallbackPolicy.name(), burstLimit);
         }

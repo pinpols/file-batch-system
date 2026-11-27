@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
@@ -66,7 +66,7 @@ public class WorkflowNodeTerminalFinalizer {
             }
         }
         List<WorkflowNodeRunEntity> nodeRuns = List.copyOf(latestByNode.values());
-        if (EmptyChecks.isEmpty(nodeRuns)
+        if (EmptyValues.isEmpty(nodeRuns)
                 || nodeRuns.stream().anyMatch(node -> !TERMINAL_NODE_STATUSES.contains(node.getNodeStatus()))) {
             return;
         }

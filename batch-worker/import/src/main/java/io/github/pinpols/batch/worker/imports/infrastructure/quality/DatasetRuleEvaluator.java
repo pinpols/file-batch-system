@@ -12,8 +12,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -152,7 +151,7 @@ public class DatasetRuleEvaluator {
     private void evaluateControlRecord(ValidationSession session) {
         Map<String, Object> rule =
                 configSupport.firstMap(session.ruleSet(), "controlRecordCheck", "control_record_check");
-        boolean ruleIsNotConfiguredOrDisabled = EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
+        boolean ruleIsNotConfiguredOrDisabled = EmptyValues.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
         if (ruleIsNotConfiguredOrDisabled) {
             return;
         }
@@ -198,7 +197,7 @@ public class DatasetRuleEvaluator {
             List<ValidationIssue> datasetIssues,
             Set<String> appliedChecks) {
         Map<String, Object> rule = configSupport.firstMap(ruleSet, "checksumCheck", "checksum_check");
-        boolean ruleIsNotConfiguredOrDisabled = EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
+        boolean ruleIsNotConfiguredOrDisabled = EmptyValues.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
         if (ruleIsNotConfiguredOrDisabled) {
             return;
         }
@@ -207,7 +206,7 @@ public class DatasetRuleEvaluator {
                 rule.get(PipelineRuntimeKeys.CHECKSUM_TYPE),
                 importPayload == null ? null : importPayload.checksumType());
         String configuredAlgorithm = stringValue(configuredAlgorithmValue);
-        String algorithm = !Texts.hasText(configuredAlgorithm) || "NONE".equalsIgnoreCase(configuredAlgorithm)
+        String algorithm = !EmptyValues.hasText(configuredAlgorithm) || "NONE".equalsIgnoreCase(configuredAlgorithm)
                 ? CryptoAlgorithms.SHA_256
                 : configuredAlgorithm;
         Object expectedChecksumValue = firstNonNull(
@@ -215,7 +214,7 @@ public class DatasetRuleEvaluator {
                 rule.get("expectedValue"),
                 importPayload == null ? null : importPayload.checksumValue());
         String expectedChecksum = stringValue(expectedChecksumValue);
-        if (!Texts.hasText(expectedChecksum) || normalizedPayload == null) {
+        if (!EmptyValues.hasText(expectedChecksum) || normalizedPayload == null) {
             return;
         }
         appliedChecks.add("checksum_check");
@@ -238,7 +237,7 @@ public class DatasetRuleEvaluator {
             List<ValidationIssue> datasetIssues,
             Set<String> appliedChecks) {
         Map<String, Object> rule = configSupport.firstMap(ruleSet, "schemaCheck", "schema_check");
-        boolean ruleIsNotConfiguredOrDisabled = EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
+        boolean ruleIsNotConfiguredOrDisabled = EmptyValues.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
         if (ruleIsNotConfiguredOrDisabled) {
             return;
         }
@@ -247,13 +246,13 @@ public class DatasetRuleEvaluator {
         }
         appliedChecks.add("schema_check");
         Set<String> actualFields =
-                schemaFields.stream().filter(Texts::hasText).collect(Collectors.toCollection(LinkedHashSet::new));
+                schemaFields.stream().filter(EmptyValues::hasText).collect(Collectors.toCollection(LinkedHashSet::new));
         Object requiredFieldsSetting = firstNonNull(rule.get("requiredFields"), rule.get("required_fields"));
         List<String> requiredFields = stringList(requiredFieldsSetting);
         Object allowedFieldsSetting = firstNonNull(rule.get("allowedFields"), rule.get("allowed_fields"));
         List<String> allowedFields = stringList(allowedFieldsSetting);
         List<String> missingFields = requiredFields.stream()
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .filter(requiredField -> !actualFields.contains(requiredField))
                 .toList();
         if (!missingFields.isEmpty()) {

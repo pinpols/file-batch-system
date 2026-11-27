@@ -172,7 +172,7 @@ class JavaWorktreeSourceInventoryTest(unittest.TestCase):
             with patch.object(sys, "argv", ["check-empty-checks.py"]):
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     self.assertEqual(EMPTY.main(), 1)
-                write_source(root, PRODUCTION, "class Probe { boolean missing(Object v) { return EmptyChecks.isNull(v); } }\n")
+                write_source(root, PRODUCTION, "class Probe { boolean missing(Object v) { return v == null; } }\n")
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     self.assertEqual(EMPTY.main(), 0)
 
@@ -187,7 +187,7 @@ class JavaWorktreeSourceInventoryTest(unittest.TestCase):
         with temporary_repository() as root:
             with patch.object(sys, "argv", ["check-empty-checks.py"]):
                 for source in (
-                    "class Probe { boolean missing(Object a, Object b) { return EmptyChecks.isNull(a) || b == null; } }\n",
+                    "class Probe { boolean missing(Object a, Object b) { return a == null || b == null; } }\n",
                     "class Probe { boolean missing(Object a, Object b) { return Objects.requireNonNull(a) == b && b == null; } }\n",
                 ):
                     with self.subTest(source=source):

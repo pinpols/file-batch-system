@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.asset;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
@@ -50,7 +50,7 @@ public class AssetPartitionService {
 
     public Optional<AssetPartitionSnapshot> findEffectiveJobPartition(
             String tenantId, String jobCode, LocalDate bizDate) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(jobCode) || bizDate == null) {
             return Optional.empty();
         }
         Optional<ResultVersionEntity> latest = resultVersionQueryService.findLatestByJob(tenantId, jobCode, bizDate);
@@ -155,14 +155,14 @@ public class AssetPartitionService {
     private boolean isMaterializable(JobInstanceEntity instance, ResultVersionEntity version) {
         return instance != null
                 && version != null
-                && Texts.hasText(instance.getTenantId())
-                && Texts.hasText(instance.getJobCode())
+                && EmptyValues.hasText(instance.getTenantId())
+                && EmptyValues.hasText(instance.getJobCode())
                 && instance.getBizDate() != null
                 && instance.getId() != null
                 && FRESHNESS_EFFECTIVE.equals(version.status())
                 && instance.getTenantId().equals(version.tenantId())
                 && instance.getId().equals(version.jobInstanceId())
-                && Texts.hasText(version.businessKey());
+                && EmptyValues.hasText(version.businessKey());
     }
 
     private AssetPartitionSnapshot toJobPartition(

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleOidcIdentityRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcIdentityResponse;
@@ -42,12 +42,12 @@ public class ConsoleOidcIdentityService {
     @Transactional
     public ConsoleOidcIdentityResponse bind(String tenantId, ConsoleOidcIdentityRequest request, String linkedBy) {
         requireConfiguredTenant(tenantId);
-        if (request == null || EmptyChecks.isBlank(linkedBy)) {
+        if (request == null || EmptyValues.isBlank(linkedBy)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
         }
         String subject = request.subject();
         boolean oidcSubjectIsInvalid =
-                EmptyChecks.isBlank(subject) || subject.length() > OIDC_SUBJECT_MAX_LENGTH || !isAscii(subject);
+                EmptyValues.isBlank(subject) || subject.length() > OIDC_SUBJECT_MAX_LENGTH || !isAscii(subject);
         if (oidcSubjectIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
         }

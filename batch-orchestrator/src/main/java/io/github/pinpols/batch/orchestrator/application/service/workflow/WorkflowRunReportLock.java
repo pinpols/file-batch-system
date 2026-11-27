@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
@@ -36,7 +36,7 @@ public final class WorkflowRunReportLock {
 
         String calendarCode = resolveCalendarCode(workflowRun);
         LocalDate bizDate = workflowRun.getBizDate();
-        if (EmptyChecks.isBlank(calendarCode) || bizDate == null) {
+        if (EmptyValues.isBlank(calendarCode) || bizDate == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
 
@@ -53,7 +53,7 @@ public final class WorkflowRunReportLock {
         WorkflowRunExecutionSnapshot executionSnapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
         if (executionSnapshot != null) {
             String calendarCode = executionSnapshot.workflowCalendarCode();
-            if (EmptyChecks.isNotBlank(calendarCode)) {
+            if (EmptyValues.isNotBlank(calendarCode)) {
                 return calendarCode;
             }
         }

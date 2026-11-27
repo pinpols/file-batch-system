@@ -41,7 +41,7 @@ public final class SecretMasking {
 
     /** 判断 key 名是否敏感（null-safe；大小写不敏感；按 contains 匹配关键词）。 */
     public static boolean isSensitive(@Nullable String key) {
-        if (EmptyChecks.isBlank(key)) {
+        if (EmptyValues.isBlank(key)) {
             return false;
         }
         String lower = key.toLowerCase(Locale.ROOT);
@@ -89,7 +89,7 @@ public final class SecretMasking {
     /** 对动态 JSON 做递归凭据脱敏，并将额外指定的字段按敏感值处理。 */
     @Nullable
     public static String maskSensitiveJson(@Nullable String json, Set<String> additionalSensitiveKeys) {
-        if (EmptyChecks.isBlank(json)) {
+        if (EmptyValues.isBlank(json)) {
             return json;
         }
         Object parsedJson = JsonUtils.fromJson(json, Object.class);
@@ -99,7 +99,7 @@ public final class SecretMasking {
 
     /** 判断动态 JSON 是否仍含有未恢复的敏感字段掩码。 */
     public static boolean containsMaskedSensitiveValue(@Nullable String json) {
-        if (EmptyChecks.isBlank(json)) {
+        if (EmptyValues.isBlank(json)) {
             return false;
         }
         Object parsedJson = JsonUtils.fromJson(json, Object.class);
@@ -109,7 +109,7 @@ public final class SecretMasking {
     /** 从跨租户配置副本中递归移除敏感字段，避免复制源环境凭据或租户级密钥引用。 */
     @Nullable
     public static String removeSensitiveJsonFields(@Nullable String json) {
-        if (EmptyChecks.isBlank(json)) {
+        if (EmptyValues.isBlank(json)) {
             return json;
         }
         Object parsedJson = JsonUtils.fromJson(json, Object.class);
@@ -143,7 +143,7 @@ public final class SecretMasking {
     /** 脱敏 URI 中的 userinfo 和敏感 query 参数；普通文件路径及非敏感 URI 保持不变。 */
     @Nullable
     public static String maskEndpoint(@Nullable String endpoint) {
-        if (EmptyChecks.isBlank(endpoint)) {
+        if (EmptyValues.isBlank(endpoint)) {
             return endpoint;
         }
         return transformEndpoint(endpoint, null, false);
@@ -152,7 +152,7 @@ public final class SecretMasking {
     /** 更新回传已脱敏端点时，从存量端点恢复 userinfo 和对应 query 凭据。 */
     @Nullable
     public static String preserveMaskedEndpoint(@Nullable String submitted, @Nullable String stored) {
-        if (EmptyChecks.isBlank(submitted)) {
+        if (EmptyValues.isBlank(submitted)) {
             return submitted;
         }
         return transformEndpoint(submitted, stored, true);
@@ -161,7 +161,7 @@ public final class SecretMasking {
     @Nullable
     private static String transformEndpoint(
             @Nullable String endpoint, @Nullable String storedEndpoint, boolean restore) {
-        if (EmptyChecks.isBlank(endpoint)) {
+        if (EmptyValues.isBlank(endpoint)) {
             return endpoint;
         }
         try {

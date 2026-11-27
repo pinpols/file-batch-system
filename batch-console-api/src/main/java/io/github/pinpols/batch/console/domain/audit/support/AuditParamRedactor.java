@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Locale;
 import java.util.Map;
 
@@ -28,7 +28,7 @@ public final class AuditParamRedactor {
      * 不回传可能包含凭据的未解析文本。
      */
     public static String redactJson(ObjectMapper objectMapper, String json) {
-        if (EmptyChecks.isBlank(json)) {
+        if (EmptyValues.isBlank(json)) {
             return json;
         }
         try {

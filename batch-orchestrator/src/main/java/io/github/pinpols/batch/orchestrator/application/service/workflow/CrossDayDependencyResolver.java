@@ -2,9 +2,8 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.domain.workflow.CrossDayDependencySpec;
@@ -86,7 +85,7 @@ public class CrossDayDependencyResolver {
             String crossDayDependenciesJson,
             boolean dryRun,
             Map<String, List<Long>> pinnedResultIdsByAlias) {
-        if (!Texts.hasText(crossDayDependenciesJson)) {
+        if (!EmptyValues.hasText(crossDayDependenciesJson)) {
             return ResolutionResult.resolvedPayload(Map.of(), Map.of());
         }
         List<CrossDayDependencySpec> specs;
@@ -100,10 +99,10 @@ public class CrossDayDependencyResolver {
                     SwallowedExceptionLogger.summary(parseFailure));
             return ResolutionResult.failed("CROSS_DAY_DEPS_PARSE_FAILED");
         }
-        if (EmptyChecks.isEmpty(specs)) {
+        if (EmptyValues.isEmpty(specs)) {
             return ResolutionResult.resolvedPayload(Map.of(), Map.of());
         }
-        if (!Texts.hasText(tenantId) || workflowBizDate == null) {
+        if (!EmptyValues.hasText(tenantId) || workflowBizDate == null) {
             return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_CONTEXT");
         }
 
@@ -123,7 +122,7 @@ public class CrossDayDependencyResolver {
                 .build();
 
         for (CrossDayDependencySpec spec : specs) {
-            boolean specIsMissingOrHasNoJobCode = spec == null || !Texts.hasText(spec.jobCode());
+            boolean specIsMissingOrHasNoJobCode = spec == null || !EmptyValues.hasText(spec.jobCode());
             if (specIsMissingOrHasNoJobCode) {
                 return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_SPEC");
             }
@@ -136,7 +135,7 @@ public class CrossDayDependencyResolver {
             if (dependencyScopeIsUnsupported) {
                 return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_SCOPE");
             }
-            String alias = Texts.hasText(spec.alias()) ? spec.alias() : defaultAlias(spec);
+            String alias = EmptyValues.hasText(spec.alias()) ? spec.alias() : defaultAlias(spec);
             if (!aliases.add(alias)) {
                 return ResolutionResult.failed("CROSS_DAY_DEP_DUPLICATE_ALIAS");
             }
@@ -154,7 +153,7 @@ public class CrossDayDependencyResolver {
             return ResolutionResult.failed("CROSS_DAY_DEP_SNAPSHOT_INVALID");
         }
 
-        if (EmptyChecks.isNotEmpty(waitingReasons)) {
+        if (EmptyValues.isNotEmpty(waitingReasons)) {
             return ResolutionResult.waiting(waitingReasons, resolved, resultVersionIdsByAlias);
         }
         return ResolutionResult.resolvedPayload(resolved, resultVersionIdsByAlias);
@@ -186,7 +185,7 @@ public class CrossDayDependencyResolver {
                     }
                     rangeOutputs = rangeResolution.outputs();
                     if (spec.isRequired()
-                            && !EmptyChecks.isEmpty(Objects.requireNonNull(rangeResolution.missingDates()))) {
+                            && !EmptyValues.isEmpty(Objects.requireNonNull(rangeResolution.missingDates()))) {
                         String missingDateList = String.join(",", rangeResolution.missingDates());
                         String missingRangeReason = "RANGE_MISSING:" + missingDateList;
                         context.waitingReasons().add(missingReason(alias, spec, missingRangeReason));
@@ -256,7 +255,7 @@ public class CrossDayDependencyResolver {
         if (spec.isOffsetMode()) {
             return bizDateArithmetic.resolveOffset(bizDate, spec.bizDateOffset());
         }
-        if (Texts.hasText(spec.bizDateRange())) {
+        if (EmptyValues.hasText(spec.bizDateRange())) {
             return bizDateArithmetic.resolveNamedOffset(bizDate, spec.bizDateRange());
         }
         return null;
@@ -344,7 +343,7 @@ public class CrossDayDependencyResolver {
         if (pinnedResultIds == null || pinnedResultIds.size() > 1) {
             return Optional.empty();
         }
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(pinnedResultIds))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(pinnedResultIds))) {
             return Optional.empty();
         }
         Long resultVersionId = pinnedResultIds.getFirst();
@@ -414,7 +413,7 @@ public class CrossDayDependencyResolver {
     }
 
     private Map<String, Object> toEntry(ResultVersionEntity row) {
-        if (!PAYLOAD_STORAGE_INLINE_JSON.equals(row.payloadStorage()) || !Texts.hasText(row.payloadJson())) {
+        if (!PAYLOAD_STORAGE_INLINE_JSON.equals(row.payloadStorage()) || !EmptyValues.hasText(row.payloadJson())) {
             throw new UnsupportedCrossDayPayloadException();
         }
         Object output;
@@ -447,7 +446,7 @@ public class CrossDayDependencyResolver {
             String sign = n < 0 ? "minus_" : "plus_";
             return "t_" + sign + Math.abs(n);
         }
-        if (Texts.hasText(spec.bizDateRange())) {
+        if (EmptyValues.hasText(spec.bizDateRange())) {
             return spec.bizDateRange().toLowerCase(Locale.ROOT);
         }
         return spec.jobCode().toLowerCase(Locale.ROOT);

@@ -8,8 +8,8 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -66,7 +66,7 @@ public final class ImportStageSupport {
             return null;
         }
         String text = String.valueOf(value);
-        return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+        return EmptyValues.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
     }
 
     /**
@@ -83,7 +83,7 @@ public final class ImportStageSupport {
             Object value = templateConfig.get("chunk_size");
             if (value instanceof Number number) {
                 chunkSize = number.intValue();
-            } else if (value != null && Texts.hasText(String.valueOf(value))) {
+            } else if (value != null && EmptyValues.hasText(String.valueOf(value))) {
                 String text = String.valueOf(value);
                 chunkSize = Integer.parseInt(text);
             }

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Locale;
@@ -25,7 +25,7 @@ public class BatchClockConfig {
     public Clock batchClock() {
         Clock systemClock = Clock.systemUTC();
         String rawOffset = System.getProperty(TESTING_CLOCK_OFFSET_PROPERTY);
-        if (EmptyChecks.isBlank(rawOffset)) {
+        if (EmptyValues.isBlank(rawOffset)) {
             return systemClock;
         }
         Duration testingOffset = parseTestingOffset(rawOffset);

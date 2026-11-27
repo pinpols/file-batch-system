@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.exception.SystemException;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -195,6 +195,6 @@ public abstract class AbstractApiExceptionHandler {
             return fallback;
         }
         String resolved = bizMessageResolver.resolve(code);
-        return EmptyChecks.isBlank(resolved) ? fallback : resolved;
+        return EmptyValues.isBlank(resolved) ? fallback : resolved;
     }
 }

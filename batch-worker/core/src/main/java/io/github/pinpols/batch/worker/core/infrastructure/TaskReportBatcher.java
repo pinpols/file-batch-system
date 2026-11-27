@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -83,7 +83,7 @@ final class TaskReportBatcher implements AutoCloseable {
                 awaitBatchWindow(skipWait);
                 batch = takeBatch(pending);
                 releaseUnsubmittedReports();
-                sending = !EmptyChecks.isEmpty(batch);
+                sending = !EmptyValues.isEmpty(batch);
             } catch (InterruptedException ex) {
                 flushing = false;
                 monitor.notifyAll();
@@ -109,7 +109,7 @@ final class TaskReportBatcher implements AutoCloseable {
 
     /** 本次 flush 必须包含调用线程自己的报告；其它租户和重复 taskId 立即交回单条。 */
     private List<PendingReport> takeBatch(PendingReport flusher) {
-        if (EmptyChecks.isEmpty(pendingReports)) {
+        if (EmptyValues.isEmpty(pendingReports)) {
             return List.of();
         }
         String tenantId = flusher.report.getTenantId();
@@ -142,7 +142,7 @@ final class TaskReportBatcher implements AutoCloseable {
     private void flush(List<PendingReport> batch) {
         Set<Long> acceptedTaskIds = Set.of();
         try {
-            if (EmptyChecks.isNotEmpty(batch)) {
+            if (EmptyValues.isNotEmpty(batch)) {
                 List<TaskExecutionReport> reports =
                         batch.stream().map(item -> item.report).toList();
                 Set<Long> submittedTaskIds = submitBatch.apply(reports);

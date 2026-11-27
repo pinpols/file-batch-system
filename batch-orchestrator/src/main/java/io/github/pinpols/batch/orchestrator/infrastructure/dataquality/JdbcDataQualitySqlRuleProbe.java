@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.dataquality;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualitySqlRuleProbe;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSqlValidator;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
@@ -22,7 +22,7 @@ public class JdbcDataQualitySqlRuleProbe implements DataQualitySqlRuleProbe {
 
     private final ObjectProvider<NamedParameterJdbcTemplate> jdbcTemplateProvider;
 
-    // S2259 无法识别 EmptyChecks 对 ObjectProvider 和查询结果的空值保护。
+    // S2259 无法识别 EmptyValues 对 ObjectProvider 和查询结果的空值保护。
     @SuppressWarnings("java:S2259")
     @Override
     public long evaluateScalar(JobInstanceEntity instance, DataQualityRuleEntity rule) {
@@ -31,7 +31,7 @@ public class JdbcDataQualitySqlRuleProbe implements DataQualitySqlRuleProbe {
             throw new IllegalStateException("JdbcTemplate unavailable for DQ rule " + rule.getRuleCode());
         }
         String sql = rule.getExpression();
-        if (!Texts.hasText(sql)) {
+        if (!EmptyValues.hasText(sql)) {
             throw new IllegalArgumentException("rule expression empty: " + rule.getRuleCode());
         }
         String validated;

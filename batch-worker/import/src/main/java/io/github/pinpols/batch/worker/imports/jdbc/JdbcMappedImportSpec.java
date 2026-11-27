@@ -4,9 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.common.utils.Texts;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -123,7 +122,7 @@ public record JdbcMappedImportSpec(
             throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
         }
         String presenceText = String.valueOf(v);
-        if (!Texts.hasText(presenceText)) {
+        if (!EmptyValues.hasText(presenceText)) {
             throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
         }
         String rawValue = String.valueOf(v);
@@ -157,7 +156,7 @@ public record JdbcMappedImportSpec(
             return out;
         }
         String jsonText = extractJsonText(raw);
-        if (Texts.hasText(jsonText)) {
+        if (EmptyValues.hasText(jsonText)) {
             try {
                 return objectMapper.readValue(jsonText, Map.class);
             } catch (Exception ignored) {
@@ -219,7 +218,7 @@ public record JdbcMappedImportSpec(
         List<ColumnMapping> out = new ArrayList<>();
         for (Map<String, Object> fm : extractFieldMappings(templateConfig, objectMapper)) {
             Object nameRaw = fm.get("name");
-            if (nameRaw == null || !Texts.hasText(String.valueOf(nameRaw))) {
+            if (nameRaw == null || !EmptyValues.hasText(String.valueOf(nameRaw))) {
                 continue;
             }
             Object persistValue = fm.get("persist");
@@ -233,7 +232,7 @@ public record JdbcMappedImportSpec(
             String to;
             if (target != null) {
                 String targetPresenceText = String.valueOf(target);
-                if (Texts.hasText(targetPresenceText)) {
+                if (EmptyValues.hasText(targetPresenceText)) {
                     String rawTarget = String.valueOf(target);
                     to = rawTarget.trim();
                 } else {
@@ -242,7 +241,7 @@ public record JdbcMappedImportSpec(
             } else {
                 to = normalizeColumn(name);
             }
-            if (Texts.hasText(to)) {
+            if (EmptyValues.hasText(to)) {
                 String mappingType = textOrNull(fm.get("type"));
                 String mappingFormat = textOrNull(fm.get("format"));
                 ColumnMapping mapping = new ColumnMapping(name, to, mappingType, mappingFormat);
@@ -299,7 +298,7 @@ public record JdbcMappedImportSpec(
             list = l;
         } else {
             String text = extractJsonText(raw);
-            if (!Texts.hasText(text)) {
+            if (!EmptyValues.hasText(text)) {
                 return List.of();
             }
             try {
@@ -346,7 +345,7 @@ public record JdbcMappedImportSpec(
         }
         String rawText = String.valueOf(value);
         String text = rawText.trim();
-        return Texts.hasText(text) ? text : null;
+        return EmptyValues.hasText(text) ? text : null;
     }
 
     /**
@@ -363,7 +362,7 @@ public record JdbcMappedImportSpec(
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
             if (c == '_' || c == '-' || c == ' ') {
-                if (EmptyChecks.isNotEmpty(sb) && sb.charAt(sb.length() - 1) != '_') {
+                if (EmptyValues.isNotEmpty(sb) && sb.charAt(sb.length() - 1) != '_') {
                     sb.append('_');
                 }
                 continue;
@@ -372,7 +371,7 @@ public record JdbcMappedImportSpec(
                 boolean prevLowerOrDigit =
                         i > 0 && (Character.isLowerCase(s.charAt(i - 1)) || Character.isDigit(s.charAt(i - 1)));
                 boolean nextLower = i + 1 < s.length() && Character.isLowerCase(s.charAt(i + 1));
-                boolean wordBoundaryNeedsSeparator = EmptyChecks.isNotEmpty(sb)
+                boolean wordBoundaryNeedsSeparator = EmptyValues.isNotEmpty(sb)
                         && sb.charAt(sb.length() - 1) != '_'
                         && (prevLowerOrDigit || nextLower);
                 if (wordBoundaryNeedsSeparator) {
@@ -387,7 +386,7 @@ public record JdbcMappedImportSpec(
     private static List<String> parseStringList(Object raw) {
         if (raw instanceof List<?> list) {
             return list.stream()
-                    .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
+                    .filter(o -> o != null && EmptyValues.hasText(String.valueOf(o)))
                     .map(o -> {
                         String rawText = String.valueOf(o);
                         return rawText.trim();
@@ -463,7 +462,7 @@ public record JdbcMappedImportSpec(
     public void validateIdentifiers(Collection<String> allowedSchemas) {
         validateMappingCardinality();
         if (loadStrategy == ImportLoadStrategy.BATCH_UPSERT
-                && EmptyChecks.isEmpty(Objects.requireNonNull(conflictColumns))) {
+                && EmptyValues.isEmpty(Objects.requireNonNull(conflictColumns))) {
             throw new WorkerConfigException("jdbc-mapped-import BATCH_UPSERT requires conflictColumns: schema="
                     + schema
                     + ", table="
@@ -530,7 +529,7 @@ public record JdbcMappedImportSpec(
     }
 
     private void validatePartitionReplaceColumns(Set<String> allCols) {
-        if (EmptyChecks.isEmpty(replacePartitionColumns)) {
+        if (EmptyValues.isEmpty(replacePartitionColumns)) {
             throw new WorkerConfigException(
                     "jdbc_mapped_import.replacePartitionColumns is required for PARTITION_REPLACE_COPY");
         }
@@ -557,7 +556,7 @@ public record JdbcMappedImportSpec(
         }
         JdbcMappedSqlValidator.requireIdentifier(stageSwap.partitionTable(), "stageSwap.partitionTable");
         String clause = stageSwap.attachClause();
-        if (!Texts.hasText(clause)) {
+        if (!EmptyValues.hasText(clause)) {
             throw new WorkerConfigException(
                     "jdbc_mapped_import.stageSwap.attachClause is required for PARTITION_STAGE_SWAP_COPY");
         }

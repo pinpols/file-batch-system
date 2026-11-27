@@ -9,7 +9,7 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
 import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
@@ -101,7 +101,7 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
             JsonNode body = new ObjectMapper().readTree(exchange.getRequestBody());
             ATTEMPTS.add(body);
             String key = exchange.getRequestHeaders().getFirst("Idempotency-Key");
-            if (EmptyChecks.isBlank(key)) {
+            if (EmptyValues.isBlank(key)) {
                 exchange.sendResponseHeaders(400, -1);
                 exchange.close();
                 return;
@@ -136,8 +136,8 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
 
     @AfterAll
     static void stopReceiver() {
-        if (EmptyChecks.isNotNull(endpoint)) endpoint.stop(0);
-        if (EmptyChecks.isNull(previousAllowPrivate)) System.clearProperty("batch.security.ssrf-guard.allow-private");
+        if (endpoint != null) endpoint.stop(0);
+        if (previousAllowPrivate == null) System.clearProperty("batch.security.ssrf-guard.allow-private");
         else System.setProperty("batch.security.ssrf-guard.allow-private", previousAllowPrivate);
     }
 

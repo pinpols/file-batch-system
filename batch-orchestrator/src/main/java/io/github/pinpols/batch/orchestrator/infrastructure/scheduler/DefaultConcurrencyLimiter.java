@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
@@ -43,7 +43,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
 
     @Override
     public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        if (request == null || !Texts.hasText(request.getTenantId())) {
+        if (request == null || !EmptyValues.hasText(request.getTenantId())) {
             return ResourceCheck.allow();
         }
 
@@ -92,7 +92,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
         if (!request.isNewJobAdmission() || quotaPolicy == null) {
             return ResourceCheck.allow();
         }
-        boolean fairShareGroupLimitIsConfigured = Texts.hasText(quotaPolicy.fairShareGroup())
+        boolean fairShareGroupLimitIsConfigured = EmptyValues.hasText(quotaPolicy.fairShareGroup())
                 && quotaPolicy.groupSharedMaxRunningJobs() != null
                 && quotaPolicy.groupSharedMaxRunningJobs() > 0;
         if (fairShareGroupLimitIsConfigured) {
@@ -157,7 +157,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
      * —— 峰值流量下不误拒未单独配策略的正常租户。
      */
     private QuotaExceededStrategy resolveStrategy(String configured) {
-        if (Texts.hasText(configured)) {
+        if (EmptyValues.hasText(configured)) {
             return QuotaExceededStrategy.from(configured);
         }
         return governance.resourceScheduler().getDefaultExceededStrategy();
@@ -184,7 +184,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
 
     private ResourceCheck checkQueueLimit(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
         boolean queueLimitUnavailable = queue == null
-                || !Texts.hasText(queue.queueCode())
+                || !EmptyValues.hasText(queue.queueCode())
                 || queue.maxRunningJobs() == null
                 || queue.maxRunningJobs() <= 0;
         if (queueLimitUnavailable) {

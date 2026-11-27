@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -55,7 +55,7 @@ public class RerunJobDefinitionResolver {
         }
 
         String rawPolicy = text(params.get(PARAM_CONFIG_VERSION_POLICY));
-        ConfigVersionPolicy policy = EmptyChecks.isBlank(rawPolicy)
+        ConfigVersionPolicy policy = EmptyValues.isBlank(rawPolicy)
                 ? ConfigVersionPolicy.USE_ORIGINAL_CONFIG
                 : ConfigVersionPolicy.fromCodeOrNull(rawPolicy);
         if (policy == null) {

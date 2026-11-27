@@ -5,9 +5,9 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -90,11 +90,11 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             // idempotencyKey 绑定到 jobInstanceId，避免 FIXED_RATE 等同一天多次触发时
             // 不同 job_instance 的分区互相冲突（partitionKey 仅作业务分片键，不作全局唯一约束）
             // DBA-2026-05-20 P2-4: V124 partial UNIQUE (WHERE NOT NULL) 防 CLAIM 穿透依赖
-            // 调用方始终设非空,此处显式 Guard 回退,任何后续 partitionPlan.partitionNo 为 null 的
+            // 调用方始终设非空,此处显式 Preconditions 回退,任何后续 partitionPlan.partitionNo 为 null 的
             // 退化分支也会立刻 fail-fast,而不是悄悄写入数据库一行 NULL idempotency_key 绕过 UNIQUE。
-            Guard.require(partitionPlan.getPartitionNo() != null, "job_partition.partition_no");
+            Preconditions.require(partitionPlan.getPartitionNo() != null, "job_partition.partition_no");
             String partitionIdempotencyKey = jobInstanceId + ":" + partitionPlan.getPartitionNo();
-            Guard.requireText(partitionIdempotencyKey, "job_partition.idempotency_key");
+            Preconditions.requireText(partitionIdempotencyKey, "job_partition.idempotency_key");
             partitionEntity.setIdempotencyKey(partitionIdempotencyKey);
             String inputSnapshot = buildInputSnapshot(plan, partitionPlan, jobInstanceId);
             partitionEntity.setInputSnapshot(inputSnapshot);
@@ -235,10 +235,10 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
 
     private String resolveInitialPartitionStatus(SchedulePlan.PartitionPlan partitionPlan, String initialStatus) {
         String recordedStatus = partitionPlan == null ? null : partitionPlan.getPartitionStatus();
-        if (EmptyChecks.isNotBlank(recordedStatus)) {
+        if (EmptyValues.isNotBlank(recordedStatus)) {
             return recordedStatus;
         }
-        return EmptyChecks.isBlank(initialStatus) ? PartitionStatus.CREATED.code() : initialStatus;
+        return EmptyValues.isBlank(initialStatus) ? PartitionStatus.CREATED.code() : initialStatus;
     }
 
     private String buildInputSnapshot(SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan, Long jobInstanceId) {
@@ -275,7 +275,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             return plan == null ? null : plan.getDownstreamChannelCode();
         }
         String targetRef = partitionPlan.getTargetRef();
-        if (EmptyChecks.isNotBlank(targetRef)) {
+        if (EmptyValues.isNotBlank(targetRef)) {
             return targetRef;
         }
         return plan.getDownstreamChannelCode();

@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -46,7 +46,7 @@ public final class ConsoleQuerySupport {
             PageRequest pageRequest, List<S> rows, Function<S, T> mapper, ToLongFunction<S> idExtractor) {
         List<T> items = rows.stream().map(mapper).toList();
         String nextCursor = null;
-        if (rows.size() >= pageRequest.pageSize() && !EmptyChecks.isEmpty(Objects.requireNonNull(rows))) {
+        if (rows.size() >= pageRequest.pageSize() && !EmptyValues.isEmpty(Objects.requireNonNull(rows))) {
             S lastRow = rows.get(rows.size() - 1);
             long lastRowId = idExtractor.applyAsLong(lastRow);
             nextCursor = CursorCodec.encode(Map.of("id", lastRowId));
@@ -56,7 +56,7 @@ public final class ConsoleQuerySupport {
 
     /** 空游标表示第一页；非空游标必须包含可解析的 id，避免损坏 token 静默回到第一页。 */
     public static Long decodeCursorId(String token) {
-        if (EmptyChecks.isBlank(token)) {
+        if (EmptyValues.isBlank(token)) {
             return null;
         }
         Object raw = CursorCodec.decode(token).get("id");
@@ -92,7 +92,7 @@ public final class ConsoleQuerySupport {
     }
 
     public static Instant parseInstant(String value, String fieldName) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return null;
         }
         try {
@@ -108,7 +108,7 @@ public final class ConsoleQuerySupport {
      * 对齐。
      */
     public static Instant parseFlexibleInstant(String value, String fieldName, ZoneId zone) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return null;
         }
         String trimmed = value.trim();
@@ -145,7 +145,7 @@ public final class ConsoleQuerySupport {
      * @see #parseFlexibleInstant(String, String, ZoneId)
      */
     public static Instant parseFlexibleInstantEndOfDay(String value, String fieldName, ZoneId zone) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return null;
         }
         String trimmed = value.trim();
@@ -165,14 +165,14 @@ public final class ConsoleQuerySupport {
     }
 
     public static String firstNonBlank(String first, String second) {
-        if (EmptyChecks.isNotBlank(first)) {
+        if (EmptyValues.isNotBlank(first)) {
             return first;
         }
         return second;
     }
 
     public static LocalDate parseLocalDate(String value, String fieldName) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return null;
         }
         try {
@@ -183,7 +183,7 @@ public final class ConsoleQuerySupport {
     }
 
     public static Long parseLong(String value, String fieldName) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return null;
         }
         try {

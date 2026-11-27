@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.support.maintenance;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import java.time.Duration;
 import java.time.Instant;
@@ -44,7 +44,7 @@ public record MaintenanceAlertWindow(Instant startsAt, Instant endsAt, Set<Strin
         }
         Set<String> jobs = new TreeSet<>();
         List<String> services = state.affectedServices();
-        if (EmptyChecks.isEmpty(services)) {
+        if (EmptyValues.isEmpty(services)) {
             jobs.add("batch-console-api");
         } else {
             for (String service : services) {

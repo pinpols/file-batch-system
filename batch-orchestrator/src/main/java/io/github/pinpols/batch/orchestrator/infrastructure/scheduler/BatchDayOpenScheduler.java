@@ -2,8 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.BatchDayOpenService;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -48,14 +47,14 @@ public class BatchDayOpenScheduler {
         }
         catchupMetrics.beginScan();
         List<BusinessCalendarEntity> calendars = businessCalendarMapper.selectByEnabled(true);
-        if (EmptyChecks.isEmpty(calendars)) {
+        if (EmptyValues.isEmpty(calendars)) {
             catchupMetrics.completeScan();
             return;
         }
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         try {
             for (BusinessCalendarEntity calendar : calendars) {
-                if (calendar == null || !Texts.hasText(calendar.tenantId())) {
+                if (calendar == null || !EmptyValues.hasText(calendar.tenantId())) {
                     // openOne 内部也校验,这里先过滤一道,避免空 tenant 触发 holder NPE 路径。
                     continue;
                 }

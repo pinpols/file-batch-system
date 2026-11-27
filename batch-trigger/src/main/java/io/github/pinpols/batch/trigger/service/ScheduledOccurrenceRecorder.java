@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceAcceptRejectedOccurrenceParam;
@@ -292,7 +292,7 @@ public class ScheduledOccurrenceRecorder {
     public int recoverUnobservedPlannedFires(
             String tenantId, Long workflowDefinitionId, int scheduleVersion, Instant beforeExclusive, int limit) {
         boolean pendingMisfireQueryIsInvalid =
-                EmptyChecks.isBlank(tenantId) || workflowDefinitionId == null || beforeExclusive == null || limit <= 0;
+                EmptyValues.isBlank(tenantId) || workflowDefinitionId == null || beforeExclusive == null || limit <= 0;
         if (pendingMisfireQueryIsInvalid) {
             return 0;
         }

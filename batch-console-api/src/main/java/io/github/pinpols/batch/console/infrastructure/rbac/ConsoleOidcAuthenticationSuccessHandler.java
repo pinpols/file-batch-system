@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.rbac;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleOidcLoginAudit;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
@@ -86,7 +86,7 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
             return Optional.empty();
         }
         // subject 判空白必须先于长度与 ASCII 检查
-        if (EmptyChecks.isBlank(oidcUser.getSubject())
+        if (EmptyValues.isBlank(oidcUser.getSubject())
                 || oidcUser.getSubject().length() > OIDC_SUBJECT_MAX_LENGTH
                 || !isAscii(oidcUser.getSubject())) {
             return Optional.empty();
@@ -100,7 +100,7 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
         }
         LinkedHashSet<String> authorities = Arrays.stream(authoritiesCsv.split(","))
                 .map(String::trim)
-                .filter(EmptyChecks::isNotEmpty)
+                .filter(EmptyValues::isNotEmpty)
                 .map(value -> value.toUpperCase(Locale.ROOT))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         return new ConsolePrincipal(username, tenantId, authorities);

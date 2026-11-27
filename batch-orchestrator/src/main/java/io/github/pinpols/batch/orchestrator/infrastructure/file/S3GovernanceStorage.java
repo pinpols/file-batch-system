@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.storage.ObjectSummary;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository.Scope;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceReconcileCursorMapper;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceReconcileCursorMapper.Advance;
@@ -114,7 +114,7 @@ public class S3GovernanceStorage {
 
     public String createPresignedDownloadUrl(String bucket, String objectName, int expirySeconds) {
         try {
-            String targetBucket = EmptyChecks.isBlank(bucket) ? properties.getBucket() : bucket;
+            String targetBucket = EmptyValues.isBlank(bucket) ? properties.getBucket() : bucket;
             int minimumExpirySeconds = Math.max(MIN_PRESIGN_EXPIRY_SECONDS, expirySeconds);
             Duration expiry = Duration.ofSeconds(minimumExpirySeconds);
             return objectStore.presign(targetBucket, objectName, expiry);
@@ -125,7 +125,7 @@ public class S3GovernanceStorage {
 
     public long objectSize(String bucket, String objectName) {
         try {
-            String targetBucket = EmptyChecks.isBlank(bucket) ? properties.getBucket() : bucket;
+            String targetBucket = EmptyValues.isBlank(bucket) ? properties.getBucket() : bucket;
             return objectStore.statSize(targetBucket, objectName);
         } catch (ObjectNotFoundException exception) {
             throw exception;
@@ -136,7 +136,7 @@ public class S3GovernanceStorage {
 
     public boolean objectExists(String bucket, String objectName) {
         try {
-            String targetBucket = EmptyChecks.isBlank(bucket) ? properties.getBucket() : bucket;
+            String targetBucket = EmptyValues.isBlank(bucket) ? properties.getBucket() : bucket;
             return objectStore.exists(targetBucket, objectName);
         } catch (Exception exception) {
             throw new IllegalStateException("failed to check object: " + objectName, exception);

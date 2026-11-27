@@ -13,7 +13,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.nio.charset.Charset;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -227,7 +227,7 @@ public final class CodingConventionsArchRules {
             private void addStringArrayProperty(JavaAnnotation<?> a, String prop, List<String> out) {
                 Object v = a.get(prop).orElse(null);
                 if (v instanceof String[]) {
-                    for (String s : (String[]) v) if (EmptyChecks.isNotBlank(s)) out.add(s);
+                    for (String s : (String[]) v) if (EmptyValues.isNotBlank(s)) out.add(s);
                 } else if (v instanceof String && !((String) v).isBlank()) {
                     out.add((String) v);
                 }

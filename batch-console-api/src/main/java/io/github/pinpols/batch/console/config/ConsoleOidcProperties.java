@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.util.Locale;
@@ -65,13 +65,13 @@ public class ConsoleOidcProperties {
         requireTrustedScheme(issuer, "issuer-uri");
         requireTrustedScheme(redirect, "redirect-uri");
         String redirectPath = redirect.getPath();
-        if (EmptyChecks.isBlank(redirectPath) || !redirectPath.endsWith("/login/oauth2/code/" + registrationId)) {
+        if (EmptyValues.isBlank(redirectPath) || !redirectPath.endsWith("/login/oauth2/code/" + registrationId)) {
             throw invalid("redirect-uri must end with /login/oauth2/code/{registration-id}");
         }
     }
 
     private static void requireText(String value, String name) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             throw invalid(name + " is required when OIDC is enabled");
         }
     }

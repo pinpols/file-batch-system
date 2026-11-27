@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -26,7 +26,7 @@ final class TaskOutcomePayloadSupport {
     private TaskOutcomePayloadSupport() {}
 
     static String payloadStringValue(String payloadJson, String fieldName) {
-        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+        if (EmptyValues.isBlank(payloadJson) || EmptyValues.isBlank(fieldName)) {
             return null;
         }
         try {
@@ -45,7 +45,7 @@ final class TaskOutcomePayloadSupport {
     }
 
     static Long payloadLongValue(String payloadJson, String fieldName) {
-        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+        if (EmptyValues.isBlank(payloadJson) || EmptyValues.isBlank(fieldName)) {
             return null;
         }
         try {
@@ -69,7 +69,7 @@ final class TaskOutcomePayloadSupport {
         }
         String rawText = String.valueOf(candidate);
         String text = rawText.trim();
-        if (EmptyChecks.isEmpty(text)) {
+        if (EmptyValues.isEmpty(text)) {
             return null;
         }
         try {

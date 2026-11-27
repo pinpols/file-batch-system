@@ -4,8 +4,7 @@ import io.github.pinpols.batch.common.config.BatchKmsProperties;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -68,7 +67,7 @@ public class BatchObjectCryptoService {
     public String resolveKeyRef(Map<String, Object> security) {
         if (security != null) {
             Object keyRef = security.get("encryption_key_ref");
-            if (keyRef != null && Texts.hasText(String.valueOf(keyRef))) {
+            if (keyRef != null && EmptyValues.hasText(String.valueOf(keyRef))) {
                 return String.valueOf(keyRef);
             }
         }
@@ -88,7 +87,7 @@ public class BatchObjectCryptoService {
     }
 
     public byte[] decrypt(byte[] content) {
-        boolean contentDoesNotNeedDecryption = EmptyChecks.isEmpty(content) || !isEncrypted(content);
+        boolean contentDoesNotNeedDecryption = EmptyValues.isEmpty(content) || !isEncrypted(content);
         if (contentDoesNotNeedDecryption) {
             return content;
         }
@@ -271,14 +270,14 @@ public class BatchObjectCryptoService {
     private byte[] resolveKeyBytes(String keyRef) {
         String resolvedKeyRef = normalizedKeyRef(keyRef);
         String base64 = kmsProperties.getKeys().get(resolvedKeyRef);
-        if (!Texts.hasText(base64)) {
+        if (!EmptyValues.hasText(base64)) {
             throw new IllegalStateException("missing kms key material for keyRef=" + resolvedKeyRef);
         }
         return Base64.getDecoder().decode(base64);
     }
 
     private String normalizedKeyRef(String keyRef) {
-        return Texts.hasText(keyRef) ? keyRef.trim() : kmsProperties.getDefaultKeyRef();
+        return EmptyValues.hasText(keyRef) ? keyRef.trim() : kmsProperties.getDefaultKeyRef();
     }
 
     private boolean truthy(Object value) {

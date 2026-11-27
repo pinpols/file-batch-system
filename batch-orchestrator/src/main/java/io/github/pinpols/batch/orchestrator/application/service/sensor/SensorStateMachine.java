@@ -11,8 +11,7 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunFinishCommand;
@@ -406,7 +405,7 @@ public class SensorStateMachine {
         String sourcePayload = resolveSourcePayloadForDownstream(wfRun, currentNodeCode);
         List<DagNodeResolution> nextNodes =
                 workflowDagService.resolveNextNodesForRun(wfRun, currentNodeCode, success, sourcePayload);
-        if (EmptyChecks.isNotEmpty(nextNodes)) {
+        if (EmptyValues.isNotEmpty(nextNodes)) {
             WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
             for (DagNodeResolution next : nextNodes) {
                 if (next == null) {
@@ -429,7 +428,7 @@ public class SensorStateMachine {
 
     private String resolveSourcePayloadForDownstream(WorkflowRunEntity wfRun, String nodeCode) {
         WorkflowNodeRunEntity nodeRun = nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(wfRun.getId(), nodeCode);
-        if (nodeRun == null || !Texts.hasText(nodeRun.getSourcePayloadProtected())) {
+        if (nodeRun == null || !EmptyValues.hasText(nodeRun.getSourcePayloadProtected())) {
             return null;
         }
         String protectedSourcePayload = nodeRun.getSourcePayloadProtected();
@@ -457,7 +456,7 @@ public class SensorStateMachine {
     }
 
     private Map<String, Object> parseJson(String raw) {
-        if (!Texts.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             return Map.of();
         }
         try {
@@ -480,7 +479,7 @@ public class SensorStateMachine {
     }
 
     private String serializeOutput(Map<String, Object> output) {
-        if (EmptyChecks.isEmpty(output)) {
+        if (EmptyValues.isEmpty(output)) {
             return null;
         }
         try {
@@ -491,7 +490,7 @@ public class SensorStateMachine {
     }
 
     private String serializeArgs(List<String> args) {
-        if (EmptyChecks.isEmpty(args)) {
+        if (EmptyValues.isEmpty(args)) {
             return null;
         }
         try {

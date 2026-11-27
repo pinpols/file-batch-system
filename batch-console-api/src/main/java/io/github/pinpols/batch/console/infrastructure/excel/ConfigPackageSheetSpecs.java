@@ -107,7 +107,7 @@ import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
 import io.github.pinpols.batch.console.support.excel.DropdownValidationSpec;
@@ -581,7 +581,7 @@ public final class ConfigPackageSheetSpecs {
 
     private static Set<String> fileTemplateColumns(Set<String> scenarios) {
         List<ConfigPackageFileScenario> profiles = fileProfiles(scenarios);
-        boolean onlyNonWorkflowProfilesAreSelected = EmptyChecks.isNotEmpty(profiles)
+        boolean onlyNonWorkflowProfilesAreSelected = EmptyValues.isNotEmpty(profiles)
                 && !scenarios.contains(SCENARIO_IMPORT)
                 && !scenarios.contains(SCENARIO_EXPORT)
                 && !scenarios.contains(SCENARIO_WORKFLOW);
@@ -642,7 +642,7 @@ public final class ConfigPackageSheetSpecs {
                 formats.add(profile.format().code());
             }
         }
-        return EmptyChecks.isEmpty(formats) ? Optional.empty() : Optional.of(Set.copyOf(formats));
+        return EmptyValues.isEmpty(formats) ? Optional.empty() : Optional.of(Set.copyOf(formats));
     }
 
     private static String focusedFileDirection(Set<String> scenarios) {

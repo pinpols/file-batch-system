@@ -5,8 +5,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.config.ConsoleResourceQueueApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueCreateRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
@@ -80,7 +80,7 @@ public class DefaultConsoleResourceQueueApplicationService implements ConsoleRes
     public ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         ResourceQueueRow selectedQueue = resourceQueueMapper.selectById(tenantId, id);
-        ResourceQueueRow existing = Guard.requireFound(selectedQueue, "resource queue not found");
+        ResourceQueueRow existing = Preconditions.requireFound(selectedQueue, "resource queue not found");
         ResourceQueueUpdateParam params = ResourceQueueUpdateParam.builder()
                 .tenantId(tenantId)
                 .id(id)

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
@@ -51,7 +51,7 @@ public class WorkerRegistryCache {
         String key = key(tenantId, workerGroup);
         try {
             String cached = redis.getStringCache(key);
-            if (EmptyChecks.isNotBlank(cached)) {
+            if (EmptyValues.isNotBlank(cached)) {
                 List<Entry> entries = objectMapper.readValue(cached, new TypeReference<List<Entry>>() {});
                 // 绝不命中「空列表」快照：否则 PG 刚插入 ONLINE worker 仍会在 TTL 内被判无候选（派发永久 WAITING）。
                 if (!entries.isEmpty()) {
@@ -106,7 +106,7 @@ public class WorkerRegistryCache {
     }
 
     private static String safe(String value) {
-        return EmptyChecks.isBlank(value) ? "_" : value.replace(':', '_');
+        return EmptyValues.isBlank(value) ? "_" : value.replace(':', '_');
     }
 
     private static List<Entry> toEntries(List<WorkerRegistryEntity> records) {

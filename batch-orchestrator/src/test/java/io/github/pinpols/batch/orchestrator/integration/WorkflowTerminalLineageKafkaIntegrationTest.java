@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
@@ -199,7 +198,7 @@ class WorkflowTerminalLineageKafkaIntegrationTest extends AbstractIntegrationTes
                     .partitionsToOffsetAndMetadata()
                     .get(10, TimeUnit.SECONDS);
             var offset = offsets.get(new TopicPartition(BatchTopics.WORKFLOW_TERMINAL_V1, 0));
-            return EmptyChecks.isNull(offset) ? -1 : offset.offset();
+            return offset == null ? -1 : offset.offset();
         }
     }
 }

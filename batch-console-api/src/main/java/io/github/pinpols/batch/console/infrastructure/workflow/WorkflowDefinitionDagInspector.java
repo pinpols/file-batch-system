@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.workflow;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
@@ -36,7 +36,7 @@ public final class WorkflowDefinitionDagInspector {
     public void requireExecutableJobReferences(String tenantId, List<WorkflowNodeEntity> nodes) {
         List<DagValidationResult.Finding> findings = new ArrayList<>();
         validateJobNodeReferences(findings, tenantId, nodes);
-        if (EmptyChecks.isNotEmpty(findings)) {
+        if (EmptyValues.isNotEmpty(findings)) {
             throw BizException.of(
                     ResultCode.VALIDATION_ERROR,
                     ResultCode.VALIDATION_ERROR.detailKey(),
@@ -78,7 +78,7 @@ public final class WorkflowDefinitionDagInspector {
                 continue;
             }
             String jobCode = node.getRelatedJobCode();
-            if (EmptyChecks.isBlank(jobCode)) {
+            if (EmptyValues.isBlank(jobCode)) {
                 findings.add(DagValidationResult.Finding.error(
                         "JOB_REF_MISSING",
                         "JOB node missing related_job_code: " + node.getNodeCode(),
@@ -111,7 +111,7 @@ public final class WorkflowDefinitionDagInspector {
             if (!"CONDITION".equalsIgnoreCase(edge.getEdgeType())) {
                 continue;
             }
-            if (EmptyChecks.isBlank(edge.getConditionExpr())) {
+            if (EmptyValues.isBlank(edge.getConditionExpr())) {
                 findings.add(DagValidationResult.Finding.error(
                         "EDGE_CONDITION_MISSING_EXPR",
                         "CONDITION edge missing condition_expr: " + edge.getFromNodeCode() + " -> "
@@ -128,7 +128,7 @@ public final class WorkflowDefinitionDagInspector {
             List<String> startNodes,
             List<String> endNodes,
             List<WorkflowEdgeEntity> edges) {
-        if (EmptyChecks.isEmpty(startNodes)) {
+        if (EmptyValues.isEmpty(startNodes)) {
             findings.add(DagValidationResult.Finding.error("MISSING_START", "Missing START node", null, null));
         } else if (startNodes.size() > 1) {
             for (int i = 1; i < startNodes.size(); i++) {
@@ -137,7 +137,7 @@ public final class WorkflowDefinitionDagInspector {
             }
         }
 
-        if (EmptyChecks.isEmpty(endNodes)) {
+        if (EmptyValues.isEmpty(endNodes)) {
             findings.add(DagValidationResult.Finding.error("MISSING_END", "Missing END node", null, null));
         } else if (endNodes.size() > 1) {
             for (int i = 1; i < endNodes.size(); i++) {
@@ -196,7 +196,7 @@ public final class WorkflowDefinitionDagInspector {
             }
         }
         int visited = 0;
-        while (EmptyChecks.isNotEmpty(queue)) {
+        while (EmptyValues.isNotEmpty(queue)) {
             String current = queue.poll();
             visited++;
             for (String next : dag.adjacency().get(current)) {
@@ -254,7 +254,7 @@ public final class WorkflowDefinitionDagInspector {
         Deque<String> queue = new ArrayDeque<>();
         queue.add(start);
         visited.add(start);
-        while (EmptyChecks.isNotEmpty(queue)) {
+        while (EmptyValues.isNotEmpty(queue)) {
             String current = queue.poll();
             for (String next : adjacency.getOrDefault(current, List.of())) {
                 if (visited.add(next)) {

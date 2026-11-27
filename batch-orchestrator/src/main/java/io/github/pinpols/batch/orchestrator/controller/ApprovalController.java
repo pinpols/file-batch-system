@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.controller;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -59,7 +59,7 @@ public class ApprovalController {
             @RequestParam(required = false) String tenantId,
             @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
                     String sourceIdempotencyKey) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(sourceIdempotencyKey)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(sourceIdempotencyKey)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }
         return new ApprovalRecordResponse(approvalWorkflowService.getBySourceKey(tenantId, sourceIdempotencyKey));

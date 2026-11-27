@@ -5,7 +5,7 @@ import com.univocity.parsers.csv.CsvParserSettings;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -168,7 +168,7 @@ public class DelimitedFormatParser implements FormatParser {
                 continue;
             }
             Object src = map.get("name") != null ? map.get("name") : map.get("source");
-            if (src == null || !Texts.hasText(String.valueOf(src))) {
+            if (src == null || !EmptyValues.hasText(String.valueOf(src))) {
                 continue;
             }
             String rawSource = String.valueOf(src);
@@ -210,12 +210,12 @@ public class DelimitedFormatParser implements FormatParser {
     }
 
     private String resolveDelimiter(ImportPayload importPayload, Object templateConfigObject) {
-        if (importPayload != null && Texts.hasText(importPayload.delimiter())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.delimiter())) {
             return importPayload.delimiter();
         }
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object value = templateConfig.get("delimiter");
-            if (value != null && Texts.hasText(String.valueOf(value))) {
+            if (value != null && EmptyValues.hasText(String.valueOf(value))) {
                 return String.valueOf(value);
             }
         }

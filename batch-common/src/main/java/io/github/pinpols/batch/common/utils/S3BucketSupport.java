@@ -29,7 +29,7 @@ public final class S3BucketSupport {
 
     public static boolean ensureBucket(
             @Nullable S3Client s3Client, String bucket, Logger log, String componentName, boolean autoCreate) {
-        if (s3Client == null || !Texts.hasText(bucket)) {
+        if (s3Client == null || !EmptyValues.hasText(bucket)) {
             return false;
         }
         // autoCreate=false（托管云 S3/OSS/COS）：bucket 由外部预建、凭据通常无 CreateBucket（甚至无 HeadBucket）

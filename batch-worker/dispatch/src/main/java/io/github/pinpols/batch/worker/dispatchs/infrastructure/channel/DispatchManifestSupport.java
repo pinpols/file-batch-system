@@ -2,8 +2,8 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import java.io.FilterInputStream;
@@ -45,7 +45,7 @@ final class DispatchManifestSupport {
             String rawValue = String.valueOf(raw);
             value = rawValue.trim();
         }
-        return Texts.hasText(value) ? value : DEFAULT_SUFFIX;
+        return EmptyValues.hasText(value) ? value : DEFAULT_SUFFIX;
     }
 
     static DigestingInputStream digesting(InputStream in) {

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.capacity;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileReport.CapacityProfileCoverage;
 import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileReport.CapacityProfileTotals;
 import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileReport.CapacityProfileWindow;
@@ -30,7 +30,7 @@ public class CapacityProfileService {
     @Transactional(readOnly = true)
     public CapacityProfileReport query(
             String tenantId, Instant from, Instant to, CapacityProfileGroupBy groupBy, Integer limit) {
-        Guard.requireText(tenantId, "tenantId is required");
+        Preconditions.requireText(tenantId, "tenantId is required");
         Instant resolvedTo = to == null ? Instant.now() : to;
         Instant resolvedFrom = from == null ? resolvedTo.minus(DEFAULT_WINDOW) : from;
         if (!resolvedFrom.isBefore(resolvedTo)) {

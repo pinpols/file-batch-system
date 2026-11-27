@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadFilter;
 import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadRow;
@@ -41,7 +41,7 @@ public class PersistentWaitReadService {
     }
 
     private static String blankToNull(String value) {
-        return EmptyChecks.isBlank(value) ? null : value;
+        return EmptyValues.isBlank(value) ? null : value;
     }
 
     public record PersistentWaitPage(List<PersistentWaitReadRow> items, int pageNo, int pageSize, long total) {}

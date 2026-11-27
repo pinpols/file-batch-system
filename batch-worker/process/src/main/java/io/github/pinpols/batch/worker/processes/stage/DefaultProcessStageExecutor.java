@@ -7,8 +7,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
@@ -151,12 +150,12 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
     @Override
     public List<ProcessStageResult> execute(ProcessJobContext context) {
         List<PipelineStepDefinition> steps = loadConfiguredSteps(context);
-        if (!Texts.hasText(context.getBatchKey())) {
+        if (!EmptyValues.hasText(context.getBatchKey())) {
             String batchKey = generateBatchKey(context);
             context.setBatchKey(batchKey);
         }
         boolean shouldCreateFallbackStagingGeneration = context.getAttributes().get(PipelineRuntimeKeys.TASK_ID) == null
-                && !Texts.hasText(context.getStagingGenerationId());
+                && !EmptyValues.hasText(context.getStagingGenerationId());
         if (shouldCreateFallbackStagingGeneration) {
             // 仅供低基数运维指标使用的跨租户汇总。
             UUID generationUuid = UUID.randomUUID();
@@ -182,7 +181,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
             context.getAttributes().put(ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS, computeStep.stepParams());
         }
         String pluginCode = resolvePluginCode(context, computeStep);
-        if (!Texts.hasText(pluginCode)) {
+        if (!EmptyValues.hasText(pluginCode)) {
             return;
         }
         ProcessComputePlugin plugin = pluginsByImplCode.get(pluginCode);
@@ -217,7 +216,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
     private String resolvePluginCode(Map<String, Object> attributes, PipelineStepDefinition computeStep) {
         if (computeStep != null) {
             String implCode = computeStep.implCode();
-            boolean hasExplicitComputePlugin = Texts.hasText(implCode)
+            boolean hasExplicitComputePlugin = EmptyValues.hasText(implCode)
                     && !ProcessStage.COMPUTE.name().equals(implCode)
                     && !"PROCESS_COMPUTE".equals(implCode);
             if (hasExplicitComputePlugin) {
@@ -281,7 +280,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
             List<PipelineStepDefinition> steps, Map<String, Object> attributes) {
         PipelineStepDefinition computeStep = findComputeStep(steps);
         String pluginCode = resolvePluginCode(attributes, computeStep);
-        if (!Texts.hasText(pluginCode)) {
+        if (!EmptyValues.hasText(pluginCode)) {
             return ReplayCapabilityDeclaration.unknown("PROCESS");
         }
         ProcessComputePlugin plugin = pluginsByImplCode.get(pluginCode);
@@ -425,11 +424,12 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
 
     private Map<String, ProcessComputePlugin> indexPlugins(List<ProcessComputePlugin> plugins) {
         Map<String, ProcessComputePlugin> indexed = new LinkedHashMap<>();
-        if (EmptyChecks.isEmpty(plugins)) {
+        if (EmptyValues.isEmpty(plugins)) {
             return Map.of();
         }
         for (ProcessComputePlugin plugin : plugins) {
-            boolean pluginIsMissingOrHasNoImplementationCode = plugin == null || !Texts.hasText(plugin.implCode());
+            boolean pluginIsMissingOrHasNoImplementationCode =
+                    plugin == null || !EmptyValues.hasText(plugin.implCode());
             if (pluginIsMissingOrHasNoImplementationCode) {
                 continue;
             }
@@ -443,7 +443,7 @@ public class DefaultProcessStageExecutor extends AbstractStageExecutor<ProcessJo
 
     private Map<ProcessStage, ProcessStageStep> indexByStage(List<ProcessStageStep> steps) {
         Map<ProcessStage, ProcessStageStep> indexed = new LinkedHashMap<>();
-        if (EmptyChecks.isEmpty(steps)) {
+        if (EmptyValues.isEmpty(steps)) {
             return Map.of();
         }
         for (ProcessStageStep step : steps) {

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -72,7 +72,7 @@ public final class BizExceptionUtils {
 
     /** 把持久化的 {@code error_args} JSONB 列(字符串)反序列化为 Object[]。null / 非法 JSON 返回空数组,渲染时占位符 {0} 留空字符串。 */
     public static Object[] parseArgs(String argsJson, ObjectMapper objectMapper) {
-        if (EmptyChecks.isBlank(argsJson) || objectMapper == null) {
+        if (EmptyValues.isBlank(argsJson) || objectMapper == null) {
             return new Object[0];
         }
         try {
@@ -88,12 +88,12 @@ public final class BizExceptionUtils {
     /** 渲染单个 key + args 为当前 Locale 字符串。{@code resolver} / {@code key} 为空时返回 fallback。 */
     public static String renderOrFallback(
             BizMessageResolver resolver, String key, Object[] args, String fallback, Locale locale) {
-        if (resolver == null || EmptyChecks.isBlank(key)) {
+        if (resolver == null || EmptyValues.isBlank(key)) {
             return fallback;
         }
         BizException synthetic = BizException.of(ResultCode.SYSTEM_ERROR, key, args);
         String rendered = resolver.resolve(synthetic, locale);
-        if (EmptyChecks.isBlank(rendered) || rendered.equals(key)) {
+        if (EmptyValues.isBlank(rendered) || rendered.equals(key)) {
             return fallback;
         }
         return rendered;

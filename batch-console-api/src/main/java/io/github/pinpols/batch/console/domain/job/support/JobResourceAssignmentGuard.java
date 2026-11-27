@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.job.support;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import java.util.Objects;
 import java.util.function.Function;
@@ -22,7 +22,7 @@ public class JobResourceAssignmentGuard {
             return;
         }
         requireTenantAdmin();
-        if (Texts.hasText(queueCode) || Texts.hasText(workerGroup)) {
+        if (EmptyValues.hasText(queueCode) || EmptyValues.hasText(workerGroup)) {
             throw forbidden();
         }
     }
@@ -51,7 +51,7 @@ public class JobResourceAssignmentGuard {
             return;
         }
         requireTenantAdmin();
-        if (Texts.hasText(queueCode) || Texts.hasText(workerGroup)) {
+        if (EmptyValues.hasText(queueCode) || EmptyValues.hasText(workerGroup)) {
             throw forbidden();
         }
     }

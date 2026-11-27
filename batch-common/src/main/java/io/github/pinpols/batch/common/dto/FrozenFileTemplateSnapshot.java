@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -26,14 +26,14 @@ public record FrozenFileTemplateSnapshot(
     public FrozenFileTemplateSnapshot {
         boolean snapshotFieldsAreInvalid = schemaVersion == null
                 || schemaVersion != CURRENT_SCHEMA_VERSION
-                || EmptyChecks.isBlank(tenantId)
-                || EmptyChecks.isBlank(templateCode)
-                || EmptyChecks.isBlank(templateType)
+                || EmptyValues.isBlank(tenantId)
+                || EmptyValues.isBlank(templateCode)
+                || EmptyValues.isBlank(templateType)
                 || templateId == null
                 || templateId <= 0
                 || templateVersion == null
                 || templateVersion <= 0
-                || EmptyChecks.isEmpty(configuration);
+                || EmptyValues.isEmpty(configuration);
         if (snapshotFieldsAreInvalid) {
             throw invalid();
         }
@@ -49,7 +49,7 @@ public record FrozenFileTemplateSnapshot(
     }
 
     public static FrozenFileTemplateSnapshot capture(Map<String, Object> configuration) {
-        if (EmptyChecks.isEmpty(configuration)) {
+        if (EmptyValues.isEmpty(configuration)) {
             throw invalid();
         }
         String tenantId = text(configuration.get("tenant_id"));

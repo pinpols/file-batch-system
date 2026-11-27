@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AdminTestDataCleanupService;
 import jakarta.validation.constraints.Pattern;
 import java.util.Map;
@@ -37,7 +37,7 @@ public class AdminTestDataCleanupController {
                             message =
                                     "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
                     String prefix) {
-        if (EmptyChecks.isBlank(prefix)) {
+        if (EmptyValues.isBlank(prefix)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
         }
         return cleanupService.cleanupByPrefix(prefix);

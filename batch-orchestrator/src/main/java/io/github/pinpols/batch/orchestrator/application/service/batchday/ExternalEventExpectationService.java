@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -183,7 +183,7 @@ public class ExternalEventExpectationService {
                 inserted += occurrenceMapper.insertIfAbsent(expectedWorkOccurrenceInsertIfAbsentParam);
                 String launchedRequestId = triggerRequestMapper.selectLaunchedExternalEventRequestId(
                         tenantId, definition.workflowDefinitionId(), definition.eventCode(), bizDate);
-                if (Texts.hasText(launchedRequestId)) {
+                if (EmptyValues.hasText(launchedRequestId)) {
                     ExpectedWorkOccurrenceTransitionStatusByGenerationParam
                             expectedWorkOccurrenceTransitionStatusByGenerationParam =
                                     ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
@@ -318,7 +318,7 @@ public class ExternalEventExpectationService {
     }
 
     private static boolean valid(String value, int maxLength) {
-        return Texts.hasText(value) && value.trim().length() <= maxLength;
+        return EmptyValues.hasText(value) && value.trim().length() <= maxLength;
     }
 
     public record DefinitionRequest(

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.testing;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationHandler;
@@ -80,7 +80,7 @@ public final class PlatformWorkerRoleDrill {
             .map(Map.Entry::getValue)
             .sorted()
             .toList();
-    private static final boolean SHARED_CONTROL_PLANE_CONTEXT = EmptyChecks.isNotEmpty(PRESENT_CONTROL_PLANE);
+    private static final boolean SHARED_CONTROL_PLANE_CONTEXT = EmptyValues.isNotEmpty(PRESENT_CONTROL_PLANE);
 
     private static final Set<String> REPORTED = ConcurrentHashMap.newKeySet();
     private static final Map<String, AtomicLong> RESTRICTED = new ConcurrentHashMap<>();
@@ -113,7 +113,7 @@ public final class PlatformWorkerRoleDrill {
 
     static Optional<Target> configuredTarget() {
         String worker = System.getProperty(WORKER_PROPERTY);
-        if (EmptyChecks.isNotBlank(worker)) {
+        if (EmptyValues.isNotBlank(worker)) {
             String trimmedWorker = worker.trim();
             return Optional.of(new Target(trimmedWorker, trimmedWorker));
         }
@@ -452,7 +452,7 @@ public final class PlatformWorkerRoleDrill {
 
         /** Statement 的 execute(String…) 与 Connection 的 prepare*(String…) 首个实参是 SQL。 */
         private static String firstStringArg(Object[] args) {
-            return EmptyChecks.isNotEmpty(args) && args[0] instanceof String text ? text : null;
+            return EmptyValues.isNotEmpty(args) && args[0] instanceof String text ? text : null;
         }
 
         private void applyRole(Connection connection, String module, String sql) throws SQLException {

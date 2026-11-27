@@ -8,8 +8,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.ExternalEventTargetStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
@@ -37,7 +37,7 @@ final class TriggerLaunchQueryService {
     private final PlatformTransactionManager transactionManager;
 
     ExternalEventLaunchStatus findExternalEventStatus(String tenantId, String eventSource, String idempotencyKey) {
-        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(eventSource) || EmptyChecks.isBlank(idempotencyKey)) {
+        if (EmptyValues.isBlank(tenantId) || EmptyValues.isBlank(eventSource) || EmptyValues.isBlank(idempotencyKey)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
         return RlsTenantContextHolder.runWithTenant(
@@ -55,7 +55,7 @@ final class TriggerLaunchQueryService {
         externalEventDeliveryMapper.setTenantContext(tenantId);
         ExternalEventDeliveryEntity delivery =
                 externalEventDeliveryMapper.selectByAlias(tenantId, eventSource, idempotencyKey);
-        Guard.requireFound(delivery, "external event delivery not found");
+        Preconditions.requireFound(delivery, "external event delivery not found");
         List<ExternalEventTargetStatus> targets =
                 externalEventDeliveryMapper.selectTargetStatuses(tenantId, eventSource, delivery.getEventId());
         Instant updatedAt = targets.stream()
@@ -83,7 +83,7 @@ final class TriggerLaunchQueryService {
                 externalEventDeliveryMapper.setTenantContext(expected.tenantId());
                 TriggerRequestEntity existing =
                         triggerRequestMapper.selectByTenantAndDedupKey(expected.tenantId(), idempotencyKey);
-                Guard.requireFound(existing, "launch request not found");
+                Preconditions.requireFound(existing, "launch request not found");
                 TriggerCatchUpIdentity.requireMatchingIfCatchUp(existing, expected);
                 return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
             });
@@ -95,10 +95,10 @@ final class TriggerLaunchQueryService {
     }
 
     TriggerLaunchStatus findLaunchStatus(String tenantId, String idempotencyKey, String externalEventSource) {
-        if (EmptyChecks.isBlank(tenantId)) {
+        if (EmptyValues.isBlank(tenantId)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
         }
-        if (EmptyChecks.isBlank(idempotencyKey)) {
+        if (EmptyValues.isBlank(idempotencyKey)) {
             throw BizException.of(
                     ResultCode.MISSING_IDEMPOTENCY_KEY,
                     ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
@@ -106,6 +106,6 @@ final class TriggerLaunchQueryService {
         }
         TriggerLaunchStatus status =
                 triggerRequestMapper.selectLaunchStatus(tenantId, idempotencyKey, externalEventSource);
-        return Guard.requireFound(status, "launch request not found");
+        return Preconditions.requireFound(status, "launch request not found");
     }
 }

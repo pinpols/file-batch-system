@@ -13,8 +13,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 治理护栏:核心 service 入口 (Launch/Trigger/Gate) 必须显式守护 null 入参 — 走 {@code Guard.require} / {@code
- * Guard.requireFound} / {@code Objects.requireNonNull} / {@code if (x == null) ...} 等任一形式。
+ * 治理护栏:核心 service 入口 (Launch/Trigger/Gate) 必须显式守护 null 入参 — 走 {@code Preconditions.require} / {@code
+ * Preconditions.requireFound} / {@code Objects.requireNonNull} / {@code if (x == null) ...} 等任一形式。
  *
  * <p>背景:这些入口处于 DB→Outbox→Kafka→CLAIM→EXECUTE→REPORT 主链路最上游,空入参直透到下层 mapper 会变成 NPE 风暴。本测试静态扫描 main
  * src,缺守护 → fail。
@@ -38,7 +38,7 @@ class ServiceEntryGuardArchTest {
 
         if (Files.exists(launchValidation)) {
             String src = Files.readString(launchValidation);
-            if (!src.contains("validate(request);") || !src.contains("Guard.require(request != null")) {
+            if (!src.contains("validate(request);") || !src.contains("Preconditions.require(request != null")) {
                 violations.add(
                         launchValidation.getFileName() + " — load 必须调用 validate(request)，且 validate 必须守护 request 空值");
             }
@@ -56,34 +56,23 @@ class ServiceEntryGuardArchTest {
     }
 
     @Test
-    @DisplayName("判空守卫兼容等价工具方法，仍拒绝漏检、与条件及注释中的伪守卫")
-    void shouldRecognizeEquivalentNullGuardWithoutAcceptingUnsafeBranches() {
-        String utilityGuard =
-                "if (EmptyChecks.isNull(request) || EmptyChecks.isNull(loaded)) {" + " return GateDecision.allow(); }";
-        String legacyGuard = "if (request == null || loaded == null) { return GateDecision.allow(); }";
-        String andGuard = utilityGuard.replace("||", "&&");
-        String incompleteGuard = utilityGuard.replace("EmptyChecks.isNull(loaded)", "false");
-        String commentedGuard = "/* " + utilityGuard + " */";
+    @DisplayName("判空守卫只接受原生比较，拒绝漏检、与条件及注释中的伪守卫")
+    void shouldRecognizeNativeNullGuardWithoutAcceptingUnsafeBranches() {
+        String guard = "if (request == null || loaded == null) { return GateDecision.allow(); }";
+        String andGuard = guard.replace("||", "&&");
+        String incompleteGuard = guard.replace("loaded == null", "false");
+        String commentedGuard = "/* " + guard + " */";
 
-        boolean utilityAccepted = hasBatchDayNullGuard(utilityGuard);
-        boolean legacyAccepted = hasBatchDayNullGuard(legacyGuard);
-        boolean andAccepted = hasBatchDayNullGuard(andGuard);
-        boolean incompleteAccepted = hasBatchDayNullGuard(incompleteGuard);
-        boolean commentAccepted = hasBatchDayNullGuard(commentedGuard);
-
-        assertThat(utilityAccepted).isTrue();
-        assertThat(legacyAccepted).isTrue();
-        assertThat(andAccepted).isFalse();
-        assertThat(incompleteAccepted).isFalse();
-        assertThat(commentAccepted).isFalse();
+        assertThat(hasBatchDayNullGuard(guard)).isTrue();
+        assertThat(hasBatchDayNullGuard(andGuard)).isFalse();
+        assertThat(hasBatchDayNullGuard(incompleteGuard)).isFalse();
+        assertThat(hasBatchDayNullGuard(commentedGuard)).isFalse();
     }
 
     private static boolean hasBatchDayNullGuard(String source) {
         String executableSource = source.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)//[^\\r\\n]*", "");
         String compact = executableSource.replaceAll("\\s+", "");
-        return compact.contains(
-                        "if(EmptyChecks.isNull(request)||EmptyChecks.isNull(loaded)){returnGateDecision.allow();")
-                || compact.contains("if(request==null||loaded==null){returnGateDecision.allow();");
+        return compact.contains("if(request==null||loaded==null){returnGateDecision.allow();");
     }
 
     private static void requireSource(Path rel, List<String> violations) {
@@ -117,7 +106,7 @@ class ServiceEntryGuardArchTest {
                     });
         }
         assertThat(violations)
-                .as("service impl 不应显式抛 NPE — 应改用 BizException 或 Guard.require")
+                .as("service impl 不应显式抛 NPE — 应改用 BizException 或 Preconditions.require")
                 .isEmpty();
     }
 }

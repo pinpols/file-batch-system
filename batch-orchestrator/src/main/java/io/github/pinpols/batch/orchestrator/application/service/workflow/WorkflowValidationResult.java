@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Map;
 import lombok.Builder;
@@ -14,11 +14,11 @@ import lombok.Builder;
 public record WorkflowValidationResult(List<ValidationIssue> errors, List<ValidationIssue> warnings) {
 
     public boolean hasErrors() {
-        return EmptyChecks.isNotEmpty(errors);
+        return EmptyValues.isNotEmpty(errors);
     }
 
     public boolean hasWarnings() {
-        return EmptyChecks.isNotEmpty(warnings);
+        return EmptyValues.isNotEmpty(warnings);
     }
 
     public static WorkflowValidationResult clean() {

@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -300,7 +300,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
             String k = String.valueOf(e.getKey());
             String value = String.valueOf(e.getValue());
             SensitiveDataValidator.rejectIfContainsInlineCredential(value, "atomic.spark.sparkConf");
-            boolean confKeyIsOutsideConfiguredPrefixes = !EmptyChecks.isEmpty(Objects.requireNonNull(allowedPrefixes))
+            boolean confKeyIsOutsideConfiguredPrefixes = !EmptyValues.isEmpty(Objects.requireNonNull(allowedPrefixes))
                     && allowedPrefixes.stream().noneMatch(k::startsWith);
             if (confKeyIsOutsideConfiguredPrefixes) {
                 throw new SparkValidationException("sparkConf key does not match an allowed prefix: " + k);
@@ -329,7 +329,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
             }
             String arg = String.valueOf(o);
             SensitiveDataValidator.rejectIfContainsInlineCredential(arg, "atomic.spark.appArgs");
-            boolean appArgMatchesNoConfiguredPattern = !EmptyChecks.isEmpty(Objects.requireNonNull(allowRegex))
+            boolean appArgMatchesNoConfiguredPattern = !EmptyValues.isEmpty(Objects.requireNonNull(allowRegex))
                     && allowRegex.stream().noneMatch(arg::matches);
             if (appArgMatchesNoConfiguredPattern) {
                 throw new SparkValidationException("appArg does not match any allowed pattern: " + arg);

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelValueSupport;
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ public final class CronExpressionFormatRule {
      */
     public static List<WorkbookIssue> validate(List<Map<String, Object>> rows) {
         List<WorkbookIssue> issues = new ArrayList<>();
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return issues;
         }
         for (Map<String, Object> row : rows) {

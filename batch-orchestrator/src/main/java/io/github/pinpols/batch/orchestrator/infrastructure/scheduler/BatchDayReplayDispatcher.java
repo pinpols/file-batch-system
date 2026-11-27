@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchProperties;
@@ -71,7 +71,7 @@ public class BatchDayReplayDispatcher {
         }
         List<BatchDayReplaySessionEntity> running = sessionMapper.selectByStatus(
                 BatchDayReplaySessionStatus.RUNNING.code(), properties.getSessionBatchSize());
-        if (EmptyChecks.isEmpty(running)) {
+        if (EmptyValues.isEmpty(running)) {
             return;
         }
         for (BatchDayReplaySessionEntity session : running) {
@@ -83,7 +83,7 @@ public class BatchDayReplayDispatcher {
                 continue;
             }
             String tenantId = session.tenantId();
-            if (EmptyChecks.isBlank(tenantId)) {
+            if (EmptyValues.isBlank(tenantId)) {
                 continue;
             }
             // RLS Phase B：dispatchSession → dispatchEntry → compensationService.submit 全链路要带租户，
@@ -114,7 +114,7 @@ public class BatchDayReplayDispatcher {
                 session.tenantId(),
                 BatchDayReplayEntryStatus.PENDING.code(),
                 properties.getEntryBatchSize());
-        if (EmptyChecks.isEmpty(pending)) {
+        if (EmptyValues.isEmpty(pending)) {
             return;
         }
         for (BatchDayReplayEntryEntity entry : pending) {

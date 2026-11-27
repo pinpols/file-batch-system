@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.query.ExpiredReadinessWaitRow;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
@@ -46,7 +46,7 @@ public class ReadinessWaitSweeper {
         Instant sweepAt = BatchDateTimeSupport.utcNow();
         List<ExpiredReadinessWaitRow> expiredWaits =
                 occurrenceMapper.selectExpiredReadinessWaits(sweepAt, SWEEP_BATCH_SIZE);
-        if (EmptyChecks.isEmpty(expiredWaits)) {
+        if (EmptyValues.isEmpty(expiredWaits)) {
             return;
         }
         int timedOut = 0;

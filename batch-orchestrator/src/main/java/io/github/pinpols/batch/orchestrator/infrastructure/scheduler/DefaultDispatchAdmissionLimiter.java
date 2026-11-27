@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TokenBucketRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.DispatchAdmissionLimiter;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
@@ -24,13 +24,13 @@ public class DefaultDispatchAdmissionLimiter implements DispatchAdmissionLimiter
 
     @Override
     public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        if (request == null || !Texts.hasText(request.getTenantId())) {
+        if (request == null || !EmptyValues.hasText(request.getTenantId())) {
             return ResourceCheck.allow();
         }
         // 先扣更细粒度的队列桶。若队列已满，不能先消耗租户令牌，否则一个热点队列会让同租户
         // 其它健康队列提前被限流。两个 Redis key 无法跨桶原子回滚；该顺序把保守误差限制在本队列内。
         boolean queueRateLimitApplies =
-                queue != null && Texts.hasText(queue.queueCode()) && queue.maxQps() != null && queue.maxQps() > 0;
+                queue != null && EmptyValues.hasText(queue.queueCode()) && queue.maxQps() != null && queue.maxQps() > 0;
         if (queueRateLimitApplies) {
             boolean queueTokenConsumed = tokenBucketRateLimiter.tryConsumePerSecond(
                     request.getTenantId(), QUEUE_ACTION_PREFIX + queue.queueCode(), queue.maxQps());

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.job.application;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplaySessionResponse;
@@ -33,7 +33,7 @@ public class ConsoleBatchDayReplayApprovalService {
         if (authentication == null
                 || !authentication.isAuthenticated()
                 || !(authentication.getPrincipal() instanceof ConsolePrincipal principal)
-                || !Texts.hasText(principal.username())) {
+                || !EmptyValues.hasText(principal.username())) {
             throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.unauthenticated");
         }
         boolean admin = authentication.getAuthorities().stream()

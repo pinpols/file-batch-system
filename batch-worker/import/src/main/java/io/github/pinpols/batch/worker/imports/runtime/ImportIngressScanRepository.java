@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.imports.runtime;
 
 import io.github.pinpols.batch.common.storage.ObjectSummary;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper;
 import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper.LeaseRow;
 import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper.ObjectWrite;
@@ -67,13 +67,13 @@ public class ImportIngressScanRepository {
         Optional<Lease> claimed = transaction.execute(status -> {
             mapper.ensureStorage(storageId);
             List<Boolean> storageReady = mapper.lockStorage(storageId);
-            if (EmptyChecks.isEmpty(storageReady)) {
+            if (EmptyValues.isEmpty(storageReady)) {
                 throw new IllegalStateException("无法读取存储扫描租约，请检查数据库及 Import 角色授权");
             }
             mapper.ensureScope(start);
             mapper.setInitialDigest(start);
             List<Configuration> configurations = mapper.configurations(scopeId);
-            if (EmptyChecks.isEmpty(configurations)) {
+            if (EmptyValues.isEmpty(configurations)) {
                 throw new IllegalStateException("无法读取入站扫描状态，请检查数据库及 Import 角色授权");
             }
             Configuration configuration = configurations.get(0);
@@ -91,11 +91,11 @@ public class ImportIngressScanRepository {
             long waitingMillis = interval > Long.MAX_VALUE - grace ? Long.MAX_VALUE : interval + grace;
             mapper.queueScope(scopeId, waitingMillis);
             List<String> eligible = mapper.eligibleScopes(storageId);
-            if (EmptyChecks.isEmpty(eligible) || !scopeId.equals(eligible.get(0)) || !storageReady.get(0)) {
+            if (EmptyValues.isEmpty(eligible) || !scopeId.equals(eligible.get(0)) || !storageReady.get(0)) {
                 return Optional.empty();
             }
             List<LeaseRow> rows = mapper.acquireScope(start, owner);
-            if (EmptyChecks.isEmpty(rows)) {
+            if (EmptyValues.isEmpty(rows)) {
                 return Optional.empty();
             }
             List<Long> storageFences = mapper.acquireStorage(storageId, owner);
@@ -126,7 +126,7 @@ public class ImportIngressScanRepository {
 
     public void release(Lease lease) {
         transaction.executeWithoutResult(status -> {
-            if (EmptyChecks.isEmpty(mapper.lockOwnedStorage(lease))) {
+            if (EmptyValues.isEmpty(mapper.lockOwnedStorage(lease))) {
                 return;
             }
             mapper.releaseScope(lease);
@@ -137,10 +137,10 @@ public class ImportIngressScanRepository {
     /** 用数据库行锁和代际隔离过期执行者；调用方不得在 action 中读取对象存储。 */
     public boolean fenced(Lease lease, Runnable action) {
         Boolean committed = transaction.execute(status -> {
-            if (EmptyChecks.isEmpty(mapper.lockActiveStorage(lease))) {
+            if (EmptyValues.isEmpty(mapper.lockActiveStorage(lease))) {
                 return false;
             }
-            if (EmptyChecks.isEmpty(mapper.lockActiveScope(lease))) {
+            if (EmptyValues.isEmpty(mapper.lockActiveScope(lease))) {
                 return false;
             }
             mapper.extendStorage(lease);
@@ -154,7 +154,7 @@ public class ImportIngressScanRepository {
     public void observe(Lease lease, String digest, ObjectSummary object, boolean manifest) {
         ObjectWrite write = ObjectWrite.of(lease, digest, object, manifest);
         List<Long> rows = mapper.observe(write);
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             throw new IllegalStateException("扫描对象摘要冲突，无法安全记录对象");
         }
     }
@@ -169,7 +169,7 @@ public class ImportIngressScanRepository {
 
     public long maxObjectId(Lease lease) {
         List<Long> rows = mapper.maxObjectId(lease.scopeId());
-        return EmptyChecks.isEmpty(rows) ? 0 : rows.get(0);
+        return EmptyValues.isEmpty(rows) ? 0 : rows.get(0);
     }
 
     public Optional<Observed> findObject(Lease lease, String digest) {

@@ -5,10 +5,9 @@ import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -67,7 +66,7 @@ public final class ImportPreprocessObjectSource {
 
     void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
         boolean hasRequiredObjectOwnershipContext =
-                context != null && importPayload != null && Texts.hasText(importPayload.storagePath());
+                context != null && importPayload != null && EmptyValues.hasText(importPayload.storagePath());
         if (!hasRequiredObjectOwnershipContext) {
             throw new ImportPreprocessException(
                     "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
@@ -89,16 +88,16 @@ public final class ImportPreprocessObjectSource {
     }
 
     byte[] resolveRawBytes(ImportJobContext context, ImportPayload importPayload, Object templateConfigObject) {
-        if (importPayload != null && Texts.hasText(importPayload.contentBase64())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.contentBase64())) {
             String encodedPayload = importPayload.contentBase64();
             String trimmedPayload = encodedPayload.trim();
             return Base64.getDecoder().decode(trimmedPayload);
         }
-        if (importPayload != null && Texts.hasText(importPayload.content())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.content())) {
             Charset charset = resolveCharsetForContentBytes(importPayload, templateConfigObject);
             return importPayload.content().getBytes(charset);
         }
-        if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.storagePath())) {
             return downloadObjectBytes(importPayload);
         }
         String raw = context.getRawPayload();
@@ -248,7 +247,7 @@ public final class ImportPreprocessObjectSource {
         Object pipeline = config.get("preprocess_pipeline");
         if (pipeline != null) {
             String presenceText = String.valueOf(pipeline);
-            if (Texts.hasText(presenceText)) {
+            if (EmptyValues.hasText(presenceText)) {
                 String rawPipelineConfig = String.valueOf(pipeline);
                 String pipelineConfig = rawPipelineConfig.trim();
                 if (!"[]".equals(pipelineConfig)) {
@@ -276,14 +275,14 @@ public final class ImportPreprocessObjectSource {
             return false;
         }
         String formatType = resolveFileFormatType(importPayload, templateConfig);
-        if (EmptyChecks.isBlank(formatType)) {
+        if (EmptyValues.isBlank(formatType)) {
             return false;
         }
         return isRangeSliceableFormat(formatType, templateConfig);
     }
 
     static boolean isBinaryImportFormat(String formatType) {
-        if (!Texts.hasText(formatType)) {
+        if (!EmptyValues.hasText(formatType)) {
             return false;
         }
         String trimmedFormatType = formatType.trim();
@@ -293,11 +292,11 @@ public final class ImportPreprocessObjectSource {
     }
 
     static String resolveFileFormatType(ImportPayload importPayload, Map<String, Object> templateConfig) {
-        if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.fileFormatType())) {
             return importPayload.fileFormatType();
         }
         Object value = templateConfig == null ? null : templateConfig.get("file_format_type");
-        if (value != null && Texts.hasText(String.valueOf(value))) {
+        if (value != null && EmptyValues.hasText(String.valueOf(value))) {
             return String.valueOf(value);
         }
         return null;
@@ -386,12 +385,12 @@ public final class ImportPreprocessObjectSource {
     private Charset resolveCharsetForContentBytes(ImportPayload importPayload, Object templateConfigObject) {
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object charset = templateConfig.get("charset");
-            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+            if (charset != null && EmptyValues.hasText(String.valueOf(charset))) {
                 String configuredCharsetText = String.valueOf(charset);
                 return EncodingUtils.resolve(configuredCharsetText);
             }
         }
-        if (importPayload != null && Texts.hasText(importPayload.charset())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.charset())) {
             return EncodingUtils.resolve(importPayload.charset());
         }
         return StandardCharsets.UTF_8;
@@ -400,33 +399,33 @@ public final class ImportPreprocessObjectSource {
     private Charset resolveCharset(ImportPayload importPayload, Object templateConfigObject) {
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object targetCharset = templateConfig.get("target_charset");
-            if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
+            if (targetCharset != null && EmptyValues.hasText(String.valueOf(targetCharset))) {
                 String configuredTargetCharsetText = String.valueOf(targetCharset);
                 return EncodingUtils.resolve(configuredTargetCharsetText);
             }
             Object charset = templateConfig.get("charset");
-            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+            if (charset != null && EmptyValues.hasText(String.valueOf(charset))) {
                 String configuredCharsetText = String.valueOf(charset);
                 return EncodingUtils.resolve(configuredCharsetText);
             }
         }
-        if (importPayload != null && Texts.hasText(importPayload.targetCharset())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.targetCharset())) {
             return EncodingUtils.resolve(importPayload.targetCharset());
         }
-        if (importPayload != null && Texts.hasText(importPayload.charset())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.charset())) {
             return EncodingUtils.resolve(importPayload.charset());
         }
         return StandardCharsets.UTF_8;
     }
 
     private String bucketFor(ImportPayload importPayload) {
-        return Texts.hasText(importPayload.storageBucket())
+        return EmptyValues.hasText(importPayload.storageBucket())
                 ? importPayload.storageBucket()
                 : s3StorageProperties.getBucket();
     }
 
     private static boolean isRangeSliceableFormat(String format, Map<String, Object> templateConfig) {
-        if (!Texts.hasText(format)) {
+        if (!EmptyValues.hasText(format)) {
             return false;
         }
         String trimmedFormat = format.trim();
@@ -461,7 +460,7 @@ public final class ImportPreprocessObjectSource {
         }
         String rawText = String.valueOf(value);
         String text = rawText.trim();
-        return EmptyChecks.isEmpty(text) || "NONE".equalsIgnoreCase(text);
+        return EmptyValues.isEmpty(text) || "NONE".equalsIgnoreCase(text);
     }
 
     private static ImportPreprocessException objectLoadFailure(String bucket, String object, Exception cause) {

@@ -88,6 +88,13 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- @Contract / @Nullable 仅编译期使用，不进入运行时依赖。 -->
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- 测试 -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

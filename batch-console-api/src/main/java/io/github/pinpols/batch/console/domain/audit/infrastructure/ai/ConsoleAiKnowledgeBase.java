@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.io.IOException;
 import java.io.InputStream;
@@ -47,7 +47,7 @@ public class ConsoleAiKnowledgeBase {
     /** 检索与 query 最相关的若干片段(已按相似度降序、过滤低于阈值、截断到 topK)。RAG 关闭或无可用片段时返回空。 */
     public List<Snippet> retrieve(String query) {
         ConsoleAiProperties.Rag rag = properties.getRag();
-        boolean knowledgeRetrievalIsUnavailable = !rag.isEnabled() || EmptyChecks.isBlank(query);
+        boolean knowledgeRetrievalIsUnavailable = !rag.isEnabled() || EmptyValues.isBlank(query);
         if (knowledgeRetrievalIsUnavailable) {
             return List.of();
         }
@@ -135,7 +135,7 @@ public class ConsoleAiKnowledgeBase {
         for (String location : properties.getRag().getLocations()) {
             for (Resource resource : resolve(location)) {
                 String text = read(resource);
-                if (EmptyChecks.isBlank(text)) {
+                if (EmptyValues.isBlank(text)) {
                     continue;
                 }
                 String source = resource.getFilename() == null ? location : resource.getFilename();

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.application.contract.request;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Data;
 
 /**
@@ -38,6 +38,6 @@ public class ConsoleLoginRequest {
 
     /** 当前 body 是否为加密形态。 */
     public boolean isEncrypted() {
-        return EmptyChecks.isNotBlank(encryptedKey);
+        return EmptyValues.isNotBlank(encryptedKey);
     }
 }

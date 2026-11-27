@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrottle;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -43,7 +43,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
 
     @Override
     public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        if (request == null || !Texts.hasText(request.getTenantId())) {
+        if (request == null || !EmptyValues.hasText(request.getTenantId())) {
             return ResourceCheck.allow();
         }
         int requestedPartitions = Math.max(request.getRequestedPartitionCount(), 1);
@@ -59,7 +59,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
 
         String queueWorkerGroup = resolveQueueWorkerGroup(request, queue);
         boolean tenantCountRequired =
-                tenantPartitionQuotaEnabled || (queuePartitionQuotaEnabled && !Texts.hasText(queueWorkerGroup));
+                tenantPartitionQuotaEnabled || (queuePartitionQuotaEnabled && !EmptyValues.hasText(queueWorkerGroup));
         long tenantActivePartitions = tenantCountRequired ? countTenantActivePartitions(request) : 0L;
         if (tenantPartitionQuotaEnabled) {
             int pburst = quotaPolicy.partitionBurstLimit() == null ? 0 : Math.max(0, quotaPolicy.partitionBurstLimit());
@@ -131,7 +131,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
     }
 
     private String resolveQueueWorkerGroup(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-        if (Texts.hasText(request.getWorkerGroup())) {
+        if (EmptyValues.hasText(request.getWorkerGroup())) {
             return request.getWorkerGroup();
         }
         return queue == null ? null : queue.workerGroup();
@@ -139,7 +139,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
 
     private long countQueueActivePartitions(
             ResourceSchedulingRequest request, String workerGroup, long tenantActivePartitions) {
-        if (!Texts.hasText(workerGroup)) {
+        if (!EmptyValues.hasText(workerGroup)) {
             return tenantActivePartitions;
         }
         CountActiveByGroupParam countRequest = CountActiveByGroupParam.builder()

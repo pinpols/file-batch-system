@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import jakarta.activation.DataHandler;
 import jakarta.mail.Message;
@@ -102,7 +102,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
         MailConfig mailConfig = resolveMailConfig(channelConfig);
         if (mailConfig == null) {
             String host = DispatchChannelConfigSupport.stringProp(channelConfig, "smtp_host");
-            if (!Texts.hasText(host)) {
+            if (!EmptyValues.hasText(host)) {
                 return DispatchResult.failureWithoutReceipt("smtp_host missing");
             }
             return DispatchResult.failureWithoutReceipt("mail_from/mail_to or target_endpoint missing");
@@ -150,7 +150,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     /** 包内可见供测试直接调用。 */
     MailConfig resolveMailConfig(Map<String, Object> channelConfig) {
         String host = DispatchChannelConfigSupport.stringProp(channelConfig, "smtp_host");
-        if (!Texts.hasText(host)) {
+        if (!EmptyValues.hasText(host)) {
             return null;
         }
         int port = DispatchChannelConfigSupport.intProp(channelConfig, "smtp_port", 587);
@@ -172,7 +172,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
         String configuredMailTo = DispatchChannelConfigSupport.stringProp(channelConfig, "mail_to");
         String configuredTargetEndpoint = DispatchChannelConfigSupport.stringProp(channelConfig, "target_endpoint");
         String to = firstNonBlank(configuredMailTo, configuredTargetEndpoint);
-        if (!Texts.hasText(from) || !Texts.hasText(to)) {
+        if (!EmptyValues.hasText(from) || !EmptyValues.hasText(to)) {
             return null;
         }
         return MailConfig.builder()
@@ -229,7 +229,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
         Map<String, Object> channelConfig = command.channelConfig();
         String subject = sanitizeHeader(DispatchChannelConfigSupport.stringProp(channelConfig, "mail_subject"));
-        if (!Texts.hasText(subject)) {
+        if (!EmptyValues.hasText(subject)) {
             subject = "File dispatch " + externalRequestId;
         }
 
@@ -335,10 +335,10 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     }
 
     private static String firstNonBlank(String a, String b) {
-        if (Texts.hasText(a)) {
+        if (EmptyValues.hasText(a)) {
             return a.trim();
         }
-        if (Texts.hasText(b)) {
+        if (EmptyValues.hasText(b)) {
             return b.trim();
         }
         return "";

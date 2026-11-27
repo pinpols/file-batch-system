@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.application.observability;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import java.time.Duration;
 import java.util.Collection;
@@ -42,7 +42,7 @@ public class SseTicketService {
         String ticket = ticketUuidText.replace("-", "");
         String roles = String.join(
                 ROLE_SEPARATOR,
-                authorities.stream().filter(Texts::hasText).distinct().toList());
+                authorities.stream().filter(EmptyValues::hasText).distinct().toList());
         String value = username + FIELD_SEPARATOR + (tenantId == null ? "" : tenantId) + FIELD_SEPARATOR + roles;
         ticketStore.save(ticket, value, TICKET_TTL);
         return ticket;
@@ -50,20 +50,20 @@ public class SseTicketService {
 
     /** 验证并消费 ticket（一次性）。 */
     public TicketPayload validate(String ticket) {
-        if (!Texts.hasText(ticket)) {
+        if (!EmptyValues.hasText(ticket)) {
             return null;
         }
         String value = ticketStore.consume(ticket.trim());
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return null;
         }
         String[] parts = value.split(FIELD_SEPARATOR_REGEX, -1);
         String username = parts.length > 0 ? parts[0] : "";
         String tenantId = parts.length > 1 ? parts[1] : "";
         Set<String> roles = new LinkedHashSet<>();
-        if (parts.length > 2 && Texts.hasText(parts[2])) {
+        if (parts.length > 2 && EmptyValues.hasText(parts[2])) {
             for (String r : parts[2].split(ROLE_SEPARATOR)) {
-                if (Texts.hasText(r)) {
+                if (EmptyValues.hasText(r)) {
                     roles.add(r.trim());
                 }
             }

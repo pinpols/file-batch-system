@@ -14,9 +14,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
@@ -326,7 +325,7 @@ public class BatchDayReplayService {
 
     private BatchDayReplayPreviewTokenEntity lockValidPreviewToken(
             BatchDayReplaySubmitCommand command, PreparedReplay prepared, Instant now) {
-        if (!Texts.hasText(command.previewToken())) {
+        if (!EmptyValues.hasText(command.previewToken())) {
             throw invalidPreviewToken();
         }
         String tokenHash = sha256(command.previewToken());
@@ -462,7 +461,7 @@ public class BatchDayReplayService {
     /** 查询 replay session 历史列表；Controller 只负责 HTTP 参数，租户约束留在应用层。 */
     @Transactional(readOnly = true)
     public List<BatchDayReplaySessionEntity> listSessions(String tenantId, String status, int limit) {
-        if (!Texts.hasText(tenantId) || limit <= 0) {
+        if (!EmptyValues.hasText(tenantId) || limit <= 0) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
         }
         int safeLimit = Math.min(limit, MAX_RECENT_SESSIONS);
@@ -472,7 +471,7 @@ public class BatchDayReplayService {
     /** 查询 replay entry 进度列表；Controller 只负责 HTTP 参数，查询约束留在应用层。 */
     @Transactional(readOnly = true)
     public List<BatchDayReplayEntryEntity> listEntries(String tenantId, Long sessionId, String status, int limit) {
-        if (!Texts.hasText(tenantId) || sessionId == null || limit <= 0) {
+        if (!EmptyValues.hasText(tenantId) || sessionId == null || limit <= 0) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
         }
         loadOrThrow(tenantId, sessionId);
@@ -483,11 +482,11 @@ public class BatchDayReplayService {
     @Transactional
     public BatchDayReplaySessionEntity retryFailedSubmission(
             String tenantId, Long sessionId, Long entryId, String operatorId, String reason) {
-        boolean retrySubmissionIdentityIsIncomplete = !Texts.hasText(tenantId)
+        boolean retrySubmissionIdentityIsIncomplete = !EmptyValues.hasText(tenantId)
                 || sessionId == null
                 || entryId == null
-                || !Texts.hasText(operatorId)
-                || !Texts.hasText(reason);
+                || !EmptyValues.hasText(operatorId)
+                || !EmptyValues.hasText(reason);
         if (retrySubmissionIdentityIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
         }
@@ -670,12 +669,12 @@ public class BatchDayReplayService {
 
     private void validateCommand(BatchDayReplaySubmitCommand command) {
         boolean replaySubmitCommandIsInvalid = command == null
-                || !Texts.hasText(command.tenantId())
-                || !Texts.hasText(command.calendarCode())
+                || !EmptyValues.hasText(command.tenantId())
+                || !EmptyValues.hasText(command.calendarCode())
                 || command.bizDate() == null
-                || !Texts.hasText(command.scope())
-                || !Texts.hasText(command.reason())
-                || !Texts.hasText(command.requestedBy());
+                || !EmptyValues.hasText(command.scope())
+                || !EmptyValues.hasText(command.reason())
+                || !EmptyValues.hasText(command.requestedBy());
         if (replaySubmitCommandIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
         }
@@ -785,8 +784,8 @@ public class BatchDayReplayService {
 
     private List<BatchDayReplayEntryEntity> materializeSubsetJobEntries(
             BatchDayReplaySubmitCommand command, Instant now) {
-        List<String> jobCodes = EmptyChecks.isEmpty(command.jobCodes()) ? List.of() : command.jobCodes();
-        if (EmptyChecks.isEmpty(jobCodes)) {
+        List<String> jobCodes = EmptyValues.isEmpty(command.jobCodes()) ? List.of() : command.jobCodes();
+        if (EmptyValues.isEmpty(jobCodes)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.subset_job_codes_required");
         }
         List<String> statusesEligibleForReplay = replayableStatuses();
@@ -853,7 +852,7 @@ public class BatchDayReplayService {
             return List.of();
         }
         List<JobDefinitionView> definitions = jobDefinitionMapper.selectByTenantAndEnabled(command.tenantId(), true);
-        if (EmptyChecks.isEmpty(definitions)) {
+        if (EmptyValues.isEmpty(definitions)) {
             return List.of();
         }
         List<BatchDayReplayEntryEntity> entries = new ArrayList<>();
@@ -887,11 +886,11 @@ public class BatchDayReplayService {
     }
 
     private List<String> normalizeRequestedJobCodes(List<String> jobCodes) {
-        if (EmptyChecks.isEmpty(jobCodes)) {
+        if (EmptyValues.isEmpty(jobCodes)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.subset_job_codes_required");
         }
         return jobCodes.stream()
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .map(String::trim)
                 .distinct()
                 .toList();
@@ -900,12 +899,12 @@ public class BatchDayReplayService {
     private boolean isSchedulePlanCandidate(
             JobDefinitionView definition, String calendarCode, LocalDate bizDate, List<String> requestedCodes) {
         boolean replayDefinitionCalendarDoesNotMatch = definition == null
-                || !Texts.hasText(definition.jobCode())
+                || !EmptyValues.hasText(definition.jobCode())
                 || !calendarCode.equals(definition.calendarCode());
         if (replayDefinitionCalendarDoesNotMatch) {
             return false;
         }
-        if (EmptyChecks.isNotEmpty(requestedCodes) && !requestedCodes.contains(definition.jobCode())) {
+        if (EmptyValues.isNotEmpty(requestedCodes) && !requestedCodes.contains(definition.jobCode())) {
             return false;
         }
         if (ScheduleType.MANUAL.code().equalsIgnoreCase(definition.scheduleType())) {
@@ -914,7 +913,7 @@ public class BatchDayReplayService {
         if (!ScheduleType.CRON.code().equalsIgnoreCase(definition.scheduleType())) {
             return true;
         }
-        if (!Texts.hasText(definition.scheduleExpr())) {
+        if (!EmptyValues.hasText(definition.scheduleExpr())) {
             return false;
         }
         try {
@@ -1008,14 +1007,14 @@ public class BatchDayReplayService {
         // BatchDayReplayTerminalReconciler 按 (sessionId, tenantId, jobCode) 匹配不到任何 entry
         // → session 永远卡 RUNNING、inFlight 永不减。改为 fail-fast：解析失败立即拒绝创建 replay entry，
         // 让运维显式修 business_key 而不是产生长期停滞的 session。
-        if (!Texts.hasText(businessKey)) {
+        if (!EmptyValues.hasText(businessKey)) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT,
                     "error.replay.business_key_blank",
                     businessKey == null ? "<null>" : "<blank>");
         }
         String[] parts = businessKey.split(":");
-        if (parts.length < 2 || !Texts.hasText(parts[1])) {
+        if (parts.length < 2 || !EmptyValues.hasText(parts[1])) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.replay.business_key_unparseable", businessKey);
         }
         return parts[1];
@@ -1058,7 +1057,7 @@ public class BatchDayReplayService {
             String tenantId, List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries) {
         List<String> businessKeys = previewEntries.stream()
                 .map(BatchDayReplayPreviewResponse.PreviewEntry::businessKey)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .distinct()
                 .toList();
         if (businessKeys.isEmpty()) {
@@ -1066,7 +1065,7 @@ public class BatchDayReplayService {
         }
         List<BatchDayReplayAssetPartitionImpactView> rows =
                 entryMapper.selectAssetPartitionImpacts(tenantId, businessKeys);
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return List.of();
         }
         return rows.stream()
@@ -1090,7 +1089,7 @@ public class BatchDayReplayService {
             return List.of();
         }
         List<BatchDayReplayDispatchImpactView> rows = entryMapper.selectDispatchImpacts(tenantId, sourceInstanceIds);
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return List.of();
         }
         return rows.stream()
@@ -1106,7 +1105,7 @@ public class BatchDayReplayService {
     private Map<Long, String> loadVersionBusinessKeys(BatchDayReplaySubmitCommand command, String scope) {
         List<Long> versionIds = command.versionIds();
         boolean outputReplaySelectionIsInvalid =
-                !BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope) || EmptyChecks.isEmpty(versionIds);
+                !BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope) || EmptyValues.isEmpty(versionIds);
         if (outputReplaySelectionIsInvalid) {
             return Map.of();
         }
@@ -1128,7 +1127,7 @@ public class BatchDayReplayService {
     }
 
     private BatchDayReplaySessionEntity loadOrThrow(String tenantId, Long sessionId) {
-        if (!Texts.hasText(tenantId) || sessionId == null) {
+        if (!EmptyValues.hasText(tenantId) || sessionId == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
         }
         BatchDayReplaySessionEntity session = sessionMapper.selectById(tenantId, sessionId);
@@ -1159,7 +1158,7 @@ public class BatchDayReplayService {
     }
 
     private String defaultIfBlank(String value, String defaultValue) {
-        return Texts.hasText(value) ? value : defaultValue;
+        return EmptyValues.hasText(value) ? value : defaultValue;
     }
 
     private String truncate(String text, int max) {

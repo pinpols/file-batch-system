@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.annotation.PostConstruct;
 import java.util.Set;
 import lombok.Data;
@@ -92,7 +92,7 @@ public class BatchSecurityProperties implements EnvironmentAware {
     private static final int MIN_SECRET_LENGTH = 16;
 
     private void validateNotPlaceholder(String key, String value) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             throw new IllegalStateException("FATAL: production secret is not configured: " + key
                     + " is empty; inject a real credential through a secret manager or environment variable");
         }

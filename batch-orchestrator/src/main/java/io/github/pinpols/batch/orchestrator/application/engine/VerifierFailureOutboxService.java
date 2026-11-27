@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.engine;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.VerifierFailure;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -65,7 +65,7 @@ public class VerifierFailureOutboxService {
         if (command == null || task == null) {
             return 0;
         }
-        if (EmptyChecks.isEmpty(failures)) {
+        if (EmptyValues.isEmpty(failures)) {
             return 0;
         }
         int written = 0;

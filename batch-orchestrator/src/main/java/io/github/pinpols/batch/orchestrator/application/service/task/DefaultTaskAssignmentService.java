@@ -14,7 +14,7 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
@@ -171,10 +171,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     @Transactional
     public boolean markNonIdempotentExecutionStarted(
             String tenantId, Long taskId, String workerCode, String partitionInvocationId) {
-        boolean executionIdentityIsIncomplete = EmptyChecks.isBlank(tenantId)
+        boolean executionIdentityIsIncomplete = EmptyValues.isBlank(tenantId)
                 || taskId == null
-                || EmptyChecks.isBlank(workerCode)
-                || EmptyChecks.isBlank(partitionInvocationId);
+                || EmptyValues.isBlank(workerCode)
+                || EmptyValues.isBlank(partitionInvocationId);
         if (executionIdentityIsIncomplete) {
             return false;
         }
@@ -267,7 +267,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
                 && workerCode.equals(task.getAssignedWorkerCode())
                 && task.getJobPartitionId() != null
-                && EmptyChecks.isNotBlank(partitionInvocationId);
+                && EmptyValues.isNotBlank(partitionInvocationId);
     }
 
     /**
@@ -286,7 +286,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return false;
         }
         // R3-P1-10：invocationId 强制非空，避免多副本同 workerCode 续他人 lease。
-        if (EmptyChecks.isBlank(partitionInvocationId)) {
+        if (EmptyValues.isBlank(partitionInvocationId)) {
             log.warn(
                     "renewLease rejected: partitionInvocationId required (R3-P1-10): tenant={} taskId={}"
                             + " workerCode={}",
@@ -321,7 +321,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         if (executionStarted && (current == null || current.getJobInstanceId() == null)) {
             return new TaskHeartbeatResult(false, false);
         }
-        if (EmptyChecks.isNotBlank(detailsJson) && current != null && current.getJobInstanceId() != null) {
+        if (EmptyValues.isNotBlank(detailsJson) && current != null && current.getJobInstanceId() != null) {
             Long instanceId = current.getJobInstanceId();
             jobInstanceMapper.acquireInstanceAdvisoryLock(tenantId, instanceId);
             current = jobTaskMapper.selectById(tenantId, taskId);
@@ -351,7 +351,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.claim_not_available");
             }
         }
-        if (EmptyChecks.isNotBlank(detailsJson)) {
+        if (EmptyValues.isNotBlank(detailsJson)) {
             jobTaskMapper.updateHeartbeatDetails(tenantId, taskId, detailsJson);
         }
         return new TaskHeartbeatResult(true, cancelRequested);
@@ -359,7 +359,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
     /** 保留任意进度载荷，只有明确的 JSON 布尔真值才能声明执行入口。 */
     private static boolean isExecutionStart(String detailsJson) {
-        if (EmptyChecks.isBlank(detailsJson)) {
+        if (EmptyValues.isBlank(detailsJson)) {
             return false;
         }
         JsonNode details = JsonUtils.fromJson(detailsJson, JsonNode.class);
@@ -375,7 +375,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return null;
         }
         if (!attempt.isTextual()
-                || EmptyChecks.isBlank(attempt.textValue())
+                || EmptyValues.isBlank(attempt.textValue())
                 || attempt.textValue().length() > EXECUTION_ATTEMPT_ID_MAX_LENGTH) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
         }
@@ -398,7 +398,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     @Override
     @Transactional
     public List<TaskHeartbeatResult> renewLeaseBatch(List<LeaseRenewCommand> items) {
-        if (EmptyChecks.isEmpty(items)) {
+        if (EmptyValues.isEmpty(items)) {
             return List.of();
         }
         Instant renewalTime = BatchDateTimeSupport.utcNow();
@@ -410,7 +410,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 continue;
             }
             String tenantId = item.tenantId();
-            if (EmptyChecks.isBlank(tenantId)) {
+            if (EmptyValues.isBlank(tenantId)) {
                 continue;
             }
             Long taskId = item.taskId();
@@ -418,11 +418,11 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 continue;
             }
             String workerCode = item.workerCode();
-            if (EmptyChecks.isBlank(workerCode)) {
+            if (EmptyValues.isBlank(workerCode)) {
                 continue;
             }
             String invocationId = item.partitionInvocationId();
-            if (EmptyChecks.isBlank(invocationId)) {
+            if (EmptyValues.isBlank(invocationId)) {
                 continue;
             }
             sqlItems.add(RenewLeaseBatchItem.builder()
@@ -433,7 +433,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                     .build());
         }
         Map<String, RenewLeaseBatchRow> renewedByKey = new HashMap<>();
-        if (EmptyChecks.isNotEmpty(sqlItems)) {
+        if (EmptyValues.isNotEmpty(sqlItems)) {
             for (RenewLeaseBatchRow row :
                     jobPartitionMapper.renewLeaseBatch(sqlItems, leaseExpireAt, TaskStatus.RUNNING.code())) {
                 renewedByKey.put(row.getTenantId() + "\u0000" + row.getTaskId(), row);
@@ -668,7 +668,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
     private List<DependencyResultReference> dependencyResultSnapshot(Map<String, Object> instanceSnapshot) {
         Object value = instanceSnapshot.get("dependencyResultSnapshot");
-        if (!(value instanceof List<?> references) || EmptyChecks.isEmpty(references)) {
+        if (!(value instanceof List<?> references) || EmptyValues.isEmpty(references)) {
             return List.of();
         }
         try {
@@ -706,7 +706,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return Map.of();
         }
         String paramsSnapshot = instance.getParamsSnapshot();
-        if (EmptyChecks.isBlank(paramsSnapshot)) {
+        if (EmptyValues.isBlank(paramsSnapshot)) {
             return Map.of();
         }
         try {
@@ -740,7 +740,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return Map.of();
         }
         String inputSnapshot = partition.getInputSnapshot();
-        if (EmptyChecks.isBlank(inputSnapshot)) {
+        if (EmptyValues.isBlank(inputSnapshot)) {
             return Map.of();
         }
         try {
@@ -761,7 +761,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         if (value instanceof Number number) {
             return number.intValue();
         }
-        if (value instanceof String text && EmptyChecks.isNotBlank(text)) {
+        if (value instanceof String text && EmptyValues.isNotBlank(text)) {
             return Integer.valueOf(text);
         }
         return null;
@@ -771,7 +771,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         if (value instanceof Number number) {
             return number.longValue();
         }
-        if (value instanceof String text && EmptyChecks.isNotBlank(text)) {
+        if (value instanceof String text && EmptyValues.isNotBlank(text)) {
             return Long.valueOf(text);
         }
         return null;
@@ -840,7 +840,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
     private ClaimEval evaluateClaim(
             String tenantId, String workerCode, JobTaskEntity task, WorkerLookupMemo workerMemo) {
-        if (EmptyChecks.isBlank(workerCode)) {
+        if (EmptyValues.isBlank(workerCode)) {
             return new ClaimEval(false, null);
         }
         // PERF(5.2c): memo 非空时同 (tenant,workerCode) 只查一次 worker_registry（含缓存 miss）。
@@ -872,7 +872,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return new ClaimEval(true, partition);
         }
         String partitionWorkerGroup = partition.getWorkerGroup();
-        if (EmptyChecks.isBlank(partitionWorkerGroup)) {
+        if (EmptyValues.isBlank(partitionWorkerGroup)) {
             return new ClaimEval(true, partition);
         }
         String registeredWorkerGroup = workerRegistry.workerGroup();
@@ -895,7 +895,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return primary;
         }
         String fallbackTenant = resourceSchedulerProperties.getSharedTenantFallback();
-        if (EmptyChecks.isBlank(fallbackTenant) || fallbackTenant.equals(tenantId)) {
+        if (EmptyValues.isBlank(fallbackTenant) || fallbackTenant.equals(tenantId)) {
             return null;
         }
         WorkerRegistryEntity fallback = workerRegistryMapper.selectByTenantAndWorkerCode(fallbackTenant, workerCode);

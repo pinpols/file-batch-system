@@ -9,10 +9,9 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
@@ -102,7 +101,7 @@ public class BatchDaySettleScheduler {
             return;
         }
         List<BatchDayInstanceEntity> candidates = batchDayInstanceMapper.selectByDayStatusIn(TRACKED_STATUSES);
-        if (EmptyChecks.isEmpty(candidates)) {
+        if (EmptyValues.isEmpty(candidates)) {
             recoverFailedCatchUps();
             return;
         }
@@ -114,7 +113,7 @@ public class BatchDaySettleScheduler {
                 continue;
             }
             String tenantId = candidate.tenantId();
-            if (EmptyChecks.isBlank(tenantId)) {
+            if (EmptyValues.isBlank(tenantId)) {
                 continue;
             }
             try {
@@ -143,10 +142,10 @@ public class BatchDaySettleScheduler {
     private void recoverFailedCatchUps() {
         List<BatchDayInstanceEntity> failedDays =
                 batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(FAILED_CATCH_UP_RECOVERY_LIMIT);
-        if (EmptyChecks.isEmpty(failedDays)) return;
+        if (EmptyValues.isEmpty(failedDays)) return;
         Instant now = dateTimeSupport.nowInstant();
         for (BatchDayInstanceEntity failedDay : failedDays) {
-            if (failedDay == null || !Texts.hasText(failedDay.tenantId())) continue;
+            if (failedDay == null || !EmptyValues.hasText(failedDay.tenantId())) continue;
             RlsTenantContextHolder.runWithTenant(failedDay.tenantId(), () -> driveCatchUp(failedDay, now));
         }
     }
@@ -324,7 +323,7 @@ public class BatchDaySettleScheduler {
                                 tenantId, calendarCode, bizDate)
                         > 0
                 || calendarDependencyWaitMapper.countWaitingByTenantCalendarBizDate(tenantId, calendarCode, bizDate) > 0
-                || EmptyChecks.isNotEmpty(
+                || EmptyValues.isNotEmpty(
                         batchDayWaitingLaunchMapper.selectWaitingByCalendarBizDate(tenantId, calendarCode, bizDate, 1));
         if (expectedOrWaitingWork) {
             return true;
@@ -358,7 +357,7 @@ public class BatchDaySettleScheduler {
         List<ExpectedWorkOccurrenceOverride> overdue =
                 expectedWorkOccurrenceMapper.selectDueExpectedWithoutMissingAlert(
                         expectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery);
-        if (EmptyChecks.isEmpty(overdue)) {
+        if (EmptyValues.isEmpty(overdue)) {
             return;
         }
         for (ExpectedWorkOccurrenceOverride occurrence : overdue) {
@@ -419,7 +418,7 @@ public class BatchDaySettleScheduler {
         }
         List<JobInstanceEntity> candidates = jobInstanceMapper.selectBatchDayCatchUpCandidates(
                 batchDay.tenantId(), batchDay.calendarCode(), batchDay.bizDate());
-        if (EmptyChecks.isEmpty(candidates)) {
+        if (EmptyValues.isEmpty(candidates)) {
             return;
         }
         for (JobInstanceEntity candidate : candidates) {
@@ -503,7 +502,7 @@ public class BatchDaySettleScheduler {
     private LaunchRequest readCatchUpSnapshot(TriggerRequestEntity request) {
         LaunchRequest original = null;
         try {
-            if (Texts.hasText(request.getLaunchPayload())) {
+            if (EmptyValues.hasText(request.getLaunchPayload())) {
                 original = JsonUtils.fromJsonStrict(request.getLaunchPayload(), LaunchRequest.class);
             }
         } catch (IllegalArgumentException invalidPayload) {

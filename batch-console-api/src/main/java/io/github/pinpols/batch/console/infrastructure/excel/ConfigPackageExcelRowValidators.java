@@ -59,9 +59,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
@@ -128,12 +127,12 @@ final class ConfigPackageExcelRowValidators {
     }
 
     private static List<String> splitDependencyCodes(String value) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return List.of();
         }
         return Arrays.stream(value.split(","))
                 .map(String::trim)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .distinct()
                 .toList();
     }
@@ -226,11 +225,11 @@ final class ConfigPackageExcelRowValidators {
 
             @Override
             public <S> Void visit(PlainSelect plainSelect, S context) {
-                boolean selectHasWriteOrLockClause = EmptyChecks.isNotEmpty(plainSelect.getIntoTables())
+                boolean selectHasWriteOrLockClause = EmptyValues.isNotEmpty(plainSelect.getIntoTables())
                         || plainSelect.getIntoTempTable() != null
                         || plainSelect.getMySqlSelectIntoClause() != null
                         || plainSelect.getForUpdate() != null
-                        || EmptyChecks.isNotEmpty(plainSelect.getForUpdateTables());
+                        || EmptyValues.isNotEmpty(plainSelect.getForUpdateTables());
                 if (selectHasWriteOrLockClause) {
                     found = true;
                 }

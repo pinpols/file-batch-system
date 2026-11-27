@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import java.io.File;
@@ -132,7 +132,7 @@ public class ExcelExportFormat extends AbstractExportFormat {
      * 行硬限,留一行给表头)。
      */
     private int resolveRowsPerSheet(Map<String, Object> templateConfig) {
-        if (EmptyChecks.isEmpty(templateConfig)) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             return 0;
         }
         Integer raw =

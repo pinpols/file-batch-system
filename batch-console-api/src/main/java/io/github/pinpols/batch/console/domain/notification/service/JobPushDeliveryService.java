@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
@@ -81,7 +81,7 @@ public class JobPushDeliveryService {
         if (pollingUnavailable) return;
         int remaining = Math.max(1, properties.getJobNotify().getBatchSize());
         List<String> tenants = deliveries.tenantPage(afterTenant, Math.min(TENANT_PAGE_SIZE, remaining));
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(tenants))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(tenants))) {
             afterTenant = "";
             tenants = deliveries.tenantPage(afterTenant, Math.min(TENANT_PAGE_SIZE, remaining));
         }

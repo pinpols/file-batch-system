@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
@@ -95,7 +94,7 @@ final class TenantConfigMatrixBuilder {
                 workflow -> workflow.getNodes() != null
                         && workflow.getNodes().stream().anyMatch(node -> jobCode.equals(node.getRelatedJobCode())));
         TenantConfigReferenceResolver.References refs = referenceResolver.resolve(job, relatedWorkflows);
-        List<String> templateCodes = EmptyChecks.isEmpty(refs.templateCodes())
+        List<String> templateCodes = EmptyValues.isEmpty(refs.templateCodes())
                 ? filter(bundle.getFileTemplates(), item -> equalsNullable(job.getBizType(), item.getBizType()))
                         .stream()
                         .map(FileTemplateSpec::getTemplateCode)
@@ -170,7 +169,7 @@ final class TenantConfigMatrixBuilder {
 
     private static List<String> channelCodes(
             JobDefinitionSpec job, ConfigSyncBundlePayload bundle, TenantConfigReferenceResolver.References refs) {
-        if (EmptyChecks.isNotEmpty(refs.channelCodes())) {
+        if (EmptyValues.isNotEmpty(refs.channelCodes())) {
             return refs.channelCodes();
         }
         return filter(bundle.getFileChannels(), item -> equalsNullable(job.getBizType(), item.getChannelCode()))
@@ -180,7 +179,7 @@ final class TenantConfigMatrixBuilder {
     }
 
     private static String resolveBaselineTenantId(TenantConfigMatrixRequest request) {
-        if (Texts.hasText(request.getBaselineTenantId())) {
+        if (EmptyValues.hasText(request.getBaselineTenantId())) {
             return request.getBaselineTenantId();
         }
         return request.getTenantIds().get(0);
@@ -193,15 +192,15 @@ final class TenantConfigMatrixBuilder {
     }
 
     private static boolean equalsNullable(String left, String right) {
-        return EmptyChecks.isNotBlank(left) && left.equals(right);
+        return EmptyValues.isNotBlank(left) && left.equals(right);
     }
 
     private static <T> T first(List<T> values) {
-        return EmptyChecks.isEmpty(values) ? null : values.get(0);
+        return EmptyValues.isEmpty(values) ? null : values.get(0);
     }
 
     private static <T> List<T> filter(List<T> source, Predicate<T> predicate) {
-        if (EmptyChecks.isEmpty(source)) {
+        if (EmptyValues.isEmpty(source)) {
             return List.of();
         }
         return source.stream().filter(predicate).toList();

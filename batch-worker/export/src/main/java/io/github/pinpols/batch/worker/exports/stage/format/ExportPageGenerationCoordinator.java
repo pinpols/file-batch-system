@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Map;
 
@@ -53,7 +53,7 @@ final class ExportPageGenerationCoordinator {
                 break;
             }
             List<Map<String, Object>> details = page.rows();
-            if (EmptyChecks.isEmpty(details)) {
+            if (EmptyValues.isEmpty(details)) {
                 break;
             }
             for (Map<String, Object> detail : details) {

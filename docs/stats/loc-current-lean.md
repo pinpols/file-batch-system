@@ -1,21 +1,21 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `c180159b3`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `51f19d342`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,401 | 819,954 | 438,448 | 53.5% |
+| 6,400 | 819,952 | 438,380 | 53.5% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,951 | 408,798 | 226,207 | 55.3% |
-| prod | 3,528 | 322,390 | 157,237 | 48.8% |
+| test | 1,951 | 408,810 | 226,220 | 55.3% |
+| prod | 3,527 | 322,369 | 157,152 | 48.7% |
 | script | 742 | 69,658 | 42,568 | 61.1% |
-| config | 68 | 10,283 | 7,684 | 74.7% |
+| config | 68 | 10,290 | 7,688 | 74.7% |
 | infra-config | 35 | 6,212 | 4,513 | 72.6% |
 | sql | 77 | 2,613 | 239 | 9.1% |
 
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,825 | 631,711 | 343,960 | 54.4% |
+| Java | 4,824 | 631,702 | 343,888 | 54.4% |
 | Python | 354 | 53,886 | 29,507 | 54.8% |
 | Shell | 219 | 36,286 | 28,722 | 79.2% |
 | YAML | 110 | 15,074 | 11,648 | 77.3% |
-| XML | 225 | 31,900 | 9,490 | 29.7% |
+| XML | 225 | 31,907 | 9,494 | 29.8% |
 | TypeScript | 42 | 8,942 | 4,743 | 53.0% |
 | Rust | 24 | 10,096 | 3,621 | 35.9% |
 | Properties | 5 | 3,197 | 2,657 | 83.1% |
@@ -58,7 +58,7 @@
 | `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanPersistenceIntegrationTest.java` | test | Java | 1,474 | 954 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigBatchInitStrictAtomicityIntegrationTest.java` | test | Java | 1,544 | 951 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 1,031 | 940 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigDependencyRlsIntegrationTest.java` | test | Java | 1,774 | 928 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigDependencyRlsIntegrationTest.java` | test | Java | 1,773 | 927 |
 
 ## 复跑
 

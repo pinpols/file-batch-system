@@ -6,8 +6,8 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -62,7 +62,7 @@ public class BatchDayGateService {
             return GateDecision.allow();
         }
         String calendarCode = loaded.effectiveCalendarCode();
-        if (!Texts.hasText(calendarCode) || request.bizDate() == null) {
+        if (!EmptyValues.hasText(calendarCode) || request.bizDate() == null) {
             return GateDecision.allow();
         }
         // FROZEN 优先于前日门闩。CATCH_UP / RERUN 显式覆盖 frozen 限制(运维补救路径)。
@@ -130,7 +130,7 @@ public class BatchDayGateService {
      */
     private String checkFineGrainedDependency(
             String scope, LaunchRequest request, JobDefinitionView job, LocalDate prevBizDate) {
-        if ("SAME_JOB_GROUP".equals(scope) && Texts.hasText(job.jobGroupCode())) {
+        if ("SAME_JOB_GROUP".equals(scope) && EmptyValues.hasText(job.jobGroupCode())) {
             int active = jobInstanceMapper.countNonTerminalByJobGroupAndBizDate(
                     request.tenantId(), job.jobGroupCode(), prevBizDate);
             return active > 0 ? "PREVIOUS_JOB_GROUP_NOT_CLOSED" : null;
@@ -302,7 +302,7 @@ public class BatchDayGateService {
 
     @SuppressWarnings("java:S2259")
     private String normalize(String value, String defaultValue) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return defaultValue;
         }
         String trimmedValue = value.trim();

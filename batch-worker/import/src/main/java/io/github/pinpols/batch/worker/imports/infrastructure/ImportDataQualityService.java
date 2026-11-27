@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.CustomerImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -90,7 +90,7 @@ public class ImportDataQualityService {
 
     public Map<Long, ValidationIssue> validateChunk(
             ValidationSession session, List<CustomerImportPayload> payloads, long recordBase) {
-        if (session == null || EmptyChecks.isEmpty(payloads)) {
+        if (session == null || EmptyValues.isEmpty(payloads)) {
             return Map.of();
         }
         List<Map<String, Object>> rows = new ArrayList<>(payloads.size());
@@ -103,7 +103,7 @@ public class ImportDataQualityService {
 
     public Map<Long, ValidationIssue> validateChunkRows(
             ValidationSession session, List<Map<String, Object>> rows, long recordBase) {
-        if (session == null || EmptyChecks.isEmpty(rows)) {
+        if (session == null || EmptyValues.isEmpty(rows)) {
             return Map.of();
         }
         return recordEvaluator.evaluate(session, rows, recordBase);
@@ -125,7 +125,7 @@ public class ImportDataQualityService {
                             return false;
                         }
                         String itemText = String.valueOf(item);
-                        return !EmptyChecks.isBlank(Objects.requireNonNull(itemText));
+                        return !EmptyValues.isBlank(Objects.requireNonNull(itemText));
                     })
                     .map(String::valueOf)
                     .toList();

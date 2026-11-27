@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.realtime;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleOpsSummaryRealtimeStream;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeEventHub;
@@ -158,7 +158,7 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
             String eventType = envelope.eventType();
             String cursor = envelope.cursor();
             Object eventData = null;
-            if (envelope.dataJson() != null && !EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()))) {
+            if (envelope.dataJson() != null && !EmptyValues.isBlank(Objects.requireNonNull(envelope.dataJson()))) {
                 String eventDataJson = envelope.dataJson();
                 eventData = JsonUtils.fromJson(eventDataJson, Object.class);
             }
@@ -181,7 +181,7 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
             return false;
         }
         boolean eventDataMissing =
-                envelope.dataJson() == null || EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()));
+                envelope.dataJson() == null || EmptyValues.isBlank(Objects.requireNonNull(envelope.dataJson()));
         return eventDataMissing;
     }
 

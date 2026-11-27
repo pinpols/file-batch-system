@@ -20,7 +20,7 @@ import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.HolidayRollRule;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.job.param.BusinessCalendarUpsertParam;
 import io.github.pinpols.batch.console.domain.job.support.BusinessCalendarTimezone;
 import java.time.LocalDate;
@@ -66,7 +66,7 @@ public final class BusinessCalendarExcelRowParser {
         String calendarName = requireText(values, COL_CALENDAR_NAME, CALENDAR_NAME_MAX_LENGTH, issues);
         rowBuilder.calendarName(calendarName);
         String timezone = requireText(values, COL_TIMEZONE, TIMEZONE_MAX_LENGTH, issues);
-        if (Texts.hasText(timezone) && !BusinessCalendarTimezone.isValid(timezone)) {
+        if (EmptyValues.hasText(timezone) && !BusinessCalendarTimezone.isValid(timezone)) {
             issues.add("timezone is invalid");
         }
         rowBuilder.timezone(timezone);
@@ -105,7 +105,7 @@ public final class BusinessCalendarExcelRowParser {
 
     private static List<LocalDate> parseHolidays(String value, List<String> issues) {
         String normalized = normalize(value);
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return List.of();
         }
         String body = normalized;
@@ -117,7 +117,7 @@ public final class BusinessCalendarExcelRowParser {
         List<LocalDate> dates = new ArrayList<>();
         for (String part : body.split(",")) {
             String item = part.trim();
-            if (!Texts.hasText(item)) {
+            if (!EmptyValues.hasText(item)) {
                 continue;
             }
             try {

@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.failure;
 
 import io.github.pinpols.batch.common.enums.FailureClass;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.failure.TechnicalFailureClassificationPort;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
@@ -49,7 +49,7 @@ public class SpringTechnicalFailureClassificationAdapter implements TechnicalFai
             if (cursor instanceof DataIntegrityViolationException) {
                 return FailureClass.DATA_QUALITY;
             }
-            if (cursor instanceof SQLException sql && Texts.hasText(sql.getSQLState())) {
+            if (cursor instanceof SQLException sql && EmptyValues.hasText(sql.getSQLState())) {
                 return classifySqlState(sql.getSQLState());
             }
             if (cursor instanceof NonTransientDataAccessException) {

@@ -10,10 +10,10 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.service.WorkflowNodeRunSupport;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
@@ -58,11 +58,11 @@ public class ChildJobLaunchSupport {
             WorkflowNodeEntity workflowNode,
             String sourcePayload,
             String traceId) {
-        if (workflowRun == null || EmptyChecks.isBlank(workflowNode.getRelatedJobCode())) {
+        if (workflowRun == null || EmptyValues.isBlank(workflowNode.getRelatedJobCode())) {
             return 0;
         }
         String sourcePayloadProtected =
-                EmptyChecks.isBlank(sourcePayload) ? null : secretPayloadProtector.protect(sourcePayload);
+                EmptyValues.isBlank(sourcePayload) ? null : secretPayloadProtector.protect(sourcePayload);
         WorkflowNodeRunEntity nodeRun = WorkflowNodeRunSupport.recordReadyIfAbsent(
                 workflowMappers.workflowNodeRunMapper,
                 workflowRun.getId(),
@@ -138,13 +138,13 @@ public class ChildJobLaunchSupport {
             return 0;
         }
         String childInstanceNo = response == null ? null : response.instanceNo();
-        Guard.require(
-                EmptyChecks.isNotBlank(childInstanceNo),
+        Preconditions.require(
+                EmptyValues.isNotBlank(childInstanceNo),
                 ResultCode.STATE_CONFLICT,
                 "error.workflow.child_job_instance_missing");
         JobInstanceEntity childInstance =
                 jobMappers.jobInstanceMapper.selectByInstanceNo(workflowRun.getTenantId(), childInstanceNo);
-        Guard.require(
+        Preconditions.require(
                 childInstance != null && childInstance.getId() != null,
                 ResultCode.STATE_CONFLICT,
                 "error.workflow.child_job_instance_missing");
@@ -160,20 +160,20 @@ public class ChildJobLaunchSupport {
             String tenantId, WorkflowNodeRunEntity expectedNodeRun, Long jobInstanceId) {
         WorkflowNodeRunEntity boundNodeRun =
                 workflowMappers.workflowNodeRunMapper.selectByTenantAndId(tenantId, expectedNodeRun.getId());
-        Guard.require(
+        Preconditions.require(
                 boundNodeRun != null && WorkflowNodeType.JOB.code().equals(boundNodeRun.getNodeType()),
                 ResultCode.STATE_CONFLICT,
                 "error.workflow.node_job_instance_link_conflict");
         if (jobInstanceId.equals(boundNodeRun.getJobInstanceId())) {
             return;
         }
-        Guard.require(
+        Preconditions.require(
                 boundNodeRun.getJobInstanceId() == null,
                 ResultCode.STATE_CONFLICT,
                 "error.workflow.node_job_instance_link_conflict");
         int linked = workflowMappers.workflowNodeRunMapper.attachJobInstance(
                 tenantId, expectedNodeRun.getId(), jobInstanceId);
-        Guard.require(linked > 0, ResultCode.STATE_CONFLICT, "error.workflow.node_job_instance_link_conflict");
+        Preconditions.require(linked > 0, ResultCode.STATE_CONFLICT, "error.workflow.node_job_instance_link_conflict");
     }
 
     private String resolveChildDedupKey(WorkflowRunEntity workflowRun, String idempotencyKey) {
@@ -184,7 +184,7 @@ public class ChildJobLaunchSupport {
                 workflowRun.getTenantId(), workflowRun.getTriggerRequestId());
         if (rootRequest != null) {
             String dedupKey = rootRequest.getDedupKey();
-            if (EmptyChecks.isNotBlank(dedupKey)) {
+            if (EmptyValues.isNotBlank(dedupKey)) {
                 return dedupKey;
             }
         }
@@ -197,7 +197,7 @@ public class ChildJobLaunchSupport {
 
     /** 尚未创建 Job Instance 的延迟子作业应保持节点 READY，等待释放调度器处理。 */
     private boolean isWaitingForBatchDay(LaunchResponse response, String tenantId, String childRequestId) {
-        if (response != null && !EmptyChecks.isBlank(response.instanceNo())) {
+        if (response != null && !EmptyValues.isBlank(response.instanceNo())) {
             return false;
         }
         TriggerRequestEntity triggerRequest =

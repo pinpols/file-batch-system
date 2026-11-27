@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -78,7 +78,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
         Instant olderThan = recoveryCheckTime.minusSeconds(minAgeSeconds);
         int limit = Math.max(properties.getBatchSize(), 1);
         List<JobInstanceEntity> candidates = jobInstanceMapper.selectStaleCreatedLaunchCandidates(olderThan, limit);
-        if (EmptyChecks.isEmpty(candidates)) {
+        if (EmptyValues.isEmpty(candidates)) {
             return;
         }
         int recovered = 0;
@@ -196,7 +196,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
 
     private boolean isPermanentBundleFailure(BizException exception) {
         if (!"error.partition.dispatch_business_error".equals(exception.getMessageKey())
-                || !EmptyChecks.isNotEmpty(exception.getMessageArgs())) {
+                || !EmptyValues.isNotEmpty(exception.getMessageArgs())) {
             return false;
         }
         String failureReason = String.valueOf(exception.getMessageArgs()[0]);

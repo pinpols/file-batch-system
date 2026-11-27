@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
@@ -207,7 +207,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> params = ctx.parameters();
 
         Object cmdObj = params.get(PARAM_COMMAND);
-        if (!(cmdObj instanceof String commandString) || EmptyChecks.isBlank(commandString)) {
+        if (!(cmdObj instanceof String commandString) || EmptyValues.isBlank(commandString)) {
             throw new ShellValidationException("parameters.command required (non-blank string)");
         }
         String command = commandString.trim();
@@ -384,7 +384,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         // 每次 invocation 唯一 id,避免 PID 复用导致 reader map key 串台
         String invocationId = nextInvocationId();
         String taskInstanceId = ctx.taskInstanceId();
-        if (EmptyChecks.isNotBlank(taskInstanceId)) {
+        if (EmptyValues.isNotBlank(taskInstanceId)) {
             running.put(taskInstanceId, proc);
         }
         try {
@@ -436,7 +436,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
             destroyProcessTree(proc);
             return AtomicErrorCode.fail(AtomicErrorCode.KILLED, "interrupted", ie);
         } finally {
-            if (EmptyChecks.isNotBlank(taskInstanceId)) {
+            if (EmptyValues.isNotBlank(taskInstanceId)) {
                 running.remove(taskInstanceId, proc);
             }
         }

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.rbac;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -174,7 +174,7 @@ public class RedisOidcAuthorizationRequestRepository
     }
 
     private static boolean validState(String state) {
-        return EmptyChecks.isNotBlank(state) && state.length() <= MAX_STATE_LENGTH;
+        return EmptyValues.isNotBlank(state) && state.length() <= MAX_STATE_LENGTH;
     }
 
     private static boolean validBrowserBinding(String value) {

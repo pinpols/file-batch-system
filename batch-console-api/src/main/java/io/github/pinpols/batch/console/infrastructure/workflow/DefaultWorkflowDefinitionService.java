@@ -3,9 +3,8 @@ package io.github.pinpols.batch.console.infrastructure.workflow;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
@@ -98,7 +97,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
         String resolvedTenant = tenantGuard.resolveTenant(tenantId);
         WorkflowDefinitionEntity loadedDefinition = definitionMapper.selectById(resolvedTenant, id);
-        WorkflowDefinitionEntity def = Guard.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
+        WorkflowDefinitionEntity def = Preconditions.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
         WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null);
         List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(nodeQuery);
         WorkflowEdgeQuery edgeQuery = WorkflowEdgeQuery.ofDefinition(resolvedTenant, def.getId(), null);
@@ -152,7 +151,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     /** v1 在同一创建事务内与节点边一起保存，后续覆盖定义时仍能解析原版本。 */
     private void appendCreatedVersionSnapshot(String tenantId, Long definitionId) {
         WorkflowDefinitionEntity stored = definitionMapper.selectById(tenantId, definitionId);
-        WorkflowDefinitionEntity definition = Guard.requireFound(stored, ERR_WORKFLOW_NOT_FOUND + definitionId);
+        WorkflowDefinitionEntity definition = Preconditions.requireFound(stored, ERR_WORKFLOW_NOT_FOUND + definitionId);
         WorkflowDefinitionSaveRequest snapshot = new WorkflowDefinitionSaveRequest();
         snapshot.setTenantId(tenantId);
         snapshot.setWorkflowCode(definition.getWorkflowCode());
@@ -184,7 +183,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         String resolvedTenant = tenantGuard.resolveTenant(body.getTenantId());
 
         WorkflowDefinitionEntity loadedDefinition = definitionMapper.selectById(resolvedTenant, id);
-        WorkflowDefinitionEntity def = Guard.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
+        WorkflowDefinitionEntity def = Preconditions.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
 
         // workflowCode 不可改:保持持久化引用稳定(workflow_node.workflow_definition_id 等下游不感知 code 变更)
         if (body.getWorkflowCode() != null && !body.getWorkflowCode().equals(def.getWorkflowCode())) {
@@ -250,8 +249,8 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         writeSupport.upsertNodesAndEdges(resolvedTenant, id, body, existingNodeParams);
 
         // 画布保存不写定时开关，快照必须取保存后的实际值，不能用保存前读取的开关。
-        WorkflowDefinitionEntity persisted =
-                Guard.requireFound(definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+        WorkflowDefinitionEntity persisted = Preconditions.requireFound(
+                definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
         // 同事务追加版本快照(workflow-dag-designer Polish):版本号取 CAS 更新后的实际值。
         // 版本协作者序列化当前持久化后的 entity list — 与 detail 读路径一致，
         // 避免基于 request DTO 序列化导致下游字段差异。
@@ -316,14 +315,14 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
             Long id, WorkflowScheduleUpdateRequest request, String currentUser) {
         String resolvedTenant = tenantGuard.resolveTenant(request.getTenantId());
         WorkflowDefinitionEntity loadedDefinition = definitionMapper.selectById(resolvedTenant, id);
-        WorkflowDefinitionEntity current = Guard.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
+        WorkflowDefinitionEntity current = Preconditions.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
         if (Boolean.TRUE.equals(current.getEnabled())) {
             requireSavedJobReferences(resolvedTenant, id);
         }
         String dependsOnJobCode = validateScheduleDependency(
                 resolvedTenant, request.getDependsOnJobCode(), current.getSingleJobDefinitionId());
         String scheduleType = request.getScheduleType().trim();
-        String triggerMode = Texts.hasText(request.getTriggerMode())
+        String triggerMode = EmptyValues.hasText(request.getTriggerMode())
                 ? request.getTriggerMode().trim()
                 : defaultTriggerMode(scheduleType);
         String validatedCalendarCode = validateCalendarReference(resolvedTenant, request.getCalendarCode());
@@ -351,7 +350,8 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
                     current.getVersion());
         }
         WorkflowDefinitionEntity updatedDefinitionRead = definitionMapper.selectById(resolvedTenant, id);
-        WorkflowDefinitionEntity updated = Guard.requireFound(updatedDefinitionRead, ERR_WORKFLOW_NOT_FOUND + id);
+        WorkflowDefinitionEntity updated =
+                Preconditions.requireFound(updatedDefinitionRead, ERR_WORKFLOW_NOT_FOUND + id);
         WorkflowDefinitionSaveRequest snapshot = new WorkflowDefinitionSaveRequest();
         snapshot.setWorkflowName(updated.getWorkflowName());
         snapshot.setWorkflowType(updated.getWorkflowType());
@@ -378,7 +378,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     }
 
     private String validateScheduleDependency(String tenantId, String requestedJobCode, Long managedJobDefinitionId) {
-        if (!Texts.hasText(requestedJobCode)) {
+        if (!EmptyValues.hasText(requestedJobCode)) {
             return null;
         }
         String jobCode = requestedJobCode.trim();
@@ -394,7 +394,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
 
     private void requireSavedJobReferences(String tenantId, Long id) {
         WorkflowDefinitionEntity definition = definitionMapper.selectById(tenantId, id);
-        Guard.requireFound(definition, ERR_WORKFLOW_NOT_FOUND + id);
+        Preconditions.requireFound(definition, ERR_WORKFLOW_NOT_FOUND + id);
         WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.ofDefinition(tenantId, id, null);
         List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(nodeQuery);
         dagInspector.requireExecutableJobReferences(tenantId, nodes);
@@ -406,7 +406,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         if (!workflowIsEnabled) {
             return;
         }
-        if (EmptyChecks.isEmpty(requestedNodes)) {
+        if (EmptyValues.isEmpty(requestedNodes)) {
             return;
         }
         List<WorkflowNodeEntity> nodes = requestedNodes.stream()
@@ -423,7 +423,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
 
     private String validateCalendarReference(String tenantId, String rawCalendarCode) {
         String calendarCode = CodeNormalizer.toConfigFormOrNull(rawCalendarCode);
-        if (!Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(calendarCode)) {
             return null;
         }
         if (businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode) == null) {
@@ -446,7 +446,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     public DagValidationResult validate(Long id, String tenantId) {
         String resolvedTenant = tenantGuard.resolveTenant(tenantId);
         WorkflowDefinitionEntity loadedDefinition = definitionMapper.selectById(resolvedTenant, id);
-        WorkflowDefinitionEntity def = Guard.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
+        WorkflowDefinitionEntity def = Preconditions.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
 
         WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null);
         List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(nodeQuery);
@@ -477,7 +477,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
             return;
         }
         for (WorkflowDefinitionSaveRequest.NodeItem node : nodes) {
-            if (Texts.hasText(node.getWorkerGroup())) {
+            if (EmptyValues.hasText(node.getWorkerGroup())) {
                 resourceAssignmentGuard.assertCreateAllowed(null, node.getWorkerGroup());
             }
         }
@@ -509,7 +509,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         String jobCode = existingNodes.stream()
                 .filter(node -> "JOB".equals(node.getNodeType()))
                 .map(WorkflowNodeEntity::getRelatedJobCode)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .findFirst()
                 .orElseThrow(DefaultWorkflowDefinitionService::managedGraphConflict);
         boolean managedStartNodeMatches = isManagedNode(nodesByCode.get("START"), "START", "START", 0, null);
@@ -527,8 +527,8 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
                 && edges.contains("START>JOB:SUCCESS")
                 && edges.contains("JOB>END:SUCCESS")
                 && submittedEdges.stream()
-                        .allMatch(edge ->
-                                !Texts.hasText(edge.getConditionExpr()) && !Boolean.FALSE.equals(edge.getEnabled()));
+                        .allMatch(edge -> !EmptyValues.hasText(edge.getConditionExpr())
+                                && !Boolean.FALSE.equals(edge.getEnabled()));
         if (!defaultEdges) {
             throw managedGraphConflict();
         }
@@ -570,14 +570,14 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         if (!nodeIdentityMatches) {
             return false;
         }
-        boolean routingOverridesAreAbsent = !Texts.hasText(node.getWorkerGroup())
-                && !Texts.hasText(node.getNodeParams())
-                && !Texts.hasText(node.getCrossDayDependencies());
+        boolean routingOverridesAreAbsent = !EmptyValues.hasText(node.getWorkerGroup())
+                && !EmptyValues.hasText(node.getNodeParams())
+                && !EmptyValues.hasText(node.getCrossDayDependencies());
         if (!routingOverridesAreAbsent) {
             return false;
         }
         String retryPolicy = node.getRetryPolicy();
-        boolean retryPolicyIsDefault = !Texts.hasText(retryPolicy) || "NONE".equals(node.getRetryPolicy());
+        boolean retryPolicyIsDefault = !EmptyValues.hasText(retryPolicy) || "NONE".equals(node.getRetryPolicy());
         if (!retryPolicyIsDefault) {
             return false;
         }
@@ -600,7 +600,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     private static void applyScheduleConfiguration(
             WorkflowDefinitionEntity target, WorkflowDefinitionSaveRequest request, WorkflowDefinitionEntity existing) {
         String requestedType = request.getScheduleType();
-        boolean shouldInheritExistingScheduleConfiguration = !Texts.hasText(requestedType) && existing != null;
+        boolean shouldInheritExistingScheduleConfiguration = !EmptyValues.hasText(requestedType) && existing != null;
         if (shouldInheritExistingScheduleConfiguration) {
             request.setScheduleType(existing.getScheduleType());
             request.setScheduleExpr(existing.getScheduleExpr());
@@ -611,9 +611,9 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
             return;
         }
 
-        String scheduleType = Texts.hasText(requestedType) ? requestedType.trim() : "MANUAL";
+        String scheduleType = EmptyValues.hasText(requestedType) ? requestedType.trim() : "MANUAL";
         String triggerMode = request.getTriggerMode();
-        if (!Texts.hasText(triggerMode)) {
+        if (!EmptyValues.hasText(triggerMode)) {
             boolean existingScheduleCanSupplyTriggerMode =
                     existing != null && scheduleType.equals(existing.getScheduleType());
             triggerMode =
@@ -649,10 +649,10 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         for (WorkflowNodeEntity node : existingNodes) {
             existingGroups.put(node.getNodeCode(), node.getWorkerGroup());
         }
-        boolean existingRoutingIsConfigured = existingGroups.values().stream().anyMatch(Texts::hasText);
+        boolean existingRoutingIsConfigured = existingGroups.values().stream().anyMatch(EmptyValues::hasText);
         boolean hasRouting = existingRoutingIsConfigured;
         if (!hasRouting) {
-            hasRouting = nodes.stream().anyMatch(node -> Texts.hasText(node.getWorkerGroup()));
+            hasRouting = nodes.stream().anyMatch(node -> EmptyValues.hasText(node.getWorkerGroup()));
         }
         boolean shouldPreserveRouting = hasRouting && resourceAssignmentGuard.shouldPreserveExistingRouting();
         if (!shouldPreserveRouting) {
@@ -678,7 +678,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     public List<WorkflowDefinitionVersionSummaryResponse> listVersions(Long id, String tenantId) {
         String resolvedTenant = tenantGuard.resolveTenant(tenantId);
         WorkflowDefinitionEntity loadedDefinition = definitionMapper.selectById(resolvedTenant, id);
-        WorkflowDefinitionEntity def = Guard.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
+        WorkflowDefinitionEntity def = Preconditions.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
 
         List<WorkflowDefinitionVersionEntity> rows = versionMapper.listByDefinitionId(resolvedTenant, id);
         if (rows.isEmpty()) {
@@ -705,7 +705,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     public WorkflowDefinitionDetailResponse getVersion(Long id, String tenantId, Integer version) {
         String resolvedTenant = tenantGuard.resolveTenant(tenantId);
         WorkflowDefinitionEntity loadedDefinition = definitionMapper.selectById(resolvedTenant, id);
-        WorkflowDefinitionEntity def = Guard.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
+        WorkflowDefinitionEntity def = Preconditions.requireFound(loadedDefinition, ERR_WORKFLOW_NOT_FOUND + id);
         if (version == null || version.equals(def.getVersion())) {
             // 当前 version → 主表 + 关联节点边(loadDetail 路径)
             return loadDetail(resolvedTenant, id);

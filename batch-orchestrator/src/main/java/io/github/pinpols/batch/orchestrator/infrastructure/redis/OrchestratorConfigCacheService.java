@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.redis;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorConfigCacheProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchWindowEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -148,7 +148,7 @@ public class OrchestratorConfigCacheService {
     }
 
     public JobDefinitionView findEnabledJobDefinition(String tenantId, String jobCode) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(jobCode)) {
             return null;
         }
         return readThrough(
@@ -158,7 +158,7 @@ public class OrchestratorConfigCacheService {
     }
 
     public WorkflowDefinitionView findEnabledWorkflowDefinition(String tenantId, String workflowCode) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(workflowCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(workflowCode)) {
             return null;
         }
         return readThrough(
@@ -176,7 +176,7 @@ public class OrchestratorConfigCacheService {
      * Workflow 缓存失效路径，而不引入另一套 Redis 键生命周期。
      */
     public WorkflowDefinitionView findEnabledSingleJobWorkflowDefinition(String tenantId, Long jobDefinitionId) {
-        if (!Texts.hasText(tenantId) || jobDefinitionId == null) {
+        if (!EmptyValues.hasText(tenantId) || jobDefinitionId == null) {
             return null;
         }
         if (usesFixedTransactionSnapshot()) {
@@ -200,7 +200,7 @@ public class OrchestratorConfigCacheService {
     }
 
     public BusinessCalendarEntity findEnabledBusinessCalendar(String tenantId, String calendarCode) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(calendarCode)) {
             return null;
         }
         return readThrough(
@@ -213,7 +213,7 @@ public class OrchestratorConfigCacheService {
     }
 
     public BatchWindowEntity findEnabledBatchWindow(String tenantId, String windowCode) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(windowCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(windowCode)) {
             return null;
         }
         return readThrough(
@@ -223,7 +223,7 @@ public class OrchestratorConfigCacheService {
     }
 
     public TenantQuotaPolicyEntity findEnabledQuotaPolicy(String tenantId) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return null;
         }
         return readThrough(
@@ -298,7 +298,7 @@ public class OrchestratorConfigCacheService {
     }
 
     public void evictQuotaPolicies(String tenantId) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return;
         }
         String key = BatchRedisKeys.config(tenantId, TENANT_QUOTA_POLICY_CACHE_TYPE, QUOTA_POLICY_CACHE_CODE);
@@ -312,7 +312,7 @@ public class OrchestratorConfigCacheService {
     }
 
     public void evictLocal(String tenantId, String type, String code) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(type) || !Texts.hasText(code)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(type) || !EmptyValues.hasText(code)) {
             return;
         }
         if ("*".equals(code)) {
@@ -332,7 +332,7 @@ public class OrchestratorConfigCacheService {
     }
 
     private void evictConfig(String tenantId, String type, String code) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(code)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(code)) {
             return;
         }
         String key = BatchRedisKeys.config(tenantId, type, code);

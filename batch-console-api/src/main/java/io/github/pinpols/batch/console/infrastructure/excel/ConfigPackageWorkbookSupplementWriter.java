@@ -26,7 +26,7 @@ import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import java.util.Arrays;
 import java.util.List;
@@ -309,7 +309,7 @@ class ConfigPackageWorkbookSupplementWriter {
                     return guide != null && guide.required();
                 })
                 .toList();
-        return EmptyChecks.isEmpty(required) ? "无强制必填列，按业务需要填写。" : String.join(", ", required);
+        return EmptyValues.isEmpty(required) ? "无强制必填列，按业务需要填写。" : String.join(", ", required);
     }
 
     private static String defaultHintFor(ConfigPackageSheetSpecs.SheetDef def) {

@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import java.util.List;
@@ -72,12 +72,12 @@ public interface WorkflowDagService {
 
     default DagNodeResolution resolveInitialNode(Long workflowDefinitionId) {
         List<DagNodeResolution> nodes = resolveInitialNodes(workflowDefinitionId, null);
-        return EmptyChecks.isEmpty(nodes) ? null : nodes.get(0);
+        return EmptyValues.isEmpty(nodes) ? null : nodes.get(0);
     }
 
     default DagNodeResolution resolveNextNode(Long workflowDefinitionId, String currentNodeCode, boolean success) {
         List<DagNodeResolution> nodes = resolveNextNodes(workflowDefinitionId, currentNodeCode, success, null);
-        return EmptyChecks.isEmpty(nodes) ? null : nodes.get(0);
+        return EmptyValues.isEmpty(nodes) ? null : nodes.get(0);
     }
 
     record DagNodeResolution(String nodeCode, String nodeType) {}

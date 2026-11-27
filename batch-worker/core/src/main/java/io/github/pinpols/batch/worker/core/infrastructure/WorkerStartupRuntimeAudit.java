@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
@@ -124,7 +124,7 @@ public class WorkerStartupRuntimeAudit {
             if (cfg.heartbeatIntervalMillis() != null && cfg.heartbeatIntervalMillis() <= 0) {
                 issues.add(issuePrefix(cfg.workerType()) + "heartbeatIntervalMillis<=0");
             }
-            if (cfg.capabilityTags().stream().anyMatch(tag -> !Texts.hasText(tag))) {
+            if (cfg.capabilityTags().stream().anyMatch(tag -> !EmptyValues.hasText(tag))) {
                 issues.add(issuePrefix(cfg.workerType()) + "capabilityTags contains blank tag");
             }
             results.add(item);
@@ -207,13 +207,13 @@ public class WorkerStartupRuntimeAudit {
     }
 
     private void requireText(List<String> issues, String workerType, String field, String value) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             issues.add(issuePrefix(workerType) + field + " blank");
         }
     }
 
     private String issuePrefix(String workerType) {
-        return Texts.hasText(workerType) ? workerType + ": " : "";
+        return EmptyValues.hasText(workerType) ? workerType + ": " : "";
     }
 
     private void put(Map<String, Object> map, String key, Object value) {

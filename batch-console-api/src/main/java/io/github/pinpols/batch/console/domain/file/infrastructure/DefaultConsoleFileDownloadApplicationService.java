@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
@@ -69,29 +69,29 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
             throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
         }
         String templateCode = fileRecordMapper.selectTemplateCodeByFileId(effectiveTenant, fileId);
-        FileTemplateSecurityFlagsView security = Texts.hasText(templateCode)
+        FileTemplateSecurityFlagsView security = EmptyValues.hasText(templateCode)
                 ? fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(effectiveTenant, templateCode)
                 : null;
         boolean downloadApprovalRequired = requiresDownloadApproval(security)
-                && !Texts.hasText(approvalId)
+                && !EmptyValues.hasText(approvalId)
                 && !batchSecurityProperties.isBypassMode();
         if (downloadApprovalRequired) {
             throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
         }
-        if (Texts.hasText(approvalId)) {
+        if (EmptyValues.hasText(approvalId)) {
             approvalClient.requireApprovedApproval(effectiveTenant, approvalId, ApprovalTargetBinding.file(fileId));
         }
         String bucket = fileRecord.storageBucket();
-        if (!Texts.hasText(bucket)) {
+        if (!EmptyValues.hasText(bucket)) {
             bucket = s3StorageProperties.getBucket();
         }
         String objectName = fileRecord.storagePath();
-        if (!Texts.hasText(objectName)) {
+        if (!EmptyValues.hasText(objectName)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
         }
         String fileName = fileRecord.fileName();
         String contentType = fileRecord.mimeType();
-        if (!Texts.hasText(contentType)) {
+        if (!EmptyValues.hasText(contentType)) {
             contentType = "application/octet-stream";
         }
         try {

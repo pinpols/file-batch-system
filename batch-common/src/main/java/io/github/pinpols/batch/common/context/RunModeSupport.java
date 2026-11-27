@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.context;
 
 import io.github.pinpols.batch.common.enums.RunMode;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -31,7 +31,7 @@ public final class RunModeSupport {
     }
 
     public static String resolveCode(Map<String, Object> attributes) {
-        if (EmptyChecks.isEmpty(attributes)) {
+        if (EmptyValues.isEmpty(attributes)) {
             return null;
         }
         String normalized = normalize(attributes.get(RUN_MODE));

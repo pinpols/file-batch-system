@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.mq.MqMessage;
 import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.mq.MqPublishResult;
 import io.github.pinpols.batch.common.observability.OtelTracePropagation;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
@@ -72,7 +72,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
             return CompletableFuture.completedFuture(failure);
         }
         Map<String, String> headers = new LinkedHashMap<>();
-        if (EmptyChecks.isNotBlank(traceId)) {
+        if (EmptyValues.isNotBlank(traceId)) {
             headers.put(HEADER_TRACE_ID, traceId);
         }
         if (launchRequest.tenantId() != null) {

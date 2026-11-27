@@ -2,8 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.lineage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.DispatchRecord;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.FileRecord;
@@ -76,7 +75,7 @@ public class LineageEvidenceService {
         List<PipelineInstance> pipelines =
                 lineageEvidenceMapper.selectPipelineInstances(version.tenantId(), version.jobInstanceId());
         String pipelineSource = HOT;
-        if (EmptyChecks.isEmpty(pipelines)) {
+        if (EmptyValues.isEmpty(pipelines)) {
             pipelines =
                     lineageEvidenceMapper.selectArchivedPipelineInstances(version.tenantId(), version.jobInstanceId());
             pipelineSource = ARCHIVE;
@@ -167,23 +166,23 @@ public class LineageEvidenceService {
         if (!payloadResolved) {
             knownGaps.add("payload_ref file_record not found in hot or archive tables");
         }
-        if (EmptyChecks.isEmpty(input.fileRecords())) {
+        if (EmptyValues.isEmpty(input.fileRecords())) {
             knownGaps.add("no related file_record found in hot or archive tables");
         }
-        if (EmptyChecks.isEmpty(input.dispatchRecords())) {
+        if (EmptyValues.isEmpty(input.dispatchRecords())) {
             knownGaps.add("no dispatch receipt found in hot or archive tables");
         }
         boolean archiveUsed = ARCHIVE.equals(input.resultVersionSource())
                 || (jobFound && ARCHIVE.equals(input.jobInstanceSource()))
-                || (!EmptyChecks.isEmpty(input.pipelineInstances()) && ARCHIVE.equals(input.pipelineSource()))
-                || (!EmptyChecks.isEmpty(input.fileRecords())
+                || (!EmptyValues.isEmpty(input.pipelineInstances()) && ARCHIVE.equals(input.pipelineSource()))
+                || (!EmptyValues.isEmpty(input.fileRecords())
                         && (ARCHIVE.equals(input.fileSource()) || HOT_AND_ARCHIVE.equals(input.fileSource())))
-                || (!EmptyChecks.isEmpty(input.dispatchRecords())
+                || (!EmptyValues.isEmpty(input.dispatchRecords())
                         && (ARCHIVE.equals(input.dispatchSource()) || HOT_AND_ARCHIVE.equals(input.dispatchSource())));
         String jobSource = jobFound ? input.jobInstanceSource() : NONE;
-        String pipelineSource = EmptyChecks.isEmpty(input.pipelineInstances()) ? NONE : input.pipelineSource();
-        String fileSource = EmptyChecks.isEmpty(input.fileRecords()) ? NONE : input.fileSource();
-        String dispatchSource = EmptyChecks.isEmpty(input.dispatchRecords()) ? NONE : input.dispatchSource();
+        String pipelineSource = EmptyValues.isEmpty(input.pipelineInstances()) ? NONE : input.pipelineSource();
+        String fileSource = EmptyValues.isEmpty(input.fileRecords()) ? NONE : input.fileSource();
+        String dispatchSource = EmptyValues.isEmpty(input.dispatchRecords()) ? NONE : input.dispatchSource();
         LineageSources sources =
                 new LineageSources(input.resultVersionSource(), jobSource, pipelineSource, fileSource, dispatchSource);
         return new LineageCoverage(
@@ -223,7 +222,7 @@ public class LineageEvidenceService {
     private static Long payloadFileId(ResultVersionEntity version) {
         boolean resultVersionHasNoFileRecordReference = version == null
                 || !"FILE_RECORD".equals(version.payloadStorage())
-                || !Texts.hasText(version.payloadRef())
+                || !EmptyValues.hasText(version.payloadRef())
                 || !version.payloadRef().startsWith(FILE_RECORD_REF_PREFIX);
         if (resultVersionHasNoFileRecordReference) {
             return null;

@@ -6,11 +6,11 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -119,7 +119,7 @@ public class ForensicExportService {
 
         String exportId = IdGenerator.newBusinessNo(EXPORT_PREFIX);
         Instant requestedAt = dateTimeSupport.nowInstant();
-        String format = Texts.hasText(request.exportFormat()) ? request.exportFormat() : "BUNDLE";
+        String format = EmptyValues.hasText(request.exportFormat()) ? request.exportFormat() : "BUNDLE";
 
         transactionService.insertProcessingRow(request, exportId, format, requestedAt);
 
@@ -162,7 +162,7 @@ public class ForensicExportService {
 
     private void validate(ForensicExportRequest request) {
         boolean exportRequestIsIncomplete = request == null
-                || !Texts.hasText(request.tenantId())
+                || !EmptyValues.hasText(request.tenantId())
                 || request.bizDateFrom() == null
                 || request.bizDateTo() == null;
         if (exportRequestIsIncomplete) {

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.common.event;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,16 +28,16 @@ public record DomainEvent(
         Integer priority) {
 
     public DomainEvent {
-        if (EmptyChecks.isBlank(tenantId)) {
+        if (EmptyValues.isBlank(tenantId)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.tenant_id_blank");
         }
-        if (EmptyChecks.isBlank(aggregateType)) {
+        if (EmptyValues.isBlank(aggregateType)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.aggregate_type_blank");
         }
-        if (EmptyChecks.isBlank(eventType)) {
+        if (EmptyValues.isBlank(eventType)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_type_blank");
         }
-        if (EmptyChecks.isBlank(eventKey)) {
+        if (EmptyValues.isBlank(eventKey)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_key_blank");
         }
         // Map.copyOf 不允许 null 值,但 outbox payload 允许 null(JSON 序列化为 null,业务依赖此语义)

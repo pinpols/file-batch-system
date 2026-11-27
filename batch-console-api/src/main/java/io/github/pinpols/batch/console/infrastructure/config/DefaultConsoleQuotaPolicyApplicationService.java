@@ -4,8 +4,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.QuotaPolicySaveRequest;
@@ -73,7 +73,7 @@ public class DefaultConsoleQuotaPolicyApplicationService implements ConsoleQuota
     public QuotaPolicyResponse update(Long id, QuotaPolicySaveRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         TenantQuotaPolicyRow selectedPolicy = quotaPolicyMapper.selectById(tenantId, id);
-        TenantQuotaPolicyRow existing = Guard.requireFound(selectedPolicy, "quota policy not found");
+        TenantQuotaPolicyRow existing = Preconditions.requireFound(selectedPolicy, "quota policy not found");
         TenantQuotaPolicyUpdateParam param = TenantQuotaPolicyUpdateParam.builder()
                 .tenantId(tenantId)
                 .id(id)

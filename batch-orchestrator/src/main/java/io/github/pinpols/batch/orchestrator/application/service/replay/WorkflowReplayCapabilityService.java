@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.List;
@@ -20,15 +20,15 @@ public class WorkflowReplayCapabilityService {
     private final WorkerRegistryMapper workerRegistryMapper;
 
     public Assessment assess(String tenantId, String workerGroup, String pluginId) {
-        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(workerGroup)) {
+        if (EmptyValues.isBlank(tenantId) || EmptyValues.isBlank(workerGroup)) {
             return new Assessment(Status.WORKER_GROUP_NOT_FROZEN, null, 0);
         }
-        if (EmptyChecks.isBlank(pluginId)) {
+        if (EmptyValues.isBlank(pluginId)) {
             return new Assessment(Status.PLUGIN_SELECTION_NOT_FROZEN, null, 0);
         }
         List<String> catalogues = workerRegistryMapper.selectReplayCapabilitiesByTenantAndWorkerGroup(
                 tenantId, workerGroup, List.of(WorkerRegistryStatus.ONLINE.code()));
-        if (EmptyChecks.isEmpty(catalogues)) {
+        if (EmptyValues.isEmpty(catalogues)) {
             return new Assessment(Status.NO_ONLINE_WORKERS, null, 0);
         }
         ReplayCapabilityDeclaration agreed = null;
@@ -50,7 +50,7 @@ public class WorkflowReplayCapabilityService {
     }
 
     private List<ReplayCapabilityDeclaration> selectedDeclarations(String catalogue, String pluginId) {
-        if (EmptyChecks.isBlank(catalogue)) {
+        if (EmptyValues.isBlank(catalogue)) {
             return List.of();
         }
         try {

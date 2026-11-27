@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeResult;
@@ -75,7 +75,7 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
         Integer partition = SensorSpecs.intValue(spec, "partition");
         Long minOffset = SensorSpecs.longValue(spec, "minOffset");
         boolean kafkaOffsetTargetIsIncomplete =
-                !Texts.hasText(topic) || partition == null || partition < 0 || minOffset == null || minOffset < 0;
+                !EmptyValues.hasText(topic) || partition == null || partition < 0 || minOffset == null || minOffset < 0;
         if (kafkaOffsetTargetIsIncomplete) {
             return SensorProbeResult.error(
                     "error.workflow.sensor_spec_invalid",

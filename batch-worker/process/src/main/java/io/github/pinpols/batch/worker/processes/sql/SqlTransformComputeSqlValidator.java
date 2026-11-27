@@ -4,8 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -65,7 +64,7 @@ public class SqlTransformComputeSqlValidator {
 
     private String validate(String raw, boolean enforceSchemaAllowlist) {
         String sql = raw == null ? "" : raw.trim();
-        if (!Texts.hasText(sql)) {
+        if (!EmptyValues.hasText(sql)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ERR_KEY, "sqlTransformCompute SQL is blank");
         }
 
@@ -85,12 +84,12 @@ public class SqlTransformComputeSqlValidator {
         if (enforceSchemaAllowlist && security != null) {
             allowedSchemas = security.getAllowedSchemas();
         }
-        boolean schemaAllowlistMustBeEnforced = EmptyChecks.isNotEmpty(allowedSchemas);
+        boolean schemaAllowlistMustBeEnforced = EmptyValues.isNotEmpty(allowedSchemas);
         if (schemaAllowlistMustBeEnforced) {
             checkAllowedSchemas(statement, allowedSchemas);
         }
         List<String> forbiddenFunctions = security == null ? null : security.getForbiddenFunctions();
-        if (EmptyChecks.isNotEmpty(forbiddenFunctions)) {
+        if (EmptyValues.isNotEmpty(forbiddenFunctions)) {
             checkNoForbiddenFunctions(statement, forbiddenFunctions);
         }
         // requireLimit 仅对主源 SQL (业务路径) 强制;VALIDATE 阶段读 process_staging 的检查 SQL 表本身已小,豁免。

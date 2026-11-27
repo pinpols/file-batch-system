@@ -12,7 +12,7 @@ CI_DIR = Path(__file__).resolve().parents[1]
 SOURCE = "module/src/main/java/example/Sample.java"
 
 
-class EmptyChecksDiffTest(unittest.TestCase):
+class EmptyValuesDiffTest(unittest.TestCase):
     def run_guard(self, before: str, after: str) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory(prefix="empty-checks-test-") as workdir:
             root = Path(workdir)
@@ -133,7 +133,7 @@ class EmptyChecksDiffTest(unittest.TestCase):
             "package example;\n"
             "class Sample {\n"
             "    void f(java.util.List<String> values) {\n"
-            "        if (EmptyChecks.isEmpty(values)) {\n"
+            "        if (EmptyValues.isEmpty(values)) {\n"
             "            return;\n"
             "        }\n"
             "    }\n"

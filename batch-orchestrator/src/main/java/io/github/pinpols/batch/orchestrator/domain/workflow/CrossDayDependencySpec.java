@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.workflow;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Locale;
 import java.util.Objects;
 import lombok.Builder;
@@ -47,7 +47,7 @@ public record CrossDayDependencySpec(
 
     /** EFFECTIVE_ONLY 是默认策略（未声明等价 EFFECTIVE_ONLY）。 */
     public String resolvedStrategy() {
-        if (consumeVersionStrategy == null || EmptyChecks.isBlank(Objects.requireNonNull(consumeVersionStrategy))) {
+        if (consumeVersionStrategy == null || EmptyValues.isBlank(Objects.requireNonNull(consumeVersionStrategy))) {
             return STRATEGY_EFFECTIVE_ONLY;
         }
         String trimmedStrategy = consumeVersionStrategy.trim();
@@ -71,6 +71,6 @@ public record CrossDayDependencySpec(
     }
 
     public boolean isRangeMode() {
-        return EmptyChecks.isNotBlank(bizDateRange);
+        return EmptyValues.isNotBlank(bizDateRange);
     }
 }

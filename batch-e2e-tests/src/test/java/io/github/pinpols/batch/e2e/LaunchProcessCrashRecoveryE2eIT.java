@@ -5,7 +5,6 @@ import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
 import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
@@ -354,7 +353,7 @@ class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
                     .partitionsToOffsetAndMetadata()
                     .get(10, TimeUnit.SECONDS);
             var offset = offsets.get(new TopicPartition(record.topic(), record.partition()));
-            return EmptyChecks.isNull(offset) ? -1 : offset.offset();
+            return offset == null ? -1 : offset.offset();
         }
     }
 

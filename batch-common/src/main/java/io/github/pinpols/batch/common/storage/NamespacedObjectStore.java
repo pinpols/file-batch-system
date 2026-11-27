@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.storage;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.Collection;
@@ -46,7 +46,7 @@ public final class NamespacedObjectStore implements BatchObjectStore {
         delegate.deleteMany(
                 bucket,
                 keys.stream()
-                        .filter(key -> EmptyChecks.isNotBlank(key))
+                        .filter(key -> EmptyValues.isNotBlank(key))
                         .map(this::physicalKey)
                         .toList());
     }
@@ -118,11 +118,11 @@ public final class NamespacedObjectStore implements BatchObjectStore {
     }
 
     private String physicalMarker(String marker) {
-        return EmptyChecks.isBlank(marker) ? marker : physicalKey(marker);
+        return EmptyValues.isBlank(marker) ? marker : physicalKey(marker);
     }
 
     private String logicalMarker(String marker) {
-        return EmptyChecks.isBlank(marker) ? marker : logicalKey(marker);
+        return EmptyValues.isBlank(marker) ? marker : logicalKey(marker);
     }
 
     private String logicalKey(String key) {

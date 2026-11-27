@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -132,7 +132,7 @@ public class DelimitedExportFormat extends AbstractExportFormat {
 
     private BigDecimal batchControlTotal(ExportFormatContext ctx) {
         Map<String, Object> batch = ctx.batch();
-        if (EmptyChecks.isEmpty(batch)) {
+        if (EmptyValues.isEmpty(batch)) {
             return null;
         }
         Object configuredControlTotal = firstNonNull(

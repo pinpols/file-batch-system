@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
@@ -290,7 +290,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
     private void advanceHighWaterMark(
             TaskOutcomeCommand outcomeCommand, JobTaskEntity task, TaskExecutionResult.Success success) {
-        if (EmptyChecks.isNotBlank(success.highWaterMarkOut())) {
+        if (EmptyValues.isNotBlank(success.highWaterMarkOut())) {
             int wmUpdated = jobMappers.jobInstanceMapper.updateHighWaterMarkOut(
                     outcomeCommand.tenantId(), task.getJobInstanceId(), success.highWaterMarkOut());
             if (wmUpdated <= 0) {

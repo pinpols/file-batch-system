@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.support.ratelimit;
 
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import jakarta.servlet.http.HttpServletRequest;
@@ -54,13 +54,13 @@ public class ConsoleLoginIpRateLimiter {
     private String resolveClientIp(HttpServletRequest request) {
         if (securityProperties.isTrustForwardedHeaders()) {
             String forwardedFor = request.getHeader("X-Forwarded-For");
-            if (Texts.hasText(forwardedFor)) {
+            if (EmptyValues.hasText(forwardedFor)) {
                 int comma = forwardedFor.indexOf(',');
                 String forwardedClientIp = comma > 0 ? forwardedFor.substring(0, comma) : forwardedFor;
                 return forwardedClientIp.trim();
             }
             String realIp = request.getHeader("X-Real-IP");
-            if (Texts.hasText(realIp)) {
+            if (EmptyValues.hasText(realIp)) {
                 return realIp.trim();
             }
         }

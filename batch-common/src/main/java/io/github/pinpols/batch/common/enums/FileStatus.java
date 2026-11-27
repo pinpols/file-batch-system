@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.enums;
 
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -27,7 +27,7 @@ public enum FileStatus implements DictEnum {
 
     /** 空白返回 null；未知 code 抛 IllegalArgumentException。 */
     public static FileStatus fromCode(String code) {
-        if (EmptyChecks.isBlank(code)) {
+        if (EmptyValues.isBlank(code)) {
             return null;
         }
         FileStatus match = DictEnum.fromCode(FileStatus.class, code);

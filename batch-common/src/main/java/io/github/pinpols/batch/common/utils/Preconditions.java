@@ -20,9 +20,9 @@ import org.jetbrains.annotations.Contract;
  * IllegalArgumentException}，与项目统一的 {@link BizException} 错误体系不兼容。
  */
 @SuppressWarnings("java:S2583")
-public final class Guard {
+public final class Preconditions {
 
-    private Guard() {}
+    private Preconditions() {}
 
     /**
      * Mapper 查询结果非 null 断言。
@@ -33,7 +33,7 @@ public final class Guard {
      * if (entity == null) throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), "job instance not found");
      *
      * // After
-     * JobInstanceEntity entity = Guard.requireFound(mapper.selectById(tenantId, id), "job instance not found");
+     * JobInstanceEntity entity = Preconditions.requireFound(mapper.selectById(tenantId, id), "job instance not found");
      * }</pre>
      */
     @Contract("null, _ -> fail; !null, _ -> param1")
@@ -47,7 +47,7 @@ public final class Guard {
     /** 字符串非空断言（用于 Command/内部参数，不替代 Controller 层的 @Valid）。 */
     @Contract("null, _ -> fail")
     public static void requireText(@Nullable String str, String message) {
-        if (!Texts.hasText(str)) {
+        if (!EmptyValues.hasText(str)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), message);
         }
     }
@@ -75,7 +75,7 @@ public final class Guard {
     /** S-1.9：带错误码的字符串非空断言。 */
     @Contract("null, _, _ -> fail")
     public static void requireText(@Nullable String str, ResultCode resultCode, String message) {
-        if (!Texts.hasText(str)) {
+        if (!EmptyValues.hasText(str)) {
             ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
             throw BizException.of(code, code.detailKey(), message);
         }

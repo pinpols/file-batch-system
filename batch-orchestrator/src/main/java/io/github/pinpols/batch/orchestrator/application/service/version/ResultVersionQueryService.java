@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.version;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.LocalDate;
@@ -38,7 +38,7 @@ public class ResultVersionQueryService {
      * partial unique index 保证。
      */
     public Optional<ResultVersionEntity> findEffective(String tenantId, String businessKey) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(businessKey)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(businessKey)) {
             return Optional.empty();
         }
         return Optional.ofNullable(resultVersionMapper.selectEffective(tenantId, businessKey));
@@ -56,7 +56,7 @@ public class ResultVersionQueryService {
 
     /** 按 (tenant, jobCode, bizDate) 查询最新版本；用于 readiness 阻断旧 EFFECTIVE 被新 attempt 覆盖前误消费。 */
     public Optional<ResultVersionEntity> findLatestByJob(String tenantId, String jobCode, LocalDate bizDate) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(jobCode) || bizDate == null) {
             return Optional.empty();
         }
         List<ResultVersionEntity> versions = listVersions(tenantId, jobBusinessKey(jobCode, bizDate), 1);
@@ -65,7 +65,7 @@ public class ResultVersionQueryService {
 
     /** 列出某 business_key 的所有版本（按 version_no desc，含 PENDING / EFFECTIVE / SUPERSEDED / ARCHIVED）。 */
     public List<ResultVersionEntity> listVersions(String tenantId, String businessKey, int limit) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(businessKey) || limit <= 0) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(businessKey) || limit <= 0) {
             return Collections.emptyList();
         }
         return resultVersionMapper.listVersionsByBusinessKey(tenantId, businessKey, limit);
@@ -75,7 +75,7 @@ public class ResultVersionQueryService {
     public Optional<ResultVersionEntity> findVersionByJob(
             String tenantId, String jobCode, LocalDate bizDate, int versionNo) {
         boolean versionQueryIsInvalid =
-                !Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null || versionNo <= 0;
+                !EmptyValues.hasText(tenantId) || !EmptyValues.hasText(jobCode) || bizDate == null || versionNo <= 0;
         if (versionQueryIsInvalid) {
             return Optional.empty();
         }
@@ -87,7 +87,7 @@ public class ResultVersionQueryService {
     /** 同一正式/试运行模式下，可供跨日依赖使用的最新版本。 */
     public Optional<ResultVersionEntity> findLatestCrossDayDependencyVersion(
             String tenantId, String jobCode, LocalDate bizDate, boolean dryRun) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(jobCode) || bizDate == null) {
             return Optional.empty();
         }
         String businessKey = jobBusinessKey(jobCode, bizDate);
@@ -100,7 +100,7 @@ public class ResultVersionQueryService {
     public Optional<ResultVersionEntity> findCrossDayDependencyVersion(
             String tenantId, String jobCode, LocalDate bizDate, int versionNo, boolean dryRun) {
         boolean versionQueryIsInvalid =
-                !Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null || versionNo <= 0;
+                !EmptyValues.hasText(tenantId) || !EmptyValues.hasText(jobCode) || bizDate == null || versionNo <= 0;
         if (versionQueryIsInvalid) {
             return Optional.empty();
         }
@@ -112,7 +112,7 @@ public class ResultVersionQueryService {
 
     /** 按租户和版本 id 查询详情；Controller 不直接触碰 Mapper，避免绕过应用层的不变量。 */
     public ResultVersionEntity getByIdOrThrow(String tenantId, Long id) {
-        if (!Texts.hasText(tenantId) || id == null) {
+        if (!EmptyValues.hasText(tenantId) || id == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.result_version.invalid_argument");
         }
         ResultVersionEntity entity = resultVersionMapper.selectById(tenantId, id);
@@ -124,7 +124,7 @@ public class ResultVersionQueryService {
 
     /** 按精确租户身份查询重放快照；缺少版本时由调用方决定拒绝方式。 */
     public Optional<ResultVersionEntity> findById(String tenantId, Long id) {
-        if (!Texts.hasText(tenantId) || id == null || id <= 0) {
+        if (!EmptyValues.hasText(tenantId) || id == null || id <= 0) {
             return Optional.empty();
         }
         return Optional.ofNullable(resultVersionMapper.selectById(tenantId, id));

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
@@ -88,8 +88,8 @@ public class ConsoleWorkflowRunController {
             @RequestParam("tenantId") String tenantId,
             @RequestParam("nodeCode") String nodeCode,
             @RequestParam("reason") String reason) {
-        Guard.requireText(reason, "skip reason is required");
-        Guard.require(reason.length() <= SKIP_REASON_MAX_LENGTH, "skip reason must not exceed 1024 characters");
+        Preconditions.requireText(reason, "skip reason is required");
+        Preconditions.require(reason.length() <= SKIP_REASON_MAX_LENGTH, "skip reason must not exceed 1024 characters");
         String operatorId = currentUsername();
         return responseFactory.success(
                 orchestratorProxyService.workflowRunSkipNode(id, tenantId, nodeCode, operatorId, reason));

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.core.domain;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
 import lombok.Builder;
 
@@ -28,12 +28,12 @@ public record PipelineStepDefinition(
         }
         for (String key : keys) {
             Object value = stepParams.get(key);
-            if (value instanceof String text && Texts.hasText(text)) {
+            if (value instanceof String text && EmptyValues.hasText(text)) {
                 return text;
             }
             if (value != null) {
                 String text = String.valueOf(value);
-                boolean parameterTextIsUsable = Texts.hasText(text) && !"null".equalsIgnoreCase(text);
+                boolean parameterTextIsUsable = EmptyValues.hasText(text) && !"null".equalsIgnoreCase(text);
                 if (parameterTextIsUsable) {
                     return text;
                 }

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import java.util.Arrays;
@@ -39,13 +39,13 @@ public class ConsoleUserAccountServiceSupport {
     }
 
     private Set<String> parseAuthorities(String raw) {
-        if (!Texts.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             return Set.of();
         }
         Set<String> authorities = new LinkedHashSet<>();
         Arrays.stream(raw.split(","))
                 .map(String::trim)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .map(value -> value.toUpperCase(Locale.ROOT))
                 .forEach(authorities::add);
         return authorities;

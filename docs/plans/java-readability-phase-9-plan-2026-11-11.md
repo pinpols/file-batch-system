@@ -367,7 +367,7 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 - [x] **Step 5：检查有没有漏掉的。** `grep -rn 'EmptyChecks\.is\(Not\)\?Null(' --include='*.java' <模块>/src/main`，预期没有输出。
 - [x] **Step 6：提交**（每个模块一个提交、一个 PR）`refactor(<模块>): use native null checks per conventions §1.8`。**门禁先行：** 在第一个 Task 18 PR 中，把 `scripts/ci/check-empty-checks.py` 改成 §1.8 的拆分规则，并与 conventions §1.8 一起提交，必须早于任何 `EmptyChecks.isNull` → `== null` 的替换。阶段 9 内为通过旧门禁而写入、Task 18 必须回头处理的位置：`WorkerTaskLeaseRenewer.java` ~:245、`ConsoleMetaQueryService.java:172`、`ConsoleOidcAuthenticationSuccessHandler` 中 Optional 的 allow 注释、`WorkflowGraphs` 里的 `EmptyChecks.isNotEmpty`。
 
-**执行记录（2026-11-27）**：§1.8 与门禁拆分先行；生产代码机械替换 3,716 处 `isNull/isNotNull`、7 处方法引用与 399 处组合判空（3 处 `MultipartFile.isEmpty()` 因无对应重载保留原生写法），`EmptyChecks.isNull/isNotNull` API 保留。验证：全 reactor `test-compile`、`batch-common` 单测、`ServiceEntryGuardArchTest`、门禁自测与 `spotless:check` 通过；模块完整测试由 PR CI 覆盖。本轮以一个分支交付并保留模块级提交，未按“每个模块一个 PR”拆分。
+**执行记录（2026-11-27）**：§1.8 与门禁拆分先行；生产代码机械替换 3,716 处 `isNull/isNotNull`、7 处方法引用与 399 处组合判空（3 处 `MultipartFile.isEmpty()` 因无对应重载保留原生写法），执行时 `EmptyChecks` 更名为 `EmptyValues`、`Texts.hasText` 合并、`Guard` 更名为 `Preconditions`；`isNull/isNotNull` 在迁移完成后移除（偏离原计划“保留 API”的保守选项）。验证：全 reactor `test-compile`、`batch-common` 单测、`ServiceEntryGuardArchTest`、门禁自测与 `spotless:check` 通过；模块完整测试由 PR CI 覆盖。本轮以一个分支交付并保留模块级提交，未按“每个模块一个 PR”拆分。
 
 ### Task 19：超长 builder 先命名，私有薄壳改直接调用（R17、R19）
 

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleAdminTestDataApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
@@ -67,7 +67,7 @@ public class ConsoleAdminTestDataController {
                             message =
                                     "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
                     String prefix) {
-        if (EmptyChecks.isBlank(prefix)) {
+        if (EmptyValues.isBlank(prefix)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
         }
         Map<String, Integer> result = applicationService.cleanupByPrefix(prefix);
@@ -89,7 +89,7 @@ public class ConsoleAdminTestDataController {
                             regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$",
                             message = "ids must start with a letter, be comma-separated, and contain 3-256 characters")
                     String ids) {
-        if (EmptyChecks.isBlank(ids)) {
+        if (EmptyValues.isBlank(ids)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
         }
         Map<String, Integer> result = applicationService.cleanupByExactIds(ids);

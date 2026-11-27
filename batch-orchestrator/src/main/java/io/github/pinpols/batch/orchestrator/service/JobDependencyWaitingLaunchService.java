@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
@@ -66,11 +66,11 @@ public class JobDependencyWaitingLaunchService {
 
     public List<JobDependencyWaitingLaunchSummary> listRecent(
             String tenantId, String waitStatus, String jobCode, int limit) {
-        if (EmptyChecks.isBlank(tenantId)) {
+        if (EmptyValues.isBlank(tenantId)) {
             throw new IllegalArgumentException("tenantId is required");
         }
         String status;
-        if (EmptyChecks.isBlank(waitStatus)) {
+        if (EmptyValues.isBlank(waitStatus)) {
             status = null;
         } else {
             String trimmedStatus = waitStatus.trim();
@@ -79,7 +79,7 @@ public class JobDependencyWaitingLaunchService {
         if (status != null && !List.of("WAITING", "RELEASED", "CANCELLED").contains(status)) {
             throw new IllegalArgumentException("Unsupported job dependency wait status");
         }
-        String normalizedJobCode = EmptyChecks.isBlank(jobCode) ? null : jobCode.trim();
+        String normalizedJobCode = EmptyValues.isBlank(jobCode) ? null : jobCode.trim();
         int pageSize = Math.max(1, Math.min(limit, MAX_PAGE_SIZE));
         return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
             TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
@@ -131,7 +131,7 @@ public class JobDependencyWaitingLaunchService {
             boolean waitRequestMatchesOriginal = LaunchRequestIdentityGuard.matches(request, original)
                     && Objects.equals(waiting.tenantId(), request.tenantId())
                     && Objects.equals(waiting.requestId(), request.requestId())
-                    && !EmptyChecks.isBlank(waiting.jobCode())
+                    && !EmptyValues.isBlank(waiting.jobCode())
                     && Objects.equals(waiting.jobCode(), request.jobCode())
                     && Objects.equals(waiting.bizDate(), request.bizDate());
             if (!waitRequestMatchesOriginal) {
@@ -259,7 +259,7 @@ public class JobDependencyWaitingLaunchService {
         List<DependencyResultReference> references = new ArrayList<>(dependencies.size());
         // 等待行只能由非空依赖建立；损坏快照不能退化为「无依赖」并放行新实例。
         String notReadyReason;
-        if (existing != null && EmptyChecks.isEmpty(dependencies)) {
+        if (existing != null && EmptyValues.isEmpty(dependencies)) {
             notReadyReason = INVALID_DEPENDENCY_SNAPSHOT;
         } else {
             String tenantId = request.tenantId();
@@ -366,13 +366,13 @@ public class JobDependencyWaitingLaunchService {
 
     public String findNotReadyReason(String tenantId, String jobCode, LocalDate bizDate, String dependencySnapshot) {
         List<DependencySnapshot> dependencies = decodeDependencies(dependencySnapshot, bizDate);
-        return EmptyChecks.isEmpty(dependencies)
+        return EmptyValues.isEmpty(dependencies)
                 ? INVALID_DEPENDENCY_SNAPSHOT
                 : evaluateDependencies(tenantId, bizDate, dependencies);
     }
 
     private String evaluateDependencies(String tenantId, LocalDate bizDate, List<DependencySnapshot> dependencies) {
-        if (EmptyChecks.isEmpty(dependencies)) {
+        if (EmptyValues.isEmpty(dependencies)) {
             return null;
         }
         for (DependencySnapshot dependency : dependencies) {
@@ -394,7 +394,7 @@ public class JobDependencyWaitingLaunchService {
 
     private List<DependencySnapshot> snapshotDependencies(
             String tenantId, String downstreamJobCode, LocalDate downstreamBizDate, List<JobDependencyRule> rules) {
-        if (EmptyChecks.isEmpty(rules)) {
+        if (EmptyValues.isEmpty(rules)) {
             return List.of();
         }
         boolean needsPreviousBusinessDay =
@@ -402,10 +402,10 @@ public class JobDependencyWaitingLaunchService {
         String calendarCode = needsPreviousBusinessDay
                 ? dependencyMapper.selectCalendarCodeByTenantAndJob(tenantId, downstreamJobCode)
                 : null;
-        BusinessCalendarEntity calendar = EmptyChecks.isBlank(calendarCode)
+        BusinessCalendarEntity calendar = EmptyValues.isBlank(calendarCode)
                 ? null
                 : businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
-        boolean missingCalendar = EmptyChecks.isNotBlank(calendarCode) && calendar == null;
+        boolean missingCalendar = EmptyValues.isNotBlank(calendarCode) && calendar == null;
         return rules.stream()
                 .map(rule -> {
                     if (!JobDependencyRule.PREVIOUS_BIZ_DAY.equals(rule.bizDateAlignment())) {
@@ -455,12 +455,12 @@ public class JobDependencyWaitingLaunchService {
     }
 
     private List<DependencySnapshot> decodeDependencies(String json, LocalDate downstreamBizDate) {
-        if (EmptyChecks.isBlank(json) || downstreamBizDate == null) {
+        if (EmptyValues.isBlank(json) || downstreamBizDate == null) {
             return List.of();
         }
         try {
             List<?> rawDependencies = JsonUtils.fromJson(json, List.class);
-            if (EmptyChecks.isEmpty(rawDependencies)) {
+            if (EmptyValues.isEmpty(rawDependencies)) {
                 return List.of();
             }
             return rawDependencies.stream()
@@ -477,7 +477,7 @@ public class JobDependencyWaitingLaunchService {
             throw new IllegalArgumentException(INVALID_DEPENDENCY_SNAPSHOT);
         }
         if (!(values.get("upstreamJobCode") instanceof String upstreamJobCode)
-                || EmptyChecks.isBlank(upstreamJobCode)
+                || EmptyValues.isBlank(upstreamJobCode)
                 || !(values.get("bizDateAlignment") instanceof String alignment)
                 || !Set.of(JobDependencyRule.SAME_DAY, JobDependencyRule.PREVIOUS_BIZ_DAY)
                         .contains(alignment)) {
@@ -485,7 +485,7 @@ public class JobDependencyWaitingLaunchService {
         }
         Object rawError = values.get("resolutionError");
         String resolutionError = rawError instanceof String text ? text : null;
-        boolean legacyResolutionErrorNeedsDecoding = rawError != null && (EmptyChecks.isBlank(resolutionError));
+        boolean legacyResolutionErrorNeedsDecoding = rawError != null && (EmptyValues.isBlank(resolutionError));
         if (legacyResolutionErrorNeedsDecoding) {
             throw new IllegalArgumentException(INVALID_DEPENDENCY_SNAPSHOT);
         }
@@ -512,7 +512,7 @@ public class JobDependencyWaitingLaunchService {
     }
 
     private LocalDate decodeUpstreamDate(Object value) {
-        if (!(value instanceof String date) || EmptyChecks.isBlank(date)) {
+        if (!(value instanceof String date) || EmptyValues.isBlank(date)) {
             throw new IllegalArgumentException(INVALID_DEPENDENCY_SNAPSHOT);
         }
         return LocalDate.parse(date);

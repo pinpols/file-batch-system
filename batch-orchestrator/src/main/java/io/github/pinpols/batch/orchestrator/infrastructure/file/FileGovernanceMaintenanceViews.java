@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 
 /** 文件治理维护任务使用的固定查询投影。 */
@@ -31,7 +31,7 @@ final class FileGovernanceMaintenanceViews {
             return null;
         }
         String presenceText = String.valueOf(value);
-        if (EmptyChecks.isBlank(presenceText)) {
+        if (EmptyValues.isBlank(presenceText)) {
             return null;
         }
         String rawValue = String.valueOf(value);

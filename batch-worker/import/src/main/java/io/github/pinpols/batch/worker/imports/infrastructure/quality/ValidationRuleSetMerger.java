@@ -6,8 +6,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.firstNonNull;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,7 +45,7 @@ public class ValidationRuleSetMerger {
     }
 
     private Map<String, Object> deriveRequiredRulesFromFieldMappings(Map<String, Object> templateConfig) {
-        if (EmptyChecks.isEmpty(templateConfig)) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             return Map.of();
         }
         Object raw = firstNonNull(templateConfig.get("field_mappings"), templateConfig.get("fieldMappings"));
@@ -54,10 +53,10 @@ public class ValidationRuleSetMerger {
             return Map.of();
         }
         Stream<Map<String, Object>> nonEmptyFieldMappings =
-                list.stream().map(configSupport::toMap).filter(EmptyChecks::isNotEmpty);
+                list.stream().map(configSupport::toMap).filter(EmptyValues::isNotEmpty);
         Stream<Map<String, Object>> namedFieldMappings = nonEmptyFieldMappings.filter(mapping -> {
             String fieldName = stringValue(mapping.get("name"));
-            return Texts.hasText(fieldName);
+            return EmptyValues.hasText(fieldName);
         });
         Stream<Map<String, Object>> requiredFieldMappings = namedFieldMappings.filter(mapping -> {
             Object rawRequiredValue = firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull"));
@@ -72,7 +71,7 @@ public class ValidationRuleSetMerger {
 
     @SuppressWarnings("unchecked")
     private void deepMerge(Map<String, Object> target, Map<String, Object> source) {
-        if (EmptyChecks.isEmpty(source)) {
+        if (EmptyValues.isEmpty(source)) {
             return;
         }
         for (Map.Entry<String, Object> entry : source.entrySet()) {

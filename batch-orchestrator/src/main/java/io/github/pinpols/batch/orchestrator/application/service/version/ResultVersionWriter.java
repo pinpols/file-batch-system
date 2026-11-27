@@ -5,9 +5,8 @@ import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityCheckExecutor;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome;
@@ -71,12 +70,12 @@ public class ResultVersionWriter {
     public void writeOnTerminal(JobInstanceEntity instance, Map<String, Object> outputs) {
         boolean instanceIsNotEligibleForResultVersion = instance == null
                 || instance.getId() == null
-                || !Texts.hasText(instance.getTenantId())
+                || !EmptyValues.hasText(instance.getTenantId())
                 || !isSuccessTerminal(instance.getInstanceStatus());
         if (instanceIsNotEligibleForResultVersion) {
             return;
         }
-        if (!Texts.hasText(instance.getJobCode()) || instance.getBizDate() == null) {
+        if (!EmptyValues.hasText(instance.getJobCode()) || instance.getBizDate() == null) {
             return;
         }
         String tenantId = instance.getTenantId();
@@ -220,7 +219,7 @@ public class ResultVersionWriter {
      */
     String resolvePromotionPolicy(JobInstanceEntity instance) {
         String snapshot = instance.getRerunPolicySnapshot();
-        if (!Texts.hasText(snapshot)) {
+        if (!EmptyValues.hasText(snapshot)) {
             return PROMOTION_AUTO_LATEST;
         }
         try {
@@ -243,11 +242,11 @@ public class ResultVersionWriter {
 
     private String resolveGeneratedBy(JobInstanceEntity instance) {
         String operatorId = instance.getOperatorId();
-        return Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM;
+        return EmptyValues.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM;
     }
 
     private String serializeOutputs(Map<String, Object> outputs) {
-        if (EmptyChecks.isEmpty(outputs)) {
+        if (EmptyValues.isEmpty(outputs)) {
             return "{}";
         }
         return JsonUtils.toJson(outputs);

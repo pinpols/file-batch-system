@@ -11,12 +11,11 @@ import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
@@ -104,7 +103,7 @@ public class GenerateStep implements ExportStageStep {
 
     ReplayCapabilityDeclaration replayCapability(Map<String, Object> frozenTemplateConfig) {
         String exportDataRef = resolveExportDataRef(frozenTemplateConfig);
-        if (!Texts.hasText(exportDataRef)) {
+        if (!EmptyValues.hasText(exportDataRef)) {
             return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
         }
         return exportDataPluginRegistry.replayCapability(exportDataRef, frozenTemplateConfig);
@@ -113,7 +112,7 @@ public class GenerateStep implements ExportStageStep {
     @Override
     public ExportStageResult execute(ExportJobContext context) {
         Object payload = context == null ? null : context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-        if (!(payload instanceof ExportPayload exportPayload) || !Texts.hasText(exportPayload.batchNo())) {
+        if (!(payload instanceof ExportPayload exportPayload) || !EmptyValues.hasText(exportPayload.batchNo())) {
             return ExportStageResult.failure(
                     stage(),
                     "EXPORT_GENERATE_NO_PAYLOAD",
@@ -148,7 +147,7 @@ public class GenerateStep implements ExportStageStep {
         ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
         ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
         Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
-        if (EmptyChecks.isEmpty(batch)) {
+        if (EmptyValues.isEmpty(batch)) {
             return ExportStageResult.failure(
                     stage(),
                     "EXPORT_BATCH_NOT_FOUND",
@@ -392,7 +391,7 @@ public class GenerateStep implements ExportStageStep {
         Object v = tc.get("export_data_ref");
         if (v != null) {
             String presenceText = String.valueOf(v);
-            if (Texts.hasText(presenceText)) {
+            if (EmptyValues.hasText(presenceText)) {
                 String rawExportDataRef = String.valueOf(v);
                 return rawExportDataRef.trim();
             }
@@ -405,7 +404,7 @@ public class GenerateStep implements ExportStageStep {
         Object nested = qpsMap.get("export_data_ref");
         if (nested != null) {
             String nestedPresenceText = String.valueOf(nested);
-            if (Texts.hasText(nestedPresenceText)) {
+            if (EmptyValues.hasText(nestedPresenceText)) {
                 String rawNestedExportDataRef = String.valueOf(nested);
                 return rawNestedExportDataRef.trim();
             }
@@ -421,7 +420,7 @@ public class GenerateStep implements ExportStageStep {
             return out;
         }
         String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
-        if (Texts.hasText(text)) {
+        if (EmptyValues.hasText(text)) {
             try {
                 return objectMapper.readValue(text, Map.class);
             } catch (Exception ignored) {
@@ -466,7 +465,7 @@ public class GenerateStep implements ExportStageStep {
             target = rawTarget.trim();
         }
         Charset charset = StandardCharsets.UTF_8;
-        if (Texts.hasText(target)) {
+        if (EmptyValues.hasText(target)) {
             try {
                 charset = EncodingUtils.resolve(target);
             } catch (IllegalArgumentException ex) {
@@ -487,7 +486,7 @@ public class GenerateStep implements ExportStageStep {
             return second;
         }
         String firstText = String.valueOf(first);
-        return Texts.hasText(firstText) ? first : second;
+        return EmptyValues.hasText(firstText) ? first : second;
     }
 
     private static boolean asBoolean(Object value) {

@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
@@ -179,18 +179,18 @@ public class WorkflowRunReplaySnapshotResolver {
         boolean replayOperationSnapshotIsInvalid = operation == null
                 || !ReplayOperationType.WORKFLOW_RUN.code().equals(operation.operationType())
                 || operation.id() == null
-                || EmptyChecks.isBlank(operation.tenantId())
+                || EmptyValues.isBlank(operation.tenantId())
                 || operation.sourceWorkflowRunId() == null
                 || operation.fromDate() != null
                 || operation.throughDate() != null
-                || EmptyChecks.isBlank(operation.calendarCode())
-                || EmptyChecks.isBlank(operation.scope())
-                || EmptyChecks.isBlank(operation.executionMode())
-                || EmptyChecks.isBlank(operation.resultPolicy())
-                || EmptyChecks.isBlank(operation.configVersionPolicy())
-                || EmptyChecks.isBlank(operation.snapshotHash())
-                || EmptyChecks.isBlank(operation.snapshotPayload())
-                || EmptyChecks.isBlank(targetRequestId);
+                || EmptyValues.isBlank(operation.calendarCode())
+                || EmptyValues.isBlank(operation.scope())
+                || EmptyValues.isBlank(operation.executionMode())
+                || EmptyValues.isBlank(operation.resultPolicy())
+                || EmptyValues.isBlank(operation.configVersionPolicy())
+                || EmptyValues.isBlank(operation.snapshotHash())
+                || EmptyValues.isBlank(operation.snapshotPayload())
+                || EmptyValues.isBlank(targetRequestId);
         if (replayOperationSnapshotIsInvalid) {
             throw invalidSnapshot();
         }
@@ -218,8 +218,8 @@ public class WorkflowRunReplaySnapshotResolver {
             JobDefinitionView definition = readDefinition(entry.getValue());
             boolean replayDefinitionIdentityIsInvalid = !tenantId.equals(definition.tenantId())
                     || definition.id() == null
-                    || EmptyChecks.isBlank(definition.jobCode())
-                    || EmptyChecks.isBlank(definition.jobType());
+                    || EmptyValues.isBlank(definition.jobCode())
+                    || EmptyValues.isBlank(definition.jobType());
             if (replayDefinitionIdentityIsInvalid) {
                 throw invalidSnapshot();
             }
@@ -280,14 +280,14 @@ public class WorkflowRunReplaySnapshotResolver {
 
     private Map<String, String> readProtectedFileTemplateSnapshots(Object rawSnapshots) {
         Map<String, Object> snapshots = readMap(rawSnapshots);
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(snapshots))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(snapshots))) {
             throw invalidSnapshot();
         }
         Map<String, String> protectedSnapshots = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : snapshots.entrySet()) {
             String templateCode = entry.getKey();
             String protectedSnapshot = requiredText(entry.getValue());
-            if (EmptyChecks.isBlank(templateCode)) {
+            if (EmptyValues.isBlank(templateCode)) {
                 throw invalidSnapshot();
             }
             protectedSnapshots.put(templateCode, protectedSnapshot);
@@ -299,7 +299,7 @@ public class WorkflowRunReplaySnapshotResolver {
         Map<String, Object> bindings = readMap(rawBindings);
         Map<String, Object> validatedBindings = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : bindings.entrySet()) {
-            if (EmptyChecks.isBlank(entry.getKey())) {
+            if (EmptyValues.isBlank(entry.getKey())) {
                 throw invalidSnapshot();
             }
             Map<String, Object> binding = readMap(entry.getValue());
@@ -369,7 +369,7 @@ public class WorkflowRunReplaySnapshotResolver {
     }
 
     private String requiredText(Object value) {
-        if (!(value instanceof String text) || EmptyChecks.isBlank(text)) {
+        if (!(value instanceof String text) || EmptyValues.isBlank(text)) {
             throw invalidSnapshot();
         }
         return text;

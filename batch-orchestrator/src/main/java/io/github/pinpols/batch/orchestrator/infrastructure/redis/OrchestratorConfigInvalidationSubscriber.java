@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -160,7 +160,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
                     SwallowedExceptionLogger.summary(exception));
             return;
         }
-        if (EmptyChecks.isBlank(rawRevision)) {
+        if (EmptyValues.isBlank(rawRevision)) {
             return;
         }
         long publishedRevision;

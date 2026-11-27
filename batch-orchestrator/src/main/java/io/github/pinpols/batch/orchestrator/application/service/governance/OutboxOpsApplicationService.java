@@ -5,9 +5,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
@@ -88,7 +87,7 @@ public class OutboxOpsApplicationService {
 
     private OutboxRepublishResponse republishInternal(
             String tenantId, List<Long> ids, boolean dryRun, String operatorId, String reason) {
-        if (EmptyChecks.isEmpty(ids)) {
+        if (EmptyValues.isEmpty(ids)) {
             return new OutboxRepublishResponse(0, 0, dryRun ? 1 : 0);
         }
         int affected;
@@ -129,10 +128,10 @@ public class OutboxOpsApplicationService {
         audit.setMessage(operation);
         audit.setDetailRef(AuditLogConstants.DETAIL_REF_OUTBOX_EVENT);
         Map<String, Object> extra = new LinkedHashMap<>(extras);
-        extra.put("operatorId", Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
+        extra.put("operatorId", EmptyValues.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
         extra.put(
                 "operatorType",
-                Texts.hasText(operatorId)
+                EmptyValues.hasText(operatorId)
                         ? AuditLogConstants.OPERATOR_TYPE_REQUEST
                         : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
         extra.put("reason", reason);

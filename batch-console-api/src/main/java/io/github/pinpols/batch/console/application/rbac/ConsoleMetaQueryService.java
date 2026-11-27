@@ -82,7 +82,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaEnumItem;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaOption;
@@ -137,7 +137,7 @@ public class ConsoleMetaQueryService {
     }
 
     public List<String> stepImpls(String module) {
-        if (EmptyChecks.isBlank(module)) {
+        if (EmptyValues.isBlank(module)) {
             return stepRegistryQueryMapper.selectAllImplCodes();
         }
         String normalizedModule = module.toUpperCase(Locale.ROOT);

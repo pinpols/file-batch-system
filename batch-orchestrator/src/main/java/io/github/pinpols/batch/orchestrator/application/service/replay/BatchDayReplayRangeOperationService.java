@@ -6,9 +6,8 @@ import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.ReplayOperationProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DisasterDayOverrideEntity;
@@ -166,7 +165,7 @@ public class BatchDayReplayRangeOperationService {
         List<PreparedDay> executableDays = preparedDays.stream()
                 .filter(day -> day.preview() != null && day.preview().totalCount() > 0)
                 .toList();
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(executableDays))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(executableDays))) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day_replay.no_candidates");
         }
         if (previewTokenMapper.consume(command.tenantId(), tokenHash, now) != 1) {
@@ -219,7 +218,7 @@ public class BatchDayReplayRangeOperationService {
 
     @Transactional(readOnly = true)
     public List<ReplayOperationEntity> list(String tenantId, int limit) {
-        if (!Texts.hasText(tenantId) || limit <= 0) {
+        if (!EmptyValues.hasText(tenantId) || limit <= 0) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
         operationMapper.setTenantContext(tenantId);
@@ -235,7 +234,7 @@ public class BatchDayReplayRangeOperationService {
     @Transactional
     public ReplayOperationEntity approve(String tenantId, Long operationId, String approver) {
         operationMapper.setTenantContext(tenantId);
-        if (!Texts.hasText(approver)) {
+        if (!EmptyValues.hasText(approver)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
         ReplayOperationEntity operation = operationMapper.selectForUpdate(tenantId, operationId);
@@ -406,10 +405,10 @@ public class BatchDayReplayRangeOperationService {
         if (command == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
-        if (!Texts.hasText(command.tenantId())) {
+        if (!EmptyValues.hasText(command.tenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
-        if (!Texts.hasText(command.calendarCode())) {
+        if (!EmptyValues.hasText(command.calendarCode())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
         if (command.fromDate() == null) {
@@ -421,13 +420,13 @@ public class BatchDayReplayRangeOperationService {
         if (command.throughDate().isBefore(command.fromDate())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
-        if (!Texts.hasText(command.scope())) {
+        if (!EmptyValues.hasText(command.scope())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
-        if (!Texts.hasText(command.reason())) {
+        if (!EmptyValues.hasText(command.reason())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
-        if (!Texts.hasText(command.requestedBy())) {
+        if (!EmptyValues.hasText(command.requestedBy())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
         long inclusiveSpan = ChronoUnit.DAYS.between(command.fromDate(), command.throughDate()) + 1;
@@ -435,7 +434,7 @@ public class BatchDayReplayRangeOperationService {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.range_too_large");
         }
         boolean replaySubmissionIdentityIsIncomplete =
-                submitting && (command.operationKey() == null || !Texts.hasText(command.previewToken()));
+                submitting && (command.operationKey() == null || !EmptyValues.hasText(command.previewToken()));
         if (replaySubmissionIdentityIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
         }
@@ -463,7 +462,7 @@ public class BatchDayReplayRangeOperationService {
     }
 
     private static String firstNonBlank(String value, String defaultValue) {
-        return Texts.hasText(value) ? value : defaultValue;
+        return EmptyValues.hasText(value) ? value : defaultValue;
     }
 
     private static BizException invalidPreview() {

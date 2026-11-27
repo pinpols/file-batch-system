@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.stateful;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -61,7 +61,7 @@ public final class StatefulBackendGuard {
 
     private GuardResult cutover(Connection connection, CurrentBinding current, DesiredBackend desired)
             throws SQLException {
-        if (!Texts.hasText(desired.cutoverId())) {
+        if (!EmptyValues.hasText(desired.cutoverId())) {
             throw new StatefulBackendSwitchRejectedException("stateful backend switch rejected for "
                     + desired.featureKey()
                     + ": registered="
@@ -204,7 +204,7 @@ public final class StatefulBackendGuard {
     }
 
     private static String required(String value, String field, int maxLength) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             throw new IllegalArgumentException(field + " is required");
         }
         String trimmedValue = value.trim();
@@ -212,7 +212,7 @@ public final class StatefulBackendGuard {
     }
 
     private static String optional(String value, String field, int maxLength) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return null;
         }
         String trimmedValue = value.trim();

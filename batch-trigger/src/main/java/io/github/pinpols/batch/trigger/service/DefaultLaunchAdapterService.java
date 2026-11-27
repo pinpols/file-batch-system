@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchInput;
@@ -130,7 +130,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
      * NULL data_interval, 由 worker 走 bizDate 回退; 不阻断 launch.
      */
     private Instant resolveNextFireAt(String scheduleType, String scheduleExpression, ZoneId zoneId, Instant fireAt) {
-        if (scheduleType == null || EmptyChecks.isBlank(scheduleExpression)) {
+        if (scheduleType == null || EmptyValues.isBlank(scheduleExpression)) {
             return null;
         }
         String trimmedScheduleType = scheduleType.trim();
@@ -164,7 +164,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
 
     private static Duration parseFixedRateInterval(String expr) {
         String trimmed = expr.trim();
-        if (EmptyChecks.isEmpty(trimmed)) {
+        if (EmptyValues.isEmpty(trimmed)) {
             return null;
         }
         // 纯数字 → 秒

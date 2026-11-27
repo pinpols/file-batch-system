@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
@@ -52,7 +52,7 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
         List<String> targetTenantIds = request.getTargetTenantIds();
         // 在首个租户事务开始前校验全部目标，避免参数错误发生在其他租户已提交之后。
         boolean invalidTargets =
-                EmptyChecks.isEmpty(targetTenantIds) || targetTenantIds.stream().anyMatch(EmptyChecks::isBlank);
+                EmptyValues.isEmpty(targetTenantIds) || targetTenantIds.stream().anyMatch(EmptyValues::isBlank);
         if (invalidTargets) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }

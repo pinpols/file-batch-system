@@ -21,7 +21,7 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
@@ -193,7 +193,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.scheduled_version_stale");
         }
         String requestedTraceId = request.traceId();
-        String traceId = EmptyChecks.isBlank(requestedTraceId) ? IdGenerator.newTraceId() : requestedTraceId;
+        String traceId = EmptyValues.isBlank(requestedTraceId) ? IdGenerator.newTraceId() : requestedTraceId;
         if (capacitySnapshot != null) {
             traceId = capacitySnapshot.traceId();
         }
@@ -213,7 +213,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         dispatchInitialNodes(effectiveRequest, run, traceId);
         triggerRequestMapper.updateAcceptance(
                 request.tenantId(), request.requestId(), TriggerRequestStatus.LAUNCHED.code(), null);
-        if (EmptyChecks.isNotBlank(eventCalendarCode)) {
+        if (EmptyValues.isNotBlank(eventCalendarCode)) {
             SatisfactionRequest satisfactionRequest = new SatisfactionRequest(
                     request.tenantId(),
                     eventCalendarCode,
@@ -250,14 +250,14 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
         if (snapshot != null) {
             String calendarCode = snapshot.workflowCalendarCode();
-            if (EmptyChecks.isBlank(calendarCode)) {
+            if (EmptyValues.isBlank(calendarCode)) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
             }
             return calendarCode;
         }
         if (definition != null) {
             String calendarCode = definition.calendarCode();
-            if (EmptyChecks.isNotBlank(calendarCode)) {
+            if (EmptyValues.isNotBlank(calendarCode)) {
                 return calendarCode;
             }
         }
@@ -293,7 +293,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         if (job.defaultParams() != null) {
             effectiveParams.putAll(job.defaultParams());
         }
-        if (EmptyChecks.isNotBlank(node.getNodeParams())) {
+        if (EmptyValues.isNotBlank(node.getNodeParams())) {
             String nodeParamsJson = node.getNodeParams();
             Object nodeParams = JsonUtils.fromJson(nodeParamsJson, Object.class);
             if (nodeParams instanceof Map<?, ?> params) {
@@ -548,7 +548,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             }
         }
         List<DagNodeResolution> initialNodes = initialNodesFromSnapshot(capacitySnapshot.executionSnapshotJson());
-        if (EmptyChecks.isEmpty(initialNodes)) {
+        if (EmptyValues.isEmpty(initialNodes)) {
             throw WorkflowLaunchWaitSnapshot.invalidSnapshot();
         }
         return new RunAdmission(transactionDefinition, initialNodes, null);
@@ -584,7 +584,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
         List<DagNodeResolution> initialNodes = initialNodesFromSnapshot(replaySnapshot.executionSnapshotJson());
-        if (EmptyChecks.isEmpty(initialNodes)) {
+        if (EmptyValues.isEmpty(initialNodes)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
         return new RunAdmission(preparation.definition(), initialNodes, null);
@@ -630,7 +630,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     }
 
     private String currentNodeCode(List<DagNodeResolution> initialNodes) {
-        if (EmptyChecks.isEmpty(initialNodes)) {
+        if (EmptyValues.isEmpty(initialNodes)) {
             return WorkflowNodeCode.START.code();
         }
         List<String> initialNodeCodes =
@@ -662,7 +662,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             return;
         }
         List<DagNodeResolution> initialNodes = initialNodesFromSnapshot(run.getExecutionSnapshot());
-        if (EmptyChecks.isEmpty(initialNodes)) {
+        if (EmptyValues.isEmpty(initialNodes)) {
             reject(request);
             throw BizException.of(ResultCode.BUSINESS_ERROR, "error.workflow.no_initial_nodes");
         }
@@ -672,7 +672,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
         String protectedPayload = start.getSourcePayloadProtected();
-        if (EmptyChecks.isBlank(protectedPayload)) {
+        if (EmptyValues.isBlank(protectedPayload)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
         String payload = secretPayloadProtector.reveal(protectedPayload);
@@ -790,8 +790,8 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         String tenantId = request.tenantId();
         String requestId = request.requestId();
         Long workflowDefinitionId = request.workflowDefinitionId();
-        boolean requiredLaunchFieldsAreInvalid = EmptyChecks.isBlank(tenantId)
-                || EmptyChecks.isBlank(requestId)
+        boolean requiredLaunchFieldsAreInvalid = EmptyValues.isBlank(tenantId)
+                || EmptyValues.isBlank(requestId)
                 || workflowDefinitionId == null
                 || workflowDefinitionId <= 0
                 || request.bizDate() == null;
