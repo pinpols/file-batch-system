@@ -320,7 +320,7 @@ pre-commit 分组为 `hygiene`、`quality`、`docs`、`config`、`supply-chain`�
 | 检查 | 扫描粒度 |
 |---|---|
 | 禁推 `main` / 受保护分支 | 当前 push ref |
-| `check-empty-checks.py --base <base>` | 增量 |
+| `check-empty-checks.py --base <base>` | 增量：字符串/集合/数组空判断；对象判空按 §1.8 用原生比较 |
 | `check-infrastructure-abstraction-boundaries.py --base <base>` | 增量:与 PR merge-base 比较引用语句及出现次数,既有项不因纯日志修改而阻断 |
 | `check-readiness-doc-sync.py --base <base>` | 增量 |
 | Java 新增行编码反例（FQN、`@Autowired`、`@Transactional` 位置、`RuntimeException`、日志拼接、`ZoneId.systemDefault`、`Charset.forName`） | 增量：PR 新增有效代码行 |

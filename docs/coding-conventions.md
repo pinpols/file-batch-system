@@ -221,6 +221,14 @@ return Optional.ofNullable(value).map(String::trim).orElse("");
 
 ---
 
+### 1.8 空值判断写法
+
+- 对象引用判空使用原生 `x == null` / `x != null`；`EmptyChecks.isNull` / `isNotNull` 保留 API，但新代码不再使用。
+- 字符串“空白也算空”用 `EmptyChecks.isBlank`；“仅 null 或长度为 0 才算空”用 `EmptyChecks.isEmpty`。`trim().isEmpty()` 与 `isBlank` 结论不同，不能互换。
+- 集合、Map、数组用 `EmptyChecks.isEmpty` / `isNotEmpty`；不要在调用点重复写 `x == null || x.isEmpty()` 或 `x != null && !x.isEmpty()`。
+- Stream 中的判空用 `Objects::nonNull` / `Objects::isNull`。
+- 组合判空的短路顺序、异常时机和外部调用次数不得改变；无法确认接收者静态类型时保留原写法。
+
 ## 2. 全限定类名（FQN）禁令
 
 **禁止在代码中使用全限定类名** —— 必须通过 `import` 导入后使用短名。

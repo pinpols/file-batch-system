@@ -277,10 +277,12 @@ python3 scripts/ci/check-comment-language.py --paths scripts load-tests/scripts 
 
 ## `check-empty-checks.py`
 
-检查生产 Java 本次 diff 新增的 `null`、字符串空、集合空判断。统一入口为
-`batch-common` 的 `EmptyChecks`：`isNull/isNotNull`、`isEmpty/isNotEmpty`、
-`isBlank/isNotBlank` 分别表达对象、字符串和集合的语义。脚本只检查新增行，历史
-代码由专项迁移逐步收口，不会因为一次接入产生大范围机械改动。
+检查生产 Java 本次 diff 新增的字符串空、集合/Map 空和数组长度判断。对象引用判空按
+[编码规约 §1.8](../../docs/coding-conventions.md#18-空值判断写法) 使用原生 `x == null` /
+`x != null`；字符串空白与集合/Map/数组空判断统一到 `batch-common` 的 `EmptyChecks`
+（`isEmpty/isNotEmpty`、`isBlank/isNotBlank`），不要在调用点重复写
+`x == null || x.isEmpty()`。脚本只检查新增行，历史代码由专项迁移逐步收口，不会因为
+一次接入产生大范围机械改动。
 
 默认检查当前工作区相对 `HEAD` 的新增行，并包含 Git 未跟踪的生产 Java 源码；
 显式指定 `--base` 时只比较该提交与 `HEAD`。测试、忽略文件和已删除文件不纳入。

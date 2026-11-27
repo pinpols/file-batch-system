@@ -222,7 +222,7 @@ batch-trigger 集中一份，`local.server.port` 只在 batch-console-api 集中
 `CompleteDispatchStep` / `DeliverDispatchStep` 的 `context == null ? null : ...`、`DispatchManifestSupport` 的
 `command.payload() == null ? ...`、`DefaultTaskExecutionWrapper` 的 `task.getJobCode() == null ? ...`、
 `CompleteDispatchStep` 的 `attrs.get(RECEIPT_CODE) != null` 共 7 处，统一改用 `EmptyChecks.isNull` /
-`isNotNull`（守护指定的统一入口，零行为变更）；`ReadReplicaCredentialGuard`（非本批文件）同因被扫出 2 处，一并收敛。
+`isNotNull`（当时守护指定的统一入口，零行为变更；2026-11-27 起按编码规约 §1.8 改为原生 `== null` / `!= null`）；`ReadReplicaCredentialGuard`（非本批文件）同因被扫出 2 处，一并收敛。
 这里**不能**用 `// empty-check: allow` 豁免——GJF 会把超长行折行，豁免标记落到另一行即失效。
 
 **批次 F：缺归属类补齐（2026-10-06，已收敛）**：
@@ -262,7 +262,7 @@ batch-trigger 集中一份，`local.server.port` 只在 batch-console-api 集中
 **批次 F 同样触发 diff 增量守护**：改既有行后，`AbstractPipelineStepExecutionAdapter#extractFromPayloadJson`、
 `DefaultStepExecutionAdapter#extractParameters`、`GenerateStep#execute` 的 `context == null ? null : ...` 共 3 处，
 `RegisterStep` 的 `attrs.get(EXPORT_LINE_SEPARATOR) != null` / `EXPORT_WITH_BOM != null` 共 2 处，统一改用
-`EmptyChecks.isNull` / `isNotNull`（零行为变更）。
+`EmptyChecks.isNull` / `isNotNull`（零行为变更；2026-11-27 起按编码规约 §1.8 改为原生 `== null` / `!= null`）。
 
 **批次 F 后仍缺归属类（登记待评估，本轮不动）**——`file_record.metadata` 键族：
 

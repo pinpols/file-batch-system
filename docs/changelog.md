@@ -1,5 +1,11 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-27 空值判断写法统一（阶段 9 Task 18）
+
+- 对象引用判空改用原生 `x == null` / `x != null`；字符串空白与集合/Map/数组空判断继续统一到 `EmptyChecks`，Stream 使用 `Objects::nonNull` / `Objects::isNull`。规则见[编码规约](coding-conventions.md#18-空值判断写法)。
+- `check-empty-checks.py` 不再拦截原生对象判空，只拦截新增的零散 `.isEmpty()` / `.isBlank()` / 长度判断；门禁自测覆盖允许与拦截两条路径。
+- 生产代码机械替换 3,716 处 `EmptyChecks.isNull/isNotNull`、7 处方法引用和 399 处组合判空；`EmptyChecks.isNull/isNotNull` API 保留，不再用于新代码。
+
 ## 2026-11-26 升级后验证与发布边界补强
 
 - `run-tests.sh` 构建前先安装根 POM，避免 `-pl` 模式读取旧缓存父 POM 导致本地测试混用旧依赖管理。
