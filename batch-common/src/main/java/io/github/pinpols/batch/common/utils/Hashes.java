@@ -15,9 +15,15 @@ import javax.annotation.Nullable;
  * <ul>
  *   <li>审计 / 日志里把 IP / UA 等弱敏感字段做短哈希(8 字节 / 16 hex)写入,既能 drift 比对又不直接落明文
  *   <li>JWT IP/UA binding hash(参考 {@code ConsoleJwtService#sha256Short})
+ *   <li>幂等键、快照指纹与按协议要求构造的 SHA-256 摘要(短信签名、OIDC cookie 名等)
  * </ul>
  *
- * <p>注意:这里只用于审计 / drift 比对等"防碰撞需求低"的场景;**禁**用于密码 / 签名等强加密路径。
+ * <p>使用边界:
+ *
+ * <ul>
+ *   <li>{@link #sha256Short} 会截断到 8 字节,只用于审计 / drift 比对等"防碰撞需求低"的场景,<b>不得</b>用于签名、令牌或任何安全判定
+ *   <li>{@link #sha256Hex} 是完整 SHA-256,可用于协议规定使用 SHA-256 十六进制的场景(短信签名、指纹);密码存储仍须使用专门的 KDF,不能直接用本方法
+ * </ul>
  */
 public final class Hashes {
 
