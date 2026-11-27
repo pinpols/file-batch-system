@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +33,16 @@ class HashesTest {
     void shouldAlwaysEmitLowercaseHex() {
         assertThat(Hashes.sha256Hex("any")).hasSize(64).matches("[0-9a-f]{64}");
         assertThat(Hashes.sha256Hex(new byte[] {1, 2, 3})).hasSize(64).matches("[0-9a-f]{64}");
+    }
+
+    @Test
+    @DisplayName("算法不可用: 抛 IllegalStateException，不静默返回半成品")
+    void shouldFailFast_whenAlgorithmUnavailable() {
+        assertThatThrownBy(() -> Hashes.sha256Hex(new byte[0], () -> {
+                    throw new NoSuchAlgorithmException("missing");
+                }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("SHA-256");
     }
 
     @Test

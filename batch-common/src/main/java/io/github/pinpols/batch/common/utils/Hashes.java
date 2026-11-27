@@ -58,12 +58,22 @@ public final class Hashes {
 
     /** 字节形态的 SHA-256 小写 hex;文件内容或已序列化载荷直接传入,避免再包一层字符串。 */
     public static String sha256Hex(byte[] raw) {
+        return sha256Hex(raw, SHA_256_FACTORY);
+    }
+
+    /** 摘要工厂可注入,仅用于覆盖「算法不可用」的失败分支。 */
+    static String sha256Hex(byte[] raw, Sha256Factory factory) {
         try {
-            return HexFormat.of()
-                    .formatHex(
-                            MessageDigest.getInstance(CryptoAlgorithms.SHA_256).digest(raw));
+            return HexFormat.of().formatHex(factory.create().digest(raw));
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is unavailable", e);
         }
     }
+
+    @FunctionalInterface
+    interface Sha256Factory {
+        MessageDigest create() throws NoSuchAlgorithmException;
+    }
+
+    private static final Sha256Factory SHA_256_FACTORY = () -> MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
 }
