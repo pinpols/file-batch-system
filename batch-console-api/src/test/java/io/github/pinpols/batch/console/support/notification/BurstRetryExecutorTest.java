@@ -88,6 +88,20 @@ class BurstRetryExecutorTest {
     }
 
     @Test
+    @DisplayName("真实退避: 线程已中断时立即返回，并恢复中断标志后继续重试")
+    void shouldRestoreInterruptFlag_whenRealBackoffInterrupted() {
+        BurstRetryExecutor executor = new BurstRetryExecutor(2, 1L);
+        AtomicInteger calls = new AtomicInteger();
+        Thread.currentThread().interrupt();
+
+        BurstRetryExecutor.Outcome<Integer> outcome =
+                executor.execute(() -> calls.incrementAndGet(), attempt -> attempt > 1);
+
+        assertThat(outcome.attempts()).isEqualTo(2);
+        assertThat(Thread.interrupted()).isTrue();
+    }
+
+    @Test
     @DisplayName("非法配置: 尝试次数小于 1 直接拒绝")
     void shouldRejectNonPositiveMaxAttempts() {
         assertThatIllegalArgumentException().isThrownBy(() -> new BurstRetryExecutor(0, 250L));

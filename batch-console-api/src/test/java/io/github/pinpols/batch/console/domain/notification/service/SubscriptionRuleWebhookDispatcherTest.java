@@ -107,6 +107,86 @@ class SubscriptionRuleWebhookDispatcherTest {
     }
 
     @Test
+    @DisplayName("首次投递失败后重试成功: 投递日志记录实际尝试次数")
+    void shouldPersistSuccessWithActualAttempts_whenRetrySucceeds() {
+        EnabledSubscriptionRuleRow rule = enabledRule(
+                9L,
+                "tenant-a",
+                "ops-hook",
+                "WEBHOOK",
+                "JOB_SUCCESS",
+                null,
+                "{\"url\":\"https://hook.example.com/in\",\"secret\":\"s3cr3t\"}");
+        when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_SUCCESS"))
+                .thenReturn(List.of(rule));
+        when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(true);
+        when(webhookDispatcher.attemptDelivery(any(), any(), any()))
+                .thenReturn(WebhookDeliveryResult.failure(503, "boom"))
+                .thenReturn(WebhookDeliveryResult.ok());
+
+        newDispatcher().dispatch("tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", "data", Instant.now());
+
+        ArgumentCaptor<NotificationDeliveryLogInsertParam> captor = ArgumentCaptor.captor();
+        verify(deliveryLogMapper, timeout(3000)).insert(captor.capture());
+        assertThat(captor.getValue().deliveryStatus()).isEqualTo("SUCCESS");
+        assertThat(captor.getValue().attempt()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("回调投递耗尽: 投递日志记录 FAILED 与实际尝试次数")
+    void shouldPersistFailureWithActualAttempts_whenWebhookDeliveryExhausted() {
+        EnabledSubscriptionRuleRow rule = enabledRule(
+                11L,
+                "tenant-a",
+                "ops-hook",
+                "WEBHOOK",
+                "JOB_SUCCESS",
+                null,
+                "{\"url\":\"https://hook.example.com/in\",\"secret\":\"s3cr3t\"}");
+        when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_SUCCESS"))
+                .thenReturn(List.of(rule));
+        when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(true);
+        when(webhookDispatcher.attemptDelivery(any(), any(), any()))
+                .thenReturn(WebhookDeliveryResult.failure(503, "boom"));
+
+        newDispatcher().dispatch("tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", "data", Instant.now());
+
+        ArgumentCaptor<NotificationDeliveryLogInsertParam> captor = ArgumentCaptor.captor();
+        verify(deliveryLogMapper, timeout(5000)).insert(captor.capture());
+        assertThat(captor.getValue().deliveryStatus()).isEqualTo("FAILED");
+        assertThat(captor.getValue().errorMessage()).isEqualTo("boom");
+        assertThat(captor.getValue().attempt()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("第三方渠道重试成功: 投递日志记录实际尝试次数")
+    void shouldPersistSenderSuccessWithActualAttempts_whenRetrySucceeds() {
+        EnabledSubscriptionRuleRow rule = enabledRule(
+                12L,
+                "tenant-a",
+                "ops-wecom",
+                "WECOM",
+                "JOB_FAILED",
+                null,
+                "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}");
+        when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_FAILED"))
+                .thenReturn(List.of(rule));
+        NotificationSender sender = mock(NotificationSender.class);
+        when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+        when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(true);
+        when(sender.send(any()))
+                .thenReturn(WebhookDeliveryResult.failure(200, "wecom errcode=93000"))
+                .thenReturn(WebhookDeliveryResult.ok());
+
+        newDispatcher().dispatch("tenant-a", "JOB_FAILED", "stream-1", "cursor-1", Map.of(), Instant.now());
+
+        ArgumentCaptor<NotificationDeliveryLogInsertParam> captor = ArgumentCaptor.captor();
+        verify(deliveryLogMapper, timeout(5000)).insert(captor.capture());
+        assertThat(captor.getValue().deliveryStatus()).isEqualTo("SUCCESS");
+        assertThat(captor.getValue().attempt()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("去重限流查询异常时按放行处理并累加回退计数, 不误判为重复")
     void shouldFailOpenAndRecordCounter_whenDedupRateLimiterThrows() {
         // arrange: dedup 键(notify:dedup:*)查询 Redis 时抛 DataAccessException,其余键正常放行。
