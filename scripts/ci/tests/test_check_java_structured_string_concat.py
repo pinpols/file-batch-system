@@ -74,6 +74,49 @@ class StructuredStringConcatTest(unittest.TestCase):
 }'''
         self.assertEqual([], MODULE.scan_source(source))
 
+    def test_ignores_code_only_change_inside_existing_structured_concat(self):
+        before = '''class Example {
+  String props = "app.name=batch" +
+      "\\napp.mode=" +
+      mode +
+      "\\napp.port=8080";
+}'''
+        after = '''class Example {
+  String props = "app.name=batch" +
+      "\\napp.mode=" +
+      String.valueOf(mode) +
+      "\\napp.port=8080";
+}'''
+        self.assertEqual([], MODULE.added_findings(after, before))
+
+    def test_ignores_line_collapse_inside_existing_structured_concat(self):
+        before = '''class Example {
+  String props = "healthy=" +
+      (value == null
+          ? "-"
+          : value.status()) +
+      " status=" +
+      (other == null
+          ? "-"
+          : other.status());
+}'''
+        after = '''class Example {
+  String props = "healthy=" +
+      (value == null ? "-" : value.status()) +
+      " status=" +
+      (other == null ? "-" : other.status());
+}'''
+        self.assertEqual([], MODULE.added_findings(after, before))
+
+    def test_detects_new_structured_concat(self):
+        before = "class Example {}"
+        after = '''class Example {
+  String sql = "SELECT id" +
+      " FROM batch.job_instance" +
+      " WHERE status = 'SUCCESS'";
+}'''
+        self.assertEqual(["SQL"], [finding.category for finding in MODULE.added_findings(after, before)])
+
     def test_ignores_text_block_and_comment(self):
         source = '''class Example {
   String body = """

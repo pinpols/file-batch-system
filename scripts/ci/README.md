@@ -969,7 +969,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [check-java-logging-governance.py](check-java-logging-governance.py) | Java 日志与异常输出治理。 |
 | [check-java-lombok-injection.py](check-java-lombok-injection.py) | Java Lombok 与依赖注入规约。 |
 | [check-java-readability.py](check-java-readability.py) | Java 可读性约定。 |
-| [check-java-structured-string-concat.py](check-java-structured-string-concat.py) | Java 结构化多行字符串。 |
+| [check-java-structured-string-concat.py](check-java-structured-string-concat.py) | Java 结构化多行字符串；按逻辑字符串内容比较，代码表达式或三元换行变化不误报。 |
 | [check-java-suppression-registry.py](check-java-suppression-registry.py) | Java 抑制项注册表。 |
 | [check-java-text-block-style.py](check-java-text-block-style.py) | Java 文本块格式。 |
 | [check-keda-autoscaling.py](check-keda-autoscaling.py) | KEDA 自动伸缩契约。 |

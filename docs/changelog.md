@@ -5,6 +5,7 @@
 - 对象引用判空改用原生 `x == null` / `x != null`；字符串空白与集合/Map/数组空判断继续统一到 `EmptyChecks`，Stream 使用 `Objects::nonNull` / `Objects::isNull`。规则见[编码规约](coding-conventions.md#18-空值判断写法)。
 - `check-empty-checks.py` 不再拦截原生对象判空，只拦截新增的零散 `.isEmpty()` / `.isBlank()` / 长度判断；门禁自测覆盖允许与拦截两条路径。
 - 生产代码机械替换 3,716 处 `EmptyChecks.isNull/isNotNull`、7 处方法引用和 399 处组合判空；`EmptyChecks.isNull/isNotNull` API 保留，不再用于新代码。
+- 结构化多行字符串门禁改为按逻辑字符串内容比较，代码表达式或三元换行变化不再误报；补充允许与拦截回归用例。
 
 ## 2026-11-26 升级后验证与发布边界补强
 
