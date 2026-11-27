@@ -115,7 +115,7 @@ MARKER = re.compile(
     r"<!-- enum-sync:(?P=name):end -->",
     re.DOTALL,
 )
-ENUM_CONSTANT = re.compile(r"^\s{2}([A-Z][A-Z0-9_]*)\s*\(", re.MULTILINE)
+ENUM_CONSTANT = re.compile(r"^\s+([A-Z][A-Z0-9_]*)\s*\(", re.MULTILINE)
 GATE_CODE = "TERMINOLOGY_DOC_SYNC"
 GATE_NAME = "核心术语文档同步"
 

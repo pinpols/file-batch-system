@@ -18,7 +18,7 @@ HUNK = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
 def changed_lines(base: str, paths: list[str], root: Path = ROOT) -> dict[Path, set[int]]:
-    command = ["git", "diff", "--unified=0", "--no-ext-diff", f"{base}...HEAD", "--", *paths]
+    command = ["git", "diff", "-w", "--unified=0", "--no-ext-diff", f"{base}...HEAD", "--", *paths]
     output = subprocess.run(command, cwd=root, check=True, text=True, capture_output=True).stdout
     result: dict[Path, set[int]] = {}
     current: Path | None = None

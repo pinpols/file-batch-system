@@ -252,7 +252,7 @@ class PositionalArgsConventionTest {
         }
         assertThat(base).as("可读性增量门禁必须能解析 main 基线").isNotBlank();
 
-        String diff = gitOutput("diff", "--unified=0", "--no-color", base, "--", "*.java");
+        String diff = gitOutput("diff", "-w", "--unified=0", "--no-color", base, "--", "*.java");
         Map<String, List<LineRange>> changedLines = parseAddedLineRanges(diff);
         String untracked = gitOutput("ls-files", "--others", "--exclude-standard", "--", "*.java");
         for (String relativePath : untracked.split("\\R")) {

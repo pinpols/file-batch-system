@@ -21,3 +21,6 @@ docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:429
 docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:430
 docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:441
 docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:457
+
+# 2026-11-27 格式化合并行后 generic-api-key 误报：值为测试用幂等键字面量，非凭据
+batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobControllerTest.java:generic-api-key:202

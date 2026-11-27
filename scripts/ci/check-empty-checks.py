@@ -177,17 +177,23 @@ def pattern_occurrences(lines: list[str]) -> int:
     return total
 
 
-def extract_base_tree(base: str, target: Path) -> None:
-    """一次解包 base 的 Java 树，避免逐文件 git show 在大 diff 上过慢。"""
+def extract_base_tree(base: str, target: Path) -> bool:
+    """一次解包 base 的 Java 树，避免逐文件 git show 在大 diff 上过慢。
+
+    base 中没有 Java 文件或归档不可用时返回 False，调用方回退到逐文件 git show。
+    """
     archive = subprocess.Popen(
-        ["git", "archive", base, "--", "*.java"], stdout=subprocess.PIPE
+        ["git", "archive", base, "--", "*.java"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     )
     try:
-        subprocess.run(["tar", "-x", "-C", str(target)], stdin=archive.stdout, check=True)
+        subprocess.run(["tar", "-x", "-C", str(target)], stdin=archive.stdout, check=False)
     finally:
         if archive.stdout:
             archive.stdout.close()
         archive.wait()
+    return archive.returncode == 0
 
 
 def read_base_lines(base_dir: Path, path: str) -> list[str]:
@@ -219,9 +225,13 @@ def new_violations(
     base_dir = Path(tempfile.mkdtemp(prefix="empty-checks-base-"))
     remaining: list[tuple[str, int, str, str]] = []
     try:
-        extract_base_tree(base, base_dir)
+        extracted = extract_base_tree(base, base_dir)
         for path, path_violations in by_path.items():
             base_lines = read_base_lines(base_dir, path)
+            if not extracted:
+                base_lines = (subprocess.run(
+                    ["git", "show", f"{base}:{path}"], capture_output=True, text=True
+                ).stdout.splitlines())
             base_matched = matched_lines(base_lines)
             extra = pattern_occurrences(read_head_lines(path)) - pattern_occurrences(base_lines)
             if extra <= 0:
