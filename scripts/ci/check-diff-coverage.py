@@ -32,7 +32,31 @@ def changed_lines(base: str, paths: list[str], root: Path = ROOT) -> dict[Path, 
         start = int(match.group(1))
         count = int(match.group(2) or "1")
         result.setdefault(current, set()).update(range(start, start + count))
-    return result
+    return {
+        path: lines
+        for path, lines in result.items()
+        if not unchanged_ignoring_whitespace(base, path, root)
+    }
+
+
+def unchanged_ignoring_whitespace(base: str, path: Path, root: Path) -> bool:
+    """去掉全部空白后与基线一致的文件只发生了重排，不计入差异覆盖率。
+
+    整仓格式化会把折行/缩进变化表现成逐行新增；``git diff -w`` 仍会把折行合并
+    视为结构变化，因此这里按内容（去空白）再过滤一次。
+    """
+    try:
+        head = (root / path).read_text(encoding="utf-8")
+        old = subprocess.run(
+            ["git", "show", f"{base}:{path}"],
+            cwd=root,
+            check=True,
+            text=True,
+            capture_output=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return re.sub(r"\s+", "", old) == re.sub(r"\s+", "", head)
 
 
 def jacoco_lines(report: Path, root: Path = ROOT, module: Path | None = None) -> dict[Path, dict[int, bool]]:
