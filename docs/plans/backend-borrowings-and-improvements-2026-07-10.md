@@ -314,9 +314,11 @@ fbs 是**批量运行控制面 + 文件/任务交付闭环**,不是通用工作�
 
 ### 8.3 批次 2：Webhook 重试抽取（抽取，行为不变）
 
-1. 新增 `BurstRetryExecutor`（console `support/notification`），入参为最大尝试次数、初始退避、单次尝试 `Supplier` 与成功判定，返回「实际尝试次数 + 最后一次结果」；中断时记录并恢复中断标志，不再继续尝试。
+1. 新增 `BurstRetryExecutor`（console `support/notification`），入参为最大尝试次数、初始退避、单次尝试 `Supplier` 与成功判定，返回「实际尝试次数 + 最后一次结果」；中断时记录并恢复中断标志，本次退避直接返回，后续尝试照旧执行（与原实现一致）。
 2. `WebhookDispatcher.deliverPersisted` 与 `SubscriptionRuleWebhookDispatcher` 的两处循环改用它；成功/失败的投递日志持久化移到循环之后，使用返回的尝试次数与最后结果；两份 `sleep` 合并为一份。
-3. 验收：`WebhookDispatcherTest`、`SubscriptionRuleWebhookDispatcherTest`、`WebhookDeliveryRelayTest` 保持通过；新增用例断言实际请求次数、退避间隔序列、中断后不再尝试、最后一次响应/错误摘要与投递日志状态。不引入 `resilience4j-retry`：三个调用点的持久化回调差异较大，抽取执行器比套库更小且更易回退。
+3. 验收：`WebhookDispatcherTest`、`SubscriptionRuleWebhookDispatcherTest`、`WebhookDeliveryRelayTest` 保持通过；新增用例断言实际请求次数、退避间隔序列、中断标志恢复、最后一次响应/错误摘要与投递日志状态。不引入 `resilience4j-retry`：三个调用点的持久化回调差异较大，抽取执行器比套库更小且更易回退。
+
+> **2026-11-27 实施**：新增 `BurstRetryExecutor` 与 5 个用例（首试成功、翻倍退避、耗尽结果、中断语义、非法配置）；`WebhookDispatcher` 与 `SubscriptionRuleWebhookDispatcher` 的三处循环改为调用该执行器，成功/失败的投递日志持久化移到重试结束后，两份 `sleep` 合并。`BurstRetryExecutorTest` 5/5、`WebhookDispatcherTest` 12/12、`SubscriptionRuleWebhookDispatcherTest` 17/17、`WebhookDeliveryRelayTest` 13/13。
 
 ### 8.4 批次 3：Console 熔断器改 R4J（替换）
 

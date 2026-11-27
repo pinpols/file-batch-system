@@ -29,6 +29,7 @@
 
 ### Changed
 - Console 限流熔断器改由 Resilience4j 承载：`RedisRateLimitCircuitBreaker` 不再手写失败计数、冷却与单探针 CAS，改用共享 `CircuitBreakerRegistry`（`slidingWindowSize = minimumNumberOfCalls = redisFailureThreshold`、100% 阈值、半开 1 个探针），指标名与 fail-open 方向不变。见[复用方案 §8](docs/plans/backend-borrowings-and-improvements-2026-07-10.md#remaining-self-built-components-2026-11-27)。
+- 抽取 `BurstRetryExecutor` 统一 webhook 与订阅规则的进程内 burst 重试：三处 `for + sleep + 退避翻倍` 收敛为一个执行器，投递日志持久化移到重试结束后；退避序列、尝试次数与中断语义保持不变。见[复用方案 §8](docs/plans/backend-borrowings-and-improvements-2026-07-10.md#remaining-self-built-components-2026-11-27)。
 - Java 源码格式化统一切换为 Palantir **120 列 / 4 空格**（原 `GOOGLE` 兼容模式实际为 100 列 / 2 空格）；全仓机械重排、无业务变更，`.editorconfig` 与文档同步，CI 门禁与差异覆盖率改为忽略纯空白变更。
 - 依赖升级到 Spring Boot 4.2.0 与 Spring AI 2.1.0：根 POM 的 parent 与 `spring-ai.version` 更新；移除 netty、Jackson 2/3、Tomcat、Mockito 五个已旧于 Boot 管理版本的固定（由 Boot 4.2 管理 4.2.20 / 2.21.8 / 3.1.8 / 11.0.27 / 5.24.0），`opentelemetry-instrumentation` 升到 `2.34.0-alpha` 对齐 OTel API 1.68。同步迁移 OTel appender、`TextMapGetter` 与 Micrometer observation handler 的废弃 API。见[升级评估](docs/audit/spring-ai-2-1-boot-4-2-upgrade-assessment-2026-11-23.md)。
 - Trigger 的 `CronExpressionAdapter` 缓存改为 Caffeine 容量淘汰（上限 1024，键为表达式 + 时区），删除生产无调用点的 `evict`；未命中或淘汰后按同一规则重算，Quartz 触发序列与夏令时结果不变。见[联验记录](docs/verifications/backend-oss-reuse-acceptance-2026-11-22.md)。

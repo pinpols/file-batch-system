@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscri
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
 import io.github.pinpols.batch.console.domain.notification.param.WebhookDeliveryLogInsertParam;
+import io.github.pinpols.batch.console.support.notification.BurstRetryExecutor;
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
@@ -78,6 +79,10 @@ public class WebhookDispatcher {
 
     /** 同步重试的首次退避毫秒数，此后每次翻倍。 */
     private static final long INITIAL_RETRY_BACKOFF_MILLIS = 250L;
+
+    /** 同步 burst 重试：固定 {@link #MAX_ATTEMPTS} 次尝试，首次退避 {@link #INITIAL_RETRY_BACKOFF_MILLIS} 后逐次翻倍。 */
+    private static final BurstRetryExecutor BURST_RETRY =
+            new BurstRetryExecutor(MAX_ATTEMPTS, INITIAL_RETRY_BACKOFF_MILLIS);
 
     private static final int MAX_ERROR_RESPONSE_BYTES = 8192;
 
@@ -227,31 +232,25 @@ public class WebhookDispatcher {
     }
 
     private void deliverPersisted(PendingWebhookDelivery pending) {
-        long backoffMillis = INITIAL_RETRY_BACKOFF_MILLIS;
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            WebhookDeliveryResult result =
-                    attemptDelivery(pending.subscription(), pending.payload(), pending.payloadJson());
+        BurstRetryExecutor.Outcome<WebhookDeliveryResult> outcome = BURST_RETRY.execute(
+                () -> attemptDelivery(pending.subscription(), pending.payload(), pending.payloadJson()),
+                WebhookDeliveryResult::success);
 
-            if (result.success()) {
-                deliveryLogRepository.markRetrySuccess(pending.deliveryLogId(), attempt, result.httpStatus());
-                return;
-            }
-
-            if (attempt < MAX_ATTEMPTS) {
-                sleep(backoffMillis);
-                backoffMillis *= 2;
-            } else {
-                ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam =
-                        ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
-                                .id(pending.deliveryLogId())
-                                .attempt(attempt)
-                                .httpStatus(result.httpStatus())
-                                .responseBody(result.errorSummary())
-                                .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
-                                .build();
-                deliveryLogRepository.markRetryFailure(consoleWebhookDeliveryLogMarkRetryFailureParam);
-            }
+        WebhookDeliveryResult result = outcome.result();
+        if (outcome.success()) {
+            deliveryLogRepository.markRetrySuccess(pending.deliveryLogId(), outcome.attempts(), result.httpStatus());
+            return;
         }
+
+        ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam =
+                ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
+                        .id(pending.deliveryLogId())
+                        .attempt(outcome.attempts())
+                        .httpStatus(result.httpStatus())
+                        .responseBody(result.errorSummary())
+                        .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
+                        .build();
+        deliveryLogRepository.markRetryFailure(consoleWebhookDeliveryLogMarkRetryFailureParam);
     }
 
     /**
@@ -383,16 +382,6 @@ public class WebhookDispatcher {
         Charset charset =
                 EmptyChecks.isNull(contentType) ? StandardCharsets.UTF_8 : contentType.charset(StandardCharsets.UTF_8);
         return new String(bytes, 0, length, charset);
-    }
-
-    private void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException ex) {
-            SwallowedExceptionLogger.info(WebhookDispatcher.class, "catch:InterruptedException", ex);
-
-            Thread.currentThread().interrupt();
-        }
     }
 
     private record PendingWebhookDelivery(
