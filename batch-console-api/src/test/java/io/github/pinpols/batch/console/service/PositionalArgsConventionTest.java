@@ -271,6 +271,7 @@ class PositionalArgsConventionTest {
             if (!relativePath.contains("/src/main/java/") || entry.getValue().isEmpty()) continue;
             Path sourcePath = REPO_ROOT.resolve(relativePath);
             if (!Files.isRegularFile(sourcePath)) continue;
+            if (isWhitespaceOnlyChange(base, relativePath, sourcePath)) continue;
             String source = Files.readString(sourcePath, StandardCharsets.UTF_8);
             violations.addAll(findDeepCallsiteViolations(relativePath, source, entry.getValue()));
         }
@@ -302,6 +303,24 @@ class PositionalArgsConventionTest {
         assertThat(findDeepCallsiteViolations("Sample.java", source, List.of(new LineRange(1, 2))))
                 .as("基线中未修改的调用不应被增量门禁报告")
                 .isEmpty();
+    }
+
+    /** 去掉全部空白后与基线一致的文件只发生了重排，不进入增量可读性判定。 */
+    private static boolean isWhitespaceOnlyChange(String base, String relativePath, Path sourcePath)
+            throws IOException, InterruptedException {
+        String head;
+        String old;
+        try {
+            head = Files.readString(sourcePath, StandardCharsets.UTF_8);
+            old = gitOutput("show", base + ":" + relativePath);
+        } catch (RuntimeException newFile) {
+            return false;
+        }
+        return normalizeWhitespace(old).equals(normalizeWhitespace(head));
+    }
+
+    private static String normalizeWhitespace(String source) {
+        return source.replaceAll("\\s+", "");
     }
 
     private static String gitOutput(String... args) throws IOException, InterruptedException {
