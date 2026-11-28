@@ -141,3 +141,5 @@ Prometheus / Alertmanager 模板已同步:
 ## 变更记录
 
 - 2026-11-28：空值工具机械收敛——`EmptyChecks` 更名 `EmptyValues`、`Texts.hasText` 合并、`Guard` 更名 `Preconditions`；readiness 调度、状态与对外契约未变。
+
+- 2026-11-28：全仓 import 分组格式化（Spotless `importOrder`）仅调整 import 顺序，readiness 调度、状态与对外契约未变。
