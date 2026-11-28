@@ -3,18 +3,14 @@ package io.github.pinpols.batch.console.domain.job.infrastructure;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchDayCatchUpOperationMapper;
 import io.github.pinpols.batch.console.domain.job.param.BatchDayCatchUpOperationCreate;
 import io.github.pinpols.batch.console.domain.job.param.BatchDayCatchUpOperationTransition;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayCatchUpOperation;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -47,8 +43,8 @@ public class BatchDayCatchUpOperationStore {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(input.tenantId());
-        String keyHash = hash(KEY_NAMESPACE + input.requestKey());
-        String requestHash = hash(input.requestJson());
+        String keyHash = Hashes.sha256Hex(KEY_NAMESPACE + input.requestKey());
+        String requestHash = Hashes.sha256Hex(input.requestJson());
         BatchDayCatchUpOperation existing = mapper.select(input.tenantId(), keyHash);
         if (EmptyChecks.isNotNull(existing)) {
             return requireSameRequest(existing, requestHash);
@@ -79,8 +75,8 @@ public class BatchDayCatchUpOperationStore {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
-        BatchDayCatchUpOperation persisted = mapper.select(tenantId, hash(KEY_NAMESPACE + requestKey));
-        return EmptyChecks.isNull(persisted) ? null : requireSameRequest(persisted, hash(requestJson));
+        BatchDayCatchUpOperation persisted = mapper.select(tenantId, Hashes.sha256Hex(KEY_NAMESPACE + requestKey));
+        return EmptyChecks.isNull(persisted) ? null : requireSameRequest(persisted, Hashes.sha256Hex(requestJson));
     }
 
     /** 只读查询原请求键；未找到不能推断远端未受理。 */
@@ -90,7 +86,7 @@ public class BatchDayCatchUpOperationStore {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
-        return mapper.select(tenantId, hash(KEY_NAMESPACE + requestKey));
+        return mapper.select(tenantId, Hashes.sha256Hex(KEY_NAMESPACE + requestKey));
     }
 
     /** 仅当原键尚未冻结时设置持久围栏；与首次冻结竞争同一数据库唯一键。 */
@@ -104,14 +100,14 @@ public class BatchDayCatchUpOperationStore {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
-        String keyHash = hash(KEY_NAMESPACE + requestKey);
+        String keyHash = Hashes.sha256Hex(KEY_NAMESPACE + requestKey);
         String requestJson = JsonUtils.toJson(Map.of("bizDate", bizDate, "calendarCode", calendarCode));
         String snapshotJson =
                 JsonUtils.toJson(Map.of("bizDate", bizDate, "calendarCode", calendarCode, "targets", List.of()));
         BatchDayCatchUpOperationCreate operation = BatchDayCatchUpOperationCreate.builder()
                 .tenantId(tenantId)
                 .requestKeyHash(keyHash)
-                .requestHash(hash("abandoned:" + requestKey))
+                .requestHash(Hashes.sha256Hex("abandoned:" + requestKey))
                 .requestJson(requestJson)
                 .snapshotJson(snapshotJson)
                 .itemsJson("[]")
@@ -320,16 +316,5 @@ public class BatchDayCatchUpOperationStore {
             throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
         }
         return persisted;
-    }
-
-    private String hash(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-            byte[] input = value.getBytes(StandardCharsets.UTF_8);
-            byte[] hash = digest.digest(input);
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException failure) {
-            throw new IllegalStateException(failure);
-        }
     }
 }

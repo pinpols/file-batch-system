@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
@@ -18,11 +19,8 @@ import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimite
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +53,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
         enforceUploadRate(tenantId, ownerUserId);
         ConsoleAiImageNormalizer.NormalizedImage image =
                 ConsoleAiImageNormalizer.normalize(input, aiProperties.getImage());
-        String inputSha256 = sha256(input);
+        String inputSha256 = Hashes.sha256Hex(input);
         UploadReservation reservation = template().execute(status -> {
             mapper.setTenantContext(tenantId);
             mapper.lockUploadQuota(tenantId);
@@ -345,16 +343,6 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
                 row.getWidth(),
                 row.getHeight(),
                 row.getExpiresAt());
-    }
-
-    private static String sha256(byte[] input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] digestBytes = digest.digest(input);
-            return HexFormat.of().formatHex(digestBytes);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 unavailable", exception);
-        }
     }
 
     private static BizException invalid() {

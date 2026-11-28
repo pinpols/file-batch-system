@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkflowNodeReplayTargetResolver;
@@ -18,14 +19,10 @@ import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +67,7 @@ public class WorkflowNodeReplayOperationService {
         CompensationSubmitCommand replayCommand = replayCommand(command, source);
         String snapshotPayload = snapshotPayload(source, replayCommand);
         String requestHash = requestHash(replayCommand);
-        String snapshotHash = sha256(snapshotPayload);
+        String snapshotHash = Hashes.sha256Hex(snapshotPayload);
         UUID operationKey = UUID.randomUUID();
         UUID rawTokenId = UUID.randomUUID();
         String rawToken = rawTokenId.toString();
@@ -78,7 +75,7 @@ public class WorkflowNodeReplayOperationService {
         Instant expiresAt = now.plus(PREVIEW_TTL);
         ReplayOperationPreviewTokenEntity.ReplayOperationPreviewTokenEntityBuilder previewTokenBuilder =
                 ReplayOperationPreviewTokenEntity.builder().tenantId(command.tenantId());
-        String tokenHash = sha256(rawToken);
+        String tokenHash = Hashes.sha256Hex(rawToken);
         previewTokenBuilder
                 .tokenHash(tokenHash)
                 .operationKey(operationKey.toString())
@@ -143,7 +140,7 @@ public class WorkflowNodeReplayOperationService {
             throw invalidPreview();
         }
 
-        String tokenHash = sha256(command.previewToken());
+        String tokenHash = Hashes.sha256Hex(command.previewToken());
         ReplayOperationPreviewTokenEntity token;
         try {
             token = tokenMapper.selectForUpdate(command.tenantId(), tokenHash);
@@ -174,7 +171,7 @@ public class WorkflowNodeReplayOperationService {
             throw invalidPreview();
         }
         String snapshotPayload = snapshotPayload(source, replayCommand);
-        String snapshotHash = sha256(snapshotPayload);
+        String snapshotHash = Hashes.sha256Hex(snapshotPayload);
         if (!snapshotHash.equals(token.snapshotHash())) {
             throw invalidPreview();
         }
@@ -340,7 +337,7 @@ public class WorkflowNodeReplayOperationService {
         payload.remove("replayOperationId");
         Object canonicalPayload = canonicalizePayload(payload);
         String canonicalPayloadJson = JsonUtils.toJson(canonicalPayload);
-        return sha256(canonicalPayloadJson);
+        return Hashes.sha256Hex(canonicalPayloadJson);
     }
 
     private Object canonicalizePayload(Object value) {
@@ -357,17 +354,6 @@ public class WorkflowNodeReplayOperationService {
             return collection.stream().map(this::canonicalizePayload).toList();
         }
         return value;
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
-            byte[] digestBytes = digest.digest(valueBytes);
-            return HexFormat.of().formatHex(digestBytes);
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
     }
 
     private BizException invalidPreview() {

@@ -312,6 +312,8 @@ fbs 是**批量运行控制面 + 文件/任务交付闭环**,不是通用工作�
 2. 替换 String→hex 的 14 处与 byte[]→hex 的 2 处；`ImportIngressOwnershipIdentity` 的 Map 版本先经现有 `JsonUtils` 序列化后调用 `sha256Hex(byte[])`，保持键序稳定；`AlertFingerprints` 的 `String.format("%02x")` 一并改为 `HexFormat`（输出不变）。文件流式的 `StoreStep.sha256Hex(Path)` 保留，避免整文件读入内存。
 3. 验收：新增 `HashesTest` 覆盖空串、中文、长文本、字节数组与旧实现逐字节一致；`AlertFingerprintsTest` 通过；受影响模块 `test-compile`。回退为单批代码差异。
 
+> **2026-11-27 实施**：`Hashes` 增加 `sha256Hex(String|byte[])`；15 个文件删除私有实现并改为调用该工具，`DefaultConsoleAiApplicationService` 保留 null 语义但去掉不可达的 `%08x` 兜底；新增 `HashesTest`（4 个用例，含公开向量与前缀一致性）。`HashesTest` 4/4、`AlertFingerprintsTest` 3/3、console 受影响 80/80、orchestrator replay 与补偿 119/119、worker import 扫描器 16/16，四模块 `test-compile` 与 `spotless:check` 通过。
+
 ### 8.3 批次 2：Webhook 重试抽取（抽取，行为不变）
 
 1. 新增 `BurstRetryExecutor`（console `support/notification`），入参为最大尝试次数、初始退避、单次尝试 `Supplier` 与成功判定，返回「实际尝试次数 + 最后一次结果」；中断时记录并恢复中断标志，本次退避直接返回，后续尝试照旧执行（与原实现一致）。

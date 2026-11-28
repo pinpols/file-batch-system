@@ -11,13 +11,13 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import io.github.pinpols.batch.console.support.notification.ConsoleNotificationCryptoSupport;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -267,7 +267,7 @@ public class TencentSmsProvider implements SmsProvider {
     private String buildAuthorization(String payload, long timestamp, String endpoint) throws GeneralSecurityException {
         String canonicalHeaders = "content-type:" + CONTENT_TYPE + '\n' + "host:" + endpoint + '\n';
         String signedHeaders = "content-type;host";
-        String hashedPayload = sha256Hex(payload);
+        String hashedPayload = Hashes.sha256Hex(payload);
 
         String canonicalRequest = HTTP_METHOD
                 + '\n'
@@ -286,7 +286,7 @@ public class TencentSmsProvider implements SmsProvider {
         String date = UTC_DATE_FORMAT.format(requestTime);
         String credentialScope = date + "/" + SERVICE + "/tc3_request";
         String stringToSign =
-                ALGORITHM + '\n' + timestamp + '\n' + credentialScope + '\n' + sha256Hex(canonicalRequest);
+                ALGORITHM + '\n' + timestamp + '\n' + credentialScope + '\n' + Hashes.sha256Hex(canonicalRequest);
 
         String secretSeed = "TC3" + properties.getTencentSecretKey();
         byte[] secretSeedBytes = secretSeed.getBytes(StandardCharsets.UTF_8);
@@ -304,17 +304,6 @@ public class TencentSmsProvider implements SmsProvider {
                 + signedHeaders
                 + ", Signature="
                 + signature;
-    }
-
-    private static String sha256Hex(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-            byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
-            byte[] hash = digest.digest(encodedInput);
-            return ConsoleNotificationCryptoSupport.toHex(hash);
-        } catch (Exception ex) {
-            throw new IllegalStateException("sha256 unavailable", ex);
-        }
     }
 
     private static byte[] hmacSha256(byte[] key, String data) throws GeneralSecurityException {
