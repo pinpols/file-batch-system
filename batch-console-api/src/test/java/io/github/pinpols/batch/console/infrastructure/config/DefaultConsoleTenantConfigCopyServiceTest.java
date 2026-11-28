@@ -21,7 +21,10 @@ import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigIni
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPreviewRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigDiffPreviewResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
@@ -39,6 +42,7 @@ import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.Cal
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.job.view.JobDependencyRuleView;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
+import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
@@ -49,6 +53,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -439,5 +444,23 @@ class DefaultConsoleTenantConfigCopyServiceTest {
                 .bizType(bizType)
                 .enabled(enabled)
                 .build();
+    }
+
+    @Test
+    @DisplayName("预览对比时按配置键索引源与目标条目：编码有效的条目参与差异计算")
+    void shouldIndexConfigItemsByKey_whenPreviewComparesAlertRoutings() {
+        AlertRoutingConfigRow row = new AlertRoutingConfigRow(
+                null, "t1", "R1", "route", null, null, null, null, null, null, null, null, true, null, null, null, null,
+                null, false);
+        when(alertRoutingConfigMapper.selectByQuery(any())).thenReturn(List.of(row));
+
+        TenantConfigPreviewRequest request = new TenantConfigPreviewRequest();
+        request.setSourceTenantId("t1");
+        request.setTargetTenantIds(List.of("t2"));
+        request.setConfigTypes(Set.of(ConfigType.ALERT_ROUTING));
+
+        TenantConfigDiffPreviewResponse response = service.preview(request);
+
+        assertThat(response.tenants()).hasSize(1);
     }
 }
