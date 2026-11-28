@@ -75,11 +75,6 @@ public class StaleTempFileCleanup {
                     if (Files.deleteIfExists(p)) {
                         cleaned++;
                     }
-                } catch (RuntimeException ex) {
-                    log.warn(
-                            "failed to delete stale temp file: path={}, error={}",
-                            p,
-                            SwallowedExceptionLogger.summary(ex));
                 } catch (Exception ex) {
                     log.warn(
                             "failed to delete stale temp file: path={}, error={}",
