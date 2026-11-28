@@ -93,6 +93,7 @@ CodeQL 的 `CodeQL Java security analysis` 只有在 `codeql.yml` 已于 main �
 
 - **feature 分支自己 push 不跑任何 gate** — 开发可频繁推送无成本,门禁压力全在 PR 时
 - **直推 main 跳过 pr-gate**(无审查),但 `full-ci-gate` 仍回退回归
+- **Maven 依赖解析瞬态失败统一重试**：含 Maven 调用的 job 经 `scripts/ci/run-maven-with-resolution-retry.sh` 包装，只对依赖/插件解析与传输层瞬态失败（`Could not transfer artifact`、`Failed to read artifact descriptor`、`Could not resolve dependencies`、Maven Central 429 限流等）重试 3 次，间隔按次递增；编译错误、测试失败和业务断言立即失败，不重试。本地复现同一命令时也使用该包装，避免把解析抖动误判为代码失败。
 - **`concurrency.group + cancel-in-progress`** 全配 — 同分支并发 push / 同 PR 多次推时,旧 run 自动取消省 runner
 - **pr-gate 与 full-ci-gate 检查项不完全相同**:见下表(pr-gate 重快速反馈,full-ci-gate 重深度回归 + 安全扫描)
 - **main 红线独立于 PR 绿灯**:PR gate 通过只代表候选变更可合入；合入后的 main 只有最新 `full-ci-gate` 通过才可作为发布基线。

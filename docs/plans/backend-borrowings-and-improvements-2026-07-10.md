@@ -306,6 +306,8 @@ fbs 是**批量运行控制面 + 文件/任务交付闭环**,不是通用工作�
 
 `EmptyChecks` 的调用量决定了整体替换的收益为负：改动 5 000 余处、行为零变化，且回退面覆盖全部模块。只把 [TenantConfigReferenceResolver](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigReferenceResolver.java) 第 128、166 行与 [DefaultConsoleTenantConfigCopyService](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java) 第 870 行的 3 处 `StringUtils.hasText` 改为项目内 `EmptyValues.hasText`（`#1474` 已把原 `Texts` 合并进 `EmptyValues`）。SDK 的 `EmptyChecks`/`SdkEmptyValues` 保持独立，SDK 不依赖 Spring。
 
+> **2026-11-27 实施**：3 处 `StringUtils.hasText` 已改为 `EmptyValues.hasText`（`#1475`），未扩大 `EmptyChecks`/`Guard` 的替换范围；规则见[编码规约 §1.8](../coding-conventions.md#18-空值判断写法)。
+
 ### 8.2 批次 1：哈希收敛（抽取，零语义变化）
 
 1. 在 [Hashes](../../batch-common/src/main/java/io/github/pinpols/batch/common/utils/Hashes.java) 增加 `sha256Hex(String)` 与 `sha256Hex(byte[])`，沿用现有 `sha256Short` 的异常处理（算法不可用抛 `IllegalStateException`）。输出必须是小写 hex，与 `HexFormat.of().formatHex` 一致。
