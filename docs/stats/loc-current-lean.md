@@ -1,18 +1,18 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `7e8d5115b`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `1c5207205` + 当前工作区改动。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,407 | 828,881 | 438,930 | 53.0% |
+| 6,407 | 828,905 | 438,935 | 53.0% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,955 | 412,737 | 226,610 | 54.9% |
+| test | 1,955 | 412,761 | 226,615 | 54.9% |
 | prod | 3,528 | 326,991 | 157,026 | 48.0% |
 | script | 744 | 70,027 | 42,850 | 61.2% |
 | config | 68 | 10,301 | 7,692 | 74.7% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,827 | 639,994 | 344,041 | 53.8% |
+| Java | 4,827 | 640,018 | 344,046 | 53.8% |
 | Python | 357 | 54,467 | 29,865 | 54.8% |
 | Shell | 220 | 36,331 | 28,757 | 79.2% |
 | YAML | 110 | 15,074 | 11,648 | 77.3% |
@@ -41,7 +41,7 @@
 |---|---|---|---:|---:|
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java` | test | Java | 7,493 | 3,291 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,255 | 2,812 |
-| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,789 | 2,598 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,813 | 2,603 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,611 | 1,790 |
 | `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,638 | 1,458 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,780 | 1,389 |
