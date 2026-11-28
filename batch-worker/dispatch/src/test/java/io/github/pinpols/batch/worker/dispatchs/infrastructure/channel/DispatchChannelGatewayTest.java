@@ -11,11 +11,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +22,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
 
 @DisplayName("渠道分发网关:适配器解析与投递记账、健康与熔断拦截、许可释放与回读守卫")
 @ExtendWith(OutputCaptureExtension.class)

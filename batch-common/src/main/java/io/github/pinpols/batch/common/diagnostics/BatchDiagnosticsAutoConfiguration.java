@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.common.diagnostics;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
-import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -12,6 +7,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
 
 @AutoConfiguration
 @ConditionalOnClass(Endpoint.class)

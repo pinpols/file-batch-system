@@ -2,9 +2,8 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import java.sql.SQLException;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -12,6 +11,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.ServerErrorMessage;
 import org.springframework.dao.DataIntegrityViolationException;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 
 @DisplayName("配置导入数据库失败结果：精确识别依赖约束并隐藏内部诊断")
 class TenantConfigFailureMessagesTest {

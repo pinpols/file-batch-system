@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.workflow.application.contract.response;
 
-import io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity;
 import java.time.Instant;
 import java.time.LocalTime;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity;
 
 /** 根级软时限的对外视图；持久化载体不直接作为 Console API 契约。 */
 @Builder

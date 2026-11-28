@@ -4,24 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import io.github.pinpols.batch.console.config.WebhookRelayProperties;
-import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
-import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
-import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
-import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
-import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationFinishParam;
-import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
-import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
-import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +20,21 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import io.github.pinpols.batch.console.config.WebhookRelayProperties;
+import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
+import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
+import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
+import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationFinishParam;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
+import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
+import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 @DisplayName("可靠终态投递停机边界:停止领取后续行并保留恢复意图")
 @ExtendWith(MockitoExtension.class)

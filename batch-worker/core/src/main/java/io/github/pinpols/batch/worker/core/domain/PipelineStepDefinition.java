@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.core.domain;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * Pipeline 单个步骤的静态定义，从配置层加载后在整个执行周期内只读。 包含步骤标识、实现编码、参数映射、超时与重试策略等元信息； 提供 {@link #textParam} /

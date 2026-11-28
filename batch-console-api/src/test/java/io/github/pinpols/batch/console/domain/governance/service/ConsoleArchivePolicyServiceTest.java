@@ -6,16 +6,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.governance.command.ArchivePolicyUpsertCommand;
 import io.github.pinpols.batch.console.domain.governance.entity.ArchivePolicyEntity;
 import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleArchivePolicyMapper;
 import io.github.pinpols.batch.console.domain.governance.param.ArchivePolicyUpsertParam;
 import io.github.pinpols.batch.console.shared.query.TenantScopeResolver;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("归档策略服务: 列表查询、目标表白名单校验与保留天数、批量大小归一化")
 class ConsoleArchivePolicyServiceTest {

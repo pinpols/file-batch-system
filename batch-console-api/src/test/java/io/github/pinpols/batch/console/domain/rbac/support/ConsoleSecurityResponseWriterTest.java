@@ -2,17 +2,19 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.logging.BatchMdc;
-import io.github.pinpols.batch.common.logging.StructuredLogField;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletResponse;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.logging.BatchMdc;
+import io.github.pinpols.batch.common.logging.StructuredLogField;
 
 @DisplayName("安全响应写入:链路标识头部与响应体元信息保持一致")
 class ConsoleSecurityResponseWriterTest {

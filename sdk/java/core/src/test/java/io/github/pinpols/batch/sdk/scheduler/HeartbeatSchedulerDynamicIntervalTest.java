@@ -11,17 +11,19 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
-import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 
 /**
  * Lane I:HeartbeatScheduler 消费 ADR-035 §11 的 {@code nextHeartbeatHint} 动态重排测试。

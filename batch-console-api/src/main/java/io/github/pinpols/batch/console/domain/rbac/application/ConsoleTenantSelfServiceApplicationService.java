@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.application;
 
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -10,8 +14,6 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.request.
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleTenantUsageSummaryResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /** 租户配额查询、用量汇总与扩容申请。 */
 @Service

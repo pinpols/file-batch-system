@@ -3,13 +3,6 @@ package io.github.pinpols.batch.worker.processes.stage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
-import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
-import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
-import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -18,7 +11,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -37,6 +32,14 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
+import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
+import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
+import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 
 @DisplayName("PROCESS invocation fence:真实 PostgreSQL 锁与 Orchestrator 回收互斥")
 class PlatformProcessInvocationFenceIntegrationTest {

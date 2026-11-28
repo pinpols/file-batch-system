@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Nullables;
@@ -26,10 +33,6 @@ import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.TenantQuotaPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
-import java.util.ArrayList;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 租户初始化中的资源、窗口、日历、配额和告警配置持久化协作者。 */
 @Component

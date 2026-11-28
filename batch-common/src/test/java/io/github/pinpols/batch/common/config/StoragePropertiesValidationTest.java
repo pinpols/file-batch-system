@@ -2,10 +2,11 @@ package io.github.pinpols.batch.common.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 
 @DisplayName("存储属性校验:对象存储端点与超时边界、文件系统扫描上限的显式无限制模式,以及内存加密上限的拒绝规则")
 class StoragePropertiesValidationTest {

@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
-import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
-import io.github.pinpols.batch.worker.core.support.AbstractStepBeanRegistrar;
-import io.github.pinpols.batch.worker.dispatchs.stage.DispatchStageStep;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
+import io.github.pinpols.batch.worker.core.support.AbstractStepBeanRegistrar;
+import io.github.pinpols.batch.worker.dispatchs.stage.DispatchStageStep;
 
 /**
  * Dispatch worker 启动后把所有 {@link DispatchStageStep} bean 登记到 {@code batch.step_registry}，

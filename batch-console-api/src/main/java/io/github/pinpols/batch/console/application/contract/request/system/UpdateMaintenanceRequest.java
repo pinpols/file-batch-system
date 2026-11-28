@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.application.contract.request.system;
 
-import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+
 import lombok.Data;
+
+import jakarta.validation.constraints.Size;
 
 /**
  * Admin 热更新维护状态请求体。

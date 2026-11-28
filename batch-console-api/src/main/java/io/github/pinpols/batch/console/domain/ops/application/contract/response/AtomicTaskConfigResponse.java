@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import java.time.Instant;
+
+import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 
 /** 已保存原子任务配置的公开 Console 视图。 */
 public record AtomicTaskConfigResponse(

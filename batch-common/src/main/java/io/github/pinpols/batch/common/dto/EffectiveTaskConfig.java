@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.dto;
 
 import java.time.Instant;
 import java.util.List;
+
 import lombok.Builder;
 
 /**

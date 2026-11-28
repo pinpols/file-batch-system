@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.console.domain.observability.mapper;
 
-import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
-import lombok.Builder;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+
+import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
 
 /** Console 后端操作审计到日聚合表的读写映射。 */
 @Mapper

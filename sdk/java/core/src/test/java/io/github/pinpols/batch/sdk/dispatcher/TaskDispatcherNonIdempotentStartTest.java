@@ -4,18 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.handler.atomic.HttpAtomicConfig;
-import io.github.pinpols.batch.sdk.handler.atomic.HttpAtomicHandler;
-import io.github.pinpols.batch.sdk.idempotent.Idempotent;
-import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencySnapshot;
-import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
-import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
-import io.github.pinpols.batch.sdk.retry.RetryOn;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -28,10 +16,25 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.handler.atomic.HttpAtomicConfig;
+import io.github.pinpols.batch.sdk.handler.atomic.HttpAtomicHandler;
+import io.github.pinpols.batch.sdk.idempotent.Idempotent;
+import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencySnapshot;
+import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
+import io.github.pinpols.batch.sdk.retry.RetryOn;
 
 @DisplayName("TaskDispatcher 非幂等 HTTP 调用 — 持久开始确认与安全请求边界")
 class TaskDispatcherNonIdempotentStartTest {

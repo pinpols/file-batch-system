@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.entity;
 
 import java.time.Instant;
+
 import lombok.Data;
 
 /** {@code batch.console_maintenance_state} 的 MyBatis 行载体。 */

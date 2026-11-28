@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.admin;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Repository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -8,14 +19,6 @@ import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper;
 import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.CleanupTarget;
 import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.OutboxEventIdentity;
 import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.PrefixCleanupScope;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Repository;
 
 /**
  * 测试数据级联清理 repository。

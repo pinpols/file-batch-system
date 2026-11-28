@@ -4,17 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.domain.governance.command.BusinessShardCatalogUpsertCommand;
-import io.github.pinpols.batch.console.domain.governance.entity.BusinessShardCatalogEntity;
-import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleBusinessShardCatalogMapper;
-import io.github.pinpols.batch.console.domain.governance.param.BusinessShardCatalogUpsertParam;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.console.domain.governance.command.BusinessShardCatalogUpsertCommand;
+import io.github.pinpols.batch.console.domain.governance.entity.BusinessShardCatalogEntity;
+import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleBusinessShardCatalogMapper;
+import io.github.pinpols.batch.console.domain.governance.param.BusinessShardCatalogUpsertParam;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("业务分片目录服务: 列表查询、启用键查询、写入与删除的仓储委托")

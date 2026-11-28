@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.domain.command;
 
-import io.github.pinpols.batch.common.i18n.LocalizedErrorCarrier;
 import java.util.List;
 import java.util.Map;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.i18n.LocalizedErrorCarrier;
 
 @Builder(toBuilder = true)
 public record TaskOutcomeCommand(

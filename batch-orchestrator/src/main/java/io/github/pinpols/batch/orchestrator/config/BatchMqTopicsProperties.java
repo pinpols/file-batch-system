@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.utils.EmptyValues;
-import lombok.Data;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * 编排侧 Kafka Topic 配置。

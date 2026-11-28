@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -8,9 +7,14 @@ import java.sql.Statement;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.BeanFactory;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 
 /**
  * ADR-035 §9 — 原子任务执行器(sql / storedproc)共享的 DataSource 解析 + 角色闸 + 回调式 acquire/release。

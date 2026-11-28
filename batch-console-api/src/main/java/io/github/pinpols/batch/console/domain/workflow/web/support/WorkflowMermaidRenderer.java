@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.workflow.web.support;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
@@ -7,9 +11,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowEdgeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * 把 workflow 定义渲染为 mermaid flowchart 文本。可贴入 GitHub README / PR / 文档站,平台无关。

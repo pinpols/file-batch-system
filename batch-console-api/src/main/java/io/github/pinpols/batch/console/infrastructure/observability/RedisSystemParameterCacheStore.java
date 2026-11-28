@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.infrastructure.observability;
 
-import io.github.pinpols.batch.console.application.observability.SystemParameterCacheStore;
 import java.time.Duration;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.console.application.observability.SystemParameterCacheStore;
 
 /** Redis 版系统参数缓存。 */
 @Component

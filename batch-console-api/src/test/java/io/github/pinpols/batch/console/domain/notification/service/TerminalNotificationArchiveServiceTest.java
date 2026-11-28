@@ -11,12 +11,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.config.WebhookRelayProperties;
-import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper;
-import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper.Family;
-import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
-import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationArchiveCandidate;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +21,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
+
+import io.github.pinpols.batch.console.config.WebhookRelayProperties;
+import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper;
+import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper.Family;
+import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
+import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationArchiveCandidate;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("通知归档单批服务：顺序、停止与失败关闭")

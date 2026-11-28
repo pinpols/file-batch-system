@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.common.utils;
 
+import java.util.EnumSet;
+import java.util.Map;
+
+import javax.annotation.Nullable;
+
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import java.util.EnumSet;
-import java.util.Map;
-import javax.annotation.Nullable;
 
 /**
  * 文件状态机，维护 {@link io.github.pinpols.batch.common.enums.FileStatus} 的合法流转规则。 初始状态仅允许 {@code

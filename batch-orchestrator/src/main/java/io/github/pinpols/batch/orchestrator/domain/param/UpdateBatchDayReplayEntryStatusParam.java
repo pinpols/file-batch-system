@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
-import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplayEntryStatus;
 import java.time.Instant;
 import java.util.Objects;
+
 import lombok.Getter;
+
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplayEntryStatus;
 
 /** 批次日重放条目的状态与关联结果更新参数。id、目标状态和更新时间必填；其余字段为空时由 Mapper 保留原值。 */
 @Getter

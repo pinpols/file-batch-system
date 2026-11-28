@@ -6,18 +6,20 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.resilience.DownstreamFallback;
-import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import java.util.List;
 import java.util.function.Supplier;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.client.RestClient;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.resilience.DownstreamFallback;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 
 /**
  * SEC-IDOR(S5):{@link DefaultConsoleTriggerProxyService#triggerList()} 按调用方租户收敛。

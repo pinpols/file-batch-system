@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.trigger.web;
 
-import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService;
-import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService.RecoveryLaunchOutcome;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService;
+import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService.RecoveryLaunchOutcome;
 
 /**
  * Orchestrator 驱动的 readiness 恢复端点（{@code X-Internal-Secret} 保护）。

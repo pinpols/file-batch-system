@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.processes.domain;
 
-import io.github.pinpols.batch.worker.core.support.ExecutionContext;
-import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.worker.core.support.ExecutionContext;
+import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
 
 /** PROCESS 任务执行上下文,贯穿各 stage 传递状态、水位和中间结果。 */
 @Data

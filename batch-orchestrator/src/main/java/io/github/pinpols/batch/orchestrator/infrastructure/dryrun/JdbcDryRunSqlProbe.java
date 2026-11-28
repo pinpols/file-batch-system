@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.dryrun;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunFinding;
-import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunSqlProbe;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+
+import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunFinding;
+import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunSqlProbe;
+
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.Statements;
 import net.sf.jsqlparser.statement.select.Select;
-import org.springframework.stereotype.Component;
 
 /** L3 SQL 静态检查；数据库计划探测停用以避免规划阶段的副作用。 */
 @Component

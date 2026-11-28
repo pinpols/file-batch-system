@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditContributor;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** DISPATCH worker 启动时输出渠道健康门控快照。 */
 @Component

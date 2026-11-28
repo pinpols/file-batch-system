@@ -3,10 +3,11 @@ package io.github.pinpols.batch.orchestrator.observability;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics.Phase;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics.Phase;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("启动阶段耗时指标的记录行为,覆盖成功与失败路径的计时器计数及结果透传")
 class LaunchPhaseMetricsTest {

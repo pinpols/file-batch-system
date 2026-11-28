@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.mapper;
 
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
 
 /**

@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.rbac.entity.SecretVersionEntity;
 import io.github.pinpols.batch.console.domain.rbac.param.SecretVersionInsertParam;
 import io.github.pinpols.batch.console.domain.rbac.query.SecretVersionQuery;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface SecretVersionMapper {
 

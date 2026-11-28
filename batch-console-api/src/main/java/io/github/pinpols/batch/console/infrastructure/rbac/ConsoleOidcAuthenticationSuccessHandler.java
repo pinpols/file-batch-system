@@ -1,5 +1,20 @@
 package io.github.pinpols.batch.console.infrastructure.rbac;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleOidcLoginAudit;
@@ -7,21 +22,10 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMap
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenCookieWriter;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
-import org.springframework.security.oauth2.core.oidc.user.OidcUser;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.stereotype.Component;
 
 /** 将已验证的 OIDC subject 映射到本地 RBAC，再签发平台自己的 JWT Cookie。 */
 @Component

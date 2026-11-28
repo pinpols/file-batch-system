@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.i18n;
 
 import java.io.IOException;
 import java.util.List;
+
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRequest;

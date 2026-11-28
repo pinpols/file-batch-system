@@ -8,16 +8,11 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import io.github.pinpols.batch.common.resilience.DownstreamFallback;
-import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleSchedulerCommandResponse;
-import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
-import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import java.time.Instant;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -26,6 +21,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+
+import io.github.pinpols.batch.common.resilience.DownstreamFallback;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleSchedulerCommandResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 
 @DisplayName("Trigger 代理真实 JSON 转换验证：固定列表、运维动作与租户失败关闭")
 class TriggerProxyJsonContractTest {

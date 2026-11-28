@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionWriter;
@@ -8,11 +15,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import org.springframework.stereotype.Component;
 
 /**
  * 负责 job_instance 进入终态后的旁路收口。

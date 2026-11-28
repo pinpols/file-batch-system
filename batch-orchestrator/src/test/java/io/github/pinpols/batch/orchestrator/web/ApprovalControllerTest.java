@@ -8,11 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
-import io.github.pinpols.batch.orchestrator.controller.ApprovalController;
-import io.github.pinpols.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +16,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
+import io.github.pinpols.batch.orchestrator.controller.ApprovalController;
+import io.github.pinpols.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("审批接口的请求处理与异常映射:提交成功返回审批单号,缺少租户参数时兜底为系统错误,业务异常映射为对应状态码与消息键")

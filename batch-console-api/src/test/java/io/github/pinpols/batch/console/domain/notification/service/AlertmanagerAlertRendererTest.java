@@ -2,13 +2,15 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
-import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 
 @DisplayName("告警渲染器: 单条与多条告警的标题, 正文与结构化字段组装")
 class AlertmanagerAlertRendererTest {

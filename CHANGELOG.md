@@ -9,6 +9,7 @@
 ## [Unreleased]
 
 ### Added
+- 新增增量门禁 `check-java-control-flow.py`：拦截 then 块以 `return` / `throw` / `continue` / `break` 结束后仍写 `else`，以及 `application` / `domain` 新增 `catch (Exception|Throwable)`；异常处理器、调度器、消费者等边界类按后缀豁免，接入 PR gate、pre-push 与 pre-commit。
 - `AlertmanagerDeliveryChainE2eIT` 新增租户分流用例：两个租户的告警经同一 AM receiver 回调后分别投递到各自渠道，并断言 `notification_delivery_log` 各记一条 `ALERTMANAGER` SUCCESS。
 - 新增 Process 完整 HTTP E2E 与 Export 复合游标崩溃续跑对账：`ProcessPipelineE2eIT` 经真实 `/internal/orchestrator/launch` 发起并由 Worker 通过 HTTP 认领/回报；`ExportKeysetRangeIntegrationTest` 在真实 PostgreSQL 上从首页复合游标重启续页，校验无重复、无漏行并与库中行数对账。
 - 新增 Workflow 定义级活跃运行上限 `max_active_runs_per_biz_date`（1..64，默认 1）：同一租户、Workflow、业务日与执行模式允许并存多个
@@ -28,6 +29,7 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- Spotless 增加 `importOrder`（static → `java/javax/org/com/lombok/io`），全仓一次性重排 3 786 个文件的 import 顺序，无业务变更；PMD 启用 `AvoidThrowingRawExceptionTypes` 与 `IdenticalCatchBranches`，深层嵌套/圈复杂度/通用异常捕获因插件缺少 baseline 由增量门禁守护。可读性快照新增 try/catch/通用 catch/else/else-if 近似计数，仅作趋势。
 - CI 的 Maven 命令统一经 `run-maven-with-resolution-retry.sh`：仅对依赖/插件解析类瞬态失败（`Could not transfer artifact`、`Failed to read artifact descriptor`、`Could not resolve dependencies` 等）重试 3 次，编译错误与测试失败不重试；同时把 Sonar 门禁里硬编码的 `jacoco-maven-plugin:0.8.15` 改回项目管理的 `jacoco:report`，消除版本漂移导致的额外拉取。
 - Console 限流熔断器改由 Resilience4j 承载：`RedisRateLimitCircuitBreaker` 不再手写失败计数、冷却与单探针 CAS，改用共享 `CircuitBreakerRegistry`（`slidingWindowSize = minimumNumberOfCalls = redisFailureThreshold`、100% 阈值、半开 1 个探针），指标名与 fail-open 方向不变。见[复用方案 §8](docs/plans/backend-borrowings-and-improvements-2026-07-10.md#remaining-self-built-components-2026-11-27)。
 - 抽取 `BurstRetryExecutor` 统一 webhook 与订阅规则的进程内 burst 重试：三处 `for + sleep + 退避翻倍` 收敛为一个执行器，投递日志持久化移到重试结束后；退避序列、尝试次数与中断语义保持不变。见[复用方案 §8](docs/plans/backend-borrowings-and-improvements-2026-07-10.md#remaining-self-built-components-2026-11-27)。

@@ -5,21 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.dto.LaunchEnvelope;
-import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
-import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
-import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
-import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
-import io.github.pinpols.batch.orchestrator.config.TriggerLaunchErrorHandlerTestSupport;
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -28,6 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -46,6 +32,22 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.TestPropertySource;
+
+import io.github.pinpols.batch.common.dto.LaunchEnvelope;
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
+import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
+import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
+import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
+import io.github.pinpols.batch.orchestrator.config.TriggerLaunchErrorHandlerTestSupport;
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 // park 之后后台恢复扫描会用真实 LaunchApplicationService 重放锚点；本用例用不存在的 job 模拟“稍后恢复”，

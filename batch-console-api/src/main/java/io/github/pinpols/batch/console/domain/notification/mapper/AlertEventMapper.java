@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.console.domain.notification.query.AlertEventActiveAlertsInAmGroupCountQuery;
 import io.github.pinpols.batch.console.domain.notification.query.AlertEventQuery;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface AlertEventMapper {
 

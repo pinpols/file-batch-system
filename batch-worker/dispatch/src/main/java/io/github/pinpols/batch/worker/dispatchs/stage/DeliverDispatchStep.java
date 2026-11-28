@@ -2,6 +2,16 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
@@ -26,13 +36,6 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchC
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchReadbackVerifier;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalLong;
-import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * Dispatch pipeline 的 DISPATCH 阶段：通过 {@link DispatchChannelGateway} 执行实际文件投递。

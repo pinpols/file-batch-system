@@ -2,14 +2,6 @@ package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.plugin.ExportDataContext;
-import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
-import io.github.pinpols.batch.worker.exports.config.JdbcMappedExportSecurityProperties;
-import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
@@ -20,7 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +24,16 @@ import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DelegatingDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.plugin.ExportDataContext;
+import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
+import io.github.pinpols.batch.worker.exports.config.JdbcMappedExportSecurityProperties;
+import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 
 @DisplayName("导出多分片统一哈希的完整性")
 class ExportPartitionMixedFallbackIntegrationTest {

@@ -2,12 +2,12 @@ package io.github.pinpols.batch.worker.core.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.Map;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -23,6 +23,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 
 /** 真实驱动与 MyBatis 映射共同守护模板固定投影到插件动态参数的边界。 */
 @DisplayName("Worker模板映射：固定投影经插件边界转换为动态配置")

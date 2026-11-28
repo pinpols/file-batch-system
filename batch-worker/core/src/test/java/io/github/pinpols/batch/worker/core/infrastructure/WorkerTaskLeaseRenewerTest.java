@@ -12,18 +12,20 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+
 import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * 单元测试：{@link WorkerTaskLeaseRenewer}.

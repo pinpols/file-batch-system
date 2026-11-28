@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractObjectStoreRunCompensator;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchWorkerType;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
 
 /**
  * 安全增量补偿(opt-in)DISPATCH 实现 —— 反向 = 删本 run 落在对象存储的分发对象 (本 run 的 {@code

@@ -4,19 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleLoginRequest;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleLoginRequest;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("控制台登录服务:已初始化用户签发令牌, 口令错误或账号不存在时拒绝并隐藏原因")

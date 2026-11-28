@@ -2,6 +2,16 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
 import static io.github.pinpols.batch.orchestrator.config.OrchestratorAsyncConfiguration.JOB_MONITORING_SCHEDULER;
 
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
@@ -11,15 +21,9 @@ import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulS
 import io.github.pinpols.batch.orchestrator.mapper.TenantDirectoryMapper;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /** 按租户扫描根级机会与运行；单项告警失败不会阻断其它机会或业务主链。 */
 @Component

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.config;
 
 import com.zaxxer.hikari.HikariConfig;
+
 import io.github.pinpols.batch.common.config.BatchPgSessionProperties.PoolTimeouts;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 

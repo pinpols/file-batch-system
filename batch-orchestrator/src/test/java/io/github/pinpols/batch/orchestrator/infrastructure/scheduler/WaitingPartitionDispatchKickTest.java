@@ -3,15 +3,17 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
-import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.scheduling.TaskScheduler;
+
+import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
+import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("等待分片派发合并触发:容量释放事件在计划派发执行前的合并与延迟调度行为")
 class WaitingPartitionDispatchKickTest {

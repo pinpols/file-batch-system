@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.request;
 
-import io.github.pinpols.batch.common.validation.ValidTenantId;
-import jakarta.validation.constraints.Min;
 import lombok.Data;
+
+import io.github.pinpols.batch.common.validation.ValidTenantId;
+
+import jakarta.validation.constraints.Min;
 
 @Data
 public class DrainWorkerRequest {

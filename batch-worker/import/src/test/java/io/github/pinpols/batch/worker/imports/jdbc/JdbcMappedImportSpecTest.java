@@ -4,14 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.exception.WorkerConfigException;
-import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec.ColumnMapping;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PGobject;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
+import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec.ColumnMapping;
 
 @DisplayName("JDBC 映射导入规格解析单测:列映射推断,冲突键补全与标识符校验语义")
 class JdbcMappedImportSpecTest {

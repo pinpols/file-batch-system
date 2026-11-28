@@ -7,15 +7,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.PipelineRunStatus;
-import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
-import io.github.pinpols.batch.worker.core.param.PlatformPipelineFinishParam;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import io.github.pinpols.batch.common.enums.PipelineRunStatus;
+import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
+import io.github.pinpols.batch.worker.core.param.PlatformPipelineFinishParam;
 
 @DisplayName("Pipeline 运行代际围栏:写入携带本次代际与目标状态,迟到写入返回 false 不抛错")
 class PipelineRunFenceRepositoryTest {

@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.application.contract.response.ops;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.Builder;
 
 /** BFS 结果版本的固定证据契约，只有文件 metadata 保留动态 JSON。 */

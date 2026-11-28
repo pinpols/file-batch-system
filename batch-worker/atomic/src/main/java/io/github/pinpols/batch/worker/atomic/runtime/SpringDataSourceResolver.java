@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import java.util.Objects;
+
 import javax.sql.DataSource;
+
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.stereotype.Component;
 

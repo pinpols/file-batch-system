@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 
 /**
  * 文件治理的短事务提交边界。

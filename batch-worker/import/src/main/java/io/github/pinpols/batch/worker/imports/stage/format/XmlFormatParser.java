@@ -1,20 +1,23 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 
 /** 将 XML 载荷解析为 NDJSON 记录。 */
 public class XmlFormatParser implements FormatParser {

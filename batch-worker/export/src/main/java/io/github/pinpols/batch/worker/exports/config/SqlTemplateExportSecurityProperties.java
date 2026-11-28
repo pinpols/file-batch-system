@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.worker.exports.config;
 
-import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 
 /** SQL 模板导出安全配置，绑定前缀 {@code batch.worker.export.sql-template}。 */
 @Data

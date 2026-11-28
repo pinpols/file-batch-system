@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ApproveCommandDecisionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RejectCommandDecisionParam;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface ApprovalCommandMapper {
 

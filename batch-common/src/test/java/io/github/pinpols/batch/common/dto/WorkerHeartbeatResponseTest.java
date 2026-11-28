@@ -2,9 +2,10 @@ package io.github.pinpols.batch.common.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 
 @DisplayName("心跳平台指令: 注册状态到 platformStatus/shouldDrain 的映射")
 class WorkerHeartbeatResponseTest {

@@ -8,6 +8,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
 import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
@@ -18,12 +25,6 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * V89 验证：tenant_quota_policy.exceeded_strategy 把租户超额检查的结果按策略转换。

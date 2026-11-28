@@ -8,12 +8,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.jcraft.jsch.ChannelSftp;
-import com.jcraft.jsch.SftpATTRS;
-import com.jcraft.jsch.SftpException;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,10 +16,19 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.SftpATTRS;
+import com.jcraft.jsch.SftpException;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 
 @DisplayName("SFTP 分发适配器:发布失败时保留远端目标并明确失败")
 class SftpDispatchChannelAdapterTest {

@@ -5,6 +5,13 @@ import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryClaimIfCurrentParam;
@@ -21,11 +28,6 @@ import io.github.pinpols.batch.orchestrator.mapper.ForensicExportLogMapper.Failu
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper.ArchiveParam;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper.SupersedeParam;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper.TransitionParam;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("Orchestrator Mapper 状态默认方法:固定状态与调用方参数保持一致")
 class MapperStatusDefaultsTest {

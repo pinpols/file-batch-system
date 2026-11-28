@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.worker.dispatchs.domain;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import java.util.Map;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 分发任务载荷，携带文件 ID、渠道编码、接收方及回执策略等信息。

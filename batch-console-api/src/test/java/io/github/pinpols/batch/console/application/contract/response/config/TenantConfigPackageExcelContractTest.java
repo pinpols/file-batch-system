@@ -2,11 +2,13 @@ package io.github.pinpols.batch.console.application.contract.response.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @DisplayName("租户配置包响应排除已退役 Pipeline 字段")
 class TenantConfigPackageExcelContractTest {

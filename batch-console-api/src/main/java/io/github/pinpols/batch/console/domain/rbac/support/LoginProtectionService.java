@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
@@ -7,9 +12,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.captcha.CaptchaResult;
 import io.github.pinpols.batch.console.domain.rbac.support.captcha.CaptchaVerifier;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 /**
  * 控制台登录防暴力破解编排:IP 限流(已由 {@code ConsoleRateLimitFilter} 承担)之外的两层——<b>账号维度失败退避</b> + <b>risk-based

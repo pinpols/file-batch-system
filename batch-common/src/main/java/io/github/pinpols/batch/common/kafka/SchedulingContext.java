@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.kafka;
 
 import java.time.LocalDate;
+
 import lombok.Builder;
 
 /**

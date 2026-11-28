@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.common.utils;
 
-import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+
 import javax.annotation.Nullable;
+
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 
 /**
  * {@code alert_event} 字段 → Alertmanager label 的映射规则（emit 直连 / silence 桥接共用）。

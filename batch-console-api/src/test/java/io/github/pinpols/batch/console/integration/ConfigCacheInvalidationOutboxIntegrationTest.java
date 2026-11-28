@@ -2,13 +2,8 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationIntent;
-import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationRelay;
-import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.UUID;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +19,13 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationIntent;
+import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationRelay;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)

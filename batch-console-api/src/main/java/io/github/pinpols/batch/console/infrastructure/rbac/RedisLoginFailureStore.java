@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.console.infrastructure.rbac;
 
-import io.github.pinpols.batch.console.domain.rbac.support.LoginFailureStore;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.domain.rbac.support.LoginFailureStore;
 
 /** Redis Sorted Set 版登录失败窗口存储。 */
 @Component

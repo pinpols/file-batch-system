@@ -3,9 +3,10 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.exception.BizException;
 
 @DisplayName("控制台口令哈希:编码为 Argon2id 且可校验, 固定哈希样本匹配, 非该算法哈希拒绝")
 class ConsolePasswordHasherTest {

@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 
 /** 基础配置包和租户覆盖操作的只读差异结果。 */
 public record TenantConfigDiffPreviewResponse(

@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.enums.FileChannelType;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.enums.FileChannelType;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 
 /**
  * NAS 渠道分发适配器，将文件拷贝到 NAS 远程目录。

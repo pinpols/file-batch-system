@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.console.support.notification;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.util.function.LongConsumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 
 /**
  * 进程内瞬时重试：固定尝试次数 + 指数退避（起点后逐次翻倍）。

@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.sdk.wire;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
  * SDK wire DTO — {@code POST /internal/workers/{workerCode}/heartbeat} 请求体。

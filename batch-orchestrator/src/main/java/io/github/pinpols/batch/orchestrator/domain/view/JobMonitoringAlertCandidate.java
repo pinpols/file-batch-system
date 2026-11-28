@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.domain.view;
 
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Builder;
 
 /** 后台监控扫描命中的作业实例，不进入作业执行状态机。 */

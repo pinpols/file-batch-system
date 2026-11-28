@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.orchestrator.service;
 
-import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 批次日告警详情共用的基础字段。 */
 final class BatchDayAlertDetails {

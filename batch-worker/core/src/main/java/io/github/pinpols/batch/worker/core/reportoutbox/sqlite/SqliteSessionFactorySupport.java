@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.reportoutbox.sqlite;
 
 import javax.sql.DataSource;
+
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;

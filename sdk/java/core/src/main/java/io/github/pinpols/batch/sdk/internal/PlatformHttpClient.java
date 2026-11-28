@@ -1,11 +1,5 @@
 package io.github.pinpols.batch.sdk.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
-import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
-import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
@@ -13,7 +7,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
+import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
+import io.github.pinpols.batch.sdk.wire.RegisterRequest;
+
 import okhttp3.Call;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;

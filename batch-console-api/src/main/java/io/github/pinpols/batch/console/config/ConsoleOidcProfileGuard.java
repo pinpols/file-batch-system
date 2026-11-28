@@ -1,12 +1,16 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.config.BatchProfileSupport;
-import jakarta.annotation.PostConstruct;
 import java.util.Arrays;
 import java.util.Locale;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.config.BatchProfileSupport;
+
+import jakarta.annotation.PostConstruct;
 
 /** 防止仅供本机/测试 IdP 使用的 HTTP issuer 例外进入生产 profile。 */
 @Component

@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileRow;
 import java.time.Instant;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileRow;
 
 /** P2 cost profile 热表聚合查询。 */
 public interface CapacityProfileMapper {

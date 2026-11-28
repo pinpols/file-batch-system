@@ -4,19 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.exception.SystemException;
-import io.github.pinpols.batch.common.i18n.BizMessageResolver;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Locale;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +27,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.exception.SystemException;
+import io.github.pinpols.batch.common.i18n.BizMessageResolver;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 /**
  * {@link ConsoleApiExceptionHandler} 的 status/code 映射单测,聚焦两条审查修复:

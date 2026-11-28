@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.DownstreamAdmissionGuard;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.mapper.DownstreamAdmissionMapper;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 使用 dispatch worker 写入的平台健康快照，在生成 Kafka 消息前阻断已知故障渠道。 */
 @Component

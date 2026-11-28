@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
 import java.time.LocalTime;
+
 import lombok.Builder;
 
 @Builder(toBuilder = true)

@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
@@ -10,9 +15,6 @@ import io.github.pinpols.batch.orchestrator.domain.param.CloseRunningPipelineSte
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /** job_instance 写入终态时，把仍为非终态的 {@code job_partition}/{@code job_task} 收敛到一致终态，防止节流按活跃分区计数时出现配额泄漏。 */
 @Slf4j

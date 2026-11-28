@@ -1,13 +1,11 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.failure;
 
-import io.github.pinpols.batch.common.enums.FailureClass;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.application.service.failure.TechnicalFailureClassificationPort;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
+
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.NonTransientDataAccessException;
@@ -17,6 +15,10 @@ import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.server.ResponseStatusException;
+
+import io.github.pinpols.batch.common.enums.FailureClass;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.application.service.failure.TechnicalFailureClassificationPort;
 
 /** JDBC、Spring DAO 与 HTTP 客户端异常的基础设施分类适配器。 */
 @Component

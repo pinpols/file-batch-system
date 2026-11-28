@@ -1,13 +1,14 @@
 package io.github.pinpols.batch.common.storage;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.Collection;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 
 /**
  * 加密装饰层（Phase 2 §5）。叠在生产实现（{@link S3ObjectStore} / {@link FilesystemObjectStore}）之上：

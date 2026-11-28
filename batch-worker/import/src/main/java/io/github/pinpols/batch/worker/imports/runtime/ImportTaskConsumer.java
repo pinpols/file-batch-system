@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.stereotype.Service;
+
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
@@ -9,9 +13,6 @@ import io.github.pinpols.batch.worker.core.support.AbstractTaskConsumer;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.stereotype.Service;
 
 /**
  * Import Worker 的 Kafka 消费者：监听 {@code topics()} 主题，将消息委托给 {@link AbstractTaskConsumer#doConsume}

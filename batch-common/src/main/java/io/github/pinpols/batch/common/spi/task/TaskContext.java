@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.common.spi.task;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * {@link BatchTaskExecutor#execute(TaskContext)} 的入参 — 携带任务身份 + 用户参数 + 框架属性。

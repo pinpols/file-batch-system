@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.trigger.domain;
 
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.trigger.mapper.TriggerDefinitionMapper;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * 触发器定义加载器,通过 MyBatis Mapper 从持久层读取调度配置。

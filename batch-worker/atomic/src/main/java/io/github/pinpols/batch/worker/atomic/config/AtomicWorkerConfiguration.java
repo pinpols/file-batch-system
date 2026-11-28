@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.worker.atomic.config;
 
+import java.util.List;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
 import io.github.pinpols.batch.worker.core.config.BaseWorkerProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
-import java.util.List;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * 专用原子任务 worker 身份配置,绑定 {@code batch.worker.spi} 前缀。

@@ -8,19 +8,21 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.function.BiFunction;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.web.client.ResourceAccessException;
+
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor.BatchItemExecution;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
-import java.util.List;
-import java.util.function.BiFunction;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.web.client.ResourceAccessException;
 
 @DisplayName("批量任务消费协调器: 租户分批, 死信转投与偏移量提交判定")
 class TaskConsumerBatchExecutionCoordinatorTest {

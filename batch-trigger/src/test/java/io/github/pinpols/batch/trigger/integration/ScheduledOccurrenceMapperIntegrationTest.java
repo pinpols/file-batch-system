@@ -8,27 +8,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceFireParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedWithStatusParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceReadinessWaitParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordClosedBatchDayRejectionParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceTransitionStatusParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceUpsertObservedParam;
-import io.github.pinpols.batch.trigger.domain.query.ExpiredReadinessWaitRow;
-import io.github.pinpols.batch.trigger.domain.query.UnobservedPlannedOccurrenceQuery;
-import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
-import io.github.pinpols.batch.trigger.infrastructure.scheduler.ReadinessWaitSweeper;
-import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
-import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
-import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceCoverage;
-import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -51,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,6 +46,28 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceFireParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedWithStatusParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceReadinessWaitParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordClosedBatchDayRejectionParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceTransitionStatusParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceUpsertObservedParam;
+import io.github.pinpols.batch.trigger.domain.query.ExpiredReadinessWaitRow;
+import io.github.pinpols.batch.trigger.domain.query.UnobservedPlannedOccurrenceQuery;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
+import io.github.pinpols.batch.trigger.infrastructure.scheduler.ReadinessWaitSweeper;
+import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
+import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
+import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceCoverage;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @SpringBootTest(classes = BatchTriggerApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional(propagation = Propagation.NEVER)

@@ -1,9 +1,12 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import java.time.Instant;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 
 /**
  * 业务日历响应（BusinessCalendarMapper 行投影，键为 camelCase 别名）。

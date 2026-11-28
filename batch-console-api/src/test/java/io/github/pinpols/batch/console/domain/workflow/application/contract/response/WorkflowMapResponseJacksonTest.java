@@ -2,14 +2,17 @@ package io.github.pinpols.batch.console.domain.workflow.application.contract.res
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
-import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 
 /**
  * wire 红线守护：批次4 workflow 域类型化 response record 的 JSON key 必须与历史 Map 响应逐字一致。

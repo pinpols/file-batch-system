@@ -4,13 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditContributor.WorkerStartupAuditResult;
-import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditContributor.WorkerStartupAuditResult;
+import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 
 @DisplayName("处理暂存区启动审计:自动删除暂停且存在超过保留期的暂存行时给出不健康告警")
 class ProcessStagingStartupAuditContributorTest {

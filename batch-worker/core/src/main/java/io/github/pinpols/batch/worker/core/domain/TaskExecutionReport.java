@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.core.domain;
 
-import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
 import java.util.List;
 import java.util.Map;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
 
 @Data
 @EqualsAndHashCode(callSuper = false)

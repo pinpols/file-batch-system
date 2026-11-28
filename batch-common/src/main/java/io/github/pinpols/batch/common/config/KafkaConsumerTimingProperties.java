@@ -2,8 +2,10 @@ package io.github.pinpols.batch.common.config;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** Kafka consumer 时序与分配策略配置。 */
 @Data

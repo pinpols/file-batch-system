@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
+import java.util.Map;
+import java.util.Set;
+
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.task.SdkSchedulingContext;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Kafka 派单消息的 SDK 侧投影 — 字段子集来自主项目 {@code TaskDispatchMessage}(orchestrator 发出)。

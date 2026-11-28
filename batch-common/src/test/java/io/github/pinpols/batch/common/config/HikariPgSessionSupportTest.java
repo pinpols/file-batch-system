@@ -2,11 +2,13 @@ package io.github.pinpols.batch.common.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.zaxxer.hikari.HikariConfig;
 import java.time.Duration;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.util.unit.DataSize;
+
+import com.zaxxer.hikari.HikariConfig;
 
 @DisplayName("连接池会话初始化:会话超时语句拼装、与既有初始化语句的合并顺序,以及应用名截断规则")
 class HikariPgSessionSupportTest {

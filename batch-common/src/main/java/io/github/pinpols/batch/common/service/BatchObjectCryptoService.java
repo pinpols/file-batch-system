@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.common.service;
 
-import io.github.pinpols.batch.common.config.BatchKmsProperties;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -20,11 +15,18 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
+
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+
+import io.github.pinpols.batch.common.config.BatchKmsProperties;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 批处理对象加解密服务，基于 AES/GCM/NoPadding 算法对文件内容进行加密保护。 加密产物携带魔数（{@code BATCHENC}）、版本号、keyRef 和随机 IV，

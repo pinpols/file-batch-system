@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.support.persistence;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.SQLException;
 import java.util.Objects;
 import java.util.Optional;
+
 import org.springframework.core.NestedExceptionUtils;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 从驱动结构化字段识别数据库约束，避免依赖本地化SQL错误文本；不引入编译期PostgreSQL驱动依赖。 */
 public record PostgresConstraintViolation(String sqlState, String schema, String table, String constraint) {

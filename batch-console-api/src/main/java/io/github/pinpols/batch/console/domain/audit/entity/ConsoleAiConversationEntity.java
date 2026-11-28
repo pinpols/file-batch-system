@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.entity;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+
 import lombok.Data;
 
 @Data

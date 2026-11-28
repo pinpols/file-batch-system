@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.worker.core.domain.entity.PipelineProgressEntity;
 import io.github.pinpols.batch.worker.core.mapper.PipelineProgressMapper;
 import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
 
 /**
  * {@link ProcessingPositionStore} 默认实现 — 经 {@link PipelineProgressMapper} 落 {@code

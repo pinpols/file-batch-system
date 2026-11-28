@@ -2,8 +2,10 @@ package io.github.pinpols.batch.console.config;
 
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * 控制台侧边栏菜单配置（{@code batch.console.menu}）——外置于 {@code menu.yml}。

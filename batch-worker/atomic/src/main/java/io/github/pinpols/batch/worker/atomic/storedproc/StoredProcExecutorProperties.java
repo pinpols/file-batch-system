@@ -2,8 +2,10 @@ package io.github.pinpols.batch.worker.atomic.storedproc;
 
 import java.time.Duration;
 import java.util.Set;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * {@link StoredProcTaskExecutor} 配置 — 默认开启,放行范围由所连 DB 角色 + schema 白名单决定。

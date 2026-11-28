@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
 import java.util.UUID;
+
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 final class DispatchReceiptSupport {
 

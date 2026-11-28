@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrottle;
@@ -13,8 +17,6 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * 分区级闸门：按 job_partition 计数，与 {@link DefaultConcurrencyLimiter} 平行但维度不同 ——后者管 job instance 数，本类管

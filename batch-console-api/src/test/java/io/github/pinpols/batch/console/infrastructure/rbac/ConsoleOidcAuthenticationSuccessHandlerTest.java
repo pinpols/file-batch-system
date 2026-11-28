@@ -8,20 +8,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
-import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.domain.audit.support.ConsoleOidcLoginAudit;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
-import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicationService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenCookieWriter;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,6 +28,16 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+
+import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
+import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
+import io.github.pinpols.batch.console.domain.audit.support.ConsoleOidcLoginAudit;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicationService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenCookieWriter;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 
 @DisplayName("OIDC 登录成功处理:仅为显式映射的本地账号签发平台会话")
 class ConsoleOidcAuthenticationSuccessHandlerTest {

@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.statemachine;
 
+import java.util.Locale;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.persistence.Stateful;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleStatusCatalog;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
-import java.util.Locale;
-import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * 默认生命周期事件映射器。

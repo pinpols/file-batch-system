@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
-import jakarta.validation.constraints.Positive;
 import lombok.Data;
+
+import jakarta.validation.constraints.Positive;
 
 @Data
 public class ConfigReleaseActionRequest {

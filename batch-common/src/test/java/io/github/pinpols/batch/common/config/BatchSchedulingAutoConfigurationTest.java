@@ -3,15 +3,17 @@ package io.github.pinpols.batch.common.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.util.ErrorHandler;
+
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
+
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 
 @DisplayName("调度自动配置:托管阶段与停机等待默认值,以及线程池参数越界时的校验失败")
 class BatchSchedulingAutoConfigurationTest {

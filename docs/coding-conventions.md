@@ -217,6 +217,7 @@ return Optional.ofNullable(value).map(String::trim).orElse("");
 - `try` 覆盖当前的失败翻译边界。新代码只捕获会抛出的那次调用。已有 `catch` 把一组调用翻译成同一错误码时，保持这组调用都在该边界内。调度器的 `DataAccessException` / `OutOfMemoryError` / `Throwable` 三层捕获按 §11.4 保留。
 - 已持久化、写入租约或跨进程传递的阶段字符串保持原字面量。可读性改动不把它们改为枚举，也不改变写入顺序。
 - 纯空判断可以收成一次局部变量。含外部调用或可变状态的条件保持原短路顺序、调用次数和异常时机。
+- 新增代码由 `check-java-control-flow.py` 守护：then 块已以 `return` / `throw` / `continue` / `break` 结束时不再写 `else`；`application` / `domain` 业务层不得新增 `catch (Exception|Throwable)`，边界类按脚本白名单豁免。
 - `if`、`catch` 和行数不是清理指标。扫描只产生候选，不自动改写。批次范围、样例和验收见[可读性路线图阶段 8](plans/java-readability-refactoring-roadmap-2026-08-12.md#control-flow-density-2026-11-10)。
 
 ---

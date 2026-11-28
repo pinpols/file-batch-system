@@ -1,21 +1,5 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
-import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
-import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,13 +18,34 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.extern.slf4j.Slf4j;
-import okhttp3.OkHttpClient;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
+import io.micrometer.core.instrument.MeterRegistry;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import okhttp3.OkHttpClient;
 
 /**
  * 分发渠道健康管理服务，负责探针执行、状态更新及分发前健康门控。

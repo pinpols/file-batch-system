@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 
 /**
  * {@code batch.quota_runtime_state} 行的不可变快照（MyBatis 通过 {@code resultMap+constructor} 映射）。

@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.config;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 启动期守护 AI 附件与批量文件的对象桶物理隔离。 */
 @Component

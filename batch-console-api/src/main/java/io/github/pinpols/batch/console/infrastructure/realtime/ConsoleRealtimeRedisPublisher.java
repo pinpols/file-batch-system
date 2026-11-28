@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.console.infrastructure.realtime;
 
+import java.time.Instant;
+
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeInstanceIdProvider;
@@ -7,10 +14,6 @@ import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleReal
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleSseEvent;
 import io.github.pinpols.batch.console.domain.observability.realtime.RealtimeEventBus;
 import io.github.pinpols.batch.console.domain.observability.realtime.RealtimeReplayStore;
-import java.time.Instant;
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
 
 /**
  * 控制台实时事件的 Redis Pub/Sub 发布器。

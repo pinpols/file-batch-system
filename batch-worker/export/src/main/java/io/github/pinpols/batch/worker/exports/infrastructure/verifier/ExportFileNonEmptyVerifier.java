@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.worker.exports.infrastructure.verifier;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-import org.springframework.stereotype.Component;
 
 /**
  * ADR-030 示例 verifier：导出产物非空。

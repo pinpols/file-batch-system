@@ -2,6 +2,12 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.service.DryRunGuard;
@@ -16,10 +22,6 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import org.springframework.stereotype.Component;
 
 /** 分发 ACK 阶段：处理回执确认，更新分发记录及文件状态为 DISPATCHED。 */
 @Component

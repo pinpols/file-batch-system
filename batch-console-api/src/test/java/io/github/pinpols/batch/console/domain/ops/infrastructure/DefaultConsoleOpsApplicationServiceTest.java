@@ -7,6 +7,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.function.Supplier;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.console.application.ops.DefaultConsoleOpsApplicationService;
@@ -19,10 +25,6 @@ import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
-import java.util.List;
-import java.util.function.Supplier;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("运维概览聚合:按租户分别统计审批, 告警, 作业, Worker 与投递积压计数")
 class DefaultConsoleOpsApplicationServiceTest {

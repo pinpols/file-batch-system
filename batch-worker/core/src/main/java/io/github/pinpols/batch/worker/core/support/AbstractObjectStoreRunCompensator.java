@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import java.util.Map;
+
+import org.springframework.beans.factory.ObjectProvider;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * 安全增量补偿(opt-in)对象类反向动作复用基类(EXPORT / DISPATCH 共用)。

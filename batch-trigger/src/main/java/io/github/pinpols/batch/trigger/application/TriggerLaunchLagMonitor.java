@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.trigger.application;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledFuture;
@@ -10,13 +7,19 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * 独立采样 trigger launch consumer group lag，为 Relay 自适应释放提供集群级下游压力信号。

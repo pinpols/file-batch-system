@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.application.contract.query;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 解析审批查询的排除类型。只接受大写类型代码，避免把任意字符串送进查询条件。 */
 public final class ApprovalTypeExclusions {

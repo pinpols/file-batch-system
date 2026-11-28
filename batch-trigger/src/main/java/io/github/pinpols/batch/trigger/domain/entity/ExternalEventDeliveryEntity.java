@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.domain.entity;
 
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Data;
 
 @Data

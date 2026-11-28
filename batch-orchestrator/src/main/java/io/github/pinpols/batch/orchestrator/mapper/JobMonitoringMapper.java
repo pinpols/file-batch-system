@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.orchestrator.domain.query.JobMonitoringRecheckQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
-import java.time.Instant;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /** 作业监控查询与告警标记；不推进 job_instance 生命周期状态。 */
 public interface JobMonitoringMapper {

@@ -1,11 +1,5 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
@@ -14,8 +8,18 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 /**
  * P0-1: worker 任务执行专用线程池.

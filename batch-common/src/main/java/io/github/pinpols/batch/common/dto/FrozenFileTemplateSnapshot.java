@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -8,6 +7,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 受保护的重放载荷携带完整文件模板定义，不作为读取最新配置的提示。 */
 public record FrozenFileTemplateSnapshot(

@@ -2,10 +2,12 @@ package io.github.pinpols.batch.trigger.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 
 @DisplayName("Trigger outbox 发布限流预算:按每秒令牌上限与轮询节奏计算单轮可领取事件数")
 class TriggerOutboxReleaseBudgetTest {

@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.Set;
+
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 
 /**
  * {@link ShellAtomicHandler} 的开箱即用配置。

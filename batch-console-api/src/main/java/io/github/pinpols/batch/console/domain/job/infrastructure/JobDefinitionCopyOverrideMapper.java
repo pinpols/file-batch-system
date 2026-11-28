@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
+import java.util.Objects;
+
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCopyRequest;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
-import java.util.Objects;
 
 /** 根据已复制的作业和请求生成维护更新参数。 */
 final class JobDefinitionCopyOverrideMapper {

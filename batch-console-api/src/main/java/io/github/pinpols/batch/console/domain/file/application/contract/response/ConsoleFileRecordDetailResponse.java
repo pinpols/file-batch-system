@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.response;
 
+import java.util.List;
+import java.util.Map;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
-import java.util.List;
-import java.util.Map;
 
 /** 文件详情只读投影；存储路径和扩展元数据中的凭据在响应边界脱敏。 */
 @JsonInclude(JsonInclude.Include.NON_NULL)

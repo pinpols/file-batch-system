@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.worker.core.domain;
 
-import io.github.pinpols.batch.common.dto.DependencyResultReference;
-import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.dto.DependencyResultReference;
+import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 
 /**
  * Worker 从 Orchestrator 拉取到的原始任务载体。 包含任务的身份标识（taskId、jobInstanceId）、路由信息（tenantId、workerId） 以及原始业务

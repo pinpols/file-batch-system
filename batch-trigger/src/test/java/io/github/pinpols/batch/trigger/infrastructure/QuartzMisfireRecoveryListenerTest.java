@@ -8,11 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
-import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +29,9 @@ import org.quartz.TriggerBuilder;
 import org.quartz.TriggerKey;
 import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.scheduling.TaskScheduler;
+
+import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
+import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Quartz misfire 恢复监听器:错失的批处理触发在 JobStore 锁外异步补建恢复 Trigger")

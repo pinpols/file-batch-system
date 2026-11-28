@@ -3,15 +3,17 @@ package io.github.pinpols.batch.sdk.retry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /** A.4 声明式重试装饰器单测。delay 取 1ms 保持测试快。 */
 @DisplayName("SDK 声明式重试装饰器:按异常类型匹配重试,达上限后按退避策略退出并保留原始异常")

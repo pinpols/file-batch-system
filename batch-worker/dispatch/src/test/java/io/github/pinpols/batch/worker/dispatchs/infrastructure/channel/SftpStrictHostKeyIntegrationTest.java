@@ -6,13 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
-import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.KeyPair;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.testing.TestContainerLabels;
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import java.io.ByteArrayInputStream;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +15,7 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,6 +24,15 @@ import org.springframework.mock.env.MockEnvironment;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
+
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.KeyPair;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.testing.TestContainerLabels;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 
 @DisplayName("SFTP 解析地址后的严格主机密钥验证")
 class SftpStrictHostKeyIntegrationTest {

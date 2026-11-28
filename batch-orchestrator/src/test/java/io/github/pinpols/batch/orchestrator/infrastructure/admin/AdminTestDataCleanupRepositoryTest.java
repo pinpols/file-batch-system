@@ -10,14 +10,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper;
-import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.CleanupTarget;
-import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.OutboxEventIdentity;
-import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.PrefixCleanupScope;
 import java.time.OffsetDateTime;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +21,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper;
+import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.CleanupTarget;
+import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.OutboxEventIdentity;
+import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.PrefixCleanupScope;
 
 @DisplayName("测试数据清理仓储的前缀删除与精确租户删除行为,覆盖删除链目标,返回值汇总与租户入参校验")
 @ExtendWith(MockitoExtension.class)

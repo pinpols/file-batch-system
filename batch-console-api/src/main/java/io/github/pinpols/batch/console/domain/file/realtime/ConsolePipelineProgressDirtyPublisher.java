@@ -1,13 +1,5 @@
 package io.github.pinpols.batch.console.domain.file.realtime;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.config.ConsolePipelineProgressDirtyProperties;
-import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
-import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
-import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper.DirtyCursor;
-import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -17,13 +9,25 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.config.ConsolePipelineProgressDirtyProperties;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper.DirtyCursor;
+import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * 低频扫描 {@code batch.pipeline_progress.updated_at}，发布 pipeline-progress dirty 事件。

@@ -2,9 +2,10 @@ package io.github.pinpols.batch.worker.atomic.route;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.model.WorkerRouteModel;
 
 @DisplayName("原子 Worker 路由适配器: 默认路由声明")
 class AtomicWorkerRouteAdapterTest {

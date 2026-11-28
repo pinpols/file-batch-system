@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.common.utils;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 
 /** 面向只读证据的凭据脱敏；不修改原始存储数据。 */
 public final class SensitiveEvidenceMasking {

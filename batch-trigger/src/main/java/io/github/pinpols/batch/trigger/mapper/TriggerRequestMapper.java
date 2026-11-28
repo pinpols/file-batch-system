@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.trigger.mapper;
 
-import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
-import io.github.pinpols.batch.trigger.domain.query.TriggerRequestQuery;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
+import io.github.pinpols.batch.trigger.domain.query.TriggerRequestQuery;
 
 public interface TriggerRequestMapper {
 

@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.worker.imports.mapper;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.common.storage.ObjectSummary;
 import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Configuration;
 import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Lease;
 import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Observed;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-import org.apache.ibatis.annotations.Param;
 
 /** 入站扫描状态和存储租约的固定平台库操作。 */
 public interface ImportIngressScanMapper {

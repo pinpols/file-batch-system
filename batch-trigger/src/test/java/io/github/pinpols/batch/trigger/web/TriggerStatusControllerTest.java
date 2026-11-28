@@ -7,19 +7,21 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.exception.SystemException;
-import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
-import io.github.pinpols.batch.trigger.domain.TriggerSchedulerStatus;
-import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
-import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.exception.SystemException;
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
+import io.github.pinpols.batch.trigger.domain.TriggerSchedulerStatus;
+import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
+import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Trigger 状态查询 REST 入口:按租户查询已注册作业")

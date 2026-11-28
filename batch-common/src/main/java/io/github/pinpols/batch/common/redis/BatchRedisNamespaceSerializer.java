@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.redis;
 
 import java.nio.charset.StandardCharsets;
+
 import org.springframework.data.redis.serializer.RedisSerializer;
 
 /** 为 Redis 物理键添加前缀，经模板回读时移除该前缀。 */

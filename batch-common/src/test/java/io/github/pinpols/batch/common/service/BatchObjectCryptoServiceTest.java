@@ -3,8 +3,6 @@ package io.github.pinpols.batch.common.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.config.BatchKmsProperties;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -13,9 +11,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.config.BatchKmsProperties;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 
 /**
  * {@link BatchObjectCryptoService} 的单元测试 —— 验证 AES-GCM 加解密往返， 包括 StoreStep（导出）使用的 BATCHENC 魔数头格式以及

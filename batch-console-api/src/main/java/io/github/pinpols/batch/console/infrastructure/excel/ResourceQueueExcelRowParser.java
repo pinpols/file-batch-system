@@ -8,16 +8,18 @@ import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetEx
 import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.requireText;
 import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.resolveTenantField;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.QueuePriorityPolicy;
 import io.github.pinpols.batch.common.enums.ResourceQueueType;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueUpsertParam;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import lombok.Builder;
 
 /** resource_queue Excel 行共用的解析与新增或更新辅助逻辑。 */
 public final class ResourceQueueExcelRowParser {

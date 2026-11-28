@@ -9,11 +9,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
-import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +22,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
+import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 
 @DisplayName("租户配置初始化 HTTP 集合条目校验")
 @ExtendWith(MockitoExtension.class)

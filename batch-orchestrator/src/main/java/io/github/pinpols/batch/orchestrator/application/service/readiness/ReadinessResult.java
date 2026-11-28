@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.readiness;
 
-import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
 
 /**
  * 上游就绪查询结果(ADR-043 依赖感知 fire)。

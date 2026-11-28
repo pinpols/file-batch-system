@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.orchestrator.domain.query;
 
+import java.time.LocalDate;
+
+import org.springframework.format.annotation.DateTimeFormat;
+
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.time.LocalDate;
-import org.springframework.format.annotation.DateTimeFormat;
 
 /** 以来源和不可变 ID 遍历等待事实；各页是实时读取而非一致性快照。 */
 public record WaitRelationshipQuery(

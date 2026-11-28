@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionMaterializationCommand;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
-import org.apache.ibatis.annotations.Param;
 
 /** BFS 最小资产分区读模型映射。 */
 public interface AssetPartitionMapper {

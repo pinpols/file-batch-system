@@ -2,9 +2,6 @@ package io.github.pinpols.batch.console.domain.ops.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
-import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.ParamSpec;
-import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.SecurityGate;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
@@ -13,9 +10,14 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
+import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.ParamSpec;
+import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.SecurityGate;
 
 /**
  * Lane H —— Atomic executor ↔ console schema 漂移守护契约测试。

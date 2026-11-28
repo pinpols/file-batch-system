@@ -2,8 +2,6 @@ package io.github.pinpols.batch.sdk.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -11,8 +9,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /** ADR-036 — Export 模板基类单测,经 {@link SdkAbstractTaskHandler#execute} 走全模板序。 */
 @DisplayName("Export 模板基类:查询结果透传与行流写出,覆盖计数回退、异常失败与资源释放")

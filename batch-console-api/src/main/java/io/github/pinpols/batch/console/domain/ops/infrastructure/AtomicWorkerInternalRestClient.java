@@ -1,9 +1,8 @@
 package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
-import io.github.pinpols.batch.console.config.ConsoleAtomicWorkerClientProperties;
-import io.github.pinpols.batch.console.shared.client.ConsoleInternalBaseUrlResolver;
 import java.time.Duration;
 import java.util.function.Supplier;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
@@ -12,6 +11,9 @@ import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.RestClient;
+
+import io.github.pinpols.batch.console.config.ConsoleAtomicWorkerClientProperties;
+import io.github.pinpols.batch.console.shared.client.ConsoleInternalBaseUrlResolver;
 
 /**
  * 统一构造调用 batch-worker-atomic Actuator {@code /actuator/atomicruntime} 端点的 {@link

@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.console.domain.audit.service;
 
+import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.enums.AiPromptDecision;
@@ -8,11 +16,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
-import java.util.Locale;
-import java.util.Set;
-import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor

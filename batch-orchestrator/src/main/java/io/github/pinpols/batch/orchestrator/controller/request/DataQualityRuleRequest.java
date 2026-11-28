@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.controller.request;
 
-import io.github.pinpols.batch.orchestrator.domain.command.DataQualityRuleWriteCommand;
 import java.time.Instant;
+
+import io.github.pinpols.batch.orchestrator.domain.command.DataQualityRuleWriteCommand;
 
 /** 创建或替换数据质量规则的 HTTP 写入契约。 */
 public record DataQualityRuleRequest(

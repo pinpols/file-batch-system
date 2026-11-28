@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.domain.query;
 
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Data;
 
 /** Console 安全等待投影；不包含 workflow_launch_wait.launch_payload。 */

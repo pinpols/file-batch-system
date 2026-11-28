@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.worker.processes.sql;
 
+import java.util.stream.Collectors;
+
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.utils.EmptyValues;
-import java.util.stream.Collectors;
 
 /** 构建 SQL 转换插件在暂存和发布阶段使用的语句。 */
 final class SqlTransformComputeSqlBuilder {

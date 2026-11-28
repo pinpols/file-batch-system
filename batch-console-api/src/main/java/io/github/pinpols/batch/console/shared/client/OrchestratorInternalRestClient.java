@@ -1,17 +1,8 @@
 package io.github.pinpols.batch.console.shared.client;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.Preconditions;
-import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
 import java.time.Duration;
 import java.util.function.Supplier;
-import lombok.Builder;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
@@ -20,6 +11,19 @@ import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.RestClient;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import lombok.Builder;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
+import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
 
 /**
  * 统一构造调用 orchestrator {@code /internal/**} 的 {@link RestClient}：

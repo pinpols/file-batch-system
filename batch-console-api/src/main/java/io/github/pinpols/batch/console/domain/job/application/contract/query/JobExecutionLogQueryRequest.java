@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.query;
 
-import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
+
+import jakarta.validation.constraints.NotNull;
 
 /** {@code batch.job_execution_log} 查询请求。jobInstanceId 必填——日志查看锚定单个实例。 */
 @Data

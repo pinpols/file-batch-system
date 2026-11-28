@@ -2,10 +2,11 @@ package io.github.pinpols.batch.common.sql;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
-import net.sf.jsqlparser.statement.Statement;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
 
 @DisplayName("SQL 函数名收集:补走 TablesNamesFinder 缺席的子句")
 class SqlFunctionNameCollectorTest {

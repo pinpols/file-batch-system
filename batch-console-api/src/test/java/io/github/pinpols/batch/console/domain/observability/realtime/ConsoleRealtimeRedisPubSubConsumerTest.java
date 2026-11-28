@@ -6,13 +6,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPubSubConsumer;
-import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +19,12 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPubSubConsumer;
+import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 // LENIENT:message() 工厂内 stub `Message.getChannel()` 用于语义文档化(消息匹配 publisher channel),
 // 部分 consumer 路径仅读 body 不读 channel,strict 会误判 UnnecessaryStubbing。

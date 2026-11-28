@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.security;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -9,9 +8,12 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.util.Base64;
 import java.util.HexFormat;
+
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * API key 哈希工具——P1-1(docs/archive/audit/deep-scan-be-security-2026-06-03.md)。

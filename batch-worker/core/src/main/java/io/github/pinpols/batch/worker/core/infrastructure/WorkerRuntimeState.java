@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 
 /**
  * Worker 进程内的注册状态仓库，以 workerId 为键维护当前节点所有已注册的 {@link WorkerRegistration}。 使用 {@link

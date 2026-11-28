@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.sdk.wire;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
 import java.time.Instant;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
 
 /**
  * SDK wire DTO — {@code POST /internal/workers/register} 请求体。

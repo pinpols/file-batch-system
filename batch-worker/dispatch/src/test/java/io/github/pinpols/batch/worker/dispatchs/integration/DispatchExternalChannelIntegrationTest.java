@@ -2,20 +2,6 @@ package io.github.pinpols.batch.worker.dispatchs.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.icegreen.greenmail.util.GreenMail;
-import com.icegreen.greenmail.util.ServerSetupTest;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.testing.TestContainerLabels;
-import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.SftpDispatchChannelAdapter;
-import jakarta.mail.Message;
-import jakarta.mail.internet.MimeMultipart;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -25,6 +11,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -42,6 +29,23 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.utility.DockerImageName;
+
+import com.icegreen.greenmail.util.GreenMail;
+import com.icegreen.greenmail.util.ServerSetupTest;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.testing.TestContainerLabels;
+import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.SftpDispatchChannelAdapter;
+
+import jakarta.mail.Message;
+import jakarta.mail.internet.MimeMultipart;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;

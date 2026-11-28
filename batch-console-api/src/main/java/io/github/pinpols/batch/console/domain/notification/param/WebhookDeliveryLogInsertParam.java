@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.param;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 @Builder

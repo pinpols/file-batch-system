@@ -7,18 +7,13 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +21,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("安全增量补偿 hook：opt-in off 逐字节不变 / on 才触发 / best-effort 不掩盖原始失败")

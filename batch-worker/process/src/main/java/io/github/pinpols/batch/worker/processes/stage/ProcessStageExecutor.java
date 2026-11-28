@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import java.util.List;
+import java.util.Map;
+
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.domain.ProcessWorkerType;
-import java.util.List;
-import java.util.Map;
 
 /**
  * PROCESS pipeline 阶段执行契约：只负责"按上下文跑一次"。 本地固定 step 模板的供给（系统阶段校验与冻结参数合并）独立到 {@link

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
@@ -12,6 +11,8 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * Excel 数据导出复用的 POI 样式 / 列宽 / 公式转义原语。能力与 console-api 的 {@code ConsoleExcelStyles} 同源(深蓝 #1F4E78

@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.application.engine.command;
 
+import java.util.Objects;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import java.util.Objects;
-import lombok.Builder;
 
 /** 同一任务的派发上下文；分区、追踪与运行模式允许沿用原入口的缺省值。 */
 @Builder

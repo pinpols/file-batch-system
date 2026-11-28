@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
-import java.util.Map;
 
 /**
  * PROCESS 业务加工插件契约。

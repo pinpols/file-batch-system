@@ -2,18 +2,20 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushApprovalNotificationEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushApprovalNotificationMapper;
 import io.github.pinpols.batch.console.domain.notification.support.PendingApprovalNotification;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /** ConsolePushApprovalNotificationMapper IT:验证 SQL 过滤 + ON CONFLICT 幂等。 */
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)

@@ -3,8 +3,6 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
-import io.github.pinpols.batch.worker.core.infrastructure.TaskReportBatcher.SubmissionResult;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -15,8 +13,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
+import io.github.pinpols.batch.worker.core.infrastructure.TaskReportBatcher.SubmissionResult;
 
 @DisplayName("同步上报微批的有界交接与生命周期")
 class TaskReportBatcherTest {

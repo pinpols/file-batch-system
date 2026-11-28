@@ -2,20 +2,23 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
 import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
 import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
 import io.github.pinpols.batch.console.domain.notification.view.NotificationDeliveryLogRow;
 import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * wire 红线守护：批次4 notification 域类型化 response record 的 JSON key 必须与历史 Map 响应逐字一致。 覆盖 snake_case

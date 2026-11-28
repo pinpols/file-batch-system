@@ -1,15 +1,19 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchSecretVersionMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchSecretVersionMapper;
 
 /** 依据实例固定的版本引用解析凭据，并在每次外发前验证该版本仍可用。 */
 @Component

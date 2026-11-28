@@ -5,16 +5,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.infrastructure.rbac.RedisConsoleSessionStore;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+
+import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
+import io.github.pinpols.batch.console.infrastructure.rbac.RedisConsoleSessionStore;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @SuppressWarnings("unchecked")
 @DisplayName("控制台会话注册表:会话版本自增与过期, 当前版本比对, 失效后旧令牌不可用")

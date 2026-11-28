@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.arch;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+
 import io.github.pinpols.batch.common.arch.CodingConventionsArchRules;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * batch-console-api 自有 docs/agent-baseline.md 规约守护。复用 batch-common 测试 jar 里的 {@link

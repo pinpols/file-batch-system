@@ -7,14 +7,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver.ResolutionResult;
-import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +20,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+
+import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver.ResolutionResult;
+import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 
 @DisplayName("跨天依赖解析器: 生效版本注入, 依赖缺失等待与失败态口径")
 class CrossDayDependencyResolverTest {

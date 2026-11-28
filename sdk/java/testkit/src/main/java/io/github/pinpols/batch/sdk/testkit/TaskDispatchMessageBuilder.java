@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.sdk.testkit;
 
-import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
-import io.github.pinpols.batch.sdk.task.SdkSchedulingContext;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
+import io.github.pinpols.batch.sdk.task.SdkSchedulingContext;
 
 /**
  * 测试夹具 — 构造 {@link TaskDispatchMessage}(record 本身无 builder),给 {@link FakeBatchPlatform#dispatch} 用。

@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.springframework.stereotype.Component;
+
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.concurrent.atomic.AtomicLong;
-import org.springframework.stereotype.Component;
 
 /** 跨已启用日历汇总的原始业务日期补扫积压低基数视图。 */
 @Component

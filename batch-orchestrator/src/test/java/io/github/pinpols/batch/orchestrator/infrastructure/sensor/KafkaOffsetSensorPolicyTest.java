@@ -4,18 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeStatus;
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
-import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.KafkaAdmin;
+
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeStatus;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
+import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 
 @DisplayName("Kafka 偏移传感器:非法数值不进入 Kafka 查询")
 class KafkaOffsetSensorPolicyTest {

@@ -7,7 +7,19 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.Locale;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.support.StaticMessageSource;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -20,15 +32,6 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapp
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateSecurityFlagsView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import java.util.List;
-import java.util.Locale;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.support.StaticMessageSource;
 
 @DisplayName("文件记录预览脱敏")
 @ExtendWith(MockitoExtension.class)

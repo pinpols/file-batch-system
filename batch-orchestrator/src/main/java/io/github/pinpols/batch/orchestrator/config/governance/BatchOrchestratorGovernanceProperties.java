@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.orchestrator.config.governance;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.config.MqRoutingProperties;
@@ -11,8 +15,6 @@ import io.github.pinpols.batch.orchestrator.config.RetryGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.config.TimeoutEnforcerProperties;
 import io.github.pinpols.batch.orchestrator.config.WorkerDrainProperties;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** Orchestrator 治理配置聚合类，将分散的 {@code @ConfigurationProperties} 统一组合，减少重复注入点。 */
 @Component

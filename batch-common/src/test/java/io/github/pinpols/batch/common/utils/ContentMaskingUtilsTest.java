@@ -3,10 +3,11 @@ package io.github.pinpols.batch.common.utils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.core.exc.StreamConstraintsException;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.core.exc.StreamConstraintsException;
+import com.fasterxml.jackson.databind.JsonNode;
 
 @DisplayName("纯文本脱敏工具: 边界输入, 数字与邮箱规则及严格规则集命中")
 class ContentMaskingUtilsTest {

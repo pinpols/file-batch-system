@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.console.domain.job.support;
 
+import java.util.Objects;
+import java.util.function.Function;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
-import java.util.Objects;
-import java.util.function.Function;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 
 /** 将物理队列和 Worker 分组的分配权保留给平台运维。 */
 @Component

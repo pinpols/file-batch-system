@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,6 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 
 /**
  * Immutable parameter object passed to each {@link FormatParser}.

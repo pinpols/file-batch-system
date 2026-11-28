@@ -4,19 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.ops.application.contract.response.CustomTaskTypeResponse;
-import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQueryService;
-import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.CustomTaskTypeResponse;
+import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQueryService;
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("自定义任务类型接口:列表, 计数与详情透传查询服务结果, 记录缺失时抛出业务异常")

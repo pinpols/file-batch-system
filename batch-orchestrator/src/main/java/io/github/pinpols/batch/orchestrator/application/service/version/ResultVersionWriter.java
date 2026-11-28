@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.orchestrator.application.service.version;
 
+import java.time.Instant;
+import java.util.Map;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
@@ -13,14 +24,6 @@ import io.github.pinpols.batch.orchestrator.application.service.dataquality.Data
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
-import java.time.Instant;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * ADR-017 §决策 §实施分阶段 Stage 2 — 结果版本写入入口。

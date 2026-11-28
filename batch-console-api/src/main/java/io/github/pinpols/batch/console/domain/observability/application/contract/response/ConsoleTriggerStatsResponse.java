@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
+import java.util.List;
+
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.TriggerStatsView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.TypeCountView;
-import java.util.List;
 
 /** dashboard trigger-stats 响应：按触发类型计数 + 按日趋势（均为固定字段行）。 */
 public record ConsoleTriggerStatsResponse(List<TypeCountEntry> byTriggerType, List<DayCountEntry> dailyTrend) {

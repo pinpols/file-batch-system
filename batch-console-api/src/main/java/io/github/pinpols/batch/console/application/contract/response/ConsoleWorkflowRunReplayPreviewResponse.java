@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.console.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowReplayCapabilityAssessment;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowReplayCapabilityAssessment;
 
 /** 整 Workflow 重放的公开预览；密钥参数和内部快照摘要保留在服务端。 */
 public record ConsoleWorkflowRunReplayPreviewResponse(

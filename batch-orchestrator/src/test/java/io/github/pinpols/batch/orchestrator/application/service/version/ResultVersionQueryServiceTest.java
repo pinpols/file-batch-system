@@ -6,14 +6,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
-import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 
 @DisplayName("结果版本查询服务: 生效版本判定与版本列表查询口径")
 class ResultVersionQueryServiceTest {

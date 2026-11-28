@@ -1,5 +1,18 @@
 package io.github.pinpols.batch.orchestrator.application.service.lineage;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
+import lombok.Builder;
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -15,16 +28,6 @@ import io.github.pinpols.batch.orchestrator.application.service.version.ResultVe
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.LineageEvidenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
-import lombok.Builder;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /** BFS 管辖范围内的最小 lineage 证据链查询，不承担外部数据目录职责。 */
 @Service

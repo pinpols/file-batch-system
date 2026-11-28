@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.core.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** Worker 运行实例身份配置。池代码负责稳定路由，实例 ID 只负责区分同一池中的进程或 Pod。 */
 @Data

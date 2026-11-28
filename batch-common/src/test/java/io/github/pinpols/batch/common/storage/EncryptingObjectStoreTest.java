@@ -3,9 +3,6 @@ package io.github.pinpols.batch.common.storage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.config.BatchKmsProperties;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -13,9 +10,14 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import io.github.pinpols.batch.common.config.BatchKmsProperties;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 
 /** {@link EncryptingObjectStore} 单测：覆盖 put/get round-trip / bypass 透传 / getFrom 拒绝 / 其它透传。 */
 @DisplayName("加密对象存储:验证写入加密与读取解密、直传写入与范围读取的拒绝、超限与未知长度拦截、绕过模式透传及委托行为")

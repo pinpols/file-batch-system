@@ -3,18 +3,6 @@ package io.github.pinpols.batch.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
-import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
-import io.github.pinpols.batch.e2e.apps.E2eTriggerApplication;
-import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -32,7 +20,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
 import javax.sql.DataSource;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -48,6 +38,19 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.test.context.jdbc.Sql;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
+import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
+import io.github.pinpols.batch.e2e.apps.E2eTriggerApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import io.github.pinpols.batch.e2e.support.E2eTestSql;
+import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 使用生产分组/抑制规则；只替换外部接收端配置。 */
 @E2eSpringBootTest(

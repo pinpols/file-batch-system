@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.common.stateful;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.Locale;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 为受保护的有状态后端生成稳定且不含秘密信息的位置标识。 */
 public final class StatefulBackendIdentity {

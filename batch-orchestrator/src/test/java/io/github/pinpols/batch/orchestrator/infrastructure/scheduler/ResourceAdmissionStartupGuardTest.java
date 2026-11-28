@@ -3,11 +3,12 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 
-import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.mock.env.MockEnvironment;
+
+import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 
 @DisplayName("资源配置准入的启动自检:生产环境必须设置正的全局并发上限,本地环境允许关闭该上限")
 class ResourceAdmissionStartupGuardTest {

@@ -6,32 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
-import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchPreparationSpec;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.orchestrator.application.service.governance.AdminTestDataCleanupService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
-import io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionReclaimUnit;
-import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.client.SdkClientMetrics;
-import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -59,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -79,6 +54,34 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
+import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchPreparationSpec;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import io.github.pinpols.batch.orchestrator.application.service.governance.AdminTestDataCleanupService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionReclaimUnit;
+import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
+import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.client.SdkClientMetrics;
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * 真实 Kafka、平台 HTTP、平台 PG 与独立业务 PG 的普通 SDK 恢复验证。

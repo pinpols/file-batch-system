@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
 
 /** Worker 注册记录的 Console 只读视图。 */
 @Builder

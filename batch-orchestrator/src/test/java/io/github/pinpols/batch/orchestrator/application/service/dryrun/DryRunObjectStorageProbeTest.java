@@ -4,14 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.orchestrator.infrastructure.storage.S3DryRunObjectStorageProbe;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.storage.S3DryRunObjectStorageProbe;
+
 import software.amazon.awssdk.services.s3.S3Client;
 
 @DisplayName("试运行对象存储探测: 桶名称校验与客户端不可用时的降级口径")

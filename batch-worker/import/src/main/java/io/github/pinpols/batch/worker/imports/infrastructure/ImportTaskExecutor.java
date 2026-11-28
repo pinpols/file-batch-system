@@ -1,5 +1,11 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
+import java.time.Duration;
+import java.util.Set;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
@@ -9,10 +15,6 @@ import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
-import java.time.Duration;
-import java.util.Set;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 /**
  * Import pipeline 的 {@link BatchTaskExecutor} SPI 包装 — delegate 到现有 {@link

@@ -7,15 +7,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import java.sql.Connection;
 import java.util.Map;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("多分片路由数据源工厂:按解析结果选取分片连接,独占实例路由,默认分片校验与资源释放")

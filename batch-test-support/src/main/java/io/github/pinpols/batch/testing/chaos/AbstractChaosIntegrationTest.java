@@ -1,21 +1,24 @@
 package io.github.pinpols.batch.testing.chaos;
 
-import eu.rekawek.toxiproxy.Proxy;
-import eu.rekawek.toxiproxy.ToxiproxyClient;
-import eu.rekawek.toxiproxy.model.Toxic;
-import eu.rekawek.toxiproxy.model.ToxicDirection;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.TestContainerLabels;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.TestContainerLabels;
+
+import eu.rekawek.toxiproxy.Proxy;
+import eu.rekawek.toxiproxy.ToxiproxyClient;
+import eu.rekawek.toxiproxy.model.Toxic;
+import eu.rekawek.toxiproxy.model.ToxicDirection;
 
 /**
  * Toxiproxy 集成测试基类:在 {@link AbstractIntegrationTest} 提供的 PG / Kafka / Redis 容器前面套一层 Toxiproxy,用例可经由

@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalMatchView;
 import io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalView;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * ADR-028 FILE_ARRIVAL sensor 反查 batch.file_record。

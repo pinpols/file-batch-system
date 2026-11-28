@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import java.util.Map;
 
 /**
  * ADR-041 Phase1.5:投递后回读校验的纯函数辅助。读 opt-in 开关 + 从 file_record 取期望大小,实际回读与比对在 {@code

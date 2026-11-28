@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.core.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Worker task 取消 watchdog 调度器配置 ({@code batch.worker.watchdog-scheduler})。

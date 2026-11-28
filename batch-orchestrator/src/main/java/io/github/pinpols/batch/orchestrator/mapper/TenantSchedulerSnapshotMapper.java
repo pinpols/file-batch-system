@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 
 /**
  * batch.tenant_scheduler_snapshot CRUD。原 {@code TenantSchedulerSnapshotRepository}（Spring Data

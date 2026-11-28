@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.e2e.config;
 
-import io.github.pinpols.batch.console.config.ConsoleAiUuidMappingConfiguration;
 import javax.sql.DataSource;
+
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
@@ -14,6 +14,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.console.config.ConsoleAiUuidMappingConfiguration;
 
 /**
  * E2E 上下文会合并 Orchestrator 和多个 Worker；每个 Worker 都可能注册自己的业务 {@link

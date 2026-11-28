@@ -1,14 +1,18 @@
 package io.github.pinpols.batch.console.support.persistence;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+
 import javax.sql.DataSource;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 在当前事务持有的平台库连接上执行 {@code set_config('app.tenant_id', ?, true)}。 */
 @Component

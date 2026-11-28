@@ -4,13 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.logging.StructuredLogField;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
-import lombok.Data;
+
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.mapping.SqlCommandType;
@@ -20,6 +19,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.logging.StructuredLogField;
 
 @DisplayName("审计字段拦截器:验证新增补全、更新强制刷新、已有值保留、参数多种形态遍历与查询语句跳过")
 class AuditFieldsInterceptorTest {

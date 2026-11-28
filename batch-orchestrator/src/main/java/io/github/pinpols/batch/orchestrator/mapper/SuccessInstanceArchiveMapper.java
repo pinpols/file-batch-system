@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
 import java.time.Instant;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
 
 /**
  * P3-3 archive 系列：终态 job_instance 级联归档专用 mapper。

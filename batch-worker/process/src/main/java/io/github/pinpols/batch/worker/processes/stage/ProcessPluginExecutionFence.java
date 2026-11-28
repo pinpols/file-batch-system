@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -8,10 +15,6 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
-import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 /** 可能写业务状态的 PROCESS 插件阶段开始前，先持久化重放围栏。 */
 @Slf4j

@@ -1,18 +1,21 @@
 package io.github.pinpols.batch.orchestrator.application.archive;
 
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
-import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
+import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
 
 /** 将归档完整性异常写入既有持久告警台账，避免只依赖进程日志发现被隔离的运行数据。 */
 @Slf4j

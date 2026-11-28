@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import java.util.Map;
 
 /**
  * 类型安全的任务执行基类 — SDK Phase 5 / SDK-P5-1。

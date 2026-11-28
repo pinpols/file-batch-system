@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.replay;
 
 import java.time.LocalDate;
 import java.util.List;
+
 import lombok.Builder;
 
 /** ADR-020 batch_day_replay 提交命令。 */

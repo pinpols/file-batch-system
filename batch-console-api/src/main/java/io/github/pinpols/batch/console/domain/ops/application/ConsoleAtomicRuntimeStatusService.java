@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.console.domain.ops.application;
 
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleAtomicRuntimeStatusResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicRuntimeStatusPayload;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicWorkerInternalRestClient;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Service;
 
 /**
  * Round-3 #8(Round-2 §4 P0 #8):Console 反向 HTTP 拉取 batch-worker-atomic Actuator 端点 {@code

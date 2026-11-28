@@ -1,13 +1,14 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.domain.job.view.BatchDayCatchUpOperation;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayCatchUpOperation;
 
 /** 服务单测的批次状态替身；实际事务与租户隔离由 PostgreSQL 集成测试验证。 */
 final class InMemoryBatchDayCatchUpStore extends BatchDayCatchUpOperationStore {

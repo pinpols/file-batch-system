@@ -2,11 +2,6 @@ package io.github.pinpols.batch.orchestrator.application.readiness;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
-import io.github.pinpols.batch.common.http.OutboundHttpResponse;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.entity.ReadinessWaitEntity;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -14,12 +9,20 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import mockwebserver3.MockResponse;
-import mockwebserver3.MockWebServer;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReadinessWaitEntity;
+
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
 
 @DisplayName("readiness 恢复 HTTP: 响应挂起超时后继续下一次调用")
 class TriggerReadinessRecoveryClientTest {

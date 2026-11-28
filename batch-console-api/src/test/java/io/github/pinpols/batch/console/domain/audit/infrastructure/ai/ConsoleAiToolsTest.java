@@ -5,6 +5,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.audit.ConsoleAiTools;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
@@ -21,15 +32,6 @@ import io.github.pinpols.batch.console.domain.ops.application.contract.response.
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleShedLockStatusResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleTerminalChildrenHealthResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleWorkerConsistencyResponse;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AI 工具集:租户绑定、只读查询与结果渲染")

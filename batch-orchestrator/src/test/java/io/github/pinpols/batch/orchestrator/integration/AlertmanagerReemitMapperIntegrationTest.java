@@ -2,13 +2,11 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -25,6 +23,10 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("告警恢复重发的真实 PostgreSQL 回执判定和公平轮询")
 class AlertmanagerReemitMapperIntegrationTest {

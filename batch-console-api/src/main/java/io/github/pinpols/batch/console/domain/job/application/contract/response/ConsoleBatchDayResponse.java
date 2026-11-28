@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.job.application.contract.response
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+
 import lombok.Builder;
 
 @Builder

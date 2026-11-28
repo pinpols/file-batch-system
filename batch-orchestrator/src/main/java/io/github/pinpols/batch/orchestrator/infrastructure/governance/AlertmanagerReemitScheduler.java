@@ -1,15 +1,19 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.governance;
 
+import java.util.List;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TenantDirectoryMapper;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /** 按租户维持活动告警并补发未获成功回执的关闭通知；单租户失败不阻塞其它租户。 */
 @Component

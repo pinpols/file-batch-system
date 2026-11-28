@@ -4,6 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -13,9 +18,6 @@ import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("Atomic Worker 注册能力快照")
 class AtomicWorkerLoopTest {

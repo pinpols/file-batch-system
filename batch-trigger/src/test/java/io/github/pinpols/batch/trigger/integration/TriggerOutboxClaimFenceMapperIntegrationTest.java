@@ -2,6 +2,18 @@ package io.github.pinpols.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
+
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -9,16 +21,6 @@ import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
 import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(classes = BatchTriggerApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("Trigger Outbox 领取轮次围栏:旧投递者不得回写新领取")

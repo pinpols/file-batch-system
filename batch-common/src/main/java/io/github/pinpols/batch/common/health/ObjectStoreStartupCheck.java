@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.common.health;
 
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.storage.ObjectListing;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -10,9 +7,15 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectListing;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 对象存储启动冒烟自检:启动期对配置 bucket 真做一遍 put → exists → statSize → get → list → deleteMany 探针,

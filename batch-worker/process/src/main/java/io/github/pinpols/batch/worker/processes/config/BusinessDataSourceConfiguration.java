@@ -1,19 +1,7 @@
 package io.github.pinpols.batch.worker.processes.config;
 
-import com.zaxxer.hikari.HikariConfig;
-import io.github.pinpols.batch.common.config.ApplicationNameProvider;
-import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
-import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
-import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
-import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
-import io.github.pinpols.batch.common.rls.BusinessDataSourceRoleHealthIndicator;
-import io.github.pinpols.batch.common.rls.BusinessDataSourceRoleStartupCheck;
-import io.github.pinpols.batch.common.rls.RlsPolicyHealthIndicator;
-import io.github.pinpols.batch.common.rls.RlsProperties;
-import io.github.pinpols.batch.common.rls.RlsStartupFailFastCheck;
-import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 import javax.sql.DataSource;
-import lombok.RequiredArgsConstructor;
+
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -25,6 +13,22 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+
+import com.zaxxer.hikari.HikariConfig;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
+import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
+import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
+import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
+import io.github.pinpols.batch.common.rls.BusinessDataSourceRoleHealthIndicator;
+import io.github.pinpols.batch.common.rls.BusinessDataSourceRoleStartupCheck;
+import io.github.pinpols.batch.common.rls.RlsPolicyHealthIndicator;
+import io.github.pinpols.batch.common.rls.RlsProperties;
+import io.github.pinpols.batch.common.rls.RlsStartupFailFastCheck;
+import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 
 /**
  * 业务数据源配置，提供 PROCESS 配置驱动 SQL 加工访问业务库的连接池。装配逻辑委托 {@link WorkerDataSourceSupport}（三个 worker 模块共用）。

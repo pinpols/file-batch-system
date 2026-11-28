@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.workflow.param;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 日程更新的固定 SQL 入参；只更新日程字段并比较原版本，不改定义启停和受管 Job 关系。 */
 @Builder(toBuilder = true)

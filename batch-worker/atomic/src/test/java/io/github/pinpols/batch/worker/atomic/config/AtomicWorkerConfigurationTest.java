@@ -2,10 +2,12 @@ package io.github.pinpols.batch.worker.atomic.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 
 @DisplayName("原子 Worker 配置: 身份标识与能力标签构造")
 class AtomicWorkerConfigurationTest {

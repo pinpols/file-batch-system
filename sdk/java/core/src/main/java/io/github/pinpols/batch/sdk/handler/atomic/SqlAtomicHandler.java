@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
-import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
-import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -14,8 +10,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
 import javax.sql.DataSource;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 
 /**
  * 开箱即用的 SQL 原子执行 handler(ADR-036 Atomic 模板的 sql shape)。

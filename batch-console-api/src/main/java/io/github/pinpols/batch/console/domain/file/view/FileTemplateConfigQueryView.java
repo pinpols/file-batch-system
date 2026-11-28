@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.file.view;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import lombok.Builder;
 
 /** 文件模板列表的固定列投影；JSONB 字段保留驱动对象以兼容配置复制和工作簿导出。 */

@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.query;
 
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
 import io.github.pinpols.batch.common.validation.ValidBizDate;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode(callSuper = false)
 @Data

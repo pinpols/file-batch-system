@@ -1,16 +1,20 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
-import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+
+import jakarta.annotation.PostConstruct;
 
 /**
  * Console AI 助手配置（{@code batch.console.ai}）。

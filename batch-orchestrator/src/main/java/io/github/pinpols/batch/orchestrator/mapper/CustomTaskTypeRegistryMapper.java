@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * {@code batch.custom_task_type_registry} 访问(SDK Phase 3 M3.1,V159)。

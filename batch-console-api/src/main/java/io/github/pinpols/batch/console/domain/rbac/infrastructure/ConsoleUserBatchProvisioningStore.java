@@ -2,10 +2,12 @@ package io.github.pinpols.batch.console.domain.rbac.infrastructure;
 
 import java.time.Duration;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
+
+import lombok.RequiredArgsConstructor;
 
 /** 批量开户预览的短期 Redis 存储适配器；提交记录由 MyBatis 管理。 */
 @Repository

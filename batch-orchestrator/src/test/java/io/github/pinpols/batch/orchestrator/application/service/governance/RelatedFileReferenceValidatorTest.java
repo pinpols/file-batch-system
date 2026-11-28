@@ -7,16 +7,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.FileRecordRow;
-import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.FileRecordRow;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("关联文件引用的租户边界")

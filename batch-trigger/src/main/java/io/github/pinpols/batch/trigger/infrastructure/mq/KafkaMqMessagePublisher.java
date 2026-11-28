@@ -1,10 +1,8 @@
 package io.github.pinpols.batch.trigger.infrastructure.mq;
 
-import io.github.pinpols.batch.common.mq.MqMessage;
-import io.github.pinpols.batch.common.mq.MqMessagePublisher;
-import io.github.pinpols.batch.common.mq.MqPublishResult;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
+
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -12,6 +10,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.mq.MqMessage;
+import io.github.pinpols.batch.common.mq.MqMessagePublisher;
+import io.github.pinpols.batch.common.mq.MqPublishResult;
 
 /** Trigger MQ 发布适配器；业务 relay 只依赖通用消息端口。 */
 @Component("triggerMqMessagePublisher")

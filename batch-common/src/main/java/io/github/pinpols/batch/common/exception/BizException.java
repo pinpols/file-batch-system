@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.common.exception;
 
+import lombok.Getter;
+
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.ResultCode;
-import lombok.Getter;
 
 /**
  * 业务异常。两种构造形式:

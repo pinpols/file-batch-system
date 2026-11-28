@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import java.util.Map;
 
 /**
  * 动态分片计划中分区数的解析策略接口。 每个实现封装一种解析方式（显式覆盖、数据量估算、历史时长估算、在线 Worker 容量）。 {@link

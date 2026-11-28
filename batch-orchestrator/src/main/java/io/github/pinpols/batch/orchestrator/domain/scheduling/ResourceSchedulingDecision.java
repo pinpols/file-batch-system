@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.domain.scheduling;
 
-import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import lombok.Data;
+
+import io.github.pinpols.batch.common.model.WorkerRouteModel;
 
 @Data
 public class ResourceSchedulingDecision {

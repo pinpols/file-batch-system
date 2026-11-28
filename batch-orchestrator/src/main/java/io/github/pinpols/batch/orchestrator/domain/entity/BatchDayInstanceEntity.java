@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.orchestrator.domain.value.BatchDayManualOperation;
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.domain.value.BatchDayManualOperation;
 
 /**
  * 批次日实例投影（MyBatis 通过 {@code resultMap+constructor} 映射；不可变 record）。

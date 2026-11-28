@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.worker.exports.domain;
 
-import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 
 /** 导出任务执行上下文，贯穿各 stage 传递状态和属性。 */
 @Data

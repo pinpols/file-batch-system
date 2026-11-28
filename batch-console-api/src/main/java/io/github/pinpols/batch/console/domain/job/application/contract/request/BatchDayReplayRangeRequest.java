@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
-import io.github.pinpols.batch.common.validation.ValidBizDate;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.validation.ValidBizDate;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /** 经租户守护的 ADR-049 日期区间重放请求。 */
 @Data

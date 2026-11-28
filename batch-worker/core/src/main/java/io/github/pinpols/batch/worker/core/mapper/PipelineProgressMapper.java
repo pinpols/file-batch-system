@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.worker.core.mapper;
 
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.worker.core.domain.entity.PipelineProgressEntity;
 import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * {@code batch.pipeline_progress} 数据访问 — ADR-038 续跑位点。

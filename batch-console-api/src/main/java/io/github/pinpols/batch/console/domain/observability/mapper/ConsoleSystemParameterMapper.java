@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.observability.mapper;
 
-import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
-import io.github.pinpols.batch.console.domain.observability.param.ConsoleSystemParameterUpsertParam;
 import java.util.List;
 import java.util.Optional;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
+import io.github.pinpols.batch.console.domain.observability.param.ConsoleSystemParameterUpsertParam;
 
 /**
  * {@code batch.system_parameter} MyBatis 映射（替代原 Spring Data JDBC ConsoleSystemParameterRepository）。

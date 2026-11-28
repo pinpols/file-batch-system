@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.application.contract.request;
 
-import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import jakarta.validation.constraints.Size;
 
 @Data
 public class UpdateUserAccountRequest {

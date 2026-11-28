@@ -1,5 +1,15 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
@@ -17,13 +27,6 @@ import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDe
 import io.github.pinpols.batch.console.domain.notification.param.NotificationDeliveryLogInsertParam;
 import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.web.util.HtmlUtils;
 
 /**
  * Alertmanager 出口投递编排:接住 AM webhook → 按 {@code receiver} 路由到 {@code notification_channel} → 复用既有多渠道

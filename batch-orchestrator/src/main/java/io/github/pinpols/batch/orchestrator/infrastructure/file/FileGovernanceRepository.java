@@ -1,6 +1,18 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.DictEnum;
@@ -23,14 +35,6 @@ import io.github.pinpols.batch.orchestrator.domain.query.FileGovernancePendingDi
 import io.github.pinpols.batch.orchestrator.domain.query.FileGovernanceProcessingDelayQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 文件治理数据访问层（纯 DAO）：提供文件记录查询、状态更新、归档/删除、对账写入和审计追加等操作。

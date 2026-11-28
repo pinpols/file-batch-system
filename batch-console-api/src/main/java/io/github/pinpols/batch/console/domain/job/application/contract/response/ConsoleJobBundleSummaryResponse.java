@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
-import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import java.util.List;
+
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 
 /** Job Bundle 内各类可移植配置的数量汇总。 */
 public record ConsoleJobBundleSummaryResponse(

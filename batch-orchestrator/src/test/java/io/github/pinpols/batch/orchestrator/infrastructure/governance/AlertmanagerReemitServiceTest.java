@@ -7,17 +7,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.AlertStatus;
-import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
-import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 import java.time.Instant;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionSynchronizationUtils;
+
+import io.github.pinpols.batch.common.enums.AlertStatus;
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
+import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 
 @DisplayName("告警重发的关闭回执、状态竞争与提交边界")
 class AlertmanagerReemitServiceTest {

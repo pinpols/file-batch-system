@@ -2,6 +2,23 @@ package io.github.pinpols.batch.worker.exports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.Base64;
+import java.util.HexFormat;
+import java.util.Map;
+import java.util.UUID;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
 import io.github.pinpols.batch.common.config.BatchKmsProperties;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
@@ -18,21 +35,6 @@ import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
 import io.github.pinpols.batch.worker.exports.stage.ExportRuntimeKeys;
 import io.github.pinpols.batch.worker.exports.stage.RegisterStep;
 import io.github.pinpols.batch.worker.exports.stage.StoreStep;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.Base64;
-import java.util.HexFormat;
-import java.util.Map;
-import java.util.UUID;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * 集成测试：使用当前测试存储后端验证 S3ExportStorage 的读取、写入、复制和删除。

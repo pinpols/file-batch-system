@@ -1,9 +1,12 @@
 package io.github.pinpols.batch.orchestrator.security;
 
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 
 /** 基于 Redis SETNX(setIfAbsent)+TTL 的 nonce 一次性存储，集群级生效。 */
 @Component

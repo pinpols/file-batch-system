@@ -1,8 +1,19 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.FrozenDispatchChannelSnapshot;
 import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -10,13 +21,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 解析任务携带的精确受保护通道行，不读取更新后的行。 */
 @Component

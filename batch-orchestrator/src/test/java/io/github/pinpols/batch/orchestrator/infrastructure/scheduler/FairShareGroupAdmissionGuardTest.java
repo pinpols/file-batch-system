@@ -6,8 +6,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +13,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 
 @DisplayName("公平份额分组准入守卫:验证准入校验的加锁顺序,硬上限拒绝与只读容量观测")
 @ExtendWith(MockitoExtension.class)

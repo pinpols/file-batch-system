@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import java.util.Set;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.util.Set;
-import lombok.Data;
 
 /** 同步配置预览；源与目标身份独立，可选类型集合为空表示全部。 */
 @Data

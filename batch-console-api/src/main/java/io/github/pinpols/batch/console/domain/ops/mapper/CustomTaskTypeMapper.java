@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
-import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 
 /** console-api 只读访问 {@code custom_task_type_registry}（SDK Phase 3 M3.1 / API-P3-1）。 */
 public interface CustomTaskTypeMapper {

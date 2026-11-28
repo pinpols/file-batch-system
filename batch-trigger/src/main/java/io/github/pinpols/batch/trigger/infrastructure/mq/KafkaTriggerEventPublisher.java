@@ -1,5 +1,17 @@
 package io.github.pinpols.batch.trigger.infrastructure.mq;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
@@ -12,15 +24,6 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
 import io.opentelemetry.context.Scope;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Component;
 
 /**
  * ADR-010 Stage 4: {@link TriggerEventPublisher} 的 Kafka 实现。

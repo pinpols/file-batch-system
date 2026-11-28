@@ -2,6 +2,14 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
+
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
@@ -9,12 +17,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.QuotaRuntimeStateEntit
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
 
 /**
  * 集成测试：QuotaRuntimeStateService 在真实数据库上的验证。 覆盖 SLIDING_WINDOW 和 CALENDAR_DAY 重置、峰值追踪及 reconcile。

@@ -4,14 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
-import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -19,6 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +20,15 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
+import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * 全局活跃作业硬上限的真 PostgreSQL 并发守护。

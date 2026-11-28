@@ -4,14 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+
 import io.github.pinpols.batch.orchestrator.config.TriggerLaunchContinuityMetricsProperties;
 import io.github.pinpols.batch.orchestrator.domain.query.TriggerLaunchContinuityMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 
 @DisplayName("触发连续性指标的聚合与失败采样")
 class TriggerLaunchContinuityMetricsSchedulerTest {

@@ -3,11 +3,12 @@ package io.github.pinpols.batch.console.domain.job.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 
 /** 导入结构可省略时间字段，但真实写入仍须以稳定业务错误拒绝缺失值，不能抛空指针。 */
 @DisplayName("共同窗口写入规则：缺失字段的错误身份")

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
 import java.time.Instant;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
 
 /** 一次性重放操作预览凭证的持久化。 */
 public interface ReplayOperationPreviewTokenMapper {

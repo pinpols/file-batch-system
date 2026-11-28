@@ -1,6 +1,21 @@
 package io.github.pinpols.batch.worker.exports.stage;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.FileChecksumType;
@@ -19,18 +34,6 @@ import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
 import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategy;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 /** 导出存储阶段：将生成的临时文件上传至对象存储（先写 .part 再 copy 提升），并完成 SHA-256 校验。 */
 @Component

@@ -2,11 +2,13 @@ package io.github.pinpols.batch.console.support.maintenance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import java.time.Instant;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 
 @DisplayName("维护通知窗口：有限时间与明确服务范围")
 class MaintenanceAlertWindowTest {

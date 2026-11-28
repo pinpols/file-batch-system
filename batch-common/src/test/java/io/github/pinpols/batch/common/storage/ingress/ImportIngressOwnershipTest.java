@@ -2,16 +2,19 @@ package io.github.pinpols.batch.common.storage.ingress;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
 import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository.Binding;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository.Scope;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("入站归属身份与对象保护范围")
 class ImportIngressOwnershipTest {

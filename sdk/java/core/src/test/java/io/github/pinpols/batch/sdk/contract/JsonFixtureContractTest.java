@@ -3,13 +3,6 @@ package io.github.pinpols.batch.sdk.contract;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
-import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
-import io.github.pinpols.batch.sdk.dispatcher.WorkerRuntimeState;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,9 +16,19 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+
+import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
+import io.github.pinpols.batch.sdk.dispatcher.WorkerRuntimeState;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 
 /**
  * Lane P（漂移防护）：与语言无关的契约 fixture 执行器中的 Java 实现。

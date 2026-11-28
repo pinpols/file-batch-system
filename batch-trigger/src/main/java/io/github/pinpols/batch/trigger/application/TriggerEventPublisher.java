@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.trigger.application;
 
-import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import java.util.concurrent.CompletableFuture;
+
+import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 
 /**
  * ADR-010: trigger 端事件发布抽象。

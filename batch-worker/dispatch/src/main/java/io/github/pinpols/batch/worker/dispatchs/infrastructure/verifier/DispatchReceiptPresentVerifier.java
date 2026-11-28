@@ -1,5 +1,11 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.verifier;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
@@ -7,10 +13,6 @@ import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-import org.springframework.stereotype.Component;
 
 /**
  * ADR-030 示例 verifier：DISPATCH 任务必须有回执标识。

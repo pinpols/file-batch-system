@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.observability.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ActivePartitionView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ConfigDependentView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayCountView;
@@ -13,8 +17,6 @@ import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaSt
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.StatusCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.TypeCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.WorkerGroupStatusCountView;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * console dashboard 聚合 / 趋势 / SLA 查询 (MyBatis,迁移自 ConsoleDashboardQueryRepository)。

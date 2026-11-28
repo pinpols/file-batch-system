@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TokenBucketRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.DispatchAdmissionLimiter;
@@ -8,8 +12,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntit
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 把配置表中的 maxQps 真正接到统一调度入口，所有 Orchestrator 副本共享 Redis 令牌桶。 */
 @Component

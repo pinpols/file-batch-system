@@ -2,9 +2,10 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sharding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 
 @DisplayName("静态分片分配提供者在默认与多分片配置下的取值与容错")
 class StaticShardAssignmentProviderTest {

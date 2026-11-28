@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.archive;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService;
 import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService.ArchiveBatchResult;
 import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.metrics.ArchiveSchedulerHealthMetrics;
+
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * P3-3 archive 系列：所有终态 job_instance（SUCCESS / PARTIAL_FAILED / FAILED / CANCELLED /

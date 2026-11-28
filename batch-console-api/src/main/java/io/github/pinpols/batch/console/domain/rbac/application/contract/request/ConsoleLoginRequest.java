@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.application.contract.request;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Data;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 控制台登录请求。两种 body 形态:

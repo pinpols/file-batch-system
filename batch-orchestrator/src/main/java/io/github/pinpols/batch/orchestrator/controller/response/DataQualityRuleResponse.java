@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.controller.response;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
 
 /** 数据质量规则的 HTTP 响应投影。 */
 @Builder

@@ -9,8 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
-import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +18,9 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /** {@link ProcessStagingOrphanCleaner#maintainPartitions()} 分区维护逻辑单测。 */
 @ExtendWith(MockitoExtension.class)

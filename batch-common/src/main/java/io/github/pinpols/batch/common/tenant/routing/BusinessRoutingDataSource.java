@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.sql.DataSource;
+
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
+
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 
 /**
  * 按当前租户把 biz 连接路由到对应 placement 数据源(pooled 分片 / silo)。

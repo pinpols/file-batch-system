@@ -5,12 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowReplayCapabilityService.Status;
-import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +16,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
+
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowReplayCapabilityService.Status;
+import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("整图 Replay 按选定插件逐实例比较能力，不推断缺失声明")

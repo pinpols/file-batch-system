@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.health;
 
-import jakarta.validation.constraints.Min;
-import lombok.Getter;
-import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import jakarta.validation.constraints.Min;
 
 @Getter
 @Setter

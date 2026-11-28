@@ -1,5 +1,17 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.storage.ObjectSummary;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -8,15 +20,6 @@ import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper.Lea
 import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper.ObjectWrite;
 import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper.Progress;
 import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper.ScanStart;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import lombok.Builder;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Repository;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /** 保存跨实例可恢复的入站扫描进度；对象存储读取不在数据库事务内执行。 */
 @Repository

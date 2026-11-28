@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.rls;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.function.Supplier;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * RLS(Row-Level Security)租户上下文 — ThreadLocal 持有当前线程的 `tenant_id`,供 {@link

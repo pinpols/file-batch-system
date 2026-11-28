@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -16,9 +15,13 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
+
+import org.springframework.stereotype.Component;
+
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 
 /**
  * 当前 Worker 进程内已认领、待执行或正在执行任务的租约注册表。

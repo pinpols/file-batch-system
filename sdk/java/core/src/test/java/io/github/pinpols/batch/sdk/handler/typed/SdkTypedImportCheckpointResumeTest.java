@@ -2,6 +2,15 @@ package io.github.pinpols.batch.sdk.handler.typed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.sdk.checkpoint.InMemorySdkCheckpoint;
 import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpointState;
 import io.github.pinpols.batch.sdk.task.CancellationSignal;
@@ -9,13 +18,6 @@ import io.github.pinpols.batch.sdk.task.ProgressReporter;
 import io.github.pinpols.batch.sdk.task.SdkCommitCoordinator;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /** ADR-037 P1~P3 — 续跑模板断点恢复 / 完成幂等跳过 / 协作取消落 cancelled 的端到端单测(Import 模板)。 */
 @DisplayName("强类型 Import 断点续跑:逐批提交落点与恢复计数,覆盖完成幂等与中途取消终态")

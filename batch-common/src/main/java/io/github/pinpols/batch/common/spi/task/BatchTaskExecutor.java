@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.spi.task;
 
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 
 /**
  * Atomic Task SPI — 单步原子任务执行契约,加新任务类型只需实现本接口 + 注册即可。

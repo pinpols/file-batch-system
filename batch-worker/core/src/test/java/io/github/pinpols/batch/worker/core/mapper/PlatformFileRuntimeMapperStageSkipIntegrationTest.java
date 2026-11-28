@@ -2,23 +2,6 @@ package io.github.pinpols.batch.worker.core.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.FileStatus;
-import io.github.pinpols.batch.common.enums.PipelineRunStatus;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.infrastructure.CreatePipelineInstanceParam;
-import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
-import io.github.pinpols.batch.worker.core.infrastructure.FileErrorRecordParam;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
-import io.github.pinpols.batch.worker.core.param.PlatformFileAuditInsertParam;
-import io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam;
-import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
-import io.github.pinpols.batch.worker.core.param.PlatformStepRunFinishParam;
-import io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam;
 import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -35,7 +18,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -52,6 +37,25 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.PipelineRunStatus;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.infrastructure.CreatePipelineInstanceParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileErrorRecordParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.param.PlatformFileAuditInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformStepRunFinishParam;
+import io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam;
 
 /**
  * {@code PlatformFileRuntimeMapper.xml} 的 {@code selectSucceededStepCodes} 真 PG 回归护栏。

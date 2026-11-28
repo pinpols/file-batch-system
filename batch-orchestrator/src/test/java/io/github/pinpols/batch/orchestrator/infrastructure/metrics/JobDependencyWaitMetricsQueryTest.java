@@ -5,15 +5,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitBacklog;
-import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitBacklog;
+import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 
 @DisplayName("依赖等待指标查询设置事务级租户 RLS")
 class JobDependencyWaitMetricsQueryTest {

@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.common.redis;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Objects;
 import java.util.regex.Pattern;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 将部署命名空间应用于 Redis 键、扫描模式和发布订阅通道。 */
 public final class BatchRedisNamespace {

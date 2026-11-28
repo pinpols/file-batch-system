@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.config.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogInsertParam;
 import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam;
 import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface ConfigSyncLogMapper {
 

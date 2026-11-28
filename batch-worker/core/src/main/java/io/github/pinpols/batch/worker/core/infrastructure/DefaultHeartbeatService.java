@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Service;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -8,9 +13,6 @@ import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerConsumptionControl;
 import io.github.pinpols.batch.worker.core.support.WorkerLoadProvider;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
 
 /**
  * Worker 心跳服务默认实现：从 {@link WorkerRuntimeState} 取出当前注册信息， 调用 {@link

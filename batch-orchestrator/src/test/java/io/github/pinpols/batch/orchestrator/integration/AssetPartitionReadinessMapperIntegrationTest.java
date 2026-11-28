@@ -2,20 +2,22 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Month;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionMaterializationCommand;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
 import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.Month;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * V189 readiness "latest-version" 守卫的真实 SQL 回归护栏（原来只有 mocked-mapper 单测覆盖）。

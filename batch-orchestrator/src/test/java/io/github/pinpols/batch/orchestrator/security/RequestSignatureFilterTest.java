@@ -8,10 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.orchestrator.config.InternalRequestProperties;
-import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier.Result;
-import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +15,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.orchestrator.config.InternalRequestProperties;
+import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier.Result;
+
+import jakarta.servlet.FilterChain;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("请求签名过滤器,验证开关,请求方法,密钥请求头与验签结果对放行或拒绝的影响")

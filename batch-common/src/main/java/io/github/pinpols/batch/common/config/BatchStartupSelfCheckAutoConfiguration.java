@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.health.BatchStartupSelfCheck;
-import io.github.pinpols.batch.common.health.BatchStartupSelfCheckProperties;
-import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
-import io.micrometer.core.instrument.MeterRegistry;
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -11,6 +7,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
+
+import io.github.pinpols.batch.common.health.BatchStartupSelfCheck;
+import io.github.pinpols.batch.common.health.BatchStartupSelfCheckProperties;
+import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @AutoConfiguration
 @ConditionalOnProperty(

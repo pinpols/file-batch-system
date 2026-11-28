@@ -3,21 +3,6 @@ package io.github.pinpols.batch.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.common.utils.AlertFingerprints;
-import io.github.pinpols.batch.console.application.contract.request.ops.AlertActionRequest;
-import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
-import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
-import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
-import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.worker.imports.runtime.ImportWorkerLoop;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -28,6 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +32,23 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.utility.DockerImageName;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.common.utils.AlertFingerprints;
+import io.github.pinpols.batch.console.application.contract.request.ops.AlertActionRequest;
+import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
+import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
+import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.worker.imports.runtime.ImportWorkerLoop;
 
 @E2eSpringBootTest(
         classes = E2eConsoleImportApplication.class,

@@ -1,15 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.web;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.notification.application.contract.request.ConsolePushSubscribeRequest;
-import io.github.pinpols.batch.console.domain.notification.application.contract.request.ConsolePushUnsubscribeRequest;
-import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsolePushVapidPublicKeyResponse;
-import io.github.pinpols.batch.console.domain.notification.service.ConsolePushSubscriptionService;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -19,6 +9,19 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.ConsolePushSubscribeRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.ConsolePushUnsubscribeRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsolePushVapidPublicKeyResponse;
+import io.github.pinpols.batch.console.domain.notification.service.ConsolePushSubscriptionService;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 
 /**
  * PWA Web Push 订阅 / 取消订阅 / VAPID 公钥三端点。

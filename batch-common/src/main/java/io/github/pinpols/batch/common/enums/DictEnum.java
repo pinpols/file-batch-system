@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.common.enums;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 所有业务字典枚举的统一契约：持久化使用 {@link #code()} 作为字段值，UI 展示使用 {@link #label()}。

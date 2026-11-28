@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.application.observability;
 
+import java.util.List;
+
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
@@ -68,7 +70,6 @@ import io.github.pinpols.batch.console.shared.view.ConsoleOutboxRetryLogResponse
 import io.github.pinpols.batch.console.shared.view.ConsolePendingCatchUpResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
-import java.util.List;
 
 /** 控制台只读查询应用服务：将 Web 查询条件转换为领域查询并返回列表或视图数据。 */
 public interface ConsoleQueryApplicationService {

@@ -9,6 +9,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
@@ -18,12 +26,6 @@ import io.github.pinpols.batch.console.domain.governance.entity.AssetFreshnessPo
 import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleAssetFreshnessPolicyMapper;
 import io.github.pinpols.batch.console.domain.governance.param.AssetFreshnessPolicyUpsertParam;
 import io.github.pinpols.batch.console.shared.query.TenantScopeResolver;
-import java.time.LocalTime;
-import java.util.List;
-import java.util.Optional;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("资产新鲜度策略服务: 分页查询、默认值补全、更新归一化与参数校验")
 class ConsoleAssetFreshnessPolicyServiceTest {

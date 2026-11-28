@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
+
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
+
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.micrometer.observation.ObservationRegistry;
 
 /** 测试支撑: 经公开的 listener 容器工厂 Bean 取得其装配的 {@link DefaultErrorHandler}, 避免反射调用私有方法。 */
 public final class TriggerLaunchErrorHandlerTestSupport {

@@ -2,10 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.progress;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
-import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressClaimView;
-import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressStageView;
-import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.PipelineSnapshot;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -14,9 +10,15 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
+import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressClaimView;
+import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressStageView;
+import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.PipelineSnapshot;
 
 @DisplayName("流水线阶段进度缓存,验证多租户与多流水线之间的进度隔离,同阶段并行任务的聚合口径以及心跳缺失与过期任务的清理行为")
 class PipelineStageProgressCacheTest {

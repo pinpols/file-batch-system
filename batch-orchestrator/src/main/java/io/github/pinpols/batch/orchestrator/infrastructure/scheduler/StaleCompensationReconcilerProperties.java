@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * {@link StaleCompensationCommandReconciler} 对账参数（{@code batch.compensation.stale-running-reconciler}）。

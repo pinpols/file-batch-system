@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.console.domain.governance.service;
 
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.console.domain.governance.command.BusinessShardCatalogUpsertCommand;
 import io.github.pinpols.batch.console.domain.governance.entity.BusinessShardCatalogEntity;
 import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleBusinessShardCatalogMapper;
 import io.github.pinpols.batch.console.domain.governance.param.BusinessShardCatalogUpsertParam;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * biz 分片目录管理(P2 tenant-routing)。平台 ROLE_ADMIN 登记/列出/删片(只登记位置不存账密)。

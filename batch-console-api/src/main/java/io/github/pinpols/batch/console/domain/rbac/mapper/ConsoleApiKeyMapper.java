@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
-import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleApiKeyInsertParam;
 import java.util.List;
 import java.util.Optional;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleApiKeyInsertParam;
 
 /** {@code batch.api_key} MyBatis 映射（替代原 Spring Data JDBC ConsoleApiKeyRepository）。 */
 public interface ConsoleApiKeyMapper {

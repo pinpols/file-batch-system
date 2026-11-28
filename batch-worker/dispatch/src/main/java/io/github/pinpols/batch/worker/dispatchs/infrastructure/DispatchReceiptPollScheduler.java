@@ -1,19 +1,5 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.enums.FileReceiptStatus;
-import io.github.pinpols.batch.common.enums.FileStatus;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
-import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
-import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.InetAddress;
@@ -27,17 +13,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.enums.FileReceiptStatus;
+import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
+import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
+import io.micrometer.core.instrument.MeterRegistry;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import org.springframework.context.event.ContextClosedEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * 异步回执轮询器：定时从 {@code file_dispatch_record} 中取出 {@code receipt_status=PENDING} 的记录， 向渠道配置的 {@code

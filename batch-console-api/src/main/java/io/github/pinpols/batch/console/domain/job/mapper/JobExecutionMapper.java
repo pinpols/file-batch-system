@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.job.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.job.application.contract.response.JobExecutionProgressResponse.Stage;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.JobExecutionProgressResponse.StatusCount;
 import io.github.pinpols.batch.console.domain.job.view.JobExecutionView;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface JobExecutionMapper {
     String setTenantContext(@Param("tenantId") String tenantId);

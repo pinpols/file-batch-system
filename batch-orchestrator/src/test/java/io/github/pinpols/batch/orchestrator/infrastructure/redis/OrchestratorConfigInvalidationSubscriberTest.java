@@ -5,12 +5,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
-import io.github.pinpols.batch.common.redis.BatchRedisKeys;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +17,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+
+import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
+import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("配置缓存失效订阅事件消费与修订号缺口对账的验证")

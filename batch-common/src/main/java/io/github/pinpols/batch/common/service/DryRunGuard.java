@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.service;
 
 import java.util.Map;
 import java.util.function.Supplier;
+
 import lombok.extern.slf4j.Slf4j;
 
 /**

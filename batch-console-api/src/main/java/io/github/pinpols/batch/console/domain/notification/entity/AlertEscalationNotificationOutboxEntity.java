@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.entity;
 
 import java.time.Instant;
+
 import lombok.Data;
 
 @Data

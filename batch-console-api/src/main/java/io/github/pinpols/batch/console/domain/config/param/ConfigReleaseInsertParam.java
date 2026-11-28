@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.config.param;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 /** 新配置发布草稿的固定写入字段；版本、载荷和操作者由应用服务提供。 */

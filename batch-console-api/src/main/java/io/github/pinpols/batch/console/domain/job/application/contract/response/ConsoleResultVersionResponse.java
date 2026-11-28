@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * ADR-017 结果版本安全投影。Console 只接收并下发治理所需元数据，不暴露原始结果载荷和内部存储引用。

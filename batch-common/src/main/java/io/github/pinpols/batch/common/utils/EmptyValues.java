@@ -2,7 +2,9 @@ package io.github.pinpols.batch.common.utils;
 
 import java.util.Collection;
 import java.util.Map;
+
 import javax.annotation.Nullable;
+
 import org.jetbrains.annotations.Contract;
 
 /**

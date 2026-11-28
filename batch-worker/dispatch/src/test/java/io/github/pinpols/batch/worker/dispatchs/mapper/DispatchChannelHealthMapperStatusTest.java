@@ -9,11 +9,13 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthFailureParam;
-import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthSuccessParam;
 import java.sql.Timestamp;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthFailureParam;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthSuccessParam;
 
 @DisplayName("派送通道 Mapper 状态默认方法：传递具名参数并固定健康状态")
 class DispatchChannelHealthMapperStatusTest {

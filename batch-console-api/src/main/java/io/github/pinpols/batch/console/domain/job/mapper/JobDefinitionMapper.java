@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.job.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
@@ -8,8 +12,6 @@ import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionCodeNameView;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface JobDefinitionMapper {
 

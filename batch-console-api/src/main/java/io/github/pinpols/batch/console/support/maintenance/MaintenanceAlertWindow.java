@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.console.support.maintenance;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 
 /** 维护通知窗口：只识别固定应用编码，未知公告标记不扩大抑制范围。 */
 public record MaintenanceAlertWindow(Instant startsAt, Instant endsAt, Set<String> jobs) {

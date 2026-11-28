@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.worker.processes.config;
 
+import java.util.List;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
 import io.github.pinpols.batch.worker.core.config.BaseWorkerProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
-import java.util.List;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * 加工 Worker 配置属性,绑定前缀 {@code batch.worker.process}。字段与规范化逻辑下沉到 {@link

@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.plugin;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 由 Worker 按冻结插件配置解析、默认拒绝的重放合同。 */
 public record ReplayCapabilityDeclaration(

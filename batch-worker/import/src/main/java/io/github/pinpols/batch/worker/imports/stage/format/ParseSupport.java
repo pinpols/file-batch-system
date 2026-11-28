@@ -1,17 +1,5 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import io.github.pinpols.batch.worker.imports.domain.ImportStage;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Writer;
@@ -20,7 +8,22 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.domain.ImportStage;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
 
 /** Shared utilities used by all {@link FormatParser} implementations. */
 public class ParseSupport {

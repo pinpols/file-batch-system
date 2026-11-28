@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
+import java.util.List;
+
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.domain.ImportWorkerType;
-import java.util.List;
 
 public interface ImportStageExecutor extends PipelineStepTemplateProvider {
 

@@ -7,8 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService;
-import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService.DrainStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +15,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService;
+import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService.DrainStatus;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("排空控制接口的状态查询与人工启停,验证响应结果,状态标记与对排空流程的委托")

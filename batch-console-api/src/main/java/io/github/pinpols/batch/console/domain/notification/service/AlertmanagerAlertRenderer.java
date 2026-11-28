@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
-import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 
 /**
  * 把 Alertmanager webhook payload 渲染成人类可读的通知(标题 + 正文)+ 结构化字段。

@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
 import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
 import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogUpdateGiveUpParam;
 import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogUpdateRetryFailureParam;
 import io.github.pinpols.batch.console.domain.notification.param.WebhookDeliveryLogInsertParam;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * {@code batch.webhook_delivery_log} MyBatis 映射（替代原 Spring Data JDBC

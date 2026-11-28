@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import java.time.Instant;
+
+import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 
 /** Public system parameter view. */
 public record SystemParameterResponse(

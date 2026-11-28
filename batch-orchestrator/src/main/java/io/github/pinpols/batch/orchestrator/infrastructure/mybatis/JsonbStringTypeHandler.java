@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mybatis;
 
-import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import java.sql.CallableStatement;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+
 import org.apache.ibatis.type.BaseTypeHandler;
 import org.apache.ibatis.type.JdbcType;
 import org.apache.ibatis.type.MappedTypes;
+
+import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 
 /**
  * MyBatis TypeHandler：把 PG {@code JSONB} 列（mapper xml 里通过 {@code ::text} 转字符串选出）映射为 {@link

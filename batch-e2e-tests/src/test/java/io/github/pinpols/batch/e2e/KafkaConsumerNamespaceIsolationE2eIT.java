@@ -3,16 +3,6 @@ package io.github.pinpols.batch.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.console.domain.notification.infrastructure.JobTerminalNotificationConsumer;
-import io.github.pinpols.batch.console.domain.notification.infrastructure.WorkflowTerminalNotificationConsumer;
-import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
-import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
-import io.github.pinpols.batch.orchestrator.infrastructure.lineage.WorkflowTerminalLineageConsumer;
-import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.worker.imports.runtime.ImportTaskConsumer;
 import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -21,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -39,6 +30,17 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.console.domain.notification.infrastructure.JobTerminalNotificationConsumer;
+import io.github.pinpols.batch.console.domain.notification.infrastructure.WorkflowTerminalNotificationConsumer;
+import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
+import io.github.pinpols.batch.orchestrator.infrastructure.lineage.WorkflowTerminalLineageConsumer;
+import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.worker.imports.runtime.ImportTaskConsumer;
 
 @E2eSpringBootTest(
         classes = E2eConsoleImportApplication.class,

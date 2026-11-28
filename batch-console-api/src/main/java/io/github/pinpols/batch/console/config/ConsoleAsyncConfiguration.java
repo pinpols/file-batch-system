@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.console.shared.usage.ConsoleUsageProjectionDispatcher;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageProjectionDispatcher;
 
 /**
  * P0-4 (pre-launch audit 2026-05-18)：为 @Async 注册有界线程池。

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.rbac.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
 
 /** 公开 API Key 视图；有意排除哈希值和 KDF 材料。 */
 @Builder

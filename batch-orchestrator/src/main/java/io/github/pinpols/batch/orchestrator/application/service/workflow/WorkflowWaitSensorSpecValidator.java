@@ -1,6 +1,17 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.SensorTimeoutAction;
 import io.github.pinpols.batch.common.enums.SensorType;
@@ -11,15 +22,6 @@ import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
 
 /** 校验工作流 WAIT 节点携带的传感器专属配置。 */
 final class WorkflowWaitSensorSpecValidator {

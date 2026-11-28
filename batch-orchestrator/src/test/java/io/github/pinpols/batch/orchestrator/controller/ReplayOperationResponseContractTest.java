@@ -7,13 +7,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayRangeOperationService;
-import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayService;
-import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -25,6 +21,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import com.fasterxml.jackson.databind.JsonNode;
+
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayRangeOperationService;
+import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayService;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Replay Operation HTTP 响应只包含公开审计字段")

@@ -1,18 +1,7 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.health.ObjectStoreStartupCheck;
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.storage.EncryptingObjectStore;
-import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
-import io.github.pinpols.batch.common.storage.MeteredObjectStore;
-import io.github.pinpols.batch.common.storage.NamespacedObjectStore;
-import io.github.pinpols.batch.common.storage.ObjectStorageBackendGuard;
-import io.github.pinpols.batch.common.storage.S3ObjectStore;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.micrometer.core.instrument.MeterRegistry;
 import javax.sql.DataSource;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationRunner;
@@ -24,6 +13,21 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.health.ObjectStoreStartupCheck;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.EncryptingObjectStore;
+import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
+import io.github.pinpols.batch.common.storage.MeteredObjectStore;
+import io.github.pinpols.batch.common.storage.NamespacedObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectStorageBackendGuard;
+import io.github.pinpols.batch.common.storage.S3ObjectStore;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.micrometer.core.instrument.MeterRegistry;
+
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 

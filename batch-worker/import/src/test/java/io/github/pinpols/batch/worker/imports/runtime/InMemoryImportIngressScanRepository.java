@@ -2,9 +2,6 @@ package io.github.pinpols.batch.worker.imports.runtime;
 
 import static org.mockito.Mockito.mock;
 
-import io.github.pinpols.batch.common.storage.ObjectSummary;
-import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
-import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -13,7 +10,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.springframework.transaction.PlatformTransactionManager;
+
+import io.github.pinpols.batch.common.storage.ObjectSummary;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
+import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper;
 
 /** 扫描器单测用的进度替身；不作为数据库并发和事务证据。 */
 final class InMemoryImportIngressScanRepository extends ImportIngressScanRepository {

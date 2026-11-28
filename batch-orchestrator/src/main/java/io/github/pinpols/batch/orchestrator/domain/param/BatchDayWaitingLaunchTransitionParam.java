@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
 import java.util.Objects;
+
 import lombok.Builder;
 
 /** 一次等待启动状态转换，目标与来源仍由Mapper具名入口决定。 */

@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -7,12 +15,6 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import io.github.pinpols.batch.worker.processes.param.ProcessInvocationFenceRotateCurrentStagingGenerationParam;
 import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentStagingGenerationQuery;
-import java.util.UUID;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /** 在独立平台库事务中按当前调用身份切换或读取 PROCESS staging 代际。 */
 @Component

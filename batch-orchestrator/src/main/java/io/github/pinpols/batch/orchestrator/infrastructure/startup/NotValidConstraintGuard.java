@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.startup;
 
-import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 启动期校验：扫 {@code pg_constraint.convalidated=false} 的 CHECK / FK，全部 fail-fast。

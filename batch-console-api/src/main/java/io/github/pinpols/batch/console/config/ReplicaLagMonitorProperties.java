@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.config;
 
-import jakarta.validation.constraints.Min;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
+import jakarta.validation.constraints.Min;
 
 /**
  * Replica WAL replay lag 监控器调度配置（{@code batch.console.replica}）。

@@ -1,16 +1,19 @@
 package io.github.pinpols.batch.console.domain.observability.service;
 
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleUsageSummaryResponse;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper;
 import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import java.time.LocalDate;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 使用率查询应用服务；统一执行租户解析和查询窗口约束。 */
 @Service

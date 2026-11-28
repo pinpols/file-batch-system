@@ -3,6 +3,17 @@ package io.github.pinpols.batch.console.domain.ops.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintSummaryResponse;
@@ -11,15 +22,6 @@ import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.Reason
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.Status;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleWorkerFingerprintQueryService;
 import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import java.time.Instant;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatchers;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 /** SDK Phase 5 / SDK-P5-3(console Lane D):验证 ConsoleWorkerFingerprintController 两端点返回包装。 */
 @ExtendWith(MockitoExtension.class)

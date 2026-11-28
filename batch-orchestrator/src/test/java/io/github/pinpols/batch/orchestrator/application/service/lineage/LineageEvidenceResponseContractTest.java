@@ -2,15 +2,18 @@ package io.github.pinpols.batch.orchestrator.application.service.lineage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.FileRecord;
-import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.JobInstance;
-import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.ResultVersion;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.FileRecord;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.JobInstance;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.ResultVersion;
+
 import tools.jackson.databind.json.JsonMapper;
 
 @DisplayName("血缘固定投影保持 snake_case、空值省略与动态 metadata JSON 契约")

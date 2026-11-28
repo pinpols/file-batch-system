@@ -2,9 +2,10 @@ package io.github.pinpols.batch.worker.exports.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * ADR-046 文件束导出:导出束 partition 的绑定 = templateCode(=源表/查询导出模板)。dispatch 派发把 partition.template_code

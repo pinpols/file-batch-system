@@ -2,11 +2,13 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 
 @DisplayName("文件束任务仅携带本分区模板的冻结配置")
 class BundleFrozenFileTemplateBindingTest {

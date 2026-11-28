@@ -1,14 +1,5 @@
 package io.github.pinpols.batch.worker.imports.preprocess;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.EncodingUtils;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
-import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -37,11 +28,24 @@ import java.util.Map;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.EncodingUtils;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 
 /**
  * 有序二进制预处理管道（无状态工具类）：对原始文件字节按步骤顺序依次执行解压、解密、摘要校验和字符集转码。

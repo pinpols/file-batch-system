@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.imports.config;
 
-import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import java.util.List;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 
 @ConfigurationProperties(prefix = "batch.worker.import")
 @SuppressWarnings("ConfigurationProperties") // 与 WorkerImportPayloadProperties 共享前缀，子键互不重叠。

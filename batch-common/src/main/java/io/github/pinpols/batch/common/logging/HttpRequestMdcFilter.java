@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.common.logging;
 
+import java.io.IOException;
+import java.util.Map;
+
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.web.filter.OncePerRequestFilter;
+
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.utils.CorrelationIds;
 import io.github.pinpols.batch.common.utils.IdGenerator;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.util.Map;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.web.filter.OncePerRequestFilter;
 
 /** 从标准 HTTP 请求头填充 MDC，适用于基于 Servlet 的服务（orchestrator、trigger、worker HTTP）。 */
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)

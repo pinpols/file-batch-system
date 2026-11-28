@@ -13,22 +13,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
-import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
-import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
-import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
-import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.RowIssue;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
-import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserBatchOperationView;
-import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
@@ -41,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +40,25 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
+import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
+import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.RowIssue;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserBatchOperationView;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 @DisplayName("用户批量开通服务: 预览校验、并发版本控制与事务回滚后的快照恢复")
 class ConsoleUserBatchProvisioningServiceTest {

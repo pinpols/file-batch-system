@@ -8,24 +8,6 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper;
-import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
-import io.github.pinpols.batch.common.storage.ObjectListing;
-import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
-import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
-import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
-import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
-import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
-import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
-import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper;
-import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Lease;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,6 +26,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +43,26 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper;
+import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectListing;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
+import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
+import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
+import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
+import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper;
+import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Lease;
 
 @Testcontainers(disabledWithoutDocker = true)
 @DisplayName("导入扫描持久进度与围栏")

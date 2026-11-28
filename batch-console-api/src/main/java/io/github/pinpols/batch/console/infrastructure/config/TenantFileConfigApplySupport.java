@@ -1,6 +1,11 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
@@ -12,8 +17,6 @@ import io.github.pinpols.batch.console.domain.file.support.FixedWidthMappingVali
 import io.github.pinpols.batch.console.domain.file.support.ImportEncryptTypeValidation;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 租户初始化中的文件渠道与文件模板持久化协作者。 */
 @Component

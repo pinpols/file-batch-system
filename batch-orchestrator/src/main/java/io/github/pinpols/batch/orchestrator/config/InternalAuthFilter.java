@@ -1,5 +1,18 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import java.io.IOException;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
@@ -9,20 +22,11 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyCandidate;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * 内部接口共享密钥校验过滤器。

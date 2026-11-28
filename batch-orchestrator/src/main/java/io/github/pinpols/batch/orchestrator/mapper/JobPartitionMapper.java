@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -20,9 +25,6 @@ import io.github.pinpols.batch.orchestrator.domain.query.WaitingPartitionScanCur
 import io.github.pinpols.batch.orchestrator.domain.query.WaitingPartitionScanQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
 import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
-import java.time.Instant;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface JobPartitionMapper {
 

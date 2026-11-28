@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.sdk.idempotent;
 
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.Map;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /**
  * A.3 — 幂等记录快照:命中时框架据此重建一个「成功」的 {@link SdkTaskResult} 返回(不重跑业务)。

@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
-import org.springframework.stereotype.Component;
 
 /** LOCAL 渠道分发适配器：将分发信封写入 {@code target_endpoint} 指定目录（或系统临时 outbox 目录）。 */
 @Component

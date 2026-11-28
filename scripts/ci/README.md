@@ -44,7 +44,7 @@
 | 配置与部署 | 环境默认值、Helm、Compose、功能开关或生产覆盖彼此漂移；生产配置启用不安全值 | 只在一个场景使用且有明确 owner 的测试参数；不属于平台配置源的临时客户端端口 | `check-config-defaults-sync.py`、`check-env-variable-governance.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py` |
 | 数据库 / SQL | 业务表缺租户隔离、迁移有破坏风险、位置式 `INSERT ... SELECT *`、SQL 绕过独立文件与变量传值 | 由权威状态/配置来源驱动的 SQL；经过登记并有专项测试的精确例外 | `check-biz-table-tenant-rls.py`、`check-migration-safety.sh`、`check-no-positional-insert-select-star.py`、`check-sql-config-boundaries.sh` |
 | API 与 SDK | OpenAPI 出现未登记破坏性变更、五语言共享契约不一致、运行时版本超出声明范围 | 只改变实现且不改变公开契约的内部重构；允许的兼容新增字段；ADR-048 切换及已授权请求限制仅登记精确差异（含 Workflow 节点名称和边条件长度，详见 [CI 手册](../../docs/runbook/ci.md)），其他 breaking 仍失败 | `check-openapi-breaking.sh`、`check-console-openapi-paths.py`、SDK parity workflow |
-| Java 规约与架构 | 新增空检查、字段注入/日志违规、固定协议值漂移、结构化多行字符串退化、依赖越界 | 不在规则覆盖范围内的测试 fixture/说明文本；已精确登记且有理由的例外 | `check-empty-checks.py`、`check-java-contract-governance.py`、`check-java-lombok-injection.py`、`check-dependency-boundaries.py` |
+| Java 规约与架构 | 新增空检查、冗余 else/业务层通用异常捕获、字段注入/日志违规、固定协议值漂移、结构化多行字符串退化、依赖越界 | 不在规则覆盖范围内的测试 fixture/说明文本；边界类按脚本白名单豁免；已精确登记且有理由的例外 | `check-empty-checks.py`、`check-java-control-flow.py`、`check-java-contract-governance.py`、`check-java-lombok-injection.py`、`check-dependency-boundaries.py` |
 | 测试完整性 | 测试被静默禁用、E2E 分片漏场景、差异覆盖率不足、测试展示名称不符合约定；模块测试 profile 重复维护共享默认项；Sim 配置包 Excel 表头或内容约束与当前导入 schema 漂移 | 按契约定义的负向用例、明确标记且登记的 flaky 隔离项、Java 测试为特定场景显式覆盖配置 | `check-no-silent-disabled-tests.sh`、`check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-diff-coverage.py`、`check-test-config-sources.py`、`scripts/sim/fix-fixture-xlsx.py --check` |
 | 安全 / 供应链 / 许可 | 未登记的高危漏洞豁免、例外到期、禁止许可证、SBOM 与 POM 不一致、Action 使用可变引用 | 扫描器确认的误报可按规则与路径精确登记；许可结论明确且符合项目策略的依赖 | `check-trivy-ignore-expiry.py`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-github-action-pinning.py` |
 | 可观测性 | 告警定义与服务指标契约漂移、日志生命周期破坏敏感信息保护要求 | 业务日志内容变化但不改变受守护字段、生命周期或敏感信息规则 | `check-observability-contract.py`、`check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh` |
@@ -274,6 +274,17 @@ python3 scripts/ci/check-comment-language.py --paths scripts load-tests/scripts 
 ```
 
 当前作为本地增量预检接入 `scripts/local/pre-commit-checks.sh`，仅检查暂存 diff 新增的说明性注释，不扫描存量文件。PR/Full CI 暂不阻断。Flyway 已提交迁移的注释修改会改变 checksum；本项目只支持全新空库部署，不支持已应用旧迁移的数据库原位升级。结构校验仅在有效 SQL 未变化时放行注释和 `COMMENT ON` 元数据修改；对已提交迁移的 DDL/DML 变化仍会阻断，修复应新增迁移版本。
+
+
+## `check-java-control-flow.py`
+
+检查本次 diff 新增的生产 Java 控制流写法：then 块已经以 `return` / `throw` / `continue` / `break` 结束时不再写 `else`；`application` / `domain` 业务层不得新增 `catch (Exception)` / `catch (Throwable)`。异常处理器、调度器、消费者、Relay、启动审计等边界类按脚本白名单豁免；基础设施层不在规则范围。只检查新增行，历史代码作为基线不动。
+
+```bash
+python3 scripts/ci/check-java-control-flow.py
+python3 scripts/ci/check-java-control-flow.py --base origin/main
+python3 -m unittest scripts.ci.tests.test_check_java_control_flow
+```
 
 ## `check-empty-checks.py`
 
@@ -958,6 +969,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [check-e2e-run-completeness.sh](check-e2e-run-completeness.sh) | 守护:e2e shard 实际跑数 == 清单声明数(运行侧闭环)。 |
 | [check-e2e-shard-coverage.sh](check-e2e-shard-coverage.sh) | E2E shard 覆盖。 |
 | [check-empty-checks.py](check-empty-checks.py) | 集中式空值检查。 |
+| [check-java-control-flow.py](check-java-control-flow.py) | 控制流可读性增量检查。 |
 | [check-env-file-shell-safety.py](check-env-file-shell-safety.py) | 环境文件 Shell 安全。 |
 | [check-env-variable-governance.py](check-env-variable-governance.py) | 环境变量治理。 |
 | [check-feature-switch-registry.py](check-feature-switch-registry.py) | 功能开关注册表。 |

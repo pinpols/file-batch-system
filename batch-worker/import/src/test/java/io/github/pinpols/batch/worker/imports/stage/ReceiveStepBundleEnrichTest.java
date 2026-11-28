@@ -2,21 +2,24 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
-import io.github.pinpols.batch.worker.core.support.FrozenFileTemplateResolver;
-import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
-import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.support.FrozenFileTemplateResolver;
+import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 
 /**
  * ADR-046 文件束:验证 {@link ReceiveStep#enrichFromFileRecord} 把既有 file_record 的存储坐标回填到 payload

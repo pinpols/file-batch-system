@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
 import java.util.List;
+
 import lombok.Builder;
 
 /** Same-job comparison matrix across tenants. */

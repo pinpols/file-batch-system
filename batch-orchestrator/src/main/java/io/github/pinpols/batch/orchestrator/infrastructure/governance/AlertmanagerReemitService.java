@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.governance;
 
-import io.github.pinpols.batch.common.enums.AlertStatus;
-import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
-import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.enums.AlertStatus;
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
+import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 
 /** 按租户读取通知意图并推进公平轮询水位；提交后才异步发送，不以尝试代替成功回执。 */
 @Service

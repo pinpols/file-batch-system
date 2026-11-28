@@ -1,14 +1,15 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableAsync;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
 import io.github.pinpols.batch.orchestrator.security.RequestSignatureFilter;
 import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier;
 import io.github.pinpols.batch.orchestrator.security.RequestSigningProperties;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.scheduling.annotation.EnableAsync;
 
 /** 注册 {@link InternalAuthFilter} 到 {@code /internal/**} URL 模式。 */
 @Configuration(proxyBeanMethods = false)

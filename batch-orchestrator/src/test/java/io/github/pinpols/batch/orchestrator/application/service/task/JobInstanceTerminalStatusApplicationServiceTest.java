@@ -11,18 +11,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
-import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetrics;
-import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +25,16 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
+import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetrics;
+import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 
 /**
  * 守护 job_instance 终态 CAS + 子表收敛的事务原子语义:

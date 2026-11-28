@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
+
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
 import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.UUID;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface ConsoleAiConversationMapper {

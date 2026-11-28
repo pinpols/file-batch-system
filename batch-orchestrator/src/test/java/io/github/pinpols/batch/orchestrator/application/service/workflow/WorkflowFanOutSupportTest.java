@@ -2,13 +2,15 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("流程扇出支持: 扇出规格解析, 分区展开与目标引用绑定口径")
 class WorkflowFanOutSupportTest {

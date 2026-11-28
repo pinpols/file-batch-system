@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.application.contract.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 
 /**

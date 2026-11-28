@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import java.util.Map;
+
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 
 /** Dispatch 出站 sidecar manifest 的目标引用和自身完整性信息。 */
 public record DispatchManifestRef(String ref, String checksum, long sizeBytes) {

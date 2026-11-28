@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.domain.governance.application;
 
-import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 
 /** 治理参数用例：聚合默认值、应用命名空间策略并委托参数持久化服务。 */
 @Service

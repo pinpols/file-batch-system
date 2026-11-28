@@ -2,9 +2,9 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.application.readiness.TriggerInternalProperties;
 import java.io.IOException;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -12,6 +12,8 @@ import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
+
+import io.github.pinpols.batch.orchestrator.application.readiness.TriggerInternalProperties;
 
 /** 从实际应用 YAML 绑定恢复地址，覆盖统一地址和本地端口覆盖值。 */
 @DisplayName("readiness 恢复地址与统一 Trigger 配置对齐")

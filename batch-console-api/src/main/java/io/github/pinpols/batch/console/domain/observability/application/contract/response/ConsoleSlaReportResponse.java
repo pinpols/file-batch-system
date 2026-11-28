@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaJobReportView;
-import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaReportView;
 import java.math.BigDecimal;
 import java.util.List;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaJobReportView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaReportView;
 
 /**
  * dashboard sla-report 响应：按 job 维度的 SLA 报表。

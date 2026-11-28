@@ -2,8 +2,10 @@ package io.github.pinpols.batch.worker.core.config;
 
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Worker → Orchestrator 任务执行（{@code claim} / {@code report} / {@code renew}）的 HTTP 客户端配置。

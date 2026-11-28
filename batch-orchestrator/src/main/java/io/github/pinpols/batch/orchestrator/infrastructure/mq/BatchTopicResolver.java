@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
+import java.util.Locale;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.config.MqRoutingProperties;
-import java.util.Locale;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * P2-5: 派发 topic 路由器。在 {@link BatchMqTopicsProperties#resolveDispatchTopic(String)} 决定的 基 topic 上，按

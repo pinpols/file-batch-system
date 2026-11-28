@@ -2,13 +2,15 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import java.lang.reflect.Method;
 import java.time.Instant;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 
 @DisplayName("探测事务执行器的事务传播行为,核查取到期任务与单节点探测都要求独立新事务")
 class SensorProbeTransactionExecutorTest {

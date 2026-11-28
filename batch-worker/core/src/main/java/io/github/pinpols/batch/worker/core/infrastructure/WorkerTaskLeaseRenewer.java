@@ -1,16 +1,5 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
-import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
-import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
-import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
-import jakarta.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -21,10 +10,25 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
+import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
+import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+
+import jakarta.annotation.PostConstruct;
 
 /**
  * 定时为所有 in-flight 任务续租：从 {@link ActiveTaskLeaseRegistry#snapshot} 取出当前活跃租约列表，按 ADR-016 打包为单次（或可配置

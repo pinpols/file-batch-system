@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.governance.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import io.github.pinpols.batch.console.domain.governance.param.BusinessTenantPlacementUpsertParam;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * {@code batch.business_tenant_placement} 管理 mapper(console 写路径)。

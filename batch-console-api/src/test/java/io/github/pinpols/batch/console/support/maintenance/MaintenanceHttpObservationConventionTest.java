@@ -2,15 +2,16 @@ package io.github.pinpols.batch.console.support.maintenance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.micrometer.core.instrument.observation.DefaultMeterObservationHandler;
-import io.micrometer.observation.ObservationRegistry;
-import io.micrometer.prometheusmetrics.PrometheusConfig;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.filter.ServerHttpObservationFilter;
+
+import io.micrometer.core.instrument.observation.DefaultMeterObservationHandler;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
 @DisplayName("维护 HTTP 指标：Prometheus 标签结构与真实错误保留")
 class MaintenanceHttpObservationConventionTest {

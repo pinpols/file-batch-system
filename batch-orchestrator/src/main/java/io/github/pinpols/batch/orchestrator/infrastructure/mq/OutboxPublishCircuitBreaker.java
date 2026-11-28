@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.springframework.dao.DataAccessException;
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -9,12 +17,8 @@ import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRed
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
-import org.springframework.stereotype.Component;
 
 /**
  * Outbox 投递的集群级熔断器：连续投递失败累积到阈值后打开熔断，强制 {@link OutboxPollScheduler} 暂停推进， 避免失败重试造成的雪崩式 DB 写入 / Kafka

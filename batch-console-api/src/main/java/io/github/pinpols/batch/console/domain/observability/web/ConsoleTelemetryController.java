@@ -1,5 +1,17 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -9,16 +21,8 @@ import io.github.pinpols.batch.console.domain.observability.application.ConsoleT
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest.Event;
 import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+
 import jakarta.validation.Valid;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 /** 前端遥测收集：接收前端埋点，通过 slf4j + MDC 输出结构化日志。 */
 @RestController

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.reportoutbox;
 
 import java.util.Optional;
+
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 抢占一行 outbox（NEW→PUBLISHING）：PostgreSQL 用 {@code SKIP LOCKED}，须在短事务内完成。 */

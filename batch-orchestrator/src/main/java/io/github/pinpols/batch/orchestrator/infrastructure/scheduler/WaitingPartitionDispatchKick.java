@@ -1,18 +1,21 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
-import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
+import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /** 在 task 终态提交后合并触发 WAITING 分区重派，缩短容量释放到下一任务派发的空窗。 */
 @Slf4j

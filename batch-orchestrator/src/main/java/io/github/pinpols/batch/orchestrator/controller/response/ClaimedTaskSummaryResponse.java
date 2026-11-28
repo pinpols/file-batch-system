@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.controller.response;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import java.time.Instant;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 
 /** Worker 运维查询的任务安全摘要，不包含任务载荷、结果正文或错误消息。 */
 public record ClaimedTaskSummaryResponse(

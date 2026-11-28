@@ -3,9 +3,10 @@ package io.github.pinpols.batch.console.config;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.config.S3StorageProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.config.S3StorageProperties;
 
 @DisplayName("AI 附件存储守卫: 附件桶与批次文件桶必须隔离,空值直接拒绝")
 class ConsoleAiAttachmentStorageGuardTest {

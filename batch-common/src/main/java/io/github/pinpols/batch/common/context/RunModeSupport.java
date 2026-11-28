@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.common.context;
 
-import io.github.pinpols.batch.common.enums.RunMode;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.enums.RunMode;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 统一运行模式意图，使 launch/retry/recover/compensate 流程都写入相同的规范键到 payload 和执行上下文。 */
 public final class RunModeSupport {

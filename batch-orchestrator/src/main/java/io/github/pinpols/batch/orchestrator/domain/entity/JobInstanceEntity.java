@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.common.persistence.Stateful;
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import io.github.pinpols.batch.common.persistence.Stateful;
 
 /**
  * docs/agent-baseline.md §Java 红线:持久化类不加 {@code @Builder}。本类是 MyBatis ResultMap target, 走 setter 注入 + canonical

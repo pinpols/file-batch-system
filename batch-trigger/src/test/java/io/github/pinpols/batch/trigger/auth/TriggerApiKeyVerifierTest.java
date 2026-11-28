@@ -4,11 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.security.ApiKeyHasher;
-import io.github.pinpols.batch.trigger.mapper.auth.TriggerApiKeyAuthMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.security.ApiKeyHasher;
+import io.github.pinpols.batch.trigger.mapper.auth.TriggerApiKeyAuthMapper;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("外部事件 API Key 的租户与显式权限校验")

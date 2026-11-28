@@ -2,8 +2,6 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import java.io.InputStream;
 import java.util.HashSet;
 import java.util.List;
@@ -11,10 +9,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 
 @DisplayName("死信自动重放扫描的暂停状态分类")
 class DeadLetterTaskMapperXmlTest {

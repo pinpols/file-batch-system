@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.StaleCompensationFailureParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
-import org.apache.ibatis.annotations.Param;
 
 public interface CompensationCommandMapper {
 

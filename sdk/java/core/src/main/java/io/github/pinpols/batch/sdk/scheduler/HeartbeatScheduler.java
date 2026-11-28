@@ -1,12 +1,5 @@
 package io.github.pinpols.batch.sdk.scheduler;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.client.WorkerIdentity;
-import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
-import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
-import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -18,7 +11,16 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.client.WorkerIdentity;
+import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 
 /**
  * 心跳上报 — 按 {@link BatchPlatformClientConfig#getHeartbeatInterval()} 周期 POST {@code

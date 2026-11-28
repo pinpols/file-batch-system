@@ -2,12 +2,6 @@ package io.github.pinpols.batch.sdk.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import io.github.pinpols.batch.sdk.wire.RegisterRequest;
-import io.github.pinpols.batch.sdk.wire.RenewRequest;
-import io.github.pinpols.batch.sdk.wire.ReportRequest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,9 +11,18 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import io.github.pinpols.batch.sdk.wire.RegisterRequest;
+import io.github.pinpols.batch.sdk.wire.RenewRequest;
+import io.github.pinpols.batch.sdk.wire.ReportRequest;
 
 /**
  * Lane P(drift guard)— Java 侧的**请求侧**契约断言。

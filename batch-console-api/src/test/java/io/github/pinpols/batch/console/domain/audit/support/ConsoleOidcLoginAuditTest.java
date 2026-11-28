@@ -6,14 +6,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+
+import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 
 @DisplayName("OIDC 登录审计")
 class ConsoleOidcLoginAuditTest {

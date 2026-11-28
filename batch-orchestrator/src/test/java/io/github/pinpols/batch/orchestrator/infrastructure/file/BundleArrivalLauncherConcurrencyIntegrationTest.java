@@ -2,14 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
-import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -22,6 +14,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -29,6 +22,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
+
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.support.web;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 保持写请求的 Redis 身份和持久完成记录身份使用同一计算方式。 */
 public final class ConsoleIdempotencyRequestIdentity {

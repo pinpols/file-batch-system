@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.support.maintenance;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 暴露跨副本维护状态，供 Prometheus 判断维护公告是否已收敛。 */
 @Component

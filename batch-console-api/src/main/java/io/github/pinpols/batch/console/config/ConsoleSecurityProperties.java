@@ -1,17 +1,21 @@
 package io.github.pinpols.batch.console.config;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.EnvironmentAware;
+import org.springframework.core.env.Environment;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+
 import jakarta.annotation.PostConstruct;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import lombok.Data;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.EnvironmentAware;
-import org.springframework.core.env.Environment;
 
 /**
  * Console-API 安全配置（{@code batch.console.security}）。

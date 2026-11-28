@@ -2,10 +2,11 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
+
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 
 @DisplayName("租户接口访问角色约束")
 class ConsoleTenantControllerAuthorizationTest {

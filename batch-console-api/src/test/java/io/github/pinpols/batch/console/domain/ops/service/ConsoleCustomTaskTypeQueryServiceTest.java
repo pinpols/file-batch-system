@@ -4,17 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
-import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("自定义任务类型查询:租户解析前置, 列表与计数返回查询结果, 详情缺失时抛业务异常")

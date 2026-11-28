@@ -2,12 +2,15 @@ package io.github.pinpols.batch.common.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.code_intelligence.jazzer.junit.FuzzTest;
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.page.CursorCodec;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
+
 import org.junit.jupiter.api.Tag;
+
+import com.code_intelligence.jazzer.junit.FuzzTest;
+
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.page.CursorCodec;
 
 /** 对用户可控游标和日志字段执行覆盖引导 fuzz，守住解析容错与日志单行边界。 */
 @Tag("fuzz")

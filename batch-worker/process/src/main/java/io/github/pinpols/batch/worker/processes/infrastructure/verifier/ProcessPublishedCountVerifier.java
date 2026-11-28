@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.worker.processes.infrastructure.verifier;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
 import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-import org.springframework.stereotype.Component;
 
 /**
  * ADR-030 示例 verifier：有输入记录的 PROCESS 任务必须 publish 出至少一条记录。

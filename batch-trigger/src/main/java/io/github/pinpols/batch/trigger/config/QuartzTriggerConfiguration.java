@@ -1,13 +1,14 @@
 package io.github.pinpols.batch.trigger.config;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
-import io.github.pinpols.batch.common.constants.CommonConstants;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.client.RestClient;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({

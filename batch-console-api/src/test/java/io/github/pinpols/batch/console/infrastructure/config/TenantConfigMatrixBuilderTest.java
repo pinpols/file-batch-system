@@ -2,15 +2,17 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigMatrixRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigMatrixResponse;
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("租户配置矩阵构建器:基线与差异字段")
 class TenantConfigMatrixBuilderTest {

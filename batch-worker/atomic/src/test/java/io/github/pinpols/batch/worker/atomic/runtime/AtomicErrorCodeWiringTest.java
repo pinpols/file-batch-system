@@ -3,6 +3,16 @@ package io.github.pinpols.batch.worker.atomic.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import java.nio.file.Path;
+import java.util.Map;
+
+import javax.sql.DataSource;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.BeanFactory;
+
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
@@ -13,13 +23,6 @@ import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.sql.SqlTaskExecutor;
 import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcTaskExecutor;
-import java.nio.file.Path;
-import java.util.Map;
-import javax.sql.DataSource;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.beans.factory.BeanFactory;
 
 /**
  * K3:验证 4 个 executor 失败路径都会在 {@link TaskResult#output()} 填 {@code error_code}。 各 executor

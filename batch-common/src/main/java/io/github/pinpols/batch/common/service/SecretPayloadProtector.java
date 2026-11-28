@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.common.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
 import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 
 /** 使用平台 KMS 密钥环保护结构化密钥载荷，供配置写入和历史数据迁移复用。 */
 @RequiredArgsConstructor

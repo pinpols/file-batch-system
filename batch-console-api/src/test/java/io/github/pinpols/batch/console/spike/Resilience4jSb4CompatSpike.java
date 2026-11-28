@@ -2,15 +2,6 @@ package io.github.pinpols.batch.console.spike;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import io.github.resilience4j.retry.RetryRegistry;
-import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
-import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBreakerMetricsAutoConfiguration;
-import io.github.resilience4j.springboot.retry.autoconfigure.RetryAutoConfiguration;
-import io.github.resilience4j.springboot.retry.autoconfigure.RetryMetricsAutoConfiguration;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +11,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.RetryRegistry;
+import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
+import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBreakerMetricsAutoConfiguration;
+import io.github.resilience4j.springboot.retry.autoconfigure.RetryAutoConfiguration;
+import io.github.resilience4j.springboot.retry.autoconfigure.RetryMetricsAutoConfiguration;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
  * SPIKE:Resilience4j 2.3.0(targets Spring Boot 3 / Spring Framework 6)在 Spring Boot 4.x (Spring

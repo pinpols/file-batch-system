@@ -2,12 +2,14 @@ package io.github.pinpols.batch.trigger.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
+
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 
 @DisplayName("Quartz trigger 配置:outbox relay 调度器的关停阶段与 outbox 参数的校验边界")
 class QuartzTriggerConfigurationTest {

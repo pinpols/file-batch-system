@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -11,6 +8,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.utils.JsonUtils;
 
 /**
  * 配置包 Excel 的「展示性内容」外置加载器：把 EXAMPLE_* 示例片段与 3 张只读说明 sheet（依赖说明 / 五类Worker示例 / 文件束示例）的表头与数据行 从

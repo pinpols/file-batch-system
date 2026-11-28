@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.common.logging;
 
-import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)

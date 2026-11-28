@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Builder;
 
 /** 持久化的跨日历依赖等待，业务日期和日历快照在首次等待时固定。 */

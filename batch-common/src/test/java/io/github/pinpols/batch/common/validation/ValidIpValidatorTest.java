@@ -2,10 +2,12 @@ package io.github.pinpols.batch.common.validation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import jakarta.validation.Payload;
 import java.lang.annotation.Annotation;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import jakarta.validation.Payload;
 
 @DisplayName("ValidIpValidator: IPv4 与 IPv6 地址校验及仅 IPv4 模式")
 class ValidIpValidatorTest {

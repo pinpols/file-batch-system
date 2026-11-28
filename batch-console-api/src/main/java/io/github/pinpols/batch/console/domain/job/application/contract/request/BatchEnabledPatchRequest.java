@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
+import java.util.List;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.util.List;
-import lombok.Data;
 
 /** 批量启用/禁用状态局部更新请求。 */
 @Data

@@ -2,21 +2,12 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
-import io.github.pinpols.batch.console.domain.file.mapper.FileArrivalGroupMapper;
-import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
-import io.github.pinpols.batch.console.domain.file.query.FileArrivalGroupQuery;
-import io.github.pinpols.batch.console.domain.file.query.FileRecordQuery;
-import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
-import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
-import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -32,6 +23,17 @@ import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.FileArrivalGroupMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
+import io.github.pinpols.batch.console.domain.file.query.FileArrivalGroupQuery;
+import io.github.pinpols.batch.console.domain.file.query.FileRecordQuery;
+import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
+import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("Console 查询投影：真实 PostgreSQL 映射和租户范围")
 class ConsoleQueryProjectionMapperIntegrationTest {

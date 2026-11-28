@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.common.arch;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * batch-common 自身的规约守护。其它模块见各自 {@code *ConventionsArchTest},均复用 {@link CodingConventionsArchRules}

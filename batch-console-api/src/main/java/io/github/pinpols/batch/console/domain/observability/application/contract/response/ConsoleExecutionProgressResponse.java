@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.observability.view.dashboard.ExecutionProgressView;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.ExecutionProgressView;
 
 /**
  * dashboard execution-progress 单行响应（列表元素）。

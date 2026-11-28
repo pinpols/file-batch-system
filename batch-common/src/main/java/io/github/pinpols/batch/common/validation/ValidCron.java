@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.common.validation;
 
-import jakarta.validation.Constraint;
-import jakarta.validation.Payload;
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+
+import jakarta.validation.Constraint;
+import jakarta.validation.Payload;
 
 /**
  * Cron 表达式校验。支持 Spring {@code CronExpression} 的 6 字段格式(秒 分 时 日 月 周)+ 兼容 5 字段(分 时 日 月 周)自动补 {@code

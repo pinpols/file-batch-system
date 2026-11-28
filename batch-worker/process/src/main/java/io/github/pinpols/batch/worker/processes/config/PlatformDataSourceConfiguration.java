@@ -1,10 +1,7 @@
 package io.github.pinpols.batch.worker.processes.config;
 
-import com.zaxxer.hikari.HikariConfig;
-import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 import javax.sql.DataSource;
-import lombok.RequiredArgsConstructor;
+
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,6 +13,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+
+import com.zaxxer.hikari.HikariConfig;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 
 /**
  * 平台数据源配置，提供 PROCESS Worker 所需的平台库 MyBatis SqlSession。装配逻辑委托 {@link WorkerDataSourceSupport}（三个

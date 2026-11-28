@@ -1,17 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleOidcIdentityRequest;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcIdentityResponse;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcProviderResponse;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleOidcIdentityService;
-import io.github.pinpols.batch.console.shared.audit.AuditAction;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import jakarta.validation.Valid;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -23,6 +13,20 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleOidcIdentityRequest;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcIdentityResponse;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcProviderResponse;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleOidcIdentityService;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+
+import jakarta.validation.Valid;
 
 /** 暴露登录页所需的 OIDC 入口，并提供全局管理员的显式身份绑定维护。 */
 @RestController

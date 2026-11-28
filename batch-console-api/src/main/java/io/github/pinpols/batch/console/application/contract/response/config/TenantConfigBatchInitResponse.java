@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.application.contract.response.config;
 
 import java.util.ArrayList;
 import java.util.List;
+
 import lombok.Builder;
 
 /** 租户配置批量初始化响应。 */

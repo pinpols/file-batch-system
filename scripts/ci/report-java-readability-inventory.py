@@ -41,6 +41,13 @@ WIDE_PARAMETER_SUPPRESSION = re.compile(
     r'@SuppressWarnings\s*\(\s*"PMD\.ExcessiveParameterList"\s*\)'
 )
 LARGE_FILE_THRESHOLD = 700
+TRY = re.compile(r"\btry\b")
+CATCH = re.compile(r"\bcatch\s*\(")
+GENERIC_CATCH = re.compile(
+    r"\bcatch\s*\(\s*(?:final\s+)?(?:java\.lang\.)?(?:Exception|Throwable)\b"
+)
+ELSE = re.compile(r"\belse\b")
+ELSE_IF = re.compile(r"\belse\s+if\b")
 
 
 @dataclass(frozen=True)
@@ -53,6 +60,11 @@ class SourceFact:
     public_map_contracts: tuple[str, ...]
     wide_parameter_suppression_count: int
     self_types: tuple[str, ...]
+    try_count: int
+    catch_count: int
+    generic_catch_count: int
+    else_count: int
+    else_if_count: int
 
     @property
     def public_map_contract_count(self) -> int:
@@ -104,6 +116,11 @@ def inspect(path: Path) -> SourceFact:
         public_map_contracts=public_map_contracts,
         wide_parameter_suppression_count=len(WIDE_PARAMETER_SUPPRESSION.findall(source)),
         self_types=tuple(match.group("type").strip() for match in SELF_INJECTION.finditer(source)),
+        try_count=len(TRY.findall(source)),
+        catch_count=len(CATCH.findall(source)),
+        generic_catch_count=len(GENERIC_CATCH.findall(source)),
+        else_count=len(ELSE.findall(source)),
+        else_if_count=len(ELSE_IF.findall(source)),
     )
 
 
@@ -139,6 +156,16 @@ def markdown(facts: list[SourceFact]) -> str:
         f"| `@Configuration` 类 | {sum(fact.configuration_count for fact in config_files)} |",
         f"| 大于等于 {LARGE_FILE_THRESHOLD} 行的源文件 | {len(large_files)} |",
         f"| `PMD.ExcessiveParameterList` 显式例外 | {sum(fact.wide_parameter_suppression_count for fact in wide_parameter_files)} |",
+        "",
+        "## 控制流（近似计数，仅作趋势）",
+        "",
+        "| 指标 | 数量 |",
+        "|---|---:|",
+        f"| `try` 语句 | {sum(fact.try_count for fact in facts)} |",
+        f"| `catch` 子句 | {sum(fact.catch_count for fact in facts)} |",
+        f"| `catch (Exception/Throwable)` | {sum(fact.generic_catch_count for fact in facts)} |",
+        f"| `else` 分支 | {sum(fact.else_count for fact in facts)} |",
+        f"| `else if` 分支 | {sum(fact.else_if_count for fact in facts)} |",
         "",
         "## 模块源文件",
         "",

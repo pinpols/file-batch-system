@@ -3,11 +3,12 @@ package io.github.pinpols.batch.common.redis;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.config.BatchKafkaNamespaceAutoConfiguration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mock.env.MockEnvironment;
+
+import io.github.pinpols.batch.common.config.BatchKafkaNamespaceAutoConfiguration;
 
 @DisplayName("Redis 键、模式与通道的部署隔离")
 class BatchRedisNamespaceTest {

@@ -1,13 +1,5 @@
 package io.github.pinpols.batch.console.shared.query;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.page.CursorCodec;
-import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -24,7 +16,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.ToLongFunction;
+
 import javax.annotation.Nullable;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.page.CursorCodec;
+import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 控制台查询子服务的共享工具方法。 */
 public final class ConsoleQuerySupport {

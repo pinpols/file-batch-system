@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.request;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * Alertmanager webhook payload 中的单条告警(typed,见 {@link AlertmanagerWebhookPayload})。

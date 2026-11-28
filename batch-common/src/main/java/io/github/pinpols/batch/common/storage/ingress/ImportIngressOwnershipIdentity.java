@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.common.storage.ingress;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
-import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -15,9 +10,18 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
+import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
 
 /** 入口归属与扫描协调使用相同的物理存储及前缀身份。 */
 @Component

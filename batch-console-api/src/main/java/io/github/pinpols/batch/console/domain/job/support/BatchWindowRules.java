@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.support;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import java.time.DateTimeException;
 import java.time.LocalTime;
 import java.time.ZoneId;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 
 /** 窗口写入的共同约束；调用方先应用默认值或合并已有值，此处不改写配置。 */
 public final class BatchWindowRules {

@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.common.observability;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import javax.annotation.Nullable;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import io.opentelemetry.context.propagation.TextMapGetter;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import javax.annotation.Nullable;
 
 /** 在持久化异步边界捕获和恢复最小 W3C 链路上下文。 */
 public final class OtelTracePropagation {

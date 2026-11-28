@@ -5,9 +5,6 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
-import jakarta.mail.internet.MimeMessage;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -23,9 +20,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
+
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
+
+import jakarta.mail.internet.MimeMessage;
 
 @DisplayName("邮件分发适配器:连接、读取与写入三类超时属性按渠道配置显式落到邮件会话")
 class SmtpEmailDispatchChannelAdapterTest {

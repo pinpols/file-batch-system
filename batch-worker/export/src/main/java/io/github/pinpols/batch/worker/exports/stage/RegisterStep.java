@@ -1,6 +1,15 @@
 package io.github.pinpols.batch.worker.exports.stage;
 
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.FileAuditOperationType;
 import io.github.pinpols.batch.common.enums.FileChecksumType;
@@ -31,12 +40,6 @@ import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
 import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDate;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-import org.springframework.stereotype.Component;
 
 /** 导出注册阶段：在平台创建 file_record，并将文件与 pipeline 实例绑定，触发插件 onRegistered 回调。 */
 @Component

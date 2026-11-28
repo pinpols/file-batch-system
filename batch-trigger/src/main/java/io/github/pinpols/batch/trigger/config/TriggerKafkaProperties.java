@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.trigger.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Trigger Kafka producer 客户端参数。

@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CloseRunningPipelineStepsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.JobInstanceUpdateStatusParam;
@@ -11,11 +18,6 @@ import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
 import io.github.pinpols.batch.orchestrator.domain.view.FairShareGroupActiveCountView;
 import io.github.pinpols.batch.orchestrator.domain.view.QueueActiveCountView;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.Collection;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface JobInstanceMapper {
 

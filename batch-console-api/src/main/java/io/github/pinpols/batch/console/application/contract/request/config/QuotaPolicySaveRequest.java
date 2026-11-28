@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 
 @Data
 public class QuotaPolicySaveRequest {

@@ -2,17 +2,20 @@ package io.github.pinpols.batch.common.i18n;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import java.text.MessageFormat;
 import java.util.Locale;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.MessageSource;
 import org.springframework.context.support.AbstractMessageSource;
 import org.springframework.context.support.ResourceBundleMessageSource;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 
 /** {@link LocalizedErrorRenderer} 读路径 + {@link BizExceptionUtils} 写路径互转测试。 */
 @DisplayName("本地化错误渲染与异常转换:渲染, 兜底, 截断与读写往返")

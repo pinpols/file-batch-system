@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.SchedulingPriorityBand;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PriorityScheduler;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
-import org.springframework.stereotype.Component;
 
 /**
  * 优先级归一化与分档：

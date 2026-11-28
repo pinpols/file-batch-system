@@ -2,10 +2,11 @@ package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 
 @DisplayName("作业定义更新的优先级约束")
 class JobDefinitionUpdateRequestValidationTest {

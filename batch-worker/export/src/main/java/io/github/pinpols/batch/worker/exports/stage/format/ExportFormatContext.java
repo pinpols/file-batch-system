@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
+import java.nio.charset.Charset;
+import java.nio.file.Path;
+import java.util.Map;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
-import java.nio.charset.Charset;
-import java.nio.file.Path;
-import java.util.Map;
-import lombok.Builder;
 
 /**
  * 不可变参数容器，由 {@link io.github.pinpols.batch.worker.exports.stage.GenerateStep} 传递给各 {@link

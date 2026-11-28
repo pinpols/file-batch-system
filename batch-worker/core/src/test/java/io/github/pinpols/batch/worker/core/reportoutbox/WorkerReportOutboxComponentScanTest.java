@@ -3,9 +3,8 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import io.github.pinpols.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
-import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
 import java.nio.file.Path;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,6 +15,9 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import io.github.pinpols.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
+import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
 
 @DisplayName("回报发件箱组件扫描遵循启用开关")
 class WorkerReportOutboxComponentScanTest {

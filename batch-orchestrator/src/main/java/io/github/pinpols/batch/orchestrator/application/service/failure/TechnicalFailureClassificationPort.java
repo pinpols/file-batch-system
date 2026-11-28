@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.service.failure;
 
-import io.github.pinpols.batch.common.enums.FailureClass;
 import java.util.Optional;
+
+import io.github.pinpols.batch.common.enums.FailureClass;
 
 /**
  * 技术异常分类端口。

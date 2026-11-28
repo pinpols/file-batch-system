@@ -3,12 +3,14 @@ package io.github.pinpols.batch.common.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 
 @DisplayName("Worker 心跳 DTO 执行器能力快照边界")
 class WorkerHeartbeatDtoTest {

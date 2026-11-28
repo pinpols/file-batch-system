@@ -7,6 +7,17 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import org.apache.ibatis.reflection.MetaObject;
+import org.apache.ibatis.reflection.SystemMetaObject;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper.BindTransitionParam;
@@ -25,15 +36,6 @@ import io.github.pinpols.batch.console.domain.notification.param.JobPushDelivery
 import io.github.pinpols.batch.console.domain.notification.view.JobPushDelivery;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
 import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalTransitionParam;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-import org.apache.ibatis.reflection.MetaObject;
-import org.apache.ibatis.reflection.SystemMetaObject;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 
 @DisplayName("Mapper 状态默认方法:固定状态参数与调用方参数保持一致")
 class MapperStatusDefaultsTest {

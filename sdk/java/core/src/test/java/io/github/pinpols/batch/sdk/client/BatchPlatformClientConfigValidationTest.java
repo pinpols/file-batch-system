@@ -3,12 +3,14 @@ package io.github.pinpols.batch.sdk.client;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import java.time.Duration;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /** Lane I:启动期 cross-field 时序校验测试 —— 覆盖 heartbeat / lease / httpTimeout 4 条规则正反 case。 */
 @DisplayName("BatchPlatformClientConfig 时序校验 — 心跳、租约与超时四组规则的正反用例")

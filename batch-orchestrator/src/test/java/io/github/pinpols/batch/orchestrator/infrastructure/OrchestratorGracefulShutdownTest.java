@@ -9,13 +9,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
+
+import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 
 @DisplayName("协调器优雅停机状态机:验证初始未排空 + 排空启动与取消 + 重复启动只保留首次原因 + 状态快照字段 + 上下文关闭事件触发排空")
 class OrchestratorGracefulShutdownTest {

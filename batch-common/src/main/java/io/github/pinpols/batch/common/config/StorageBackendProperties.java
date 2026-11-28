@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * 对象存储后端选择配置（{@code batch.storage.backend}）。

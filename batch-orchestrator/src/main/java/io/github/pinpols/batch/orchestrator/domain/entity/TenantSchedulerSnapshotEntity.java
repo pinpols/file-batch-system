@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 
 @Builder
 public record TenantSchedulerSnapshotEntity(

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.testing;
 
 import java.util.List;
+
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.event.ContextRefreshedEvent;

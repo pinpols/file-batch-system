@@ -1,17 +1,21 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
+import java.time.Duration;
+import java.util.Locale;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
+import org.springframework.stereotype.Service;
+
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Duration;
-import java.util.Locale;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.dao.DataAccessException;
-import org.springframework.stereotype.Service;
 
 /**
  * 控制台单会话注册表：按 {@code (tenantId, username)} 在 Redis 记录当前有效的 session 版本号， 实现"新登录踢旧会话"。

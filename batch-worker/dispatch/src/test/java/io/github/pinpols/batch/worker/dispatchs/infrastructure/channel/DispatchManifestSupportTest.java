@@ -2,8 +2,6 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.sql.Date;
@@ -11,10 +9,15 @@ import java.time.LocalDate;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import io.github.pinpols.batch.common.utils.JsonUtils;
 
 @DisplayName("出站清单:业务日期保持 ISO 文本，摘要与载荷一致")
 class DispatchManifestSupportTest {

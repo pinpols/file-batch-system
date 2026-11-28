@@ -8,7 +8,22 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
@@ -35,18 +50,6 @@ import io.github.pinpols.batch.worker.exports.stage.format.FixedWidthExportForma
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCursorCodec;
 import io.github.pinpols.batch.worker.exports.stage.format.JsonExportFormat;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * ADR-038 P3 端到端续跑测试:模拟 GENERATE 在第二页崩溃 → 位点记下首页 cursor → 重派从该 cursor 续写 → 最终文件完整有效。 验证「单文件 +

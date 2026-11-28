@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.trigger.domain.query;
 
-import io.github.pinpols.batch.common.model.PageRequest;
 import lombok.Data;
+
+import io.github.pinpols.batch.common.model.PageRequest;
 
 @Data
 public class TriggerRequestQuery {

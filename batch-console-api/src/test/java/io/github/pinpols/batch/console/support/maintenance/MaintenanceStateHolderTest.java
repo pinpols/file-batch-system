@@ -6,14 +6,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
-import io.github.pinpols.batch.console.domain.ops.entity.MaintenanceStateEntity;
-import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import java.time.Instant;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
+import io.github.pinpols.batch.console.domain.ops.entity.MaintenanceStateEntity;
+import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 
 @DisplayName("维护状态读取与应用启动时序")
 class MaintenanceStateHolderTest {

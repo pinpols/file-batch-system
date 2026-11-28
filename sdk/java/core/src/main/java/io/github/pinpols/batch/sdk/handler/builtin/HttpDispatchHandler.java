@@ -1,13 +1,5 @@
 package io.github.pinpols.batch.sdk.handler.builtin;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
-import io.github.pinpols.batch.sdk.handler.SdkRowResult;
-import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
-import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
@@ -25,8 +17,20 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+
 import javax.sql.DataSource;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
+import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
+import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /**
  * 开箱即用的「JDBC 查询 → HTTP 逐行推送」分发 handler(ADR-036 Dispatch shape 的配置驱动版)。

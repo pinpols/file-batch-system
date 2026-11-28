@@ -2,13 +2,6 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.job.entity.JobInstanceEntity;
-import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -18,7 +11,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.scripting.defaults.DefaultParameterHandler;
@@ -29,6 +24,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.job.entity.JobInstanceEntity;
+import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 集成测试：控制台 JobInstanceMapper 对真实数据库的查询验证。 */
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)

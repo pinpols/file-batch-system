@@ -1,16 +1,19 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.FileTemplateFormat;
-import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 生成分隔符平面文件（CSV / TSV / 自定义分隔符），支持可选的引号和转义策略。

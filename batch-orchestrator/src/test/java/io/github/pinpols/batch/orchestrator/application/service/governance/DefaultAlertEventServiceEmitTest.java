@@ -6,17 +6,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
-import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
-import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
+import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
+import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("emit 直连 AM 旁路")

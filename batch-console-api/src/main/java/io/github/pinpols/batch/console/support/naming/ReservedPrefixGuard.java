@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.support.naming;
 
+import java.util.List;
+import java.util.Locale;
+
+import lombok.experimental.UtilityClass;
+
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
-import java.util.List;
-import java.util.Locale;
-import lombok.experimental.UtilityClass;
 
 /**
  * 命名空间守卫:防止 tenant / resource code 命名残留与高权限冲突。

@@ -3,13 +3,6 @@ package io.github.pinpols.batch.worker.dispatchs.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthRepository;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthService;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthSnapshot;
-import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
@@ -22,6 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +24,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthRepository;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthService;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthSnapshot;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
 
 /**
  * 集成测试：DispatchChannelHealthService 将结果写入真实业务数据库，且

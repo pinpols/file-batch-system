@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.param;
 
 import java.sql.Timestamp;
+
 import lombok.Builder;
 
 /** 失败计数匹配时的退避回写参数；不改变原 CAS 与时间戳语义。 */

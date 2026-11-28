@@ -3,11 +3,11 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.console.config.ConsoleMenuProperties;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
@@ -15,6 +15,8 @@ import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
+
+import io.github.pinpols.batch.console.config.ConsoleMenuProperties;
 
 @DisplayName("控制台菜单注册:按角色过滤可见菜单, 未配置授权时回退最小角色, 历史角色配置直接拒绝")
 class ConsoleMenuRegistryTest {

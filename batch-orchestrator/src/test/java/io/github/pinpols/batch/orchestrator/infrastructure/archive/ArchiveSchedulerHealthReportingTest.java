@@ -5,6 +5,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.orchestrator.application.archive.OutboxArchiveService;
 import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService;
 import io.github.pinpols.batch.orchestrator.application.archive.WorkflowArchiveService;
@@ -13,9 +18,6 @@ import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchivePropert
 import io.github.pinpols.batch.orchestrator.config.WorkflowArchiveProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.metrics.ArchiveSchedulerHealthMetrics;
-import java.time.Instant;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("归档调度健康上报,验证各调度器注册并在完整执行后记录成功")
 class ArchiveSchedulerHealthReportingTest {

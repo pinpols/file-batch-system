@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.application.contract.request;
 
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 
 /** 整 Workflow 重放请求；操作者身份始终取自已认证的 Console 上下文。 */
 @Data

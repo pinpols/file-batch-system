@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
-import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 
 /** 定时触发分发渠道健康探针，按配置的间隔周期性探测各渠道可用性。 */
 @Component

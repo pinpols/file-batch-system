@@ -1,7 +1,19 @@
 package io.github.pinpols.batch.worker.core.config;
 
+import javax.sql.DataSource;
+
+import org.apache.ibatis.session.Configuration;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.mybatis.spring.SqlSessionFactoryBean;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
+import org.springframework.core.env.Environment;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+
 import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
 import io.github.pinpols.batch.common.config.BusinessDataSourceBuilder;
@@ -15,15 +27,6 @@ import io.github.pinpols.batch.common.rls.RlsPolicyHealthIndicator;
 import io.github.pinpols.batch.common.rls.RlsProperties;
 import io.github.pinpols.batch.common.rls.RlsStartupFailFastCheck;
 import io.github.pinpols.batch.common.tenant.routing.MyBatisTenantPlacementRepository;
-import javax.sql.DataSource;
-import org.apache.ibatis.session.Configuration;
-import org.apache.ibatis.session.SqlSessionFactory;
-import org.mybatis.spring.SqlSessionFactoryBean;
-import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
-import org.springframework.core.env.Environment;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 /**
  * import/process/export 三个 worker 模块 {@code PlatformDataSourceConfiguration} / {@code

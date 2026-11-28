@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
@@ -16,12 +24,6 @@ import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.domain.ImportWorkerType;
 import io.github.pinpols.batch.worker.imports.stage.ImportStageExecutor;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.context.annotation.Primary;
-import org.springframework.stereotype.Component;
 
 /**
  * Import pipeline 的步骤执行适配器，连接通用 {@link AbstractPipelineStepExecutionAdapter} 模板 与 Import 业务的具体实现。

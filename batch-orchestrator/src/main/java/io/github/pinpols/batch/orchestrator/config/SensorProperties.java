@@ -2,8 +2,10 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import java.time.Duration;
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** ADR-028 Sensor SPI 配置：HTTP / DB sensor 的安全边界与超时。 */
 @Data

@@ -2,16 +2,19 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 
 /** ADR-041 Phase1.2:控制金额对账(controlTotalCheck)。 */
 @DisplayName("控制金额对账单测:模板声明金额与 trailer 声明金额对累加值的一致性语义")

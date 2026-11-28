@@ -2,10 +2,12 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 
 @DisplayName("WAIT 传感器配置校验器:格式、传感类型与超时策略边界")
 class WorkflowWaitSensorSpecValidatorTest {

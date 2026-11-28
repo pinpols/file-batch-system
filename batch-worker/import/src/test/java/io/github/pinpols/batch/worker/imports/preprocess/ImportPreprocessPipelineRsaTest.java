@@ -3,7 +3,6 @@ package io.github.pinpols.batch.worker.imports.preprocess;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -17,9 +16,12 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 
 /**
  * {@code VERIFY_RSA_SHA256} 预处理步骤的测试，使用位于 {@code fixtures/test-rsa-public.pem} 和 {@code

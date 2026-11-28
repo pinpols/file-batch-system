@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.orchestrator.application.contract.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 
 /** BFS 结果版本的固定证据契约，只有文件 metadata 保留动态 JSON。 */
 public record LineageEvidenceResponse(

@@ -2,9 +2,6 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.BatchLifecycleStatus;
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -16,11 +13,16 @@ import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.BatchLifecycleStatus;
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 
 @DisplayName("作业实例状态与映射文件的 SQL 契约,验证批量日门禁查询覆盖全部终态状态码")
 class JobInstanceStatusSqlContractTest {

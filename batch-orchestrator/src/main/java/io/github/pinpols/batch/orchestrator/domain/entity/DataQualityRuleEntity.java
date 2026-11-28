@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
+
 import lombok.Data;
 
 /** ADR-021 数据对账规则定义。priority-scope §ADR-021 红线：只做"修业务数据"层面的对账，**不**做主数据治理 / 财务核算。 */

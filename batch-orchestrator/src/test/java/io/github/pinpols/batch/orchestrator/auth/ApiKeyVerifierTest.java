@@ -10,17 +10,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.github.benmanes.caffeine.cache.Ticker;
-import io.github.pinpols.batch.common.security.ApiKeyHasher;
-import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +24,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
+import com.github.benmanes.caffeine.cache.Ticker;
+
+import io.github.pinpols.batch.common.security.ApiKeyHasher;
+import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("密钥校验器,覆盖候选行命中,作用域判定,结果缓存与最近使用时间节流")

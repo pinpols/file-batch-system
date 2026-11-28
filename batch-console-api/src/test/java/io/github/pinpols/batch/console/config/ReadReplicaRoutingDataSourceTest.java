@@ -7,14 +7,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.config.ReadReplicaRoutingDataSource.Route;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
+
 import javax.sql.DataSource;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +23,10 @@ import org.mockito.MockingDetails;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import io.github.pinpols.batch.console.config.ReadReplicaRoutingDataSource.Route;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /** ReadReplicaRoutingDataSource 单元测试：覆盖路由决策、force-primary 旁路、fail-open 降级、quarantine 闭环。 */
 @DisplayName("只读副本路由数据源: 路由决策,强制主库旁路与失败隔离恢复")

@@ -9,18 +9,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.event.DomainEvent;
-import io.github.pinpols.batch.common.event.DomainEventPublisher;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.math.BigInteger;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,6 +24,16 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.event.DomainEvent;
+import io.github.pinpols.batch.common.event.DomainEventPublisher;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 
 @DisplayName("条数连续性：冻结的数据关系、范围证据、差额和执行身份")
 @ExtendWith(MockitoExtension.class)

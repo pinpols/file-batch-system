@@ -6,15 +6,17 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.storage.NamespacedObjectStore;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.io.ByteArrayInputStream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.NamespacedObjectStore;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @DisplayName("对象存储的部署命名空间配置")
 class BatchObjectStoreNamespaceConfigurationTest {

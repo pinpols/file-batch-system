@@ -2,9 +2,10 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 
 /**
  * 防漂移单测：锁定配置包各 sheet 与共享 schema 的列定义。

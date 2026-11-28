@@ -1,7 +1,15 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
+import java.time.Instant;
+
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -10,10 +18,6 @@ import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsRespon
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
 import io.github.pinpols.batch.console.domain.ops.view.JobTaskHeartbeatView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import java.time.Instant;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 /**
  * FE 2-C:读 {@code batch.job_task} 最新心跳进度,把 JSONB details 解析成 JSON 透传 FE。

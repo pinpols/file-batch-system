@@ -4,19 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
-import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
-import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
-import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
-import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
-import io.github.pinpols.batch.worker.processes.stage.PlatformProcessInvocationFence;
-import io.github.pinpols.batch.worker.processes.stage.PlatformProcessStagingGenerationCoordinator;
-import io.github.pinpols.batch.worker.processes.stage.ProcessInvocationFence;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
@@ -24,7 +11,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -48,6 +37,20 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
+import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
+import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
+import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
+import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
+import io.github.pinpols.batch.worker.processes.stage.PlatformProcessInvocationFence;
+import io.github.pinpols.batch.worker.processes.stage.PlatformProcessStagingGenerationCoordinator;
+import io.github.pinpols.batch.worker.processes.stage.ProcessInvocationFence;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @DisplayName("PROCESS staging 回收:双库提交中断后可安全重试")
 class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {

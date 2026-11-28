@@ -5,16 +5,18 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
-import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
-import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;
 
 /** 单元测试：资源池解析只从启用队列中选,且专用队列优先于 MIXED 回退队列。 */
 @ExtendWith(MockitoExtension.class)

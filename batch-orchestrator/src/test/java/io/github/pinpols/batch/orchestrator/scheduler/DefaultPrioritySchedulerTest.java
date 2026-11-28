@@ -2,12 +2,13 @@ package io.github.pinpols.batch.orchestrator.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.SchedulingPriorityBand;
-import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
-import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.DefaultPriorityScheduler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.SchedulingPriorityBand;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.DefaultPriorityScheduler;
 
 @DisplayName("优先级解析组件,验证优先级的默认值与越界收敛规则以及优先级分档的区间划分")
 class DefaultPrioritySchedulerTest {

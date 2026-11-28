@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.controller.response;
 
+import java.time.Instant;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
-import java.time.Instant;
-import lombok.Builder;
 
 /** Worker 生命周期状态的稳定 HTTP 表示。 */
 @Builder

@@ -3,14 +3,16 @@ package io.github.pinpols.batch.common.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 
 /** ADR-039 P1 envRef 解析 + fail-fast + 明文兼容期放行。 */
 @DisplayName("CredentialEnvResolver: 环境变量引用解析、缺失快速失败与明文兼容放行")

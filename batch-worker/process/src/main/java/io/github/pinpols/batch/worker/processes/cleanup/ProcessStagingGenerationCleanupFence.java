@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 
 /** 持有平台库实例围栏并确认候选已被当前代际替换后，调用业务库执行观测或回收。 */
 @Service

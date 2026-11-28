@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
 
 /** 单次配置同步审计日志。 */
 @Builder

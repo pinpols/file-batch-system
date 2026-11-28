@@ -3,7 +3,16 @@ package io.github.pinpols.batch.console.infrastructure.query;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.fasterxml.jackson.databind.JsonNode;
+
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -16,12 +25,6 @@ import io.github.pinpols.batch.console.domain.job.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.console.domain.job.support.ConsoleJobQueryMappers;
 import io.github.pinpols.batch.console.domain.job.view.JobStepInstanceView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("作业步骤查询: 内嵌任务载荷凭据的响应遮蔽")

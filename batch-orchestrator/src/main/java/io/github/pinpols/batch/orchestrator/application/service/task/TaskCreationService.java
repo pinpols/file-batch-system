@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import java.util.List;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 
 /** 处理任务与步骤实例的创建，从原任务执行门面中拆分。 */
 public interface TaskCreationService {

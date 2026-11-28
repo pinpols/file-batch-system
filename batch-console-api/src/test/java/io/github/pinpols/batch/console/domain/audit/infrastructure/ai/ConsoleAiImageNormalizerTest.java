@@ -3,16 +3,19 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+
 import javax.imageio.ImageIO;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 
 @DisplayName("AI 图片归一化:格式重写与输入体积上限校验")
 class ConsoleAiImageNormalizerTest {

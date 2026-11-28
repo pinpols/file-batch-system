@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 表驱动 placement(P2 tenant-routing):显式登记的租户用 {@link TenantPlacementRepository} 表里的 placement

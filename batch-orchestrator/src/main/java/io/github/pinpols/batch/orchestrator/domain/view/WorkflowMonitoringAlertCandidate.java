@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.domain.view;
 
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Builder;
 
 /** 根运行或尚未创建根的预期机会；关闭机会不伪装成 Workflow 的实际完成时间。 */

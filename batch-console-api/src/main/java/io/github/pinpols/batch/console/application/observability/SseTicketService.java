@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.console.application.observability;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 
 /**
  * SSE 连接的一次性 ticket 服务。

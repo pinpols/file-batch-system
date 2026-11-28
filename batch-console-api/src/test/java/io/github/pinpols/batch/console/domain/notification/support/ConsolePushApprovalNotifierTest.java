@@ -8,12 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.config.ConsolePushProperties;
-import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushApprovalNotificationEntity;
-import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushApprovalNotificationMapper;
-import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.PushPayload;
 import java.time.Instant;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +19,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.console.config.ConsolePushProperties;
+import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushApprovalNotificationEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushApprovalNotificationMapper;
+import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.PushPayload;
 
 /** ConsolePushApprovalNotifier 单测:覆盖跳过/幂等/标签映射/payload 拼装。 */
 @ExtendWith(MockitoExtension.class)

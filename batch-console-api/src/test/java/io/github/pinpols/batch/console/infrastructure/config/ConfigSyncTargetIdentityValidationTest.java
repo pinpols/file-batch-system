@@ -2,6 +2,16 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncExportRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncPreviewRequest;
@@ -9,18 +19,11 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigMatrixRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPreviewRequest;
+
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 @DisplayName("配置导入、复制、预览与矩阵的集合元素身份校验")
 class ConfigSyncTargetIdentityValidationTest {

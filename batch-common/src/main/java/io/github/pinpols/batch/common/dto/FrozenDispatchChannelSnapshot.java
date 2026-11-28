@@ -1,13 +1,14 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 为单次 Job 尝试冻结完整分发通道行，并在持久化前保护内容。 */
 public record FrozenDispatchChannelSnapshot(

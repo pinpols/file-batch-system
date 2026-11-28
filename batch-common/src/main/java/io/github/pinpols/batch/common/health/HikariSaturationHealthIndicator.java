@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.common.health;
 
-import com.zaxxer.hikari.HikariDataSource;
-import com.zaxxer.hikari.HikariPoolMXBean;
 import java.util.Map;
+
 import javax.sql.DataSource;
+
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
+
+import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.HikariPoolMXBean;
 
 /**
  * Hikari 连接池饱和度健康探针。

@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.FileTemplateFormat;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.Map;
+
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 
 /** 生成单文档 JSON 文件，结构为： {@code {"snapshot":…, "batch":…, "details":[…]}}。 */
 @Component

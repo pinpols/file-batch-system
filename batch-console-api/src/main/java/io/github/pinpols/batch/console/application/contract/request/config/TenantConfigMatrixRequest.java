@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import java.util.List;
+
+import lombok.Data;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
-import java.util.List;
-import lombok.Data;
 
 /** 用于比较多个租户同一作业配置的请求。 */
 @Data

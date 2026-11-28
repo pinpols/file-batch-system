@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.common.utils;
 
+import javax.annotation.Nullable;
+
+import org.jetbrains.annotations.Contract;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import javax.annotation.Nullable;
-import org.jetbrains.annotations.Contract;
 
 /**
  * 轻量前置校验工具。

@@ -2,17 +2,19 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.config.mapper.ConfigSyncLogMapper;
-import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogInsertParam;
-import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigSyncLogMapper;
+import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogInsertParam;
+import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 真实PG验证具名参数的生成主键、租户限定与JSON合并/替换及状态保护。 */
 @SpringBootTest(classes = BatchConsoleApiApplication.class)

@@ -1,15 +1,16 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
+
+import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 
 /** 处理 Worker 分配、任务租约管理、状态更新及日志追加，从原任务执行门面中拆分。 */
 public interface TaskAssignmentService {

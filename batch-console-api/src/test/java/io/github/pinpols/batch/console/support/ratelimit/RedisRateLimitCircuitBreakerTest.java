@@ -2,12 +2,13 @@ package io.github.pinpols.batch.console.support.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("Redis 限流熔断器: 连续失败开启、冷却期单探针与成功后恢复")
 class RedisRateLimitCircuitBreakerTest {

@@ -2,12 +2,14 @@ package io.github.pinpols.batch.console.domain.rbac.application.contract.respons
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * wire 红线守护：批次4 rbac(auth/captcha/api-key/tenant self-service) 域类型化 response record 的 JSON key

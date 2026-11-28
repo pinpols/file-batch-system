@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.command;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 /** 数据质量规则写入输入。 */

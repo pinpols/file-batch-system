@@ -2,13 +2,15 @@ package io.github.pinpols.batch.worker.processes.infrastructure.verifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
-import java.util.HashMap;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("处理发布数量校验:发布数为零且确有处理行时判失败,缺字段或空输入时放行")
 class ProcessPublishedCountVerifierTest {

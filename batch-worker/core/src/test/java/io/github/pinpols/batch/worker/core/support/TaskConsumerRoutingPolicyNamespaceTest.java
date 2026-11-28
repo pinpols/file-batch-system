@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import java.util.regex.Pattern;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 
 @DisplayName("Worker Kafka 订阅应用部署命名空间")
 class TaskConsumerRoutingPolicyNamespaceTest {

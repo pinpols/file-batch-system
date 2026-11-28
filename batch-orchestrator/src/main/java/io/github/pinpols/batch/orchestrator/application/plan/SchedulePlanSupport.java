@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
 import io.github.pinpols.batch.common.constants.WorkerCapabilities;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
 
 /** 调度计划与资源准入决策之间共用的转换逻辑。 */
 public final class SchedulePlanSupport {

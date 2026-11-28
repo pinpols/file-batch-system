@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.core.domain;
 
-import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import java.time.OffsetDateTime;
 import java.util.List;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 
 @Data
 public class WorkerRegistration {

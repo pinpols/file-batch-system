@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.integration;
 
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * Console 写路径(POST/PUT/PATCH/DELETE) 集成测试基类。

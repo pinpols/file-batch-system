@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.orchestrator.application.archive;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.config.WorkflowArchiveProperties;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.config.WorkflowArchiveProperties;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 
 /**
  * P3-3 workflow archive 业务层：把 SQL 脚本 {@code cleanup-workflow-runs.sql} 的删除语义移到代码侧， 支持自动调度 + 单元测试覆盖

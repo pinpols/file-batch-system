@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.common.http;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 与具体 HTTP 客户端无关的出站请求描述。 */
 public record OutboundHttpRequest(
