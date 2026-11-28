@@ -95,4 +95,10 @@
         </properties>
     </rule>
 
+
+    <!-- 控制流退化：只启用当前零违规的规则；其余规则（深层嵌套/圈复杂度/通用异常捕获）
+         因 PMD Maven 插件没有 baseline 能力，repo-wide 启用会一次性阻断历史代码，
+         新增代码由 check-java-control-flow.py 增量守护。 -->
+    <rule ref="category/java/design.xml/AvoidThrowingRawExceptionTypes"/>
+    <rule ref="category/java/codestyle.xml/IdenticalCatchBranches"/>
 </ruleset>

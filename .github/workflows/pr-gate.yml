@@ -263,6 +263,7 @@ jobs:
             scripts/ci/tests/test_check_soft_gate_governance.py \
             scripts/ci/tests/test_check_diff_coverage.py \
             scripts/ci/tests/test_check_java_governance_test_coverage.py \
+            scripts/ci/tests/test_check_java_control_flow.py \
             scripts/ci/tests/test_java_worktree_source_inventory.py \
             scripts/ci/tests/test_sim_sftp_known_hosts.py \
             scripts/ci/tests/test_sim_export_partition_evidence.py \
@@ -770,6 +771,12 @@ jobs:
         shell: bash
         # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire。
         run: bash scripts/ci/run-gate.sh PR_JAVA_STATIC_ANALYSIS "PMD、Spotless 与编译检查" -- ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
+
+      - name: Verify control-flow readability
+        shell: bash
+        env:
+          CONTROL_FLOW_BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+        run: bash scripts/ci/run-gate.sh PR_CONTROL_FLOW "控制流可读性" -- python3 scripts/ci/check-java-control-flow.py --base "$CONTROL_FLOW_BASE"
 
       - name: Report all Java quality check failures
         if: always()
