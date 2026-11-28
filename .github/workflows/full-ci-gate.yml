@@ -132,6 +132,7 @@ jobs:
           gate_run FULL_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run FULL_SHELL_BASH32_COMPAT "Shell Bash 3.2 兼容性" python3 scripts/ci/check-shell-bash32-compat.py
           gate_run FULL_SHELL_COMPAT_TESTS "Shell 兼容门禁测试" python3 -m unittest scripts/ci/tests/test_check_shell_linux_portability.py scripts/ci/tests/test_check_shell_bash32_compat.py
+          gate_run FULL_MAVEN_RESOLUTION_RETRY_TEST "Maven 解析失败重试契约" python3 -m unittest scripts/ci/tests/test_run_maven_with_resolution_retry.py
           gate_run FULL_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
           gate_run FULL_POSTGRES_CLIENT_FALLBACK "PostgreSQL 客户端 fallback" bash scripts/ci/check-postgres-client-fallback.sh
           gate_run FULL_SDK_ORCHESTRATOR_E2E_SCRIPT_TEST "SDK 真栈 E2E 启动脚本回归测试" python3 -m unittest scripts/ci/tests/test_sdk_orchestrator_e2e_scripts.py
@@ -471,21 +472,21 @@ jobs:
         # 上游依赖只编译安装；测试仅在所属 shard 执行一次。
         run: |
           MODULES="batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit"
-          ./mvnw install -pl "$MODULES" -am -DskipTests \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
           heavy_excludes=$(sed 's/^/!/' scripts/ci/test-shards/full-orchestrator-heavy.txt | paste -sd, -)
-          ./mvnw verify -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw verify -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit \
             "-Dtest=!*ArchTest,!*ConventionTest,!ArchiveDiagnosticCadenceProbeIT,$heavy_excludes" \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
           # 覆盖率门禁(BUNDLE 25% LINE + 15 个核心类 80% lock-in 棘轮)。原仅本地 strict-verify 跑,
           # 现上 CI。只查本 shard 跑了测试的目标模块,不带 -am(否则上游模块 0% 覆盖误判失败)。
-          ./mvnw jacoco:check@check -pl batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:check@check -pl batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
 
       - name: Verify changed-line coverage
         shell: bash
         run: |
-          ./mvnw jacoco:report -pl batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
           BASE="${{ github.event.before }}"
           [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
           python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
@@ -525,12 +526,12 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
       - name: Install orchestrator dependencies
-        run: ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+        run: bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
       - name: Run long orchestrator integration classes
         shell: bash
         run: |
           tests=$(paste -sd, scripts/ci/test-shards/full-orchestrator-heavy.txt)
-          ./mvnw test -pl batch-orchestrator "-Dtest=$tests" -Dsurefire.failIfNoSpecifiedTests=true \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw test -pl batch-orchestrator "-Dtest=$tests" -Dsurefire.failIfNoSpecifiedTests=true \
             -Dspotless.check.skip=true -Dpmd.skip=true -fae -B
       - name: Verify selected orchestrator classes ran
         run: bash scripts/ci/check-e2e-run-completeness.sh "$(paste -sd, scripts/ci/test-shards/full-orchestrator-heavy.txt)" batch-orchestrator/target/surefire-reports
@@ -569,7 +570,7 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
       - name: Build orchestrator classes for coverage
-        run: ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+        run: bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
       - name: Download main coverage data
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -586,9 +587,9 @@ jobs:
           mkdir -p batch-orchestrator/target/ci-jacoco-shards
           mv batch-orchestrator/target/ci-jacoco-shards/main/jacoco.exec batch-orchestrator/target/ci-jacoco-shards/main.exec
           mv batch-orchestrator/target/ci-jacoco-shards/heavy/jacoco.exec batch-orchestrator/target/ci-jacoco-shards/heavy.exec
-          ./mvnw jacoco:merge@merge-ci-shards -pl batch-orchestrator -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:merge@merge-ci-shards -pl batch-orchestrator -B
           test -s batch-orchestrator/target/jacoco.exec
-          ./mvnw jacoco:check@check jacoco:report -pl batch-orchestrator -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:check@check jacoco:report -pl batch-orchestrator -B
           BASE="${{ github.event.before }}"
           [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
           python3 scripts/ci/check-diff-coverage.py --base "$BASE" --path batch-orchestrator
@@ -623,20 +624,20 @@ jobs:
         shell: bash
         run: |
           MODULES="batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch"
-          ./mvnw install -pl "$MODULES" -am -DskipTests \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
-          ./mvnw verify -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw verify -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch \
             -Dtest='!*ArchTest,!*ConventionTest' \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
           # 覆盖率门禁(见 unit-it-a 注释);只查本 shard 的生产模块。
           # batch-test-support 是测试基础设施，执行自身测试但不纳入产品代码覆盖率。
-          ./mvnw jacoco:check@check -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:check@check -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
 
       - name: Verify changed-line coverage
         shell: bash
         run: |
-          ./mvnw jacoco:report -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch -B
           BASE="${{ github.event.before }}"
           [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
           python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
@@ -684,19 +685,19 @@ jobs:
         shell: bash
         run: |
           MODULES="batch-worker/import,batch-worker/export,batch-worker/atomic"
-          ./mvnw install -pl "$MODULES" -am -DskipTests \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
-          ./mvnw verify -pl batch-worker/import,batch-worker/export,batch-worker/atomic \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw verify -pl batch-worker/import,batch-worker/export,batch-worker/atomic \
             -Dtest='!*ArchTest,!*ConventionTest' \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
           # 覆盖率门禁(见 unit-it-a 注释);只查本 shard 目标模块。
-          ./mvnw jacoco:check@check -pl batch-worker/import,batch-worker/export,batch-worker/atomic -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:check@check -pl batch-worker/import,batch-worker/export,batch-worker/atomic -B
 
       - name: Verify changed-line coverage
         shell: bash
         run: |
-          ./mvnw jacoco:report -pl batch-worker/import,batch-worker/export,batch-worker/atomic -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-worker/import,batch-worker/export,batch-worker/atomic -B
           BASE="${{ github.event.before }}"
           [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
           python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
@@ -743,18 +744,18 @@ jobs:
         shell: bash
         run: |
           MODULES="batch-console-api"
-          ./mvnw install -pl "$MODULES" -am -DskipTests \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
-          ./mvnw verify -pl batch-console-api \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw verify -pl batch-console-api \
             -Dtest='!*ArchTest,!*ConventionTest' \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
-          ./mvnw jacoco:check@check -pl batch-console-api -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:check@check -pl batch-console-api -B
 
       - name: Verify changed-line coverage
         shell: bash
         run: |
-          ./mvnw jacoco:report -pl batch-console-api -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-console-api -B
           BASE="${{ github.event.before }}"
           [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
           python3 scripts/ci/check-diff-coverage.py --base "$BASE" --path batch-console-api
@@ -1085,10 +1086,10 @@ jobs:
             python3 scripts/local/spark-e2e-runtime.py -- ./mvnw test -pl batch-e2e-tests \
               -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
           elif [[ "$TESTS" == "FilesystemBackendPipelineE2eIT" ]]; then
-            ./mvnw test -pl batch-e2e-tests -Dbatch.test.storage.backend=filesystem \
+            bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw test -pl batch-e2e-tests -Dbatch.test.storage.backend=filesystem \
               -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
           else
-            ./mvnw test -pl batch-e2e-tests \
+            bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw test -pl batch-e2e-tests \
               -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
           fi
 

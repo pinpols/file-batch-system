@@ -28,6 +28,7 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- CI 的 Maven 命令统一经 `run-maven-with-resolution-retry.sh`：仅对依赖/插件解析类瞬态失败（`Could not transfer artifact`、`Failed to read artifact descriptor`、`Could not resolve dependencies` 等）重试 3 次，编译错误与测试失败不重试；同时把 Sonar 门禁里硬编码的 `jacoco-maven-plugin:0.8.15` 改回项目管理的 `jacoco:report`，消除版本漂移导致的额外拉取。
 - Console 限流熔断器改由 Resilience4j 承载：`RedisRateLimitCircuitBreaker` 不再手写失败计数、冷却与单探针 CAS，改用共享 `CircuitBreakerRegistry`（`slidingWindowSize = minimumNumberOfCalls = redisFailureThreshold`、100% 阈值、半开 1 个探针），指标名与 fail-open 方向不变。见[复用方案 §8](docs/plans/backend-borrowings-and-improvements-2026-07-10.md#remaining-self-built-components-2026-11-27)。
 - 抽取 `BurstRetryExecutor` 统一 webhook 与订阅规则的进程内 burst 重试：三处 `for + sleep + 退避翻倍` 收敛为一个执行器，投递日志持久化移到重试结束后；退避序列、尝试次数与中断语义保持不变。见[复用方案 §8](docs/plans/backend-borrowings-and-improvements-2026-07-10.md#remaining-self-built-components-2026-11-27)。
 - 收敛 SHA-256 的私有实现：`Hashes` 新增 `sha256Hex(String)` 与 `sha256Hex(byte[])`，15 个类删除各自的摘要 + hex 样板改为调用该工具；输出仍为小写 hex，`AlertFingerprints` 的 `String.format("%02x")` 一并改为 `HexFormat`，`DefaultConsoleAiApplicationService` 保留 null 语义并去掉不可达的 `%08x` 兜底。见[复用方案 §8](docs/plans/backend-borrowings-and-improvements-2026-07-10.md#remaining-self-built-components-2026-11-27)。
