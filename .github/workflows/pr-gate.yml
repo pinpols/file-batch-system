@@ -837,9 +837,9 @@ jobs:
         # batch-test-support 的守卫与 Testcontainers 用例被多分片重复执行。
         run: |
           MODULES="batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit"
-          ./mvnw install -pl "$MODULES" -am -DskipTests \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
-          ./mvnw test -pl "$MODULES" \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw test -pl "$MODULES" \
             -Dtest='!*IntegrationTest,!*ArchTest,!*ConventionTest,!ArchiveDiagnosticCadenceProbeIT' \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
@@ -851,7 +851,7 @@ jobs:
       - name: Generate coverage reports
         shell: bash
         run: |
-          ./mvnw jacoco:report -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
           for module in batch-orchestrator batch-worker/core sdk/java/core sdk/java/spring sdk/java/testkit; do
             report="$module/target/site/jacoco/jacoco.xml"
             if [[ -f "$report" ]]; then
@@ -894,11 +894,11 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
       - name: Install orchestrator dependencies
-        run: ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+        run: bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
       - name: Run remaining orchestrator integration scenarios
         run: bash scripts/ci/run-pr-coverage-integration.sh a-extra
       - name: Generate orchestrator coverage report
-        run: ./mvnw jacoco:report -pl batch-orchestrator -B
+        run: bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-orchestrator -B
       - name: Upload orchestrator coverage report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -999,9 +999,9 @@ jobs:
         shell: bash
         run: |
           MODULES="batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch"
-          ./mvnw install -pl "$MODULES" -am -DskipTests \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
-          ./mvnw test -pl "$MODULES" \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw test -pl "$MODULES" \
             -Dtest='!*IntegrationTest,!*ArchTest,!*ConventionTest' \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
@@ -1009,7 +1009,7 @@ jobs:
       - name: Generate primary coverage reports
         shell: bash
         run: |
-          ./mvnw jacoco:report -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
           for module in batch-common batch-trigger batch-worker/process batch-worker/dispatch; do
             report="$module/target/site/jacoco/jacoco.xml"
             test -f "$report"
@@ -1050,13 +1050,13 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
       - name: Install integration dependencies
-        run: ./mvnw install -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+        run: bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
       - name: Run selected integration scenarios for coverage
         run: bash scripts/ci/run-pr-coverage-integration.sh b1
       - name: Generate integration coverage reports
         shell: bash
         run: |
-          ./mvnw jacoco:report -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
           for module in batch-trigger batch-worker/process batch-worker/dispatch; do
             report="$module/target/site/jacoco/jacoco.xml"
             test -f "$report"
@@ -1162,9 +1162,9 @@ jobs:
         shell: bash
         run: |
           MODULES="batch-worker/import,batch-worker/export,batch-worker/atomic"
-          ./mvnw install -pl "$MODULES" -am -DskipTests \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
-          ./mvnw test -pl "$MODULES" \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw test -pl "$MODULES" \
             -Dtest='!*IntegrationTest,!*ArchTest,!*ConventionTest' \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
@@ -1176,7 +1176,7 @@ jobs:
       - name: Verify changed-line coverage
         shell: bash
         run: |
-          ./mvnw jacoco:report -pl batch-worker/import,batch-worker/export,batch-worker/atomic -B
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-worker/import,batch-worker/export,batch-worker/atomic -B
           BASE="${{ github.event.pull_request.base.sha }}"
           [[ -n "$BASE" ]] || BASE="HEAD^"
           python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
@@ -1217,9 +1217,9 @@ jobs:
         shell: bash
         run: |
           MODULES="batch-console-api"
-          ./mvnw install -pl "$MODULES" -am -DskipTests \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
-          ./mvnw test -pl "$MODULES" \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw test -pl "$MODULES" \
             -Dtest='!*IntegrationTest,!*ArchTest,!*ConventionTest' \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
@@ -1229,7 +1229,7 @@ jobs:
         # Console API 的高风险配置写入路径由真实 PostgreSQL/Testcontainers 集成测试覆盖；
         # 将其 JaCoCo 数据追加到单测结果，保持变更行 80% 门槛而不把整个慢速 IT 套件塞进 PR。
         run: |
-          ./mvnw test -pl batch-console-api \
+          bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw test -pl batch-console-api \
             -Dtest=ConsoleTenantConfigPackageExcelUploadIntegrationTest,ConsoleTenantConfigPackageExcelPatchIntegrationTest,ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest,ConsoleFileChannelMutationIntegrationTest,ConsoleJobDefinitionMutationIntegrationTest,ConsolePipelineDefinitionMutationIntegrationTest,ConsoleWorkflowDefinitionMutationIntegrationTest,ConsoleFileTemplateMutationIntegrationTest,ConsoleCalendarMutationIntegrationTest,ConsoleBatchWindowMutationIntegrationTest \
             -DskipITs=true -Djacoco.append=true \
             -Dspotless.check.skip=true -Dpmd.skip=true -fae -B
@@ -1239,7 +1239,7 @@ jobs:
         run: bash scripts/ci/run-pr-coverage-integration.sh b2-console
 
       - name: Generate Console coverage report
-        run: ./mvnw jacoco:report -pl batch-console-api -B
+        run: bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-console-api -B
 
       - name: Upload Console coverage report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -1275,11 +1275,11 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
       - name: Install Console dependencies
-        run: ./mvnw install -pl batch-console-api -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+        run: bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw install -pl batch-console-api -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
       - name: Run remaining Console integration scenarios
         run: bash scripts/ci/run-pr-coverage-integration.sh b2-console-extra
       - name: Generate Console coverage report
-        run: ./mvnw jacoco:report -pl batch-console-api -B
+        run: bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw jacoco:report -pl batch-console-api -B
       - name: Upload Console coverage report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:

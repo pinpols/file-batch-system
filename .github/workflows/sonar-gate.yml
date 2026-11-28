@@ -87,7 +87,7 @@ jobs:
 
       - name: Run Maven tests and generate JaCoCo reports
         if: steps.nightly.outputs.skip != 'true'
-        run: ./mvnw -B clean test org.jacoco:jacoco-maven-plugin:0.8.15:report --projects '!batch-e2e-tests'
+        run: bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw -B clean test jacoco:report --projects '!batch-e2e-tests'
 
       - name: Start ephemeral SonarQube container
         if: steps.nightly.outputs.skip != 'true'

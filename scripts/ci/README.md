@@ -351,6 +351,14 @@ python3 scripts/ci/check-trivy-ignore-expiry.py --today 2026-09-13
 bash scripts/ci/run-full-regression.sh --help
 ```
 
+## `run-maven-with-resolution-retry.sh`
+
+为 CI 中的 Maven 命令增加「仅针对依赖/插件解析类瞬态失败」的重试：命中 `Could not transfer artifact`、`Failed to read artifact descriptor`、`Could not resolve dependencies` 等标记时最多重试 3 次（退避 30s、60s），编译错误与测试失败不重试，避免 Maven Central 抖动把分片判红。`MAVEN_RESOLUTION_RETRY_ATTEMPTS` / `MAVEN_RESOLUTION_RETRY_BACKOFF_SECONDS` 可覆盖次数与退避。
+
+```bash
+bash scripts/ci/run-maven-with-resolution-retry.sh -- ./mvnw test -pl batch-common -B
+```
+
 ## `run-staging-live-smoke.sh`
 
 staging live rollout / rollback smoke 的薄封装：默认开启 live deploy smoke 和 deployment verification，直接复用 `run-full-regression.sh`。
@@ -1031,6 +1039,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [run-full-regression.sh](run-full-regression.sh) | CI / staging 统一回归入口。 |
 | [run-gate.sh](run-gate.sh) | 按统一职责分组和模式执行门禁并传播结果。 |
 | [run-java-governance-tests.sh](run-java-governance-tests.sh) | Java 架构与约定检查。 |
+| [run-maven-with-resolution-retry.sh](run-maven-with-resolution-retry.sh) | Maven 依赖解析类瞬态失败的重试包装，编译与测试失败不重试。 |
 | [run-sdk-happy-eyeballs-gate.sh](run-sdk-happy-eyeballs-gate.sh) | 执行五语言 SDK 的单栈、双栈与黑洞连接矩阵。 |
 | [run-sdk-live-transport-gate.sh](run-sdk-live-transport-gate.sh) | 执行五语言 SDK 真实传输层契约门禁。 |
 | [run-sdk-orchestrator-e2e.sh](run-sdk-orchestrator-e2e.sh) | 五语言 BYO SDK 样例 worker 对真实 Orchestrator/Trigger 的端到端验证。 |
