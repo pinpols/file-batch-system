@@ -192,18 +192,16 @@ public class DefaultWorkerSelector implements WorkerSelector {
         if (registry == null) {
             return;
         }
-        Counter.builder(METRIC_NO_MATCH)
-                .tags(Tags.of(
-                        "tenantId",
-                        String.valueOf(request.getTenantId()),
-                        "workerType",
-                        String.valueOf(request.getWorkerType()),
-                        "resourceTag",
-                        resourceProfile == null ? "none" : resourceProfile,
-                        "reason",
-                        reason))
-                .register(registry)
-                .increment();
+        Tags noMatchTags = Tags.of(
+                "tenantId",
+                String.valueOf(request.getTenantId()),
+                "workerType",
+                String.valueOf(request.getWorkerType()),
+                "resourceTag",
+                resourceProfile == null ? "none" : resourceProfile,
+                "reason",
+                reason);
+        Counter.builder(METRIC_NO_MATCH).tags(noMatchTags).register(registry).increment();
     }
 
     private boolean matchesResourceProfile(WorkerRegistryEntity candidate, String resourceProfile) {
