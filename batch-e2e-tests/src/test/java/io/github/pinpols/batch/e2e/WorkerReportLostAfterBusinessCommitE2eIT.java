@@ -427,6 +427,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
                         "checkpoint-process-reclaim",
                         params));
                 outboxPublishSupport.publishAllPending(TENANT);
+                assertDispatchRoutedToWorkerPool(seed, workerPoolCode);
                 await().atMost(Duration.ofSeconds(120))
                         .pollInterval(Duration.ofMillis(200))
                         .untilAsserted(() -> {
@@ -4086,6 +4087,25 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         return platformJdbc.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
     }
 
+    /**
+     * 资源调度可能把派发钉到 {@code base.node.<workerCode>} 直达 topic，此时只有该 Worker 会消费。
+     * 共享测试上下文残留的 ONLINE 旧 Worker 被选中时，本次启动的 Worker 永远收不到消息，
+     * 失败点会推迟到业务等待 120s 之后；这里提前把路由前提暴露成明确断言。
+     */
+    private void assertDispatchRoutedToWorkerPool(LaunchSeed seed, String workerPoolCode) {
+        final String selectAssignedWorkerSql = """
+        select t.assigned_worker_code from batch.job_task t join batch.job_instance ji
+          on ji.id = t.job_instance_id
+        where ji.tenant_id = ? and ji.dedup_key = ?
+        """;
+
+        assertThat(platformJdbc.queryForObject(selectAssignedWorkerSql, String.class, TENANT, seed.dedupKey()))
+                .as("dispatch must target this test's worker pool, otherwise the pinned direct topic is never consumed")
+                .satisfiesAnyOf(
+                        assignedWorkerCode -> assertThat(assignedWorkerCode).isNull(),
+                        assignedWorkerCode -> assertThat(assignedWorkerCode).isEqualTo(workerPoolCode));
+    }
+
     private int reportOutboxCount(LaunchSeed seed) {
         final String selectCountSql = """
         select count(*) from batch.worker_report_outbox where tenant_id = ? and task_id = (select t.id\s\
@@ -4215,6 +4235,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
                             selectCountSql, Integer.class, TENANT, workerPoolCode, workerGroup);
                     assertThat(selectedCount).isGreaterThanOrEqualTo(1);
                 });
+        // 共享测试上下文会缓存上个用例的 Worker 列表：被强杀的 Worker 在心跳超时前仍是 ONLINE，
+        // 陈旧快照会让 launch 选中已死 Worker 并把派发钉到 base.node.<workerCode> 直达 topic；
+        // 当前 Worker 的订阅不匹配该 topic，消息滞留而任务永远不 claim。上线后驱逐，确保选择读到本次注册的行。
+        workerRegistryCache.evict(TENANT, workerGroup);
     }
 
     private Process startDispatchWorker(String workerPoolCode, String consumerGroupId, Path logFile, String instanceId)
