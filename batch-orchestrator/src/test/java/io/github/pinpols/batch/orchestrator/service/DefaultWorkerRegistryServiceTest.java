@@ -11,6 +11,19 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.dto.WorkerTaskTypeDescriptorDto;
@@ -28,17 +41,6 @@ import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStag
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.SystemParameterMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 守护 worker 注册表关键不变量:

@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.orchestrator.application.service.dq;
 
+import java.util.List;
+import java.util.Objects;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.command.DataQualityRuleWriteCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
 import io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper;
-import java.util.List;
-import java.util.Objects;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** DQ 规则应用服务：把内部 Controller 与 MyBatis Mapper 隔离，后续审计、权限和边界校验只在这里扩展。 */
 @Service

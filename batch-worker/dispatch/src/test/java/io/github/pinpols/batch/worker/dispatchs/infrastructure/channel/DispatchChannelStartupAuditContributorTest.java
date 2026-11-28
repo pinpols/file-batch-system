@@ -5,13 +5,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditContributor.WorkerStartupAuditResult;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
-import java.time.Instant;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("渠道启动审计:不健康渠道告警、官方渠道安全画像暴露与首轮探测待定的判定边界")
 class DispatchChannelStartupAuditContributorTest {

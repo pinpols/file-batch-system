@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.worker.imports.route;
 
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.worker.core.route.WorkerRouteAdapter;
 import io.github.pinpols.batch.worker.imports.domain.ImportWorkerType;
-import org.springframework.stereotype.Component;
 
 @Component
 public class DefaultImportWorkerRouteAdapter implements WorkerRouteAdapter {

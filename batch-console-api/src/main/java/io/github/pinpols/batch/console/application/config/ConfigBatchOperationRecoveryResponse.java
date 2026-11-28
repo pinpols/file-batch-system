@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
 
 /** 按原目标顺序返回已确认的回执；缺失的目标仍为未知。 */
 public record ConfigBatchOperationRecoveryResponse(

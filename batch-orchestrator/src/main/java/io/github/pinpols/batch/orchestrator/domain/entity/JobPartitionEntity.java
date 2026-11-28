@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.common.persistence.Stateful;
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.persistence.Stateful;
 
 @Data
 public class JobPartitionEntity implements Stateful {

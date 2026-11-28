@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.common.config;
 
-import jakarta.validation.constraints.Min;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
+import jakarta.validation.constraints.Min;
 
 /**
  * 对象存储加密装饰层开关（Phase 2 §5）。绑定前缀 {@code batch.storage.encryption}。

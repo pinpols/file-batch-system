@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
+import java.util.List;
+
 import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
-import java.util.List;
 
 /**
  * DISPATCH pipeline 阶段执行契约：只负责"按上下文跑一次"。 本地固定 step 模板的供给（系统阶段校验与冻结参数合并）独立到 {@link

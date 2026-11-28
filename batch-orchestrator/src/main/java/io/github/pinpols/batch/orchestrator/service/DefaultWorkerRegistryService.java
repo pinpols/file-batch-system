@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.orchestrator.service;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.dto.SdkProtocolVersions;
 import io.github.pinpols.batch.common.dto.SdkVersions;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
@@ -25,12 +34,6 @@ import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStag
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.SystemParameterMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
-import java.time.Instant;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Worker 注册表服务端入口：register（新建/重连）/ heartbeat（续活）/ updateStatus / deactivate。

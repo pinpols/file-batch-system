@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
-import io.github.pinpols.batch.trigger.domain.MisfireHandler;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.trigger.domain.MisfireHandler;
 
 /**
  * Quartz 错失触发（misfire）回调：当 scheduler 因 JVM 停顿、长事务、集群故障等错过了 fire time， 在此仅落一条 warn

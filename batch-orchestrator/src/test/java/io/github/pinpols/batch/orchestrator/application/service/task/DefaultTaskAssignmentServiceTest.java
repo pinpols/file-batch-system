@@ -11,9 +11,19 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
+
 import io.github.pinpols.batch.common.dto.DependencyResultReference;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.TaskStatus;
@@ -36,17 +46,10 @@ import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 /**
  * 守护 worker 认领 / 续租关键路径:

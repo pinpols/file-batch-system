@@ -2,18 +2,20 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.ops.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.console.domain.ops.query.ApprovalCommandQuery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("审批命令查询映射: 状态,申请人,关键字三类过滤与配套计数口径")

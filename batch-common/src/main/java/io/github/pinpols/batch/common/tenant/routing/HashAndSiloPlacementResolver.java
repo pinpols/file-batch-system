@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * Tiered 放置:多数租户哈希到 {@code pooledShardCount} 个 pooled 分片;指定(巨型 / 合规)租户经 {@code siloOverrides} 路由到独占

@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.core.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Worker 本地临时文件配置（{@code batch.worker}）。

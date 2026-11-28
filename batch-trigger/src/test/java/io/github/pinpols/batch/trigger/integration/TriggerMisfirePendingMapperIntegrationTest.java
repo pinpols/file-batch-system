@@ -4,16 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.infrastructure.scheduler.TriggerMisfirePendingReconciler;
-import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+
 import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +19,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.infrastructure.scheduler.TriggerMisfirePendingReconciler;
+import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
 
 /** trigger_misfire_pending Mapper 集成测试 — 覆盖 MANUAL_APPROVAL catch-up 流程的 DB 路径。 */
 @SpringBootTest(

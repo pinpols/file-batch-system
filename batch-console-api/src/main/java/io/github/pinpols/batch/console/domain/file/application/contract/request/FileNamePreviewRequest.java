@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.request;
 
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidBizDate;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 
 /** 导出文件命名规则预览请求。 */
 @Data

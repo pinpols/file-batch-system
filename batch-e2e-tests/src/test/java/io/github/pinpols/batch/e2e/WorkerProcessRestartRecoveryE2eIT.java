@@ -3,31 +3,6 @@ package io.github.pinpols.batch.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
-import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
-import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
-import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncImportResponse;
-import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
-import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
-import io.github.pinpols.batch.e2e.config.E2eBusinessDataSourceConfiguration;
-import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
-import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
-import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
-import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -53,6 +28,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -71,6 +47,33 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncImportResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
+import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
+import io.github.pinpols.batch.e2e.config.E2eBusinessDataSourceConfiguration;
+import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
+import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
+import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
+import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * Worker 进程重启恢复 E2E 测试：验证 Dispatch Worker 进程重启后， 重新注册并恢复消费 Kafka 派发消息，完成文件分发任务。

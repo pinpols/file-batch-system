@@ -5,15 +5,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchClockConfig;
-import io.github.pinpols.batch.common.redis.BatchRedisKeys;
-import io.github.pinpols.batch.orchestrator.config.OrchestratorConfigCacheProperties;
-import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigMappers;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
-import io.github.pinpols.batch.orchestrator.mapper.*;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +15,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import io.github.pinpols.batch.common.config.BatchClockConfig;
+import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.orchestrator.config.OrchestratorConfigCacheProperties;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigMappers;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
+import io.github.pinpols.batch.orchestrator.mapper.*;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * 集成测试：验证 OrchestratorConfigCacheService 的缓存旁路（Cache-Aside）模式 使用真实 Redis 容器，Repository 层使用 Mock。

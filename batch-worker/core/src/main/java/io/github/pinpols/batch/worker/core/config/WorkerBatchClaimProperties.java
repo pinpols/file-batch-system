@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.core.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * ADR-046 Phase 2 切片 2.3 —— Worker 消费端批量认领开关（默认关闭）。

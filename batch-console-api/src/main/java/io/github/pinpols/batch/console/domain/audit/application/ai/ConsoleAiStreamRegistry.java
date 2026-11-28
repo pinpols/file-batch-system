@@ -1,16 +1,19 @@
 package io.github.pinpols.batch.console.domain.audit.application.ai;
 
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /** 活动 AI 请求的身份、冲突与取消归属。 */
 @Service

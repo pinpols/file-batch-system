@@ -7,9 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.config.NotificationProperties;
 import java.time.Instant;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +21,10 @@ import org.springframework.mail.MailException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.config.NotificationProperties;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("邮件通知发送器: 渠道识别, 收件人解析与邮件内容组装")

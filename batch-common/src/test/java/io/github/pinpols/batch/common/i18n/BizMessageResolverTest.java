@@ -3,14 +3,16 @@ package io.github.pinpols.batch.common.i18n;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import java.util.Locale;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 
 /** {@link BizMessageResolver} 五条路径回归测试。 */
 @DisplayName("异常消息本地化解析:资源命中, 兜底, 空值与旧式构造的返回约定")

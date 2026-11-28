@@ -3,15 +3,10 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.config.BatchKmsProperties;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.startup.SecretPayloadFlywayCallback;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
+
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +17,13 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.config.BatchKmsProperties;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.startup.SecretPayloadFlywayCallback;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 /** 验证 V209→V210→V211 逐级升级会加密历史载荷，并在应用就绪前收紧最终约束。 */
 @Tag("integration")

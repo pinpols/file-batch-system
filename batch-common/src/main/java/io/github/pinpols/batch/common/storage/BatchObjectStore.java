@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.common.storage;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.Collection;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 对象存储统一抽象（Phase 2 §1 定稿契约）。

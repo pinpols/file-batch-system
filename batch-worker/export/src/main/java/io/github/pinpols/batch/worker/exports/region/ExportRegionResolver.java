@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.exports.region;
 
-import io.github.pinpols.batch.common.exception.WorkerConfigException;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 导出地区(region)解析(per-run + 默认回退 + 字典校验),与导入 {@code GenericJdbcMappedImportLoadPlugin#applyRegion}

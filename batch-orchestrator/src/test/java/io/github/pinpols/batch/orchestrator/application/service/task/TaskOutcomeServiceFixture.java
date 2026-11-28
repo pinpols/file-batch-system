@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
+
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
@@ -19,9 +23,6 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.mockito.Mockito;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.context.ApplicationEventPublisher;
 
 /** 将真实状态推进协作者的纯测试装配集中于此，不在生产入口保留另一套创建路径。 */
 public final class TaskOutcomeServiceFixture {

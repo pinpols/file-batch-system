@@ -4,16 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.security.BlockedAddressException;
 import java.net.InetAddress;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.security.BlockedAddressException;
 
 /**
  * {@link SsrfGuardedDns} 单测:验证 OkHttp 建连回调层做真 per-request pin —— 返回的正是 {@code DnsResolveGuard}

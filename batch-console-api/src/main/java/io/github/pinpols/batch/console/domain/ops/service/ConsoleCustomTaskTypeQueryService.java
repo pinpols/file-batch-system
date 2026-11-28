@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
 import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 自定义 taskType 控制台只读查询服务。 */
 @Service

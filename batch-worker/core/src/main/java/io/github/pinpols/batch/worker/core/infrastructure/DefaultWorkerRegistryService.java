@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerRegistryClient;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * Worker 自注册服务默认实现：将 {@link WorkerRegistryClient} 的远程调用封装为本地服务接口。

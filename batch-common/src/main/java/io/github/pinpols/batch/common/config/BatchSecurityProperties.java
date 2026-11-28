@@ -1,13 +1,17 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import jakarta.annotation.PostConstruct;
 import java.util.Set;
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.EnvironmentAware;
 import org.springframework.core.env.Environment;
+
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
+import jakarta.annotation.PostConstruct;
 
 @Data
 @Slf4j

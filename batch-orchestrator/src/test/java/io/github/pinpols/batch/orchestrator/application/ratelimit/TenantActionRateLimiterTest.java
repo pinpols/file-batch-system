@@ -7,15 +7,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
-import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
+import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /** 验证 action→配额映射与短路放行逻辑（防 TASK_* 误接到错误阈值键）+ 拒绝计数。 */
 @ExtendWith(MockitoExtension.class)

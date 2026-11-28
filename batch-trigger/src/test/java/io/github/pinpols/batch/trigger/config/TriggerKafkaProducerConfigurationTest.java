@@ -2,7 +2,6 @@ package io.github.pinpols.batch.trigger.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.micrometer.observation.ObservationRegistry;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,6 +9,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+
+import io.micrometer.observation.ObservationRegistry;
 
 @DisplayName("Trigger Kafka 生产者配置:脱离 Spring Boot Kafka 自动配置也能装配可用的生产端与 Admin 基础设施")
 class TriggerKafkaProducerConfigurationTest {

@@ -2,19 +2,13 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
-import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
-import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
-import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +16,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
+import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("AI 会话分页查询映射: 时间戳并列,租户与属主隔离,过期会话过滤")

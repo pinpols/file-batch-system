@@ -3,16 +3,18 @@ package io.github.pinpols.batch.trigger.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
-import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import java.util.Arrays;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.bind.annotation.PostMapping;
+
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
+import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Trigger 管理接口支持以 WorkflowCode 管理调度")

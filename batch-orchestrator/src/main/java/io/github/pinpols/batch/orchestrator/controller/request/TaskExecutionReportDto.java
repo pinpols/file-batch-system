@@ -1,12 +1,16 @@
 package io.github.pinpols.batch.orchestrator.controller.request;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
-import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
+
+import jakarta.validation.constraints.Size;
 
 // 防滚动升级期间 worker / orchestrator 版本不一致时未识别字段 fail。
 @JsonIgnoreProperties(ignoreUnknown = true)

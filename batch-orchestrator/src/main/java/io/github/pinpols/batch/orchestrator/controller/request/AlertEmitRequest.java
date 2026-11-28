@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.controller.request;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import lombok.Builder;
 
 @Builder

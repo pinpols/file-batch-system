@@ -8,16 +8,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
+import java.time.Duration;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
 import io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.scheduler.HeartbeatScheduler;
 import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
-import java.lang.reflect.Field;
-import java.time.Duration;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 /**
  * Lane E #4-Java + #5:{@link BatchPlatformClient#stop(Duration)} 预算重分配 + fatal-auth 跳 deactivate

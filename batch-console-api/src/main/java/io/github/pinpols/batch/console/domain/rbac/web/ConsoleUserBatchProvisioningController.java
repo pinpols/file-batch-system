@@ -1,20 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.ApplyResult;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.Operation;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.Preview;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.shared.audit.AuditAction;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.web.Idempotent;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 import java.io.IOException;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -29,6 +17,22 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.ApplyResult;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.Operation;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.Preview;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.Idempotent;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 
 /** 账号批量开户的传输层；租户与角色裁决在服务层重新执行。 */
 @RestController

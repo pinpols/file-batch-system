@@ -2,10 +2,6 @@ package io.github.pinpols.batch.console.domain.workflow.application.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
-import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeRunResponse;
 import java.io.IOException;
 import java.lang.reflect.RecordComponent;
 import java.nio.file.Files;
@@ -14,11 +10,18 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeRunResponse;
 
 @DisplayName("Workflow 调度契约：公开响应字段和强制版本与 OpenAPI 对齐")
 class WorkflowSchedulingOpenApiContractTest {

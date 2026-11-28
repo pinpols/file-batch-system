@@ -6,17 +6,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("工作流图校验器: 线性链路, 环, 不可达节点, 断头节点与汇聚网关等结构配置的校验口径")
 class WorkflowGraphValidatorTest {

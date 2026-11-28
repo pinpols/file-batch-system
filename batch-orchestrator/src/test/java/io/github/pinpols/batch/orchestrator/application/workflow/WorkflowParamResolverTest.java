@@ -3,13 +3,15 @@ package io.github.pinpols.batch.orchestrator.application.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.exception.BizException;
 
 /**
  * ADR-009 Stage 2 unit tests:覆盖 4 类引用语法 + 3 类 fail-fast。

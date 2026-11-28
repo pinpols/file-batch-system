@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditContributor;
-import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditContributor;
+import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 
 /** PROCESS worker 启动时输出 staging 孤儿风险快照。 */
 @Component

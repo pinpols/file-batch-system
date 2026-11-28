@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import java.time.Instant;
+
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 
 /**
  * 配额运行时状态服务：管理租户/队列的突发配额（burst quota）窗口，支持三种重置策略。

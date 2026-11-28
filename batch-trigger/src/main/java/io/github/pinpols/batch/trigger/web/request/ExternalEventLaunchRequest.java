@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.trigger.web.request;
 
-import io.github.pinpols.batch.common.validation.ValidTenantId;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.validation.ValidTenantId;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 @Data
 public class ExternalEventLaunchRequest {

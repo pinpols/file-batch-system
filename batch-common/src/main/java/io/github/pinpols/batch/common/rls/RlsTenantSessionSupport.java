@@ -1,15 +1,19 @@
 package io.github.pinpols.batch.common.rls;
 
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.regex.Pattern;
+
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.jdbc.datasource.DataSourceUtils;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 把 {@link RlsTenantContextHolder} 当前 tenant_id 写到 PostgreSQL session 变量 `app.tenant_id`,触发 biz.*

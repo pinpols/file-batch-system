@@ -2,10 +2,6 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -19,10 +15,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 
 @DisplayName("HTTP 分发幂等请求")
 class HttpDispatchChannelIdempotencyTest {

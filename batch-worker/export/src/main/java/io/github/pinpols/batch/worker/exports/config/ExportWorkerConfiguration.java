@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.exports.config;
 
-import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import java.util.List;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 
 /** 导出 Worker 配置属性，绑定前缀 {@code batch.worker.export}。 */
 @ConfigurationProperties(prefix = "batch.worker.export")

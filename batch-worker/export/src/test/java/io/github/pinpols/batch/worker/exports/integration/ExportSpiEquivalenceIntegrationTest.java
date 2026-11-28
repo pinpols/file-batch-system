@@ -2,6 +2,16 @@ package io.github.pinpols.batch.worker.exports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.Field;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestConstructor;
+
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
@@ -12,14 +22,6 @@ import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 import io.github.pinpols.batch.worker.exports.infrastructure.ExportStepExecutionAdapter;
 import io.github.pinpols.batch.worker.exports.infrastructure.ExportTaskExecutor;
 import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
-import java.lang.reflect.Field;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.TestConstructor;
 
 /** P0 Phase 3 等价性 IT — SPI 路径 ≡ @Primary 路径(export)。详见 {@code ImportSpiEquivalenceIT} 同名 doc。 */
 @SpringBootTest(

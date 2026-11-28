@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.config;
 
-import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -9,6 +8,8 @@ import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
+
+import com.zaxxer.hikari.HikariDataSource;
 
 /**
  * 覆盖 Spring Boot 自动配置的<strong>唯一</strong>平台库 {@link DataSource}（bean 名通常为 {@code dataSource}）：写入

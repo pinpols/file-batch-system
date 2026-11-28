@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 /** 仅保存摘要的一次性重放操作预览凭证。 */

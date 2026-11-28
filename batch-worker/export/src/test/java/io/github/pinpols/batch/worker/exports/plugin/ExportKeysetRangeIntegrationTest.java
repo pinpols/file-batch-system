@@ -3,13 +3,6 @@ package io.github.pinpols.batch.worker.exports.plugin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.WorkerConfigException;
-import io.github.pinpols.batch.common.plugin.ExportDataContext;
-import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -20,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +24,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
+import io.github.pinpols.batch.common.plugin.ExportDataContext;
+import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 
 /** 真实 PostgreSQL 验证旧区间配置下统一哈希分片，覆盖两种插件、稀疏数据与多页读取。 */
 @SpringBootTest(

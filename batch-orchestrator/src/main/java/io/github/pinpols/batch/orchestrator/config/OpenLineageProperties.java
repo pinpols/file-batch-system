@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * OpenLineage 血缘 emitter 配置。默认关闭 —— 仅在显式 {@code batch.openlineage.enabled=true} 且配了 {@code

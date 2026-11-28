@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.console.domain.notification.application;
 
+import java.util.List;
+import java.util.Locale;
+
+import org.springframework.context.MessageSource;
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTopicResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTypeResponse;
-import java.util.List;
-import java.util.Locale;
-import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
-import org.springframework.stereotype.Service;
 
 /** 可订阅业务事件及其运行环境主题目录。 */
 @Service

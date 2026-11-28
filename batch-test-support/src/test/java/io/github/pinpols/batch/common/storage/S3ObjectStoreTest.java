@@ -4,20 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.testing.MinioObjectStoreContainer;
-import io.github.pinpols.batch.testing.TestObjectStoreContainers;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
+
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.testing.MinioObjectStoreContainer;
+import io.github.pinpols.batch.testing.TestObjectStoreContainers;
+
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;

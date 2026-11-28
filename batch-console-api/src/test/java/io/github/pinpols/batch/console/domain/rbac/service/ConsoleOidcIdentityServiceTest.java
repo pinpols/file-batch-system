@@ -7,6 +7,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.dao.DuplicateKeyException;
+
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleOidcIdentityRequest;
@@ -15,14 +25,6 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMap
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
 import io.github.pinpols.batch.console.domain.rbac.view.ConsoleOidcIdentityView;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.dao.DuplicateKeyException;
 
 @DisplayName("OIDC 身份绑定服务")
 class ConsoleOidcIdentityServiceTest {

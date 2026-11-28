@@ -7,7 +7,23 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
 import io.github.pinpols.batch.common.enums.SystemPipelineDefinition;
 import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
@@ -26,19 +42,6 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchWorkerType;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
 import io.github.pinpols.batch.worker.dispatchs.stage.DispatchStageExecutor;
-import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("分发步骤执行适配器:流水线描述、上下文构建、阶段委派、结果访问与成功响应产出字段")

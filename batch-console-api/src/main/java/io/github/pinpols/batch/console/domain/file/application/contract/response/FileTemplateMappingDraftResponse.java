@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 import java.util.List;
+
+import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 
 /** 文件模板字段映射草案：前端可直接带入 FileTemplateCreate/UpdateRequest。 */
 public record FileTemplateMappingDraftResponse(

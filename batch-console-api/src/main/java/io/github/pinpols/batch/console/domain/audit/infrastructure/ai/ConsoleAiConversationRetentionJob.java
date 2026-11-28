@@ -1,15 +1,19 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 @Component
 @RequiredArgsConstructor

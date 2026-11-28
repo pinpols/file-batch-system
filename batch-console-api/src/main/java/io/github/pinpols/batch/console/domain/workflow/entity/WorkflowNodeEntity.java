@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.workflow.entity;
 
 import java.time.Instant;
+
 import lombok.Data;
 
 @Data

@@ -2,9 +2,10 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 
 @DisplayName("分发结果关联文件遵循主字段和束字段的明确优先级")
 class TaskOutcomePayloadSupportBundleTest {

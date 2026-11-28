@@ -5,12 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import io.micrometer.observation.ObservationRegistry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+
+import io.micrometer.observation.ObservationRegistry;
 
 @DisplayName("Kafka 消费者容器工厂: 批量领取开关下的并发容量校验")
 class KafkaConsumerConfigurationTest {

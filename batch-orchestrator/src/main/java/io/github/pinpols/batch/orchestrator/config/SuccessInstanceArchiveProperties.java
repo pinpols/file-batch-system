@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Job 实例运行树自动归档配置（{@code batch.job-instance.archive}）。

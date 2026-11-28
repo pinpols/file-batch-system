@@ -8,9 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +16,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("实时事件发布器: 空事件短路与回放缓冲加频道的双写")

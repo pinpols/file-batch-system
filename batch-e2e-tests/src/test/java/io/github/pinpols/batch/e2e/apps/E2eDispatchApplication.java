@@ -1,21 +1,9 @@
 package io.github.pinpols.batch.e2e.apps;
 
-import io.github.pinpols.batch.common.config.BatchClockConfig;
-import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
-import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
-import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
-import io.github.pinpols.batch.e2e.config.E2eBusinessDataSourceConfiguration;
-import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
-import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
-import io.github.pinpols.batch.e2e.config.E2eShedLockConfiguration;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
-import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
-import io.github.pinpols.batch.worker.exports.infrastructure.ExportStepExecutionAdapter;
-import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportStepExecutionAdapter;
 import java.util.concurrent.Executor;
+
 import javax.sql.DataSource;
+
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
@@ -47,6 +35,21 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import io.github.pinpols.batch.common.config.BatchClockConfig;
+import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
+import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
+import io.github.pinpols.batch.e2e.config.E2eBusinessDataSourceConfiguration;
+import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
+import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
+import io.github.pinpols.batch.e2e.config.E2eShedLockConfiguration;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
+import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
+import io.github.pinpols.batch.worker.exports.infrastructure.ExportStepExecutionAdapter;
+import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportStepExecutionAdapter;
 
 @Configuration
 @EnableAutoConfiguration(

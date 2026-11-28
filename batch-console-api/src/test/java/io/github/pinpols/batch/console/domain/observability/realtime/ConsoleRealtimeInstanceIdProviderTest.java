@@ -2,9 +2,10 @@ package io.github.pinpols.batch.console.domain.observability.realtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.config.ConsoleInstanceIdProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.config.ConsoleInstanceIdProperties;
 
 @DisplayName("实时实例标识提供者: 显式配置优先与缺省时的自动生成")
 class ConsoleRealtimeInstanceIdProviderTest {

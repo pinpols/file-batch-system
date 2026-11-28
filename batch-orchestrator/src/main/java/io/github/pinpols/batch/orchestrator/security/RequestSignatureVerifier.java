@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.orchestrator.security;
 
+import java.time.Duration;
+import java.util.regex.Pattern;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.security.RequestSignatures;
 import io.github.pinpols.batch.common.security.SecretComparator;
 import io.github.pinpols.batch.common.utils.EmptyValues;
-import java.time.Duration;
-import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * 服务端请求签名校验（方案 A：以 api_key 为 HMAC 密钥）。

@@ -3,6 +3,18 @@ package io.github.pinpols.batch.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -13,16 +25,6 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 端到端测试：Dispatch 渠道配置缺失导致失败。

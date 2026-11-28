@@ -9,11 +9,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.FileStatus;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,7 +22,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -47,6 +44,12 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 
 /** 真实 Mapper 与提交后的文件版本状态共同验证去重和新版本写入；不启动其它 Worker 链路。 */
 @DisplayName("文件登记：路径去重复用不改变版本标识，新版本原子替换最新标记")

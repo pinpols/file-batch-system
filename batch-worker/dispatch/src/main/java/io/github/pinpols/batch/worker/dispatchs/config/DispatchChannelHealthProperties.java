@@ -2,8 +2,10 @@ package io.github.pinpols.batch.worker.dispatchs.config;
 
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** 分发渠道健康探针配置属性。 */
 @Data

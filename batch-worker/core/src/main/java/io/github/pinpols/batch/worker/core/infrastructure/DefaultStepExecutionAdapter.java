@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -14,10 +21,6 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.support.StepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
-import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 /**
  * {@link StepExecutionAdapter} 的默认实现 — 充当 {@link BatchTaskExecutor} SPI 的路由器。

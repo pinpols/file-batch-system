@@ -2,18 +2,20 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("租户初始化定长映射验证")

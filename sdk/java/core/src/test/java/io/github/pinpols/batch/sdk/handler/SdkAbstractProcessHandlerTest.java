@@ -2,16 +2,18 @@ package io.github.pinpols.batch.sdk.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /** ADR-036 Process 模板 {@link SdkAbstractProcessHandler} 单测(经基类 execute 模板序驱动)。 */
 @DisplayName("Process 模板基类:转换跳过与分批回写,覆盖默认批量、异常失败与流关闭")

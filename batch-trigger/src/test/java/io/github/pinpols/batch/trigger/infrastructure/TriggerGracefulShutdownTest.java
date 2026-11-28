@@ -5,13 +5,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.springframework.context.event.ContextClosedEvent;
+
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 
 @DisplayName("Trigger 优雅停机协调器:排水状态流转、Quartz standby/start 与生命周期相位契约")
 class TriggerGracefulShutdownTest {

@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.support.web;
 
-import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 
 /** Excel 应用结果到 HTTP 流式下载的适配。 */
 public final class ConsoleExcelDownloadResponse {

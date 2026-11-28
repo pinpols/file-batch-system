@@ -1,6 +1,29 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -21,25 +44,6 @@ import io.github.pinpols.batch.worker.imports.domain.ImportWorkerType;
 import io.github.pinpols.batch.worker.imports.preprocess.ImportPreprocessException;
 import io.github.pinpols.batch.worker.imports.preprocess.ImportPreprocessPipeline;
 import io.github.pinpols.batch.worker.imports.stage.support.ImportStageSupport;
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * PREPROCESS（设计说明书 §9.3）：拉取模板、解码正文，执行 {@link ImportPreprocessPipeline} （{@code preprocess_pipeline}

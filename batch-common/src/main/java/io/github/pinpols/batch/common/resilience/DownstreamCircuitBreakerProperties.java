@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.resilience;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * {@link DownstreamFallback} 内部 resilience4j CircuitBreaker 的配置。

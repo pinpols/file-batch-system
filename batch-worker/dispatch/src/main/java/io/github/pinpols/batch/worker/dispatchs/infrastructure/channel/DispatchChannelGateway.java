@@ -1,16 +1,19 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
 
 /**
  * 根据 {@code channel_type} 将分发请求路由到对应的 {@link DispatchChannelAdapter}， 并统一应用渠道级熔断器和指标采集。

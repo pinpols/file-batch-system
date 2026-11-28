@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.shared.command;
 
-import io.github.pinpols.batch.common.validation.ValidTenantId;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
+
+import io.github.pinpols.batch.common.validation.ValidTenantId;
+
+import jakarta.validation.constraints.NotNull;
 
 /** 启用/禁用状态局部更新请求。 */
 @Data

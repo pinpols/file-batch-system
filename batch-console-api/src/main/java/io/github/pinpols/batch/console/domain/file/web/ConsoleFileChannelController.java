@@ -1,18 +1,5 @@
 package io.github.pinpols.batch.console.domain.file.web;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChannelApplicationService;
-import io.github.pinpols.batch.console.domain.file.application.contract.query.FileChannelQueryRequest;
-import io.github.pinpols.batch.console.domain.file.application.contract.request.FileChannelCreateRequest;
-import io.github.pinpols.batch.console.domain.file.application.contract.request.FileChannelUpdateRequest;
-import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileChannelResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.web.Idempotent;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +12,22 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChannelApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.contract.query.FileChannelQueryRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.FileChannelCreateRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.FileChannelUpdateRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileChannelResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.Idempotent;
+
+import jakarta.validation.Valid;
 
 /** 文件通道（file_channel_config）CRUD REST 接口。 */
 @RestController

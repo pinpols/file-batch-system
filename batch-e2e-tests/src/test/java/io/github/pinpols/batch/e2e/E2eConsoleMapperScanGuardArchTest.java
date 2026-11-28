@@ -2,18 +2,21 @@ package io.github.pinpols.batch.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.tngtech.archunit.core.domain.JavaClasses;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
-import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.util.AntPathMatcher;
+
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+
+import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
 
 /**
  * E2E 控制台应用 MapperScan 覆盖守护。

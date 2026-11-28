@@ -1,18 +1,9 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.worker.core.config.WorkerGracefulShutdownProperties;
-import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
-import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.concurrent.TimeUnit;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
 import org.springframework.boot.availability.ReadinessState;
@@ -22,6 +13,18 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.worker.core.config.WorkerGracefulShutdownProperties;
+import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
+import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 
 /**
  * Spring {@link ContextClosedEvent} 监听器，负责 Worker 进程的有序关机。

@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -15,13 +24,6 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.TenantQuotaPolicySpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
-import org.springframework.stereotype.Component;
 
 /** 配置发布类型注册表：集中维护 configType 的别名、payload 解析、身份校验和运行时缓存失效。 */
 @Component

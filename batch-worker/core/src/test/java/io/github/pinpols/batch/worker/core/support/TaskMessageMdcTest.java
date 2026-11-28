@@ -2,16 +2,18 @@ package io.github.pinpols.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.kafka.SchedulingContext;
-import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
-import io.github.pinpols.batch.common.logging.StructuredLogField;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
+
+import io.github.pinpols.batch.common.kafka.SchedulingContext;
+import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.common.logging.StructuredLogField;
 
 @DisplayName("任务消息 MDC 字段: 两处消费入口共用的公共字段写入")
 class TaskMessageMdcTest {

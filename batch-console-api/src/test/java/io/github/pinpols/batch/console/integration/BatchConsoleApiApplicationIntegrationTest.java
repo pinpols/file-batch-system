@@ -2,6 +2,18 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+import java.util.UUID;
+
+import javax.sql.DataSource;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.model.PageRequest;
@@ -13,15 +25,6 @@ import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionV
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQuery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.util.List;
-import java.util.UUID;
-import javax.sql.DataSource;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationContext;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 使用真实 Postgres、Kafka、对象存储的控制台 API 测试；Flyway 在平台库上执行编排器 {@code db/migration} 迁移。 */
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)

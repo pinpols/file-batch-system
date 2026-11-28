@@ -2,8 +2,10 @@ package io.github.pinpols.batch.common.config;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * 统一的 Kafka producer 调优配置(绑定 {@code spring.kafka.producer.*})。

@@ -2,6 +2,16 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.LocalDate;
+import java.time.Month;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
@@ -9,14 +19,6 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.time.LocalDate;
-import java.time.Month;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 集成测试：主要的 Worker 路由类型在启动后各自发出匹配的 task / outbox {@code event_type} （IMPORT / EXPORT / DISPATCH）。

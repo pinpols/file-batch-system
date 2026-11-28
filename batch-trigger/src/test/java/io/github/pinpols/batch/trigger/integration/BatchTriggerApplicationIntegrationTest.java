@@ -2,14 +2,15 @@ package io.github.pinpols.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.startup.SecretPayloadFlywayCallback;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.Scheduler;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestConstructor;
+
+import io.github.pinpols.batch.common.startup.SecretPayloadFlywayCallback;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 
 @SpringBootTest(
         classes = BatchTriggerApplication.class,

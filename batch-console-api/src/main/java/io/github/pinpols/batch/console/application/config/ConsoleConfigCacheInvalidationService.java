@@ -1,5 +1,17 @@
 package io.github.pinpols.batch.console.application.config;
 
+import java.time.Instant;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -8,15 +20,6 @@ import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidat
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Instant;
-import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Console 配置变更后的 Redis 缓存失效服务：把 console 的配置写操作与 orchestrator 读热点（ {@code

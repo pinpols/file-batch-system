@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.common.validation;
 
+import org.springframework.scheduling.support.CronExpression;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
+
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
-import org.springframework.scheduling.support.CronExpression;
 
 public class ValidCronValidator implements ConstraintValidator<ValidCron, String> {
 

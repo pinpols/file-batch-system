@@ -3,11 +3,12 @@ package io.github.pinpols.batch.trigger.infrastructure.kafka;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.KafkaAdmin;
+
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 
 @DisplayName("Kafka 触发延迟查询适配器:停机后拒绝继续采样 lag,避免停机期新建 AdminClient 连接")
 class KafkaTriggerLaunchLagQueryAdapterTest {

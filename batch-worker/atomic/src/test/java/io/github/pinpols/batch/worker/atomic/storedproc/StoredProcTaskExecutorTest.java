@@ -7,9 +7,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.spi.task.ResourceKind;
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.math.BigInteger;
 import java.sql.CallableStatement;
 import java.sql.Connection;
@@ -20,7 +17,9 @@ import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,6 +28,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+
+import io.github.pinpols.batch.common.spi.task.ResourceKind;
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
 
 /** {@link StoredProcTaskExecutor} 单测 — validation / 类型映射 / mocked CALL 执行。 */
 @DisplayName("存储过程执行器: 参数校验, 类型映射与调用执行")

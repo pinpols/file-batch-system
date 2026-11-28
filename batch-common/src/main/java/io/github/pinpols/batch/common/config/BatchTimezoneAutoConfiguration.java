@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Clock;
+
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 
 /**
  * 为 {@link BatchTimezoneProvider} / {@link BatchDateTimeSupport} 提供 AutoConfiguration 回退。

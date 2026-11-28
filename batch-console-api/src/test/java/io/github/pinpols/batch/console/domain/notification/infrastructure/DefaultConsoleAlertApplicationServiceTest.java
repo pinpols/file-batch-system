@@ -4,12 +4,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.console.application.contract.request.ops.AlertActionRequest;
-import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
-import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerSilenceBridge;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +11,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.console.application.contract.request.ops.AlertActionRequest;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
+import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerSilenceBridge;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Console 告警关闭与 Alertmanager 单实体解除")

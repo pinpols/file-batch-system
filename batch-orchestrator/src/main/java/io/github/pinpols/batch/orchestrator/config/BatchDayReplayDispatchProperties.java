@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.config;
 
 import java.time.Duration;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** ADR-020 §影响面 §性能 — batch_day_replay dispatcher 配置。 */
 @Data

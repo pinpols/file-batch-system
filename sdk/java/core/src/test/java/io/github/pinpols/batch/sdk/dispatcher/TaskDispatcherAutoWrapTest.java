@@ -8,6 +8,18 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.idempotent.Idempotent;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencySnapshot;
@@ -21,16 +33,6 @@ import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * SDK-P5 auto-wrap:验证 {@link TaskDispatcher} 注册时自动探测 {@link Idempotent} / {@link RetryOn} 并织入装饰器。

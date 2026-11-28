@@ -1,13 +1,14 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.enums.DictEnum;
-import io.github.pinpols.batch.common.enums.FileChannelType;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.FileChannelType;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 官方分发渠道类型白名单。新增 adapter 类型必须先在这里显式登记。 */
 final class DispatchChannelTypePolicy {

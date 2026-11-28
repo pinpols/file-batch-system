@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.verifier;
 
-import io.github.pinpols.batch.common.enums.JobType;
 import java.util.Set;
+
+import io.github.pinpols.batch.common.enums.JobType;
 
 /**
  * 产物内容验收 SPI（ADR-030）。

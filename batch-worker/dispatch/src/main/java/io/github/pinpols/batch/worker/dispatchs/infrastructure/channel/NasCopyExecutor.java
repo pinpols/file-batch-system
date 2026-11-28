@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -18,8 +15,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
+
+import jakarta.annotation.PreDestroy;
 
 /** Spring 生命周期管理的 NAS 阻塞复制执行器。 */
 @Slf4j

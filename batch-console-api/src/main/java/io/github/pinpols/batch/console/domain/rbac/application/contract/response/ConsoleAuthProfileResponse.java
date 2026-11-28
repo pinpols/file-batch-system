@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleMenuRegistry.MenuGroup;
 import java.util.List;
 import java.util.Set;
+
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleMenuRegistry.MenuGroup;
 
 public record ConsoleAuthProfileResponse(
         String username,

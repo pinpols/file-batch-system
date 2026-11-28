@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.param;
 
 import java.sql.Timestamp;
+
 import lombok.Builder;
 
 /** 完整健康快照写入参数；可空探针时间与证据沿用原数据库字段语义。 */

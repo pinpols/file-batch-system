@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.contract.response;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
 
 /** 单条跨日历依赖等待记录的 HTTP 表示。 */
 @Builder

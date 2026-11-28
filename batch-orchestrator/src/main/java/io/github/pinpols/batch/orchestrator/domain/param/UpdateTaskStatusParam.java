@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
-import io.github.pinpols.batch.common.enums.TaskStatus;
-import io.github.pinpols.batch.common.i18n.LocalizedErrorCarrier;
 import lombok.Builder;
 import lombok.Getter;
+
+import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.i18n.LocalizedErrorCarrier;
 
 @Getter
 @Builder

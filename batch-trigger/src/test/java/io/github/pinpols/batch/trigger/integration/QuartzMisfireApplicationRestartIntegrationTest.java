@@ -7,18 +7,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
-import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
-import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
-import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
-import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
-import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
-import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
-import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.file.Files;
@@ -39,10 +27,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import mockwebserver3.Dispatcher;
-import mockwebserver3.MockResponse;
-import mockwebserver3.MockWebServer;
-import mockwebserver3.RecordedRequest;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -68,6 +53,24 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.scheduling.TaskScheduler;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
+import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
+import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
+import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+
+import mockwebserver3.Dispatcher;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
+import mockwebserver3.RecordedRequest;
 
 /** 根据围栏后的快照检查所有者和调用标识，不使用加锁前的读取结果。 */
 @DisplayName("Trigger 完整应用上下文重启:从 PostgreSQL 恢复持久 misfire")

@@ -2,16 +2,20 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Map;
-import okhttp3.OkHttpClient;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
+
+import okhttp3.OkHttpClient;
 
 @DisplayName("HTTP 渠道健康探针不把 URL 凭据写入成功或失败证据")
 class RemoteFilesystemHttpProbeSecurityTest {

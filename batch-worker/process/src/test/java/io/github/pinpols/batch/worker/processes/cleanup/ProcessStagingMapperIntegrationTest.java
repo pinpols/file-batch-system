@@ -3,15 +3,13 @@ package io.github.pinpols.batch.worker.processes.cleanup;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
-import io.github.pinpols.batch.worker.processes.query.ProcessStagingExpiredScanQuery;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -28,6 +26,11 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
+import io.github.pinpols.batch.worker.processes.query.ProcessStagingExpiredScanQuery;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @DisplayName("PROCESS staging generation 清理与 RLS Mapper 真实 PostgreSQL 回归")
 class ProcessStagingMapperIntegrationTest {

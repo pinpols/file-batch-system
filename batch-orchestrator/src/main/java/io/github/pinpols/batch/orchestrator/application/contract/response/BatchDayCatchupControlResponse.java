@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.contract.response;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import java.time.Instant;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 
 /** 日历自动补扫控制状态的 HTTP 表示。 */
 public record BatchDayCatchupControlResponse(

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.kafka;
 
 import java.time.Instant;
 import java.util.Map;
+
 import lombok.Builder;
 
 @Builder

@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.FileRecordRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 验证运行时文件引用是否属于运行数据行所属的租户。 */
 @Component

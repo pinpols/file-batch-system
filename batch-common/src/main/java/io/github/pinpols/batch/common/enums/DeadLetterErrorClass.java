@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.common.enums;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * dead_letter_task.error_class 字典 (V90)。

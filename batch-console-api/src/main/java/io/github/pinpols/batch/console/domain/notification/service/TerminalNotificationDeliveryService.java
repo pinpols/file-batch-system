@@ -1,5 +1,21 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.util.HtmlUtils;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -17,19 +33,6 @@ import io.github.pinpols.batch.console.domain.notification.param.WorkflowTermina
 import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
 import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
 import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.BooleanSupplier;
-import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.util.HtmlUtils;
 
 /** 持久化终态投递；由现有 Webhook 中继在调度锁下调用。 */
 @Service

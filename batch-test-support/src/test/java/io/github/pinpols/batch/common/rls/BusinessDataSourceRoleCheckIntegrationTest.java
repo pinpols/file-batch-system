@@ -4,9 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -14,6 +11,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("业务库运行账号必须受 RLS 约束")
 class BusinessDataSourceRoleCheckIntegrationTest {

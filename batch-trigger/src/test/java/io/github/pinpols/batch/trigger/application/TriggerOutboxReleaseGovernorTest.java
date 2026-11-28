@@ -4,13 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Outbox 自适应发布限速器:按 Kafka lag 样本以 AIMD 策略调节单进程每秒发布上限")

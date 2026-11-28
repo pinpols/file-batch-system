@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -12,7 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.MountableFile;
+
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @Testcontainers(disabledWithoutDocker = true)
 @DisplayName("配置缓存失效队列授权脚本：指定角色、策略冲突和撤销")

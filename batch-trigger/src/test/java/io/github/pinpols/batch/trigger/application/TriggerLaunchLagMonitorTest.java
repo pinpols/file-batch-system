@@ -3,11 +3,12 @@ package io.github.pinpols.batch.trigger.application;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+
+import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("Trigger 启动延迟监控:采样受启停开关控制,lag 查询端口只在运行期被访问")
 class TriggerLaunchLagMonitorTest {

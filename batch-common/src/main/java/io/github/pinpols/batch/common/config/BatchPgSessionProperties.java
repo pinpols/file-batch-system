@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.common.config;
 
 import java.time.Duration;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
+
+import lombok.Data;
 
 /**
  * 全模块共用的 PostgreSQL 会话治理：JDBC {@code ApplicationName} + 连接级 {@code SET}（由 Hikari {@code

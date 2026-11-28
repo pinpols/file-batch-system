@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
-import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.springframework.stereotype.Service;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
+
+import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /** 对象到达时合并通知并提前触发既有的入口扫描。 */
 @Slf4j

@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.core.env.Environment;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 阻止生产环境静默使用本地开发地址或不可发现的管理端口。 */
 @AutoConfiguration

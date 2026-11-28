@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.worker.imports.domain;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
+
+import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 
 /**
  * 单次导入作业的运行时上下文，贯穿解析、校验、写库等各阶段。 实现 {@link

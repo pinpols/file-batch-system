@@ -1,11 +1,5 @@
 package io.github.pinpols.batch.worker.imports.jdbc;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.exception.WorkerConfigException;
-import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -16,8 +10,18 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import javax.annotation.Nullable;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
+import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 
 /**
  * 从 {@code file_template_config.query_param_schema.jdbcMappedImport} 或顶层 {@code

@@ -5,15 +5,17 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
-import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.env.MockEnvironment;
+
+import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 
 /** 部署期默认密码守护:prod fail-fast vs 非 prod WARN。 */
 @ExtendWith(MockitoExtension.class)

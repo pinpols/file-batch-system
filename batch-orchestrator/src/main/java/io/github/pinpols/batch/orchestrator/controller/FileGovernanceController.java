@@ -1,14 +1,8 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceLatencyResponse;
-import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceService;
-import io.github.pinpols.batch.orchestrator.application.service.governance.FileUploadSessionResponse;
-import io.github.pinpols.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
-import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand;
-import io.github.pinpols.batch.orchestrator.domain.command.FileUploadSessionCommand;
 import java.time.LocalDate;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +10,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceLatencyResponse;
+import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceService;
+import io.github.pinpols.batch.orchestrator.application.service.governance.FileUploadSessionResponse;
+import io.github.pinpols.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
+import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand;
+import io.github.pinpols.batch.orchestrator.domain.command.FileUploadSessionCommand;
 
 /**
  * 文件治理内部控制器，基础路径 {@code /internal/files}。 支持对单个文件的归档（{@code archive}）、删除（{@code

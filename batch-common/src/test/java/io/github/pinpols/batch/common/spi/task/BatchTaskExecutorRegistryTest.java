@@ -3,12 +3,14 @@ package io.github.pinpols.batch.common.spi.task;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 
 @DisplayName("任务执行器注册表:注册查找, 空表容忍与非法类型快速失败")
 class BatchTaskExecutorRegistryTest {

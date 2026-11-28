@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
+import java.util.Objects;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -10,10 +17,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ApproveCommandDecisionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RejectCommandDecisionParam;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
-import java.util.Objects;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 审批命令状态机：{@code PENDING → APPROVED / REJECTED → EXECUTED}。

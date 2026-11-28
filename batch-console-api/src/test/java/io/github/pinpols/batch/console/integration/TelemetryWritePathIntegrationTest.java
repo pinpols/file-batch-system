@@ -2,14 +2,13 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +16,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * P2: ConsoleTelemetryController 写路径整合 — 校验 FE 上报 → BE 校验入参 → 写结构化日志(而非业务表)。

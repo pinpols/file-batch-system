@@ -1,8 +1,18 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -20,12 +30,6 @@ import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertP
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import io.github.pinpols.batch.console.domain.workflow.validation.FileArrivalChannelNodeValidation;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * 负责工作流节点、边和历史版本快照的持久化辅助操作。

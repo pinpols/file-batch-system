@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.application.contract.response;
 
 import java.time.Instant;
 import java.time.LocalTime;
+
 import lombok.Builder;
 
 /** Public asset freshness policy view. */

@@ -2,8 +2,8 @@ package io.github.pinpols.batch.common.i18n;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Locale;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -13,6 +13,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.MessageSource;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.context.support.StaticMessageSource;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @DisplayName("国际化自动配置:消息源优先级与语言回退")
 class BatchI18nAutoConfigurationTest {

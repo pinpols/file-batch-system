@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
+import java.util.List;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidBizDate;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.util.List;
-import lombok.Data;
 
 /**
  * ADR-020 批次日重放提交/预览请求（console 侧）。字段名与 orchestrator {@code BatchDayReplaySubmitCommand} 逐一对应，

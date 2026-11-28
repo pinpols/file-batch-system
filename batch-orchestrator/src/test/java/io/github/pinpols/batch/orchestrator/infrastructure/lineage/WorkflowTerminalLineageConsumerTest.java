@@ -8,16 +8,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
 import java.time.Duration;
 import java.time.Instant;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.support.Acknowledgment;
+
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
 
 @DisplayName("工作流终态血缘消费:有效事件投递,投递失败重投,非法报文丢弃")
 class WorkflowTerminalLineageConsumerTest {

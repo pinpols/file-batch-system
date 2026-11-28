@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.controller.response;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 
 /** 结果版本的稳定 HTTP 表示；仅持久化行为保留在 Entity 中。 */
 @Builder

@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * orchestrator {@code /internal/readiness/job} 响应体(ADR-043)。

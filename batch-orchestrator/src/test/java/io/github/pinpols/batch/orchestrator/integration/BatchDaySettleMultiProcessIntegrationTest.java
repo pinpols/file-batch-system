@@ -2,8 +2,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,12 +18,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** R33 证据：同一 Job 的输出版本在生产冷归档后仍须保留准确血缘。 */
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)

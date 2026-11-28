@@ -1,9 +1,12 @@
 package io.github.pinpols.batch.orchestrator.domain.query;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
+
 import org.springframework.format.annotation.DateTimeFormat;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
+import jakarta.validation.constraints.NotBlank;
 
 /** 内部等待查询的 HTTP 参数；分页缺省值由查询服务统一补齐。 */
 public record PersistentWaitReadQuery(

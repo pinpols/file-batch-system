@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.application.contract.query;
 
+import lombok.Data;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import lombok.Data;
 
 @Data
 public class PageQueryRequest {

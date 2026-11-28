@@ -1,11 +1,8 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
-import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
@@ -18,6 +15,12 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 
 /**
  * Trigger 优雅停机协调器：

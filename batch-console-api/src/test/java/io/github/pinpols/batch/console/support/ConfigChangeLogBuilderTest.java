@@ -2,10 +2,11 @@ package io.github.pinpols.batch.console.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.logging.AuditLogConstants;
-import io.github.pinpols.batch.console.domain.config.param.ConfigChangeLogInsertParam;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
+import io.github.pinpols.batch.console.domain.config.param.ConfigChangeLogInsertParam;
 
 @DisplayName("配置变更日志构造: 默认值补齐、显式覆盖与字段截断")
 class ConfigChangeLogBuilderTest {

@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * pipeline-progress dirty 扫描发布器配置（{@code batch.console.pipeline-progress-dirty}）。

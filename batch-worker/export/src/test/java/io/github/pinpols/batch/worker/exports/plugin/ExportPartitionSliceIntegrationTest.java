@@ -2,12 +2,6 @@ package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.plugin.ExportDataContext;
-import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -16,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +21,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import io.github.pinpols.batch.common.plugin.ExportDataContext;
+import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 
 /**
  * 分片完整性集成测试：验证 EXPORT 分片逻辑在真实 PostgreSQL 上满足 <b>4 片无重叠 + 全集覆盖</b>两个不变量。

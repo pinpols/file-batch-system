@@ -3,11 +3,6 @@ package io.github.pinpols.batch.trigger.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.domain.MisfireHandler;
-import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
-import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireListener;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +10,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.domain.MisfireHandler;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireListener;
 
 /**
  * 校验 {@link QuartzMisfireListener} 的装配。Quartz cron 触发器使用 {@code

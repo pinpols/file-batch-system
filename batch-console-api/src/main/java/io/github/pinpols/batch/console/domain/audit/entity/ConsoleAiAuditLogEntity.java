@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.entity;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+
 import lombok.Data;
 
 @Data

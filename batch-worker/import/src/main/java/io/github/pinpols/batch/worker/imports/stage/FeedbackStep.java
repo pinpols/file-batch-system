@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.FileAuditOperationType;
 import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
@@ -11,9 +16,6 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import org.springframework.stereotype.Component;
 
 /**
  * Import pipeline 的 FEEDBACK 阶段（终止步骤）：汇总 parse/validate/load 各阶段的记录统计， 以 {@code IMPORT_FEEDBACK}

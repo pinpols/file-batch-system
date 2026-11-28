@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
+import java.util.List;
+
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.AlertTrendView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.DaySeverityCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SeverityCountView;
-import java.util.List;
 
 /** dashboard alert-trend 响应：按严重度计数 + 按日趋势（均为固定字段行）。 */
 public record ConsoleAlertTrendResponse(List<SeverityCountEntry> bySeverity, List<DaySeverityCountEntry> dailyTrend) {

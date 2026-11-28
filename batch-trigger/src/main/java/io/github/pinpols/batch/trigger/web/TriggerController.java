@@ -1,5 +1,17 @@
 package io.github.pinpols.batch.trigger.web;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
@@ -16,17 +28,8 @@ import io.github.pinpols.batch.trigger.web.request.ExternalEventLaunchRequest;
 import io.github.pinpols.batch.trigger.web.request.ScheduledOccurrenceCatchUpRequest;
 import io.github.pinpols.batch.trigger.web.request.TriggerCatchUpRequest;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
+
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 触发器核心 REST 控制器，对外暴露任务手动触发与补单审批接口。 每个请求必须携带幂等键请求头；服务进入 draining 状态时，所有写入操作均拒绝并返回 {@code

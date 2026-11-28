@@ -4,18 +4,20 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
-import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 import java.time.Clock;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
+import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
+import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Worker 生命周期管理器: 下线流程的本地清理与远端同步容错")

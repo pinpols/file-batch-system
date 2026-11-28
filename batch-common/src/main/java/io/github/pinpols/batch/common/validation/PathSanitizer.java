@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.validation;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.nio.file.Path;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** D-5: 路径清洗工具，防止路径遍历攻击。所有外部输入的文件路径必须经过此类校验。 */
 public final class PathSanitizer {

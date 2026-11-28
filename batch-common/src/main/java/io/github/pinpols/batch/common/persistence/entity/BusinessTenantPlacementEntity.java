@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.persistence.entity;
 
 import java.time.Instant;
+
 import lombok.Data;
 
 /**

@@ -10,15 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.config.ConsolePushProperties;
-import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
-import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
-import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.DeliveryOutcome;
-import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.PushPayload;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.List;
@@ -26,7 +17,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
-import nl.martijndwars.webpush.Notification;
+
 import org.asynchttpclient.Response;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +29,19 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.config.ConsolePushProperties;
+import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
+import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.DeliveryOutcome;
+import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.PushPayload;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import nl.martijndwars.webpush.Notification;
 
 @DisplayName("推送发送器: 开关判定, 初始化失败兜底与投递目标查找的生命周期")
 @ExtendWith(MockitoExtension.class)

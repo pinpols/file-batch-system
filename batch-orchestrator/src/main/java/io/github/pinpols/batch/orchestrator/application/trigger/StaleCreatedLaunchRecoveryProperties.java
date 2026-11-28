@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.trigger;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * {@link StaleCreatedLaunchRecoveryScheduler} 恢复参数（{@code batch.trigger.launch.created-recovery}）。

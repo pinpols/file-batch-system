@@ -5,10 +5,12 @@ import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 
 @DisplayName("Process 计算插件的冻结配置与 Replay 能力")
 class ProcessComputePluginReplayCapabilityTest {

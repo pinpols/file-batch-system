@@ -2,11 +2,13 @@ package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.worker.exports.plugin.GenericJdbcMappedExportDataPlugin.DetailSql;
 import java.math.BigDecimal;
 import java.util.Arrays;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.exports.plugin.GenericJdbcMappedExportDataPlugin.DetailSql;
 
 @DisplayName("通用 JDBC 映射导出 keyset 区间谓词单测:区间边界,回退与游标共存语义")
 class GenericJdbcMappedExportKeysetRangeTest {

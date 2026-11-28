@@ -4,21 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 @DisplayName("BatchWorkerSdkAutoConfiguration — 属性绑定、条件退让与生命周期开关")
 class BatchWorkerSdkAutoConfigurationTest {

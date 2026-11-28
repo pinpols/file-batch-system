@@ -1,20 +1,24 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.storage.ObjectStoreException;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectStoreException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
+import jakarta.annotation.PostConstruct;
 
 /** 解析分发文件字节：支持本地路径或对象存储（S3 协议兼容 / filesystem 后端）。 */
 @Component

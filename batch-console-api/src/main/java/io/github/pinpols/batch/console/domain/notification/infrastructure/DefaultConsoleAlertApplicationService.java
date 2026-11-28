@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -13,11 +20,6 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerSilenceBridge;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** {@link ConsoleAlertApplicationService} 的默认实现： 仅执行告警状态流转，不引入额外的告警事件表。 */
 @Service

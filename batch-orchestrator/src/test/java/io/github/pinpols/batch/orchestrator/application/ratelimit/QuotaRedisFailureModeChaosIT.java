@@ -2,7 +2,17 @@ package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService.QuotaReservationOwner;
@@ -14,13 +24,6 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.infrastructure.quota.RedisQuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import io.github.pinpols.batch.testing.chaos.AbstractChaosIntegrationTest;
-import java.time.Duration;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
-import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
-import org.springframework.data.redis.core.StringRedisTemplate;
 
 /** {@code batch.quota.redis.failure-mode} 开关集成测试：Redis 全断（toxiproxy）时 FAIL_CLOSED 拒单 / FAIL_OPEN 放行。 */
 @DisplayName("Redis 故障 → quota failure-mode 语义")

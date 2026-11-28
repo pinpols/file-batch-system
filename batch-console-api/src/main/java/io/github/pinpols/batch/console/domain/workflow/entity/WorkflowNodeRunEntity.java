@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.workflow.entity;
 
-import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
 import java.time.Instant;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
 
 @Data
 @EqualsAndHashCode(callSuper = false)

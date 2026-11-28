@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.orchestrator.application.readiness;
 
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
 /**
  * readiness 持久等待的周期推进器：在无 Quartz 回调时判定就绪、驱动恢复启动，并终结超窗等待。

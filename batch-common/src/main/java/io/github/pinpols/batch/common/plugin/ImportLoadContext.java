@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.plugin;
 
 import java.util.Map;
+
 import lombok.Builder;
 
 /** 传给 {@link ImportLoadPlugin} 的 LOAD 阶段上下文。由平台填充;插件不得假设固定的 entity 类型。 */

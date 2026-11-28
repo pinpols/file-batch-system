@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.domain.governance.mapper;
 
+import java.util.List;
+import java.util.Optional;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.governance.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.domain.governance.param.AssetFreshnessPolicyUpsertParam;
-import java.util.List;
-import java.util.Optional;
-import org.apache.ibatis.annotations.Param;
 
 /** {@code batch.asset_freshness_policy} Console 管理映射。 */
 public interface ConsoleAssetFreshnessPolicyMapper {

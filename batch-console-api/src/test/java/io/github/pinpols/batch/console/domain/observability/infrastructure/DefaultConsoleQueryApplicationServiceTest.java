@@ -5,6 +5,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.observability.DefaultConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleOpsQueryPort;
@@ -20,15 +31,6 @@ import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.Cons
 import io.github.pinpols.batch.console.infrastructure.query.ConsoleJobQueryService;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
-import java.time.Instant;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("查询应用服务: 链路快照的分域查询, 时间线汇总与超限标记")

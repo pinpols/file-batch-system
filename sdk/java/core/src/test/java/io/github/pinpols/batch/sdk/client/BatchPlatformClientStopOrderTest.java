@@ -6,18 +6,20 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.time.Duration;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
+
 import io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.scheduler.HeartbeatScheduler;
 import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.time.Duration;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
-import org.mockito.Mockito;
 
 /**
  * Phase 1 §3.1 #1.1:验证 {@link BatchPlatformClient#stop()} 的关闭顺序 Kafka consumer → dispatcher drain →

@@ -5,15 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.dto.FrozenFileTemplateSnapshot;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +18,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.dto.FrozenFileTemplateSnapshot;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Worker 文件模板解析优先验证 CLAIM 中的冻结配置")

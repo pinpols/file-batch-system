@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import org.springframework.stereotype.Component;
+
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.stereotype.Component;
 
 /**
  * Console AI 成本 / 调用可观测指标。

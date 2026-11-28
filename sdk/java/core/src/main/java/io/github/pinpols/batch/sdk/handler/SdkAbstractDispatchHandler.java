@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.sdk.handler;
 
-import io.github.pinpols.batch.sdk.handler.typed.SdkAbstractTypedDispatchHandler;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.sdk.handler.typed.SdkAbstractTypedDispatchHandler;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 
 /**
  * ADR-036 — Dispatch 模板:tenant → external push(DB → HTTP/SFTP)。单条失败计 failed 不中断整批。

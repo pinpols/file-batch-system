@@ -1,7 +1,26 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -29,21 +48,6 @@ import io.github.pinpols.batch.worker.imports.stage.format.JsonFormatParser;
 import io.github.pinpols.batch.worker.imports.stage.format.ParseSupport;
 import io.github.pinpols.batch.worker.imports.stage.format.XmlFormatParser;
 import io.github.pinpols.batch.worker.imports.stage.support.ImportStageSupport;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 /**
  * Import pipeline 的 PARSE 阶段：将原始 payload 按文件格式解析为 NDJSON 暂存文件。

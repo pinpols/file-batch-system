@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.support.excel;
 
 import java.util.Locale;
-import lombok.Builder;
+
 import org.springframework.context.MessageSource;
+
+import lombok.Builder;
 
 /**
  * Excel 下拉数据校验参数封装。封装 6 个非定位参数（values/promptTitle/promptText/maxRow/messageSource/locale）， 让 {@link

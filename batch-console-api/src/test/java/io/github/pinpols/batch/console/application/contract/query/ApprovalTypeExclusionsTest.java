@@ -3,9 +3,10 @@ package io.github.pinpols.batch.console.application.contract.query;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.exception.BizException;
 
 @DisplayName("审批排除类型: 只接受最多 8 个大写类型代码")
 class ApprovalTypeExclusionsTest {

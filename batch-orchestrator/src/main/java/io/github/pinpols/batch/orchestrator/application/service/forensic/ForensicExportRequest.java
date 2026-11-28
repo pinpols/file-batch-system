@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.forensic;
 
 import java.time.LocalDate;
 import java.util.List;
+
 import lombok.Builder;
 
 /**

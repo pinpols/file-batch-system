@@ -3,12 +3,8 @@ package io.github.pinpols.batch.testing.chaos;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.config.ShedLockProviderFactory;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Duration;
-import net.javacrumbs.shedlock.core.LockConfiguration;
-import net.javacrumbs.shedlock.core.LockProvider;
-import net.javacrumbs.shedlock.core.SimpleLock;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
@@ -16,6 +12,13 @@ import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
+import io.github.pinpols.batch.common.config.ShedLockProviderFactory;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.SimpleLock;
 
 /**
  * 故障注入意图:验证 Redis 全断(toxiproxy disable)下:

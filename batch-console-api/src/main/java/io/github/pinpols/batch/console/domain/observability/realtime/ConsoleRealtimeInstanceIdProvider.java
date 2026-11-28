@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
+import java.util.UUID;
+
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleInstanceIdProperties;
-import java.util.UUID;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * 控制台实时实例标识。

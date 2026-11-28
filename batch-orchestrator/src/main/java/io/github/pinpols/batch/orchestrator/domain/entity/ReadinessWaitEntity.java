@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Data;
 
 /** Orchestrator 接管的 readiness 持久等待。 */

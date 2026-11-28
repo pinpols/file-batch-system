@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.sdk.task;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.sdk.checkpoint.InMemorySdkCheckpoint;
 import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpoint;
 import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpointState;
-import java.util.Map;
 
 /**
  * ADR-037 决策二 + 决策三 — {@link SdkTaskContext#commit(Map)} 背后的<b>三合一可靠提交协调器</b>。

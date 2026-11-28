@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import java.time.Instant;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 
 /**
  * {@code batch.quota_runtime_state} MyBatis 映射（替代原 Spring Data JDBC {@code

@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
-import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
-import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
@@ -20,7 +16,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.PatternSyntaxException;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 
 /**
  * 开箱即用的 HTTP 原子执行器。继承 {@link SdkAbstractAtomicHandler},发起单次 HTTP 调用并返回状态码 + (截断的) 响应体。

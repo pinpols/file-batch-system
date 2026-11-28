@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.TriggerLaunchContinuityMetricsProperties;
@@ -7,16 +18,9 @@ import io.github.pinpols.batch.orchestrator.domain.query.TriggerLaunchContinuity
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /** 度量已接受但过期的请求，以及近期请求到实例的启动延迟。 */
 @Slf4j

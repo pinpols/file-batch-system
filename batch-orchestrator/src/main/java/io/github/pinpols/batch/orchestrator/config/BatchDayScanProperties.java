@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** 批次日缺口扫描与依赖等待配置。 */
 @Data

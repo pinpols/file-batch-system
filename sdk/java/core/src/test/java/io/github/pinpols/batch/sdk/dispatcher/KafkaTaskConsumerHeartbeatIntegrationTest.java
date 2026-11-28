@@ -2,14 +2,6 @@ package io.github.pinpols.batch.sdk.dispatcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
-import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +14,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -38,6 +31,16 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /** 使用真实 Kafka 验证认领等待期间消费组的存活和后续位点。 */
 @EnabledIfEnvironmentVariable(named = "BATCH_SDK_KAFKA_BOOTSTRAP", matches = ".+")

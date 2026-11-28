@@ -5,13 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.enums.ReplayOperationType;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
-import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -20,6 +13,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +22,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import io.github.pinpols.batch.common.enums.ReplayOperationType;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("整 Workflow 回放只从经过校验的加密快照恢复执行输入")

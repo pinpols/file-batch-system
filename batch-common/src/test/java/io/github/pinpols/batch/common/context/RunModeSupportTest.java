@@ -2,10 +2,12 @@ package io.github.pinpols.batch.common.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.RunMode;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.RunMode;
 
 @DisplayName("运行模式归一化:遗留别名改写与缺省模式回退")
 class RunModeSupportTest {

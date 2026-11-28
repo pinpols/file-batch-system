@@ -2,10 +2,10 @@ package io.github.pinpols.batch.worker.imports.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import java.nio.file.Path;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,6 +16,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 
 @TestPropertySource(
         properties = {"batch.worker.report-outbox.enabled=true", "batch.worker.report-outbox.storage=SQLITE"})

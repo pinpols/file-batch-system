@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.orchestrator.service;
 
+import java.util.Objects;
+import java.util.Set;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import java.util.Objects;
-import java.util.Set;
 
 /** 启动和持久等待共用的原请求身份；调用方负责事务、行锁和各入口允许的状态范围。 */
 public final class LaunchRequestIdentityGuard {

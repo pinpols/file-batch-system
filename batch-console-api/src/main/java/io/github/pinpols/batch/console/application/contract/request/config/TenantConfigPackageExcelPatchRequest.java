@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import java.util.Map;
+
+import lombok.Data;
+
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import java.util.Map;
-import lombok.Data;
 
 /** 租户配置包 Excel 预览出错行内联编辑请求:定位 (sheet, rowNo) + 改动的单元格值。 */
 @Data

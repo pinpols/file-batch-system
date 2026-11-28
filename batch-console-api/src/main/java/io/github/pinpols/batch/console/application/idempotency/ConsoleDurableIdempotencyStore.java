@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.application.idempotency;
 
-import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleIdempotencyMapper;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleIdempotencyMapper;
 
 /**
  * Console HTTP 幂等完成态的数据库兜底。

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
 import java.time.Instant;
+
 import lombok.Data;
 
 /** {@link ConsolePushApprovalNotifier} 扫描结果 DTO,仅在推送链路内部传递。 */

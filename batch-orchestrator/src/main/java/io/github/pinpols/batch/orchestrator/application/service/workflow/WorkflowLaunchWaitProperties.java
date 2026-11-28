@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
-import jakarta.validation.constraints.Min;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
+import jakarta.validation.constraints.Min;
 
 /** Workflow 根启动容量等待的有界恢复参数：每轮认领数量、并发启动数、立即补槽批量与持久化等待的下次检查间隔。 */
 @Data

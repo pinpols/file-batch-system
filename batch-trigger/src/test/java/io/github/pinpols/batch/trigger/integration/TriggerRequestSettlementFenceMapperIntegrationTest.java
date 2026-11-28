@@ -2,10 +2,8 @@ package io.github.pinpols.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
 import java.time.LocalDate;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +12,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
 
 @SpringBootTest(classes = BatchTriggerApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional(propagation = Propagation.NEVER)

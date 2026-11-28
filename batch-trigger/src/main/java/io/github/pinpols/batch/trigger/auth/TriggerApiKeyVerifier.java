@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.trigger.auth;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import io.github.pinpols.batch.common.security.ApiKeyHasher;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.trigger.mapper.auth.TriggerApiKeyAuthMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -14,8 +9,16 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
+import io.github.pinpols.batch.common.security.ApiKeyHasher;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.trigger.mapper.auth.TriggerApiKeyAuthMapper;
 
 /** 按租户校验触发 API 密钥及事件来源作用域，并缓存有界时效的认证结果。 */
 @Component

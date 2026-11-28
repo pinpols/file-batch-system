@@ -9,6 +9,15 @@ import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.time.Duration;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.MockedConstruction;
+
 import io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.idempotent.Idempotent;
@@ -19,13 +28,6 @@ import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.wire.RegisterRequest;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.time.Duration;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.MockedConstruction;
 
 /**
  * P7-3:验证 {@link BatchPlatformClient#start()} 的生命周期失败语义。

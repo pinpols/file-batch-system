@@ -1,16 +1,12 @@
 package io.github.pinpols.batch.worker.core.reportoutbox;
 
-import io.github.pinpols.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
-import io.github.pinpols.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
-import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
-import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.SqliteSessionFactorySupport;
-import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.ObjectProvider;
@@ -25,6 +21,13 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
+import io.github.pinpols.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
+import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.SqliteSessionFactorySupport;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "batch.worker.report-outbox", name = "enabled", havingValue = "true")

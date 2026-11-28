@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.common.validation;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import jakarta.validation.ConstraintValidator;
-import jakarta.validation.ConstraintValidatorContext;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
 
 public class ValidIpValidator implements ConstraintValidator<ValidIp, String> {
 

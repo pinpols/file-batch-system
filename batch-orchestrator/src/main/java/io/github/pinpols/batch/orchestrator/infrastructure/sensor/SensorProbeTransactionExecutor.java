@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorStateMachine;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import java.time.Instant;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorStateMachine;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 
 /**
  * Sensor 扫描的短事务执行器。

@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.common.http;
 
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Proxy;
@@ -10,6 +7,11 @@ import java.net.UnknownHostException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
+import jakarta.annotation.PreDestroy;
 import okhttp3.Dns;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;

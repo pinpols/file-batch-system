@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
-import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
 
 @Mapper
 public interface ConsoleAiAttachmentMapper {

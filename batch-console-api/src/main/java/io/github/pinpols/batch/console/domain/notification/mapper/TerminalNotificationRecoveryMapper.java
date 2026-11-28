@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
-import io.github.pinpols.batch.console.domain.notification.application.contract.response.TerminalDeliveryRecoveryResponse;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.TerminalDeliveryRecoveryResponse;
 
 public interface TerminalNotificationRecoveryMapper {
     String bindTenant(@Param("tenantId") String tenantId);

@@ -2,14 +2,16 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
+import java.util.Set;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.ScheduleType;
-import java.util.Arrays;
-import java.util.Set;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * 防漂移单测：锁定 {@link ConfigPackageExcelWorkbookWriter} 暴露给 Excel 模板下拉的 4 个 dropdown 数组 与后端真实 enum /

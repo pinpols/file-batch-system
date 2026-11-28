@@ -3,6 +3,10 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
@@ -22,9 +26,6 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 @DisplayName("任务结果生产装配：直接注入窄协作者并在容器生命周期注册指标")
 class TaskOutcomeWiringTest {

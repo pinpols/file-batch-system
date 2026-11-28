@@ -9,18 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
-import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
-import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
-import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
-import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
-import io.github.pinpols.batch.trigger.infrastructure.scheduler.TriggerReconciler;
-import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
-import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -45,7 +33,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -78,6 +68,19 @@ import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 import org.springframework.scheduling.quartz.SpringBeanJobFactory;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.util.AopTestUtils;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
+import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
+import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
+import io.github.pinpols.batch.trigger.infrastructure.scheduler.TriggerReconciler;
+import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
+import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
 
 /** 暂停会保留进行中的工作并记录其结果，但不得推进任何边。 */
 @SpringBootTest(

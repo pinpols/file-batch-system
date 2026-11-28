@@ -3,16 +3,6 @@ package io.github.pinpols.batch.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
-import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.common.utils.AlertFingerprints;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
-import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerSilenceBridge;
-import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
-import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -23,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -32,6 +23,18 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.utility.DockerImageName;
 import org.yaml.snakeyaml.Yaml;
+
+import com.fasterxml.jackson.databind.JsonNode;
+
+import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.common.utils.AlertFingerprints;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
+import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerSilenceBridge;
+import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /** 生产调度器运行期间，持续观察并保留终态结果。 */
 @Tag("integration")

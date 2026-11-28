@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 
 /**
  * {@code batch.result_version} MyBatis 映射（ADR-017）。

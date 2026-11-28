@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.console.domain.rbac.application.contract.request;
 
+import java.util.List;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
+
 import jakarta.annotation.Nullable;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.util.List;
-import lombok.Data;
 
 @Data
 public class BatchCreateTenantRequest {

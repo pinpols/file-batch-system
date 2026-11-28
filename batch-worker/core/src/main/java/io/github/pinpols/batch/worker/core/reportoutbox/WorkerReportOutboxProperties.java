@@ -1,9 +1,12 @@
 package io.github.pinpols.batch.worker.core.reportoutbox;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.nio.file.Path;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 @Data
 @ConfigurationProperties(prefix = "batch.worker.report-outbox")

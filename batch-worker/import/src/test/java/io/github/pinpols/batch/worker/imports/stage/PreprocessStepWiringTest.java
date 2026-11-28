@@ -3,7 +3,12 @@ package io.github.pinpols.batch.worker.imports.stage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
@@ -12,9 +17,6 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 @DisplayName("导入预处理生产装配：只使用注入的配置、序列化器与对象读取协作者")
 class PreprocessStepWiringTest {

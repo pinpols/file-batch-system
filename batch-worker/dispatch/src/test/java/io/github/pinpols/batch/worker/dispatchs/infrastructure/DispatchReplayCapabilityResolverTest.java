@@ -5,20 +5,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.FrozenDispatchChannelResolver;
 import java.util.Map;
 import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.FrozenDispatchChannelResolver;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Dispatch 重放能力解析:仅根据任务携带的冻结渠道配置确认")

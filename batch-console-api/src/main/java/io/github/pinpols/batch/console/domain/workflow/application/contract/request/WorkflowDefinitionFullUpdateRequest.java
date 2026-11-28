@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.workflow.application.contract.request;
 
+import lombok.Data;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
 
 /**
  * Workflow DAG designer 全量替换请求(BE Spike,docs/design/workflow-dag-designer.md)。

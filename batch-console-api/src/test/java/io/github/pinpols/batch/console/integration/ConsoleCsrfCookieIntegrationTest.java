@@ -7,25 +7,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
-import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
-import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
-import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
-import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
-import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
-import io.github.pinpols.batch.console.shared.command.ConsoleScheduledOccurrenceCatchUpCommand;
-import io.github.pinpols.batch.console.support.web.ConsoleIdempotencyStore;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +28,21 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
+import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
+import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
+import io.github.pinpols.batch.console.shared.command.ConsoleScheduledOccurrenceCatchUpCommand;
+import io.github.pinpols.batch.console.support.web.ConsoleIdempotencyStore;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(
         classes = BatchConsoleApiApplication.class,

@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.common.config;
 
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.core.env.Environment;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Console 主 / 从库密码启动守护：生产 profile 下拒绝已知弱默认口令，非生产 profile 显式 WARN。

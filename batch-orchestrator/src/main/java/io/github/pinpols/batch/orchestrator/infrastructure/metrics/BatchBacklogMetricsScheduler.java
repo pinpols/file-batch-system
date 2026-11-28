@@ -1,5 +1,17 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.DeadLetterReplayStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -10,17 +22,9 @@ import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulS
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * Outbox / DLQ 积压量指标收集器。

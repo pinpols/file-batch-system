@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * ShedLock 共享配置（{@code batch.shedlock}）。

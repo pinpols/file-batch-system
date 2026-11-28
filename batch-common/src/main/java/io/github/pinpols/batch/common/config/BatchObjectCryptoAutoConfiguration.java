@@ -1,16 +1,18 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Set;
+
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
+
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 按配置装配对象存储加解密能力。 */
 @AutoConfiguration

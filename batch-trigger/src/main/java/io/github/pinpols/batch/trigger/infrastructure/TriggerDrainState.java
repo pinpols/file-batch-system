@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.springframework.stereotype.Component;
+
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 
 /**
  * Trigger 排水 (draining) 状态管理 — 与具体 scheduler 实现解耦的纯状态 bean。

@@ -2,7 +2,17 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.reactive.server.EntityExchangeResult;
+
 import com.fasterxml.jackson.databind.JsonNode;
+
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
@@ -10,13 +20,6 @@ import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.param.BatchWindowInsertParam;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueInsertParam;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.reactive.server.EntityExchangeResult;
 
 /** 真实 HTTP 和提交后的 PostgreSQL 行验证固定写入参数；包含主键回填与局部更新，不直接写业务状态。 */
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)

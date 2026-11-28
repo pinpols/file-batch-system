@@ -2,12 +2,12 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowTriggerStatusResponse;
-import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowTriggerReceiptMapper;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -18,6 +18,9 @@ import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowTriggerStatusResponse;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowTriggerReceiptMapper;
 
 /** CI 与已有本地平台库复用同一真实 Mapper 断言，全部夹具在单连接事务中回滚。 */
 public final class WorkflowTriggerReceiptFixture {

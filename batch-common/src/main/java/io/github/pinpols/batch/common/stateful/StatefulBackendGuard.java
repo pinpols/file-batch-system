@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.common.stateful;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+
 import javax.sql.DataSource;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 持久化并校验有状态可插拔功能的后端身份。

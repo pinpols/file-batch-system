@@ -8,27 +8,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretResolver;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchSecretVersionMapper;
-import io.github.pinpols.batch.worker.dispatchs.stage.DeliverDispatchStep;
-import io.github.pinpols.batch.worker.dispatchs.stage.RetryDispatchStep;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -46,6 +31,25 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretResolver;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchSecretVersionMapper;
+import io.github.pinpols.batch.worker.dispatchs.stage.DeliverDispatchStep;
+import io.github.pinpols.batch.worker.dispatchs.stage.RetryDispatchStep;
 
 @DisplayName("分发密钥版本 mapper 的真实 PostgreSQL 语义")
 class DispatchSecretVersionMapperIntegrationTest {

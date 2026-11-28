@@ -1,16 +1,19 @@
 package io.github.pinpols.batch.orchestrator.application.service.version;
 
+import java.time.LocalDate;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
-import java.time.LocalDate;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * ADR-017 §决策 §实施分阶段 Stage 3 — 结果版本读取入口。

@@ -2,8 +2,10 @@ package io.github.pinpols.batch.worker.atomic.http;
 
 import java.time.Duration;
 import java.util.Set;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * {@link HttpTaskExecutor} 配置 — 默认全关。

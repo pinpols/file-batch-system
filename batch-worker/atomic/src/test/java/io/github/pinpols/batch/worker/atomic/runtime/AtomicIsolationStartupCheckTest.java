@@ -5,11 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +12,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.env.Environment;
+
+import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 
 /**
  * {@link AtomicIsolationStartupCheck} 单测 —— mock {@link Environment} + executor {@link

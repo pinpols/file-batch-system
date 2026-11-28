@@ -2,12 +2,15 @@ package io.github.pinpols.batch.orchestrator.application.plan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.ShardStrategy;
-import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
-import jakarta.validation.Validation;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.ShardStrategy;
+import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
+
+import jakarta.validation.Validation;
 
 @DisplayName("按大小切分数量解析器: 目标条数优先, 分档策略与参数校验口径")
 class SizeBasedPartitionCountResolverTest {

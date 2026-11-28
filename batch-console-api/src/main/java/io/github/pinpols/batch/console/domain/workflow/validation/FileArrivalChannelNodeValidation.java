@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.domain.workflow.validation;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
-import java.util.Map;
 
 /** 在工作流保存与配置导入时校验文件到达渠道字段，不要求渠道提前部署。 */
 public final class FileArrivalChannelNodeValidation {

@@ -2,16 +2,18 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunFinding;
-import io.github.pinpols.batch.orchestrator.infrastructure.dryrun.JdbcDryRunSqlProbe;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.ArrayList;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunFinding;
+import io.github.pinpols.batch.orchestrator.infrastructure.dryrun.JdbcDryRunSqlProbe;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("SQL dry-run 计划阶段的数据库副作用")
 class DryRunSqlProbePlanningIntegrationTest {

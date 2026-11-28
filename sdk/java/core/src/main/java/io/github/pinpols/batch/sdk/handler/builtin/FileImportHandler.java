@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.sdk.handler.builtin;
 
-import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
-import io.github.pinpols.batch.sdk.handler.SdkRowResult;
-import io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedCodec;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.BufferedReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -13,8 +8,16 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Objects;
+
 import javax.sql.DataSource;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
+import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedCodec;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /**
  * 开箱即用的「分隔符文件 → JDBC 表」导入 handler(ADR-036 Import shape 的配置驱动版)。

@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Alertmanager webhook 出口(sink)配置。

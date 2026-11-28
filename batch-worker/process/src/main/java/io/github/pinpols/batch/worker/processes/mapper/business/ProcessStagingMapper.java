@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.processes.mapper.business;
 
-import io.github.pinpols.batch.worker.processes.cleanup.ProcessStagingGenerationCandidate;
-import io.github.pinpols.batch.worker.processes.query.ProcessStagingExpiredScanQuery;
 import java.time.Instant;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.worker.processes.cleanup.ProcessStagingGenerationCandidate;
+import io.github.pinpols.batch.worker.processes.query.ProcessStagingExpiredScanQuery;
 
 /**
  * {@code batch.process_staging} 业务表 Mapper（业务库 = {@code processBusinessDataSource}）。

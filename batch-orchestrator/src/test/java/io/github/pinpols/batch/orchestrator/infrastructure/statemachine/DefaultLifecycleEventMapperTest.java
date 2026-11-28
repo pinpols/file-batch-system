@@ -3,11 +3,12 @@ package io.github.pinpols.batch.orchestrator.infrastructure.statemachine;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.enums.TaskStatus;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
 
 @DisplayName("默认生命周期事件映射:起始状态与事件解析,事件文本归一化,终态保护与非法入参拒绝")
 class DefaultLifecycleEventMapperTest {

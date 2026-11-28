@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
+import java.util.List;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.util.List;
-import lombok.Data;
 
 @Data
 public class BatchDayCatchUpRequest {

@@ -2,11 +2,13 @@ package io.github.pinpols.batch.common.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.time.Instant;
 import java.time.LocalDate;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.utils.JsonUtils;
 
 @DisplayName("Workflow 与每日连续性启动请求: 持久化和恢复保留两侧契约")
 class LaunchRequestIntegrationContractTest {

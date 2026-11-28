@@ -4,12 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import java.util.Set;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +16,12 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
+
+import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 
 /** {@link AtomicExecutorProductionGuard} 单测:验证 prod profile fail-closed 行为 + dev/local 放行行为。 */
 @ExtendWith(MockitoExtension.class)

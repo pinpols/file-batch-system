@@ -2,21 +2,23 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespaceSerializer;
 import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
 import io.github.pinpols.batch.console.support.cache.RedisKeyUtils;
 import io.github.pinpols.batch.console.support.web.RedisConsoleIdempotencyStore;
 import io.github.pinpols.batch.testing.TestValkeyContainers;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
-import org.springframework.data.redis.core.StringRedisTemplate;
 
 /** 使用真实 Redis 兼容服务验证 Lua 的 owner 校验和预览 CAS，不启动整套应用。 */
 @DisplayName("Redis 占位归属: 陈旧持有者不能改写,并发预览更新只有一个赢家")

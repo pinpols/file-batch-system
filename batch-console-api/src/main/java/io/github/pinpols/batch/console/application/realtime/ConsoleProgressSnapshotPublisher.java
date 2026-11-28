@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.console.application.realtime;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.console.config.ConsoleExecutionProgressConfiguration;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -13,11 +8,20 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.console.config.ConsoleExecutionProgressConfiguration;
+
+import jakarta.annotation.PreDestroy;
 
 /** 已授权进度对象按租户/流共享采样；无订阅即停止，时间戳不触发重复业务推送。 */
 @Service

@@ -2,10 +2,9 @@ package io.github.pinpols.batch.worker.core.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import java.io.InputStream;
 import java.util.List;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -24,6 +23,9 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 
 /**
  * ADR-038 P0 mapper IT:真 PG 上验证 {@link PipelineProgressMapper#deleteByInstance} 的 SQL 形状 —— 补偿删业务行后

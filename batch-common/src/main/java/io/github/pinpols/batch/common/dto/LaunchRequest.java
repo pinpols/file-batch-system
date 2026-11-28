@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.enums.TriggerType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
 
 /**
  * Launch 请求模型. 触发侧 (CRON / FIXED_RATE / API / MANUAL) 计算 bizDate / 参数后封装提交给 orchestrator.

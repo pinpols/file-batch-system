@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import io.github.pinpols.batch.common.security.BlockedAddressException;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -25,7 +23,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
+
 import javax.net.SocketFactory;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.security.BlockedAddressException;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
+
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import okhttp3.Interceptor;
@@ -37,8 +43,6 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import okio.Buffer;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("外部出站网络传输 - 校验地址策略选择,请求响应映射,双栈连接回退与代理绕过行为")
 class OkHttpOutboundHttpTransportTest {

@@ -8,13 +8,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplaySessionStatus;
-import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import java.time.Instant;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplaySessionStatus;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 
 /** 会话 Mapper 的默认委托：重开部分失败时统一使用 RUNNING 作为目标状态。 */
 @DisplayName("批次日重放会话 Mapper 默认方法")

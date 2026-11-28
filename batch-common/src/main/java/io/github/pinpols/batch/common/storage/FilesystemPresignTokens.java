@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.common.storage;
 
-import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Base64;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * FS 后端 presign 令牌的签发 / 校验工具（Phase 2 §4①）。

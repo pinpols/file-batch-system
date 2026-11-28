@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.file.application;
 
+import java.util.List;
+
+import org.springframework.web.multipart.MultipartFile;
+
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.ArchiveFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.ConsoleFileUploadBindingRequest;
@@ -10,8 +14,6 @@ import io.github.pinpols.batch.console.domain.file.application.contract.request.
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePresignUploadResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileUploadTargetResponse;
-import java.util.List;
-import org.springframework.web.multipart.MultipartFile;
 
 /** 控制台文件治理应用服务：归档、删除、重派、预签名下载及到达组操作。 */
 public interface ConsoleFileApplicationService {

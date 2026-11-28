@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import io.github.pinpols.batch.common.config.BatchProfileSupport;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
-import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.config.BatchProfileSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 
 /**
  * 部署期默认密码守护:启动后检测内置系统账号(admin / auditor / config-admin)的 password_hash 是否仍是出厂明文 {@code admin123}。

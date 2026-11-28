@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -10,11 +17,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import org.springframework.stereotype.Component;
 
 /** 为 JOB_RERUN 根 Workflow 启动选择不可变的 Job 定义快照。 */
 @Component

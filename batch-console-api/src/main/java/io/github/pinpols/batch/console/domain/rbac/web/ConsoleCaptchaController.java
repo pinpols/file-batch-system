@@ -1,5 +1,11 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -7,10 +13,6 @@ import io.github.pinpols.batch.console.config.CaptchaProperties;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleCaptchaConfigResponse;
 import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 验证码公开端点(登录前即可访问,无需认证):

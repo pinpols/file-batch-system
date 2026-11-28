@@ -1,10 +1,7 @@
 package io.github.pinpols.batch.trigger.config;
 
-import io.github.pinpols.batch.common.config.BatchKafkaProducerProperties;
-import io.github.pinpols.batch.common.config.BatchKafkaProducerSupport;
-import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
+
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +12,12 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.config.BatchKafkaProducerProperties;
+import io.github.pinpols.batch.common.config.BatchKafkaProducerSupport;
+import io.micrometer.observation.ObservationRegistry;
 
 /**
  * ADR-010 Stage 4: trigger 端 Kafka 生产者配置（固化无开关）。

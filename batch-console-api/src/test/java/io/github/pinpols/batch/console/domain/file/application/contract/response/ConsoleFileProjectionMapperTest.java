@@ -2,11 +2,13 @@ package io.github.pinpols.batch.console.domain.file.application.contract.respons
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
-import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import java.time.Instant;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 
 @DisplayName("文件配置响应投影: 具名视图行转换为稳定响应")
 class ConsoleFileProjectionMapperTest {

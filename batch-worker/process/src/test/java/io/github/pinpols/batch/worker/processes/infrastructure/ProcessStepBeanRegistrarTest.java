@@ -4,13 +4,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
-import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
-import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
-import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
-import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
-import io.github.pinpols.batch.worker.processes.stage.ProcessStageStep;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
@@ -18,6 +13,13 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
+
+import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
+import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
+import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
+import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
+import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
+import io.github.pinpols.batch.worker.processes.stage.ProcessStageStep;
 
 @DisplayName("处理阶段 Bean 注册:启动时先清空旧注册,再把阶段步骤与计算插件按模块写入注册表")
 class ProcessStepBeanRegistrarTest {

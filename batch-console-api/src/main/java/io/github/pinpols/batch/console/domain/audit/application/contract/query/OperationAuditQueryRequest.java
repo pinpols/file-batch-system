@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.audit.application.contract.query;
 
-import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
 import java.time.Instant;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
 
 /**
  * 通用控制台用户操作审计查询参数。所有字段可空,空 = 不过滤。

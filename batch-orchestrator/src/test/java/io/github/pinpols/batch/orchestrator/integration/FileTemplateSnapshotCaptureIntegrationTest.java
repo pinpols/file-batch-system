@@ -3,25 +3,13 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.config.BatchKmsProperties;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.dto.FrozenFileTemplateSnapshot;
-import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import io.github.pinpols.batch.orchestrator.mapper.FileTemplateSnapshotMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.orchestrator.service.FileTemplateSnapshotService;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -38,6 +26,21 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import io.github.pinpols.batch.common.config.BatchKmsProperties;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.dto.FrozenFileTemplateSnapshot;
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.mapper.FileTemplateSnapshotMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.orchestrator.service.FileTemplateSnapshotService;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @Testcontainers(disabledWithoutDocker = true)
 @DisplayName("文件模板捕获使用真实 PostgreSQL JSON 与平台认证加密")

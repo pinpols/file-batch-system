@@ -2,15 +2,13 @@ package io.github.pinpols.batch.worker.atomic.shell;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,6 +16,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 
 /**
  * ADR-026 §dry-run 守护:dry-run 上下文下 Shell executor 必须不 fork 进程、不建 workdir,直接回 success +

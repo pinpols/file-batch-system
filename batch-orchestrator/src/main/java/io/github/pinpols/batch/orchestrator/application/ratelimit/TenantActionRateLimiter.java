@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
+import java.util.Map;
+import java.util.function.ToLongFunction;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import java.util.Map;
-import java.util.function.ToLongFunction;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * 租户级动作限流门面：{@link RateLimitAction} 决定读哪个配额配置，然后委托 {@link TokenBucketRateLimiter} 做 Redis 分布式令牌桶限流。

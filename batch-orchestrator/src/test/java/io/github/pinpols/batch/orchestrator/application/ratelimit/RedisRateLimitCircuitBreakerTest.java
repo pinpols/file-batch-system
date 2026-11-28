@@ -9,6 +9,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+
 import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.TokensInheritanceStrategy;
 import io.github.bucket4j.distributed.BucketProxy;
@@ -18,11 +25,6 @@ import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.lettuce.core.RedisCommandTimeoutException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 
 /**
  * Redis 短路熔断行为测试（用 mock {@link LettuceBasedProxyManager} 确定性驱动状态机，不依赖真 Redis）。

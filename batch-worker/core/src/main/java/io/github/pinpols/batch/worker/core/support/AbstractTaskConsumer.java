@@ -1,5 +1,19 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.Semaphore;
+
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.support.Acknowledgment;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.BatchMdc;
@@ -16,18 +30,8 @@ import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.Semaphore;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.support.Acknowledgment;
 
 /**
  * Kafka 消费骨架（所有 worker 通用）。

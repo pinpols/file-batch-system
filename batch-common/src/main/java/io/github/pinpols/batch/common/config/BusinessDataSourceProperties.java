@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Worker 业务库 HikariCP 连接池配置（{@code batch.datasource.business}）。

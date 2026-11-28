@@ -8,18 +8,20 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.trigger.domain.query.ExpiredReadinessWaitRow;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
-import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+
+import io.github.pinpols.batch.trigger.domain.query.ExpiredReadinessWaitRow;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
+import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("readiness 等待扫尾: 无 Quartz 回调时按 CAS 终结超窗等待")
 class ReadinessWaitSweeperTest {

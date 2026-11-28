@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** ADR-018 Stage 5/7 — 跨批量日依赖 reconciler 配置。 */
 @Data

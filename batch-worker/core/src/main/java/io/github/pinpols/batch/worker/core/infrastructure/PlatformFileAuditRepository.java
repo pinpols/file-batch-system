@@ -4,12 +4,14 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toJson;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.truncate;
 
+import org.springframework.stereotype.Repository;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import io.github.pinpols.batch.worker.core.param.PlatformFileAuditInsertParam;
 import io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
 
 /** 文件错误记录与审计日志的数据访问协作者。 */
 @Repository

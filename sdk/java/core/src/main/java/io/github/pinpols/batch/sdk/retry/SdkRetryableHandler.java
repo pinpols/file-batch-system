@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.sdk.retry;
 
+import java.time.Duration;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
-import java.time.Duration;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * A.4 — 声明式重试的织入装饰器。包一个被 {@link RetryOn} 标注的 {@link SdkTaskHandler},对整体执行遇到指定异常时按退避重试。

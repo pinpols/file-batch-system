@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.shared.client;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.springframework.core.env.Environment;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 解析 Console 内部 HTTP 客户端地址，并支持 RANDOM_PORT 测试在服务启动后回调本应用。 */
 public final class ConsoleInternalBaseUrlResolver {

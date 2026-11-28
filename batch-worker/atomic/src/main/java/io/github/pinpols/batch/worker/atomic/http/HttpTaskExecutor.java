@@ -1,22 +1,5 @@
 package io.github.pinpols.batch.worker.atomic.http;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.CredentialEnvResolver;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.security.SensitiveDataValidator;
-import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
-import io.github.pinpols.batch.common.spi.task.ResourceKind;
-import io.github.pinpols.batch.common.spi.task.TaskCapability;
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
-import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import jakarta.annotation.PreDestroy;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,8 +22,33 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.CredentialEnvResolver;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.security.SensitiveDataValidator;
+import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
+import io.github.pinpols.batch.common.spi.task.ResourceKind;
+import io.github.pinpols.batch.common.spi.task.TaskCapability;
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.SecretMasking;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+
+import jakarta.annotation.PreDestroy;
 import okhttp3.Dns;
 import okhttp3.Headers;
 import okhttp3.MediaType;
@@ -49,10 +57,6 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.stereotype.Component;
 
 /**
  * HTTP task SPI 实现 — 用 OkHttp 发出口 HTTP 请求,带域名白名单 / 超时 / 响应截断 / 简单重试 / 基础鉴权。

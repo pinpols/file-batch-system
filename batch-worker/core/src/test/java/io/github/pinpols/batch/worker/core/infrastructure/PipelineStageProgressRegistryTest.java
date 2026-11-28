@@ -2,12 +2,14 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
-import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
+import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 
 @DisplayName("流水线阶段进度注册表: 并发任务隔离与不可识别进度的过滤")
 class PipelineStageProgressRegistryTest {

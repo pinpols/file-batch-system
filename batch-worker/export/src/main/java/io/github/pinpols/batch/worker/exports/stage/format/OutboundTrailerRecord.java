@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * ADR-041 Phase1.4:出站内嵌 trailer 控制记录构造(纯函数,可独立单测)。按 {@code trailer_template} 把记录类型标记 / 声明笔数 /

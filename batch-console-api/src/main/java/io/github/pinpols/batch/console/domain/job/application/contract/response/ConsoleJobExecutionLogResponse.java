@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 /** {@code batch.job_execution_log} 单行日志(console 展示视图)。 */

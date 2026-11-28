@@ -5,12 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.redis.BatchRedisKeys;
-import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +20,12 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("配置缓存版本读取的初始值与不可用边界")

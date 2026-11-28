@@ -1,6 +1,21 @@
 package io.github.pinpols.batch.console.application.ops.infrastructure;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriBuilder;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -45,17 +60,6 @@ import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemRe
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.time.LocalDate;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Service;
-import org.springframework.web.util.UriBuilder;
 
 /**
  * {@link ConsoleOrchestratorPort} 的默认实现：通过 RestClient 转发请求到编排器内部接口。

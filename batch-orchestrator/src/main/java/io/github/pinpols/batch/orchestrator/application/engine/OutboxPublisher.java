@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import java.util.concurrent.CompletableFuture;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 
 public interface OutboxPublisher {
 

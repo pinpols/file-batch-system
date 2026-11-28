@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.notification.param.NotificationDeliveryLogInsertParam;
 import io.github.pinpols.batch.console.domain.notification.view.NotificationDeliveryLogRow;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface NotificationDeliveryLogMapper {
 

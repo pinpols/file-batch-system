@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
+import java.util.Map;
+import java.util.Objects;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import java.util.Map;
-import java.util.Objects;
 
 /** 容量等待持有已构建的同一执行快照；该对象只在受信运行时内解封使用。 */
 public record WorkflowLaunchWaitSnapshot(

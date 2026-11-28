@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import java.util.List;
+
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 
 /**
  * SDK Phase 2 §2.3:心跳响应里的"平台指令"(platform directive)。

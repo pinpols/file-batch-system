@@ -8,6 +8,20 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.scheduling.TaskScheduler;
+
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
@@ -20,18 +34,6 @@ import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.scheduling.TaskScheduler;
 
 @DisplayName("批量 claim 排队期间的租约回收围栏")
 class QueuedBatchClaimLeaseFenceTest {

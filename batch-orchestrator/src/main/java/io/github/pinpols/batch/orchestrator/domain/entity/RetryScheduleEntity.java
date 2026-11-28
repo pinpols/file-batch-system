@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.common.i18n.LocalizedErrorCarrier;
 import java.time.Instant;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.i18n.LocalizedErrorCarrier;
 
 @Data
 public class RetryScheduleEntity implements LocalizedErrorCarrier {

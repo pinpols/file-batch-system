@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.CustomerImportPayload;
@@ -13,14 +24,6 @@ import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationI
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationOutcome;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationRuleSetMerger;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationSession;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * 导入数据质量校验服务:对数据集级别和记录级别分别执行规则校验。

@@ -8,14 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
-import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import java.time.Clock;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +21,14 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
+import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
+import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 
 // LENIENT:setUp 共享 stub(tenantGuard / cursorFactory / realtimeEventHub.subscribe)
 // 被部分用例不触发,符合 docs/agent-baseline.md §测试约定豁免场景。

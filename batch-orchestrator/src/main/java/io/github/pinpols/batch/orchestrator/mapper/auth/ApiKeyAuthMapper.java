@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.mapper.auth;
 
-import io.github.pinpols.batch.orchestrator.auth.ApiKeyCandidate;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.auth.ApiKeyCandidate;
 
 /**
  * 只读 + 哈希升级访问 batch.api_key 表 — 给 {@link ApiKeyVerifier} 验 X-Batch-Api-Key header 用。

@@ -9,7 +9,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+
 import com.fasterxml.jackson.databind.JsonNode;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -28,13 +38,6 @@ import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequ
 import io.github.pinpols.batch.console.shared.command.ConsoleLaunchCommand;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.time.LocalDate;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 
 @DisplayName("Console 批量日补跑与审批解析 Workflow 根目标")
 class DefaultConsoleJobApprovalServiceWorkflowTest {

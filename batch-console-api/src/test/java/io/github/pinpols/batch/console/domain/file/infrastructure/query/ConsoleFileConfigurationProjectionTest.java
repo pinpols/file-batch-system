@@ -6,6 +6,13 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -22,11 +29,6 @@ import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryVi
 import io.github.pinpols.batch.console.domain.file.view.FilePipelineStepRunQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 
 @DisplayName("文件配置查询: Mapper 结果投影为稳定响应类型")
 class ConsoleFileConfigurationProjectionTest {

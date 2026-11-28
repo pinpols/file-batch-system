@@ -1,15 +1,10 @@
 package io.github.pinpols.batch.console.config;
 
-import com.zaxxer.hikari.HikariDataSource;
-import io.github.pinpols.batch.common.config.ApplicationNameProvider;
-import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
-import io.github.pinpols.batch.common.config.HikariPgSessionSupport;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.util.HashMap;
 import java.util.Map;
+
 import javax.sql.DataSource;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,6 +14,16 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
+
+import com.zaxxer.hikari.HikariDataSource;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
+import io.github.pinpols.batch.common.config.HikariPgSessionSupport;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * P2-4: 仅在 {@code batch.console.read-replica.enabled=true} 时生效——为 console-api 装配主/从两套 HikariPool，由

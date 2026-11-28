@@ -2,16 +2,19 @@ package io.github.pinpols.batch.orchestrator.application.plan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.enums.JobType;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams.BundleFile;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams.BundleFile;
 
 @DisplayName("束计划参数解析: 按作业类型提取必需绑定字段的口径")
 class BundlePlanParamsTest {

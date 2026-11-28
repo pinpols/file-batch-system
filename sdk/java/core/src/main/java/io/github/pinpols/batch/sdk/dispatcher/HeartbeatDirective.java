@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 
 /**
  * SDK Phase 2 §2.3:心跳回包里的"平台指令"投影 —— 对齐平台 {@code

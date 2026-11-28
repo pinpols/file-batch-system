@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.sdk.idempotent;
 
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 
 /**
  * A.3 — SpEL-free 幂等键解析:把 {@link Idempotent#key()} 的 {@code {field}} 占位符按上下文求值。

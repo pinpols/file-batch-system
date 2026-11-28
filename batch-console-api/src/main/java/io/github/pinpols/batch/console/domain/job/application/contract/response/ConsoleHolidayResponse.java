@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
 import java.time.Instant;
 import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
 
 /**
  * 日历节假日响应（CalendarHolidayMapper 行投影，键为 camelCase 别名）。

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.verifier;
 
-import io.github.pinpols.batch.common.enums.JobType;
 import java.util.Map;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.enums.JobType;
 
 /**
  * ContentVerifier 接收的执行上下文，描述"刚结束的这一步"是什么。

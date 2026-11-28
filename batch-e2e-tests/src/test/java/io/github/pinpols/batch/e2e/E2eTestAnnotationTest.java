@@ -2,7 +2,6 @@ package io.github.pinpols.batch.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -10,6 +9,8 @@ import org.junit.platform.commons.support.AnnotationSupport;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.annotation.MergedAnnotations;
 import org.springframework.test.context.ActiveProfiles;
+
+import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
 
 @DisplayName("E2E 组合注解契约")
 class E2eTestAnnotationTest {

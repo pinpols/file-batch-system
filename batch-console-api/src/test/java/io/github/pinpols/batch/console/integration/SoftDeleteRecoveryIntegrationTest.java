@@ -2,15 +2,17 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * V145/V146 软删除复活语义的 SQL 行为合同测试 — 不走 controller 路径,直接 JdbcTemplate 验证 schema + mapper.xml

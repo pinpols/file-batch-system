@@ -1,6 +1,16 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
@@ -19,13 +29,6 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchWorkerType;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
 import io.github.pinpols.batch.worker.dispatchs.stage.DispatchStageExecutor;
 import io.github.pinpols.batch.worker.dispatchs.stage.DispatchStageOutcome;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.context.annotation.Primary;
-import org.springframework.stereotype.Component;
 
 /** 分发 pipeline 的步骤执行适配器，负责构建上下文并驱动各阶段执行。 */
 @Primary

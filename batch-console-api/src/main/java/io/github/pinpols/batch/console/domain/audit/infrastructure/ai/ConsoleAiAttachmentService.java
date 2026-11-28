@@ -1,5 +1,20 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.dao.DataAccessException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
@@ -16,18 +31,6 @@ import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMa
 import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
 import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.UUID;
-import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataAccessException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /** 管理 AI 私有图片存储、所有者校验和持久化对象删除意图。 */
 @Service

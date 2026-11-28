@@ -1,14 +1,18 @@
 package io.github.pinpols.batch.trigger.web.request;
 
-import com.fasterxml.jackson.annotation.JsonAnySetter;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.validation.ValidTenantId;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.validation.ValidTenantId;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 @Data
 public class TriggerLaunchRequest {

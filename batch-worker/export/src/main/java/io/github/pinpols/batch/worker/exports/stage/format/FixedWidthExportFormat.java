@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.FileTemplateFormat;
-import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.List;
+
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 
 /**
  * 生成固定宽度平面文件。

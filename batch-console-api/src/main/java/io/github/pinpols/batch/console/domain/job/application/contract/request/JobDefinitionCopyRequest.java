@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 
 /** 克隆作业定义请求：必须指定 newJobCode，其余字段为可选覆盖。 */
 @Data

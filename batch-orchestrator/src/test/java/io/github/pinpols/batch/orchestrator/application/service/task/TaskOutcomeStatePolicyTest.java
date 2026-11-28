@@ -2,13 +2,15 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Set;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import java.util.Set;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("任务结果状态策略: 实例与流程终态判定, 活跃节点解析与失败提升口径")
 class TaskOutcomeStatePolicyTest {

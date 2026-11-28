@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 /**

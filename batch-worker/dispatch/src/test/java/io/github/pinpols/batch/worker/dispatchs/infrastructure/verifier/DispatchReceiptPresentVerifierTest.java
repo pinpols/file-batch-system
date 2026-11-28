@@ -2,15 +2,17 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.verifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
-import java.util.HashMap;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("分发回执存在性校验:回执码与外部请求号的非空判定及缺失时的证据回带")
 class DispatchReceiptPresentVerifierTest {

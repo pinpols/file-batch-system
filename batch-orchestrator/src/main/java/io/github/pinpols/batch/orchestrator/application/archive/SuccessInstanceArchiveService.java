@@ -1,18 +1,21 @@
 package io.github.pinpols.batch.orchestrator.application.archive;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
 import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
 import io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Objects;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * P3-3 archive 系列：终态 job_instance 运行树归档业务层。

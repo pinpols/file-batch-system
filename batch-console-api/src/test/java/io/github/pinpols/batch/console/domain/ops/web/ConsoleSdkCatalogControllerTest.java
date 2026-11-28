@@ -4,16 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog;
-import io.github.pinpols.batch.console.domain.ops.service.ConsoleSdkCatalogService;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog;
+import io.github.pinpols.batch.console.domain.ops.service.ConsoleSdkCatalogService;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 
 /** SDK 运行时可见性 ②:验证 ConsoleSdkCatalogController 包装 service 输出为 CommonResponse。 */
 @ExtendWith(MockitoExtension.class)

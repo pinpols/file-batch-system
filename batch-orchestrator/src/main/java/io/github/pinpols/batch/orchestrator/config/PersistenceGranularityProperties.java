@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import jakarta.validation.constraints.Min;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
+import jakarta.validation.constraints.Min;
 
 /**
  * 根据任务规模选择分区持久化粒度的灰度参数。

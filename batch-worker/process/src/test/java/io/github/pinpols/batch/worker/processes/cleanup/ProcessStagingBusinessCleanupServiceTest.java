@@ -3,9 +3,9 @@ package io.github.pinpols.batch.worker.processes.cleanup;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import java.time.Instant;
 import java.util.List;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 
 @DisplayName("PROCESS staging cleanup 在开启业务事务前绑定租户路由")
 @ExtendWith(MockitoExtension.class)

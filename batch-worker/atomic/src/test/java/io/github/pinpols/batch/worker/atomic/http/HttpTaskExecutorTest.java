@@ -4,11 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.common.spi.task.ResourceKind;
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
@@ -27,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,6 +31,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.common.spi.task.ResourceKind;
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 
 /** {@link HttpTaskExecutor} 单测 — validation / 黑白名单 / 真实 HTTP server(JDK {@link HttpServer})。 */
 @DisplayName("HTTP 任务执行器: 入参校验, 主机黑白名单与真实请求行为")

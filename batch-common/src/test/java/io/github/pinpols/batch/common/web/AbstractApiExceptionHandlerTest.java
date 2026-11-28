@@ -2,15 +2,17 @@ package io.github.pinpols.batch.common.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.enums.ResultCode;
 import java.sql.SQLException;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.enums.ResultCode;
 
 @DisplayName("通用异常处理:数据库资源故障返回可重试语义")
 class AbstractApiExceptionHandlerTest {

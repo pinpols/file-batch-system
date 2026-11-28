@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * 短信通知发送器配置（阿里云短信 SendSms）。与验证码的 {@link CaptchaProperties} 独立，<b>互不复用 AK/SK</b>：验证码 AK/SK

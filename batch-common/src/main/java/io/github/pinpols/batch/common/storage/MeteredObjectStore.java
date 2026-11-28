@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.common.storage;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 /**
  * 指标装饰层:给每个对象存储操作打点(延迟 + 成功/失败计数),挂在最外层(加密/raw 之外)。计量名 {@code batch.objectstore.op},按 {@code

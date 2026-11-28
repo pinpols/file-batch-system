@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.common.config;
 
-import jakarta.validation.constraints.Min;
 import java.time.Duration;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
+import jakarta.validation.constraints.Min;
 
 /**
  * 文件系统对象存储后端配置（Phase 2 §4 / §8）。绑定前缀 {@code batch.storage.filesystem}。

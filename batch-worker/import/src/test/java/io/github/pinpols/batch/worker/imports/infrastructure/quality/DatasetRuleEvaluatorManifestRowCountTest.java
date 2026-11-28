@@ -2,16 +2,19 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 
 /** ADR-040:sidecar(.chk manifest)声明的 expectedRecordCount 与实际累加行数对账。 */
 @DisplayName("数据集规则清单行数对账单测:与模板显式校验的优先级及参与条件")

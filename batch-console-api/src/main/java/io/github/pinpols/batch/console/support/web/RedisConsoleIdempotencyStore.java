@@ -2,10 +2,12 @@ package io.github.pinpols.batch.console.support.web;
 
 import java.time.Duration;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
 
 /** Redis 版控制台写请求幂等存储。 */
 @Component

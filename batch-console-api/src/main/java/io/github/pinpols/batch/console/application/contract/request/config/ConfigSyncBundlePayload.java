@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import java.util.List;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BatchWindowSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BusinessCalendarSpec;
@@ -9,10 +13,9 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.TenantQuotaPolicySpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-import java.util.List;
-import lombok.Data;
 
 @Data
 public class ConfigSyncBundlePayload {

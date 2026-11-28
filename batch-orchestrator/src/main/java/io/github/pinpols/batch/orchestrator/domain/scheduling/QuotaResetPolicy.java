@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.orchestrator.domain.scheduling;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 public enum QuotaResetPolicy {
     NONE,

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
 
 /**
  * 文件治理配置（{@code batch.file-governance}）。

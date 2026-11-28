@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.common.resilience;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.LinkedHashSet;
 import java.util.Set;
+
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 /** 在当前 Web 请求上标记实际使用过的下游降级来源。 */
 public final class DegradedResponseHeaders {

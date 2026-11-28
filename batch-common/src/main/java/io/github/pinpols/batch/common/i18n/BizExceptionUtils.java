@@ -1,16 +1,19 @@
 package io.github.pinpols.batch.common.i18n;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** {@link BizException} ↔ {@link LocalizedError} 互转工具,集中持久化 i18n 错误的写入路径。 */
 @Slf4j

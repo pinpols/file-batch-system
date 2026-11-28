@@ -1,8 +1,17 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.FrozenFileTemplateSnapshot;
 import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -12,11 +21,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
-import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 先解析受保护的重放快照，再考虑普通运行或实时配置。 */
 @Component

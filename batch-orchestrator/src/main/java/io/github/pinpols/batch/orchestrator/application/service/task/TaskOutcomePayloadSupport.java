@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import java.util.Map;
 
 /**
  * P2-4 god-class-decomposition extract: 从 {@link DefaultTaskOutcomeService} 抽出的纯函数 payload 解析助手。

@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -9,8 +13,6 @@ import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.K
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * 任务启动应用服务，区分同步 HTTP 入口与已持久化的 Kafka 队列入口。

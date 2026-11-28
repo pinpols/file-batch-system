@@ -1,16 +1,19 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
+
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.context.annotation.Profile;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 /**
  * OSS(对象存储)渠道分发适配器,将文件上传至 S3 兼容存储桶。

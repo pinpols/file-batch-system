@@ -1,9 +1,24 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Properties;
+
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Component;
+
+import lombok.Builder;
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
+
 import jakarta.activation.DataHandler;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
@@ -14,17 +29,6 @@ import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import jakarta.mail.util.ByteArrayDataSource;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Properties;
-import lombok.Builder;
-import lombok.RequiredArgsConstructor;
-import org.springframework.core.env.Environment;
-import org.springframework.stereotype.Component;
 
 /**
  * SMTP 邮件邮件分发适配器，将 {@code file_record} 中的文件作为附件通过 SMTP 发送。

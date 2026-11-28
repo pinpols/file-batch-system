@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.config;
 
-import jakarta.annotation.PostConstruct;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
+
+import jakarta.annotation.PostConstruct;
 
 /**
  * 可插拔验证码配置。登录风控只依赖 {@code CaptchaVerifier} 抽象接口,<b>换厂商只改本配置</b>(provider + 对应密钥块),不改代码。

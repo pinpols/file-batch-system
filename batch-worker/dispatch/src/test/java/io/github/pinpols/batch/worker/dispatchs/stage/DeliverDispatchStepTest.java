@@ -12,6 +12,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -29,16 +41,6 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepos
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("分发投递阶段:缺载荷与准备上下文缺失的错误码,记录新增或累加、失败路由重试、落库失败与试运行跳过")

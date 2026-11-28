@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.console.config.ConsoleMenuProperties;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -9,7 +7,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.console.config.ConsoleMenuProperties;
 
 /**
  * 控制台侧边栏菜单注册表（与前端 navigation.ts / pageMeta 对齐）。

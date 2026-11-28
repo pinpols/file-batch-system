@@ -1,7 +1,36 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Pattern;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.dao.DataAccessException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.multipart.MultipartFile;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -18,31 +47,6 @@ import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserBatchOperatio
 import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.UploadFileGuard;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
-import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.dao.DataAccessException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.multipart.MultipartFile;
 
 /** 账号批量开户：Redis 仅保存短期预览，数据库事务是 Apply 的唯一事实源。 */
 @Service

@@ -3,8 +3,10 @@ package io.github.pinpols.batch.worker.atomic.spark;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * {@code spark-submit} 原子执行器配置（{@code batch.worker.executors.spark-submit}）。

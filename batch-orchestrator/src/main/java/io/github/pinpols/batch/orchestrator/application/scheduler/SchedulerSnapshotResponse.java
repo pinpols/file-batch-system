@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.scheduler;
 
 import java.time.Instant;
 import java.util.List;
+
 import lombok.Builder;
 
 public record SchedulerSnapshotResponse(

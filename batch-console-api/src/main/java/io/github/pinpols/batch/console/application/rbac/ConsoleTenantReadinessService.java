@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.console.application.rbac;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
@@ -14,11 +22,6 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * 租户就绪自检(ADR-026 dry-run 边界内:只看「配置完整性 / 会不会跑」,不看「业务结果对不对」)。

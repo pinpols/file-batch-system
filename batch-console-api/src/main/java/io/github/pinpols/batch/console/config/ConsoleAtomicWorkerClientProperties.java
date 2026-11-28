@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Console 反向访问 batch-worker-atomic Actuator 端点的客户端配置(Round-3 #8)。

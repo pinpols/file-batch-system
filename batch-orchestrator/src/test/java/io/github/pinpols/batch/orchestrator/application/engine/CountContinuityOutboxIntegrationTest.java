@@ -6,15 +6,12 @@ import static io.github.pinpols.batch.orchestrator.application.engine.CountConti
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +25,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("连续性核对的真实 PostgreSQL 事务、重复回报和重试身份")

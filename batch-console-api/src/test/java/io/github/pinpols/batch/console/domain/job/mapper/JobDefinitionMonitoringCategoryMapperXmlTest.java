@@ -2,14 +2,16 @@ package io.github.pinpols.batch.console.domain.job.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 
 @DisplayName("作业监控分类查询映射")
 class JobDefinitionMonitoringCategoryMapperXmlTest {

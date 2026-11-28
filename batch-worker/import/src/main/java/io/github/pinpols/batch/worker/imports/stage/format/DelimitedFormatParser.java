@@ -1,14 +1,5 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
-import com.univocity.parsers.csv.CsvParser;
-import com.univocity.parsers.csv.CsvParserSettings;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.util.ArrayList;
@@ -17,6 +8,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import com.univocity.parsers.csv.CsvParser;
+import com.univocity.parsers.csv.CsvParserSettings;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 
 /**
  * 将分隔文本（CSV、TSV、管道符分隔等）解析为 NDJSON 记录。

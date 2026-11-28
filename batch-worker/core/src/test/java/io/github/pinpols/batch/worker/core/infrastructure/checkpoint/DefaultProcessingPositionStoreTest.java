@@ -6,12 +6,8 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.core.domain.entity.PipelineProgressEntity;
-import io.github.pinpols.batch.worker.core.mapper.PipelineProgressMapper;
-import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.OffsetDateTime;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +15,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.github.pinpols.batch.worker.core.domain.entity.PipelineProgressEntity;
+import io.github.pinpols.batch.worker.core.mapper.PipelineProgressMapper;
+import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("处理位点存储: 位点读取语义, 委托透传与失败指标")

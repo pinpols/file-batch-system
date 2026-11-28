@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.springframework.stereotype.Repository;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
@@ -17,11 +25,6 @@ import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkAttemptFai
 import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkCompensatedParam;
 import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkFailedParam;
 import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkSentParam;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
 
 /** 文件分发数据仓库，封装分发记录、渠道配置的增删改查操作。 */
 @Repository

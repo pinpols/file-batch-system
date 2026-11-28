@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.worker.atomic.shell;
 
-import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 
 /**
  * {@link ShellTaskExecutor} 的配置 — 默认全关,业务方按需开 + 配白名单 + 配隔离目录。

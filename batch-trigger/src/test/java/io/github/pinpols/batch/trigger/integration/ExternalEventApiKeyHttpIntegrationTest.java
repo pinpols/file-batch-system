@@ -6,14 +6,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.security.ApiKeyHasher;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.BatchIntegrationTest;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
 import java.time.LocalDate;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
@@ -34,6 +29,13 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.client.RestClient;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.security.ApiKeyHasher;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.BatchIntegrationTest;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
 
 @SpringBootTest(
         classes = BatchTriggerApplication.class,

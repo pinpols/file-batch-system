@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
-import io.github.pinpols.batch.common.validation.ValidTenantId;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import io.github.pinpols.batch.common.validation.ValidTenantId;
+
+import jakarta.validation.constraints.Size;
 
 @Data
 public class ResourceQueueUpdateRequest {

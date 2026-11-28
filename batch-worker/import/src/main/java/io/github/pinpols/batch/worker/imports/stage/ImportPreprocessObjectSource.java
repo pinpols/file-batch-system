@@ -1,5 +1,25 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
@@ -18,23 +38,6 @@ import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.preprocess.ImportPreprocessException;
 import io.github.pinpols.batch.worker.imports.stage.support.ImportStageSupport;
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
-import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * PREPROCESS 的对象输入适配器。

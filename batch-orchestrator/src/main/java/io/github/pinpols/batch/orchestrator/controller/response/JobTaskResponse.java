@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.controller.response;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 
 /** 已认领任务的 HTTP 表示，保持 Worker 使用的 JSON 字段名。 */
 @Builder

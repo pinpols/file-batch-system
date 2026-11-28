@@ -6,13 +6,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import java.time.Duration;
 import java.time.Instant;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +18,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("作业终态指标记录,验证提交后回调复用实例快照与回查权威实例两类路径")

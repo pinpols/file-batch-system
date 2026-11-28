@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 /** ADR-021 一次 job_instance 的 DQ 检查结果（单条 rule 一行）。 */

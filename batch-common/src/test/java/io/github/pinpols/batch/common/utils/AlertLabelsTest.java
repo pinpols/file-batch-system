@@ -2,10 +2,12 @@ package io.github.pinpols.batch.common.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 
 @DisplayName("AlertLabels: alert_event → AM label 映射")
 class AlertLabelsTest {

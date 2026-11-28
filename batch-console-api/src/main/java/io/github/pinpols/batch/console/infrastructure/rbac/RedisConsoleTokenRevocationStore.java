@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.infrastructure.rbac;
 
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenRevocationStore;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenRevocationStore;
 
 /** Redis 版 Console JWT 撤销名单。 */
 @Component

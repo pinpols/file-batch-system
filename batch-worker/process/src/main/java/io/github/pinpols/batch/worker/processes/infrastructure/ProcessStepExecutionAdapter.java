@@ -1,7 +1,16 @@
 package io.github.pinpols.batch.worker.processes.infrastructure;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
@@ -24,12 +33,6 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessWorkerType;
 import io.github.pinpols.batch.worker.processes.stage.ComputeStep;
 import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.stage.ProcessStageExecutor;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.context.annotation.Primary;
-import org.springframework.stereotype.Component;
 
 /** PROCESS Pipeline 执行适配器,把平台 step 请求转换为 PROCESS stage 调用链。 */
 @Primary

@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.enums.FileChannelType;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import java.util.Set;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.enums.FileChannelType;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 
 /**
  * NAS 渠道存根适配器:本地/IT 环境下没有真 NAS 服务,以与 LOCAL 相同的方式将分发信封写到文件系统 供运维捡收;通过信封中的 {@code transportStub}

@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.router;
 
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.orchestrator.application.route.WorkerRoutingPolicy;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
-import org.springframework.stereotype.Component;
 
 /**
  * 默认 Worker 路由选择策略。

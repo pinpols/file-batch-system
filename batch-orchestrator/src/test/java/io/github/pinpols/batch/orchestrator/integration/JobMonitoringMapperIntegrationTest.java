@@ -2,14 +2,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
-import io.github.pinpols.batch.orchestrator.domain.query.JobMonitoringRecheckQuery;
-import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
-import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
-import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,7 +13,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -39,6 +33,15 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
+import io.github.pinpols.batch.orchestrator.domain.query.JobMonitoringRecheckQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
+import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("作业监控 mapper 的真实 PostgreSQL 查询语义")
 class JobMonitoringMapperIntegrationTest {

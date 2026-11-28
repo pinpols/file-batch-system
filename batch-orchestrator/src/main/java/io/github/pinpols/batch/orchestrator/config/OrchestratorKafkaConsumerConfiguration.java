@@ -1,17 +1,8 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.observation.ObservationRegistry;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -27,6 +18,18 @@ import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.observation.ObservationRegistry;
 
 /**
  * ADR-010 Stage 4: orchestrator Kafka 消费侧配置（固化无开关）。

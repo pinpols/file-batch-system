@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 平台服务端支持的 SDK 协议 schema 主版本集合 + 解析工具(register 准入门禁权威源)。

@@ -3,17 +3,19 @@ package io.github.pinpols.batch.sdk.idempotent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /**
  * A.3 声明式幂等装饰器单测。

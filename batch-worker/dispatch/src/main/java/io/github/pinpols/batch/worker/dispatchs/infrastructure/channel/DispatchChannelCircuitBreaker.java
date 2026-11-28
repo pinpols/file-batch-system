@@ -1,5 +1,11 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
@@ -8,10 +14,6 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 /**
  * 按渠道维度({@code tenantId|channelType|channelCode})熔断,内部由 resilience4j {@link CircuitBreaker} per-key

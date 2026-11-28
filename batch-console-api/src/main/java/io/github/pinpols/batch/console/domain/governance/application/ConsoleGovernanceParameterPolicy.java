@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.governance.application;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 治理参数的命名空间、默认值和展示说明策略。

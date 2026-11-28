@@ -2,6 +2,18 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
@@ -13,16 +25,6 @@ import io.github.pinpols.batch.console.domain.workflow.application.contract.requ
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.NodeItem;
 import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 配置包采用完整集合语义，不能受交互列表的单页上限截断。 */
 @DisplayName("租户配置包完整集合校验")

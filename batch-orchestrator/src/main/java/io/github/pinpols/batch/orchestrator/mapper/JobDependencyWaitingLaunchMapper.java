@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDependencyWaitingLaunchEntity;
-import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitBacklog;
-import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitingLaunchSummary;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDependencyWaitingLaunchEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitBacklog;
+import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitingLaunchSummary;
 
 public interface JobDependencyWaitingLaunchMapper {
 

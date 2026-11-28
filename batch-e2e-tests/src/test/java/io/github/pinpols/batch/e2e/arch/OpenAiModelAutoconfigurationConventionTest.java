@@ -2,6 +2,21 @@ package io.github.pinpols.batch.e2e.arch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiDecisionAutoConfiguration;
+import org.springframework.ai.openai.OpenAiDecisionModel;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.e2e.apps.E2eAtomicApplication;
 import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
@@ -12,19 +27,6 @@ import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
 import io.github.pinpols.batch.e2e.apps.E2eProcessApplication;
 import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
 import io.github.pinpols.batch.e2e.apps.E2eTriggerApplication;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
-import org.springframework.ai.model.openai.autoconfigure.OpenAiDecisionAutoConfiguration;
-import org.springframework.ai.openai.OpenAiDecisionModel;
-import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.core.annotation.AnnotatedElementUtils;
 
 /**
  * Spring AI 2.1 新增 {@link OpenAiDecisionAutoConfiguration}，且 {@code spring.ai.model.decision}

@@ -4,18 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.application.contract.request.config.AlertRoutingSaveRequest;
-import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
-import io.github.pinpols.batch.console.domain.notification.param.AlertRoutingConfigUpsertParam;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.console.application.contract.request.config.AlertRoutingSaveRequest;
+import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
+import io.github.pinpols.batch.console.domain.notification.param.AlertRoutingConfigUpsertParam;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 
 @DisplayName("告警路由创建: 未填写分组与重复间隔时使用默认秒数")
 @ExtendWith(MockitoExtension.class)

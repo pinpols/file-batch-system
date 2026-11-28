@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
+
+import jakarta.validation.constraints.NotNull;
 
 @Data
 public class HolidaySaveRequest {

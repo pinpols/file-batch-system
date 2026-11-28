@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.common.utils;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 
 /**
  * 全局唯一 ID 生成工具类。 {@code newTraceId()} 优先取当前 OTel active span 的 traceId（让业务持久化字段与 OTel 自动 traceId

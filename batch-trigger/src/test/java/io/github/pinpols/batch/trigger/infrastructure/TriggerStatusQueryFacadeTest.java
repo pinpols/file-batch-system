@@ -6,10 +6,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
-import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.util.List;
 import java.util.Set;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.JobDataMap;
@@ -17,6 +16,9 @@ import org.quartz.JobDetail;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.impl.matchers.GroupMatcher;
+
+import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 
 @DisplayName("触发器状态查询：按租户隔离 Workflow 调度")
 class TriggerStatusQueryFacadeTest {

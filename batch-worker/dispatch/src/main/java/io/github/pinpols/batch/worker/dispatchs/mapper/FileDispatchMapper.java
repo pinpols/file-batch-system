@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.worker.dispatchs.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRecordView;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchRecordSnapshot;
 import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
@@ -11,8 +15,6 @@ import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkAttemptFai
 import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkCompensatedParam;
 import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkFailedParam;
 import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkSentParam;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /** 文件分发 MyBatis Mapper 接口，对应 file_dispatch_record 及 file_channel_config 相关 SQL 操作。 */
 public interface FileDispatchMapper {

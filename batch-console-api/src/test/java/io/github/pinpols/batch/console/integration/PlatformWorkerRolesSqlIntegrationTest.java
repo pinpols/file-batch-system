@@ -3,9 +3,6 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -15,7 +12,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +27,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.MountableFile;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 /**
  * ARCH-20261103-01：Worker 平台库最小授权脚本在完整迁移后的真实 PostgreSQL 上执行。

@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.common.health;
 
-import jakarta.validation.constraints.NotBlank;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
+import jakarta.validation.constraints.NotBlank;
 
 /** 声明式启动自检：在 {@code ApplicationReadyEvent} 后校验 schema / 表 / 列与（可选）Flyway 状态，仅写日志、不阻断启动。 */
 @Data

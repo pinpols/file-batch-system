@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
-import io.github.pinpols.batch.common.persistence.Stateful;
 import java.time.Instant;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
+import io.github.pinpols.batch.common.persistence.Stateful;
 
 // 实现 Stateful，让生命周期事件映射器通过编译期契约读取状态，避免反射猜测 getter。
 @Data

@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.sdk.handler;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import java.util.Map;
 
 /**
  * ADR-036 — Atomic 业务模板:单次原子调用(shell / sql 单语句 / HTTP / pure compute)。 子类只实现 doInvoke,异常自动转

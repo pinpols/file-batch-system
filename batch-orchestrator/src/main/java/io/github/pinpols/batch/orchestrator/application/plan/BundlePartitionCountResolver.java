@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
+import java.util.Map;
+
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import java.util.Map;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 /**
  * ADR-046 文件束:束作业({@code BUNDLE_IMPORT}/{@code BUNDLE_EXPORT}/{@code BUNDLE_DISPATCH})的分区数 =

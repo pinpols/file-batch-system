@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.trigger;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** 启动恢复锚点的扫描参数；重试上限与退避用于避免无限重投。 */
 @Data

@@ -1,11 +1,54 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.content.Media;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.dao.DataAccessException;
+import org.springframework.stereotype.Service;
+import org.springframework.util.MimeType;
+import org.springframework.util.MimeTypeUtils;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
+
 import com.anthropic.errors.AnthropicIoException;
 import com.anthropic.errors.AnthropicRetryableException;
 import com.anthropic.errors.AnthropicServiceException;
 import com.openai.errors.OpenAIIoException;
 import com.openai.errors.OpenAIRetryableException;
 import com.openai.errors.OpenAIServiceException;
+
+import lombok.Builder;
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.enums.AiPromptDecision;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -38,46 +81,8 @@ import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditServic
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+
 import jakarta.annotation.PreDestroy;
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.YearMonth;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-import lombok.Builder;
-import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.metadata.ChatResponseMetadata;
-import org.springframework.ai.chat.metadata.Usage;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.chat.prompt.ChatOptions;
-import org.springframework.ai.content.Media;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
-import org.springframework.dao.DataAccessException;
-import org.springframework.stereotype.Service;
-import org.springframework.util.MimeType;
-import org.springframework.util.MimeTypeUtils;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClientResponseException;
 import reactor.core.publisher.Flux;
 
 /**

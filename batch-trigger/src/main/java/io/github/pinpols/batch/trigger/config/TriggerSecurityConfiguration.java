@@ -1,20 +1,9 @@
 package io.github.pinpols.batch.trigger.config;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.security.SecretComparator;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.web.ServletRequestPaths;
-import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
-import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -29,6 +18,21 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.security.SecretComparator;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.web.ServletRequestPaths;
+import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
+import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Trigger 模块安全配置。

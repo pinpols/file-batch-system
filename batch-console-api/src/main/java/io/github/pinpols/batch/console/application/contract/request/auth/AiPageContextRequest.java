@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.application.contract.request.auth;
 
-import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import jakarta.validation.constraints.Size;
 
 /** v1 页面引用字段；服务端后续查询前必须重新读取数据并完成授权校验。 */
 @Data

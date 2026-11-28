@@ -508,6 +508,11 @@
                                 <version>2.92.0</version>
                                 <style>PALANTIR</style>
                             </palantirJavaFormat>
+                            <!-- 统一 import 分组：静态导入在前，随后 java/javax/org/com/lombok/项目包。
+                                 Palantir 只做代码布局，不排序 import；由 Spotless 固定分组，避免各文件顺序漂移。 -->
+                            <importOrder>
+                                <order>\#,java,javax,org,com,lombok,io</order>
+                            </importOrder>
                             <!--
                               团队约定：方法返回类型带注解（如 @Nullable）时，注解单独占一行，
                               方法签名整体一行。palantir 会把注解并回签名行，这里在 palantir 之后

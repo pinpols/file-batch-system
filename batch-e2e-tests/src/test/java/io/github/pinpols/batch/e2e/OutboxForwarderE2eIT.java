@@ -6,19 +6,6 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
-import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
-import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.e2e.support.E2eStatusLogger;
-import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.Duration;
@@ -29,7 +16,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -45,6 +34,20 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.TransactionSystemException;
+
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import io.github.pinpols.batch.e2e.support.E2eStatusLogger;
+import io.github.pinpols.batch.e2e.support.E2eTestSql;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * 端到端测试：验证真实的 Outbox 轮询器会自动投递消息（不依赖测试手工 publish）。

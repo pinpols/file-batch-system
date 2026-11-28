@@ -11,12 +11,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.storage.ObjectStoreAccessException;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,10 +19,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectStoreAccessException;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 
 @DisplayName("远程文件系统投递:外部发布后的失败必须保留未知结果,发布前失败可重试")
 class RemoteFilesystemAmbiguousOutcomeTest {

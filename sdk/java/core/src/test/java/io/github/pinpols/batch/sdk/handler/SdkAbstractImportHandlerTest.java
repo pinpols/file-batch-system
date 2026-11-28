@@ -2,15 +2,17 @@ package io.github.pinpols.batch.sdk.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /** ADR-036 Import 模板基类单测 — 走基类 execute 整条模板序。 */
 @DisplayName("Import 模板基类:行流分批装载与提交,覆盖分批边界、异常失败与流关闭")

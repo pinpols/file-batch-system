@@ -3,12 +3,13 @@ package io.github.pinpols.batch.console.domain.job.support;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import io.github.pinpols.batch.common.exception.BizException;
 
 @DisplayName("作业物理资源分配授权")
 class JobResourceAssignmentGuardTest {

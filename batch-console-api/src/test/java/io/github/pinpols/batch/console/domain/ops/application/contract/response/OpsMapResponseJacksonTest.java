@@ -2,15 +2,18 @@ package io.github.pinpols.batch.console.domain.ops.application.contract.response
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 
 /**
  * wire 红线守护：ops 域类型化 response record 的 JSON key 必须与历史 Map 响应逐字一致。 覆盖嵌套 MyBatis 行 NON_NULL 省略、 动态

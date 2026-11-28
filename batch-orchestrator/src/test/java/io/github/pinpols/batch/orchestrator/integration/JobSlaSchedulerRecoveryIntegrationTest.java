@@ -4,14 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
-import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
-import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
-import io.github.pinpols.batch.orchestrator.infrastructure.sla.JobSlaViolationProcessor;
-import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,6 +16,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,6 +28,15 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
+import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
+import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
+import io.github.pinpols.batch.orchestrator.infrastructure.sla.JobSlaViolationProcessor;
+import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

@@ -10,16 +10,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
-import io.github.pinpols.batch.console.shared.audit.AuditAction;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import io.github.pinpols.batch.console.shared.usage.ConsoleUsageProjectionDispatcher;
-import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.Signature;
 import org.aspectj.lang.reflect.MethodSignature;
@@ -35,6 +30,14 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageProjectionDispatcher;
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
 
 /**
  * 守护:console_operation_audit.tenant_id NOT NULL。auth.login / auth.logout 等系统级动作

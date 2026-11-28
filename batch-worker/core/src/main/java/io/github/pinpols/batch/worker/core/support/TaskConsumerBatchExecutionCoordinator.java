@@ -1,5 +1,15 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.function.Supplier;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
@@ -9,14 +19,6 @@ import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor.BatchItemExecution;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.BiFunction;
-import java.util.function.BiPredicate;
-import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * 批量消费的执行协调器。

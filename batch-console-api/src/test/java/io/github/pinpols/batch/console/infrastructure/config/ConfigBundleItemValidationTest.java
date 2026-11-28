@@ -2,23 +2,27 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
-import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
-import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleCreateRequest;
-import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleImportRequest;
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validation;
-import jakarta.validation.ValidatorFactory;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleCreateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleImportRequest;
+
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 
 @DisplayName("配置同步与作业包的配置条目级联校验")
 class ConfigBundleItemValidationTest {

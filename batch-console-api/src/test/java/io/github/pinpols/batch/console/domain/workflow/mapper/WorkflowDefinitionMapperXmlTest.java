@@ -3,14 +3,13 @@ package io.github.pinpols.batch.console.domain.workflow.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
-import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 import java.io.InputStream;
 import java.sql.PreparedStatement;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
@@ -23,6 +22,9 @@ import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Workflow 插入与全量更新 SQL 的调度开关列与参数绑定")

@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.observability.mapper;
 
-import io.github.pinpols.batch.console.domain.observability.application.progress.DailyProgressResponse;
 import java.time.LocalDate;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.observability.application.progress.DailyProgressResponse;
 
 public interface DailyProgressMapper {
     String setTenantContext(@Param("tenantId") String tenantId);

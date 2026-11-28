@@ -13,10 +13,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
-import io.github.pinpols.batch.common.storage.ObjectListing;
-import io.github.pinpols.batch.common.storage.ObjectSummary;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.file.Path;
@@ -24,9 +20,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectListing;
+import io.github.pinpols.batch.common.storage.ObjectSummary;
 
 /** {@link ObjectStoreStartupCheck} 单测:探针成功跑通 + 各失败点 fail-fast + 失败也清理探针。 */
 @DisplayName("对象存储启动自检:探针读写校验通过,以及桶名、内容、长度、预签名、上传与清理各失败点的快速失败")

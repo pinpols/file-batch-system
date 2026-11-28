@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.query;
 
-import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
+
+import jakarta.validation.constraints.Size;
 
 @EqualsAndHashCode(callSuper = false)
 @Data

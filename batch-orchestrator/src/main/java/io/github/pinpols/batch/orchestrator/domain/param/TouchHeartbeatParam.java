@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
 import java.util.List;
+
 import lombok.Builder;
 import lombok.Getter;
 

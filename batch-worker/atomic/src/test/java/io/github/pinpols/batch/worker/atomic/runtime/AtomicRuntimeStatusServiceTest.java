@@ -4,19 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
-import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Set;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +23,15 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.env.MockEnvironment;
+
+import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
+import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 
 /**
  * Round-3 #8:{@link AtomicRuntimeStatusService} 单测 — 4 个 executor 快照字段 + enforce-allowlist 来源分类

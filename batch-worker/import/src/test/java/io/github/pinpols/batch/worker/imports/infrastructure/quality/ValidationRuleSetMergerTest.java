@@ -2,10 +2,12 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @DisplayName("校验规则集字段别名的优先级")
 class ValidationRuleSetMergerTest {

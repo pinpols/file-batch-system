@@ -1,5 +1,30 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
+import java.util.function.Function;
+
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import lombok.Builder;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.context.RunModeSupport;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
@@ -51,28 +76,6 @@ import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchRequestIdentityGuard;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.Collection;
-import java.util.HexFormat;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.TreeMap;
-import java.util.function.Function;
-import lombok.Builder;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 补偿指令统一入口：按 {@code compensationType} 路由到 6 种内部操作（JOB / STEP / PARTITION / FILE / BATCH / DLQ），

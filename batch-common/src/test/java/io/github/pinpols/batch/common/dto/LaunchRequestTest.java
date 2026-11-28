@@ -2,13 +2,15 @@ package io.github.pinpols.batch.common.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.TriggerType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
 
 @DisplayName("LaunchRequest: 各构造入口与建造器对数据区间, 重放会话和试运行标记的取值约定")
 class LaunchRequestTest {

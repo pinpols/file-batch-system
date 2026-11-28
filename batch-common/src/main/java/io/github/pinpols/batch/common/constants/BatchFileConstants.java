@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.constants;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.UUID;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 public final class BatchFileConstants {
 

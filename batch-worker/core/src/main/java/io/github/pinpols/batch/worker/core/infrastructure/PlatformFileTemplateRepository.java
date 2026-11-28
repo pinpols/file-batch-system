@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import java.util.Map;
+
+import org.springframework.stereotype.Repository;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileTemplateConfigView;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
 
 /** 文件模板配置的数据访问协作者。 */
 @Repository

@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalInsertParam;
 import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalTransitionParam;
 import io.github.pinpols.batch.console.domain.ops.view.ConfigApprovalRow;
-import org.apache.ibatis.annotations.Param;
 
 public interface ConfigApprovalMapper {
 

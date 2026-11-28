@@ -2,15 +2,17 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("渠道熔断器:阈值熔断、冷却后半开试探、按渠道隔离与指标绑定的完整生命周期")
 class DispatchChannelCircuitBreakerTest {

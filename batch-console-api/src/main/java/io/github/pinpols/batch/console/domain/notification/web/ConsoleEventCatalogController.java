@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.console.domain.notification.web;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.notification.application.ConsoleEventCatalogService;
-import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTopicResponse;
-import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTypeResponse;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.notification.application.ConsoleEventCatalogService;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTopicResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTypeResponse;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 
 /** 事件总线目录:暴露系统可订阅事件类型与 Kafka Topic 映射。 */
 @RestController

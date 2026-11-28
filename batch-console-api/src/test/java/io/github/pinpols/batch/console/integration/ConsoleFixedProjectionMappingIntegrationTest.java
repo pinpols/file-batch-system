@@ -2,6 +2,18 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
+
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.config.mapper.ConfigChangeLogMapper;
 import io.github.pinpols.batch.console.domain.config.param.ConfigChangeLogInsertParam;
@@ -40,16 +52,6 @@ import io.github.pinpols.batch.console.domain.ops.view.cluster.JobInstanceDiagno
 import io.github.pinpols.batch.console.domain.ops.view.cluster.WorkerGroupCapacityView;
 import io.github.pinpols.batch.console.support.ConfigChangeLogBuilder;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mybatis.spring.SqlSessionTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 使用生产迁移、Mapper XML 和真实 PostgreSQL 核对固定投影的实际返回类型与字段绑定。 */
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)

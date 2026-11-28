@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** 数据质量规则执行与结果版本门禁配置。 */
 @Data

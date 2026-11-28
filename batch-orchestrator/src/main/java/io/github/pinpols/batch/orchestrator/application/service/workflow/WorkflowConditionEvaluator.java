@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -12,7 +7,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 
 @Component
 public class WorkflowConditionEvaluator {

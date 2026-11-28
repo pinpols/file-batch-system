@@ -1,10 +1,7 @@
 package io.github.pinpols.batch.console.domain.file.web;
 
-import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
-import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
-import jakarta.validation.constraints.NotNull;
 import java.io.IOException;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -16,6 +13,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
+
+import jakarta.validation.constraints.NotNull;
 
 /** 控制台文件下载 REST：流式返回对象存储文件（与写操作 Controller 同路径前缀，按 HTTP 方法区分）。 */
 @RestController

@@ -8,9 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.orchestrator.application.service.dq.DataQualityRuleApplicationService;
-import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
-import io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -21,6 +18,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import io.github.pinpols.batch.orchestrator.application.service.dq.DataQualityRuleApplicationService;
+import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
+import io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("数据质量规则更新接口")

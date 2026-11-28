@@ -6,12 +6,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import io.github.pinpols.batch.worker.imports.domain.ImportStage;
-import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +14,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.domain.ImportStage;
+import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 
 /** Import FEEDBACK 阶段单测：审计聚合 / dry-run 跳过 / null 上下文回退。 */
 @ExtendWith(MockitoExtension.class)

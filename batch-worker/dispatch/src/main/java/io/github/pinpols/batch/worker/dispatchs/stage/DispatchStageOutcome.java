@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
+import java.util.List;
+
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
-import java.util.List;
 
 /** 判定分发重试后的最终结果，同时保留每个阶段的原始记录。 */
 public final class DispatchStageOutcome {

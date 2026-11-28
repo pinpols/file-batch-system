@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * Spring Boot Actuator 自定义只读端点 {@code /actuator/atomicruntime}:暴露 4 个 executor 的 effective 配置快照。

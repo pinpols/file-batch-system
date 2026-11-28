@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.application;
 
+import java.util.List;
+
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.SubscriptionRuleUpsertRequest;
@@ -7,7 +9,6 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleNotificationDeliveryLogResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleNotificationTestResultResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleSubscriptionRuleResponse;
-import java.util.List;
 
 /** 通知订阅管理应用服务：通知渠道 CRUD、订阅规则 CRUD、投递日志查询。 */
 public interface ConsoleNotificationApplicationService {

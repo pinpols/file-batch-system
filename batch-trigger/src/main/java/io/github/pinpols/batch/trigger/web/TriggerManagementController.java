@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.trigger.web;
 
+import org.springframework.web.bind.annotation.*;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.trigger.domain.TriggerActionResult;
 import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
 import io.github.pinpols.batch.trigger.domain.TriggerDrainService.TriggerDrainStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.TriggerSchedulerStatus;
-import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
 
 /**
  * 触发器运维管理控制器，提供触发器的注册、注销、暂停、恢复以及优雅排水（draining）等运维操作接口。

@@ -1,11 +1,15 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import io.github.pinpols.batch.common.config.KafkaConsumerTimingProperties;
-import jakarta.annotation.PostConstruct;
 import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.config.KafkaConsumerTimingProperties;
+
+import jakarta.annotation.PostConstruct;
 
 /** 校验分片租约窗口与 Kafka 消费者轮询窗口的关系。 */
 @Slf4j

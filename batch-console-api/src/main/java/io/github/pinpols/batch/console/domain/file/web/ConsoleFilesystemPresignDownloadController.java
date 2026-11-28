@@ -1,11 +1,8 @@
 package io.github.pinpols.batch.console.domain.file.web;
 
-import io.github.pinpols.batch.console.domain.file.application.ConsoleFilesystemPresignDownloadService;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import java.io.InputStream;
 import java.io.OutputStream;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -17,6 +14,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.domain.file.application.ConsoleFilesystemPresignDownloadService;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * 文件系统后端 presign 代下端点（Phase 2 §4①）。

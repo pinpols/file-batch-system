@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
+import java.util.List;
+
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchWorkerType;
-import java.util.List;
 
 /** 重放合同以租户、文件、通道的持久分发记录状态机为依据。 */
 final class DispatchReplayCapability {

@@ -8,11 +8,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.function.Function;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +20,8 @@ import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClient;
+
+import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("上游就绪查询客户端")

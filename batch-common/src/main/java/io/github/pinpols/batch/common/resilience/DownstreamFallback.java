@@ -1,5 +1,15 @@
 package io.github.pinpols.batch.common.resilience;
 
+import java.time.Duration;
+import java.util.function.Supplier;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -8,13 +18,6 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowT
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import java.time.Duration;
-import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientException;
 
 /**
  * 下游调用降级模板 — 把"try / catch RestClientException / log / fallback"模式集中起来,并由 resilience4j

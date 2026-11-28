@@ -9,13 +9,15 @@ import static io.github.pinpols.batch.common.observability.BatchMetricsNames.TAG
 import static io.github.pinpols.batch.common.observability.BatchMetricsNames.TAG_STATUS;
 import static io.github.pinpols.batch.common.observability.BatchMetricsNames.TAG_TENANT;
 
+import java.time.Duration;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
-import java.time.Duration;
-import org.springframework.stereotype.Component;
 
 /**
  * job_instance 生命周期指标:从 CREATED 走到终态(SUCCESS / FAILED / CANCELLED / TERMINATED)的时长 + 完成 / 失败计数。

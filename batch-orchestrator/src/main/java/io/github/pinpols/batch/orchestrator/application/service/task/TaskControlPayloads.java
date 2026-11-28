@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import java.util.List;
 import java.util.Map;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 
 /**
  * Worker 任务控制用例的应用层载荷。

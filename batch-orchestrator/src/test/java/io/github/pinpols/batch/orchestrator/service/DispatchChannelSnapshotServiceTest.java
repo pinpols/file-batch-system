@@ -7,16 +7,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.dto.FrozenDispatchChannelSnapshot;
-import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
-import io.github.pinpols.batch.common.enums.JobType;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.mapper.DispatchChannelSnapshotMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +22,14 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.dto.FrozenDispatchChannelSnapshot;
+import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
+import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.mapper.DispatchChannelSnapshotMapper;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("分发通道配置在实例和整 Workflow Replay 审批快照中固定")

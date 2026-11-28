@@ -1,17 +1,21 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.application.service.governance.AdminTestDataCleanupService;
-import jakarta.validation.constraints.Pattern;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.application.service.governance.AdminTestDataCleanupService;
+
+import jakarta.validation.constraints.Pattern;
 
 /**
  * 测试数据清理内部接口。

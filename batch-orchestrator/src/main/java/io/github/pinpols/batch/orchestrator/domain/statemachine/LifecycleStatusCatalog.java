@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.orchestrator.domain.statemachine;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 
 /** 状态迁移和结果策略共用的生命周期状态目录。 */
 public final class LifecycleStatusCatalog {

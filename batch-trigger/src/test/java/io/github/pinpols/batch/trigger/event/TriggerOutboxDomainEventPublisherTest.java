@@ -5,13 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
-import io.github.pinpols.batch.common.event.DomainEvent;
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
-import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +14,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.event.DomainEvent;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
+import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
 
 /**
  * 守护 TriggerOutboxDomainEventPublisher 把 DomainEvent 准确投影到 trigger_outbox_event 行的适配语义。

@@ -2,11 +2,12 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.FileTemplateFormat;
-import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 
 @DisplayName("导出格式策略: 生成文件后缀与对外文件名后缀保持一致")
 class ExportFormatStrategySuffixTest {

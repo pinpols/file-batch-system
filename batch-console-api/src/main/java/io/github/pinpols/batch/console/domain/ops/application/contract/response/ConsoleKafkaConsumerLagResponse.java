@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
  * Kafka consumer group 积压响应（列表元素）。列表混合两种历史形态：正常组 {@code

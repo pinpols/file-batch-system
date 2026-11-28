@@ -3,11 +3,12 @@ package io.github.pinpols.batch.worker.processes.metrics;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("处理指标采集:注册表缺失时的空实现,以及暂存行数、发布行数、校验失败与阶段耗时的埋点语义")
 class ProcessMetricsTest {

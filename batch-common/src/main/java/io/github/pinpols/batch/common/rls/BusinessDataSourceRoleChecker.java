@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.rls;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -9,8 +8,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import javax.sql.DataSource;
+
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 校验所有业务数据源均使用可被 PostgreSQL RLS 约束的运行账号。 */
 public final class BusinessDataSourceRoleChecker {

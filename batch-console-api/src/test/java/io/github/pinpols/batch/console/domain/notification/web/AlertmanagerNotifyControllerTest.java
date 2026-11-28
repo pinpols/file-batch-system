@@ -12,19 +12,9 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
-import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
-import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerNotifyService;
-import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerNotifyService.AmNotifyOutcome;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,6 +27,18 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
+import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerNotifyService;
+import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerNotifyService.AmNotifyOutcome;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("告警接入接口: 令牌鉴权, 开关关闭与投递结论透出")

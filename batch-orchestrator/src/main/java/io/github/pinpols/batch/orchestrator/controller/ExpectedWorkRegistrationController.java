@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.orchestrator.application.service.batchday.ExpectedWorkRegistrationService;
-import io.github.pinpols.batch.orchestrator.application.service.batchday.ExpectedWorkRegistrationService.FileGroupExpectation;
-import io.github.pinpols.batch.orchestrator.application.service.batchday.ExpectedWorkRegistrationService.RegistrationResult;
 import java.time.Instant;
 import java.time.LocalDate;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.orchestrator.application.service.batchday.ExpectedWorkRegistrationService;
+import io.github.pinpols.batch.orchestrator.application.service.batchday.ExpectedWorkRegistrationService.FileGroupExpectation;
+import io.github.pinpols.batch.orchestrator.application.service.batchday.ExpectedWorkRegistrationService.RegistrationResult;
 
 /** 用于提前声明预期分组的上游文件清单内部幂等接收入口。 */
 @RestController

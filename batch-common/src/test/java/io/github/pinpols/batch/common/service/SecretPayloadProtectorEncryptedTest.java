@@ -3,17 +3,20 @@ package io.github.pinpols.batch.common.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.config.BatchKmsProperties;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import io.github.pinpols.batch.common.config.BatchKmsProperties;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 
 @DisplayName("Replay 配置保护要求真实认证密文")
 class SecretPayloadProtectorEncryptedTest {

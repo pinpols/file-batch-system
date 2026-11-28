@@ -2,14 +2,16 @@ package io.github.pinpols.batch.sdk.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /** ADR-036 Dispatch 模板单测 — 经基类 execute 模板序,验证单条失败不中断整批。 */
 @DisplayName("Dispatch 模板基类:逐条推送时单条失败不中断整批,整体计数与终态符合预期")

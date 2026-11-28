@@ -1,19 +1,5 @@
 package io.github.pinpols.batch.worker.atomic.shell;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.SensitiveDataValidator;
-import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
-import io.github.pinpols.batch.common.spi.task.ResourceKind;
-import io.github.pinpols.batch.common.spi.task.TaskCapability;
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
-import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
-import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,12 +23,29 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.SensitiveDataValidator;
+import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
+import io.github.pinpols.batch.common.spi.task.ResourceKind;
+import io.github.pinpols.batch.common.spi.task.TaskCapability;
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 
 /**
  * Shell task SPI 实现 — 用 {@link ProcessBuilder} 执行外部命令,带超时 / 隔离 workdir / 输出截断 / 白名单。

@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.domain.job.support;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import java.util.Locale;
 import java.util.Set;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 
 /**
  * Builtin Task SPI(Shell / SQL / StoredProc / HTTP)的使用边界守门 — 见 ADR-035 §使用边界。

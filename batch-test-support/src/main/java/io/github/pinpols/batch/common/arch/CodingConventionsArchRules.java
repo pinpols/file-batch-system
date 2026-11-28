@@ -2,6 +2,13 @@ package io.github.pinpols.batch.common.arch;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import java.nio.charset.Charset;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -13,13 +20,8 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
-import java.nio.charset.Charset;
-import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * 复用型 ArchUnit 规则,守护 docs/agent-baseline.md 硬性规约。

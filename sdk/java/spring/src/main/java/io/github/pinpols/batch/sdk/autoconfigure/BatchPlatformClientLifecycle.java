@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.sdk.autoconfigure;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
 import org.springframework.context.SmartLifecycle;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
 
 public final class BatchPlatformClientLifecycle implements SmartLifecycle {
 

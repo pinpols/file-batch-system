@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.trigger.web;
 
+import java.util.List;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
 import io.github.pinpols.batch.trigger.domain.TriggerDrainService.TriggerDrainStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerSchedulerStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
 
 /** Trigger 只读状态查询接口。写操作保留在 {@link TriggerManagementController}。 */
 @RestController

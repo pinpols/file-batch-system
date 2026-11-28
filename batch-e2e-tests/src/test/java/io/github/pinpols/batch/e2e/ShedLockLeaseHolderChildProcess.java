@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.e2e;
 
-import io.github.pinpols.batch.common.config.ShedLockProviderFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Properties;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+
+import io.github.pinpols.batch.common.config.ShedLockProviderFactory;
+
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /** 用于验证进程丢失后依靠持久化 CLAIM 状态恢复的独立 JVM SDK Worker。 */
 public final class ShedLockLeaseHolderChildProcess {

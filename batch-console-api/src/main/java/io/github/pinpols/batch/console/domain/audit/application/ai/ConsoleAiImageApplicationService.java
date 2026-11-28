@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.console.domain.audit.application.ai;
 
+import java.io.IOException;
+import java.util.UUID;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -8,12 +17,6 @@ import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.io.IOException;
-import java.util.UUID;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 /** AI 图片能力与上传入口策略。 */
 @Service

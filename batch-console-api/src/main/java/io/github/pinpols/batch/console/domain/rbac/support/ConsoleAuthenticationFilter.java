@@ -1,5 +1,20 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -8,23 +23,12 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.observability.SseTicketService;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * 控制台请求认证过滤器：按优先级依次匹配 3 条认证链，首个命中即填充 {@link ConsolePrincipal}，都不命中则放行给下游 （下游的 {@code @PreAuthorize}

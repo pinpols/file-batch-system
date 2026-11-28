@@ -2,9 +2,10 @@ package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("批量日追平指标的聚合与失败采样")
 class BatchDayCatchupMetricsTest {

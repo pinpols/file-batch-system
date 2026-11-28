@@ -8,11 +8,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
-import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +15,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
+import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /** T-1: OutboxPublishCircuitBreaker 测试——验证 CLOSED → OPEN → HALF_OPEN → CLOSED 状态机。 */
 @ExtendWith(MockitoExtension.class)

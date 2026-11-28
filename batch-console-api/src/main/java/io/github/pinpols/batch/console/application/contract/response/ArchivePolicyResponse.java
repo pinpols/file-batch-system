@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.governance.entity.ArchivePolicyEntity;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.governance.entity.ArchivePolicyEntity;
 
 /** Public archive policy view. */
 @Builder

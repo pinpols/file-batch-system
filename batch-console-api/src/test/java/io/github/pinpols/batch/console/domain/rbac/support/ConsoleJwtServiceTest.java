@@ -13,15 +13,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.Set;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +26,11 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.oauth2.jwt.JwtException;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 
 /**
  * R3-P1-12 补：覆盖 ConsoleJwtService 的安全关键路径。

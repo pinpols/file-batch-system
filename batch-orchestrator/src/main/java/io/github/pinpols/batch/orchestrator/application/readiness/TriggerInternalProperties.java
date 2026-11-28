@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.readiness;
 
 import java.time.Duration;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** Trigger 内部调用配置（Orchestrator 主动驱动 readiness 恢复）。 */
 @Data

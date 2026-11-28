@@ -9,16 +9,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
-import io.github.pinpols.batch.console.domain.ops.mapper.AtomicTaskConfigMapper;
-import io.github.pinpols.batch.console.domain.ops.param.AtomicTaskConfigCreateParam;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.math.BigInteger;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +24,14 @@ import org.mockito.Spy;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.stubbing.Answer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
+import io.github.pinpols.batch.console.domain.ops.mapper.AtomicTaskConfigMapper;
+import io.github.pinpols.batch.console.domain.ops.param.AtomicTaskConfigCreateParam;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 
 /**
  * R3-5 — {@link ConsoleAtomicTaskConfigService} 单测。

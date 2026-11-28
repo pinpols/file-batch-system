@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskExecutionReportCommand;
-import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
-import lombok.RequiredArgsConstructor;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskExecutionReportCommand;
+import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 
 /** 单条 Worker 结果上报的死锁重试边界；批量上报通过跨 Bean 调用复用同一策略。 */
 @Component

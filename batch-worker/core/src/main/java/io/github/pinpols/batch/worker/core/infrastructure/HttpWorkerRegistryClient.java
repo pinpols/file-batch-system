@@ -1,5 +1,21 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.HttpClientSettings;
+import org.springframework.core.env.Environment;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
@@ -9,19 +25,6 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerRegistryClient;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.util.concurrent.atomic.AtomicReference;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
-import org.springframework.boot.http.client.HttpClientSettings;
-import org.springframework.core.env.Environment;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.ClientHttpRequestFactory;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 
 /**
  * 基于 HTTP 的 Worker 注册中心客户端，向 Orchestrator 内部接口发送注册、心跳、状态更新和下线请求。 延迟初始化 {@link

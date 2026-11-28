@@ -6,18 +6,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleKafkaConsumerLagResponse;
-import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsResult;
@@ -28,6 +22,16 @@ import org.mockito.ArgumentMatchers;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleKafkaConsumerLagResponse;
+import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 @DisplayName("Kafka 积压查询错误信息保护")
 class DefaultConsoleKafkaLagQueryServiceTest {

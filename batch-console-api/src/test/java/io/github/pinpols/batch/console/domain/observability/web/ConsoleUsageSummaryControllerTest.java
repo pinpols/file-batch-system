@@ -2,10 +2,11 @@ package io.github.pinpols.batch.console.domain.observability.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
+
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 
 @DisplayName("用量汇总接口:接口访问角色约束")
 class ConsoleUsageSummaryControllerTest {

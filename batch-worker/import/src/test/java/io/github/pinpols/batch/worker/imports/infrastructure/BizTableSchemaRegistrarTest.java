@@ -10,18 +10,22 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.core.mapper.BizTableSchemaMapper;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.worker.core.mapper.BizTableSchemaMapper;
 
 /** {@link BizTableSchemaRegistrar} 单元测试:覆盖元数据读取成功后覆盖写,以及读取失败保留旧快照。 */
 @DisplayName("业务库表结构登记单测:成功覆盖写与读取失败不刷新")

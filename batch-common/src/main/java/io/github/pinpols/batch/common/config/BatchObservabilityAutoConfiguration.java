@@ -1,15 +1,16 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.logging.OpenTelemetryLogbackBridge;
-import io.micrometer.observation.ObservationRegistry;
-import io.micrometer.observation.aop.ObservedAspect;
-import io.opentelemetry.api.OpenTelemetry;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Lazy;
+
+import io.github.pinpols.batch.common.logging.OpenTelemetryLogbackBridge;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.aop.ObservedAspect;
+import io.opentelemetry.api.OpenTelemetry;
 
 /**
  * 提供 {@code @Observed} 注解的 AOP 拦截支持，把业务方法包成 Micrometer Observation。Observation 自动桥接到 {@code

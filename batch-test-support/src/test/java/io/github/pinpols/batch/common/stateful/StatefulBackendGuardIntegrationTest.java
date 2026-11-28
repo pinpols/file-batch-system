@@ -3,10 +3,6 @@ package io.github.pinpols.batch.common.stateful;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +17,12 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("真实 PostgreSQL 上的有状态后端身份守卫集成测试: 验证首次部署记录基线, 后端或位置变更需一次性切换凭证, 切换代次与切换历史持久化")
 class StatefulBackendGuardIntegrationTest {

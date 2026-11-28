@@ -7,19 +7,22 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.client.BatchSdkClientException;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.client.BatchSdkClientException;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 
 /**
  * Lane E #4-Java:Kafka SASL 凭据错 → poll loop 必须 fail-fast,置 {@code fatalAuthFailure=true} + {@code

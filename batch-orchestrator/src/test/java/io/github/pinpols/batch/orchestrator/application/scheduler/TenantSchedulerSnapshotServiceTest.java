@@ -9,6 +9,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
@@ -22,17 +35,6 @@ import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
-import java.time.Instant;
-import java.util.List;
-import java.util.Set;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 守护租户调度快照的输入约束:

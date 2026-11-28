@@ -1,14 +1,11 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper;
-import jakarta.annotation.PreDestroy;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.ContextClosedEvent;
@@ -16,6 +13,13 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper;
+
+import jakarta.annotation.PreDestroy;
 
 /** 重放已提交的失效意图；Redis 调用不持有数据库事务。 */
 @Slf4j

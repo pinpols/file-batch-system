@@ -6,7 +6,17 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.function.Supplier;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
@@ -21,13 +31,6 @@ import io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCount
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ShedLockView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
-import java.time.Instant;
-import java.util.List;
-import java.util.function.Supplier;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 
 @DisplayName("集群诊断服务:Worker 一致性, 投递健康, 终态子实例与实例级诊断的判定规则")
 class ConsoleClusterDiagnosticServiceTest {

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.logging;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

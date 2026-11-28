@@ -1,19 +1,5 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.constants.BatchFileConstants;
-import io.github.pinpols.batch.common.enums.DictEnum;
-import io.github.pinpols.batch.common.enums.FileChannelType;
-import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.storage.ObjectStoreAccessException;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,7 +21,24 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.FileChannelType;
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectStoreAccessException;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.SecretMasking;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
+
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;

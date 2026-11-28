@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
 
 /**
  * 上游就绪查询客户端(ADR-043 依赖感知 fire)。

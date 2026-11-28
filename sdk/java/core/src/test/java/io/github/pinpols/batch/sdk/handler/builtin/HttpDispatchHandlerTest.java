@@ -4,9 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.net.InetSocketAddress;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -14,11 +11,18 @@ import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 @DisplayName("HTTP 推送处理器:按查询结果逐行发起请求并统计成败,覆盖正常推送、失败不中断与内网地址防护")
 class HttpDispatchHandlerTest {

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.audit.query;
 
-import io.github.pinpols.batch.common.model.PageRequest;
 import java.time.Instant;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.model.PageRequest;
 
 @Data
 public class AuditLogQuery {

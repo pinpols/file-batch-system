@@ -1,5 +1,18 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.timeout;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
@@ -14,17 +27,8 @@ import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkflowLau
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * workflow_run stuck 回退（参考 docs/archive/audit/orchestrator-vs-industry-2026-05-03.md §2.2）。

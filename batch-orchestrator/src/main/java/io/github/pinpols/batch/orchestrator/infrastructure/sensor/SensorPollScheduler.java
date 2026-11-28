@@ -1,5 +1,15 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -9,14 +19,8 @@ import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
-import java.time.Instant;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * ADR-028 S3：周期扫到期 WAIT 节点 → 调 {@link SensorStateMachine}。

@@ -175,6 +175,9 @@ if [[ -n "$BASE_REF" ]]; then
   if ! "$PYTHON_BIN" scripts/ci/check-empty-checks.py --base "$BASE_REF"; then
     fail "EmptyChecks diff 门禁失败"
   fi
+  if ! "$PYTHON_BIN" scripts/ci/check-java-control-flow.py --base "$BASE_REF"; then
+    fail "控制流可读性门禁失败"
+  fi
   if ! "$PYTHON_BIN" scripts/ci/check-infrastructure-abstraction-boundaries.py --base "$BASE_REF"; then
     fail "Infrastructure abstraction boundary 门禁失败"
   fi

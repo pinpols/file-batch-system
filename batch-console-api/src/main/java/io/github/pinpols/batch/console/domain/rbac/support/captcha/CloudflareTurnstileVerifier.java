@@ -1,7 +1,19 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Map;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
@@ -10,14 +22,6 @@ import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
-import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 
 /**
  * Cloudflare Turnstile 验证码校验。{@code provider=cloudflare} 装配。

@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
+
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
 
 /** 仅暂停当前测试 JVM 的 broker；保留其存储、地址和生产者连接。 */
 public final class BatchDaySettleChildProcess {

@@ -1,21 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ApiKeyResponse;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleApiKeyCreateResponse;
-import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleApiKeyService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.shared.audit.AuditAction;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import io.github.pinpols.batch.console.support.web.Idempotent;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,6 +13,23 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ApiKeyResponse;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleApiKeyCreateResponse;
+import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleApiKeyService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import io.github.pinpols.batch.console.support.web.Idempotent;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /** API Key 自助管理：租户创建/查看/吊销 API Key。 */
 @RestController

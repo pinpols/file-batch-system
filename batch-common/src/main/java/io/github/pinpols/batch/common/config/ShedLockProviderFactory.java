@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import javax.sql.DataSource;
-import net.javacrumbs.shedlock.core.LockProvider;
-import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
-import net.javacrumbs.shedlock.provider.redis.spring.RedisLockProvider;
+
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
+import net.javacrumbs.shedlock.provider.redis.spring.RedisLockProvider;
 
 /** 创建 ShedLock 提供者(JDBC / Redis)的共享工具类。 */
 public final class ShedLockProviderFactory {

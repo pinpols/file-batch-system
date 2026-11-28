@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.sdk.retry;
 
-import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import java.time.Duration;
 import java.util.function.Supplier;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 
 /**
  * ADR-036 — 轻量重试策略,handler 内对易瞬时失败的操作(外部 HTTP / DB 连接抖动)包一层。

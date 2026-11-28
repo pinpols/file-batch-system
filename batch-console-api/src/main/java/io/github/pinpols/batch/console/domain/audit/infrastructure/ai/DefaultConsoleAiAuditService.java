@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * {@link io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditService} 的默认实现：写入 AI

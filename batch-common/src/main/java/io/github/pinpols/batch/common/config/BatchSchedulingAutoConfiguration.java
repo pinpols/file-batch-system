@@ -1,12 +1,11 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.ThreadPoolExecutor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -18,6 +17,10 @@ import org.springframework.data.redis.RedisSystemException;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.util.ErrorHandler;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 @AutoConfiguration
 @EnableConfigurationProperties(BatchSchedulingProperties.class)

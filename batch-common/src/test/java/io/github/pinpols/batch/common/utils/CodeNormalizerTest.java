@@ -3,9 +3,10 @@ package io.github.pinpols.batch.common.utils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.exception.BizException;
 
 @DisplayName("编码归一化工具: 组编码与配置编码的大小写, 分隔符归一及非法格式拒绝")
 class CodeNormalizerTest {

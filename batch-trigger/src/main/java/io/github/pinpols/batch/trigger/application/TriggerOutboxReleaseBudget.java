@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.trigger.application;
 
-import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
+
+import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 
 /**
  * 单个 Trigger 进程向下游释放事件的固定窗口预算。

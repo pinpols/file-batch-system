@@ -1,17 +1,5 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import com.jcraft.jsch.ChannelSftp;
-import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.Session;
-import com.jcraft.jsch.SftpException;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.enums.FileChannelType;
-import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
-import jakarta.annotation.PreDestroy;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -25,11 +13,28 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Component;
+
+import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.Session;
+import com.jcraft.jsch.SftpException;
+
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
-import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.enums.FileChannelType;
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * SFTP 渠道分发适配器，将 {@code file_record} 引用的文件上传到 {@code sftp_remote_directory}。

@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console;
 
-import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
-import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
-import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
@@ -16,6 +13,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
+
+import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
+import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
 
 @SpringBootApplication(
         scanBasePackages = {"io.github.pinpols.batch.console", "io.github.pinpols.batch.common"},

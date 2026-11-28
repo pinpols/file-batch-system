@@ -2,6 +2,11 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -16,9 +21,6 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretRes
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import java.util.Map;
-import java.util.Set;
-import org.springframework.stereotype.Component;
 
 /**
  * Dispatch pipeline 的 RETRY 阶段：对 {@link DeliverDispatchStep} 投递失败的情况执行一次重试。

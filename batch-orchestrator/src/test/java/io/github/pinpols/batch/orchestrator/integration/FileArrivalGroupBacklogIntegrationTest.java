@@ -2,17 +2,19 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.ArrivalGroupBacklogRow;
-import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.ArrivalGroupBacklogRow;
+import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("文件到达积压按组计数与等待时长")

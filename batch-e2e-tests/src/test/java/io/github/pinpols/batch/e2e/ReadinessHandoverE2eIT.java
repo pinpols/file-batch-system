@@ -2,6 +2,26 @@ package io.github.pinpols.batch.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.Map;
+import java.util.UUID;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.web.server.context.WebServerApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
@@ -22,24 +42,6 @@ import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
-import java.util.Map;
-import java.util.UUID;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.boot.web.server.context.WebServerApplicationContext;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 /** 双 HTTP 上下文与真实 PG：移交后不运行 Quartz，仅由持久等待扫描恢复或超时。 */
 @E2eSpringBootTest(

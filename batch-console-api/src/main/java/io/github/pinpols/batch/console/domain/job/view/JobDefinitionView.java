@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.console.domain.job.view;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.List;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 
 /** 作业定义与依赖、托管 Workflow 和监控策略的查询投影。 */
 @Data

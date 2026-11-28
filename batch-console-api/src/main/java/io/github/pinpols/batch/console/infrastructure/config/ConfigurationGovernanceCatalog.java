@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.application.contract.response.config.ConfigGovernanceItemResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigGovernanceItemResponse;
 
 /** 从 CI 生成的唯一登记源加载 Console 配置治理目录。 */
 @Component

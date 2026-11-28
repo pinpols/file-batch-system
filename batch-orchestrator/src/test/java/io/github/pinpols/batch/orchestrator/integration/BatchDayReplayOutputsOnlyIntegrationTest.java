@@ -2,6 +2,18 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Month;
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
@@ -14,16 +26,6 @@ import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegratio
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.Month;
-import java.util.List;
-import java.util.UUID;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * ADR-020 §决策 §实施分阶段 Stage 8 — OUTPUTS_ONLY 端到端集成测试。

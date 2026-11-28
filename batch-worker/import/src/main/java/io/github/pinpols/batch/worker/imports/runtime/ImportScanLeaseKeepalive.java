@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
-import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Lease;
 import java.util.function.LongSupplier;
+
+import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Lease;
 
 /** 大文件摘要计算期间按时间续租，避免将对象流读取放入数据库事务。 */
 final class ImportScanLeaseKeepalive {

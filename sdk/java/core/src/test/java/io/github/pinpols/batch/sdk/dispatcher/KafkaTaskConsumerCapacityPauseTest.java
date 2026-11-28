@@ -4,17 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 
 /**
  * P0 hardening — 验证 {@link KafkaTaskConsumer#applyBackpressure()} 在 in-flight task 达到 {@code

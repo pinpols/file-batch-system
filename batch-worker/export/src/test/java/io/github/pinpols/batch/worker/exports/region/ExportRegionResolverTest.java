@@ -3,12 +3,14 @@ package io.github.pinpols.batch.worker.exports.region;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
 
 /** 导出地区解析:per-run 优先 / 模板默认回退 / allowedRegions 字典校验 / 顶层 + snake_case 别名。 */
 @DisplayName("导出地区解析单测:触发值优先,模板默认回退与允许字典校验语义")

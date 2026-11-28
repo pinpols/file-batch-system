@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.trigger.config;
 
-import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.stereotype.Component;
+
+import com.zaxxer.hikari.HikariDataSource;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 校验手工 launch 的并发闸门与业务连接池预算。

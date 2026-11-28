@@ -303,6 +303,7 @@ if ((scripts_changed == 1)); then
     scripts/ci/tests/test_check_shell_bash32_compat.py \
     scripts/ci/tests/test_check_diff_coverage.py \
     scripts/ci/tests/test_check_java_governance_test_coverage.py \
+    scripts/ci/tests/test_check_java_control_flow.py \
     scripts/ci/tests/test_daily_validation_workflow.py \
     scripts/ci/tests/test_console_api_readiness.py \
     scripts/ci/tests/test_pre_push_module_selection.py \

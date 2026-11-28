@@ -1,23 +1,27 @@
 package io.github.pinpols.batch.console.domain.workflow.application;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
-import io.github.pinpols.batch.console.config.ConsoleExecutionProgressConfiguration;
-import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowExecutionProgressResponse;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
+import io.github.pinpols.batch.console.config.ConsoleExecutionProgressConfiguration;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowExecutionProgressResponse;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * 订阅驱动的服务端进度快照：同租户/运行只共享一份采样，变化后推送完整状态。

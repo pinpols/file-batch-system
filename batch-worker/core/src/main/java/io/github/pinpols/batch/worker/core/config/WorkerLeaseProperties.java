@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.worker.core.config;
 
-import jakarta.validation.constraints.Min;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
+import jakarta.validation.constraints.Min;
 
 /**
  * Worker lease renewer / 任务执行客户端共享配置。

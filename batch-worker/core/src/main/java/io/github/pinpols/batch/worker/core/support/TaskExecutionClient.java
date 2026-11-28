@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
-import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
+import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 
 public interface TaskExecutionClient {
 

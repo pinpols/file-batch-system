@@ -3,9 +3,10 @@ package io.github.pinpols.batch.common.enums;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.exception.BizException;
 
 @DisplayName("WorkflowJoinMode 工作流汇聚模式: 编码解析的大小写容忍 / 缺省回退与非法编码报错")
 class WorkflowJoinModeTest {

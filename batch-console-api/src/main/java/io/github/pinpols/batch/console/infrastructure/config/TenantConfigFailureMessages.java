@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.console.support.persistence.PostgresConstraintViolation;
 import java.sql.SQLException;
+
 import org.springframework.dao.DataAccessException;
+
+import io.github.pinpols.batch.console.support.persistence.PostgresConstraintViolation;
 
 /** 部分成功和租户失败结果使用稳定错误键；数据库诊断细节仅留在服务端日志。 */
 final class TenantConfigFailureMessages {

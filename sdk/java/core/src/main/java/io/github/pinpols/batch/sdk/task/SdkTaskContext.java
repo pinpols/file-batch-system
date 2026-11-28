@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.sdk.task;
 
-import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpoint;
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -9,7 +7,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpoint;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 
 /**
  * 任务执行上下文 — 由 SDK 框架从派单消息构造,传给 {@link SdkTaskHandler#execute(SdkTaskContext)}。

@@ -1,8 +1,25 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -21,19 +38,6 @@ import io.github.pinpols.batch.worker.imports.infrastructure.quality.DatasetRule
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationIssue;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationSession;
 import io.github.pinpols.batch.worker.imports.stage.support.ImportStageSupport;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * Import pipeline 的 VALIDATE 阶段：流式读取 {@code PARSED_RECORDS_PATH} 暂存文件， 对每条记录执行数据质量校验，将通过校验的记录写入

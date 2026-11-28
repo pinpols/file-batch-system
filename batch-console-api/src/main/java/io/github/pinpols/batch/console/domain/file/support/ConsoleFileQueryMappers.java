@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.file.support;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.console.domain.file.mapper.FileArrivalGroupMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileDispatchRecordMapper;
@@ -8,8 +12,6 @@ import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor

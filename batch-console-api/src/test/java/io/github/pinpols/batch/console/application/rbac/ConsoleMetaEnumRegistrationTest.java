@@ -2,15 +2,17 @@ package io.github.pinpols.batch.console.application.rbac;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.DictEnum;
 import java.io.IOException;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+
+import io.github.pinpols.batch.common.enums.DictEnum;
 
 /**
  * 守护测试：batch-common/.../enums 下每个公共枚举必须

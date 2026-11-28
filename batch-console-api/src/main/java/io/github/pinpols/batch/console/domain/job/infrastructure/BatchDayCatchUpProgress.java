@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 批量日补跑逐项状态；网络回执身份必须由调用方核验后才可确认。 */
 final class BatchDayCatchUpProgress {

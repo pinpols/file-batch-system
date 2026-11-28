@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.worker.exports.jdbc;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /** 从模板配置的 {@code query_param_schema.jdbcMappedExport} 或 {@code jdbc_mapped_export} 解析而来的导出规格。 */
 public record JdbcMappedExportSpec(

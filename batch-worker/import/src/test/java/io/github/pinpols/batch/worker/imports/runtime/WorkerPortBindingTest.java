@@ -5,6 +5,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
+import org.springframework.boot.web.server.context.ServerPortInfoApplicationContextInitializer;
+import org.springframework.boot.web.server.servlet.ServletWebServerFactory;
+import org.springframework.boot.web.server.servlet.context.AnnotationConfigServletWebServerApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.test.context.support.TestPropertySourceUtils;
+
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -15,17 +28,6 @@ import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.plugin.ImportLoadPluginRegistry;
-import java.time.Clock;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
-import org.springframework.boot.web.server.context.ServerPortInfoApplicationContextInitializer;
-import org.springframework.boot.web.server.servlet.ServletWebServerFactory;
-import org.springframework.boot.web.server.servlet.context.AnnotationConfigServletWebServerApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.test.context.support.TestPropertySourceUtils;
 
 @DisplayName("Worker 注册使用真实绑定端口, 不混用独立管理端口")
 class WorkerPortBindingTest {

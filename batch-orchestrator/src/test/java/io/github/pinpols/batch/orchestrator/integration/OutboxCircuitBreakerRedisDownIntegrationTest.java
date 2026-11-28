@@ -5,20 +5,23 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
-import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.infrastructure.mq.OutboxPublishCircuitBreaker;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
-import io.github.pinpols.batch.testing.chaos.AbstractChaosIntegrationTest;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
+import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.mq.OutboxPublishCircuitBreaker;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
+import io.github.pinpols.batch.testing.chaos.AbstractChaosIntegrationTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
  * 故障注入意图:验证 Redis 全断(toxiproxy disable)下 outbox 熔断器 fail-open —— 这是 #762 修复的混沌级守护。

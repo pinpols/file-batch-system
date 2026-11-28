@@ -5,6 +5,22 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -16,20 +32,6 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /** 真实 Kafka 重试耗尽后留下加密恢复锚点，恢复扫描沿原请求创建唯一根运行。 */
 @E2eSpringBootTest(

@@ -2,10 +2,11 @@ package io.github.pinpols.batch.console.application.contract.request.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import jakarta.validation.Validation;
-import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 
 @DisplayName("AI 对话请求参数校验: 会话标识长度上限守护")
 class AiChatRequestValidationTest {

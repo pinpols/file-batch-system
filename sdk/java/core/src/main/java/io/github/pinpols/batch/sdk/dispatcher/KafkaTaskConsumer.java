@@ -1,12 +1,5 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.client.BatchSdkClientException;
-import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
-import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
-import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
@@ -19,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-import lombok.extern.slf4j.Slf4j;
+
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -34,6 +27,17 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.client.BatchSdkClientException;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
+import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
+import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 
 /**
  * Kafka task dispatch topic consumer — 单线程 poll loop,把消息反序列化为 {@link TaskDispatchMessage} 后交给

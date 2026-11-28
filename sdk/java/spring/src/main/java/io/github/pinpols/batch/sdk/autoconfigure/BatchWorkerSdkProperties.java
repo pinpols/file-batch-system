@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.sdk.autoconfigure;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import java.time.Duration;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
 import lombok.Getter;
 import lombok.Setter;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 
 @Getter
 @Setter

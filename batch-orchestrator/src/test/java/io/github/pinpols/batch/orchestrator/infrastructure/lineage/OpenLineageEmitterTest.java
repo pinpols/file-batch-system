@@ -5,19 +5,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.FileStatus;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
-import io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
+import io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @DisplayName("血缘事件生成器: 运行态事件类型与时间映射, 输入输出数据集归类及文件附加信息")
 class OpenLineageEmitterTest {

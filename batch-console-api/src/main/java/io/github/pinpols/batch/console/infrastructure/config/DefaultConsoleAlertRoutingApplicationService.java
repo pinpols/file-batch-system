@@ -1,5 +1,11 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
@@ -17,9 +23,6 @@ import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingCon
 import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /** {@link ConsoleAlertRoutingApplicationService} 的默认实现。 */
 @Service

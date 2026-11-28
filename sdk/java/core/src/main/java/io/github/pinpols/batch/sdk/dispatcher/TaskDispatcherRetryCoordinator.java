@@ -1,17 +1,19 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
-import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
+import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 
 /**
  * SDK 控制面调用的重试与故障分类协作者。

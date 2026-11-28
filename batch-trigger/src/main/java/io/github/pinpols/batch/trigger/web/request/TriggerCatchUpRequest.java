@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.trigger.web.request;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
+
+import jakarta.validation.constraints.NotBlank;
 
 @Data
 public class TriggerCatchUpRequest {

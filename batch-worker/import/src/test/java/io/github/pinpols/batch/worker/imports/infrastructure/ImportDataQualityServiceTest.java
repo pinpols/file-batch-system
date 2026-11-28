@@ -2,14 +2,17 @@ package io.github.pinpols.batch.worker.imports.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationConfigSupport;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationRuleSetMerger;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("导入数据质量校验会话")
 class ImportDataQualityServiceTest {

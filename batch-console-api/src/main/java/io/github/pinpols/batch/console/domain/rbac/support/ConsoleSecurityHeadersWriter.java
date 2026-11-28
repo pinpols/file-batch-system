@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.web.header.HeaderWriter;
 import org.springframework.stereotype.Component;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Component
 public class ConsoleSecurityHeadersWriter implements HeaderWriter {

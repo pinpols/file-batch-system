@@ -4,21 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
-import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BatchWindowSpec;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
-import io.github.pinpols.batch.console.domain.job.infrastructure.BatchDayCatchUpOperationStore;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
-import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
-import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,6 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,6 +40,23 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.reactive.server.FluxExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BatchWindowSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
+import io.github.pinpols.batch.console.domain.job.infrastructure.BatchDayCatchUpOperationStore;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(
         classes = BatchConsoleApiApplication.class,

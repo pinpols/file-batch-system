@@ -1,20 +1,24 @@
 package io.github.pinpols.batch.console.support.cache;
 
+import java.time.Duration;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Duration;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.stereotype.Service;
 
 /**
  * 控制台高频查询的 Redis 缓存层。

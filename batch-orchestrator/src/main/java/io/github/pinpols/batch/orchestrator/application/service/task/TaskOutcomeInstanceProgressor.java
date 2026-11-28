@@ -1,5 +1,18 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
@@ -23,16 +36,6 @@ import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMa
 import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
-import java.time.Instant;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * 负责 worker 回报后的分区、实例和 workflow 聚合推进。

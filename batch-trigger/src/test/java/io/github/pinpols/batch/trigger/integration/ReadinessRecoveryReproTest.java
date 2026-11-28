@@ -2,6 +2,22 @@ package io.github.pinpols.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
@@ -12,20 +28,6 @@ import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService;
 import io.github.pinpols.batch.trigger.web.InternalReadinessRecoveryController;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * readiness 恢复的冻结版本与终态 occurrence 回归。

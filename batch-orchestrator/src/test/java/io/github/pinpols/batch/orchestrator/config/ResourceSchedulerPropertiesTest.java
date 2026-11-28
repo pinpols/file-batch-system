@@ -3,13 +3,15 @@ package io.github.pinpols.batch.orchestrator.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
+
+import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
 
 @DisplayName("资源调度配置属性,校验合法超配额策略可绑定且拼写错误时绑定失败")
 class ResourceSchedulerPropertiesTest {

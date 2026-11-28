@@ -1,25 +1,11 @@
 package io.github.pinpols.batch.console.domain.audit.support;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.Hashes;
-import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
-import io.github.pinpols.batch.console.shared.audit.AuditAction;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import io.github.pinpols.batch.console.shared.usage.ConsoleUsageProjectionDispatcher;
-import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
-import jakarta.annotation.PostConstruct;
-import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -42,6 +28,25 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
+import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageProjectionDispatcher;
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * {@link AuditAction} 切面 —— 同事务把方法执行结果写入 {@code batch.console_operation_audit}。

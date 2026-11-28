@@ -2,10 +2,11 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Connection;
 import java.util.Map;
+
 import javax.sql.DataSource;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -16,6 +17,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 /**
  * SQL 一致性门禁：在空 PostgreSQL 上跑通 Flyway 全链，并校验核心唯一约束及一条典型的 {@code ON CONFLICT} 路径。

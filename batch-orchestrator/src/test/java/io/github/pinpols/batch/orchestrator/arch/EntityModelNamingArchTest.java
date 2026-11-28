@@ -2,13 +2,15 @@ package io.github.pinpols.batch.orchestrator.arch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
-import java.util.Set;
-import java.util.stream.Collectors;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /** 确保 entity 包只包含持久化行模型。 */
 @DisplayName("实体包仅包含 XxxEntity 持久化表行模型")

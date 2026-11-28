@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.springframework.stereotype.Component;
 
 @Component
 public class ConsoleRealtimeMetrics {

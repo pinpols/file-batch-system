@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.Instant;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import lombok.Data;
 
 @Data

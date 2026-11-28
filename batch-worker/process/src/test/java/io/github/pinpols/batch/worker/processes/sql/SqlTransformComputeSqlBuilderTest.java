@@ -3,12 +3,14 @@ package io.github.pinpols.batch.worker.processes.sql;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @DisplayName("SQL 转换语句构建器:暂存、发布、冲突与水位 SQL")
 class SqlTransformComputeSqlBuilderTest {

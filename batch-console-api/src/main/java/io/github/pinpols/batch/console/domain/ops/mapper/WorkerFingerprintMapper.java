@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.ops.query.WorkerFingerprintRow;
 import io.github.pinpols.batch.console.domain.ops.view.WorkerFingerprintSummaryRow;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * console-api 只读访问 {@code batch.worker_registry} 指纹列(SDK Phase 5 / SDK-P5-3,console Lane D)。

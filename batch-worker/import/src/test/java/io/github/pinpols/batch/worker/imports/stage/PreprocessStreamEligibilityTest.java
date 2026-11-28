@@ -2,11 +2,13 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 
 @DisplayName("导入预处理流式直载资格单测:格式,管道与压缩加密配置的准入判定")
 class PreprocessStreamEligibilityTest {

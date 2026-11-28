@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.console.support.security;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.List;
-import okhttp3.Dns;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
+
+import okhttp3.Dns;
 
 /**
  * OkHttp {@link Dns} 实现：在客户端真正建连前校验全部解析结果，并把同一份安全地址快照交给连接层。

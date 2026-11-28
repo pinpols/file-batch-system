@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
-import io.github.pinpols.batch.orchestrator.domain.param.WorkflowNodeRunUpdateSensorProbeStateParam;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowNodeRunUpdateSensorProbeStateParam;
 
 public interface WorkflowNodeRunMapper {
 

@@ -2,11 +2,13 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @DisplayName("渠道配置合并:白名单覆盖、字符串配置解析、历史别名归一化与策略列防护")
 class ChannelConfigMergeTest {

@@ -3,18 +3,12 @@ package io.github.pinpols.batch.worker.imports.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
-import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
-import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Lease;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -25,6 +19,15 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
+import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Lease;
 
 @SpringBootTest(
         classes = BatchWorkerImportApplication.class,

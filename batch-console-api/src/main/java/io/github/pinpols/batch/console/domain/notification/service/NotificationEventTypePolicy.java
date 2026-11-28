@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import java.util.Locale;
 import java.util.Set;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 
 /** SLA 告警由已有告警通道管理，不接受没有业务事件生产者的订阅编码。 */
 public final class NotificationEventTypePolicy {

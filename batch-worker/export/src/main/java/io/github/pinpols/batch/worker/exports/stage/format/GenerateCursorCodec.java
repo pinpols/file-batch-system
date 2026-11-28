@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
@@ -11,7 +10,10 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * ADR-038 P3 Export GENERATE 续跑:keyset 分页 cursor 的「带类型标签」序列化 codec。

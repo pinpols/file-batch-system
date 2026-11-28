@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 /** 统一签发本地认证 cookie，供密码登录、token 换发和 OIDC callback 复用。 */
 @Component

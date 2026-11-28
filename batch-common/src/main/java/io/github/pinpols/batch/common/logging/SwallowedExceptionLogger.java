@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.logging;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.regex.Pattern;
+
 import org.slf4j.LoggerFactory;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 写<strong>单行摘要</strong>日志（类型 + message），不显式打印完整栈，避免与 {@code log.error("...", t)} 默认打出整栈的行为混用。

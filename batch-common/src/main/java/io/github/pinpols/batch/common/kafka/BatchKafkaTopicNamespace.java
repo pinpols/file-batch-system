@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.common.kafka;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Objects;
 import java.util.regex.Pattern;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 对 Kafka topic 和消费组名称一致应用部署命名空间。 */
 public final class BatchKafkaTopicNamespace {

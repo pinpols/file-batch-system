@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.console.support;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.BlockedAddressException;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.UnknownHostException;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * Webhook callbackUrl 安全校验器。

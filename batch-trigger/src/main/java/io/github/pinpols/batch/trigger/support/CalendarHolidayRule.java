@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.support;
 
 import java.time.LocalDate;
+
 import lombok.Data;
 
 /**

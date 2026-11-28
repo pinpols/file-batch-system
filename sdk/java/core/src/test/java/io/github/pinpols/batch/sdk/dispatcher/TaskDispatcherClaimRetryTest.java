@@ -11,12 +11,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
@@ -25,11 +19,19 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /**
  * Phase 1 #SDK-P1-2 — CLAIM 401/403 fail-fast + 5xx 指数退避 + 409 peer / 其它 4xx give up。

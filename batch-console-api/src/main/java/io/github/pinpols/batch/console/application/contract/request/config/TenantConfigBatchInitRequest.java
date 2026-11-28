@@ -1,8 +1,15 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import java.time.LocalTime;
+import java.util.List;
+
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -11,9 +18,6 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.time.LocalTime;
-import java.util.List;
-import lombok.Data;
 
 /** mode=SKIP_EXISTING 已存在跳过；mode=UPSERT 已存在更新。dryRun=true 时只校验不写入数据库。 */
 @Data

@@ -2,8 +2,6 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -12,12 +10,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 
 @DisplayName("工作流运行映射文件:归档候选查询对试运行终态的覆盖,以及映射文件可正常解析")
 class WorkflowRunMapperXmlTest {

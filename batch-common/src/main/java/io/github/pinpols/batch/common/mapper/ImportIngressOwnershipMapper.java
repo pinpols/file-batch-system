@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.mapper;
 
 import java.util.List;
-import lombok.Data;
+
 import org.apache.ibatis.annotations.Param;
+
+import lombok.Data;
 
 /** 读取 Import 与对象对账共同使用的入口归属声明。 */
 public interface ImportIngressOwnershipMapper {

@@ -1,17 +1,12 @@
 package io.github.pinpols.batch.common.health;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationVersion;
@@ -21,6 +16,14 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.metrics.ApplicationStartup;
 import org.springframework.core.metrics.StartupStep;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 /** 通用启动自检：检查项完全由 {@link BatchStartupSelfCheckProperties} 配置，避免各模块复制 JDBC 校验逻辑。 */
 @Slf4j

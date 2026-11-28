@@ -12,15 +12,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
-import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Set;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +28,15 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
+import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("控制台限流过滤器: 登录、高开销与文件操作三个维度的拦截")

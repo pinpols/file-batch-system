@@ -3,12 +3,14 @@ package io.github.pinpols.batch.worker.core.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 
 @DisplayName("Job 参数只能覆盖固定 System Pipeline 阶段的业务参数")
 class SystemPipelineStepConfigurationTest {

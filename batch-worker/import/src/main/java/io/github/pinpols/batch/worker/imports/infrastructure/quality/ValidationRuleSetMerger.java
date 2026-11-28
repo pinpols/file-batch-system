@@ -6,15 +6,18 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.firstNonNull;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 
 /**
  * 合并模板配置中的 {@code field_mappings} 派生规则与显式 {@code validation_rule_set}。

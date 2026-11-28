@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * 上游就绪门禁开关（{@code batch.trigger.readiness-gate}，ADR-043 依赖感知 fire）。

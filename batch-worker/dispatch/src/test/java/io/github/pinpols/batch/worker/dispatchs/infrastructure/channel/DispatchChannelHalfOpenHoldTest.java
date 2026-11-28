@@ -7,20 +7,23 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.beans.factory.ObjectProvider;
 
 @DisplayName("渠道健康服务:半开探测通行证持有时长不低于 1 秒")
 class DispatchChannelHalfOpenHoldTest {

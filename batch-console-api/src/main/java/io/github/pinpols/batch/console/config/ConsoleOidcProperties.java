@@ -1,12 +1,16 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.util.Locale;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
 import lombok.Getter;
 import lombok.Setter;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
+import jakarta.annotation.PostConstruct;
 
 /** 单试点租户 OIDC 客户端配置；密钥由部署 Secret 注入，启用需重启 Console API。 */
 @Getter

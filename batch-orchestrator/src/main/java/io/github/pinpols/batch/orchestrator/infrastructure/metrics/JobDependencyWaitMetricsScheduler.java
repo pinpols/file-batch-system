@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -7,14 +16,9 @@ import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitBacklo
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TenantDirectoryMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /** 发布等待数量和等待时长汇总，不带租户/作业标签。 */
 @Slf4j

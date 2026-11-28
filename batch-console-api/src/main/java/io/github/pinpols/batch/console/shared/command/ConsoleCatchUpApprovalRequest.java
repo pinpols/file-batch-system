@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.shared.command;
 
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidBizDate;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 
 @Data
 public class ConsoleCatchUpApprovalRequest {

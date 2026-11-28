@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.file.application.progress;
 
-import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePipelineStepProgressResponse;
 import java.time.Instant;
 import java.util.List;
+
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePipelineStepProgressResponse;
 
 /** 当前订阅范围的完整快照；steps仅含每个阶段的最新尝试。 */
 public record PipelineProgressResponse(String tenantId, Instant generatedAt, List<Pipeline> pipelines) {

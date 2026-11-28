@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import java.time.Instant;
+
+import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 
 /** Public resource tag view. */
 public record ResourceTagResponse(

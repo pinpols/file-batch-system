@@ -2,14 +2,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService;
-import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
-import io.github.pinpols.batch.orchestrator.infrastructure.archive.SuccessInstanceArchiveScheduler;
-import io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -36,8 +28,9 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
+
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.executor.parameter.ParameterHandler;
 import org.apache.ibatis.mapping.BoundSql;
@@ -68,6 +61,17 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService;
+import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.archive.SuccessInstanceArchiveScheduler;
+import io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 仅显式 -Dtest 执行的诊断成本对照；完整运行树和回滚语义由既有归档 IT 独立证明。 */
 @Slf4j

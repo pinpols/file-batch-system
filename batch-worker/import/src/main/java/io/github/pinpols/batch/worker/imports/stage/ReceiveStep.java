@@ -1,9 +1,23 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.DictEnum;
@@ -30,17 +44,8 @@ import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.domain.ImportWorkerType;
+
 import jakarta.annotation.PostConstruct;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDate;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * Import pipeline 的第一阶段：接收并登记文件记录。

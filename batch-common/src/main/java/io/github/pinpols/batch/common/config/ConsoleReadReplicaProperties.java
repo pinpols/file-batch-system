@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Console 读写分离配置的跨模块只读视图（{@code batch.console.read-replica}）。

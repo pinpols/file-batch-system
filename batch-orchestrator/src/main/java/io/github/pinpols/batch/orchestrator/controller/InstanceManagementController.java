@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
+import org.springframework.web.bind.annotation.*;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementResults.InstanceAction;
 import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementResults.PartitionAction;
 import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementResults.RetryFailedPartitions;
-import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
 
 /**
  * 任务实例运行态管控内部控制器，基础路径 {@code /internal/instances}。 支持对任务实例的取消（{@code POST

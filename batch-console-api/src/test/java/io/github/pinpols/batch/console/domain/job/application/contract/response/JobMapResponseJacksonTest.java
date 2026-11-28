@@ -3,8 +3,17 @@ package io.github.pinpols.batch.console.domain.job.application.contract.response
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
@@ -12,12 +21,6 @@ import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFail
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * wire 红线守护:类型化 response record 的 JSON key 必须与历史 Map 响应逐字一致。 覆盖三个易错形态:snake_case 键(batch

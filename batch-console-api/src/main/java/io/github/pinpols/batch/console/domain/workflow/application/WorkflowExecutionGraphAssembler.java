@@ -1,6 +1,16 @@
 package io.github.pinpols.batch.console.domain.workflow.application;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -12,14 +22,6 @@ import io.github.pinpols.batch.console.domain.workflow.application.contract.resp
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowExecutionProgressResponse.NodeProgress;
 import io.github.pinpols.batch.console.domain.workflow.view.WorkflowExecutionNodeView;
 import io.github.pinpols.batch.console.domain.workflow.view.WorkflowExecutionSnapshotView;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 
 /** 只从本次运行的冻结节点/边构建图，禁止退回可变定义图。 */
 public final class WorkflowExecutionGraphAssembler {

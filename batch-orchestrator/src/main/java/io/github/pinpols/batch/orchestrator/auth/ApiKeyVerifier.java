@@ -1,14 +1,5 @@
 package io.github.pinpols.batch.orchestrator.auth;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.Ticker;
-import io.github.pinpols.batch.common.security.ApiKeyHasher;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
-import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -17,8 +8,21 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Ticker;
+
+import io.github.pinpols.batch.common.security.ApiKeyHasher;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
+
+import jakarta.annotation.PostConstruct;
 
 /**
  * 验证 X-Batch-Api-Key — 按 {@code key_prefix} 索引拿候选活跃行,逐行用 {@link ApiKeyHasher#verify} 常量时间比对。

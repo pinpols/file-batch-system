@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.common.event;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 域事件不可变描述。**所有**业务想发到 outbox 的事件统一通过本对象表达,各模块的 publisher 实现负责把它写入对应的 outbox 表 (orchestrator →

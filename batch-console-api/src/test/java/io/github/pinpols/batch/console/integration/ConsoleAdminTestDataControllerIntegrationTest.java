@@ -3,11 +3,9 @@ package io.github.pinpols.batch.console.integration;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +13,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * P1: ConsoleAdminTestDataController HTTP 入口验证。

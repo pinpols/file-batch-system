@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
 import java.time.Instant;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

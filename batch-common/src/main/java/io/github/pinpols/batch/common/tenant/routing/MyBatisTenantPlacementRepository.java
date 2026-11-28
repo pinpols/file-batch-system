@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
-import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
-import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
+import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 
 /**
  * {@link TenantPlacementRepository} 的 MyBatis 实现,经 {@link BusinessTenantPlacementMapper} 从 platform

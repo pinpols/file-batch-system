@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
-import io.github.pinpols.batch.common.config.BatchProfileSupport;
-import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.config.BatchProfileSupport;
+import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
+
+import jakarta.annotation.PostConstruct;
 
 /**
  * 生产类 profile 下,把 {@link HttpExecutorProperties#isEnforceAllowlist()} 的 effective 默认从 false 翻成 true

@@ -2,12 +2,15 @@ package io.github.pinpols.batch.common.config;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.zaxxer.hikari.HikariConfig;
 import java.util.Collections;
 import java.util.List;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.zaxxer.hikari.HikariConfig;
 
 @DisplayName("业务数据源构建:分片路由开启时的分片列表、默认分片与分片键唯一性前置校验")
 class BusinessDataSourceBuilderTest {

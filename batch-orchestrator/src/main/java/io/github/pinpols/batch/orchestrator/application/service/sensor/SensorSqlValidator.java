@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
+import java.util.List;
+
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
 import io.github.pinpols.batch.common.utils.EmptyValues;
-import java.util.List;
+
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.Select;

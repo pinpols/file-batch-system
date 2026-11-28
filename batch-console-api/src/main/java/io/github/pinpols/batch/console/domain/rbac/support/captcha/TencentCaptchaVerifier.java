@@ -1,17 +1,5 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
-import io.github.pinpols.batch.common.http.OutboundHttpRequest;
-import io.github.pinpols.batch.common.http.OutboundHttpResponse;
-import io.github.pinpols.batch.common.http.OutboundHttpTransport;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.console.config.CaptchaProperties;
-import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -22,9 +10,25 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.console.config.CaptchaProperties;
+import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 
 /**
  * 腾讯天御无感验证码校验。{@code provider=tencent} 装配。

@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import java.time.Instant;
 import java.util.List;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 
 /**
  * Worker register / heartbeat / deactivate / updateStatus 的统一请求体。

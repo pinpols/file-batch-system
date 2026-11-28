@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import jakarta.validation.constraints.Min;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
+import jakarta.validation.constraints.Min;
 
 /** Orchestrator 配置近缓存参数。 */
 @Data

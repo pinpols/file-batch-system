@@ -2,6 +2,12 @@ package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.GenericContainer;
+
 import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
 import io.github.bucket4j.redis.lettuce.Bucket4jLettuce;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
@@ -17,10 +23,6 @@ import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.codec.StringCodec;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Duration;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.GenericContainer;
 
 /**
  * 真 Redis 短路熔断端到端测试：验证 #782 遗留的"慢故障下每请求叠 500ms"被熔断消除。

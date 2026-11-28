@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
+import java.time.Instant;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
-import java.time.Instant;
-import lombok.Builder;
 
 /**
  * worker_registry 表的不可变快照（MyBatis 通过 {@code resultMap+constructor} 映射）。

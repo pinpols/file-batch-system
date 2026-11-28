@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
+import java.util.Collection;
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.rbac.param.TenantUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
-import java.util.Collection;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface TenantMapper {
 

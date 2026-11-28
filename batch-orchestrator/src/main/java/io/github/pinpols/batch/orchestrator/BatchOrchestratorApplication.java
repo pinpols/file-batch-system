@@ -1,13 +1,7 @@
 package io.github.pinpols.batch.orchestrator;
 
-import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
-import io.github.pinpols.batch.common.config.BatchKafkaProducerProperties;
-import io.github.pinpols.batch.common.config.BatchKafkaProducerSupport;
-import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
-import io.github.pinpols.batch.common.config.BatchStartupSelfCheckAutoConfiguration;
-import io.github.pinpols.batch.common.config.KafkaConnectionProperties;
-import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
+
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -20,6 +14,14 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.scheduling.annotation.EnableScheduling;
+
+import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
+import io.github.pinpols.batch.common.config.BatchKafkaProducerProperties;
+import io.github.pinpols.batch.common.config.BatchKafkaProducerSupport;
+import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import io.github.pinpols.batch.common.config.BatchStartupSelfCheckAutoConfiguration;
+import io.github.pinpols.batch.common.config.KafkaConnectionProperties;
+import io.micrometer.observation.ObservationRegistry;
 
 /**
  * Orchestrator 进程入口。

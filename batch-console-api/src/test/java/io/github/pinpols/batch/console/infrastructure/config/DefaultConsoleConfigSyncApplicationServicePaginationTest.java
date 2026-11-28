@@ -4,12 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
-import io.github.pinpols.batch.console.domain.config.mapper.ConfigSyncLogMapper;
-import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +13,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigSyncLogMapper;
+import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("配置同步日志分页服务: 总数与切片结果")

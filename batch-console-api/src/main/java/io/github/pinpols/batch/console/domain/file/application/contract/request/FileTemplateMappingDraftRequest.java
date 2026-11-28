@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.request;
 
-import io.github.pinpols.batch.common.validation.ValidTenantId;
-import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Size;
 import java.util.ArrayList;
 import java.util.List;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.validation.ValidTenantId;
+import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 
 /** 文件模板字段映射草案请求：把向导式字段输入转换成现有 template JSON 配置。 */
 @Data

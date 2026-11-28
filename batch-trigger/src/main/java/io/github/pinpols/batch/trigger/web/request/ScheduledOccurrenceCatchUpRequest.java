@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.trigger.web.request;
 
+import java.time.Instant;
+import java.time.LocalDate;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
-import java.time.LocalDate;
-import lombok.Data;
 
 /** 外租户文件导致部分分区记录被持久化。 */
 @Data

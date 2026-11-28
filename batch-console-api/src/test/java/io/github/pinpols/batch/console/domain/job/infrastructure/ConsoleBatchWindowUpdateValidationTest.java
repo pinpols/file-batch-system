@@ -8,14 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
-import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchWindowUpdateRequest;
-import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
-import io.github.pinpols.batch.console.domain.job.param.BatchWindowUpdateParam;
-import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +16,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchWindowUpdateRequest;
+import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
+import io.github.pinpols.batch.console.domain.job.param.BatchWindowUpdateParam;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 
 /** 除真实HTTP持久化验证外，单独守护错误身份与缓存失效边界，不依赖数据库报格式错误。 */
 @ExtendWith(MockitoExtension.class)

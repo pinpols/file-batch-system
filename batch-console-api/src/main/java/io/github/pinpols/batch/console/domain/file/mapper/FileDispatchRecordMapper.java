@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.file.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.file.query.FileDispatchRecordQuery;
 import io.github.pinpols.batch.console.domain.file.view.FileDispatchRecordQueryView;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface FileDispatchRecordMapper {
 

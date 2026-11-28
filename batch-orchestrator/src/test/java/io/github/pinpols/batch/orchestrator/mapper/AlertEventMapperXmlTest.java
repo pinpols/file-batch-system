@@ -2,17 +2,19 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import java.io.InputStream;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 
 @DisplayName("告警恢复映射中的作业生命周期分类")
 class AlertEventMapperXmlTest {

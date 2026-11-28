@@ -2,14 +2,12 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +21,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 真实 HTTP、版本事务和持久化审计共同验证密钥引用的存储身份；不读取或输出密钥载荷。 */
 @SpringBootTest(

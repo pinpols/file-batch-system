@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.exception;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
 import lombok.Getter;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
 
 @Getter
 public class SystemException extends RuntimeException {

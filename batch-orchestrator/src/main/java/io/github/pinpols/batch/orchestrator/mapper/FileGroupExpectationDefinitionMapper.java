@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.orchestrator.domain.param.FileGroupExpectationDefinitionUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.query.FileGroupExpectationDefinition;
 import io.github.pinpols.batch.orchestrator.domain.query.FileGroupUploadTarget;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface FileGroupExpectationDefinitionMapper {
 

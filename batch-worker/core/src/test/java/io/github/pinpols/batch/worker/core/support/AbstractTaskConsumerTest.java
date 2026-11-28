@@ -9,6 +9,31 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.Month;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
+
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.mock.env.MockEnvironment;
+import org.springframework.web.client.ResourceAccessException;
+
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.kafka.SchedulingContext;
@@ -25,29 +50,6 @@ import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.lang.reflect.Field;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.Month;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Pattern;
-import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.slf4j.MDC;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.mock.env.MockEnvironment;
-import org.springframework.web.client.ResourceAccessException;
 
 /**
  * AbstractTaskConsumer 测试覆盖：格式错误的消息被静默丢弃；Worker 类型

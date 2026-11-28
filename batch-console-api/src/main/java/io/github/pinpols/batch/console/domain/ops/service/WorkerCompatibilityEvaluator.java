@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.dto.SdkVersions;
 import io.github.pinpols.batch.console.domain.ops.dto.SdkPlatformConstants;
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility;
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.ReasonCode;
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.Status;
-import org.springframework.stereotype.Component;
 
 /**
  * 由 worker 上报的 {@code sdkVersion} 算出协议/SDK 兼容状态(console SDK 运行时可见性 ①)。

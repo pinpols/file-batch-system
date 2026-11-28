@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.stereotype.Repository;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
 import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelHealthMapper;
@@ -9,11 +17,6 @@ import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthFailu
 import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthProbeClaimParam;
 import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthSuccessParam;
 import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthUpsertParam;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
 
 /** 分发渠道健康状态持久化仓库。 */
 @Repository

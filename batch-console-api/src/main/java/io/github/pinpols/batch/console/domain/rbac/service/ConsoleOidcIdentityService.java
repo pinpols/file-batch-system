@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import java.util.List;
+
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -11,11 +19,6 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMap
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
 import io.github.pinpols.batch.console.domain.rbac.view.ConsoleOidcIdentityView;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 管理 OIDC 主体到本地账号的显式映射；IdP claims 不参与角色授予。 */
 @Service

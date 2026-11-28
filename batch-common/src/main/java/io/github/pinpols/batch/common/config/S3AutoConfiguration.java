@@ -1,9 +1,8 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.health.S3HealthIndicator;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.URI;
 import java.time.Duration;
+
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -12,6 +11,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
+
+import io.github.pinpols.batch.common.health.S3HealthIndicator;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;

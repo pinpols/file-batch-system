@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
 import java.util.Objects;
+
 import lombok.Builder;
 
 /** 一次资产身份与归属写入。 */

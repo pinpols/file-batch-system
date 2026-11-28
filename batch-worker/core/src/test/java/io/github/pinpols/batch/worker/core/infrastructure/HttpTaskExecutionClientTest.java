@@ -5,24 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
-import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
-import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
-import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
-import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
-import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
-import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-import mockwebserver3.MockResponse;
-import mockwebserver3.MockWebServer;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,6 +21,23 @@ import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
+import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
+import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
+import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
+import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
+import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
+import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
 
 /**
  * Worker → Orchestrator HTTP 的弹性测试：5xx / I/O 错误 / 429 均按退避重试，R6 P0-7 起 429 不再立即失败， 避免高峰期 worker

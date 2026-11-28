@@ -1,14 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
-import io.github.pinpols.batch.common.enums.SensorType;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeResult;
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
-import io.github.pinpols.batch.orchestrator.config.SensorProperties;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,7 +9,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.extern.slf4j.Slf4j;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -27,6 +18,19 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.enums.SensorType;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeResult;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
+import io.github.pinpols.batch.orchestrator.config.SensorProperties;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * KAFKA_OFFSET sensor：等待指定 topic-partition 的 endOffset &gt;= minOffset。

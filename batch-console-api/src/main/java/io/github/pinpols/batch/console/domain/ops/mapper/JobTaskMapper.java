@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.ops.view.JobTaskExecutionAuditView;
 import io.github.pinpols.batch.console.domain.ops.view.JobTaskHeartbeatView;
-import org.apache.ibatis.annotations.Param;
 
 /** console-api 只读访问 {@code batch.job_task}：心跳进度子集(SDK Phase 4 / ORCH-P4-1)与执行审计子集。 */
 public interface JobTaskMapper {

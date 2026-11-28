@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.startup;
 
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -8,11 +15,6 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Component;
 
 /**
  * Orchestrator 启动后租约审计：读取 worker_registry / job_partition / outbox_event 里 <b>已经过期但仍未被回收</b> 的记录并以

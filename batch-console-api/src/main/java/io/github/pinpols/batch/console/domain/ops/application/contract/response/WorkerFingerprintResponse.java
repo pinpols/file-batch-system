@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
+import java.time.Instant;
+
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility;
 import io.github.pinpols.batch.console.domain.ops.query.WorkerFingerprintRow;
-import java.time.Instant;
 
 /**
  * SDK Phase 5 / SDK-P5-3 (console Lane D):单个 worker 运行指纹响应。

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.logging;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
+
 import org.slf4j.MDC;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 基于 SLF4J MDC 的轻量封装，统一结构化日志字段写入。 */
 public final class BatchMdc {

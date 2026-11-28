@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
 
 @Data
 @ConfigurationProperties(prefix = "batch.resource-scheduler")

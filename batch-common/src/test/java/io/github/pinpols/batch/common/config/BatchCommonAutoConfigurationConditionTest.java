@@ -3,16 +3,11 @@ package io.github.pinpols.batch.common.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import io.github.pinpols.batch.common.health.BatchHealthAutoConfiguration;
-import io.github.pinpols.batch.common.health.BatchStartupSelfCheck;
-import io.github.pinpols.batch.common.health.HikariSaturationHealthIndicator;
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.storage.EncryptingObjectStore;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -20,6 +15,15 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+
+import io.github.pinpols.batch.common.health.BatchHealthAutoConfiguration;
+import io.github.pinpols.batch.common.health.BatchStartupSelfCheck;
+import io.github.pinpols.batch.common.health.HikariSaturationHealthIndicator;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.EncryptingObjectStore;
+
 import software.amazon.awssdk.services.s3.S3Client;
 
 @DisplayName("公共自动配置装配条件:存储后端互斥、启动自检开关、对象加密密钥校验与健康指示器数据源选择")

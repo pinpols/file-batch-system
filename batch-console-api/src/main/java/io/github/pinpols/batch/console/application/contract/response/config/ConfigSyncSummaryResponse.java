@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import java.util.List;
+
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 
 /** 配置同步包内各类配置的数量汇总。 */
 public record ConfigSyncSummaryResponse(

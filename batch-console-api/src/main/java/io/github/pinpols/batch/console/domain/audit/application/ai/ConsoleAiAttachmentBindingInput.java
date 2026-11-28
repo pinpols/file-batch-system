@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+
 import lombok.Builder;
 
 /** 单轮附件绑定输入；空附件保持无需绑定的语义，非空附件仍由原归属与有效期校验处理。 */

@@ -2,13 +2,11 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -22,6 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("作业硬超时从实际执行入口计时")
 class JobInstanceHardTimeoutIntegrationTest {

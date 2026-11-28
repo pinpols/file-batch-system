@@ -1,18 +1,5 @@
 package io.github.pinpols.batch.worker.atomic.spark;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.SensitiveDataValidator;
-import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
-import io.github.pinpols.batch.common.spi.task.ResourceKind;
-import io.github.pinpols.batch.common.spi.task.TaskCapability;
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,10 +22,26 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.SensitiveDataValidator;
+import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
+import io.github.pinpols.batch.common.spi.task.ResourceKind;
+import io.github.pinpols.batch.common.spi.task.TaskCapability;
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.SecretMasking;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 
 /**
  * Atomic Task SPI 骨架:把一个 Spark 作业作为一种 {@code taskType} 提交并跟踪。

@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.query;
 
+import java.util.Set;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.TriggerMode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
+
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.util.Set;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode(callSuper = false)
 @Data

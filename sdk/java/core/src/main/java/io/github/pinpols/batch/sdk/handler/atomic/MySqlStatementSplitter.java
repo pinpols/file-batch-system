@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.ArrayList;
 import java.util.List;
+
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 
 /**
  * MySQL / MariaDB 词法下的多语句切分器,只在 {@link SqlSplitDialect} 判定连接为 MySQL 家族时使用。

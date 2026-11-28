@@ -2,18 +2,21 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("任务结果摘要构建器: 输出聚合, 分片计数与分片过滤口径")
 class TaskOutcomeSummaryBuilderTest {

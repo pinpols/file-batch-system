@@ -2,9 +2,21 @@ package io.github.pinpols.batch.e2e.arch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Import;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+
 import io.github.pinpols.batch.common.arch.CodingConventionsArchRules;
 import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
@@ -18,15 +30,6 @@ import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
 import io.github.pinpols.batch.e2e.apps.E2eProcessApplication;
 import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
 import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Import;
 
 /**
  * Spring 装配守护 — 防 P0/P1-B 已踩过的 2 类 main-red:

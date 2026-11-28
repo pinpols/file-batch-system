@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.ops.param;
 
-import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import lombok.Getter;
+
+import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 
 /** 配置审批状态迁移参数；目标状态由具名工厂固定。 */
 @Getter

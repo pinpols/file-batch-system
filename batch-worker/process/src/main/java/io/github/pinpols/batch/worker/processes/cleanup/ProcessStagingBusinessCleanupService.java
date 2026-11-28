@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import java.time.Instant;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 
 /** 绑定候选所属租户上下文，再委派业务库事务执行 staging 代际查询和回收。 */
 @Service

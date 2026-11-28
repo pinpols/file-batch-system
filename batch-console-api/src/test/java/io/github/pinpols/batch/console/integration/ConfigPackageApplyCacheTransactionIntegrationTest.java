@@ -5,20 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
-import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore;
-import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -30,6 +22,16 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore;
+import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 配置包实际 Apply 事务提交/回滚与 Redis 失效回调的联合验证。 */
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)

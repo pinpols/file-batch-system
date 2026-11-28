@@ -13,16 +13,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.console.application.observability.SseTicketService;
-import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +29,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
-// 下方 mock() 调用会用到 SseTicketService。
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.console.application.observability.SseTicketService;
+import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("控制台认证过滤器:开关与旁路模式放行, cookie 与工单票据鉴权, 非法凭据返回未授权或禁止")

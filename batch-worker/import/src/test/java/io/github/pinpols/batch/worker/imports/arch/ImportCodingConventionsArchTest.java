@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.worker.imports.arch;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+
 import io.github.pinpols.batch.common.arch.CodingConventionsArchRules;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * batch-worker-import docs/agent-baseline.md 规约守护,规则源自 batch-common 测试 jar 的 CodingConventionsArchRules。

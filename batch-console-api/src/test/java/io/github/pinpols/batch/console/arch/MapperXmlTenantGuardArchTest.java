@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.arch;
 
-import io.github.pinpols.batch.common.arch.BaseMapperXmlTenantGuardArchTest;
 import java.util.List;
 import java.util.Set;
+
+import io.github.pinpols.batch.common.arch.BaseMapperXmlTenantGuardArchTest;
 
 /**
  * 治理护栏:任何引用 batch.* 业务表的 mapper XML,SELECT/UPDATE/DELETE 都必须强制带 tenant_id 过滤, 不允许 {@code <if

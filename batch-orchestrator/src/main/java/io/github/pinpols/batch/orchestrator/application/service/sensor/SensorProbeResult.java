@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 
 /**
  * ADR-028 sensor 单次探测的返回。

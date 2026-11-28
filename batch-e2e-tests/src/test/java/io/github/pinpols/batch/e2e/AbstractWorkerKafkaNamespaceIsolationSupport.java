@@ -3,10 +3,6 @@ package io.github.pinpols.batch.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.worker.core.support.AbstractTaskConsumer;
 import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -15,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -31,6 +28,11 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.worker.core.support.AbstractTaskConsumer;
 
 /** 通过真实 broker 核验独立 Worker 应用的消费组 topic 分配。 */
 @E2eBusinessSchema

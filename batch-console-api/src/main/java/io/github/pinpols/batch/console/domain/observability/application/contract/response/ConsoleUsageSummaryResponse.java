@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
 import java.time.LocalDate;
+
 import lombok.Builder;
 
 /** 后端派生使用率日明细；不替代操作审计或业务对账。 */

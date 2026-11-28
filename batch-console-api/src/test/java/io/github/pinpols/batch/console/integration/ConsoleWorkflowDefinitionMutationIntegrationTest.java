@@ -2,14 +2,16 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 
 /**
  * 写路径端到端集成测试:POST /api/console/workflow-definitions → DB(workflow_definition + workflow_node +

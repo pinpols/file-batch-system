@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.worker.imports.plugin;
 
-import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 @Component
 public class ImportLoadPluginRegistry {

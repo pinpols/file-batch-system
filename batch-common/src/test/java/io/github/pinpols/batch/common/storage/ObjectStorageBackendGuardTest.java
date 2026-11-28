@@ -4,15 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import io.github.pinpols.batch.common.config.ApplicationNameProvider;
-import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
-import io.github.pinpols.batch.common.config.StorageBackendProperties;
-import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import java.nio.file.Path;
 import java.util.Locale;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
@@ -21,6 +17,13 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
+
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
+import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 
 @DisplayName("对象存储后端守护:验证各后端身份指纹的组成要素以及未支持后端的拒绝")
 class ObjectStorageBackendGuardTest {

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.governance.entity.BusinessShardCatalogEntity;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.governance.entity.BusinessShardCatalogEntity;
 
 /** 公开分片目录视图；凭据不会包含在目录中。 */
 @Builder

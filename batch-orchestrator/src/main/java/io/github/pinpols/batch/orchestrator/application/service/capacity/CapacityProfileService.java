@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.orchestrator.application.service.capacity;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Preconditions;
@@ -7,12 +16,6 @@ import io.github.pinpols.batch.orchestrator.application.service.capacity.Capacit
 import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileReport.CapacityProfileTotals;
 import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileReport.CapacityProfileWindow;
 import io.github.pinpols.batch.orchestrator.mapper.CapacityProfileMapper;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** P2 cost profile:基于热表做近似容量画像，不做账单治理或财务成本分摊。 */
 @Service

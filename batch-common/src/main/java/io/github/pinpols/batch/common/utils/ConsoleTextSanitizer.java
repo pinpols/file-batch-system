@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.utils;
 
 import java.text.Normalizer;
 import java.util.regex.Pattern;
+
 import org.springframework.web.util.HtmlUtils;
 
 /**

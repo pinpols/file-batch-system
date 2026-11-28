@@ -2,16 +2,18 @@ package io.github.pinpols.batch.sdk.handler.typed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.sdk.handler.SdkRowResult;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /** A.2 typed Export 模板基类单测 — 验证强类型入参 + 行流写出模板。 */
 @DisplayName("强类型 Export 模板基类:入参反序列化后构建查询并逐行写出,覆盖显式结果与非法参数")

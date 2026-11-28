@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Console 实时实例标识配置（{@code batch.console.instance-id}）。

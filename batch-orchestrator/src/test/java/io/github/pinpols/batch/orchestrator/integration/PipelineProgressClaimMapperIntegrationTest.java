@@ -2,19 +2,21 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.PipelineProgressReadService;
-import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+
+import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.PipelineProgressReadService;
+import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional

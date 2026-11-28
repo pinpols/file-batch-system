@@ -9,12 +9,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -23,6 +22,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 
 /** SDK Kafka offset 契约:只有已接收/终态坏消息提交 offset,可恢复拒收不提交。 */
 @DisplayName("Kafka 消费位移决策 — 仅接收成功或终态坏消息提交位移,可恢复拒收不提交")

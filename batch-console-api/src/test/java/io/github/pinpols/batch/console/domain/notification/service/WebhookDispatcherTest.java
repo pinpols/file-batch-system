@@ -8,12 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
-import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
-import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -25,10 +19,19 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
+import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 
 @DisplayName("回调分发器: 事件类型匹配, 回调地址安全拦截与载荷签名")
 class WebhookDispatcherTest {

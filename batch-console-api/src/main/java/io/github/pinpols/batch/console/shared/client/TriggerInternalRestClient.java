@@ -1,12 +1,8 @@
 package io.github.pinpols.batch.console.shared.client;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.console.config.ConsoleTriggerClientProperties;
 import java.time.Duration;
 import java.util.function.Supplier;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
@@ -15,6 +11,12 @@ import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.RestClient;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.console.config.ConsoleTriggerClientProperties;
 
 /**
  * 统一构造调用 batch-trigger {@code /api/**} 的 {@link RestClient}。

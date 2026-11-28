@@ -4,16 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipQuery;
-import io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipRow;
-import io.github.pinpols.batch.orchestrator.mapper.WaitRelationshipMapper;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipRow;
+import io.github.pinpols.batch.orchestrator.mapper.WaitRelationshipMapper;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("等待关系服务的稳定游标分页")

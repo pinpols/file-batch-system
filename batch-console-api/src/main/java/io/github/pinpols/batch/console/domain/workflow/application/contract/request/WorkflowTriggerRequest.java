@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.workflow.application.contract.req
 
 import io.github.pinpols.batch.common.validation.ValidBizDate;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 

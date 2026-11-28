@@ -1,5 +1,18 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
+import java.util.List;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleKafkaLagQueryPort;
 import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
@@ -13,19 +26,10 @@ import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
 
 /** 控制台运维总览 REST：租户维度运行摘要。 */
 @RestController

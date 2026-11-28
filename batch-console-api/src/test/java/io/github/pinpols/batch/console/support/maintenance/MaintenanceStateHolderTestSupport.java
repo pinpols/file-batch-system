@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.support.maintenance;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 

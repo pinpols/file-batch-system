@@ -7,7 +7,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
@@ -18,9 +24,6 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("租户配置导入的文件等待渠道校验")
 class TenantWorkflowChannelValidationTest {

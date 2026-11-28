@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.common.config.BatchProfileSupport;
-import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
-import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.config.BatchProfileSupport;
+import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 
 /** 生产准入硬门禁：禁止以“无限全局活跃作业”配置启动控制面。 */
 @Component

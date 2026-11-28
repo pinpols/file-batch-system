@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import java.time.LocalDate;
+
 import lombok.Builder;
 import lombok.Getter;
 

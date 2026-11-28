@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
+import java.util.regex.Pattern;
+
+import org.springframework.beans.factory.support.ScopeNotActiveException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -9,12 +18,6 @@ import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.support.ScopeNotActiveException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 
 /**
  * 租户访问守卫：所有需要落租户维度的 console 操作经此解析/校验目标租户，返回归一化的 tenantId。

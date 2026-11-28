@@ -2,17 +2,19 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.PartitionStatus;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
-import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
 import java.util.List;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
+import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
 
 @DisplayName("分区结果计数：两种计数来源、完成判定与终态摘要校验")
 class PartitionOutcomeCountsTest {

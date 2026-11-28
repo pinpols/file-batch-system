@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.persistence.mybatis;
 
 import java.time.Clock;
+
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.boot.autoconfigure.ConfigurationCustomizer;
 import org.springframework.boot.autoconfigure.AutoConfiguration;

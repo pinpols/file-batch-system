@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -10,6 +9,8 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 @Configuration(proxyBeanMethods = false)
 /** 装配 Console 的 AI 审计与调用客户端。 */

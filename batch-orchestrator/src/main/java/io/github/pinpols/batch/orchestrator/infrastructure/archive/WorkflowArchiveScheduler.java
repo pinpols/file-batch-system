@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.archive;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.orchestrator.application.archive.WorkflowArchiveService;
 import io.github.pinpols.batch.orchestrator.application.archive.WorkflowArchiveService.ArchiveBatchResult;
 import io.github.pinpols.batch.orchestrator.config.WorkflowArchiveProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.metrics.ArchiveSchedulerHealthMetrics;
+
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * P3-3 workflow archive 调度器：默认每天 04:15 跑（{@code batch.workflow.archive.cron}）， 清理终结态 workflow_run /

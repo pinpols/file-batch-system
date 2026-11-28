@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.infrastructure.observability;
 
-import io.github.pinpols.batch.console.application.observability.SseTicketStore;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.application.observability.SseTicketStore;
 
 /** Redis 版 SSE 一次性 ticket 存储。 */
 @Component

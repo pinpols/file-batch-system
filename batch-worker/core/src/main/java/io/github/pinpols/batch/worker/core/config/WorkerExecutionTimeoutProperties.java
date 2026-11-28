@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.core.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * P0-1 worker 任务执行超时治理配置 ({@code batch.worker.execution})。

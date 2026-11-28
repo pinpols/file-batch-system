@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Builder;
 
 @Builder

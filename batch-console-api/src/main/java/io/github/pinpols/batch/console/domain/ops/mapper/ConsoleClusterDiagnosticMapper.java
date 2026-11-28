@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ActiveTaskWorkerIssueView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ClusterStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.DeliveryStatusCountView;
@@ -7,8 +11,6 @@ import io.github.pinpols.batch.console.domain.ops.view.cluster.JobInstanceDiagno
 import io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ShedLockView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.WorkerGroupCapacityView;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * console 集群诊断查询 (MyBatis,迁移自 ConsoleClusterDiagnosticRepository)。

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 
 /** 资源队列响应。 */
 @Builder

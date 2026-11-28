@@ -1,18 +1,22 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.archive;
 
+import java.util.function.Supplier;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.orchestrator.application.archive.OutboxArchiveService;
 import io.github.pinpols.batch.orchestrator.application.archive.OutboxArchiveService.ArchiveBatchResult;
 import io.github.pinpols.batch.orchestrator.config.OutboxArchiveProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.metrics.ArchiveSchedulerHealthMetrics;
+
 import jakarta.annotation.PostConstruct;
-import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * P3-3 archive 系列：outbox_event 自动归档调度器。默认每天 03:30 跑（早于 workflow 的 04:15）。

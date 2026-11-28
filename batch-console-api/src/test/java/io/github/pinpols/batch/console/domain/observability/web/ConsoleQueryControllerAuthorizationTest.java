@@ -2,6 +2,12 @@ package io.github.pinpols.batch.console.domain.observability.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.security.access.prepost.PreAuthorize;
+
 import io.github.pinpols.batch.console.application.contract.query.OutboxDeliveryLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.OutboxRetryLogQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.application.contract.query.OperationAuditQueryRequest;
@@ -9,11 +15,6 @@ import io.github.pinpols.batch.console.domain.job.application.contract.query.Pen
 import io.github.pinpols.batch.console.domain.ops.web.realtime.ConsoleOutboxRealtimeController;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.springframework.security.access.prepost.PreAuthorize;
 
 @DisplayName("综合查询接口:与菜单一致的访问角色")
 class ConsoleQueryControllerAuthorizationTest {

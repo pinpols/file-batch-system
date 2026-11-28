@@ -2,12 +2,14 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.shared.audit.AuditAction;
-import io.github.pinpols.batch.console.support.web.Idempotent;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.multipart.MultipartFile;
+
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.support.web.Idempotent;
 
 @DisplayName("用户批量开通控制器: 幂等注解与审计注解契约")
 class ConsoleUserBatchProvisioningControllerTest {

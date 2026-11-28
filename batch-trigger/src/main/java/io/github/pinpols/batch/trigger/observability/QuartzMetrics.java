@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.trigger.observability;
 
+import java.util.concurrent.TimeUnit;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
-import java.util.concurrent.TimeUnit;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 /**
  * Quartz JobStore 健康指标命名 + 注册中心。

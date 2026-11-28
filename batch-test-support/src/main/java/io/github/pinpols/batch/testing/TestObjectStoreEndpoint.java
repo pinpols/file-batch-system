@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.testing;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;

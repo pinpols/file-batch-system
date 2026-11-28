@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.sdk.task;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * 调度上下文的 SDK 侧投影 —— 对齐平台 {@code io.github.pinpols.batch.common.kafka.SchedulingContext}(随 {@link

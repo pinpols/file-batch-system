@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
 import java.time.Instant;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

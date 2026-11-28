@@ -2,17 +2,19 @@ package io.github.pinpols.batch.orchestrator.infrastructure.failure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.FailureClass;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
 import java.util.concurrent.TimeoutException;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.server.ResponseStatusException;
+
+import io.github.pinpols.batch.common.enums.FailureClass;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 
 @DisplayName("技术异常分类适配器: 隔离 JDBC, Spring DAO 与 HTTP 客户端异常")
 class SpringTechnicalFailureClassificationAdapterTest {

@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.common.lock;
 
-import io.github.pinpols.batch.common.config.BatchShedLockAutoConfiguration;
-import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
@@ -10,6 +8,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+
+import io.github.pinpols.batch.common.config.BatchShedLockAutoConfiguration;
+
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 
 /**
  * 装配 {@link DistributedLockAspect}。配套 {@link DistributedLock} 的预留能力——该注解目前零生产使用 (见其

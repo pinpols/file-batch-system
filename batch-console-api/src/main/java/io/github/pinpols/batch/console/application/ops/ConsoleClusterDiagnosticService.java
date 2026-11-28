@@ -1,6 +1,20 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
@@ -29,16 +43,6 @@ import io.github.pinpols.batch.console.domain.ops.view.cluster.ShedLockView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.WorkerGroupCapacityView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 跨节点一致性诊断服务：检查 ShedLock 租约、Worker 注册一致性、Outbox 健康。 */
 @Service

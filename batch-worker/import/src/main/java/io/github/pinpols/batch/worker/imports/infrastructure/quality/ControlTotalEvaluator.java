@@ -5,14 +5,17 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.firstNonNull;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 
 /**
  * ADR-041 Phase1.2:控制金额对账。跨 chunk 累加 amountField 金额,所有记录处理完后与声明总额(规则 expected 或 P1.1 trailer 声明的

@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import lombok.Data;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.validation.annotation.Validated;
 
 /** 任务 SLA 监控、告警与升级参数。 */
 @Data

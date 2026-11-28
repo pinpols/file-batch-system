@@ -1,6 +1,21 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
+
+import org.apache.kafka.common.utils.Utils;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+import org.springframework.web.util.HtmlUtils;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.i18n.BizExceptionUtils;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
@@ -26,18 +41,6 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.opentelemetry.context.Scope;
-import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.Executor;
-import org.apache.kafka.common.utils.Utils;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Component;
-import org.springframework.web.util.HtmlUtils;
 
 /**
  * Outbox → Kafka 的投递器。

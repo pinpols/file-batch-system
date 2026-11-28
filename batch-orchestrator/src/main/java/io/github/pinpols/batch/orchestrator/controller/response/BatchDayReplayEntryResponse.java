@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.controller.response;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 
 /** 单条重放明细的 HTTP 契约。 */
 @Builder

@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaComplianceView;
-import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaDayView;
 import java.math.BigDecimal;
 import java.util.List;
+
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaComplianceView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaDayView;
 
 /**
  * dashboard sla-compliance 响应：违约 / 达标 / 有 SLA 总数 + 平均时长 + 按日趋势。

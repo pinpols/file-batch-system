@@ -2,6 +2,12 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.FileAuditOperationType;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.OperationResult;
@@ -18,10 +24,6 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import org.springframework.stereotype.Component;
 
 /** 分发补偿阶段：在投递彻底失败后将分发记录标记为 COMPENSATED，并写入审计日志。 */
 @Component

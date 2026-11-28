@@ -4,10 +4,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.exception.BizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.multipart.MultipartFile;
+
+import io.github.pinpols.batch.common.exception.BizException;
 
 @DisplayName("上传文件守卫：文件名校验")
 class UploadFileGuardTest {

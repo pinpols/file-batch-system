@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.param;
 
-import io.github.pinpols.batch.console.domain.notification.view.JobPushDelivery;
 import java.time.Instant;
+
+import io.github.pinpols.batch.console.domain.notification.view.JobPushDelivery;
 
 public record JobPushDeliveryClaimParam(
         JobPushDelivery row, String token, Instant now, Instant until, int maxAttempts) {

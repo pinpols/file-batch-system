@@ -6,16 +6,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +18,15 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Workflow 终态归并使用最新节点尝试")

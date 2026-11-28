@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.jdbc;
 
 import java.sql.SQLException;
+
 import org.springframework.dao.DataIntegrityViolationException;
 
 /** JDBC 异常的纯分类支持，应用层不直接识别或构造驱动异常。 */

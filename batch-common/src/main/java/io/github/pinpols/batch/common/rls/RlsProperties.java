@@ -2,8 +2,10 @@ package io.github.pinpols.batch.common.rls;
 
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Phase A · RLS 闭世界守护配置（{@code batch.rls}）。

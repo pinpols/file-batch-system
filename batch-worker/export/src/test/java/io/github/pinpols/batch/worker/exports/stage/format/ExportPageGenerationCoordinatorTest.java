@@ -8,13 +8,15 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.plugin.ExportDataContext;
-import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.plugin.ExportDataContext;
+import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 
 @DisplayName("导出分页生成协调器单测:跨页行号单调递增与首页预取复用语义")
 class ExportPageGenerationCoordinatorTest {

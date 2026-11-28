@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.trigger.domain.command;
 
-import io.github.pinpols.batch.common.enums.TriggerType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
 
 /** 触发用例接收的输入字段。 */
 @Builder(toBuilder = true)

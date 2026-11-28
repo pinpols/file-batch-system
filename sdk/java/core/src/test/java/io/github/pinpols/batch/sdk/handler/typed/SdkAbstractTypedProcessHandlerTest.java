@@ -2,16 +2,18 @@ package io.github.pinpols.batch.sdk.handler.typed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.sdk.handler.SdkRowResult;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /** A.2 typed Process 模板基类单测 — 验证强类型入参 + transform/skip + 分批 upsert。 */
 @DisplayName("强类型 Process 模板基类:入参反序列化后转换与分批回写,覆盖空值跳过与非法参数")

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.audit.entity;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
 import lombok.Data;
 
 @Data

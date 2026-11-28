@@ -4,25 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.console.application.observability.SseTicketService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleAuthenticationFilter;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,6 +18,23 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.csrf.DefaultCsrfToken;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.console.application.observability.SseTicketService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleAuthenticationFilter;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 
 @DisplayName("控制台安全配置与认证过滤器: 租户白名单,开放模式与令牌 cookie 取值")
 class ConsoleSecurityConfigurationTest {

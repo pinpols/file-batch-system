@@ -11,17 +11,20 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.QueryTimeoutException;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 
 @DisplayName("工作节点注册表缓存,验证开关,命中,未命中,读写故障与脏数据场景下的加载与回填行为")
 class WorkerRegistryCacheTest {

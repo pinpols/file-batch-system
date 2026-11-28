@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * P2-3: WorkerSelector 的 Redis 缓存配置。

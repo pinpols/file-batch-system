@@ -1,6 +1,12 @@
 package io.github.pinpols.batch.worker.exports.stage;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.enums.FileAuditOperationType;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.OperationResult;
@@ -16,9 +22,6 @@ import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import org.springframework.stereotype.Component;
 
 /** 导出完成阶段：更新文件状态（GENERATED 或 DISPATCHING），并写入审计日志。 */
 @Component

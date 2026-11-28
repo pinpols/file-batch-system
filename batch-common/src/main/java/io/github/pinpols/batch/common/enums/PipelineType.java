@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.enums;
 
 import java.util.List;
+
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;

@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
+import java.util.List;
+
 import io.github.pinpols.batch.console.domain.audit.query.AuditLogQuery;
 import io.github.pinpols.batch.console.domain.audit.view.FileAuditLogRow;
-import java.util.List;
 
 public interface AuditLogMapper {
 

@@ -11,19 +11,21 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService.ArchiveBatchResult;
-import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
-import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
-import io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
 import java.time.Instant;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService.ArchiveBatchResult;
+import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
+import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
+import io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
 
 @DisplayName("成功实例归档服务: 开关短路, 候选清理顺序与保留期下限口径")
 class SuccessInstanceArchiveServiceTest {

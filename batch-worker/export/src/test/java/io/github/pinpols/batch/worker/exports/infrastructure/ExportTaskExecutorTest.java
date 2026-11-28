@@ -6,17 +6,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 /** {@link ExportTaskExecutor} 单测 — 跟 {@code ImportTaskExecutorTest} 同 pattern。 */
 @DisplayName("导出任务执行器单测:任务类型,资源能力与请求翻译及失败消息回退语义")

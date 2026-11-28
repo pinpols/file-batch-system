@@ -7,17 +7,19 @@ import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetEx
 import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.requireText;
 import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.resolveTenantField;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.OutOfWindowAction;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.job.param.BatchWindowUpsertParam;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Pattern;
-import lombok.Builder;
 
 /** batch_window Excel 行共用的解析与新增或更新辅助逻辑。 */
 public final class BatchWindowExcelRowParser {

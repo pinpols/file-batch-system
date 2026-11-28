@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.dispatchs.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 @Data
 @ConfigurationProperties(prefix = "batch.worker.dispatch.http-channel")

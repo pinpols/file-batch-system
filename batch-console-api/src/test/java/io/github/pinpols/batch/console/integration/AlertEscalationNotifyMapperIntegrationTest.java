@@ -9,9 +9,30 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
+
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -32,24 +53,6 @@ import io.github.pinpols.batch.console.domain.notification.service.AlertEscalati
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier.AlertEscalationNotifyPayload;
 import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.sql.Timestamp;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestConstructor;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * 集成测试:验证升级通知的两个新 SQL 对真实 PG 的语义正确(V181 列 + 谓词 + CAS 水位线)。

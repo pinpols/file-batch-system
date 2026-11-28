@@ -8,13 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
-import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
-import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
-import io.github.pinpols.batch.console.infrastructure.config.ConfigSyncImportExecutor.ImportContext;
-import io.github.pinpols.batch.console.infrastructure.config.ConfigSyncTargetExecutor.Target;
-import io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleTenantConfigInitApplicationService.StrictBundleAbortedException;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +17,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.TransactionSystemException;
+
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
+import io.github.pinpols.batch.console.infrastructure.config.ConfigSyncImportExecutor.ImportContext;
+import io.github.pinpols.batch.console.infrastructure.config.ConfigSyncTargetExecutor.Target;
+import io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleTenantConfigInitApplicationService.StrictBundleAbortedException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("配置同步目标结果: 已确认回滚与提交未知必须分开处理")
