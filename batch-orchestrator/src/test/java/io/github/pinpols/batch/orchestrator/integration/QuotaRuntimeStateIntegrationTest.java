@@ -237,7 +237,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("滑动窗口已过期时对账应将该状态的峰值借用数重置为零")
+    @DisplayName("查询过期滑动窗口只计算视图，后台对账才持久化峰值重置")
     void shouldReconcileExpiredSlidingWindowState() {
         String ownerCode = "reconcile-sw-" + BatchDateTimeSupport.utcEpochMillis();
 
@@ -256,6 +256,22 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
                 BatchDateTimeSupport.utcNow(),
                 null);
         quotaRuntimeStateMapper.insert(expiredState);
+
+        QuotaRuntimeStateEntity beforeQuery =
+                quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
+        QuotaRuntimeStateService.QuotaRuntimeSnapshot snapshot =
+                quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+                        new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
+                        "SLIDING_WINDOW",
+                        10,
+                        2));
+        QuotaRuntimeStateEntity afterQuery =
+                quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
+
+        assertThat(beforeQuery).isNotNull();
+        assertThat(snapshot.peakBorrowedCount()).isZero();
+        assertThat(snapshot.remainingBurst()).isEqualTo(10);
+        assertThat(afterQuery).isEqualTo(beforeQuery);
 
         quotaRuntimeStateService.reconcileExpiredStates(2);
 
