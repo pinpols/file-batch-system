@@ -1,5 +1,10 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-28 E2E 派发路由稳定性
+
+- `WorkerReportLostAfterBusinessCommitE2eIT` 在 Worker 上线后驱逐 `WorkerRegistryCache` 的 `(tenant, workerGroup)` 快照：共享测试上下文里被强杀的 Worker 在心跳超时前仍是 ONLINE，陈旧快照会让 launch 选中已死 Worker，把派发钉到 `base.node.<workerCode>` 直达 topic，本次启动的 Worker 永远收不到消息。
+- 同一用例在发布后校验 `job_task.assigned_worker_code` 只指向本次 Worker 池（或未钉选），把路由前提失败提前为明确断言，而不是 120s 业务等待超时。
+
 ## 2026-11-27 空值判断写法统一（阶段 9 Task 18）
 
 - 对象引用判空改用原生 `x == null` / `x != null`；字符串空白与集合/Map/数组空判断继续统一到 `EmptyValues`，Stream 使用 `Objects::nonNull` / `Objects::isNull`。规则见[编码规约](coding-conventions.md#18-空值判断写法)。
