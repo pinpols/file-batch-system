@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import io.github.pinpols.batch.console.support.notification.ConsoleNotificationCryptoSupport;
@@ -17,7 +18,6 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -151,7 +151,7 @@ public class AliyunSmsProvider implements SmsProvider {
                 "x-acs-version", VERSION,
                 "x-acs-date", acsDate,
                 "x-acs-signature-nonce", nonce,
-                "x-acs-content-sha256", sha256Hex(""),
+                "x-acs-content-sha256", Hashes.sha256Hex(""),
                 "Authorization", authorization);
 
         return deliverSignedRequest(phoneNumbers, message, url, headers);
@@ -221,7 +221,7 @@ public class AliyunSmsProvider implements SmsProvider {
      */
     private String buildAuthorization(String canonicalQuery, String acsDate, String nonce, String endpoint)
             throws GeneralSecurityException {
-        String hashedPayload = sha256Hex("");
+        String hashedPayload = Hashes.sha256Hex("");
 
         // signedHeaders 必须按字典序且与 canonicalHeaders 一致。
         SortedMap<String, String> canonicalHeaders = new TreeMap<>();
@@ -259,7 +259,7 @@ public class AliyunSmsProvider implements SmsProvider {
                 + '\n'
                 + hashedPayload;
 
-        String stringToSign = ALGORITHM + '\n' + sha256Hex(canonicalRequest);
+        String stringToSign = ALGORITHM + '\n' + Hashes.sha256Hex(canonicalRequest);
         String signature = hmacSha256Hex(properties.getAliyunAccessKeySecret(), stringToSign);
 
         return ALGORITHM
@@ -291,17 +291,6 @@ public class AliyunSmsProvider implements SmsProvider {
         String spacesEncoded = formEncoded.replace("+", "%20");
         String asterisksEncoded = spacesEncoded.replace("*", "%2A");
         return asterisksEncoded.replace("%7E", "~");
-    }
-
-    private static String sha256Hex(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-            byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
-            byte[] hash = digest.digest(encodedInput);
-            return ConsoleNotificationCryptoSupport.toHex(hash);
-        } catch (Exception ex) {
-            throw new IllegalStateException("sha256 unavailable", ex);
-        }
     }
 
     private static String hmacSha256Hex(String secret, String data) throws GeneralSecurityException {

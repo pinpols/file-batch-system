@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.ReplayOperationProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
@@ -18,15 +19,11 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DisasterDayOverrideMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -77,11 +74,11 @@ public class BatchDayReplayRangeOperationService {
                 .sum();
         String requestHash = requestHash(command);
         String snapshotPayload = JsonUtils.toJson(days);
-        String snapshotHash = sha256(snapshotPayload);
+        String snapshotHash = Hashes.sha256Hex(snapshotPayload);
         UUID rawTokenId = UUID.randomUUID();
         String rawToken = rawTokenId.toString();
         Instant expiresAt = now.plus(PREVIEW_TOKEN_TTL);
-        String tokenHash = sha256(rawToken);
+        String tokenHash = Hashes.sha256Hex(rawToken);
         previewTokenMapper.insert(ReplayOperationPreviewTokenEntity.builder()
                 .tenantId(command.tenantId())
                 .tokenHash(tokenHash)
@@ -126,7 +123,7 @@ public class BatchDayReplayRangeOperationService {
             return existing;
         }
 
-        String tokenHash = sha256(command.previewToken());
+        String tokenHash = Hashes.sha256Hex(command.previewToken());
         ReplayOperationPreviewTokenEntity token;
         try {
             token = previewTokenMapper.selectForUpdate(command.tenantId(), tokenHash);
@@ -158,7 +155,7 @@ public class BatchDayReplayRangeOperationService {
         List<PreparedDay> preparedDays = prepareDays(command, now, true);
         List<ReplayOperationPreviewResponse.DayPreview> days = previewDays(preparedDays);
         String snapshotPayload = JsonUtils.toJson(days);
-        String snapshotHash = sha256(snapshotPayload);
+        String snapshotHash = Hashes.sha256Hex(snapshotPayload);
         if (!snapshotHash.equals(token.snapshotHash())) {
             throw invalidPreview();
         }
@@ -458,7 +455,7 @@ public class BatchDayReplayRangeOperationService {
                 command.executionMode(),
                 command.candidateSource());
         String fingerprintJson = JsonUtils.toJson(fingerprint);
-        return sha256(fingerprintJson);
+        return Hashes.sha256Hex(fingerprintJson);
     }
 
     private static String firstNonBlank(String value, String defaultValue) {
@@ -467,17 +464,6 @@ public class BatchDayReplayRangeOperationService {
 
     private static BizException invalidPreview() {
         return BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.preview_stale");
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
-            byte[] digestBytes = digest.digest(valueBytes);
-            return HexFormat.of().formatHex(digestBytes);
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
     }
 
     private record PreparedDay(LocalDate bizDate, BatchDayReplayPreviewResponse preview, String disposition) {}

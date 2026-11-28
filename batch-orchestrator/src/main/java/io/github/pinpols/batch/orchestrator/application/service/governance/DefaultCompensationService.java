@@ -20,6 +20,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Preconditions;
@@ -611,7 +612,7 @@ public class DefaultCompensationService implements CompensationService {
         snapshot.put("configVersion", command.configVersion());
         String snapshotPayload = JsonUtils.toJson(snapshot);
         String requestHash = replayRequestHash(command);
-        String snapshotHash = sha256(snapshotPayload);
+        String snapshotHash = Hashes.sha256Hex(snapshotPayload);
         ReplayPreviewHashes previewHashes = new ReplayPreviewHashes(requestHash, snapshotHash);
         return startApprovedWorkflowNodeReplay(command, targetRequestId, source, previewHashes, approval, now);
     }
@@ -675,18 +676,7 @@ public class DefaultCompensationService implements CompensationService {
         payload.remove("replayOperationId");
         Object canonicalPayload = canonicalizePayload(payload);
         String canonicalPayloadJson = JsonUtils.toJson(canonicalPayload);
-        return sha256(canonicalPayloadJson);
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
-            byte[] digestBytes = digest.digest(valueBytes);
-            return HexFormat.of().formatHex(digestBytes);
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
+        return Hashes.sha256Hex(canonicalPayloadJson);
     }
 
     private Map<String, Object> rerunStep(

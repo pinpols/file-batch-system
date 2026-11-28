@@ -11,16 +11,13 @@ import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +44,7 @@ public class WorkflowRunReplaySnapshotResolver {
         Map<String, Object> envelope = readMap(operation.snapshotPayload());
         String sealedPayload = requiredText(envelope.get("sealedSnapshotPayload"));
         String snapshotJson = reveal(sealedPayload);
-        String actualSnapshotHash = sha256(snapshotJson);
+        String actualSnapshotHash = Hashes.sha256Hex(snapshotJson);
         if (!actualSnapshotHash.equals(operation.snapshotHash())) {
             throw invalidSnapshot();
         }
@@ -433,17 +430,6 @@ public class WorkflowRunReplaySnapshotResolver {
             }
         }
         throw invalidSnapshot();
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-            byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
-            byte[] digest = messageDigest.digest(valueBytes);
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
     }
 
     private BizException invalidSnapshot() {

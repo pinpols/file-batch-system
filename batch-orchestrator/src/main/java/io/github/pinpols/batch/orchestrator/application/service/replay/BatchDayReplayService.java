@@ -15,6 +15,7 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
@@ -46,9 +47,6 @@ import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -56,7 +54,6 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -245,7 +242,7 @@ public class BatchDayReplayService {
         Instant expiresAt = now.plus(PREVIEW_TOKEN_TTL);
         previewTokenMapper.deleteExpired(now, now.minus(CONSUMED_PREVIEW_RETENTION), EXPIRED_PREVIEW_CLEANUP_LIMIT);
         String tenantId = command.tenantId();
-        String tokenHash = sha256(rawToken);
+        String tokenHash = Hashes.sha256Hex(rawToken);
         String previewRequestHash = requestHash(command, prepared);
         String previewSnapshotHash = snapshotHash(prepared.response());
         BatchDayReplayPreviewTokenEntity previewToken = new BatchDayReplayPreviewTokenEntity(
@@ -328,7 +325,7 @@ public class BatchDayReplayService {
         if (!EmptyValues.hasText(command.previewToken())) {
             throw invalidPreviewToken();
         }
-        String tokenHash = sha256(command.previewToken());
+        String tokenHash = Hashes.sha256Hex(command.previewToken());
         BatchDayReplayPreviewTokenEntity token;
         try {
             token = previewTokenMapper.selectForUpdate(command.tenantId(), tokenHash);
@@ -373,7 +370,7 @@ public class BatchDayReplayService {
                 prepared.executionMode(),
                 prepared.candidateSource());
         String fingerprintJson = JsonUtils.toJson(fingerprint);
-        return sha256(fingerprintJson);
+        return Hashes.sha256Hex(fingerprintJson);
     }
 
     private String snapshotHash(BatchDayReplayPreviewResponse response) {
@@ -394,18 +391,7 @@ public class BatchDayReplayService {
                 response.dispatchImpacts(),
                 response.warnings());
         String fingerprintJson = JsonUtils.toJson(fingerprint);
-        return sha256(fingerprintJson);
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-            byte[] inputBytes = value.getBytes(StandardCharsets.UTF_8);
-            byte[] digest = sha256.digest(inputBytes);
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
+        return Hashes.sha256Hex(fingerprintJson);
     }
 
     private record PreparedReplay(
@@ -969,7 +955,7 @@ public class BatchDayReplayService {
 
     private List<BatchDayReplayEntryEntity> materializeOutputsOnlyEntries(
             BatchDayReplaySubmitCommand command, Instant now) {
-        if (command.versionIds() == null || command.versionIds().isEmpty()) {
+        if (EmptyValues.isEmpty(command.versionIds())) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.outputs_only_version_ids_required");
         }

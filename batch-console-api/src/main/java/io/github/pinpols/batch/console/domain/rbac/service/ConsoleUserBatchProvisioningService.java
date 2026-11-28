@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
 import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
@@ -19,14 +20,11 @@ import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.UploadFileGuard;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -133,7 +131,7 @@ public class ConsoleUserBatchProvisioningService {
         if (EmptyValues.isEmpty(rows)) throw invalid("Workbook contains no accounts");
         UUID tokenId = UUID.randomUUID();
         String token = tokenId.toString();
-        String digest = digest(bytes);
+        String digest = Hashes.sha256Hex(bytes);
         ConsolePrincipal principal = actor();
         String previewActorUsername = principal.username();
         Session session = new Session(previewActorUsername, digest, 1, rows);
@@ -379,17 +377,6 @@ public class ConsoleUserBatchProvisioningService {
             throw BizException.of(ResultCode.UNAUTHORIZED, "Authentication required");
         }
         return principal;
-    }
-
-    private static String digest(byte[] bytes) {
-        try {
-            HexFormat hexFormat = HexFormat.of();
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashedBytes = digest.digest(bytes);
-            return hexFormat.formatHex(hashedBytes);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException(ex);
-        }
     }
 
     private static String randomPassword() {

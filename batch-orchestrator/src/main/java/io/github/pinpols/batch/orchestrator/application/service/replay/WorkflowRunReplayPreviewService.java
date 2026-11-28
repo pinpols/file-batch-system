@@ -22,6 +22,7 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplayPreviewResponse.EdgePreview;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplayPreviewResponse.NodePreview;
@@ -47,14 +48,10 @@ import io.github.pinpols.batch.orchestrator.service.DispatchChannelSnapshotServi
 import io.github.pinpols.batch.orchestrator.service.DispatchSecretSnapshotResolver;
 import io.github.pinpols.batch.orchestrator.service.FileTemplateSnapshotService;
 import io.github.pinpols.batch.orchestrator.service.LaunchRequestIdentityGuard;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,7 +101,7 @@ public class WorkflowRunReplayPreviewService {
         Instant expiresAt = now.plus(PREVIEW_TOKEN_TTL);
         PreparedPreview prepared = preparePreview(command, operationKey, rawToken, expiresAt);
         WorkflowRunReplayPreviewResponse response = prepared.response();
-        String tokenHash = sha256(rawToken);
+        String tokenHash = Hashes.sha256Hex(rawToken);
         String protectedSnapshot = secretPayloadProtector.protect(prepared.snapshotPayload());
         tokenMapper.setTenantContext(command.tenantId());
         ReplayOperationPreviewTokenMapper previewTokenMapper = tokenMapper;
@@ -115,7 +112,7 @@ public class WorkflowRunReplayPreviewService {
         previewTokenBuilder.operationKey(operationKey.toString());
         String replayRequestHash = requestHash(command, prepared.policies());
         previewTokenBuilder.requestHash(replayRequestHash);
-        String snapshotHash = sha256(prepared.snapshotPayload());
+        String snapshotHash = Hashes.sha256Hex(prepared.snapshotPayload());
         previewTokenBuilder.snapshotHash(snapshotHash);
         String serializedProtectedSnapshot = JsonUtils.toJson(Map.of("sealedSnapshotPayload", protectedSnapshot));
         previewTokenBuilder.snapshotPayload(serializedProtectedSnapshot);
@@ -139,7 +136,7 @@ public class WorkflowRunReplayPreviewService {
         if (existing != null) {
             return existing;
         }
-        String tokenHash = sha256(command.previewToken());
+        String tokenHash = Hashes.sha256Hex(command.previewToken());
         LockedPreview locked = lockMatchingPreviewToken(command.tenantId(), tokenHash, operationKey, requestHash);
         if (locked.alreadyConsumed() != null) {
             return locked.alreadyConsumed();
@@ -198,7 +195,7 @@ public class WorkflowRunReplayPreviewService {
             ReplayOperationPreviewTokenEntity token,
             ReplaySubmissionIdentity identity,
             Instant now) {
-        String freshSnapshotHash = sha256(fresh.snapshotPayload());
+        String freshSnapshotHash = Hashes.sha256Hex(fresh.snapshotPayload());
         if (!freshSnapshotHash.equals(token.snapshotHash())
                 || fresh.response().nodes().stream()
                         .anyMatch(node -> !EmptyValues.isEmpty(Objects.requireNonNull(node.blockers())))) {
@@ -537,18 +534,7 @@ public class WorkflowRunReplayPreviewService {
         request.put("configVersionPolicy", policies.config().code());
         request.put("configVersion", command.configVersion());
         String requestJson = JsonUtils.toJson(request);
-        return sha256(requestJson);
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-            byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
-            byte[] digest = messageDigest.digest(valueBytes);
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
+        return Hashes.sha256Hex(requestJson);
     }
 
     private NodePreview previewNode(WorkflowNodeEntity node, PreviewContext context) {

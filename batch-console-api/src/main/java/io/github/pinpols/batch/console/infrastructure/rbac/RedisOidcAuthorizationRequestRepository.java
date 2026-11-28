@@ -3,18 +3,15 @@ package io.github.pinpols.batch.console.infrastructure.rbac;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
-import java.util.HexFormat;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -149,7 +146,7 @@ public class RedisOidcAuthorizationRequestRepository
     }
 
     private static String cookieName(String state) {
-        return COOKIE_PREFIX + digest(state);
+        return COOKIE_PREFIX + Hashes.sha256Hex(state);
     }
 
     private OAuth2AuthorizationRequest read(String json) {
@@ -182,18 +179,7 @@ public class RedisOidcAuthorizationRequestRepository
     }
 
     private static String key(String state, String browserBinding) {
-        return KEY_PREFIX + digest(state) + ":" + digest(browserBinding);
-    }
-
-    private static String digest(String value) {
-        try {
-            MessageDigest digestGenerator = MessageDigest.getInstance("SHA-256");
-            byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
-            byte[] digest = digestGenerator.digest(valueBytes);
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
+        return KEY_PREFIX + Hashes.sha256Hex(state) + ":" + Hashes.sha256Hex(browserBinding);
     }
 
     private record StoredRequest(

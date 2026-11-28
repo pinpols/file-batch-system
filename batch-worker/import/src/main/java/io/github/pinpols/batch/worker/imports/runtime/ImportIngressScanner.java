@@ -19,6 +19,7 @@ import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIden
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam.FileAuditParamBuilder;
@@ -725,6 +726,11 @@ public class ImportIngressScanner {
         return sha256(writeJson(rules));
     }
 
+    /** 扫描身份摘要：算法与输出统一由 {@link Hashes} 提供，这里只保留本类原有方法名。 */
+    private String sha256(String value) {
+        return Hashes.sha256Hex(value);
+    }
+
     private record EffectiveBindings(
             List<ImportScannerProperties.ManifestBinding> manifests,
             List<ImportScannerProperties.ChannelBinding> channels) {}
@@ -784,16 +790,6 @@ public class ImportIngressScanner {
 
     private boolean validResourceCode(String value) {
         return value != null && value.matches(ValidResourceCode.REGEX);
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("无法计算扫描身份摘要", ex);
-        }
     }
 
     private String writeJson(Object value) {

@@ -12,10 +12,10 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.audit.ConsoleAiTools;
@@ -41,13 +41,9 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.YearMonth;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1175,24 +1171,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
 
     private String hash(String value) {
-        if (value == null) {
-            return null;
-        }
-        try {
-            MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-            HexFormat hexFormat = HexFormat.of();
-            byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
-            byte[] digestBytes = digest.digest(valueBytes);
-            return hexFormat.formatHex(digestBytes);
-        } catch (NoSuchAlgorithmException exception) {
-            SwallowedExceptionLogger.info(
-                    DefaultConsoleAiApplicationService.class, "catch:NoSuchAlgorithmException", exception);
-
-            // R7 安全扫描 2026-05-16 P1：原 Integer.toHexString(hashCode) 漏前导 0
-            // (semgrep bad-hexa-conversion)；改 %08x 保留 8 字符全长。
-            // 注：SHA-256 在现代 JDK 必定可用，这条 catch 实际不可达，做回退而已。
-            return String.format("%08x", value.hashCode());
-        }
+        return value == null ? null : Hashes.sha256Hex(value);
     }
 
     private String firstNonBlank(String value, String fallback) {
