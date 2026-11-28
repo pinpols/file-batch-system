@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDe
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.domain.notification.param.NotificationDeliveryLogInsertParam;
 import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
+import io.github.pinpols.batch.console.support.notification.BurstRetryExecutor;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
@@ -65,6 +66,9 @@ public class SubscriptionRuleWebhookDispatcher {
 
     private static final int MAX_ATTEMPTS = 3;
     private static final long BACKOFF_BASE_MILLIS = 250L;
+
+    /** burst 重试：固定 {@link #MAX_ATTEMPTS} 次尝试，首次退避 {@link #BACKOFF_BASE_MILLIS} 后逐次翻倍。 */
+    private static final BurstRetryExecutor BURST_RETRY = new BurstRetryExecutor(MAX_ATTEMPTS, BACKOFF_BASE_MILLIS);
 
     private static final String CHANNEL_TYPE_WEBHOOK = "WEBHOOK";
 
@@ -254,72 +258,61 @@ public class SubscriptionRuleWebhookDispatcher {
             String payloadJson,
             String channelCode,
             DeliveryLogContext logContext) {
-        long backoffMillis = BACKOFF_BASE_MILLIS;
-        WebhookDeliveryResult result = null;
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            result = webhookDispatcher.attemptDelivery(subscription, payload, payloadJson);
-            if (result.success()) {
-                if (attempt > 1) {
-                    log.info(
-                            "subscription_rule WEBHOOK delivered after retry: channelCode={}, attempt={},"
-                                    + " httpStatus={}",
-                            channelCode,
-                            attempt,
-                            result.httpStatus());
-                }
-                persistDeliveryLog(logContext, "SUCCESS", null, attempt);
-                return;
-            }
-            if (attempt < MAX_ATTEMPTS) {
-                sleep(backoffMillis);
-                backoffMillis *= 2;
-            } else {
-                log.warn(
-                        "subscription_rule WEBHOOK delivery exhausted: channelCode={}, attempts={},"
-                                + " httpStatus={}, error={}",
+        BurstRetryExecutor.Outcome<WebhookDeliveryResult> outcome = BURST_RETRY.execute(
+                () -> webhookDispatcher.attemptDelivery(subscription, payload, payloadJson),
+                WebhookDeliveryResult::success);
+
+        WebhookDeliveryResult result = outcome.result();
+        if (outcome.success()) {
+            if (outcome.attempts() > 1) {
+                log.info(
+                        "subscription_rule WEBHOOK delivered after retry: channelCode={}, attempt={},"
+                                + " httpStatus={}",
                         channelCode,
-                        MAX_ATTEMPTS,
-                        result.httpStatus(),
-                        safeDeliveryError(result.errorSummary()));
+                        outcome.attempts(),
+                        result.httpStatus());
             }
+            persistDeliveryLog(logContext, "SUCCESS", null, outcome.attempts());
+            return;
         }
-        persistDeliveryLog(logContext, "FAILED", result == null ? null : result.errorSummary(), MAX_ATTEMPTS);
+
+        log.warn(
+                "subscription_rule WEBHOOK delivery exhausted: channelCode={}, attempts={}, httpStatus={}, error={}",
+                channelCode,
+                outcome.attempts(),
+                result.httpStatus(),
+                safeDeliveryError(result.errorSummary()));
+        persistDeliveryLog(logContext, "FAILED", result.errorSummary(), outcome.attempts());
     }
 
     /** 非 WEBHOOK 渠道经 {@link NotificationSender} 的 burst 重试投递;收敛后落 notification_delivery_log 审计行。 */
     private void deliverViaSenderWithBurstRetry(
             NotificationSender sender, NotificationMessage message, String eventType, DeliveryLogContext logContext) {
-        long backoffMillis = BACKOFF_BASE_MILLIS;
-        WebhookDeliveryResult result = null;
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            result = sender.send(message);
-            if (result.success()) {
-                if (attempt > 1) {
-                    log.info(
-                            "subscription_rule {} delivered after retry: channelCode={}, attempt={}," + " eventType={}",
-                            message.channelType(),
-                            message.channelCode(),
-                            attempt,
-                            eventType);
-                }
-                persistDeliveryLog(logContext, "SUCCESS", null, attempt);
-                return;
-            }
-            if (attempt < MAX_ATTEMPTS) {
-                sleep(backoffMillis);
-                backoffMillis *= 2;
-            } else {
-                log.warn(
-                        "subscription_rule {} delivery exhausted: channelCode={}, attempts={}, httpStatus={},"
-                                + " error={}",
+        BurstRetryExecutor.Outcome<WebhookDeliveryResult> outcome =
+                BURST_RETRY.execute(() -> sender.send(message), WebhookDeliveryResult::success);
+
+        WebhookDeliveryResult result = outcome.result();
+        if (outcome.success()) {
+            if (outcome.attempts() > 1) {
+                log.info(
+                        "subscription_rule {} delivered after retry: channelCode={}, attempt={}, eventType={}",
                         message.channelType(),
                         message.channelCode(),
-                        MAX_ATTEMPTS,
-                        result.httpStatus(),
-                        safeDeliveryError(result.errorSummary()));
+                        outcome.attempts(),
+                        eventType);
             }
+            persistDeliveryLog(logContext, "SUCCESS", null, outcome.attempts());
+            return;
         }
-        persistDeliveryLog(logContext, "FAILED", result == null ? null : result.errorSummary(), MAX_ATTEMPTS);
+
+        log.warn(
+                "subscription_rule {} delivery exhausted: channelCode={}, attempts={}, httpStatus={}, error={}",
+                message.channelType(),
+                message.channelCode(),
+                outcome.attempts(),
+                result.httpStatus(),
+                safeDeliveryError(result.errorSummary()));
+        persistDeliveryLog(logContext, "FAILED", result.errorSummary(), outcome.attempts());
     }
 
     /**
@@ -412,14 +405,5 @@ public class SubscriptionRuleWebhookDispatcher {
     private static String str(Map<String, Object> map, String key) {
         Object value = map.get(key);
         return value == null ? null : value.toString();
-    }
-
-    private void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException ex) {
-            SwallowedExceptionLogger.info(SubscriptionRuleWebhookDispatcher.class, "catch:InterruptedException", ex);
-            Thread.currentThread().interrupt();
-        }
     }
 }
