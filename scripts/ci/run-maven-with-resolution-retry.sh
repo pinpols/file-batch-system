@@ -16,21 +16,21 @@ backoff_seconds="${MAVEN_RESOLUTION_RETRY_BACKOFF_SECONDS:-30}"
 # 只匹配依赖/插件解析失败与传输层中断；编译错误、测试失败与业务断言必须立刻失败，不能被重试掩盖。
 transient_pattern='Could not transfer artifact|Failed to read artifact descriptor|PluginResolutionException|Failed to collect dependencies|Could not resolve dependencies|Could not resolve artifact|Connection reset|Read timed out|502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout'
 
+log_file="$(mktemp)"
+trap 'rm -f "$log_file"' EXIT
+
 for attempt in $(seq 1 "$attempts"); do
-    log_file="$(mktemp)"
     set +e
     "$@" 2>&1 | tee "$log_file"
     status="${PIPESTATUS[0]}"
     set -e
     if [[ "$status" -eq 0 ]]; then
-        rm -f "$log_file"
         exit 0
     fi
     if ! grep -Eq "$transient_pattern" "$log_file"; then
-        rm -f "$log_file"
         exit "$status"
     fi
-    rm -f "$log_file"
+    : >"$log_file"
     if [[ "$attempt" -ge "$attempts" ]]; then
         echo "依赖解析在 ${attempts} 次尝试后仍失败，放弃重试" >&2
         exit "$status"

@@ -35,6 +35,7 @@
 | PostgreSQL / Kafka / MinIO 四日清理 | `scripts/sim-4day/00-clean.sh` | 清空 platform/business 运行数据、删除 `batch.*` Kafka 历史消息并清空整个 MinIO bucket。只允许本机 Compose project 的 PG/Kafka/MinIO 容器和仓库默认本地端点；SQL 有独立 session guard。运行前必须确认 bucket 可丢弃、应用处于静默状态。 |
 | Kafka / MinIO / PostgreSQL 压测清理 | `load-tests/scripts/cleanup-load-test-environment.sh` | 默认只诊断/预览；执行需 `--apply --confirm-project <当前 Compose project>`。远程 Docker、非本地 PG host 和非本地对象存储端点拒绝执行。`--kafka-reset-topics` 会删并重建 topic；`--postgres-reclaim` 会执行锁表的 `VACUUM FULL`。 |
 | S3 兼容服务迁移 PoC | `scripts/local/s3-compatible-minio-migration.sh` | 用随机桶名，只清理脚本确认创建成功的桶；创建失败或桶已存在时不会在退出 trap 中删除既有桶。目标 endpoint 和凭据仍须由操作者确认是专用测试账号/环境。 |
+| CI Maven 重试包装 | `scripts/ci/run-maven-with-resolution-retry.sh` | 仅删除自己用 `mktemp` 创建的临时日志（EXIT trap 一次），不触碰仓库、构建产物或其他临时文件；重试只针对依赖解析类瞬态失败。 |
 | Redis / Valkey | 当前没有仓库脚本调用 `FLUSHDB` / `FLUSHALL`；Runbook 有按 key 的 `DEL` 示例 | 禁止全库 flush。清锁前先核对实例、DB index、key 前缀、租约状态和 owner；只对确认过期的精确 key 执行删除。不要把未经审阅的 `SCAN` 结果直接 pipe 到 `DEL`。 |
 | Kubernetes / Helm | `scripts/ha/failover-drill.sh` 删除基础服务 Pod；`run-full-regression.sh` 的 live verification 会卸载并重建专用 Helm release | 故障演练要求精确确认 kube context 和 namespace 清单，拒绝生产/预发布 context。部署验证 live 模式要求 `BATCH_DEPLOY_VERIFICATION_CONFIRM_TARGET=<context>/<namespace>/<release>`；生产 context 拒绝。 |
 
