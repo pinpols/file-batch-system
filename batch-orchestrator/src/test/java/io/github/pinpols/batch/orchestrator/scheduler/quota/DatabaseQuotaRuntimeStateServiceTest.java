@@ -395,6 +395,38 @@ class DatabaseQuotaRuntimeStateServiceTest {
         assertThat(snap.remainingBurst()).isEqualTo(5);
     }
 
+    @Test
+    @DisplayName("查询快照时已过期的滑动窗口仅在结果中重置，数据库状态保持不变")
+    void shouldReturnResetSnapshotWithoutWriting_whenSlidingWindowHasExpired() {
+        Instant expiredAt = BatchDateTimeSupport.utcNow().minusSeconds(3600);
+        QuotaRuntimeStateEntity expiredState = QuotaRuntimeStateEntity.builder()
+                .id(1L)
+                .tenantId("t1")
+                .quotaScope("JOB")
+                .ownerCode("job-001")
+                .quotaResetPolicy("SLIDING_WINDOW")
+                .windowStartedAt(expiredAt.minusSeconds(3600))
+                .windowExpiresAt(expiredAt)
+                .peakBorrowedCount(3)
+                .version(7L)
+                .build();
+        when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-001"))
+                .thenReturn(expiredState);
+
+        QuotaRuntimeStateService.QuotaRuntimeSnapshot snapshot =
+                service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+                        new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "job-001"),
+                        "SLIDING_WINDOW",
+                        5,
+                        24));
+
+        assertThat(snapshot.peakBorrowedCount()).isZero();
+        assertThat(snapshot.remainingBurst()).isEqualTo(5);
+        assertThat(snapshot.windowStartedAt()).isAfter(expiredAt);
+        verify(quotaRuntimeStateMapper, never()).insert(any());
+        verify(quotaRuntimeStateMapper, never()).updateWithCas(any());
+    }
+
     // ── reconcileExpiredStates() ───────────────────────────────────────────────
 
     @Test

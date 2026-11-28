@@ -85,7 +85,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
                 request.owner(), policy.name(), now, request.policy().slidingWindowHours());
         QuotaRuntimeStateEntity state = loadOrCreate(stateContext);
         // 刷新窗口与预约合并为一次 CAS，避免刷新写入后再次使用旧版本。
-        state = refreshState(state, policy, now, request.policy().slidingWindowHours(), false);
+        state = refreshState(state, policy, now, request.policy().slidingWindowHours());
         if (state == null) {
             return ResourceCheck.allow();
         }
@@ -132,7 +132,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
         if (state == null) {
             return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
         }
-        state = refreshState(state, policy, BatchDateTimeSupport.utcNow(), slidingWindowHours, false);
+        state = refreshState(state, policy, BatchDateTimeSupport.utcNow(), slidingWindowHours);
         if (state == null) {
             return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
         }
@@ -183,7 +183,10 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
 
     private void reconcileOne(QuotaRuntimeStateEntity state, Instant now, int slidingWindowHours) {
         QuotaResetPolicy policy = QuotaResetPolicy.from(state.quotaResetPolicy());
-        refreshState(state, policy, now, slidingWindowHours, true);
+        QuotaRuntimeStateEntity refreshed = refreshState(state, policy, now, slidingWindowHours);
+        if (!state.equals(refreshed)) {
+            persist(refreshed);
+        }
     }
 
     private record StateContext(
@@ -210,22 +213,18 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
         QuotaResetPolicy resetPolicy = QuotaResetPolicy.from(ctx.quotaResetPolicy());
         Instant createdAt = ctx.now();
         int slidingWindowHours = ctx.slidingWindowHours();
-        created = refreshState(created, resetPolicy, createdAt, slidingWindowHours, false);
+        created = refreshState(created, resetPolicy, createdAt, slidingWindowHours);
         return created;
     }
 
+    /** 仅计算刷新后的配额窗口。预约和后台对账在各自的事务中负责持久化。 */
     private QuotaRuntimeStateEntity refreshState(
-            QuotaRuntimeStateEntity state,
-            QuotaResetPolicy policy,
-            Instant now,
-            int slidingWindowHours,
-            boolean persist) {
+            QuotaRuntimeStateEntity state, QuotaResetPolicy policy, Instant now, int slidingWindowHours) {
         if (state == null) {
             return null;
         }
         QuotaResetPolicy effectivePolicy = policy == null ? QuotaResetPolicy.NONE : policy;
         String normalizedPolicy = effectivePolicy.name();
-        boolean changed = false;
         if (!normalizedPolicy.equalsIgnoreCase(state.quotaResetPolicy())) {
             state = state.withRefresh(
                     normalizedPolicy,
@@ -233,7 +232,6 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
                     state.windowExpiresAt(),
                     state.peakBorrowedCount() == null ? 0 : state.peakBorrowedCount(),
                     state.lastResetAt());
-            changed = true;
         }
         if (!effectivePolicy.isRuntimeManaged()) {
             boolean quotaStateNeedsReset = state.peakBorrowedCount() == null
@@ -242,10 +240,6 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
                     || state.windowExpiresAt() != null;
             if (quotaStateNeedsReset) {
                 state = state.withoutRuntimeWindow(normalizedPolicy, state.lastResetAt());
-                changed = true;
-            }
-            if (changed && persist) {
-                persist(state);
             }
             return state;
         }
@@ -261,7 +255,6 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
                     || !now.isBefore(state.windowExpiresAt());
             if (fixedQuotaWindowNeedsReset) {
                 state = state.withRefresh(normalizedPolicy, windowStart, windowEnd, 0, now);
-                changed = true;
             }
         } else if (effectivePolicy == QuotaResetPolicy.SLIDING_WINDOW) {
             int normalizedHours = Math.max(1, slidingWindowHours);
@@ -272,11 +265,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
                 Duration slidingWindowDuration = Duration.ofHours(normalizedHours);
                 Instant windowExpiresAt = now.plus(slidingWindowDuration);
                 state = state.withRefresh(normalizedPolicy, now, windowExpiresAt, 0, now);
-                changed = true;
             }
-        }
-        if (changed && persist) {
-            persist(state);
         }
         return state;
     }

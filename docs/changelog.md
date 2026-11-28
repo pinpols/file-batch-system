@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-28 CodeQL 告警处置
+
+- PostgreSQL 配额状态的窗口计算与持久化分离，调度快照只查询和计算，后台对账与容量预约继续负责写入。告警判定和验证见[本轮安全告警处置](verifications/security-alert-remediation-2026-11-28.md)。
+
 ## 2026-11-28 E2E 派发路由稳定性
 
 - `WorkerReportLostAfterBusinessCommitE2eIT` 在 Worker 上线后驱逐 `WorkerRegistryCache` 的 `(tenant, workerGroup)` 快照：共享测试上下文里被强杀的 Worker 在心跳超时前仍是 ONLINE，陈旧快照会让 launch 选中已死 Worker，把派发钉到 `base.node.<workerCode>` 直达 topic，本次启动的 Worker 永远收不到消息。
