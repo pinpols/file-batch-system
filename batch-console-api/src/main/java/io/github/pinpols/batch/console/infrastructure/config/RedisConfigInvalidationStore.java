@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import java.util.Objects;
+
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
@@ -7,10 +14,6 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConfigInvalidationStore;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.support.cache.RedisKeyUtils;
-import java.util.Objects;
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Component;
 
 /** Redis 版配置缓存失效端口实现。 */
 @Component

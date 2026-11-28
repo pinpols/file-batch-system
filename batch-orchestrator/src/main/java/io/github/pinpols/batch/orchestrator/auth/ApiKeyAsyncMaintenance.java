@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.orchestrator.auth;
 
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
 import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Component;
 
 /**
  * API Key 验证后的异步维护动作。

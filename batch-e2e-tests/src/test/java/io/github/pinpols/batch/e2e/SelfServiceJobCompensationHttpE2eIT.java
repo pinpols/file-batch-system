@@ -3,35 +3,6 @@ package io.github.pinpols.batch.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.dto.LaunchResponse;
-import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
-import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
-import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
-import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayService;
-import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplaySubmitCommand;
-import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayReplayDispatcher;
-import io.github.pinpols.batch.orchestrator.service.WorkerRegistryServerService;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
@@ -59,7 +30,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
+
 import javax.sql.DataSource;
+
 import org.awaitility.core.ThrowingRunnable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -81,6 +54,37 @@ import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
+import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
+import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import io.github.pinpols.batch.e2e.support.E2eTestSql;
+import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayService;
+import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplaySubmitCommand;
+import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayReplayDispatcher;
+import io.github.pinpols.batch.orchestrator.service.WorkerRegistryServerService;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 通过真实认证的 Console 自助审批完成 Workflow 与 Worker 重跑。 */
 @E2eSpringBootTest(

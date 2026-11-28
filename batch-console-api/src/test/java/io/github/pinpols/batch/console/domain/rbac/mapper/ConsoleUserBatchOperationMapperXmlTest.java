@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;

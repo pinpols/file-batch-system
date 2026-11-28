@@ -3,20 +3,12 @@ package io.github.pinpols.batch.worker.processes.sql;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
-import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
-import io.github.pinpols.batch.worker.processes.metrics.ProcessMetrics;
-import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -29,6 +21,17 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
+import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
+import io.github.pinpols.batch.worker.processes.metrics.ProcessMetrics;
+import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
 
 /**
  * SqlTransformComputePlugin WAP+bookends 端到端集成测试。

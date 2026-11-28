@@ -13,20 +13,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRecoveryResponse;
-import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRecoveryResponse.Status;
-import io.github.pinpols.batch.console.application.config.ConsoleConfigBatchOperationService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +30,18 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRecoveryResponse;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRecoveryResponse.Status;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigBatchOperationService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("配置批量操作回查：原请求身份与权限边界")

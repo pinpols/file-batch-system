@@ -3,16 +3,18 @@ package io.github.pinpols.batch.orchestrator.infrastructure.governance;
 import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("AlertmanagerEmitPublisher: PostableAlert 映射 + 开关")
 class AlertmanagerEmitPublisherTest {

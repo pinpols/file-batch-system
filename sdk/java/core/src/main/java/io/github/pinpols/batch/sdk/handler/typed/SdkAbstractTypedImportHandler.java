@@ -1,16 +1,18 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.handler.SdkRowResult;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
+import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
 
 /**
  * A.2 — typed Import 模板:把 A.1 的「强类型入参」与 ADR-036 的「行流/分批模板」合流。

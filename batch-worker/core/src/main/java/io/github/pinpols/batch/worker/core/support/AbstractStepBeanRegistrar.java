@@ -1,19 +1,22 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.EventListener;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
 
 /**
  * 应用启动期把本模块注册到 Spring 上下文的 Step bean 集合写入 {@code batch.step_registry}。

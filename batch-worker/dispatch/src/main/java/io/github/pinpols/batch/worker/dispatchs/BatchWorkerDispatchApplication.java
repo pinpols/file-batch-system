@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.worker.dispatchs;
 
-import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
-import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -10,6 +8,9 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
+
+import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
+import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
 
 @SpringBootApplication(scanBasePackages = "io.github.pinpols.batch")
 @ImportAutoConfiguration({

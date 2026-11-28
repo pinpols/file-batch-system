@@ -1,21 +1,25 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
-import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
-import io.github.pinpols.batch.common.web.CachedBodyHttpServletRequest;
-import io.github.pinpols.batch.common.web.ServletRequestPaths;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Locale;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
+import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
+import io.github.pinpols.batch.common.web.CachedBodyHttpServletRequest;
+import io.github.pinpols.batch.common.web.ServletRequestPaths;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * 缺口③：内部端点（{@code /internal/**}）请求体大小硬上限过滤器。

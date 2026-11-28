@@ -4,6 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+
 import io.github.pinpols.batch.common.constants.WorkerCapabilities;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
@@ -15,14 +25,6 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * 覆盖 resource_tag 匹配逻辑，重点验证 {@code capability_tags} JSONB 数组作为 worker 侧多能力声明 可以命中 queue 的 tag

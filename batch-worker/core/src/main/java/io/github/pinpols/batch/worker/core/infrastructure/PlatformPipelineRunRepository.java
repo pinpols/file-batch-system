@@ -3,7 +3,22 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toJson;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.truncate;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
+import lombok.Builder;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.PipelineRunStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -14,17 +29,6 @@ import io.github.pinpols.batch.worker.core.param.PlatformPipelineFinishParam;
 import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
 import io.github.pinpols.batch.worker.core.param.PlatformStepRunFinishParam;
 import io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import lombok.Builder;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /** Pipeline 实例与步骤运行记录的数据访问协作者。 */
 @Repository

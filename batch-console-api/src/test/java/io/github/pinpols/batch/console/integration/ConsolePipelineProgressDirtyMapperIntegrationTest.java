@@ -2,23 +2,25 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
-import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper.DirtyCursor;
-import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper.DirtyCursor;
+import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("流水线进度查询映射: 每个实例只取最新进度,跨租户关联不串号")

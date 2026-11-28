@@ -11,17 +11,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.common.dto.ResponseMeta;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.application.ops.ConsoleKafkaLagQueryPort;
-import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
-import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxRepublishResponse;
-import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +33,17 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+
+import io.github.pinpols.batch.common.dto.ResponseMeta;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.ops.ConsoleKafkaLagQueryPort;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
+import io.github.pinpols.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxRepublishResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 
 @DisplayName("运维概览接口:汇总响应结构与字段回填正确, 且允许租户用户读取")
 @ExtendWith(MockitoExtension.class)

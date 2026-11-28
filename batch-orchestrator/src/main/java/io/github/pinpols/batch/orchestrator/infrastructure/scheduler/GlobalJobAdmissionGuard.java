@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * 平台全局活跃作业硬门禁。

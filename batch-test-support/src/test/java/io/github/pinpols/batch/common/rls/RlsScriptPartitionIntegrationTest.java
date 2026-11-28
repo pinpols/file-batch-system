@@ -3,12 +3,13 @@ package io.github.pinpols.batch.common.rls;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.MountableFile;
+
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 /** 需要真实 psql 与独立角色/策略目录，故直接使用每用例隔离的业务 PG，不启动应用或共享平台库。 */
 @Testcontainers(disabledWithoutDocker = true)

@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.e2e.support;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 
 /**
  * PROCESS e2e 共享 fixture：业务行 seed、作业执行参数配置和 SQL transform spec 构造，避免 happy

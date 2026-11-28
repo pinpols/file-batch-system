@@ -7,20 +7,22 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
-import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
-import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 
 @DisplayName("租户配置包应用权限:隔离平台资源字段")
 class TenantConfigPackageExcelApplyAuthorizationTest {

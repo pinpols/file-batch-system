@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.config;
 
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * 通知投递安全配置。

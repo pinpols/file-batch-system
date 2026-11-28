@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayPreviewTokenEntity;
 import java.time.Instant;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayPreviewTokenEntity;
 
 /** 批次日重放预览凭证映射；消费路径在 PostgreSQL 行锁内完成。 */
 public interface BatchDayReplayPreviewTokenMapper {

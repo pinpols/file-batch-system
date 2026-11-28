@@ -1,12 +1,5 @@
 package io.github.pinpols.batch.worker.processes.sql;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -16,7 +9,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 
 /** 从 Job 冻结的 COMPUTE 阶段业务参数解析出的 SQL 加工规格。 */
 @Builder

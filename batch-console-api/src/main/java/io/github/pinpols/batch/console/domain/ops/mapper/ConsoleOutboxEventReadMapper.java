@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
-import io.github.pinpols.batch.console.domain.ops.view.OutboxEventStatusStat;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.ops.view.OutboxEventStatusStat;
 
 /**
  * Console 端 outbox_event 只读查询 mapper。

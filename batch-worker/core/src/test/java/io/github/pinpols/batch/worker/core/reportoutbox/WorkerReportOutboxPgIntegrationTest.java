@@ -3,16 +3,13 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
-import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
-import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.SqliteSessionFactorySupport;
-import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -36,6 +33,12 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
+import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.SqliteSessionFactorySupport;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper;
 
 /**
  * {@code WorkerReportOutboxRepository} 的 PLATFORM_PG(文档默认后端)真 PG 闭环护栏。

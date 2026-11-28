@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
-import io.github.pinpols.batch.common.enums.ShardStrategy;
-import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.util.Map;
+
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.enums.ShardStrategy;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 
 /**
  * 根据历史执行时长解析分区数，公式为 {@code ceil(historicalDurationSeconds / targetPartitionDurationSeconds)}。

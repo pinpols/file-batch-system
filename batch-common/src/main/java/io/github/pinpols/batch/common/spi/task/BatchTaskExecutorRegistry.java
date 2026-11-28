@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.common.spi.task;
 
-import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -11,10 +8,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * {@link BatchTaskExecutor} 的统一注册表 — 启动期收集所有实现,运行期按 {@link BatchTaskExecutor#taskType()} O(1) 路由。

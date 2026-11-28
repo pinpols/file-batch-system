@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 按 channelType 解析 {@link NotificationSender} 的注册表。构造期校验渠道键非空且唯一，避免多个实现支持同一渠道时由 Spring Bean

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.param;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 /** 密钥轮换的新版本字段；载荷已保护，存储引用与版本锁身份一致。 */

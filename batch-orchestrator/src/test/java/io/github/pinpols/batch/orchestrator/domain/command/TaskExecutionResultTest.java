@@ -2,14 +2,17 @@ package io.github.pinpols.batch.orchestrator.domain.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.utils.JsonUtils;
 
 @DisplayName("任务结果建模：分离执行分支并保留历史输入及软告警语义")
 class TaskExecutionResultTest {

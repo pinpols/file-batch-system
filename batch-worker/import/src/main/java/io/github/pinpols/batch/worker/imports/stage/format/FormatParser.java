@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedWriter;
+
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 
 /** 将某种特定文件格式(Excel、JSON、XML 等)解析成 NDJSON 记录的策略接口。 */
 public interface FormatParser {

@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import java.time.Instant;
+
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
 
 /**
  * ADR-010: trigger → orchestrator 异步事件载荷。

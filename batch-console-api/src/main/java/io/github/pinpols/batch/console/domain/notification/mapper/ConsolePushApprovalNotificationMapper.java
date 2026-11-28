@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushApprovalNotificationEntity;
 import io.github.pinpols.batch.console.domain.notification.support.PendingApprovalNotification;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /** {@code batch.console_push_approval_notification} MyBatis 映射。 */
 public interface ConsolePushApprovalNotificationMapper {

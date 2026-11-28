@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -9,14 +20,6 @@ import io.github.pinpols.batch.common.verifier.ContentVerifierRegistry;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
 
 /**
  * ADR-030 §C：worker pipeline 成功路径运行 ContentVerifier 的统一钩子。

@@ -5,22 +5,6 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleAuthenticationFilter;
-import io.github.pinpols.batch.console.infrastructure.rbac.RedisOidcAuthorizationRequestRepository;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceModeFilter;
-import io.github.pinpols.batch.console.support.ratelimit.ConsoleOidcAuthorizationRateLimitFilter;
-import io.github.pinpols.batch.console.support.ratelimit.ConsoleRateLimitFilter;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import jakarta.servlet.Filter;
-import jakarta.servlet.http.Cookie;
 import java.net.InetAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -38,10 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import mockwebserver3.Dispatcher;
-import mockwebserver3.MockResponse;
-import mockwebserver3.MockWebServer;
-import mockwebserver3.RecordedRequest;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,6 +49,29 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.util.UriComponentsBuilder;
+
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleAuthenticationFilter;
+import io.github.pinpols.batch.console.infrastructure.rbac.RedisOidcAuthorizationRequestRepository;
+import io.github.pinpols.batch.console.support.maintenance.MaintenanceModeFilter;
+import io.github.pinpols.batch.console.support.ratelimit.ConsoleOidcAuthorizationRateLimitFilter;
+import io.github.pinpols.batch.console.support.ratelimit.ConsoleRateLimitFilter;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+
+import jakarta.servlet.Filter;
+import jakarta.servlet.http.Cookie;
+import mockwebserver3.Dispatcher;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
+import mockwebserver3.RecordedRequest;
 
 /** 经 Spring Security OAuth2 Client 和真实 Redis state store 执行完整授权码回调。 */
 @SpringBootTest(

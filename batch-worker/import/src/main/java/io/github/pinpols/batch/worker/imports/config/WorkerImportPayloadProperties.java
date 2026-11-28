@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.imports.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Import worker payload 大小/堆比例守护。

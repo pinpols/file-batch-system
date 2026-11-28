@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
 import java.time.Duration;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * P1-7:`batch.process_staging` 孤儿清理调度配置,绑定 {@code batch.worker.process.staging-cleanup}。

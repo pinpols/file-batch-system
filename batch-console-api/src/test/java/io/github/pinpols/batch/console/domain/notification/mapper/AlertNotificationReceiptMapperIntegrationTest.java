@@ -3,16 +3,13 @@ package io.github.pinpols.batch.console.domain.notification.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
-import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
-import io.github.pinpols.batch.console.domain.notification.query.AlertNotificationReceiptCommand;
-import io.github.pinpols.batch.console.domain.notification.service.AlertNotificationReceiptService;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -36,6 +33,12 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
+import io.github.pinpols.batch.console.domain.notification.query.AlertNotificationReceiptCommand;
+import io.github.pinpols.batch.console.domain.notification.service.AlertNotificationReceiptService;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("告警成功回执的真实 PostgreSQL 幂等、恢复和租户隔离")
 class AlertNotificationReceiptMapperIntegrationTest {

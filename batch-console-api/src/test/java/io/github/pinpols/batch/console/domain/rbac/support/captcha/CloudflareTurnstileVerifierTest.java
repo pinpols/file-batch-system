@@ -3,12 +3,15 @@ package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.config.CaptchaProperties;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.config.CaptchaProperties;
 
 @DisplayName("Cloudflare Turnstile 校验:成功 / 失败 / 空 token 不走网络")
 class CloudflareTurnstileVerifierTest {

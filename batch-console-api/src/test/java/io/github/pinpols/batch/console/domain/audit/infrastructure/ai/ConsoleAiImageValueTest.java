@@ -2,9 +2,10 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase.ImageContent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase.ImageContent;
 
 @DisplayName("AI 图片值对象：字节数组值语义")
 class ConsoleAiImageValueTest {

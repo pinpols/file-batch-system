@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.worker.core.config;
 
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.validation.annotation.Validated;
 
 /** Worker Kafka 属性绑定；保留既有 spring.kafka 键名、毫秒单位与默认值，不启用额外自动配置。 */
 @Data

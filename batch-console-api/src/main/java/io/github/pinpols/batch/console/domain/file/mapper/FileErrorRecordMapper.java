@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.file.mapper;
 
+import java.util.List;
+
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
 import io.github.pinpols.batch.console.domain.file.query.FileErrorRecordQuery;
-import java.util.List;
 
 public interface FileErrorRecordMapper {
 

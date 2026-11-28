@@ -2,10 +2,13 @@ package io.github.pinpols.batch.common.rls;
 
 import java.sql.SQLException;
 import java.util.List;
+
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Phase A · RLS 启动期 fail-fast 守门(opt-in)。

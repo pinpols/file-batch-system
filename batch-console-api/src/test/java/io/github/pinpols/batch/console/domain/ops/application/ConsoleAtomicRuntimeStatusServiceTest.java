@@ -2,11 +2,13 @@ package io.github.pinpols.batch.console.domain.ops.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleAtomicRuntimeStatusResponse;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicRuntimeStatusPayload;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleAtomicRuntimeStatusResponse;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicRuntimeStatusPayload;
 
 /** Round-3 #8:{@link ConsoleAtomicRuntimeStatusService#toResponse} 纯映射测试,不需 Spring/HTTP。 */
 @DisplayName("原子运行时状态响应映射:原始载荷完整时标记可用, 为空或缺失时标记不可用")

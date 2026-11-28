@@ -2,9 +2,10 @@ package io.github.pinpols.batch.worker.dispatchs.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * 验证文件束绑定键与普通字段映射到 {@link DispatchPayload} 的优先级及兼容读取。

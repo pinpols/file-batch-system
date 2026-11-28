@@ -6,20 +6,22 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.common.enums.PartitionStatus;
-import io.github.pinpols.batch.common.enums.TaskStatus;
-import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
-import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.io.ClassPathResource;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
+import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 
 @DisplayName("AI 知识库检索:排序结果、降级开关与语料一致性")
 class ConsoleAiKnowledgeBaseTest {

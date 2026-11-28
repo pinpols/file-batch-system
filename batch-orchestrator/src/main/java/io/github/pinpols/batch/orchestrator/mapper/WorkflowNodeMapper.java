@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import java.util.Collection;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 
 public interface WorkflowNodeMapper {
 

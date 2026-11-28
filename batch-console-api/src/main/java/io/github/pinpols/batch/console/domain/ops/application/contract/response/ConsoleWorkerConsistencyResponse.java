@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import lombok.Builder;
 
 /** 集群诊断 - Worker 注册一致性。{@code workerGroups} 为 mapper 按组容量投影行。 */

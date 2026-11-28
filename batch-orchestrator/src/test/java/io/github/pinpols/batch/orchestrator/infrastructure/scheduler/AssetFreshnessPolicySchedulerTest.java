@@ -5,12 +5,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.application.service.asset.AssetFreshnessPolicyService;
-import io.github.pinpols.batch.orchestrator.config.AssetFreshnessPolicyProperties;
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.orchestrator.application.service.asset.AssetFreshnessPolicyService;
+import io.github.pinpols.batch.orchestrator.config.AssetFreshnessPolicyProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 
 @DisplayName("资产新鲜度策略定时扫描:开关状态与停机排空的门控,以及正常运行时的批量委派")
 class AssetFreshnessPolicySchedulerTest {

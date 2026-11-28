@@ -2,12 +2,14 @@ package io.github.pinpols.batch.console.domain.audit.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @DisplayName("审计参数脱敏: 嵌套凭据识别与非法载荷兜底")
 class AuditParamRedactorTest {

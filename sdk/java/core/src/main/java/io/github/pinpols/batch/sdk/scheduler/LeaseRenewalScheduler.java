@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.sdk.scheduler;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
-import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -12,7 +7,14 @@ import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 
 /**
  * 任务 lease 续约 — 按 {@link BatchPlatformClientConfig#getLeaseRenewInterval()} 周期遍历 dispatcher 的

@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
-import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -11,6 +8,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 
 /** 不依赖 Spring/Jackson 的纯函数小工具，从 ImportDataQualityService 抽出。 */
 final class ValidationCoercions {

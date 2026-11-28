@@ -1,17 +1,7 @@
 package io.github.pinpols.batch.e2e.apps;
 
-import io.github.pinpols.batch.common.config.BatchClockConfig;
-import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
-import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
-import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
-import io.github.pinpols.batch.e2e.config.E2eKafkaProducerConfiguration;
-import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
-import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
-import io.github.pinpols.batch.e2e.config.E2eShedLockConfiguration;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.config.OrchestratorDataSourceConfiguration;
-import io.github.pinpols.batch.orchestrator.infrastructure.sensor.DbRowExistsSensorPolicy;
 import java.util.concurrent.Executor;
+
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
@@ -39,6 +29,18 @@ import org.springframework.context.annotation.Import;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import io.github.pinpols.batch.common.config.BatchClockConfig;
+import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
+import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
+import io.github.pinpols.batch.e2e.config.E2eKafkaProducerConfiguration;
+import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
+import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
+import io.github.pinpols.batch.e2e.config.E2eShedLockConfiguration;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.config.OrchestratorDataSourceConfiguration;
+import io.github.pinpols.batch.orchestrator.infrastructure.sensor.DbRowExistsSensorPolicy;
 
 /** 不得修改任一租约，也不得注入第二条 Kafka 消息来强制恢复。 */
 @Configuration

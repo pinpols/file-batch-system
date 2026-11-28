@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.SQLException;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;

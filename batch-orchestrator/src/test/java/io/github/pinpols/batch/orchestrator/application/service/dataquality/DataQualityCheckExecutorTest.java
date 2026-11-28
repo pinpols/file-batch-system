@@ -9,6 +9,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
+import java.time.Month;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.GateStatus;
 import io.github.pinpols.batch.orchestrator.config.DataQualityProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityCheckEntity;
@@ -17,16 +29,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.dataquality.JdbcDataQualitySqlRuleProbe;
 import io.github.pinpols.batch.orchestrator.mapper.DataQualityCheckMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper;
-import java.time.LocalDate;
-import java.time.Month;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 @DisplayName("数据质量检查执行器: 规则模式, 严重度判定与门禁状态口径")
 class DataQualityCheckExecutorTest {

@@ -2,9 +2,10 @@ package io.github.pinpols.batch.worker.imports.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @DisplayName("批次清单解析单测:必需文件,按文件映射与仅导出束的判定语义")
 class BatchManifestTest {

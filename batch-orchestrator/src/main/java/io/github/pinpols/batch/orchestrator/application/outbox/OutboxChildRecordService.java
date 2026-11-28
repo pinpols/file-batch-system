@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.orchestrator.application.outbox;
 
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import io.github.pinpols.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.EventOutboxRetryMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 针对完整的热表或归档父记录标识，持久化 Outbox 子审计记录。 */
 @Slf4j

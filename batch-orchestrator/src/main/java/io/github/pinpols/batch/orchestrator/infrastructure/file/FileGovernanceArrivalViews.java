@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
-import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 
 /** 到达组治理的固定应用视图；metadata_json 仅作为动态 JSON 字段透传。 */
 public final class FileGovernanceArrivalViews {

@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.rbac.application.contract.request;
 
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 
 /**
  * 创建账号请求体（POST /api/console/users）。username 与 password 用 V34 / CreateTenantRequest 同款约束， 保证密码至少 8

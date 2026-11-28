@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
-import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
-import io.github.pinpols.batch.worker.core.support.AbstractStepBeanRegistrar;
-import io.github.pinpols.batch.worker.imports.stage.ImportStageStep;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
+import io.github.pinpols.batch.worker.core.support.AbstractStepBeanRegistrar;
+import io.github.pinpols.batch.worker.imports.stage.ImportStageStep;
 
 /**
  * Import worker 启动后把所有 {@link ImportStageStep} bean 登记到 {@code batch.step_registry}，

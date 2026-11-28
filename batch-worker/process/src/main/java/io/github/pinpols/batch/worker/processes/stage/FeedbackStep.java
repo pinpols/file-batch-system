@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.metrics.ProcessMetrics;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * PROCESS FEEDBACK 阶段:推进水位、清理 staging、写审计 / 指标,委托到 plugin.feedback()。

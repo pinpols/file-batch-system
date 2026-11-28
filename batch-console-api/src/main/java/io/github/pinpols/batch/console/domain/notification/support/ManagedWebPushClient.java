@@ -12,14 +12,16 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
-import nl.martijndwars.webpush.AbstractPushService;
-import nl.martijndwars.webpush.Encoding;
-import nl.martijndwars.webpush.HttpRequest;
-import nl.martijndwars.webpush.Notification;
+
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
 import org.asynchttpclient.Response;
 import org.jose4j.lang.JoseException;
+
+import nl.martijndwars.webpush.AbstractPushService;
+import nl.martijndwars.webpush.Encoding;
+import nl.martijndwars.webpush.HttpRequest;
+import nl.martijndwars.webpush.Notification;
 
 /** 管理传输生命周期；加密和 VAPID 签名仍由固定版本的依赖库负责。 */
 public class ManagedWebPushClient extends AbstractPushService<ManagedWebPushClient> implements Closeable {

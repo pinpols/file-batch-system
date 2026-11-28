@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 
 /** SDK 声明的自定义任务类型的公开 Console 视图。 */
 @Builder

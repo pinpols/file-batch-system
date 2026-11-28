@@ -5,6 +5,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.LongStream;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse;
@@ -16,16 +28,6 @@ import io.github.pinpols.batch.orchestrator.application.service.version.ResultVe
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.LineageEvidenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.LongStream;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("血缘证据服务: 热表与归档表回退, 覆盖缺口与生效版本查询口径")
 @ExtendWith(MockitoExtension.class)

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.domain.view;
 
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Data;
 
 /** SLA 候选及其所属 Workflow 上下文的查询投影。 */

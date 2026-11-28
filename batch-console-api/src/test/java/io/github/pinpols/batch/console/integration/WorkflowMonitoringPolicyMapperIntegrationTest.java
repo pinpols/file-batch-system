@@ -3,15 +3,13 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowMonitoringPolicyMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.UUID;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -30,6 +28,10 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowMonitoringPolicyMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("Workflow 根级监控策略：真实迁移、SQL 与同租户引用")
 class WorkflowMonitoringPolicyMapperIntegrationTest {

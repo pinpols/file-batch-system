@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.request;
 
+import java.util.List;
+import java.util.Map;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.util.List;
-import java.util.Map;
 
 /**
  * P2-2(2026-05-16):增加 userId / sessionId / ts / page / props 的大小约束, 避免登录用户用大 payload 写满

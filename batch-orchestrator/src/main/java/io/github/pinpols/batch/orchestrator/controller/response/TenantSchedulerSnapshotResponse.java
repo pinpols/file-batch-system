@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.controller.response;
 
+import java.time.Instant;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
-import java.time.Instant;
-import lombok.Builder;
 
 /** 已持久化调度历史的稳定 HTTP 投影。 */
 @Builder

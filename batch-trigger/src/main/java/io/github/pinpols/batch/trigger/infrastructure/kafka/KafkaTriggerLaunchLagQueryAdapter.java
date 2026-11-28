@@ -1,11 +1,5 @@
 package io.github.pinpols.batch.trigger.infrastructure.kafka;
 
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.trigger.application.TriggerLaunchLagQueryPort;
-import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,7 +8,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.RequiredArgsConstructor;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -23,6 +17,16 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.trigger.application.TriggerLaunchLagQueryPort;
+import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * {@link TriggerLaunchLagQueryPort} 的 Kafka Admin 适配器：复用一个受 Spring 生命周期管理的 AdminClient，

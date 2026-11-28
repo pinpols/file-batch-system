@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.observability;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.function.Supplier;
+
 import org.springframework.stereotype.Component;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 /**
  * 记录 launch 控制面关键阶段耗时。

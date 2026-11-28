@@ -1,11 +1,8 @@
 package io.github.pinpols.batch.worker.core.config;
 
-import io.github.pinpols.batch.common.config.BatchKafkaProducerProperties;
-import io.github.pinpols.batch.common.config.BatchKafkaProducerSupport;
-import io.micrometer.observation.ObservationRegistry;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
+
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -18,6 +15,12 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.config.BatchKafkaProducerProperties;
+import io.github.pinpols.batch.common.config.BatchKafkaProducerSupport;
+import io.micrometer.observation.ObservationRegistry;
 
 @Configuration(proxyBeanMethods = false)
 @RequiredArgsConstructor

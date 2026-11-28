@@ -3,18 +3,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
-import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
-import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
-import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -22,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +23,19 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
+import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
+import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

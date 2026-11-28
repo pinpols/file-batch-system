@@ -1,19 +1,5 @@
 package io.github.pinpols.batch.worker.imports.plugin;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.exception.WorkerConfigException;
-import io.github.pinpols.batch.common.jdbc.DataSourceConnectionLease;
-import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
-import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
-import io.github.pinpols.batch.common.plugin.ImportLoadContext;
-import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
-import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
-import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
-import io.github.pinpols.batch.worker.imports.jdbc.ImportLoadStrategy;
-import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec;
-import io.github.pinpols.batch.worker.imports.stage.format.ParseSupport;
 import java.io.IOException;
 import java.io.StringReader;
 import java.math.BigDecimal;
@@ -33,8 +19,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
+
 import org.postgresql.PGConnection;
 import org.postgresql.copy.CopyManager;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -43,6 +30,24 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
+import io.github.pinpols.batch.common.jdbc.DataSourceConnectionLease;
+import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
+import io.github.pinpols.batch.common.plugin.ImportLoadContext;
+import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
+import io.github.pinpols.batch.worker.imports.jdbc.ImportLoadStrategy;
+import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec;
+import io.github.pinpols.batch.worker.imports.stage.format.ParseSupport;
 
 /**
  * 通用 LOAD：通过模板驱动的列映射（白名单）向单张业务表执行 INSERT / UPSERT。 每次 {@link ImportLoadPlugin#loadChunk} 调用使用 JDBC

@@ -2,15 +2,17 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("等待分片重派时的调度请求构建: 队列,资源档位与下游通道约束均取自分片输入快照")
 class WaitingPartitionDispatchSchedulerRequestTest {

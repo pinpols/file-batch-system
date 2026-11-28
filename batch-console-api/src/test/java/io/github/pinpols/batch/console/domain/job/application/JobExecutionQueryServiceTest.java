@@ -8,6 +8,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.file.FilePipelineProgressSnapshotService;
@@ -16,14 +26,6 @@ import io.github.pinpols.batch.console.domain.job.mapper.JobExecutionMapper;
 import io.github.pinpols.batch.console.domain.job.view.JobExecutionView;
 import io.github.pinpols.batch.console.shared.progress.PipelineStepProgressSnapshot;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import java.time.Instant;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("作业冻结阶段与技术任务分母")
 @ExtendWith(MockitoExtension.class)

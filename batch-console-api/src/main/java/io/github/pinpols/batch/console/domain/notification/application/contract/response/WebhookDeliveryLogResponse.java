@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.response;
 
+import java.time.Instant;
+
+import org.springframework.web.util.HtmlUtils;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
-import java.time.Instant;
-import lombok.Builder;
-import org.springframework.web.util.HtmlUtils;
 
 /** Public webhook delivery log view. */
 @Builder

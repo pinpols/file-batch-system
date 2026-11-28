@@ -1,14 +1,15 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiPageContextRequest;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
 
 /** 限制并清洗由调用方提供、将发送给外部模型的 JSON 上下文。 */
 final class ConsoleAiContextSanitizer {

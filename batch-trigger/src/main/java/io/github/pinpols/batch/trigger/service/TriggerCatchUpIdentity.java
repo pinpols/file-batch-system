@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.trigger.service;
 
+import java.util.List;
+import java.util.Objects;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import java.util.List;
-import java.util.Objects;
 
 /** 验证补跑冻结载荷；请求 ID 和追踪 ID 可随重试变化。 */
 final class TriggerCatchUpIdentity {

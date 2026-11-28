@@ -1,16 +1,5 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
-import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
-import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
-import io.github.pinpols.batch.console.shared.view.ConsoleSseEventResponse;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,13 +12,28 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
+import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
+import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
+import io.github.pinpols.batch.console.shared.view.ConsoleSseEventResponse;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * 控制台实时事件总线：把事件分发给本机的 SSE 订阅者。

@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import java.util.List;
+import java.util.Set;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.util.List;
-import java.util.Set;
-import lombok.Data;
 
 /** 用于只读预览租户配置差异及覆盖项的请求。 */
 @Data

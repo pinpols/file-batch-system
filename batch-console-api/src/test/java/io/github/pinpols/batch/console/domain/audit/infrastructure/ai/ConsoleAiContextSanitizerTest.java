@@ -3,12 +3,14 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.application.contract.request.auth.AiPageContextRequest;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.application.contract.request.auth.AiPageContextRequest;
 
 @DisplayName("AI 上下文清洗:字段白名单、长度与嵌套深度校验")
 class ConsoleAiContextSanitizerTest {

@@ -2,9 +2,17 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
@@ -17,11 +25,6 @@ import io.github.pinpols.batch.sdk.wire.HeartbeatRequest;
 import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import io.github.pinpols.batch.sdk.wire.RenewRequest;
 import io.github.pinpols.batch.sdk.wire.ReportRequest;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * SDK 端 wire DTO → 平台端 DTO 反序列化契约测试(Phase 0 §2.1 / 决策 #2)。

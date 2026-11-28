@@ -8,6 +8,17 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
 import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgGiveUpRowParam;
@@ -17,15 +28,6 @@ import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutbo
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteClaimParam;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteGiveUpRowParam;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteUpdateRetryParam;
-import java.util.List;
-import java.util.Optional;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 存储委托契约：仓储按方言把状态值交给 Mapper 时，必须统一使用 {@link OutboxPublishStatus}，

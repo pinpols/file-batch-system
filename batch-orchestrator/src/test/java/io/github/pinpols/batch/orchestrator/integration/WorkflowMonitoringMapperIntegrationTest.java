@@ -2,16 +2,12 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.query.WorkflowMonitoringQuery;
-import io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate;
-import io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate.Violation;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowMonitoringMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -29,6 +25,12 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.orchestrator.domain.query.WorkflowMonitoringQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate.Violation;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowMonitoringMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("Workflow 三类时限：真实 PostgreSQL 机会、终态补报与隔离")
 class WorkflowMonitoringMapperIntegrationTest {

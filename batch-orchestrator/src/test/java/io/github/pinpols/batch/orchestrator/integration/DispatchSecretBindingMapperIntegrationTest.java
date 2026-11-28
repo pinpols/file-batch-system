@@ -2,11 +2,10 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.view.DispatchSecretBindingView;
-import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.List;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -22,6 +21,10 @@ import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.orchestrator.domain.view.DispatchSecretBindingView;
+import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("Dispatch SecretVersion 选版 SQL 的真实 PostgreSQL 语义")
 class DispatchSecretBindingMapperIntegrationTest {

@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 import java.util.List;
 import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisConnectionDetails;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 
 /**
  * 只读 Spring 基础设施配置探针。

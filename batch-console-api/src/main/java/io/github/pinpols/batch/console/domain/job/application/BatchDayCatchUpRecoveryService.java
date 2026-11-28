@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
-import io.github.pinpols.batch.console.domain.job.application.contract.response.BatchDayCatchUpRequestStatusResponse;
 import java.time.LocalDate;
+
+import io.github.pinpols.batch.console.domain.job.application.contract.response.BatchDayCatchUpRequestStatusResponse;
 
 /** 按原请求核对审批回执或接续待处理项目。 */
 public interface BatchDayCatchUpRecoveryService {

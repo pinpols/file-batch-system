@@ -7,14 +7,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.testing.TestExcelFileBuilder;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.SourceLocator;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,6 +14,7 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.util.List;
 import java.util.Map;
+
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +24,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.testing.TestExcelFileBuilder;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.SourceLocator;
 
 /** {@link ExcelFormatParser} 单元测试:覆盖 .xls fail-fast、物理行号/列定位、表头校验、表头直通、preview、按名选 sheet。 */
 @ExtendWith(MockitoExtension.class)

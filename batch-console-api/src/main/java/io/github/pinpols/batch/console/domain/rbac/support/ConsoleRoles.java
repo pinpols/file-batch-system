@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collection;
 import java.util.Set;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 控制台 4 角色模型(2026-05 重设计):

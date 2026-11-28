@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import java.util.Map;
 
 /**
  * SDK typed handler 共用的「参数反序列化」工具 —— 把 {@link SdkTaskContext#parameters()} 经 Jackson 反序列化成强类型入参

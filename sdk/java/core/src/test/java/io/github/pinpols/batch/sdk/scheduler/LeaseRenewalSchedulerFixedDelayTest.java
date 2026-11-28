@@ -8,15 +8,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 
 /**
  * TOP #6:LeaseRenewalScheduler 必须用 fixed-delay,与 HeartbeatScheduler 对齐。

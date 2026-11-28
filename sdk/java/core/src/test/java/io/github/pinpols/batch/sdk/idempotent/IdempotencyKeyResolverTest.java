@@ -3,10 +3,12 @@ package io.github.pinpols.batch.sdk.idempotent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 
 /** A.3 幂等键解析单测。 */
 @DisplayName("IdempotencyKeyResolver — 幂等键占位符解析、字面量透传与异常语义")

@@ -12,13 +12,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
-import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,11 +26,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
+import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 @DisplayName("TaskDispatcher 主链路 — 认领执行回报、异常回退与异步派发")
 class TaskDispatcherTest {

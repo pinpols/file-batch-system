@@ -9,22 +9,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.http.OutboundHttpRequest;
-import io.github.pinpols.batch.common.http.OutboundHttpResponse;
-import io.github.pinpols.batch.common.http.OutboundHttpTransport;
-import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
-import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
-import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -36,6 +26,19 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
+import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
+import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
+import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("维护信号发布器随应用启动自动对账")
 class MaintenanceAlertPublisherSchedulingTest {

@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.orchestrator.application.service.PipelineProgressReadService;
-import io.github.pinpols.batch.orchestrator.application.service.PipelineProgressReadService.PipelineProgressItem;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.orchestrator.application.service.PipelineProgressReadService;
+import io.github.pinpols.batch.orchestrator.application.service.PipelineProgressReadService.PipelineProgressItem;
 
 /**
  * Pipeline stage 行级进度内部查询端点(orchestrator → console-api)。

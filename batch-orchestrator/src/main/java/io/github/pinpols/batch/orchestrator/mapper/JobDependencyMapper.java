@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyRule;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyRule;
 
 public interface JobDependencyMapper {
 

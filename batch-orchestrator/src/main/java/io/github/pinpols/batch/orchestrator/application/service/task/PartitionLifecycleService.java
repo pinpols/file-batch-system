@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import java.time.Instant;
+import java.util.List;
+
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import java.time.Instant;
-import java.util.List;
 
 /**
  * 分区生命周期管理服务。 负责 JobPartition 的创建、认领（CLAIM）、租约续期、过期回收以及状态释放等全生命周期操作。 默认的 {@code createPartitions} 以

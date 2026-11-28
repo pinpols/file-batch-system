@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.worker.atomic.sql;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.List;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * {@link SqlTaskExecutor} 的多语句切分器:按顶层 `;` 把 SQL 文本切成有序语句列表。

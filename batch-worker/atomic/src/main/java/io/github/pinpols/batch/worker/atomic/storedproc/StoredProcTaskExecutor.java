@@ -1,21 +1,5 @@
 package io.github.pinpols.batch.worker.atomic.storedproc;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.SensitiveDataValidator;
-import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
-import io.github.pinpols.batch.common.spi.task.ResourceKind;
-import io.github.pinpols.batch.common.spi.task.TaskCapability;
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
-import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
-import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
-import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
-import io.github.pinpols.batch.worker.atomic.runtime.SpringDataSourceResolver;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -32,14 +16,34 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.SensitiveDataValidator;
+import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
+import io.github.pinpols.batch.common.spi.task.ResourceKind;
+import io.github.pinpols.batch.common.spi.task.TaskCapability;
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
+import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
+import io.github.pinpols.batch.worker.atomic.runtime.SpringDataSourceResolver;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 
 /**
  * Stored Procedure SPI 实现 — 通过 {@link CallableStatement} 调用存储过程,带白名单 / 超时 / OUT 参数截断 / REFCURSOR

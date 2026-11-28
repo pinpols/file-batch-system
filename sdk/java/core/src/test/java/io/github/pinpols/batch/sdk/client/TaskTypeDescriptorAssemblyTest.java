@@ -2,14 +2,16 @@ package io.github.pinpols.batch.sdk.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * SDK Phase 3 M3.1:register 装配 taskTypes[] —— code 以 handler.taskType() 为权威 + 过滤无 descriptor 的

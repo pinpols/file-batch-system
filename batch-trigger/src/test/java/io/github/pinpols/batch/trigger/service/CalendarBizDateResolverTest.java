@@ -2,9 +2,6 @@ package io.github.pinpols.batch.trigger.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -12,8 +9,13 @@ import java.time.Month;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Set;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
+import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 
 @DisplayName("日历业务日期解析:按截止时间与节假日滚动规则把触发时刻换算为 bizDate")
 class CalendarBizDateResolverTest {

@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
-import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.util.Map;
+
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 
 /** 计划输入；执行路径传入已选定的定义，配置预览可按编码读取当前定义。 */
 public record SchedulePlanCommand(

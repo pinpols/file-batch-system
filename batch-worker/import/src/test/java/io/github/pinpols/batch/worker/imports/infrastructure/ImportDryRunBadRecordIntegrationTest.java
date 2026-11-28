@@ -2,7 +2,26 @@ package io.github.pinpols.batch.worker.imports.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.Map;
+
+import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.Configuration;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactoryBuilder;
+import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.postgresql.ds.PGSimpleDataSource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
 import com.fasterxml.jackson.databind.JsonNode;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
@@ -16,22 +35,6 @@ import io.github.pinpols.batch.worker.imports.config.ImportSkipProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.util.Map;
-import org.apache.ibatis.builder.xml.XMLMapperBuilder;
-import org.apache.ibatis.mapping.Environment;
-import org.apache.ibatis.session.Configuration;
-import org.apache.ibatis.session.SqlSession;
-import org.apache.ibatis.session.SqlSessionFactoryBuilder;
-import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.postgresql.ds.PGSimpleDataSource;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @DisplayName("导入演练坏记录真实存储隔离")
 class ImportDryRunBadRecordIntegrationTest {

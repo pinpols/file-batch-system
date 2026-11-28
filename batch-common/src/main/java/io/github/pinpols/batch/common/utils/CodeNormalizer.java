@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.common.utils;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import java.util.Locale;
 import java.util.regex.Pattern;
+
 import javax.annotation.Nullable;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 
 /**
  * 配置码（configuration code）归一与格式校验工具。

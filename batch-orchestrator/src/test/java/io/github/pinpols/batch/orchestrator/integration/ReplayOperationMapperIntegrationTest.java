@@ -2,17 +2,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationStartParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
-import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
-import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
-import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
-import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -24,7 +13,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -42,6 +33,18 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationStartParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @Testcontainers(disabledWithoutDocker = true)
 @DisplayName("Replay operation PostgreSQL mapper: 父子身份和终态汇总")

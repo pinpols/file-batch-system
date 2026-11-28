@@ -4,8 +4,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
-import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +11,9 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
+import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Misfire 待审对账器")

@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
-import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+
 import org.springframework.stereotype.Service;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 
 /** 控制台账号查询：通过 Spring Data JDBC 从平台库读取账号、密码哈希和角色列表。 */
 @Service

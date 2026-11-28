@@ -1,17 +1,19 @@
 package io.github.pinpols.batch.e2e;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 
 /** 独立 SDK 进程在业务提交后停留或回报，由父测试控制真实进程退出与网络故障。 */
 public final class SdkCommittedEffectChildProcess {

@@ -2,12 +2,14 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
 import java.util.Locale;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
 
 /** 配置类型属于协议标识，不应随部署主机默认语言而改变解析结果。 */
 @DisplayName("配置复制类型解析与默认语言无关")

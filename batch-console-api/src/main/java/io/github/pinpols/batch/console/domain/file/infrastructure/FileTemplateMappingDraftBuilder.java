@@ -1,17 +1,19 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 /** 构造文件模板导入和导出映射草稿。 */
 final class FileTemplateMappingDraftBuilder {

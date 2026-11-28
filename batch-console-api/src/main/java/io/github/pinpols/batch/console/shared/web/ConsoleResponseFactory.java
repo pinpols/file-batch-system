@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.console.shared.web;
 
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * 封装控制台统一响应体，自动填充 requestId / traceId 等 {@link io.github.pinpols.batch.common.dto.ResponseMeta}。

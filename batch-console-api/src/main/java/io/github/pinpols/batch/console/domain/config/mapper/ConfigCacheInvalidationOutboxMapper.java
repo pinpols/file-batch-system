@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.config.mapper;
 
-import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationIntent;
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationIntent;
 
 /** 配置缓存失效意图的领取与确认。 */
 public interface ConfigCacheInvalidationOutboxMapper {

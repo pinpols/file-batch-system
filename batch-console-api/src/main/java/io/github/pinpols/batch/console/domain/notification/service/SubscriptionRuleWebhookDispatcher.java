@@ -1,5 +1,21 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
@@ -13,20 +29,8 @@ import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscript
 import io.github.pinpols.batch.console.support.notification.BurstRetryExecutor;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PreDestroy;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.web.util.HtmlUtils;
 
 /**
  * P1-2(2026-06-15):把前端配置的「通知中心」规则({@code subscription_rule} + {@code notification_channel})接进事件投递链。

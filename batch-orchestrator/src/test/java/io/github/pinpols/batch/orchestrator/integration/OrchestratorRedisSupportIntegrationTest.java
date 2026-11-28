@@ -2,11 +2,9 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.config.BatchClockConfig;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +13,10 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
+import io.github.pinpols.batch.common.config.BatchClockConfig;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 集成测试：验证 OrchestratorRedisSupport 的核心 Redis 操作使用真实 Redis 容器正确执行。 */
 @SpringBootTest(

@@ -1,25 +1,29 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
-import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryRealtimePort;
-import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryRealtimePort;
+import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * 控制台运维摘要实时流。

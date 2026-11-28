@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.notification.param.SubscriptionRuleInsertParam;
 import io.github.pinpols.batch.console.domain.notification.param.SubscriptionRuleUpdateParam;
 import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
 import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface SubscriptionRuleMapper {
 

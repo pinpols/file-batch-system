@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * 公平共享组的硬并发闸门。

@@ -1,5 +1,24 @@
 package io.github.pinpols.batch.console.infrastructure.realtime;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.data.redis.connection.Message;
+import org.springframework.data.redis.connection.MessageListener;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.stereotype.Service;
+import org.springframework.util.ErrorHandler;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -11,24 +30,9 @@ import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleReal
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeMetrics;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeStreamEnvelope;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleSseEvent;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.ContextClosedEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.data.redis.connection.Message;
-import org.springframework.data.redis.connection.MessageListener;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.listener.ChannelTopic;
-import org.springframework.data.redis.listener.RedisMessageListenerContainer;
-import org.springframework.stereotype.Service;
-import org.springframework.util.ErrorHandler;
 
 /**
  * 控制台 Redis Pub/Sub 消费器。

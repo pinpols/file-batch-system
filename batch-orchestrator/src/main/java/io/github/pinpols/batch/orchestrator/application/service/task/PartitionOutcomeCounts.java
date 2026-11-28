@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import java.util.List;
+import java.util.Objects;
+
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
 import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
-import java.util.List;
-import java.util.Objects;
 
 /**
  * 一次 worker 回报推进时使用的实例分区计数快照。

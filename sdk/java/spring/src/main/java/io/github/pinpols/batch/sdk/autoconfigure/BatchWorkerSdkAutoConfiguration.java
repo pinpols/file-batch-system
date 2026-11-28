@@ -1,10 +1,7 @@
 package io.github.pinpols.batch.sdk.autoconfigure;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
-import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import java.util.List;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -12,6 +9,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
+import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 
 @AutoConfiguration
 @ConditionalOnClass(BatchPlatformClient.class)

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.integration.support;
 
-import io.github.pinpols.batch.common.enums.TriggerType;
 import java.time.LocalDate;
+
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
 
 /**
  * 初始化最小的平台数据行，使 {@link io.github.pinpols.batch.orchestrator.service.LaunchService#launch}

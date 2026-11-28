@@ -8,9 +8,6 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcTaskExecutor.StoredProcValidationException;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -19,11 +16,17 @@ import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanFactory;
+
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcTaskExecutor.StoredProcValidationException;
 
 /**
  * SPI hardening 单测(mockito,无 docker):覆盖 P-1 大小写、dataSourceBean 白名单、maxRefCursorRows 截断。 DB

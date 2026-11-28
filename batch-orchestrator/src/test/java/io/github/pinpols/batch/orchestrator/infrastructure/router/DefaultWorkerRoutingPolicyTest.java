@@ -2,12 +2,14 @@ package io.github.pinpols.batch.orchestrator.infrastructure.router;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import java.util.Arrays;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.model.WorkerRouteModel;
 
 @DisplayName("默认工作节点路由策略: 空候选处理, 可用性过滤与优先级选择, 全部不可用时回退")
 class DefaultWorkerRoutingPolicyTest {

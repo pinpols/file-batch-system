@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.BiPredicate;
+
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
@@ -7,12 +14,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.function.BiPredicate;
 
 /**
  * 负责 worker 消费端的 topic 路由和基础消息筛选。

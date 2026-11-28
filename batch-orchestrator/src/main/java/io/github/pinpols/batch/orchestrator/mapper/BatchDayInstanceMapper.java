@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayInstanceAdvanceOpenCursorParam;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayInstanceAdvanceOpenCursorParam;
 
 /**
  * {@code batch.batch_day_instance} MyBatis 映射（替代原 Spring Data JDBC {@code

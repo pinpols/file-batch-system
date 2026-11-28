@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.dataquality;
 
 import java.util.List;
+
 import lombok.Builder;
 
 /**

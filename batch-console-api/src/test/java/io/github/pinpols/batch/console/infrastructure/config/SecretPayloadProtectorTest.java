@@ -6,10 +6,11 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 
 @DisplayName("密钥载荷保护: 加密信封格式与明文不外泄")
 class SecretPayloadProtectorTest {

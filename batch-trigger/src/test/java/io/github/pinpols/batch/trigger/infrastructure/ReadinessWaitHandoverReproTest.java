@@ -2,9 +2,6 @@ package io.github.pinpols.batch.trigger.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.trigger.infrastructure.scheduler.ReadinessWaitSweeper;
-import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
-import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -13,9 +10,14 @@ import java.lang.reflect.Parameter;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.annotation.Scheduled;
+
+import io.github.pinpols.batch.trigger.infrastructure.scheduler.ReadinessWaitSweeper;
+import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
+import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 
 /**
  * readiness 持久等待移交的验收测试（Phase 1）。

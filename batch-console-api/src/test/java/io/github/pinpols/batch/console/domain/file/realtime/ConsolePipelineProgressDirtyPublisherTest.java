@@ -11,22 +11,24 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.config.ConsolePipelineProgressDirtyProperties;
-import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
-import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
-import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper.DirtyCursor;
-import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.config.ConsolePipelineProgressDirtyProperties;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper.DirtyCursor;
+import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
 
 @DisplayName("Pipeline 进度 dirty 事件发布失败后重试")
 @ExtendWith(OutputCaptureExtension.class)

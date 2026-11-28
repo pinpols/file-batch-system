@@ -2,6 +2,15 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
+
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.config.entity.ConfigReleaseEntity;
@@ -12,13 +21,6 @@ import io.github.pinpols.batch.console.domain.rbac.entity.SecretVersionEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.SecretVersionMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.SecretVersionInsertParam;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 真实 PostgreSQL 验证具名参数绑定、可空字段和租户/CAS；测试事务回滚，业务提交另由 HTTP 用例覆盖。 */
 @SpringBootTest(

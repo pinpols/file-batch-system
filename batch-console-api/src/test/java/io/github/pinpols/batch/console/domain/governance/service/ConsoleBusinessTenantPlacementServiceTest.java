@@ -5,6 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
@@ -12,12 +20,6 @@ import io.github.pinpols.batch.console.domain.governance.command.BusinessTenantP
 import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleBusinessShardCatalogMapper;
 import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleBusinessTenantPlacementMapper;
 import io.github.pinpols.batch.console.domain.governance.param.BusinessTenantPlacementUpsertParam;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("业务租户放置服务: 列表查询、启用分片目录校验与删除结果判定")

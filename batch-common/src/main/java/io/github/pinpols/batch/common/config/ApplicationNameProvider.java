@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * {@code spring.application.name} 的统一读取入口。

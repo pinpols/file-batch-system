@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.shared.view;
 
+import java.util.List;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.ConsoleOperationAuditResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileRecordResponse;
@@ -9,8 +13,6 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowRunResponse;
-import java.util.List;
-import lombok.Builder;
 
 @Builder
 public record ConsoleTraceSnapshotResponse(

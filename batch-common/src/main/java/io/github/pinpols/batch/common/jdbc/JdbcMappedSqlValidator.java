@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.common.jdbc;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collection;
 import java.util.Locale;
 import java.util.regex.Pattern;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** JDBC 映射插件的白名单校验（仅允许标识符，禁止调用方传入 SQL 片段）。 */
 public final class JdbcMappedSqlValidator {

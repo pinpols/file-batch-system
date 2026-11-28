@@ -2,10 +2,6 @@ package io.github.pinpols.batch.worker.processes.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
-import io.github.pinpols.batch.worker.processes.cleanup.ProcessStagingCleanupProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +9,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
+import io.github.pinpols.batch.worker.processes.cleanup.ProcessStagingCleanupProperties;
 
 /**
  * 守护 {@code batch-worker-process/src/test/resources/application-test.yml}：集成测常用 PG 未必有 {@code

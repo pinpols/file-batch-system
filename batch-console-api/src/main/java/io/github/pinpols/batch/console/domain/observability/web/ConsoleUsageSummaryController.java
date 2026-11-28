@@ -1,19 +1,22 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleUsageSummaryResponse;
-import io.github.pinpols.batch.console.domain.observability.service.ConsoleUsageSummaryService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.time.LocalDate;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleUsageSummaryResponse;
+import io.github.pinpols.batch.console.domain.observability.service.ConsoleUsageSummaryService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 
 /** 后端操作使用率查询；结果仅用于趋势观察。 */
 @RestController

@@ -1,14 +1,7 @@
 package io.github.pinpols.batch.trigger.web;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.i18n.BizMessageResolver;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.web.AbstractApiExceptionHandler;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerBusyException;
-import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -17,6 +10,16 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.i18n.BizMessageResolver;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.web.AbstractApiExceptionHandler;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerBusyException;
+
+import jakarta.validation.ConstraintViolationException;
 
 /**
  * Trigger 模块全局异常处理器：继承 {@link AbstractApiExceptionHandler} 取得 Biz / System / 通用异常的统一处理；额外追加 Spring

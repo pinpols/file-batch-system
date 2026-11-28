@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 批次清单。

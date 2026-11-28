@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.common.diagnostics;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.springframework.boot.diagnostics.AbstractFailureAnalyzer;
 import org.springframework.boot.diagnostics.FailureAnalysis;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 把 BFS 生产 fail-close 异常翻译成 Spring Boot 风格的可执行启动诊断。

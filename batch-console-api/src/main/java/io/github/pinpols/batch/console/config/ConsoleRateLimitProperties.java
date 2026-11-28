@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.config;
 
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * 控制台 API 限流配置。

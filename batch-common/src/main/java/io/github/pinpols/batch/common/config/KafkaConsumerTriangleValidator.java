@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.common.config;
 
-import jakarta.annotation.PostConstruct;
 import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+
+import lombok.extern.slf4j.Slf4j;
+
+import jakarta.annotation.PostConstruct;
 
 /**
  * P1-10 启动期 fail-fast 校验 Kafka consumer 三角时序 + 分配策略。

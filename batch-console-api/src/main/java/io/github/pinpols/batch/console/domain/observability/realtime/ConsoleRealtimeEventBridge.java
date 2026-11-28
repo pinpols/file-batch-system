@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
-import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
-import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+
+import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
+import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 
 /**
  * 控制台实时事件桥接器。

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.observability.view.dashboard;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 /** dashboard 单 job + bizDate 的执行进度投影 (job_instance 行级状态 + partition 计数)。 */

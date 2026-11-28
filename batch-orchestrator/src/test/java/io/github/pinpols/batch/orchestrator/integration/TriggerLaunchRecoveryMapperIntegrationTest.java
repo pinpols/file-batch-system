@@ -2,17 +2,11 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryAttemptParam;
-import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryRetryParam;
-import io.github.pinpols.batch.orchestrator.domain.view.TriggerLaunchRecoveryView;
-import io.github.pinpols.batch.orchestrator.mapper.TriggerLaunchRecoveryMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +14,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryAttemptParam;
+import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryRetryParam;
+import io.github.pinpols.batch.orchestrator.domain.view.TriggerLaunchRecoveryView;
+import io.github.pinpols.batch.orchestrator.mapper.TriggerLaunchRecoveryMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * {@link TriggerLaunchRecoveryMapper} 在真实 PostgreSQL 上的幂等登记、到期扫描与状态 CAS 回归。

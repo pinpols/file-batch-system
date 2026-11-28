@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.processes.domain;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Objects;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** 同一次已CLAIM任务的不可变身份；暂存代次的创建与读取必须使用同一身份。 */
 @Builder

@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 final class DispatchChannelConfigSupport {
 

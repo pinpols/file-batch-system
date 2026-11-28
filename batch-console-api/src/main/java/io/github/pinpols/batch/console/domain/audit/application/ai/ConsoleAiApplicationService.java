@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.console.domain.audit.application.ai;
 
-import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
-import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
+import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
+
 import reactor.core.publisher.Mono;
 
 /** 控制台 AI 对话应用服务：基于 Spring AI 的聊天与审计写入数据库。 */

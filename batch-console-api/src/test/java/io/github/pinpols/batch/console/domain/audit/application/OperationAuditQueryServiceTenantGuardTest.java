@@ -6,20 +6,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.common.page.CursorCodec;
-import io.github.pinpols.batch.console.domain.audit.application.contract.query.OperationAuditQueryRequest;
-import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
-import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
-import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQuery;
-import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -27,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +28,22 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.page.CursorCodec;
+import io.github.pinpols.batch.console.domain.audit.application.contract.query.OperationAuditQueryRequest;
+import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
+import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQuery;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 
 /**
  * P0 回归:OperationAuditQueryService 必须经 ConsoleTenantGuard.resolveTenant 解析后下发 mapper, 否则租户用户传

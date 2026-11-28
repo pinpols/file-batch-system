@@ -3,12 +3,13 @@ package io.github.pinpols.batch.console.domain.workflow.infrastructure.excel;
 import static io.github.pinpols.batch.console.domain.workflow.infrastructure.excel.WorkflowExcelColumnMetadata.GUIDE_FALSE;
 import static io.github.pinpols.batch.console.domain.workflow.infrastructure.excel.WorkflowExcelColumnMetadata.GUIDE_TRUE;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * P2-3 god-class-decomposition extract: parser + validator 共享的纯文本归一化助手。

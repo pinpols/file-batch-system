@@ -1,5 +1,18 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+
+import lombok.Builder;
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.ErrorSinkType;
@@ -25,16 +38,6 @@ import io.github.pinpols.batch.worker.imports.domain.ImportBadRecord;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.stage.ImportRuntimeKeys;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import lombok.Builder;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * 导入坏记录治理服务：集中管理跳过策略、阈值判断、坏记录持久化和错误输出汇总。

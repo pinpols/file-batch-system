@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.worker.dispatchs.domain;
 
-import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 
 /** 分发任务执行上下文，贯穿整个 dispatch pipeline 的状态载体。 */
 @Data

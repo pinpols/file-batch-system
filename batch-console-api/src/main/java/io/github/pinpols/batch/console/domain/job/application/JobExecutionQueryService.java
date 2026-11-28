@@ -1,5 +1,19 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PipelineRunStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -16,17 +30,6 @@ import io.github.pinpols.batch.console.domain.job.view.JobExecutionView;
 import io.github.pinpols.batch.console.shared.progress.PipelineStepProgressSnapshot;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.query.TenantScope;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 在租户快照内拼合作业冻结阶段与当前运行尝试进度；未知版本保留已观测阶段，不推测流程图。 */
 @Service

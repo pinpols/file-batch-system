@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.request;
 
+import java.time.LocalDate;
+import java.util.List;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import java.time.LocalDate;
-import java.util.List;
 
 /** 人工文件上传的可选文件组绑定；缺省时维持普通单文件上传语义。 */
 public record ConsoleFileUploadBindingRequest(

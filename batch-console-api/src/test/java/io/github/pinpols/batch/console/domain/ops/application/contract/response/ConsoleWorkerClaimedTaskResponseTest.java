@@ -2,9 +2,10 @@ package io.github.pinpols.batch.console.domain.ops.application.contract.response
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @DisplayName("Console Worker 任务响应对上游新增字段保持最小暴露")
 class ConsoleWorkerClaimedTaskResponseTest {

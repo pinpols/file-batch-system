@@ -3,14 +3,15 @@ package io.github.pinpols.batch.orchestrator.infrastructure.trigger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("Trigger 消费主题与消费组隔离")
 class TriggerLaunchConsumerNamespaceTest {

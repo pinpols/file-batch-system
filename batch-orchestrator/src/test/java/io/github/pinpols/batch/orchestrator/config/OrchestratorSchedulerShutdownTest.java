@@ -2,9 +2,6 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.config.BatchSchedulingProperties;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
@@ -14,6 +11,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,6 +26,10 @@ import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+
+import io.github.pinpols.batch.common.config.BatchSchedulingProperties;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
 
 @DisplayName("Orchestrator专用调度器上下文关闭")
 class OrchestratorSchedulerShutdownTest {

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.ops.query;
 
-import io.github.pinpols.batch.common.model.PageRequest;
 import java.util.List;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.model.PageRequest;
 
 @Data
 public class ApprovalCommandQuery {

@@ -3,17 +3,19 @@ package io.github.pinpols.batch.console.domain.ops.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
-import io.github.pinpols.batch.console.domain.ops.service.ConsoleAtomicTaskTypeSchemaService;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
+import io.github.pinpols.batch.console.domain.ops.service.ConsoleAtomicTaskTypeSchemaService;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("原子任务类型接口:目录查询透传服务层结果, 并以任务类型字段返回")

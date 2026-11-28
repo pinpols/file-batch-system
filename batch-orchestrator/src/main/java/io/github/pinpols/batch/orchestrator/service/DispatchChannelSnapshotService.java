@@ -1,6 +1,19 @@
 package io.github.pinpols.batch.orchestrator.service;
 
+import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.FrozenDispatchChannelSnapshot;
 import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
@@ -12,15 +25,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchChannelSnapshotMapper;
-import java.math.BigDecimal;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /** 按 Job 固定分发通道行，防止后续执行静默读取更新后的配置。 */
 @Service

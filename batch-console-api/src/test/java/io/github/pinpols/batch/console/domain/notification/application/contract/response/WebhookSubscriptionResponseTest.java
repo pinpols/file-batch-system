@@ -2,10 +2,12 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 
 @DisplayName("订阅响应输出: 敏感回调密钥不得随序列化结果外泄")
 class WebhookSubscriptionResponseTest {

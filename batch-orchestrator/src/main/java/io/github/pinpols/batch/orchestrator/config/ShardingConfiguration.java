@@ -1,19 +1,22 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.infrastructure.sharding.RedisShardAssignmentProvider;
-import io.github.pinpols.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
-import io.github.pinpols.batch.orchestrator.infrastructure.sharding.StaticShardAssignmentProvider;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.infrastructure.sharding.RedisShardAssignmentProvider;
+import io.github.pinpols.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
+import io.github.pinpols.batch.orchestrator.infrastructure.sharding.StaticShardAssignmentProvider;
 
 /**
  * Outbox shard 分配源的装配：按 {@link OutboxProperties#getShardingMode()} 选择 {@link

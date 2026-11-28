@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueInsertParam;
 import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueUpdateParam;
 import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueUpsertParam;
 import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
 import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface ResourceQueueMapper {
 

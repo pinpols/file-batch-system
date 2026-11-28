@@ -6,18 +6,21 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import java.io.BufferedWriter;
 import java.io.StringWriter;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 
 /** {@link JsonFormatParser} 单元测试:覆盖根数组、records 信封、单对象、空输入与 null 元素。 */
 @ExtendWith(MockitoExtension.class)

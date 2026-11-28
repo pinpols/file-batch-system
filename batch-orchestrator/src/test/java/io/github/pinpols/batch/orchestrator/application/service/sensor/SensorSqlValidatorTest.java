@@ -3,11 +3,13 @@ package io.github.pinpols.batch.orchestrator.application.service.sensor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 
 @DisplayName("传感查询语句校验器: 语句形态, 模式白名单与禁用函数拦截口径")
 class SensorSqlValidatorTest {

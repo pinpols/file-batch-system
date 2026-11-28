@@ -6,12 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.orchestrator.application.service.dq.DataQualityRuleApplicationService;
-import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
-import io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.Map;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -32,6 +28,13 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.orchestrator.application.service.dq.DataQualityRuleApplicationService;
+import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
+import io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)

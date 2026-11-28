@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.ops.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.HashSet;
@@ -10,10 +9,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 
 @DisplayName("集群诊断终态查询:SQL 中过滤的状态集合须与作业实例生命周期枚举一致, 不得硬编码漂移")
 class ConsoleClusterDiagnosticMapperXmlTest {

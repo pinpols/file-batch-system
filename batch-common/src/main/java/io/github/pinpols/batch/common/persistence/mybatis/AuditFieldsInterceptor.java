@@ -1,13 +1,12 @@
 package io.github.pinpols.batch.common.persistence.mybatis;
 
-import io.github.pinpols.batch.common.logging.StructuredLogField;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.mapping.SqlCommandType;
@@ -16,6 +15,9 @@ import org.apache.ibatis.plugin.Intercepts;
 import org.apache.ibatis.plugin.Invocation;
 import org.apache.ibatis.plugin.Signature;
 import org.slf4j.MDC;
+
+import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 拦截 MyBatis Executor.update,反射写 entity 的审计字段(createdAt / updatedAt / createdBy / updatedBy /

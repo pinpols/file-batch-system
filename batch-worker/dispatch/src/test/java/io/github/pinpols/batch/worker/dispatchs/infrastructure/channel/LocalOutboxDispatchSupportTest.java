@@ -2,17 +2,19 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
-import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 
 @DisplayName("本地出箱分发:沙箱内写出信封与旁挂清单,以及目标目录越出沙箱根时的拒绝")
 class LocalOutboxDispatchSupportTest {

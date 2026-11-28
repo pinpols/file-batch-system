@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
-import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
 import java.util.List;
 import java.util.Optional;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
 
 /**
  * {@code batch.resource_tag} MyBatis 映射（替代原 Spring Data JDBC {@code ConsoleResourceTagRepository}，

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.core.config;
 
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * P2-5 worker 端 Kafka 订阅模式开关（{@code batch.worker.kafka}）。

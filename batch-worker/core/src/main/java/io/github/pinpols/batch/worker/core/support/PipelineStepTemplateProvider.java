@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import java.util.List;
+
+import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 
 /**
  * 四类文件 Worker 的默认步骤模板供给契约，与阶段执行职责分离。

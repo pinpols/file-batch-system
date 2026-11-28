@@ -1,5 +1,18 @@
 package io.github.pinpols.batch.sdk.client;
 
+import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
@@ -11,17 +24,6 @@ import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
 import io.github.pinpols.batch.sdk.wire.RegisterRequest;
-import java.io.IOException;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * SDK 主入口 — 业务方 build + register + start,框架负责后续派单 + claim + report。

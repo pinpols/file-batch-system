@@ -12,19 +12,21 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
-import io.github.pinpols.batch.sdk.client.WorkerIdentity;
-import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.client.WorkerIdentity;
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 
 @DisplayName("HeartbeatScheduler — 心跳报文组装、身份指纹透传与调度生命周期")
 class HeartbeatSchedulerTest {

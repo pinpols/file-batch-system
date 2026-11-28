@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.trigger.mapper;
 
-import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.util.List;
+
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 
 public interface TriggerDefinitionMapper {
 

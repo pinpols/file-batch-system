@@ -1,5 +1,15 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
@@ -10,15 +20,6 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigMatrixRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigMatrixResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigMatrixResponse.JobMatrixRow;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.function.BiFunction;
-import java.util.function.Predicate;
 
 /** 构建只读的跨租户作业配置对照矩阵。 */
 final class TenantConfigMatrixBuilder {

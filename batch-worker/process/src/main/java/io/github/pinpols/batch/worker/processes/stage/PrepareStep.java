@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
-import org.springframework.stereotype.Component;
 
 /** PROCESS PREPARE 阶段:Pre-flight 校验,委托到 plugin.prepare()。 */
 @Component

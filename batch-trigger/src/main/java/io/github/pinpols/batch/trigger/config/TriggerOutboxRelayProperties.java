@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.trigger.config;
 
-import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import jakarta.validation.constraints.AssertTrue;
-import jakarta.validation.constraints.Min;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Min;
 
 /**
  * Trigger outbox relay 调度参数。

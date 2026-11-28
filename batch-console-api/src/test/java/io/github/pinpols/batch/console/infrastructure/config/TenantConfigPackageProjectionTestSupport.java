@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 
 /** 让真实 Mapper 测试复用配置包工作簿的行投影入口。 */
 public final class TenantConfigPackageProjectionTestSupport {

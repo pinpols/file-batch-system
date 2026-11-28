@@ -2,8 +2,6 @@ package io.github.pinpols.batch.console.domain.ops.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog;
-import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog.SdkLanguage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,8 +11,12 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog;
+import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog.SdkLanguage;
 
 /** SDK 运行时可见性 ②:验证 catalog 结构 + 各语言版本对照真实打包元数据(drift-guard)。 */
 @DisplayName("SDK 目录服务:协议版本, 共享常量, 文档索引与五种语言版本均与真实打包元数据对齐")

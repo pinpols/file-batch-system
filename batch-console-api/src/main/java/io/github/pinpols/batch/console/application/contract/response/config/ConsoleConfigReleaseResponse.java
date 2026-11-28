@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 @Builder

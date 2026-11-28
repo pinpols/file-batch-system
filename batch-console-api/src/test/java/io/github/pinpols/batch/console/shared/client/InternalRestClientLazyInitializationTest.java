@@ -4,16 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.console.config.ConsoleAtomicWorkerClientProperties;
-import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
-import io.github.pinpols.batch.console.config.ConsoleTriggerClientProperties;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicWorkerInternalRestClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.client.RestClient;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.console.config.ConsoleAtomicWorkerClientProperties;
+import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
+import io.github.pinpols.batch.console.config.ConsoleTriggerClientProperties;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicWorkerInternalRestClient;
 
 @DisplayName("内部 REST 客户端懒初始化: 随机端口等待与实例复用")
 class InternalRestClientLazyInitializationTest {

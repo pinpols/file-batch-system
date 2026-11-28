@@ -1,8 +1,16 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import java.time.Duration;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
@@ -11,10 +19,6 @@ import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
-import java.time.Duration;
-import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * 企业微信群机器人通知发送器（{@code channelType=WECOM}，平台枚举 WECOM 即企业微信）。

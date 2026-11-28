@@ -5,20 +5,22 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+
 import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleSystemParameterMapper;
 import io.github.pinpols.batch.console.domain.observability.param.ConsoleSystemParameterUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.infrastructure.observability.RedisSystemParameterCacheStore;
-import java.time.Duration;
-import java.util.List;
-import java.util.Optional;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 @SuppressWarnings("unchecked")
 @DisplayName("系统参数服务: 缓存优先读取, 数据库回退与写后清缓存")

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
-import io.github.pinpols.batch.console.shared.view.SimpleOptionView;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.shared.view.SimpleOptionView;
 
 /**
  * console meta 下拉框 (code, label) 查询 (MyBatis,迁移自 ConsoleMetaQueryRepository)。

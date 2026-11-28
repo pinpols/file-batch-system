@@ -5,9 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import io.github.pinpols.batch.console.config.ConsolePushProperties;
-import io.github.pinpols.batch.console.domain.notification.service.JobPushDeliveryService;
 import java.util.function.BooleanSupplier;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +14,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.console.config.ConsolePushProperties;
+import io.github.pinpols.batch.console.domain.notification.service.JobPushDeliveryService;
 
 @DisplayName("持久推送队列轮询的启动与关闭")
 @ExtendWith(MockitoExtension.class)

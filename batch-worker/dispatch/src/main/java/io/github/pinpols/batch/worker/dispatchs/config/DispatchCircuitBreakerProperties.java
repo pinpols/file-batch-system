@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.dispatchs.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** 分发渠道熔断器配置属性。 */
 @Data

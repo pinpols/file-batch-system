@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.internal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Locale;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 

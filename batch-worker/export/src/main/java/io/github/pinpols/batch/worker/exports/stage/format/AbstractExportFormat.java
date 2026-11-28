@@ -1,13 +1,5 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.plugin.ExportDataContext;
-import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
-import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -26,6 +18,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ExportDataContext;
+import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
+import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 
 /**
  * 文本类导出格式的共享执行骨架，统一处理字符集、BOM、换行、字段编码、分片文件和 checkpoint。

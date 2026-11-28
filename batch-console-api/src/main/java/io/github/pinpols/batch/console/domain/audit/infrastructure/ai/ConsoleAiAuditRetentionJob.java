@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.config.ConsoleAiProperties;
-import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -12,9 +7,18 @@ import java.time.ZoneOffset;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
+import org.springframework.stereotype.Component;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 /** 按显式开关清理 AI 审计，默认关闭，避免未完成合规评审时误删证据。 */
 @Component

@@ -2,20 +2,22 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.common.enums.StepInstanceStatus;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.domain.param.CloseRunningPipelineStepsParam;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.StepInstanceStatus;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.param.CloseRunningPipelineStepsParam;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 完整迁移与生产 Mapper：作业终态只收尾同租户未完成的历史 Pipeline 尝试。 */
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)

@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
+import java.util.List;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
@@ -7,11 +15,6 @@ import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyServic
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
 
 /**
  * Workflow 调度运维（Ops-only）：register / unregister / pause / resume 属于 <b>救急修复入口</b>，

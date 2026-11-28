@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.testing;
 
 import java.time.Duration;
-import lombok.Getter;
+
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
+
+import lombok.Getter;
 
 /** 集成测试使用的 MinIO 测试容器封装；通用入口请使用 {@link TestObjectStoreEndpoint}。 */
 public final class MinioObjectStoreContainer extends GenericContainer<MinioObjectStoreContainer>

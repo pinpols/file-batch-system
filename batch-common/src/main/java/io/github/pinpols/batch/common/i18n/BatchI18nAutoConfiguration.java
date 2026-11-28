@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.common.i18n;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -11,6 +11,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.support.ReloadableResourceBundleMessageSource;
 import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.i18n.AcceptHeaderLocaleResolver;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * i18n 基础设施:把 BizException + ResultCode + ResponseFactory 链路上的英文 free text 翻译成 Accept-Language

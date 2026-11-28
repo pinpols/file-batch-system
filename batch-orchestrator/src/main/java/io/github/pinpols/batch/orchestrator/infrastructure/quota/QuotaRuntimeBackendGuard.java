@@ -1,17 +1,21 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
+import java.util.Locale;
+
+import javax.sql.DataSource;
+
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.Ordered;
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
-import java.util.Locale;
-import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.core.Ordered;
-import org.springframework.stereotype.Component;
 
 /** 启动时拒绝未标记的配额运行时存储或连接位置变更。 */
 @Slf4j

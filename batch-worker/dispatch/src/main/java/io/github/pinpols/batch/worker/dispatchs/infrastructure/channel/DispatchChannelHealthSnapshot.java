@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 /** 分发渠道健康状态快照，记录探测时间、连续失败次数及下次探测时间等信息。 */

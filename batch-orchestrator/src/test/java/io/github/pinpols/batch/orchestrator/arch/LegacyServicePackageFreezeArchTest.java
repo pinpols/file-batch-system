@@ -2,14 +2,16 @@ package io.github.pinpols.batch.orchestrator.arch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Set;
+import java.util.TreeSet;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
-import java.util.Set;
-import java.util.TreeSet;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * 旧 {@code orchestrator.service} 包冻结(CONV-20261103-01):新服务进入 {@code application.service.<ctx>},存量随功能改动迁出,

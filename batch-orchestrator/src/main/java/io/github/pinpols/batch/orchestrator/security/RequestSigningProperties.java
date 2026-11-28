@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.security;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * 请求签名校验配置（方案 A，opt-in，默认关）。

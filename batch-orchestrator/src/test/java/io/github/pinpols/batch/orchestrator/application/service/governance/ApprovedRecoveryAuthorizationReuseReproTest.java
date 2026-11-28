@@ -3,6 +3,15 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.enums.CompensationCommandStatus;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -15,13 +24,6 @@ import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
-import java.time.LocalDate;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * WR-04 候选复现尝试（只加测试，不改主代码）：非 DISPATCH 的 UNKNOWN 恢复授权是否缺少绑定根请求的一次性消费。

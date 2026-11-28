@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.domain.job.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.job.param.BatchWindowInsertParam;
 import io.github.pinpols.batch.console.domain.job.param.BatchWindowUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.BatchWindowUpsertParam;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface BatchWindowMapper {
 

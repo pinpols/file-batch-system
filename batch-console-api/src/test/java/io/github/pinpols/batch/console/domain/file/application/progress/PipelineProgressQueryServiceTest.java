@@ -5,20 +5,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.file.infrastructure.query.ConsoleFileQueryService;
-import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.file.infrastructure.query.ConsoleFileQueryService;
+import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 
 @DisplayName("Pipeline完整快照范围与租户授权")
 @ExtendWith(MockitoExtension.class)

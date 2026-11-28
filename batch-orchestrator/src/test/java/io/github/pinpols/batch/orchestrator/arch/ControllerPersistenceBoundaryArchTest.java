@@ -2,11 +2,12 @@ package io.github.pinpols.batch.orchestrator.arch;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /** 确保 HTTP 适配器通过应用用例访问数据，不直接调用持久层。 */
 @DisplayName("Controller 不得直接依赖持久层")

@@ -2,18 +2,20 @@ package io.github.pinpols.batch.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
-import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowGraphValidator;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
+
+import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
+import io.github.pinpols.batch.e2e.support.E2eTestSql;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowGraphValidator;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** ADR-028 S5：ta/tb/tc 多租户 seed 至少覆盖一个 WAIT Sensor workflow。 */
 @E2eSpringBootTest(classes = E2eOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)

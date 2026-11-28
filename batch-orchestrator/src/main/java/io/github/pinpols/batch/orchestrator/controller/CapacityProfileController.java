@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileGroupBy;
-import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileReport;
-import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileService;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileGroupBy;
+import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileReport;
+import io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileService;
 
 /** P2 cost profile 内部只读 API。 */
 @RestController

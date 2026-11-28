@@ -2,10 +2,6 @@ package io.github.pinpols.batch.console.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.sun.source.tree.ClassTree;
-import com.sun.source.tree.Tree;
-import com.sun.source.tree.VariableTree;
-import com.sun.source.util.JavacTask;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -16,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import javax.lang.model.element.Modifier;
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
@@ -23,9 +20,15 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.tree.VariableTree;
+import com.sun.source.util.JavacTask;
 
 /**
  * QF-2 守护测试:全仓扫 {@code new *Query(...)} 调用,字段 ≥ 5 的 record 在调用处出现 ≥ 2 个 {@code null} 占位时

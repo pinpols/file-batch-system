@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
-import io.github.pinpols.batch.common.enums.ShardStrategy;
-import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.util.Map;
+
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.enums.ShardStrategy;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 
 /**
  * 从调用方显式传入的参数中解析分区数，优先级最高。 识别的参数键（按优先级）：{@code partitionCount}、{@code estimatedPartitionCount}、

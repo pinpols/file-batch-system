@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.trigger.service.readiness;
 
+import java.time.Instant;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -9,10 +16,6 @@ import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.service.UpstreamNotReadyException;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import java.time.Instant;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 /**
  * Orchestrator 驱动的 readiness 恢复启动：由原 fire 身份重建 {@link ScheduledTriggerCommand} 并走正常启动链路。

@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.worker.core.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgGiveUpRowParam;
 import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgUpdateGiveUpParam;
 import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgUpdateRetryParam;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxUpsertParam;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /** 平台 PostgreSQL：{@code batch.worker_report_outbox}（ADR-015）。 */
 public interface WorkerReportOutboxPgMapper {

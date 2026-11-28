@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -7,11 +15,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
-import java.time.OffsetDateTime;
-import java.util.UUID;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 /**
  * Worker 生命周期管理器默认实现：封装注册、心跳、状态迁移和关机流程。

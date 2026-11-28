@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
+import lombok.Data;
+
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
 
 @Data
 public class JobBundleCreateRequest {

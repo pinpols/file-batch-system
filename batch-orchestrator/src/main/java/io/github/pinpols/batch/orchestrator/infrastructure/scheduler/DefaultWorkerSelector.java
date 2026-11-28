@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import java.time.Duration;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.ThrottledLogger;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
@@ -16,14 +27,6 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import java.time.Duration;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
-import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
 
 /**
  * Worker 路由选择：从 ONLINE worker 中挑一个承接任务。

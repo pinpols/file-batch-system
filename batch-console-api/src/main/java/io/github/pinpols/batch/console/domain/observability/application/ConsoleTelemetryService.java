@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.observability.application;
 
+import org.springframework.stereotype.Service;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest.Event;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 /** 记录不包含调用方文本的前端事件摘要。 */
 @Service

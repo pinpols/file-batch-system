@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import lombok.RequiredArgsConstructor;
-import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
 /**
  * 文件治理——到达分组管理调度器。

@@ -1,17 +1,5 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.common.constants.WorkerCapabilities;
-import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
-import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
-import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
-import jakarta.annotation.PreDestroy;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -24,7 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.EnvironmentAware;
 import org.springframework.context.event.ContextClosedEvent;
@@ -32,6 +20,22 @@ import org.springframework.context.event.EventListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.constants.WorkerCapabilities;
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
+import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
+import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * Worker 生命周期模板（所有 worker 通用骨架）。

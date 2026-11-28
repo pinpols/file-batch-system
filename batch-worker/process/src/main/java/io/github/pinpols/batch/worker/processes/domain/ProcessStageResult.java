@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.domain;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.i18n.BizExceptionUtils;
 import io.github.pinpols.batch.common.i18n.LocalizedError;

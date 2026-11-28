@@ -1,19 +1,23 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.console.config.ConsolePushProperties;
-import io.github.pinpols.batch.console.domain.notification.service.JobPushDeliveryService;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.console.config.ConsolePushProperties;
+import io.github.pinpols.batch.console.domain.notification.service.JobPushDeliveryService;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 /** 为 Job 终态接收流程中持久化的设备通知意图安排有界投递。 */
 @Slf4j

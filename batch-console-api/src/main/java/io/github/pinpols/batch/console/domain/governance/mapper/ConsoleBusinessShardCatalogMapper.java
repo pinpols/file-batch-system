@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.governance.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.governance.entity.BusinessShardCatalogEntity;
 import io.github.pinpols.batch.console.domain.governance.param.BusinessShardCatalogUpsertParam;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * {@code batch.business_shard_catalog} 管理 mapper(console)。biz 分片目录:登记/列出/删片。

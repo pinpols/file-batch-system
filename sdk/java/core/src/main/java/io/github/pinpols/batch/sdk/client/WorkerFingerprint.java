@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.sdk.client;
 
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 
 /**
  * SDK-P5-3 运行指纹采集 — register 时上报到平台 {@code worker_registry},便于运维定位具体进程实例。

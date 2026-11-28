@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** Worker 注册时上报的执行器能力摘要，供 Console 运维展示；不参与调度决策。 */
 public record WorkerTaskCapabilityDto(

@@ -2,14 +2,15 @@ package io.github.pinpols.batch.console.domain.ops.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility;
-import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.ReasonCode;
-import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.Status;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility;
+import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.ReasonCode;
+import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.Status;
 
 /** SDK 运行时可见性 ①:验证按 sdkVersion 对照平台当前 SDK 主版本算兼容。 */
 @DisplayName("Worker 兼容性评估:按上报版本与平台主版本比较, 判定兼容, 过期, 不支持与未知")

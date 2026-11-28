@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
-import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.spi.task.TaskResult;
 
 /**
  * Atomic worker 失败路径的标准 error code 枚举。

@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
@@ -8,12 +15,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleStatusCatalog;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 
 /** Worker 回报后的终态与活动节点纯决策策略。 */
 final class TaskOutcomeStatePolicy {

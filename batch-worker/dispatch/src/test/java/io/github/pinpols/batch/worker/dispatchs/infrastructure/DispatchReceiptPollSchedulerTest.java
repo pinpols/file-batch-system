@@ -11,13 +11,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
-import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
@@ -27,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +29,15 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
+import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /** 单元测试：{@link DispatchReceiptPollScheduler#poll()} 的互斥与守卫行为。 */
 @DisplayName("回执轮询调度:开关与停机守卫、待轮询行缺失字段的跳过,以及瞬时连通性失败分类")

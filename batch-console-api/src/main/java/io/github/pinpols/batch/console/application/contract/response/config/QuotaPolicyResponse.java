@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
 
 /** 租户配额策略响应。 */
 @Builder

@@ -9,15 +9,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
-import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
-import io.github.pinpols.batch.worker.core.support.WorkerConsumptionControl;
-import io.github.pinpols.batch.worker.core.support.WorkerLoadProvider;
-import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +26,12 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
+import io.github.pinpols.batch.worker.core.support.WorkerConsumptionControl;
+import io.github.pinpols.batch.worker.core.support.WorkerLoadProvider;
+import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 
 /**
  * 守护心跳路径的关键不变量:

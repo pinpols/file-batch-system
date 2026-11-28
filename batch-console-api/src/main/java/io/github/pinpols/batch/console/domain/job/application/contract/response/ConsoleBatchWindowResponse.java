@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
+import java.time.Instant;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
-import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 
 /**
  * 批量窗口响应（BatchWindowMapper 行投影）。

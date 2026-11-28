@@ -1,5 +1,15 @@
 package io.github.pinpols.batch.orchestrator.service;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -8,13 +18,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.domain.view.DispatchSecretBindingView;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 在 launch 时为本实例引用到的 Dispatch 渠道固定密钥版本号，不复制密钥材料。 */
 @Component

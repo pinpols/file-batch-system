@@ -1,5 +1,19 @@
 package io.github.pinpols.batch.e2e.support;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.errors.TopicExistsException;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
@@ -9,18 +23,6 @@ import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.common.errors.TopicExistsException;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 /** 将待处理的 Outbox 记录发布到 Kafka（集成测试会禁用转发调度器）。 */
 @Component

@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.workflow.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowEdgeMapper {
 

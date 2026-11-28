@@ -2,12 +2,15 @@ package io.github.pinpols.batch.common.sql;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import java.util.List;
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
-import net.sf.jsqlparser.statement.Statement;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
+
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
 
 @DisplayName("可读性工厂行为:兼容占位与集合查询标量子句")
 class ReadabilityFactoryBehaviorTest {

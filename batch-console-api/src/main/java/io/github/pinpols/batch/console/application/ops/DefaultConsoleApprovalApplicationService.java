@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+import org.springframework.stereotype.Service;
+
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+
 import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -25,14 +36,6 @@ import io.github.pinpols.batch.console.shared.command.RerunRequest;
 import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
-import org.springframework.stereotype.Service;
 
 /**
  * 审批决策入口：approve 成功后按 {@code actionType} 自动执行下游业务。

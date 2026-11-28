@@ -2,10 +2,12 @@ package io.github.pinpols.batch.console.domain.ops.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
 
 /** 2-B 内置原子四类 schema 静态目录单测 —— 校验四类齐全、必填字段、安全闸不空。 */
 @DisplayName("内置原子任务类型目录:四类齐全, 必填参数与安全闸不空且与执行器契约一致")

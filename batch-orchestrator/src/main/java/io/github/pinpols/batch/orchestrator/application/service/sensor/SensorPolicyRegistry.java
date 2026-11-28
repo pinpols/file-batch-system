@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
-import io.github.pinpols.batch.common.enums.SensorType;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.enums.SensorType;
 
 /**
  * ADR-028 SensorPolicy 路由表。Spring 注入所有 {@link SensorPolicy} bean，构造期按 {@link SensorPolicy#type()} 建

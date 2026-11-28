@@ -3,11 +3,8 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
-import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.UUID;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +13,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(
         classes = BatchConsoleApiApplication.class,

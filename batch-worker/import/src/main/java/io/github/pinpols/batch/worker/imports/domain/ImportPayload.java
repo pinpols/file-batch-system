@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.imports.domain;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * 导入任务的原始业务载荷，从 Kafka 消息或任务 payload 字段反序列化而来。 描述待导入文件的来源（sourceType/sourceRef）、存储位置、格式参数（分隔符、表头行数等）

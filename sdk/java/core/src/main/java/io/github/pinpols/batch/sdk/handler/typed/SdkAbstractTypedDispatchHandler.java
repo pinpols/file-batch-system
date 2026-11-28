@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
+import java.util.List;
+import java.util.Map;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import java.util.List;
-import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * A.2 — typed Dispatch 模板:tenant → external push(DB → HTTP/SFTP),把强类型入参与 ADR-036 Dispatch 模板合流。

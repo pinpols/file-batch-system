@@ -1,12 +1,5 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
-import io.github.pinpols.batch.common.config.BatchProfileSupport;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -14,14 +7,24 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.config.BatchProfileSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 
 /**
  * Atomic worker 启动期 fail-closed 守护:prod profile 下校验 5 类 executor 配置不能"空 = 允许全部"。

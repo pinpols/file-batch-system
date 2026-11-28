@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.common.storage;
 
+import java.util.Locale;
+
+import javax.sql.DataSource;
+
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.Ordered;
+import org.springframework.core.env.Environment;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
@@ -7,13 +18,6 @@ import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
 import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
-import java.util.Locale;
-import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.core.Ordered;
-import org.springframework.core.env.Environment;
 
 /** 服务就绪前拒绝未标记的 S3/文件系统后端及位置变更。 */
 @Slf4j

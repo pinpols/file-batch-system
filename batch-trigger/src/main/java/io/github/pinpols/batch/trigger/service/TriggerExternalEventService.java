@@ -4,6 +4,21 @@ import static io.github.pinpols.batch.trigger.service.TriggerAdmissionRules.CLOS
 import static io.github.pinpols.batch.trigger.service.TriggerAdmissionRules.EXTERNAL_EVENT_IDENTITY_CONFLICT;
 import static io.github.pinpols.batch.trigger.service.TriggerAdmissionRules.REQUEST_BODY_REQUIRED;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Objects;
+
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -22,18 +37,6 @@ import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchInput;
 import io.github.pinpols.batch.trigger.domain.entity.ExternalEventDeliveryEntity;
 import io.github.pinpols.batch.trigger.mapper.ExternalEventDeliveryMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Objects;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /** 外部事件的身份核验、目标冻结和多目标原子接纳。
  *

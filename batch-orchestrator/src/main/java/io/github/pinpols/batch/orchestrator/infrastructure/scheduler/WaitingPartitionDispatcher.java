@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -25,11 +32,6 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * WAITING 分片派发的原子写入单元。

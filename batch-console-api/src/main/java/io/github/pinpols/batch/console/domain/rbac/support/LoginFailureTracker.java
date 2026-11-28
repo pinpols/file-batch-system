@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import java.util.Locale;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 
 /**
  * 登录失败计数器(Redis Sorted Set 滑动窗口)。按<b>账号</b>与<b>IP</b>两个维度分别计数,窗口默认 15 分钟。

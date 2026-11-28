@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.Objects;
 import java.util.Set;
+
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 
 /**
  * {@link HttpAtomicHandler} 的配置。开箱即用的 HTTP 原子执行器调用约束(SSRF 防护 / method 白名单 / 超时 / 响应大小上限)。

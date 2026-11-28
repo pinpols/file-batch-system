@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -18,11 +14,19 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 
 /**
  * 读写分离路由 DataSource，在 {@link AbstractRoutingDataSource} 之上加两层增强：

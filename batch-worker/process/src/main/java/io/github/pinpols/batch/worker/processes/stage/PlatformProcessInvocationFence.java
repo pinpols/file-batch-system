@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import java.util.Map;
+import java.util.function.Supplier;
+
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -11,11 +19,6 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentInvocationIdQuery;
-import java.util.Map;
-import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 将 PROCESS 阶段执行与当前任务及分区调用串行化。

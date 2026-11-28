@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
-import io.github.pinpols.batch.common.exception.SystemException;
-import io.github.pinpols.batch.trigger.domain.TriggerDrainPort;
-import lombok.RequiredArgsConstructor;
 import org.quartz.SchedulerException;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.exception.SystemException;
+import io.github.pinpols.batch.trigger.domain.TriggerDrainPort;
 
 /** 将排水用例适配到 Quartz 生命周期协调器。 */
 @Component

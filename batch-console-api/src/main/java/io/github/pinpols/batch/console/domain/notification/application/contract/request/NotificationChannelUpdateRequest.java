@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.request;
 
+import lombok.Data;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 
 /**
  * 通知渠道更新请求。channelCode 来自路径参数（body 中若携带将被忽略），故不在此 DTO 内。

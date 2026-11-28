@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.time.LocalDate;
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -11,9 +16,6 @@ import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskActiveByAssignedWorkerQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.NodePartitionAssignment;
-import java.time.LocalDate;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 public interface JobTaskMapper {
 

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.kafka;
 
-import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
 
 /**
  * Kafka task 派发消息。

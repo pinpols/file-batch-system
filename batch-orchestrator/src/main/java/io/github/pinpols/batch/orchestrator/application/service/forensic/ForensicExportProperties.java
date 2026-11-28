@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.forensic;
 
-import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 
 /** ADR-022 v0.1 forensic 取证配置。生产建议显式配置 storage-dir。 */
 @Component

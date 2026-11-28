@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.sdk.handler;
 
+import java.util.Map;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
-import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * ADR-036 — SDK 五大业务模板的共同基类,提供模板方法 {@code validate → before → doExecute → after + finally

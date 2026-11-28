@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** ADR-025 §决策 §定期对账 — workflow 静态校验 reconciler 配置。 */
 @Data

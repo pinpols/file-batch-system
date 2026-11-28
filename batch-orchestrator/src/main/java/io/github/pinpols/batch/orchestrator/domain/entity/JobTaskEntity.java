@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
-import io.github.pinpols.batch.common.persistence.Stateful;
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
+import io.github.pinpols.batch.common.persistence.Stateful;
 
 @Data
 @EqualsAndHashCode(callSuper = false)

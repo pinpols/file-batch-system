@@ -9,19 +9,22 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import java.io.BufferedWriter;
 import java.io.StringWriter;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 
 /** {@link FixedWidthFormatParser} 单元测试:覆盖正常行、短行、空行、表头/表尾与字段溢出。 */
 @ExtendWith(MockitoExtension.class)

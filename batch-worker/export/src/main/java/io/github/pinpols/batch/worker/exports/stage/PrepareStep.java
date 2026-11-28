@@ -1,6 +1,16 @@
 package io.github.pinpols.batch.worker.exports.stage;
 
+import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
@@ -18,13 +28,6 @@ import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
 import io.github.pinpols.batch.worker.exports.domain.ExportWorkerType;
 import io.github.pinpols.batch.worker.exports.region.ExportRegionResolver;
-import java.io.IOException;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import org.springframework.stereotype.Component;
 
 /** 导出准备阶段：解析 payload、加载模板配置、确定文件名和对象路径。 */
 @Component

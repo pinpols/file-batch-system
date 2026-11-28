@@ -17,9 +17,6 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.normalize;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.normalizeEnum;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.validation.WorkflowGraphs;
-import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -28,6 +25,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.validation.WorkflowGraphs;
+import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 
 /**
  * ADR-025 §校验项清单 — Excel 导入阶段的纯静态 DAG 拓扑校验。

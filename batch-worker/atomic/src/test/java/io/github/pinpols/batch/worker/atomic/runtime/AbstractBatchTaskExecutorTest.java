@@ -2,18 +2,20 @@ package io.github.pinpols.batch.worker.atomic.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.spi.task.TaskCapability;
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+
+import io.github.pinpols.batch.common.spi.task.TaskCapability;
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
 
 /** {@link AbstractBatchTaskExecutor} 模板方法执行序 + 异常路径 + cleanup 必跑测试。 */
 @DisplayName("原子任务执行器模板方法: 钩子执行顺序与异常路径")

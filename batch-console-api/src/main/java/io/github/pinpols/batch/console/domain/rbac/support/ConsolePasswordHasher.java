@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Preconditions;
-import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
-import org.springframework.stereotype.Component;
 
 /** 控制台密码仅使用 Argon2id（Spring Security 默认参数）。 */
 @Component

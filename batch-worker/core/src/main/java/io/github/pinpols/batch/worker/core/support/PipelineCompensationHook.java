@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
@@ -9,12 +18,6 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepos
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
 
 /**
  * 安全增量补偿(opt-in)统一钩子 —— 照 {@link PipelineVerifierHook} 模式,由 {@link

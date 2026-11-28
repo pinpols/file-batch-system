@@ -1,19 +1,23 @@
 package io.github.pinpols.batch.worker.core.reportoutbox;
 
-import io.github.pinpols.batch.common.config.ApplicationNameProvider;
-import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
-import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
-import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 import java.nio.file.Path;
 import java.util.Locale;
+
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
+import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
+import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 
 /**
  * 拒绝未标记的 Worker 回报 Outbox 启用或停用，以及 PLATFORM_PG/SQLITE 后端切换。

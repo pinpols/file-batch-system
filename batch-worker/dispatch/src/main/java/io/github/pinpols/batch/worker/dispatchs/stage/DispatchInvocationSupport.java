@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -10,7 +12,6 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchC
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import java.util.Map;
 
 /**
  * Dispatch 链路两条 step（{@link DeliverDispatchStep} / {@link RetryDispatchStep}）共用的"执行 dispatch →

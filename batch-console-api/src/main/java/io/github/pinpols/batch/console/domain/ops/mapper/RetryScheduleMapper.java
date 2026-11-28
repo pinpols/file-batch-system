@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
+import java.util.List;
+
 import io.github.pinpols.batch.console.domain.ops.entity.RetryScheduleEntity;
 import io.github.pinpols.batch.console.domain.ops.query.RetryScheduleQuery;
-import java.util.List;
 
 public interface RetryScheduleMapper {
 

@@ -1,12 +1,16 @@
 package io.github.pinpols.batch.orchestrator.application.trigger;
 
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
 /**
  * 周期重投被 Kafka 消费重试耗尽丢弃的启动意图（{@link TriggerLaunchRecoveryService}）。

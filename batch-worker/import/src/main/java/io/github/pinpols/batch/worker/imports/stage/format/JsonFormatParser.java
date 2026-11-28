@@ -1,16 +1,18 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.util.Map;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.util.Map;
 
 /** 将 JSON 载荷（数组、信封对象或单个对象）解析为 NDJSON 记录。 */
 public class JsonFormatParser implements FormatParser {

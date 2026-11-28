@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.stateful;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

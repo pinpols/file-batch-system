@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.model;
 
 import java.util.Set;
+
 import lombok.Data;
 
 @Data

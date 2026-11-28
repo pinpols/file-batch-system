@@ -15,21 +15,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
-import io.github.pinpols.batch.trigger.domain.MisfireHandler;
-import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
-import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
-import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessWaitHandoverClient;
-import io.github.pinpols.batch.trigger.infrastructure.scheduler.TriggerReconciler;
-import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
-import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
-import io.github.pinpols.batch.trigger.service.TriggerService;
-import io.github.pinpols.batch.trigger.service.UpstreamNotReadyException;
-import io.github.pinpols.batch.trigger.support.ReadinessWaitWindow;
-import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,6 +27,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -67,6 +53,22 @@ import org.quartz.TriggerBuilder;
 import org.quartz.TriggerKey;
 import org.quartz.impl.StdSchedulerFactory;
 import org.springframework.scheduling.TaskScheduler;
+
+import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
+import io.github.pinpols.batch.trigger.domain.MisfireHandler;
+import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
+import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
+import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessWaitHandoverClient;
+import io.github.pinpols.batch.trigger.infrastructure.scheduler.TriggerReconciler;
+import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
+import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
+import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.service.UpstreamNotReadyException;
+import io.github.pinpols.batch.trigger.support.ReadinessWaitWindow;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Quartz 调度门面:CRON/FIXED_RATE 注册替换、启停暂停顺序与并发管理保护")

@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.worker.exports.runtime;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.stereotype.Service;
+
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
@@ -8,9 +12,6 @@ import io.github.pinpols.batch.worker.core.support.AbstractTaskConsumer;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.stereotype.Service;
 
 /** 导出任务 Kafka 消费者，监听导出任务 topic 并驱动任务执行。 */
 @Service

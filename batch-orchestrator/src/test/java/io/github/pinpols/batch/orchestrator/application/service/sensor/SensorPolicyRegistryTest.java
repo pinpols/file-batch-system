@@ -3,10 +3,12 @@ package io.github.pinpols.batch.orchestrator.application.service.sensor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.enums.SensorType;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.SensorType;
 
 @DisplayName("传感策略注册表: 类型解析与重复注册拒绝口径")
 class SensorPolicyRegistryTest {

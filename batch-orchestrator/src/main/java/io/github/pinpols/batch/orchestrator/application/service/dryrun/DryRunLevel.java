@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.service.dryrun;
 
-import io.github.pinpols.batch.common.enums.DictEnum;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
+
+import io.github.pinpols.batch.common.enums.DictEnum;
 
 /**
  * ADR-026 dry-run 三层粒度。priority-scope §ADR-026 固化 L1/L2/L3，FULL_SIMULATION 红线不做。

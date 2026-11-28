@@ -2,9 +2,6 @@ package io.github.pinpols.batch.console.domain.job.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.HashSet;
@@ -13,10 +10,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
 
 @DisplayName("作业实例查询语句的状态过滤口径: 各筛选保留自身业务语义的状态集合")
 class JobInstanceMapperXmlTest {

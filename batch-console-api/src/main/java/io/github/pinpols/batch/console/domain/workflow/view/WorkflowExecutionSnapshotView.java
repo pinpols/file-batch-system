@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.workflow.view;
 
 import java.time.Instant;
 import java.time.LocalDate;
+
 import lombok.Data;
 
 /** 仅供运行图投影；原始快照不得直接作为接口响应。 */

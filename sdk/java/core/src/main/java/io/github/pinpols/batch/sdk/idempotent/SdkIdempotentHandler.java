@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.sdk.idempotent;
 
+import java.util.Optional;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
-import java.util.Optional;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * A.3 — 声明式幂等的织入装饰器。包一个被 {@link Idempotent} 标注的 {@link SdkTaskHandler},在 {@code execute} 前后织入去重:命中

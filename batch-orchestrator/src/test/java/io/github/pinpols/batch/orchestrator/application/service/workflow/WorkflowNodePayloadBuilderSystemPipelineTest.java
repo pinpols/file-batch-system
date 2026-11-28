@@ -3,16 +3,18 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.workflow.WorkflowParamResolver;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.mapper.FileRecordLookupMapper;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("Workflow 节点载荷固定系统 Pipeline 身份")
 class WorkflowNodePayloadBuilderSystemPipelineTest {

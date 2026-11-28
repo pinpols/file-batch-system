@@ -2,11 +2,13 @@ package io.github.pinpols.batch.worker.atomic.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.spi.task.TaskResult;
 
 /** {@link AtomicErrorCode} 单测:覆盖三个 fail() 重载的语义。 */
 @DisplayName("原子错误码: 失败结果构造与枚举名稳定性")

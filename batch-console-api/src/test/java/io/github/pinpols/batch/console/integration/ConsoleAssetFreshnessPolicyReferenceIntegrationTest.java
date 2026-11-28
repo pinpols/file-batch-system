@@ -3,6 +3,16 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalTime;
+import java.util.UUID;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
@@ -11,14 +21,6 @@ import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleAssetFres
 import io.github.pinpols.batch.console.domain.governance.param.AssetFreshnessPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.governance.service.ConsoleAssetFreshnessPolicyService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.time.LocalTime;
-import java.util.UUID;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("资产新鲜度策略的 Job 引用与租户完整性")

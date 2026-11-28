@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
-import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import jakarta.validation.constraints.Size;
 
 @Data
 public class TenantConfigPackageExcelApplyRequest {

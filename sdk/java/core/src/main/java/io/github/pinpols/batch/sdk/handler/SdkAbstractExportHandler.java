@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.sdk.handler;
 
+import java.util.Map;
+import java.util.stream.Stream;
+
 import io.github.pinpols.batch.sdk.handler.typed.SdkAbstractTypedExportHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import java.util.Map;
-import java.util.stream.Stream;
 
 /**
  * ADR-036 — Export 模板:tenant → external(tenant DB → file)。

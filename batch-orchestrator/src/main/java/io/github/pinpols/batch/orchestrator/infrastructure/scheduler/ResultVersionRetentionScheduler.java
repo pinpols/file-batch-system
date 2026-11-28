@@ -1,5 +1,15 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -8,14 +18,8 @@ import io.github.pinpols.batch.orchestrator.config.ResultVersionRetentionPropert
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * ADR-017 §GC / 保留策略 — 周期归档过期 SUPERSEDED，并清理已归档的 batch 热表行。

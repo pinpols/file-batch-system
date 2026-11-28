@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.application.contract.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.Set;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
  * 登录 / 换 token 响应。

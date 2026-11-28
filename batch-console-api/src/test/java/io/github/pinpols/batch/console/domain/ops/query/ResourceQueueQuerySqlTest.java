@@ -3,15 +3,17 @@ package io.github.pinpols.batch.console.domain.ops.query;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.model.PageRequest;
 import java.io.InputStream;
 import java.util.Objects;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.model.PageRequest;
 
 @DisplayName("资源队列配置导出与交互分页的真实 Mapper SQL 边界")
 class ResourceQueueQuerySqlTest {

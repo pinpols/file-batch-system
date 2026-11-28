@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
+import java.util.List;
+import java.util.Objects;
+
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
 import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleSchedulerCommandResponse;
@@ -8,11 +16,6 @@ import io.github.pinpols.batch.console.application.contract.response.ops.Console
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantScopeResolver;
-import java.util.List;
-import java.util.Objects;
-import lombok.RequiredArgsConstructor;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Service;
 
 /** Trigger 内部接口代理：读路径统一降级，写路径失败传播，并按当前租户收敛列表。 */
 @Service

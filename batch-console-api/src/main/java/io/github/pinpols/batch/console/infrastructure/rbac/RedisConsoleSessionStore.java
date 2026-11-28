@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.infrastructure.rbac;
 
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionStore;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionStore;
 
 /** Redis 版控制台会话版本存储。 */
 @Component

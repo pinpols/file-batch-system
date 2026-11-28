@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * 控制台登录防暴力破解 / 撞库配置（IP 限流之外的「账号维度失败退避 + risk-based 验证码」两层）。

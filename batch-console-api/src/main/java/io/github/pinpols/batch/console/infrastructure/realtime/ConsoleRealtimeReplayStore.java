@@ -1,5 +1,17 @@
 package io.github.pinpols.batch.console.infrastructure.realtime;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -7,15 +19,6 @@ import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeMetrics;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeStreamEnvelope;
 import io.github.pinpols.batch.console.domain.observability.realtime.RealtimeReplayStore;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisCallback;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor

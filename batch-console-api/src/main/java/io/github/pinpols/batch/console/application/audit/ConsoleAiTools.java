@@ -1,5 +1,11 @@
 package io.github.pinpols.batch.console.application.audit;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -17,10 +23,6 @@ import io.github.pinpols.batch.console.domain.ops.application.contract.response.
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleShedLockStatusResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleTerminalChildrenHealthResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleWorkerConsistencyResponse;
-import java.util.List;
-import java.util.stream.Collectors;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 
 /**
  * Console AI 的只读诊断工具(L3 function-calling):让模型在需要时拉取「实时系统状态」回答, 把「讲概念」升级成「诊断你眼前这次失败」。

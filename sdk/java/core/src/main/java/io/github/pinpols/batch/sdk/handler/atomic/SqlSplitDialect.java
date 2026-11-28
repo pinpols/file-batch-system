@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
-import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -8,7 +7,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Locale;
+
 import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 
 /**
  * {@link SqlAtomicHandler} 切分多语句时采用的词法规则,按连接的 {@link DatabaseMetaData#getDatabaseProductName()} 选择。

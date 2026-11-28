@@ -2,10 +2,11 @@ package io.github.pinpols.batch.console.domain.audit.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.AiPromptCategory;
-import io.github.pinpols.batch.common.enums.AiPromptDecision;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.AiPromptCategory;
+import io.github.pinpols.batch.common.enums.AiPromptDecision;
 
 @DisplayName("提示词准入结果: 放行与拒绝两种构造的字段承载")
 class AiPromptGateResultTest {

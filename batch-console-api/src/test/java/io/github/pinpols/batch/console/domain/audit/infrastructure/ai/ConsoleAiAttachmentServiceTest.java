@@ -10,16 +10,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.console.config.ConsoleAiProperties;
-import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
-import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
-import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
-import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -27,7 +17,9 @@ import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+
 import javax.imageio.ImageIO;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,6 +30,17 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
+import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
+import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
+import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AI 附件服务:图片上传开关、草稿配额与对象加密约束")

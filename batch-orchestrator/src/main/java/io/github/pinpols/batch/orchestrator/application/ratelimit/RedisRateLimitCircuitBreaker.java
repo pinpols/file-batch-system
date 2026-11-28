@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
+import java.time.Duration;
+import java.util.function.Supplier;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.bucket4j.TimeoutException;
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -10,12 +19,6 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.lettuce.core.RedisException;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Duration;
-import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 /**
  * 限流器 Redis 交互的短路熔断器：Redis <b>长时间慢故障</b>下，避免每个 claim/report 请求都阻塞至 {@code requestTimeout}(500ms) 才

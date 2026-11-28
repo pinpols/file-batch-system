@@ -5,13 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
-import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -21,9 +14,19 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
+import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 
 /**
  * 2026-05-01 Fix-2 守护:验证 ParseStep 默认按 PARTITION_NO/COUNT 切分行的零重叠 + 全覆盖语义。

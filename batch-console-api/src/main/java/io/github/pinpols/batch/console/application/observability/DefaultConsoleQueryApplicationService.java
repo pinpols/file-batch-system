@@ -1,5 +1,17 @@
 package io.github.pinpols.batch.console.application.observability;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.Builder;
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
@@ -79,15 +91,6 @@ import io.github.pinpols.batch.console.shared.view.ConsolePendingCatchUpResponse
 import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleTraceTimelineItem;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
-import lombok.Builder;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** {@link ConsoleQueryApplicationService} 的门面实现： 将调用委派给各领域查询子服务（Job / File / Workflow / Ops）。 */
 @Service

@@ -4,14 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.JobType;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.github.pinpols.batch.common.enums.JobType;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("内容校验器注册表:按作业类型与阶段筛选、执行指标记录与异常兜底")
 class ContentVerifierRegistryTest {

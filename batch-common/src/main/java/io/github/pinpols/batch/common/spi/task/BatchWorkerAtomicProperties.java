@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.spi.task;
 
 import java.util.Set;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Worker 进程的 SPI 注册配置 — Phase 5 改造(见 {@code docs/design/task-spi-design.md} §Phase 5)。

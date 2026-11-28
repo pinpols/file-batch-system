@@ -11,11 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
-import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +28,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+
+import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("文件下载控制器: 流式响应与租户参数校验")

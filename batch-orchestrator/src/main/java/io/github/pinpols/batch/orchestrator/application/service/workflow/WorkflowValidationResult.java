@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Map;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * ADR-025 工作流静态校验结果。

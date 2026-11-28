@@ -5,6 +5,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.Map;
+import java.util.Objects;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
 import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
@@ -14,18 +28,6 @@ import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatest
 import io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalView;
 import io.github.pinpols.batch.orchestrator.infrastructure.sensor.FileArrivalSensorPolicy;
 import io.github.pinpols.batch.orchestrator.mapper.SensorFileArrivalMapper;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.util.Map;
-import java.util.Objects;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("文件到达传感策略: 到达命中, 记录缺失与查询异常口径")

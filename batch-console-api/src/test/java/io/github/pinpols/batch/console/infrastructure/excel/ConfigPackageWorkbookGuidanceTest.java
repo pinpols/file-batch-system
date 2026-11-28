@@ -3,6 +3,23 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.poi.ss.SpreadsheetVersion;
+import org.apache.poi.ss.usermodel.DataValidation;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.context.support.StaticMessageSource;
+
 import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.DictEnum;
@@ -18,21 +35,6 @@ import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import org.apache.poi.ss.SpreadsheetVersion;
-import org.apache.poi.ss.usermodel.DataValidation;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.context.support.StaticMessageSource;
 
 /**
  * 配置引导防漂移单测:锁定 {@link ConfigPackageExcelWorkbookWriter} 生成的模板里 ① 新增的「五类Worker示例」「依赖说明」只读 sheet 存在且

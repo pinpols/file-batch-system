@@ -2,16 +2,18 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.mapper.DownstreamAdmissionMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
+
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.mapper.DownstreamAdmissionMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 真 PostgreSQL 验证多渠道准入查询，防止束分发只检查首个目标或发生跨租户误阻断。 */
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)

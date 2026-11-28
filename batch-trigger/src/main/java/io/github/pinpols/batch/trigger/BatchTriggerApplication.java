@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.trigger;
 
-import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -8,6 +7,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 import org.springframework.scheduling.annotation.EnableScheduling;
+
+import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
 
 // 注:trigger.config.ShedLockConfiguration 由 @SpringBootApplication 默认 ComponentScan 自动装配,
 // 无需 @Import。application-local 已 lazy-initialization=false，确保 TriggerOutboxRelay(@PostConstruct)

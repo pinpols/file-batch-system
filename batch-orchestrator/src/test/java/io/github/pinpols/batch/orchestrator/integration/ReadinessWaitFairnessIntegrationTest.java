@@ -6,18 +6,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.application.readiness.ReadinessWaitService;
-import io.github.pinpols.batch.orchestrator.application.readiness.TriggerReadinessRecoveryClient;
-import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessResult;
-import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessService;
-import io.github.pinpols.batch.orchestrator.domain.command.ReadinessWaitHandoverCommand;
-import io.github.pinpols.batch.orchestrator.mapper.ReadinessWaitMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.InputStream;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -33,6 +26,15 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.orchestrator.application.readiness.ReadinessWaitService;
+import io.github.pinpols.batch.orchestrator.application.readiness.TriggerReadinessRecoveryClient;
+import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessResult;
+import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessService;
+import io.github.pinpols.batch.orchestrator.domain.command.ReadinessWaitHandoverCommand;
+import io.github.pinpols.batch.orchestrator.mapper.ReadinessWaitMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("readiness 持久等待: 超过扫描批次后已就绪记录仍可推进")
 class ReadinessWaitFairnessIntegrationTest {

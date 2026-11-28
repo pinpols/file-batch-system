@@ -1,6 +1,16 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+
+import org.springframework.beans.factory.ObjectProvider;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
@@ -25,14 +35,8 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepo
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.micrometer.core.annotation.Timed;
+
 import jakarta.annotation.PostConstruct;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
-import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * worker 链路共用的 pipeline 生命周期模板：按系统目录生成固定步骤 → 创建 pipeline 实例 → 执行各阶段 → 标记实例最终状态。

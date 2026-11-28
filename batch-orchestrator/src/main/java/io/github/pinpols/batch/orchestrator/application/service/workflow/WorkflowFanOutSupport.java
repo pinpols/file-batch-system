@@ -1,13 +1,14 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 
 /**
  * P1 动态 fan-out 的纯函数工具(无状态,可单测)。把"解析 fanOut 配置 / 展开 N 分区 / 给分区注入 item"这三段纯逻辑 从 {@link

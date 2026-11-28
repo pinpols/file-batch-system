@@ -1,13 +1,7 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.micrometer.core.instrument.MeterRegistry;
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
-import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
-import net.javacrumbs.shedlock.core.LockProvider;
-import net.javacrumbs.shedlock.core.LockingTaskExecutor;
-import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -17,6 +11,16 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.micrometer.core.instrument.MeterRegistry;
+
+import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 
 /**
  * ShedLock 共享自动配置：每个模块只要 classpath 含 {@code shedlock-spring} + 容器有 {@link DataSource} bean，就自动获得

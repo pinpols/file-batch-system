@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.request;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * Alertmanager webhook v4 回调 payload 的 typed 契约(不用 Map,遵循本仓 Map-body 契约漂移教训)。

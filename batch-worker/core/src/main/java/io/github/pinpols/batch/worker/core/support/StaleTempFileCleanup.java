@@ -1,20 +1,23 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.common.constants.BatchFileConstants;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.worker.core.config.WorkerTempFileProperties;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
+import io.github.pinpols.batch.worker.core.config.WorkerTempFileProperties;
 
 /**
  * 系统临时文件清理器：在应用启动就绪时执行一次清理，并定期（默认 PT4H）扫描 JVM 临时目录中的过期 {@code

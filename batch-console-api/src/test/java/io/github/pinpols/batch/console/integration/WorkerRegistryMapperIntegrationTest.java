@@ -2,14 +2,9 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerRegistryResponse;
-import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
-import io.github.pinpols.batch.console.domain.ops.query.WorkerRegistryQuery;
-import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.util.List;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -25,6 +20,13 @@ import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerRegistryResponse;
+import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
+import io.github.pinpols.batch.console.domain.ops.query.WorkerRegistryQuery;
+import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @DisplayName("Worker 注册查询：真实 SQL 的租户范围与负载字段映射")
 class WorkerRegistryMapperIntegrationTest {

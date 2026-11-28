@@ -1,20 +1,23 @@
 package io.github.pinpols.batch.console.domain.audit.service;
 
-import io.github.pinpols.batch.common.constants.CommonErrorMessages;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.config.ConsoleAiProperties;
-import io.github.pinpols.batch.console.shared.security.ConsoleCapabilityProvider;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.constants.CommonErrorMessages;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.shared.security.ConsoleCapabilityProvider;
 
 /** 控制台 AI 功能授权：按配置校验当前登录用户/角色是否允许使用 AI 助手。 */
 @Service

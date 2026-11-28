@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.console.shared.command.ConsoleLaunchCommand;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.console.shared.command.ConsoleLaunchCommand;
 
 /** AUTO 首次提交、接续和回查共用的冻结请求载荷。 */
 @Builder

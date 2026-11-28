@@ -9,21 +9,24 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
-import io.github.pinpols.batch.worker.imports.runtime.ImportEventArrivalService;
-import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner;
-import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner.ScanResult;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
+import io.github.pinpols.batch.worker.imports.runtime.ImportEventArrivalService;
+import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner;
+import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner.ScanResult;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)

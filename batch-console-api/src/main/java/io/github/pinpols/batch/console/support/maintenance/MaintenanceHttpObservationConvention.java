@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.console.support.maintenance;
 
-import io.micrometer.common.KeyValues;
 import org.springframework.http.server.observation.DefaultServerRequestObservationConvention;
 import org.springframework.http.server.observation.ServerRequestObservationContext;
 import org.springframework.stereotype.Component;
+
+import io.micrometer.common.KeyValues;
 
 /** 为全部 HTTP 请求提供固定的维护标签集合，防止同名 Prometheus 指标的标签结构冲突。 */
 @Component

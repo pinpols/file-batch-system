@@ -2,12 +2,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.config.MeteredLockProvider;
-import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.redis.BatchRedisNamespaceSerializer;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.Set;
@@ -16,16 +10,26 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.sql.DataSource;
-import net.javacrumbs.shedlock.core.LockConfiguration;
-import net.javacrumbs.shedlock.core.LockProvider;
-import net.javacrumbs.shedlock.core.SimpleLock;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.common.config.MeteredLockProvider;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespaceSerializer;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.SimpleLock;
 
 /**
  * 集成冒烟：确认 ShedLock 在 Flyway 与测试基础设施之后仍可正常装配。

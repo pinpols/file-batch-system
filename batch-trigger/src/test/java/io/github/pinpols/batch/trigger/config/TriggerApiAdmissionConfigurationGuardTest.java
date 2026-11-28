@@ -4,10 +4,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.Mockito.when;
 
-import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+
+import com.zaxxer.hikari.HikariDataSource;
 
 /** 单元测试：入口并发必须给 trigger 后台路径预留平台库连接。 */
 @DisplayName("入口并发准入配置守卫:启动时校验 launch 并发不超连接池预算,且最小并发不大于最大并发")

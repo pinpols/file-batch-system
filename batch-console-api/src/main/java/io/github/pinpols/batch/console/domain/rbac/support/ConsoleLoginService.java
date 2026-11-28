@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
+import java.util.LinkedHashSet;
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Preconditions;
@@ -7,9 +12,6 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.request.
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.LinkedHashSet;
-import java.util.Optional;
-import org.springframework.stereotype.Service;
 
 /**
  * 控制台登录服务：按用户名全局查找账号、校验密码并签发 JWT。

@@ -5,14 +5,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
-import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import io.github.pinpols.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
-import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;
-import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import java.lang.reflect.Method;
 import java.util.List;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +15,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.annotation.Transactional;
+
+import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
+import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 
 /**
  * {@code batch.quota.snapshot.enabled} 开/关态守卫(此前零测试)。

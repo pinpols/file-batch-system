@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * Atomic executor 生产守护配置（{@code batch.worker.executors.guard}）。

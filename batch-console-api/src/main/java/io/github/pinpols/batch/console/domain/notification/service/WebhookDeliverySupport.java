@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
-import java.util.Map;
 
 /** 通知入口共用的渠道投递和模拟 Webhook 映射逻辑。 */
 @SuppressWarnings("java:S2583")

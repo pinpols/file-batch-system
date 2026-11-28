@@ -2,6 +2,7 @@ package io.github.pinpols.batch.sdk.internal;
 
 import java.util.Collection;
 import java.util.Map;
+
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 

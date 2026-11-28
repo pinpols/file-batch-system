@@ -3,9 +3,10 @@ package io.github.pinpols.batch.console.domain.workflow.validation;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.exception.BizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.exception.BizException;
 
 @DisplayName("文件等待渠道输入校验")
 class FileArrivalChannelNodeValidationTest {

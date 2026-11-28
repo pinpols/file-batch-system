@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+
 import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog;
 import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog.ProtocolVersion;
 import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog.SdkDoc;
 import io.github.pinpols.batch.console.domain.ops.dto.SdkCatalog.SdkLanguage;
 import io.github.pinpols.batch.console.domain.ops.dto.SdkPlatformConstants;
-import java.util.List;
-import java.util.Map;
-import org.springframework.stereotype.Service;
 
 /**
  * SDK 目录静态数据源(开发者门户后端,SDK 运行时可见性 ②)。

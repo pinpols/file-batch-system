@@ -3,12 +3,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.outbox.OutboxChildRecordService;
-import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
-import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -20,6 +14,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +24,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.outbox.OutboxChildRecordService;
+import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
+import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @TestPropertySource(

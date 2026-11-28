@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.application.contract.response;
 
-import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import java.time.Instant;
+
+import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 
 /** 公开的租户与分片映射视图。 */
 public record BusinessTenantPlacementResponse(

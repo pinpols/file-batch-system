@@ -1,5 +1,13 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionGlobalQueueBacklogSummaryQuery;
@@ -7,13 +15,9 @@ import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogSta
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
-import java.util.concurrent.atomic.AtomicLong;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * 调度队列积压采样器。

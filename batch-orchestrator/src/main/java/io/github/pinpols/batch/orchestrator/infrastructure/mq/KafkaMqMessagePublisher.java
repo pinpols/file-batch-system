@@ -1,10 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
-import io.github.pinpols.batch.common.mq.MqMessage;
-import io.github.pinpols.batch.common.mq.MqMessagePublisher;
-import io.github.pinpols.batch.common.mq.MqPublishResult;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
+
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.header.Headers;
@@ -12,6 +10,10 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.mq.MqMessage;
+import io.github.pinpols.batch.common.mq.MqMessagePublisher;
+import io.github.pinpols.batch.common.mq.MqPublishResult;
 
 /** Orchestrator MQ 发布适配器；KafkaTemplate 依赖收敛在 infrastructure 层。 */
 @Component("orchestratorMqMessagePublisher")

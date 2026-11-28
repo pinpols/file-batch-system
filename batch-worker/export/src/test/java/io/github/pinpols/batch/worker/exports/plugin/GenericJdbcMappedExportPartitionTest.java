@@ -2,10 +2,11 @@ package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.worker.exports.plugin.GenericJdbcMappedExportDataPlugin.DetailSql;
-import io.github.pinpols.batch.worker.exports.plugin.GenericJdbcMappedExportDataPlugin.PagedQuery;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.exports.plugin.GenericJdbcMappedExportDataPlugin.DetailSql;
+import io.github.pinpols.batch.worker.exports.plugin.GenericJdbcMappedExportDataPlugin.PagedQuery;
 
 @DisplayName("通用 JDBC 映射导出分片谓词单测:单分片不分片与多分片取模谓词语义")
 class GenericJdbcMappedExportPartitionTest {

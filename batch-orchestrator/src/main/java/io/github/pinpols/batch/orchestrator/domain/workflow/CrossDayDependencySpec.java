@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.orchestrator.domain.workflow;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Locale;
 import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * ADR-018 跨批量日依赖单元声明（{@code workflow_node.cross_day_dependencies} JSONB 数组单元素）。

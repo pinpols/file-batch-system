@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.worker.imports.domain;
 
-import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 
 /** 单次导入的阶段文件作用域;运行中持锁,成功收尾删除,失败收尾解锁并保留取证文件。 */
 public final class ImportStagingFiles implements AutoCloseable {

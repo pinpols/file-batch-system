@@ -2,10 +2,6 @@ package io.github.pinpols.batch.sdk.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
-import io.github.pinpols.batch.sdk.dispatcher.WorkerRuntimeState;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,8 +13,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
+import io.github.pinpols.batch.sdk.dispatcher.WorkerRuntimeState;
 
 /**
  * Lane P (drift guard): docs/api/sdk-shared-constants.yaml 必须与 Java 源头集合等值。

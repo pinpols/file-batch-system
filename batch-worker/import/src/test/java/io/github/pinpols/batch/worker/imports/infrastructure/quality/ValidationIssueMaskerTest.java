@@ -2,14 +2,16 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 
 @DisplayName("校验问题掩码单测:未开启掩码时对空问题集合的兜底处理")
 class ValidationIssueMaskerTest {

@@ -3,14 +3,11 @@ package io.github.pinpols.batch.common.rls;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-import io.github.pinpols.batch.common.tenant.routing.BusinessRoutingDataSourceFactory;
-import io.github.pinpols.batch.common.tenant.routing.HashAndSiloPlacementResolver;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.List;
 import java.util.Map;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,6 +17,13 @@ import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+import io.github.pinpols.batch.common.tenant.routing.BusinessRoutingDataSourceFactory;
+import io.github.pinpols.batch.common.tenant.routing.HashAndSiloPlacementResolver;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 /**
  * Phase A · RLS 闭世界守护(closed-world)集成测试。

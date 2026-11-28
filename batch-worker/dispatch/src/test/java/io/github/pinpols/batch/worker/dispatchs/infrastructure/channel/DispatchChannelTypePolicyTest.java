@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.enums.FileChannelType;
 import java.util.HashSet;
 import java.util.Set;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.FileChannelType;
 
 @DisplayName("分发渠道类型策略:允许类型的闭集、归一化、安全画像覆盖度与各类渠道的安全属性")
 class DispatchChannelTypePolicyTest {

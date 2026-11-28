@@ -5,12 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.ApplicationNameProvider;
-import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
-import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
-import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import java.util.Locale;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
@@ -19,6 +17,11 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisConnectionDetails;
 import org.springframework.mock.env.MockEnvironment;
+
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
+import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
+import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 
 @DisplayName("配额运行态后端守卫,验证期望后端的标识解析与未知存储类型的快速失败")
 class QuotaRuntimeBackendGuardTest {

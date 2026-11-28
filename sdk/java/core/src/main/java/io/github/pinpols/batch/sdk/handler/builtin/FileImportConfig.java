@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.sdk.handler.builtin;
 
-import io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedFormat;
 import java.util.List;
+
+import io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedFormat;
 
 /**
  * {@link FileImportHandler} 的开箱即用配置。

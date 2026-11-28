@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -12,10 +11,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 
 @DisplayName("成功实例归档映射器的 XML 配置,验证其可被解析且终态筛选口径正确")
 class SuccessInstanceArchiveMapperXmlTest {

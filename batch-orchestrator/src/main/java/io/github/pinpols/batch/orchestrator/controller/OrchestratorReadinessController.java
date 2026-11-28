@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessResult;
-import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessService;
 import java.time.LocalDate;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessResult;
+import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessService;
 
 /**
  * 上游就绪查询内部接口(ADR-043 依赖感知 fire)。仅供 trigger 内部调用,不对外暴露。

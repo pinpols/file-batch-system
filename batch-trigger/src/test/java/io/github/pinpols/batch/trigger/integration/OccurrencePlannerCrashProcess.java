@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.trigger.integration;
 
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
-import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
-import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,6 +8,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+
 import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
@@ -21,6 +18,11 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
+
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
+import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 
 /** Task/分区状态，再决定是否允许重放。 */
 public final class OccurrencePlannerCrashProcess {

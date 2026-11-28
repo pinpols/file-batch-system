@@ -1,20 +1,24 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
-import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
+
+import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 
 /**
  * P2-3: Redis 缓存 ONLINE worker 列表，避免每秒派发都打 PG。

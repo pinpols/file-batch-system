@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.e2e;
 
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.e2e.apps.E2eExportApplication;
-import io.github.pinpols.batch.worker.core.support.AbstractTaskConsumer;
 import java.util.List;
+
 import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.e2e.apps.E2eExportApplication;
+import io.github.pinpols.batch.worker.core.support.AbstractTaskConsumer;
 
 @E2eSpringBootTest(
         classes = E2eExportApplication.class,

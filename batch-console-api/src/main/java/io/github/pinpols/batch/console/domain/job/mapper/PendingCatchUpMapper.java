@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.console.domain.job.mapper;
 
+import java.util.List;
+
 import io.github.pinpols.batch.console.domain.job.query.PendingCatchUpQuery;
 import io.github.pinpols.batch.console.domain.job.view.PendingCatchUpView;
-import java.util.List;
 
 public interface PendingCatchUpMapper {
 

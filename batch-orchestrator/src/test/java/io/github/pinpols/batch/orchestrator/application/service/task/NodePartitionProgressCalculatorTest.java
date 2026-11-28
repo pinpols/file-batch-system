@@ -2,13 +2,15 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.NodePartitionAssignment;
 import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("节点分区进度计算器: 归属当前节点的分区统计口径")
 class NodePartitionProgressCalculatorTest {

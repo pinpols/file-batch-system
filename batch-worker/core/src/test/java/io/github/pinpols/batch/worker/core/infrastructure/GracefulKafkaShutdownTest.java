@@ -8,14 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.worker.core.config.WorkerGracefulShutdownProperties;
-import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
-import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +17,14 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.core.config.WorkerGracefulShutdownProperties;
+import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
+import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
  * 单元测试：{@link GracefulKafkaShutdown} drain 可观测性指标。

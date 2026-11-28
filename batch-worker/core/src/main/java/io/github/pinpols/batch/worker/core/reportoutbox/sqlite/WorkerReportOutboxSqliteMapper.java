@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.worker.core.reportoutbox.sqlite;
 
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxUpsertParam;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteClaimParam;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteGiveUpParam;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteGiveUpRowParam;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteUpdateRetryParam;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * SQLite 专用（独立 {@link org.mybatis.spring.SqlSessionFactoryBean}），勿放入 {@code

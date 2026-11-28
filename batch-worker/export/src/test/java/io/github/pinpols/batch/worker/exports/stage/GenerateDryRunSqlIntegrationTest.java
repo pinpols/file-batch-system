@@ -4,7 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.postgresql.ds.PGSimpleDataSource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
@@ -21,13 +31,6 @@ import io.github.pinpols.batch.worker.exports.plugin.SqlTemplateExportDataPlugin
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCursorCodec;
 import io.github.pinpols.batch.worker.exports.stage.format.JsonExportFormat;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.postgresql.ds.PGSimpleDataSource;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @DisplayName("导出演练生成阶段的数据库副作用")
 class GenerateDryRunSqlIntegrationTest {

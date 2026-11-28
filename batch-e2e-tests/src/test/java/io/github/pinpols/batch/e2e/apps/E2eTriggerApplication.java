@@ -1,17 +1,7 @@
 package io.github.pinpols.batch.e2e.apps;
 
-import io.github.pinpols.batch.common.config.BatchClockConfig;
-import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
-import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
-import io.github.pinpols.batch.common.config.BatchObjectStoreAutoConfiguration;
-import io.github.pinpols.batch.common.config.S3AutoConfiguration;
-import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
-import io.github.pinpols.batch.e2e.config.E2eKafkaProducerConfiguration;
-import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
-import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
-import io.github.pinpols.batch.e2e.config.E2eShedLockConfiguration;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 import java.util.concurrent.Executor;
+
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
@@ -39,6 +29,18 @@ import org.springframework.context.annotation.Import;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import io.github.pinpols.batch.common.config.BatchClockConfig;
+import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
+import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import io.github.pinpols.batch.common.config.BatchObjectStoreAutoConfiguration;
+import io.github.pinpols.batch.common.config.S3AutoConfiguration;
+import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
+import io.github.pinpols.batch.e2e.config.E2eKafkaProducerConfiguration;
+import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
+import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
+import io.github.pinpols.batch.e2e.config.E2eShedLockConfiguration;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 
 /**
  * ADR-010 Stage 5 trigger-only E2E application context. 与 {@link

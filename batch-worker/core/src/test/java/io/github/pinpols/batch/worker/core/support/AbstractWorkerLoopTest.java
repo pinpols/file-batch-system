@@ -10,14 +10,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
-import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
-import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.time.Clock;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +26,14 @@ import org.mockito.quality.Strictness;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.mock.env.MockEnvironment;
+
+import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
+import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
+import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
+import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 
 /**
  * AbstractWorkerLoop 单元测试： - ensureStarted() 是幂等的（仅注册一次） - 注册信息从 WorkerConfiguration 正确填充 -

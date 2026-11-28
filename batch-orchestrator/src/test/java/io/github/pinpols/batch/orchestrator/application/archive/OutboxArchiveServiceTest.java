@@ -10,11 +10,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.application.archive.OutboxArchiveService.ArchiveBatchResult;
-import io.github.pinpols.batch.orchestrator.config.OutboxArchiveProperties;
-import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Instant;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +22,10 @@ import org.mockito.InOrder;
 import org.mockito.Mockito;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+
+import io.github.pinpols.batch.orchestrator.application.archive.OutboxArchiveService.ArchiveBatchResult;
+import io.github.pinpols.batch.orchestrator.config.OutboxArchiveProperties;
+import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 
 @ExtendWith(OutputCaptureExtension.class)
 @DisplayName("出箱归档服务: 开关短路, 冷热表搬运顺序与保留期口径")

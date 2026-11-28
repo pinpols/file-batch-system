@@ -1,12 +1,16 @@
 package io.github.pinpols.batch.common.rls;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.sql.SQLException;
 import java.util.List;
+
 import javax.sql.DataSource;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 
 /**
  * Phase A · RLS healthcheck — 启动期 + actuator/health 时<b>闭世界</b>确认真实 biz.* 表(+

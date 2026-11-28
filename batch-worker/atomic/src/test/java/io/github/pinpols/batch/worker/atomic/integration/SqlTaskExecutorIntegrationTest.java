@@ -2,18 +2,12 @@ package io.github.pinpols.batch.worker.atomic.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.worker.atomic.BatchWorkerAtomicApplication;
-import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.sql.SqlTaskExecutor;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -24,6 +18,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.atomic.BatchWorkerAtomicApplication;
+import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.sql.SqlTaskExecutor;
 
 /** SqlTaskExecutor 集成测试:打真实 testcontainers PG,跑真 JDBC SELECT(单测是 mock JDBC,本测验真连接 + 真结果集解析)。 */
 @SpringBootTest(

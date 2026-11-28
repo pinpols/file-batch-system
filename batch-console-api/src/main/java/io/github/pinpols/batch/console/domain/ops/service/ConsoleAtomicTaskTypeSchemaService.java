@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.ParamSpec;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.SecurityGate;
-import java.util.List;
-import org.springframework.stereotype.Service;
 
 /**
  * 平台内置原子任务四类(sql / shell / stored_proc / http)的参数 schema + 安全闸静态目录。

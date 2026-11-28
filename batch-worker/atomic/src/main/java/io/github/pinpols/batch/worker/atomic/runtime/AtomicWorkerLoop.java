@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
+import java.util.List;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
@@ -12,9 +17,6 @@ import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupPropertie
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
-import java.util.List;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
 
 /** 专用原子任务 worker 心跳循环。 */
 @Service

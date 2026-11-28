@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigDiffPreviewResponse.ConfigDiffItem;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigDiffPreviewResponse.ConfigImpactItem;
-import java.util.ArrayList;
-import java.util.List;
 
 /** 根据配置差异生成复制前影响提示。 */
 final class TenantConfigCopyImpactAnalyzer {

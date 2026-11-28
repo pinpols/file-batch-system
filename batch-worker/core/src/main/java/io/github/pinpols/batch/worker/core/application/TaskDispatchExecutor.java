@@ -1,5 +1,17 @@
 package io.github.pinpols.batch.worker.core.application;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.BatchMdc;
@@ -11,15 +23,6 @@ import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
 import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionWrapper;
 import io.github.pinpols.batch.worker.core.support.TaskMessageMdc;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * Kafka 消费层与 Worker 执行层之间的粘合：先向 Orchestrator CLAIM 任务所有权， 成功后再执行；CLAIM 失败（如已被其他 worker 抢占）则直接返回

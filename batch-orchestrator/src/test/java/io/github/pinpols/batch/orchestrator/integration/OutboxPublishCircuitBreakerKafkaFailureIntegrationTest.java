@@ -3,22 +3,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
-import io.github.pinpols.batch.common.kafka.BatchEventMessage;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleForwarder;
-import io.github.pinpols.batch.orchestrator.application.engine.ScheduleForwarderResult;
-import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
-import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
-import io.github.pinpols.batch.orchestrator.infrastructure.mq.OutboxPublishCircuitBreaker;
-import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
-import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -27,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.StreamSupport;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -52,6 +37,24 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.test.annotation.DirtiesContext;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.kafka.BatchEventMessage;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleForwarder;
+import io.github.pinpols.batch.orchestrator.application.engine.ScheduleForwarderResult;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
+import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
+import io.github.pinpols.batch.orchestrator.infrastructure.mq.OutboxPublishCircuitBreaker;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
+import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

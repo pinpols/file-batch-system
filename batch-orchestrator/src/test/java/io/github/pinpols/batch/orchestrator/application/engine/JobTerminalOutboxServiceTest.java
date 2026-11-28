@@ -4,15 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
-import io.github.pinpols.batch.common.event.DomainEvent;
-import io.github.pinpols.batch.common.event.DomainEventPublisher;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +17,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.event.DomainEvent;
+import io.github.pinpols.batch.common.event.DomainEventPublisher;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 
 @DisplayName("Job 终态 Outbox:持久快照、独立实体身份与修正事实")
 @ExtendWith(MockitoExtension.class)

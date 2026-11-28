@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.trigger.domain;
 
+import java.time.Instant;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import java.time.Instant;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /** Trigger 排水用例入口，隔离 HTTP 控制器与 Quartz 生命周期协调器。 */
 @Service

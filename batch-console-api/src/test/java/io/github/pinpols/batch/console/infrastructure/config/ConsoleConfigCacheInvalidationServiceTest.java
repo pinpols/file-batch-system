@@ -13,14 +13,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
-import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationIntent;
-import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
-import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.Iterator;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +28,13 @@ import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationIntent;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("配置缓存失效服务: 键删除时机,失效事件发布与游标扫描兜底")

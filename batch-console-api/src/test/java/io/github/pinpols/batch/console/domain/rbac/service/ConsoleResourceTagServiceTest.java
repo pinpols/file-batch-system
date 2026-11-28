@@ -6,18 +6,20 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleResourceTagMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
-import org.mockito.Mockito;
 
 @DisplayName("资源标签服务: 标签查询、写入、删除与资源类型规范化")
 class ConsoleResourceTagServiceTest {

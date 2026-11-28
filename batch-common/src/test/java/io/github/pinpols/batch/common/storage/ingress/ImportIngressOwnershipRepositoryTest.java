@@ -5,13 +5,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper;
 import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper.OwnershipRow;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository.Binding;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository.Scope;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("入口归属仓储的范围与绑定组装")
 class ImportIngressOwnershipRepositoryTest {

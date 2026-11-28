@@ -5,8 +5,6 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +14,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("内部告警入口保留请求字段并委派应用服务")

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.domain.command;
 
 import java.time.LocalDate;
 import java.util.List;
+
 import lombok.Builder;
 
 @Builder

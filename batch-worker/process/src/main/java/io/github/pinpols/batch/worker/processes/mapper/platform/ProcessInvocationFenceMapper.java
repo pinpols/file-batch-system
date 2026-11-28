@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.processes.mapper.platform;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.worker.processes.param.ProcessInvocationFenceRotateCurrentStagingGenerationParam;
 import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentInvocationIdQuery;
 import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentStagingGenerationQuery;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /** PROCESS 调用身份、当前暂存代际和清理围栏的平台库访问。 */
 public interface ProcessInvocationFenceMapper {

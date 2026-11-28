@@ -5,17 +5,20 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
-import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import java.util.List;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
+import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
+import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 
 @DisplayName("维护状态事务：通知只消费已提交的共享状态")
 class MaintenanceStateHolderTransactionTest {

@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.sdk.task;
 
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 
 /** 领取任务载荷中冻结的单个内联结果版本。 */
 public record SdkCrossDayResult(

@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.response;
 
+import java.time.Instant;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
-import java.time.Instant;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
 
 /**
  * 订阅规则行响应（{@code SubscriptionRuleMapper.selectByTenant/selectById} 投影）。

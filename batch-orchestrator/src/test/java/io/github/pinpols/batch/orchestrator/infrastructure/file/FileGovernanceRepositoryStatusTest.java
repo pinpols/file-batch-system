@@ -5,14 +5,15 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
 import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("文件治理仓储:重新派送保留失败态与未回执态")
 class FileGovernanceRepositoryStatusTest {

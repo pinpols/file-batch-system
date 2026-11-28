@@ -3,12 +3,11 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import io.github.pinpols.batch.common.config.ApplicationNameProvider;
-import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
-import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import java.nio.file.Path;
 import java.util.Locale;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
@@ -17,6 +16,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisConnectionDetails;
 import org.springframework.mock.env.MockEnvironment;
+
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
+import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 
 @DisplayName("上报发件箱后端守卫: 禁用态与启用态的后端身份解析")
 class WorkerReportOutboxBackendGuardTest {

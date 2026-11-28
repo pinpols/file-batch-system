@@ -7,11 +7,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.DictEnum;
 import java.util.Locale;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.MessageSource;
+
+import io.github.pinpols.batch.common.enums.DictEnum;
 
 @DisplayName("字典枚举 label 本地化: 消息 key 为空回退硬编码 label，非空走 MessageSource")
 class ConsoleMetaLabelLocalizationTest {

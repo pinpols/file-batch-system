@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 
 /**
  * 验证码 provider 共用的低层工具：SHA-256 / HMAC-SHA256 / hex / 日志净化。

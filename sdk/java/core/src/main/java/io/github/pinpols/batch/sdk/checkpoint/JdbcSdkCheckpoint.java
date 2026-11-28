@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.sdk.checkpoint;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.Map;
 import java.util.Optional;
+
 import javax.sql.DataSource;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 
 /**
  * ADR-037 决策一 / 决策二 — <b>JDBC 同事务断点的默认实现示例(SKELETON)</b>。

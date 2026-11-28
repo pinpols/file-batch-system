@@ -3,14 +3,16 @@ package io.github.pinpols.batch.worker.imports.plugin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.worker.imports.jdbc.ImportLoadStrategy;
 import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /** systemBindings 占位符解析 + 地区(region)默认回退/字典校验。 */
 @DisplayName("通用 JDBC 映射导入加载插件单测:占位符解析,地区回退与冲突列排序语义")

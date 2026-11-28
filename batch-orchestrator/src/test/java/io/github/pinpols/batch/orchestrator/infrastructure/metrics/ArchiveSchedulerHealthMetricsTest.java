@@ -2,11 +2,12 @@ package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("归档调度健康指标 - 注册各调度并记录最近正常返回时间")
 class ArchiveSchedulerHealthMetricsTest {

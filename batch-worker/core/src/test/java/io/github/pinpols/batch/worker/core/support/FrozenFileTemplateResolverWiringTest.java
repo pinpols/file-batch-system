@@ -3,14 +3,10 @@ package io.github.pinpols.batch.worker.core.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
-import io.github.pinpols.batch.common.dto.FrozenFileTemplateSnapshot;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +14,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
+import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import io.github.pinpols.batch.common.dto.FrozenFileTemplateSnapshot;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("冻结模板解析器与平台认证加密组件实际组装")

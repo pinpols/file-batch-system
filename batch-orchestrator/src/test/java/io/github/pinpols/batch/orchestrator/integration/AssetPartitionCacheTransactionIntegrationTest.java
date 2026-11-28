@@ -3,13 +3,6 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
-import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
-import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -19,6 +12,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +21,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
+import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /** 共享资产标识绝不能暴露其他事务无法引用的记录。 */
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)

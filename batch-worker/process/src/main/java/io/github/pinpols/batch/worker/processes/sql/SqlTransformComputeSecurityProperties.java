@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.worker.processes.sql;
 
-import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
+
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 
 /** 配置驱动 SQL 加工的安全边界，绑定前缀 {@code batch.worker.process.sql-transform}。 */
 @Data

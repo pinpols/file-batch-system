@@ -1,7 +1,13 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
+import java.util.Map;
+import java.util.Optional;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -10,9 +16,6 @@ import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.FrozenDispatchChannelResolver;
-import java.util.Map;
-import java.util.Optional;
-import org.springframework.stereotype.Component;
 
 /** 按任务携带的受保护通道配置解析重放安全性。 */
 @Component

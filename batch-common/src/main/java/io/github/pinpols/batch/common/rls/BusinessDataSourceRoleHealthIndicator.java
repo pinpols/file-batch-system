@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.common.rls;
 
 import java.sql.SQLException;
+
 import javax.sql.DataSource;
+
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 

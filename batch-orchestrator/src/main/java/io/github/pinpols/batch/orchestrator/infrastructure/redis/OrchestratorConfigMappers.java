@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.redis;
 
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.orchestrator.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
-import org.springframework.stereotype.Component;
 
 /**
  * Orchestrator 配置缓存使用的 MyBatis 读取端口集合。

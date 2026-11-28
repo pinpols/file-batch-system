@@ -2,23 +2,25 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.domain.query.FileGovernanceOrphanUploadQuery;
-import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
-import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
-import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.query.FileGovernanceOrphanUploadQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
+import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

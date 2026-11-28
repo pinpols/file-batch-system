@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
+import java.util.Map;
+
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
-import java.util.Map;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 /** 根据预估数据量解析分区数。依次尝试：条目数 ÷ 每分区目标条目数、文件大小 ÷ 每分区目标字节数。 所需参数缺失或非正时返回 {@code 0}。 */
 @Component

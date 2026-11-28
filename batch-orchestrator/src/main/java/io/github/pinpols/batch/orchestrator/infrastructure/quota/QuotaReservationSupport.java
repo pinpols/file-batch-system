@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
+import java.util.Optional;
+import java.util.function.Function;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService.QuotaReservationRequest;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.QuotaResetPolicy;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
-import java.util.Optional;
-import java.util.function.Function;
 
 /** 数据库和 Redis 配额预留实现共用的规范化逻辑。 */
 final class QuotaReservationSupport {

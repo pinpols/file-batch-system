@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.router;
 
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.route.WorkerRouter;
 import io.github.pinpols.batch.orchestrator.application.route.WorkerRoutingPolicy;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * 默认 Worker 路由器实现。

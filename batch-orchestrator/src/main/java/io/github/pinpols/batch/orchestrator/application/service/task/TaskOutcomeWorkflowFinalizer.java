@@ -1,5 +1,15 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+
+import org.springframework.stereotype.Component;
+
+import lombok.Builder;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -10,13 +20,6 @@ import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
-import java.time.Instant;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import lombok.Builder;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * 负责 worker outcome 驱动的 workflow_run 状态收口。

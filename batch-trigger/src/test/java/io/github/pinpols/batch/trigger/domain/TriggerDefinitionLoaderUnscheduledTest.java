@@ -6,11 +6,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.trigger.mapper.TriggerDefinitionMapper;
-import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.trigger.mapper.TriggerDefinitionMapper;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 
 @DisplayName("触发器定义加载：调度关闭的周期 Workflow 按租户范围查询")
 class TriggerDefinitionLoaderUnscheduledTest {

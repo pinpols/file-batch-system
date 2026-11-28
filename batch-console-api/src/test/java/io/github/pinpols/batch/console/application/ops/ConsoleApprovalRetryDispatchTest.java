@@ -9,15 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
-import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
-import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
-import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +19,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
+import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
+import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
+import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("任务与分区重放审批按冻结目标派发，非法目标不标记执行完成")

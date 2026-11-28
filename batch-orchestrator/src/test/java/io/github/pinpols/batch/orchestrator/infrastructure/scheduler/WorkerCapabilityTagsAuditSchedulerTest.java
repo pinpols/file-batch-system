@@ -5,19 +5,21 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.config.WorkerCapabilityTagsAuditProperties;
-import io.github.pinpols.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.orchestrator.config.WorkerCapabilityTagsAuditProperties;
+import io.github.pinpols.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("工作节点能力标签审计调度: 停机跳过, 指标归零与不合法标签判定口径")

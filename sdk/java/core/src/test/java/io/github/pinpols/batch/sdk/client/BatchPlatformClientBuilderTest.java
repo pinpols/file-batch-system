@@ -3,11 +3,12 @@ package io.github.pinpols.batch.sdk.client;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /** {@link BatchPlatformClient.Builder} — handler 注册 + 重复 / 空 type fail-fast。 */
 @DisplayName("BatchPlatformClient 构造器 — handler 注册装配,重复或空白任务类型的快速失败")

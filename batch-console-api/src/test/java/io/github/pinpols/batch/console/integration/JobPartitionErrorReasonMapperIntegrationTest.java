@@ -2,21 +2,23 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Date;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.job.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobPartitionQuery;
 import io.github.pinpols.batch.console.domain.job.view.JobPartitionView;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.sql.Date;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 缺口3 mapper IT:FAILED 分区失败原因透出。真实库验证 {@code JobPartitionMapper.selectByQuery} 的 LATERAL JOIN

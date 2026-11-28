@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.domain.scheduling;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -2,14 +2,12 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadFilter;
-import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadRow;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Connection;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -29,6 +27,10 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadFilter;
+import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadRow;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 /** 用真实 PostgreSQL 校验两类持久等待的参数绑定、分页与租户筛选。 */
 @Tag("integration")

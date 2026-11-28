@@ -4,6 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
@@ -15,15 +26,6 @@ import io.github.pinpols.batch.orchestrator.application.service.lineage.LineageE
 import io.github.pinpols.batch.orchestrator.controller.LineageEvidenceController;
 import io.github.pinpols.batch.orchestrator.mapper.LineageEvidenceMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * #744/#745 lineage 证据链的 ARCHIVE 回退真实 PG 护栏（原来只有 mocked-mapper 单测覆盖）。

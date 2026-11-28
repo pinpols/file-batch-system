@@ -1,16 +1,20 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.response;
 
+import java.time.Instant;
+import java.util.Set;
+
+import org.springframework.web.util.HtmlUtils;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.notification.view.NotificationDeliveryLogRow;
-import java.time.Instant;
-import java.util.Set;
-import lombok.Builder;
-import org.springframework.web.util.HtmlUtils;
 
 /**
  * 通知投递日志行响应（{@code NotificationDeliveryLogMapper.selectByTenant} 投影）。

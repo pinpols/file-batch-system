@@ -2,7 +2,6 @@ package io.github.pinpols.batch.common.kafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
@@ -12,8 +11,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 
 /**
  * 守护:Kafka 跨服务事件 payload 的 wire schema 不被静默破坏。

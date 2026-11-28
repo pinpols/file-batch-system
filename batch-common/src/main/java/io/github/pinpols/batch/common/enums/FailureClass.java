@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.common.enums;
 
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * ADR-012 失败分类一等公民。

@@ -1,16 +1,19 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
+import java.util.List;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleAtomicTaskTypeSchemaService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 /**
  * FE 2-B：平台内置原子任务四类(sql / shell / stored_proc / http)的参数 schema + 安全闸,供 console 工作流编辑器渲染节点配置表单。

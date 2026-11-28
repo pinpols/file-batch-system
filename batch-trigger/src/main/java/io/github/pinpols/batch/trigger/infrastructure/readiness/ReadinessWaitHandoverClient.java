@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * readiness 等待移交给 Orchestrator 的客户端。

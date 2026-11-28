@@ -2,9 +2,6 @@ package io.github.pinpols.batch.common.tenant.routing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -12,11 +9,18 @@ import java.sql.Statement;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 
 /**
  * P2 tenant-routing 活体验证:对两片<b>真实 PG 实例</b>跑 {@link HashAndSiloPlacementResolver} + {@link

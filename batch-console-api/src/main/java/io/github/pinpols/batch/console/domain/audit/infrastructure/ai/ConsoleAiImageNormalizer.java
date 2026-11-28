@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -11,9 +8,14 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Objects;
+
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 
 /** 解码受限图片并写入仅含像素的新副本，不保留 EXIF 等元数据。 */
 public final class ConsoleAiImageNormalizer {

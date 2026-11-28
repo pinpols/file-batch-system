@@ -2,7 +2,6 @@ package io.github.pinpols.batch.e2e.support.verifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -12,7 +11,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * 用于 Export 流程 E2E 测试的内容校验器。

@@ -3,11 +3,13 @@ package io.github.pinpols.batch.worker.exports.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @DisplayName("JDBC 映射导出规格解析单测:列缺省推断与显式配置优先级语义")
 class JdbcMappedExportSpecTest {

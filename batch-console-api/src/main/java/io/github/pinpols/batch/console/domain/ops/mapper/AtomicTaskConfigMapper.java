@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import io.github.pinpols.batch.console.domain.ops.param.AtomicTaskConfigCreateParam;
-import java.util.List;
-import org.apache.ibatis.annotations.Param;
 
 /**
  * R3-5 — {@code batch.atomic_task_config}(V165)读写 mapper。

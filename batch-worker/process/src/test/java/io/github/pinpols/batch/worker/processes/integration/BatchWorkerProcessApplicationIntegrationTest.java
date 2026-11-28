@@ -2,14 +2,10 @@ package io.github.pinpols.batch.worker.processes.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
-import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
-import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
-import io.github.pinpols.batch.worker.processes.stage.ProcessInvocationFence;
 import java.util.List;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +17,13 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
+import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
+import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
+import io.github.pinpols.batch.worker.processes.stage.ProcessInvocationFence;
 
 @SpringBootTest(
         classes = BatchWorkerProcessApplication.class,

@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.e2e.config;
 
-import io.github.pinpols.batch.common.config.ShedLockProviderFactory;
 import javax.sql.DataSource;
-import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
-import net.javacrumbs.shedlock.core.LockProvider;
-import net.javacrumbs.shedlock.core.LockingTaskExecutor;
-import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import io.github.pinpols.batch.common.config.ShedLockProviderFactory;
+
+import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 
 /**
  * E2E 显式声明 ShedLock，用于覆盖 orchestrator 的 Redis {@link LockProvider}；须与 {@link

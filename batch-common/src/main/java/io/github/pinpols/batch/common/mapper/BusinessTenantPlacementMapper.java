@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.common.mapper;
 
-import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import java.util.List;
+
+import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 
 /**
  * {@code batch.business_tenant_placement}(platform 库)读 mapper:P2 tenant-routing 表驱动 placement。

@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.web.realtime;
 
-import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -12,6 +8,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 
 @RestController
 @Validated

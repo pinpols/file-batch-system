@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
-import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
-import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 import java.time.OffsetDateTime;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 
 public interface ConsoleAiAuditLogMapper {
 

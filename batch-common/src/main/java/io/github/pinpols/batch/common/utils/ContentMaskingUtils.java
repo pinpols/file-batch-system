@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.common.utils;
 
+import java.util.Locale;
+import java.util.regex.Pattern;
+
+import javax.annotation.Nullable;
+
 import com.fasterxml.jackson.core.exc.StreamConstraintsException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import java.util.Locale;
-import java.util.regex.Pattern;
-import javax.annotation.Nullable;
 
 /**
  * 面向预览、日志、坏件载荷的尽力脱敏，不能替代字段级令牌化；避免长数字串、类邮箱片段原样外露。

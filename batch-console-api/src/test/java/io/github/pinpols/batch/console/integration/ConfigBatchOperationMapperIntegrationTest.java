@@ -3,20 +3,15 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.domain.config.mapper.ConfigBatchOperationMapper;
-import io.github.pinpols.batch.console.domain.config.param.ConfigBatchOperationInsertParam;
-import io.github.pinpols.batch.console.domain.config.param.ConfigBatchTargetReceiptInsertParam;
-import io.github.pinpols.batch.console.domain.config.view.ConfigBatchOperationRow;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -34,6 +29,15 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigBatchOperationMapper;
+import io.github.pinpols.batch.console.domain.config.param.ConfigBatchOperationInsertParam;
+import io.github.pinpols.batch.console.domain.config.param.ConfigBatchTargetReceiptInsertParam;
+import io.github.pinpols.batch.console.domain.config.view.ConfigBatchOperationRow;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 @Testcontainers(disabledWithoutDocker = true)
 @DisplayName("配置批量操作登记及回执：真实数据库事务与租户隔离")

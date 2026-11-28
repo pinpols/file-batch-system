@@ -14,24 +14,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import io.github.pinpols.batch.common.dto.LaunchEnvelope;
-import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
-import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
-import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkPublishingBatchParam;
-import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Timer;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
@@ -39,8 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import net.javacrumbs.shedlock.core.LockConfiguration;
-import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -56,6 +37,28 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+
+import io.github.pinpols.batch.common.dto.LaunchEnvelope;
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkPublishingBatchParam;
+import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 
 /** S3 Stage 2: TriggerOutboxRelay 单测,覆盖空批 / 成功 / 失败 / 反序列化错误 / 已被抢占 5 类路径 + 退避函数。 */
 // LENIENT 保留:setUp() 预置了 resetStalePublishing / countByStatuses / countStalePublishing /

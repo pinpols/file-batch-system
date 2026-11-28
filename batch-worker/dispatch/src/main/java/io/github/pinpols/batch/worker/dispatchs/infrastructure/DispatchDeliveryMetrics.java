@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelCircuitBreaker;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
-import org.springframework.stereotype.Component;
 
 /** 分发投递指标采集，包括熔断器开路数量和各渠道投递结果计数。 */
 @Component

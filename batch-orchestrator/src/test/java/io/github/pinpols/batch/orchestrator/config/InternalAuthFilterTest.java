@@ -9,20 +9,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyCandidate;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
+
 import jakarta.servlet.FilterChain;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
 
 @DisplayName("内部鉴权过滤器,验证接口密钥与内部密钥两条凭据通道的放行与拒绝分流,并核验租户上下文传递,旁路模式及非内部路径直通行为")
 class InternalAuthFilterTest {

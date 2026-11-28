@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.console.support.ratelimit;
 
+import org.springframework.dao.DataAccessException;
+
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
+
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
 
 /** 统一密码登录和 OIDC 登录发起的客户端 IP 限流及 Redis 故障回退语义。 */
 @Slf4j

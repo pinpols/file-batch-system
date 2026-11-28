@@ -2,17 +2,19 @@ package io.github.pinpols.batch.console.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.config.ConsoleReadReplicaProperties;
 import java.beans.PropertyDescriptor;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
+
+import io.github.pinpols.batch.common.config.ConsoleReadReplicaProperties;
 
 /**
  * 钉住 {@code batch.console.read-replica} 的两个绑定方之间的键重叠契约。

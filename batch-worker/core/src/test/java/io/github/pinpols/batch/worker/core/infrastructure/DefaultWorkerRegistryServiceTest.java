@@ -6,12 +6,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
-import io.github.pinpols.batch.worker.core.support.WorkerRegistryClient;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +16,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
+import io.github.pinpols.batch.worker.core.support.WorkerRegistryClient;
 
 /**
  * 守护 DefaultWorkerRegistryService 关键不变量:

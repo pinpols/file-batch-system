@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.response;
 
+import java.time.Instant;
+
+import org.springframework.web.util.HtmlUtils;
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import java.time.Instant;
-import org.springframework.web.util.HtmlUtils;
 
 /** 原事件/目标的恢复元数据,不返回渠道凭据或原始业务载荷。 */
 public record TerminalDeliveryRecoveryResponse(

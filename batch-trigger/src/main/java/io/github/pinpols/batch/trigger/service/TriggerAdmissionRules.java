@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.trigger.service;
 
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.trigger.mapper.TenantStatusMapper;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 触发请求共用的租户准入、排程版本口径及稳定错误身份。
  *

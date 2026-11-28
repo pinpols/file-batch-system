@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.context.RunModeSupport;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.RunMode;
@@ -21,14 +32,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Outbox 写入：把“要派发的任务消息”以统一协议写入数据库到 {@code batch.outbox_event}。

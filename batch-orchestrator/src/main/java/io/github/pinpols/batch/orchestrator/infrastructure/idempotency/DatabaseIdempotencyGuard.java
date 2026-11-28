@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.idempotency;
 
-import io.github.pinpols.batch.common.service.IdempotencyGuard;
-import io.github.pinpols.batch.orchestrator.mapper.IdempotencyRecordMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.service.IdempotencyGuard;
+import io.github.pinpols.batch.orchestrator.mapper.IdempotencyRecordMapper;
 
 /**
  * D-1: 基于 {@code batch.idempotency_record} 表的幂等守卫实现。 利用 PostgreSQL {@code INSERT ... ON CONFLICT DO

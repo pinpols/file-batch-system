@@ -3,11 +3,13 @@ package io.github.pinpols.batch.common.plugin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 
 @DisplayName("Replay 能力声明的覆盖关系与执行约束")
 class ReplayCapabilityDeclarationTest {

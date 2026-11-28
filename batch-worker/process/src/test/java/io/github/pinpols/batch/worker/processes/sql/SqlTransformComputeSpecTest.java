@@ -3,12 +3,15 @@ package io.github.pinpols.batch.worker.processes.sql;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 
 @DisplayName("SQL 转换计算规格解析:嵌套规格、校验规则、保留参数与直接暂存模式等取舍边界")
 class SqlTransformComputeSpecTest {

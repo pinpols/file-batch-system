@@ -1,19 +1,7 @@
 package io.github.pinpols.batch.console.domain.governance.web;
 
-import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.application.contract.response.ArchivePolicyResponse;
-import io.github.pinpols.batch.console.domain.governance.command.ArchivePolicyUpsertCommand;
-import io.github.pinpols.batch.console.domain.governance.service.ConsoleArchivePolicyService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import io.github.pinpols.batch.console.support.web.Idempotent;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +10,22 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.contract.response.ArchivePolicyResponse;
+import io.github.pinpols.batch.console.domain.governance.command.ArchivePolicyUpsertCommand;
+import io.github.pinpols.batch.console.domain.governance.service.ConsoleArchivePolicyService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import io.github.pinpols.batch.console.support.web.Idempotent;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /** 数据归档/清理策略管理：配置各运行态表的保留天数、是否归档、是否清理。 */
 @RestController

@@ -6,13 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
-import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertActionResponse;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +19,12 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertActionResponse;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 /**
  * P2: 验证 @AuditAction 切面在真实 HTTP 调用路径下能成功写入数据库 batch.console_operation_audit。

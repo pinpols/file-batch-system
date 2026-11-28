@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
-import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -9,6 +7,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
+import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 
 /** 将 Job 的阶段业务参数合并到系统 Pipeline 模板，同时禁止覆盖阶段控制流。 */
 final class SystemPipelineStepConfiguration {

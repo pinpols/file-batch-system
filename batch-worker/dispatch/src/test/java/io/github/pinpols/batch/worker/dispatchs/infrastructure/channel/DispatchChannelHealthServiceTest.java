@@ -11,14 +11,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
-import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
-import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -29,6 +21,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +34,16 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @DisplayName("渠道健康服务:上下文关闭后停止探测,以及失败退避直接采用落库返回的失败计数")
 @ExtendWith(OutputCaptureExtension.class)

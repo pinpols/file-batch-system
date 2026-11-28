@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.common.security;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.LinkedHashSet;
 import java.util.List;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * DNS-rebinding 防护：先解析主机名，再校验解析后的 IP 是否落在受限网段。

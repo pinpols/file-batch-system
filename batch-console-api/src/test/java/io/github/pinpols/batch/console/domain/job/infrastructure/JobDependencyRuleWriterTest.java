@@ -6,9 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
-import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,6 +15,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
+import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 
 @DisplayName("作业依赖规则替换：显式空集合清空，缺失集合在任何写入前拒绝")
 @ExtendWith(MockitoExtension.class)

@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
-import io.github.pinpols.batch.common.model.WorkerRouteModel;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.List;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.model.WorkerRouteModel;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 调度计划：{@link SchedulePlanBuilder} 的输出产物，描述本次调度所需的作业元数据、分区列表和 Worker 路由。

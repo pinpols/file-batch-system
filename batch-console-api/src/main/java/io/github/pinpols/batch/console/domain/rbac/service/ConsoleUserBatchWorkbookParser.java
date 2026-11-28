@@ -4,12 +4,12 @@ import static io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBat
 import static io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.MAX_ROWS;
 import static io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.invalid;
 
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -20,6 +20,8 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
 
 /** 解析并校验批量开户工作簿，供预览流程使用。 */
 final class ConsoleUserBatchWorkbookParser {

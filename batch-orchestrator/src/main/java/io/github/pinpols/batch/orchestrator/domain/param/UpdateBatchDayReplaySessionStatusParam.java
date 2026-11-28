@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplaySessionStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+
 import lombok.Getter;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplaySessionStatus;
 
 /** 批次日重放会话状态 CAS 更新参数；必填字段在构造边界校验。 */
 @Getter

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.view;
 
 import java.util.Map;
+
 import lombok.Builder;
 
 @Builder

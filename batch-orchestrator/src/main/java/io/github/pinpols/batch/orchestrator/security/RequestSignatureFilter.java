@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.orchestrator.security;
 
+import java.io.IOException;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -10,16 +19,11 @@ import io.github.pinpols.batch.orchestrator.config.InternalAuthFilter;
 import io.github.pinpols.batch.orchestrator.config.InternalRequestProperties;
 import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier.Result;
 import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier.SignedRequest;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * 请求签名校验过滤器（方案 A，opt-in，order=2 排在 {@link InternalAuthFilter} 之后）。

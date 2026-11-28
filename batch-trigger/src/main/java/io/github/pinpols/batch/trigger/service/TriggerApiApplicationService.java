@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.trigger.service;
 
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -16,8 +20,6 @@ import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUp
 import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpInput;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchInput;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /** Trigger 接口的鉴权、排水、并发准入及用例协调。 */
 @Service

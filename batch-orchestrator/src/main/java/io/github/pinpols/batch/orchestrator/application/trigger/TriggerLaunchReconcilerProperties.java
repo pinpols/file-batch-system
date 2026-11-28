@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.trigger;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /**
  * {@link TriggerRequestLaunchReconciler} 周期回写参数。

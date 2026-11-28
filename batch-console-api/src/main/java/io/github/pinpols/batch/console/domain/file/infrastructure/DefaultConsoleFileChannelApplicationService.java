@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -24,10 +31,6 @@ import io.github.pinpols.batch.console.domain.file.query.FileChannelConfigQuery;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.List;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /** {@link ConsoleFileChannelApplicationService} 的默认实现。 */
 @Service

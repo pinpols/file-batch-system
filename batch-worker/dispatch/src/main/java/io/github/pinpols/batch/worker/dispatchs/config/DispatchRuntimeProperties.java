@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.worker.dispatchs.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import lombok.Data;
 
 /** Dispatch 外部文件通道的运行时保护参数。 */
 @Data

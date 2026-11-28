@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.domain;
 
 import java.time.Instant;
+
 import lombok.Builder;
 
 @Builder

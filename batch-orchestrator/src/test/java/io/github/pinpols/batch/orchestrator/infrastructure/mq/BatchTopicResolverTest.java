@@ -2,14 +2,15 @@ package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.config.MqRoutingProperties;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("消息主题解析器,验证单主题,按租户与按优先级三种路由模式下的主题拼接,缺省回退与非法字符清洗")
 class BatchTopicResolverTest {

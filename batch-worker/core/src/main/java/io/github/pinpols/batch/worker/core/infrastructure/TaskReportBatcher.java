@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -11,6 +9,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 
 /**
  * 调用线程内的有界上报微批：只合并传输，同步等逐项确认，不改变任务执行或 Kafka ACK 边界。

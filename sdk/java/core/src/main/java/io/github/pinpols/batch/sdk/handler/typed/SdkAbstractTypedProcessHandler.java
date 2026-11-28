@@ -1,18 +1,20 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpointState;
-import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
-import io.github.pinpols.batch.sdk.handler.SdkRowResult;
-import io.github.pinpols.batch.sdk.task.SdkTaskContext;
-import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpointState;
+import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
+import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
+import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
 
 /**
  * A.2 — typed Process 模板:tenant → tenant(transform 写回),把强类型入参与 ADR-036 Process 行流模板合流。

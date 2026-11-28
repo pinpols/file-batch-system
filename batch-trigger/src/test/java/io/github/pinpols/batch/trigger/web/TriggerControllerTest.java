@@ -16,6 +16,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
@@ -36,24 +56,6 @@ import io.github.pinpols.batch.trigger.service.TriggerApiApplicationService;
 import io.github.pinpols.batch.trigger.service.TriggerLaunchAdmissionService;
 import io.github.pinpols.batch.trigger.service.TriggerRequestPolicy;
 import io.github.pinpols.batch.trigger.service.TriggerService;
-import java.sql.SQLException;
-import java.time.LocalDate;
-import java.util.List;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
-import org.springframework.jdbc.CannotGetJdbcConnectionException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Trigger REST 入口:启动/启动状态查询/补跑审批的入参校验与请求标识生成")

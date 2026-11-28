@@ -2,21 +2,10 @@ package io.github.pinpols.batch.console.support.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.ApplicationNameProvider;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.logging.BatchMdc;
-import io.github.pinpols.batch.common.logging.StructuredLogField;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +15,21 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.logging.BatchMdc;
+import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletResponse;
 
 @DisplayName("控制台请求上下文过滤器: 租户一致性校验,操作人取值与日志上下文还原")
 class ConsoleRequestContextFilterTest {

@@ -4,17 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
-import io.github.pinpols.batch.trigger.service.TriggerService;
-import io.github.pinpols.batch.trigger.web.TriggerCommandInputMapper;
-import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Locale;
 import java.util.Map;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +20,14 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
+import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.web.TriggerCommandInputMapper;
+import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 
 /**
  * REQUIRES_NEW 事务边界集成测试 — Trigger 去重（ADR-010 异步路径）。

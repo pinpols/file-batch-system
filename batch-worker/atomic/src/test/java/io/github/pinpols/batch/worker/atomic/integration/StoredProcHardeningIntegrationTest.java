@@ -2,19 +2,14 @@ package io.github.pinpols.batch.worker.atomic.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.spi.task.TaskContext;
-import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.worker.atomic.BatchWorkerAtomicApplication;
-import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
-import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcTaskExecutor;
 import java.math.BigInteger;
 import java.sql.Connection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.sql.DataSource;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +22,14 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.atomic.BatchWorkerAtomicApplication;
+import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
+import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcTaskExecutor;
 
 /**
  * StoredProc hardening 的真 testcontainers PG 集成测试 —— 验证只能打真库才能验的行为(单测是 mock JDBC):

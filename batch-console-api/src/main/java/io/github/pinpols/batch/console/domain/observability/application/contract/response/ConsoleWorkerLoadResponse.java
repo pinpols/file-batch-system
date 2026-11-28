@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
+import java.util.List;
+
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ActivePartitionView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.StatusCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.WorkerGroupStatusCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.WorkerLoadView;
-import java.util.List;
 
 /** dashboard worker-load 响应：按状态 / 按 worker 组 / 按 worker 活跃分区数（均为固定字段行）。 */
 public record ConsoleWorkerLoadResponse(

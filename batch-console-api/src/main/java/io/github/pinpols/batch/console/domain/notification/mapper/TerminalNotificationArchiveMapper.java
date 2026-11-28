@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
-import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationArchiveCandidate;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationArchiveCandidate;
 
 /** 终态通知专用归档；不处理非终态订阅投递或其他业务审计。 */
 public interface TerminalNotificationArchiveMapper {

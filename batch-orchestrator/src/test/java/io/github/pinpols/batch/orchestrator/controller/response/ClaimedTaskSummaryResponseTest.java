@@ -2,10 +2,12 @@ package io.github.pinpols.batch.orchestrator.controller.response;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 
 @DisplayName("Worker 已认领任务响应只返回安全摘要")
 class ClaimedTaskSummaryResponseTest {

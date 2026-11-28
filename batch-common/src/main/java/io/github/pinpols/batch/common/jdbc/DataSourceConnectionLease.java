@@ -2,7 +2,9 @@ package io.github.pinpols.batch.common.jdbc;
 
 import java.sql.Connection;
 import java.util.Objects;
+
 import javax.sql.DataSource;
+
 import org.springframework.jdbc.datasource.DataSourceUtils;
 
 /** Spring 管理的 DataSource 连接的 AutoCloseable 包装器。 */

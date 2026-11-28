@@ -2,11 +2,14 @@ package io.github.pinpols.batch.orchestrator.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipRow;
 import java.time.LocalDate;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipRow;
 
 @DisplayName("等待关系快照的安全投影")
 class WaitRelationshipSanitizerTest {

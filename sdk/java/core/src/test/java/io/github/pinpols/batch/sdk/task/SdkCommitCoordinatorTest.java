@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.pinpols.batch.sdk.checkpoint.InMemorySdkCheckpoint;
-import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpointState;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.sdk.checkpoint.InMemorySdkCheckpoint;
+import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpointState;
 
 /** ADR-037 决策二 + 决策三 — 三合一 commit 原子性 / 限流上报 / 取消安全点单测。 */
 @DisplayName("SdkCommitCoordinator — 断点提交原子性、上报限流与取消安全点")

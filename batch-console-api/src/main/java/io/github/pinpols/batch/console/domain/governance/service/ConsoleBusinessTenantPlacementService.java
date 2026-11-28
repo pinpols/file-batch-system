@@ -1,5 +1,14 @@
 package io.github.pinpols.batch.console.domain.governance.service;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -9,12 +18,6 @@ import io.github.pinpols.batch.console.domain.governance.command.BusinessTenantP
 import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleBusinessShardCatalogMapper;
 import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleBusinessTenantPlacementMapper;
 import io.github.pinpols.batch.console.domain.governance.param.BusinessTenantPlacementUpsertParam;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * biz 租户分片 placement 管理(P2 tenant-routing 表驱动)。平台 ROLE_ADMIN 跨租维护: 列出全量映射、指派/迁片、取消指派(回退 hash)。

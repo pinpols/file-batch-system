@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.support.cache;
 
-import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * Redis 键集合操作通用工具:抽走 console-api 内重复的 SCAN-based 模式删除样板 （{@link ConsoleQueryCacheService} 与 {@link

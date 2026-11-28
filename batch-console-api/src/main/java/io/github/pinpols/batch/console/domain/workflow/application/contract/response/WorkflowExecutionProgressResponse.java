@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.workflow.application.contract.res
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+
 import lombok.Builder;
 
 /** 运行冻结图和实际进度；任务数仅表示已生成任务，不能用作全部未来工作量。 */

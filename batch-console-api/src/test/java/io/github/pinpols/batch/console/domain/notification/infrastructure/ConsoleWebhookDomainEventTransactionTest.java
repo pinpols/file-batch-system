@@ -5,12 +5,9 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
-import io.github.pinpols.batch.console.domain.notification.service.SubscriptionRuleWebhookDispatcher;
-import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
-import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 import java.time.Instant;
 import java.util.concurrent.Executor;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -24,6 +21,11 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.DefaultTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
+import io.github.pinpols.batch.console.domain.notification.service.SubscriptionRuleWebhookDispatcher;
+import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
+import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 
 @DisplayName("领域事件的事务边界: 仅提交后分发, 回滚事件被丢弃")
 class ConsoleWebhookDomainEventTransactionTest {

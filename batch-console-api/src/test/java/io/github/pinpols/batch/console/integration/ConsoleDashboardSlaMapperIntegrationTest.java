@@ -2,6 +2,18 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
+
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleSlaReportResponse;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleDashboardQueryMapper;
@@ -10,16 +22,6 @@ import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaJo
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaReportView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaStatsView;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("Dashboard SLA 报表:终态缺失完成时间不能被计为按时")

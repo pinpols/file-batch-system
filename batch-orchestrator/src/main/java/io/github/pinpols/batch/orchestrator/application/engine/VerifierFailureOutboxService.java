@@ -1,5 +1,16 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
@@ -7,14 +18,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.VerifierFailure;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * ADR-030 §F：把 worker 上报的 ContentVerifier 失败转成 outbox 事件，与 task SUCCESS 同事务写入。

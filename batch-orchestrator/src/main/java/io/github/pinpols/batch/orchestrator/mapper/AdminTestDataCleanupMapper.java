@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
 
 /** 管理员测试数据清理 Mapper。删除目标由枚举封闭，不接受动态表名。 */

@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.dataquality;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualitySqlRuleProbe;
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSqlValidator;
-import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualitySqlRuleProbe;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSqlValidator;
+import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 
 /** JDBC 版 DQ SQL 规则执行器。 */
 @Component

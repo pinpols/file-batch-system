@@ -5,16 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
-import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
-import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +18,16 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
+import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(classes = E2eOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(ApprovalSourceReconciliationE2eIT.InternalSecurity.class)

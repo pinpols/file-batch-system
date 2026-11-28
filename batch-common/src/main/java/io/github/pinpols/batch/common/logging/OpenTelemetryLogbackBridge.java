@@ -2,12 +2,14 @@ package io.github.pinpols.batch.common.logging;
 
 import static org.slf4j.Logger.ROOT_LOGGER_NAME;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.LoggerContext;
+import org.slf4j.LoggerFactory;
+
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.instrumentation.api.config.IncludeExclude;
 import io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender;
-import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 
 /** 将 Logback 事件桥接到 Spring Boot 管理的 OpenTelemetry LoggerProvider。 */
 public final class OpenTelemetryLogbackBridge implements AutoCloseable {

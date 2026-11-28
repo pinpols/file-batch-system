@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.util.List;
+
 import io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.EventOutboxRetryQuery;
-import java.util.List;
 
 public interface EventOutboxRetryMapper {
 

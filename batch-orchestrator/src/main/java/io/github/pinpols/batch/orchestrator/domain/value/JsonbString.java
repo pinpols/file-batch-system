@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.orchestrator.domain.value;
 
+import java.util.Objects;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonRawValue;
 import com.fasterxml.jackson.annotation.JsonValue;
-import java.util.Objects;
 
 public final class JsonbString {
 

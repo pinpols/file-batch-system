@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.service;
 
-import io.github.pinpols.batch.orchestrator.service.BatchDayOperationService.BatchDayOperation;
 import java.time.LocalDate;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.orchestrator.service.BatchDayOperationService.BatchDayOperation;
 
 @Builder
 public record BatchDayOperateCommand(

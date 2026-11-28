@@ -3,20 +3,23 @@ package io.github.pinpols.batch.worker.imports.stage.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import java.io.BufferedWriter;
 import java.io.StringWriter;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 
 /** {@link DelimitedFormatParser} 单元测试:聚焦无表头时按 field_mappings 顺序位置绑定(及历史 schema 回退)。 */
 @ExtendWith(MockitoExtension.class)

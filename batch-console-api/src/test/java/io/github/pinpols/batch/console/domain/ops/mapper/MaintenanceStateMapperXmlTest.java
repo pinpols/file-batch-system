@@ -2,12 +2,14 @@ package io.github.pinpols.batch.console.domain.ops.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.ops.entity.MaintenanceStateEntity;
 import java.io.InputStream;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.domain.ops.entity.MaintenanceStateEntity;
 
 @DisplayName("维护状态 Mapper 启动解析")
 class MaintenanceStateMapperXmlTest {

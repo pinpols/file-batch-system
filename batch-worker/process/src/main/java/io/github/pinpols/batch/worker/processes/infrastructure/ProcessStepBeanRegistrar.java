@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.worker.processes.infrastructure;
 
+import java.util.List;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+
 import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
 import io.github.pinpols.batch.worker.core.support.AbstractStepBeanRegistrar;
 import io.github.pinpols.batch.worker.processes.domain.ProcessWorkerType;
 import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
 import io.github.pinpols.batch.worker.processes.stage.ProcessStageStep;
-import java.util.List;
-import org.springframework.context.ApplicationContext;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Process worker 启动后把 stage step 与 compute plugin 登记到 {@code batch.step_registry}，供 console-api 上传

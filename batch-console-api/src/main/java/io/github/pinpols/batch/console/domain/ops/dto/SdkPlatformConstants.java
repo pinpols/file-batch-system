@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.domain.ops.dto;
 
-import io.github.pinpols.batch.common.dto.SdkProtocolVersions;
 import java.util.List;
+
+import io.github.pinpols.batch.common.dto.SdkProtocolVersions;
 
 /**
  * 平台 SDK / 协议常量在 console-api 的只读镜像(SDK 运行时可见性后端支撑)。

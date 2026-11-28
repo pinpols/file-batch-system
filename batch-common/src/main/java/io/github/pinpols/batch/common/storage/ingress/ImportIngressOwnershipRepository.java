@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.common.storage.ingress;
 
-import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper;
-import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper.OwnershipRow;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Repository;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper;
+import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper.OwnershipRow;
 
 /** 从平台库读取 Import 与对象对账共同使用的入口归属声明。 */
 @Repository

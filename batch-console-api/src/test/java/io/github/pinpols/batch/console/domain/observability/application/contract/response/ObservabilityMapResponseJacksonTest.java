@@ -2,21 +2,24 @@ package io.github.pinpols.batch.console.domain.observability.application.contrac
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayStatusCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ExecutionProgressView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.JobStatsView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaComplianceView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaDayView;
 import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * wire 红线守护：observability 域类型化 response record 的 JSON key 必须与历史 Map 响应逐字一致。 覆盖动态维度键映射 （byStatus

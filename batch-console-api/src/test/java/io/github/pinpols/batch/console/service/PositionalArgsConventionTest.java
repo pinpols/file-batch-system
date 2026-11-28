@@ -2,16 +2,6 @@ package io.github.pinpols.batch.console.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.sun.source.tree.ClassTree;
-import com.sun.source.tree.LambdaExpressionTree;
-import com.sun.source.tree.MethodInvocationTree;
-import com.sun.source.tree.NewClassTree;
-import com.sun.source.tree.ReturnTree;
-import com.sun.source.tree.Tree;
-import com.sun.source.util.JavacTask;
-import com.sun.source.util.TreePathScanner;
-import com.sun.source.util.TreeScanner;
-import com.sun.source.util.Trees;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -25,13 +15,26 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.LambdaExpressionTree;
+import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.ReturnTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.util.JavacTask;
+import com.sun.source.util.TreePathScanner;
+import com.sun.source.util.TreeScanner;
+import com.sun.source.util.Trees;
 
 /**
  * 守护测试：docs/agent-baseline.md §方法参数约束 "调用方约束" 子节落地。

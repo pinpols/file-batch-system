@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.domain.param;
 
 import java.time.Instant;
 import java.util.Objects;
+
 import lombok.Builder;
 
 /** 基于数据库当前尝试次数原子计算重试状态及退避的参数。 */

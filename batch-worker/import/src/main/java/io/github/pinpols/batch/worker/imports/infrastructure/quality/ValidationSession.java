@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
-import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
-import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 
 @Builder
 public record ValidationSession(

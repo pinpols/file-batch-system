@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.trigger.service;
 
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /** Trigger 请求授权策略，保证外部事件密钥只能访问其授权租户和事件源。 */
 @Service

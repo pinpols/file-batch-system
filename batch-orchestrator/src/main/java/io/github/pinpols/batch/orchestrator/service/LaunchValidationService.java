@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.service;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
@@ -7,7 +9,6 @@ import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
-import java.util.Map;
 
 /**
  * 校验启动请求并加载所需定义，所有操作只读、无需事务。 从 {@link DefaultLaunchService} 中拆分以隔离校验关注点。

@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.worker.exports.stage;
 
+import java.util.Map;
+
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
-import java.util.Map;
 
 /** 导出产物归属于一个 Job 实例；同实例重领复用，新实例不能借用旧运行的对象。 */
 final class ExportArtifactIdentity {

@@ -1,9 +1,17 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
@@ -18,11 +26,6 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.ChannelConfigMerg
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.FrozenDispatchChannelResolver;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import org.springframework.stereotype.Component;
 
 /**
  * Dispatch pipeline 的 PREPARE 阶段：解析 payload，加载文件记录和渠道配置，初始化执行上下文。

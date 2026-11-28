@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.trigger.support;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Arrays;
 import java.util.List;
+
 import lombok.Data;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 触发器描述符，承载调度器注册一个触发器所需的全部配置信息。 由 {@link

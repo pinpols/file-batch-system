@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.e2e.config;
 
-import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 import javax.sql.DataSource;
+
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -10,6 +10,8 @@ import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+
+import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 
 /**
  * E2E 业务库连接配置。

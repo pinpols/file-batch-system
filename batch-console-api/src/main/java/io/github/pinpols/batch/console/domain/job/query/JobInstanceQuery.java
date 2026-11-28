@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.console.domain.job.query;
 
-import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+
 import lombok.Builder;
+
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 @Builder
 public record JobInstanceQuery(

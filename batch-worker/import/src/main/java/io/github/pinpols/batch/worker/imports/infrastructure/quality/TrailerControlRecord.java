@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.regex.Pattern;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * ADR-041 Phase1.1:从文件 trailer 行 + {@code trailer_template} 抽出上游声明的记录数 / 控制总额。纯函数,可独立单测。

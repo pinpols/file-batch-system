@@ -2,14 +2,16 @@ package io.github.pinpols.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 
 @DisplayName("流水线步骤流转支持: 下一步解析与流转次数上限")
 class PipelineStepFlowSupportTest {

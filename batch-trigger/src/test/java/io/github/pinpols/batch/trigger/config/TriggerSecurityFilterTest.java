@@ -7,13 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
-import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.Optional;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +16,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
+import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * S5-c 守护测试:验证 trigger 模块 {@code X-Internal-Secret} 鉴权过滤器在 4 类边界条件上行为正确。

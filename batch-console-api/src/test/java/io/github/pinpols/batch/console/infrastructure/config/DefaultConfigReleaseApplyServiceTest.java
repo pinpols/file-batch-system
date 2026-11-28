@@ -8,17 +8,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 import io.github.pinpols.batch.console.domain.config.entity.ConfigReleaseEntity;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 @DisplayName("配置发布单应用服务: 严格上送,载荷校验与类型别名规范化")
 class DefaultConfigReleaseApplyServiceTest {

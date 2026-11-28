@@ -6,15 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.mq.MqMessage;
-import io.github.pinpols.batch.common.mq.MqMessagePublisher;
-import io.github.pinpols.batch.common.mq.MqPublishResult;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CompletableFuture;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +16,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.mq.MqMessage;
+import io.github.pinpols.batch.common.mq.MqMessagePublisher;
+import io.github.pinpols.batch.common.mq.MqPublishResult;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("死信发布器: 消息封装, 错误截断与超时失败的可观测性")

@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
-import io.github.pinpols.batch.trigger.support.ScheduledFireTimeSource;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+
 import org.quartz.Trigger;
 import org.springframework.stereotype.Component;
+
+import io.github.pinpols.batch.trigger.support.ScheduledFireTimeSource;
 
 /** 在指定时间区间内有界枚举计划触发时刻，拒绝不前进的时间源及超量计划。 */
 @Component

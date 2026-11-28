@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
+import java.util.Map;
+import java.util.Optional;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpoint;
 import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpointState;
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import java.util.Map;
-import java.util.Optional;
 
 /** 类型化行流模板共用的参数、检查点和输出处理逻辑。 */
 abstract class SdkAbstractTypedRowStreamHandler<I, O, R> extends SdkAbstractTaskHandler {

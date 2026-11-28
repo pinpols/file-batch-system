@@ -2,6 +2,11 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.enums.FileAuditOperationType;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
@@ -18,9 +23,6 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import org.springframework.stereotype.Component;
 
 /** 分发完成阶段：汇总回执状态并写入审计日志，作为整个分发 pipeline 的终态步骤。 */
 @Component

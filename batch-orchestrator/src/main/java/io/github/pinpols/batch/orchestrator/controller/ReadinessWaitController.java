@@ -1,17 +1,20 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.orchestrator.application.readiness.ReadinessWaitService;
-import io.github.pinpols.batch.orchestrator.domain.command.ReadinessWaitHandoverCommand;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import io.github.pinpols.batch.orchestrator.application.readiness.ReadinessWaitService;
+import io.github.pinpols.batch.orchestrator.domain.command.ReadinessWaitHandoverCommand;
 
 /**
  * Trigger → Orchestrator 的 readiness 等待移交入口（{@code X-Internal-Secret} 保护）。

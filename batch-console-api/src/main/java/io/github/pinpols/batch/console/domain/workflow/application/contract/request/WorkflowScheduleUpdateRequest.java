@@ -1,15 +1,19 @@
 package io.github.pinpols.batch.console.domain.workflow.application.contract.request;
 
+import java.time.ZoneId;
+
+import org.springframework.scheduling.support.CronExpression;
+
+import lombok.Data;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.time.ZoneId;
-import lombok.Data;
-import org.springframework.scheduling.support.CronExpression;
 
 /** 更新 Workflow 自有调度配置时，使用定义版本进行乐观锁校验。 */
 @Data

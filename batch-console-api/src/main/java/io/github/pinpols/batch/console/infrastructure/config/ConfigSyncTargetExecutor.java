@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
 import io.github.pinpols.batch.console.domain.config.mapper.ConfigSyncTargetReceiptMapper;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 配置同步专用的目标提交边界；原批量初始化入口不承担同步审计职责。 */
 @Component

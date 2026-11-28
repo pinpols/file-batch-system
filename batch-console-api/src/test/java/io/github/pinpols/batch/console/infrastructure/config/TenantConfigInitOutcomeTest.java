@@ -13,16 +13,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
-import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
-import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
-import io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleTenantConfigInitApplicationService.StrictBundleAbortedException;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +26,15 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.TransactionSystemException;
+
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
+import io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleTenantConfigInitApplicationService.StrictBundleAbortedException;
 
 /** 区分已知回滚与未知提交结果，避免把已生效配置报告为可安全重试的失败。 */
 @DisplayName("租户配置批量初始化的事务结果边界")

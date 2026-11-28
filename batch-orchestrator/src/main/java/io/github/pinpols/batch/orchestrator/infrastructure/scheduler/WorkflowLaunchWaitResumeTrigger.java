@@ -1,21 +1,24 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyValues;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
-import io.github.pinpols.batch.orchestrator.config.OrchestratorAsyncConfiguration;
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
+import io.github.pinpols.batch.orchestrator.config.OrchestratorAsyncConfiguration;
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 
 /**
  * 根运行离开 CREATED/RUNNING 并提交后，立刻补满该租户当前空闲的 launch-wait 槽位。

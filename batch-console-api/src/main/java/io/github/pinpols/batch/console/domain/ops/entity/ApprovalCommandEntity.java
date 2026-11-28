@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.entity;
 
 import java.time.OffsetDateTime;
+
 import lombok.Data;
 
 @Data

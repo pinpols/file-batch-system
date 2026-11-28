@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowEdgeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
@@ -8,9 +13,6 @@ import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionVersionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
-import java.time.Instant;
-import java.util.List;
-import org.springframework.stereotype.Component;
 
 /**
  * 负责把工作流持久化实体转换为 Console 固定响应 DTO。

@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
+import lombok.extern.slf4j.Slf4j;
+
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * ADR-035 §9 — 原子任务执行器可选基类,提供模板方法 {@code validate → before → doExecute → after + finally cleanup}。

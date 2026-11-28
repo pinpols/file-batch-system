@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.failure;
 
+import java.sql.SQLException;
+
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.failure.PersistenceConflictDetectionPort;
-import java.sql.SQLException;
-import org.springframework.stereotype.Component;
 
 /** JDBC 唯一约束冲突探测适配器。 */
 @Component

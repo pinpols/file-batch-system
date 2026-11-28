@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.worker.atomic.route;
 
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.worker.atomic.domain.AtomicWorkerType;
 import io.github.pinpols.batch.worker.core.route.WorkerRouteAdapter;
-import org.springframework.stereotype.Component;
 
 /** 专用原子任务 worker 默认路由适配器:声明 worker_type=ATOMIC。 */
 @Component

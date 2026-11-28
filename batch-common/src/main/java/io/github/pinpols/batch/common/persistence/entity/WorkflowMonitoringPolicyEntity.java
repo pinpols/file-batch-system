@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.persistence.entity;
 
 import java.time.Instant;
 import java.time.LocalTime;
+
 import lombok.Data;
 
 /** Workflow 根级监控策略；Job 策略及运行状态保持独立。 */

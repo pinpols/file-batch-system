@@ -4,22 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpServer;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
-import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationClaimParam;
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationFinishParam;
-import io.github.pinpols.batch.console.domain.notification.service.TerminalNotificationDeliveryService;
-import io.github.pinpols.batch.console.domain.notification.service.WorkflowTerminalNotificationService;
-import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
-import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
@@ -34,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -48,6 +33,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
+
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
+import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationClaimParam;
+import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationFinishParam;
+import io.github.pinpols.batch.console.domain.notification.service.TerminalNotificationDeliveryService;
+import io.github.pinpols.batch.console.domain.notification.service.WorkflowTerminalNotificationService;
+import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
+import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 
 @SpringBootTest(
         classes = BatchConsoleApiApplication.class,

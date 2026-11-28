@@ -2,28 +2,13 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
-import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkGiveUpBatchParam;
-import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishedBatchParam;
-import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
-import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchItem;
-import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
-import io.github.pinpols.batch.orchestrator.domain.query.OutboxPublishClaim;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
-import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
-import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -44,6 +29,23 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkGiveUpBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishedBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchItem;
+import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
+import io.github.pinpols.batch.orchestrator.domain.query.OutboxPublishClaim;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
+import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 
 /**
  * PERF(任务5) 针对性 IT：真 PG 上验证批量 SQL 的三个"纸面上说不准、必须实测"的机制点：

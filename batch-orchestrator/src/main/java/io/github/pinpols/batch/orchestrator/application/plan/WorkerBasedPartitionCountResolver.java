@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
+import java.util.Map;
+
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 /**
  * 根据当前在线 Worker 数量解析分区数，公式为 {@code min(256, onlineWorkerCount × partitionFactor)}。 DYNAMIC 策略下

@@ -1,18 +1,9 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-import io.github.pinpols.batch.common.config.ApplicationNameProvider;
-import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
-import io.github.pinpols.batch.common.config.BusinessDataSourceBuilder;
-import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
-import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
-import io.github.pinpols.batch.common.config.HikariPgSessionSupport;
-import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
-import io.github.pinpols.batch.common.tenant.routing.MyBatisTenantPlacementRepository;
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Objects;
+
 import javax.sql.DataSource;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -25,6 +16,19 @@ import org.springframework.core.env.Environment;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
+import io.github.pinpols.batch.common.config.BusinessDataSourceBuilder;
+import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
+import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
+import io.github.pinpols.batch.common.config.HikariPgSessionSupport;
+import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
+import io.github.pinpols.batch.common.tenant.routing.MyBatisTenantPlacementRepository;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 配置了业务库时的 Orchestrator 数据源装配：主平台数据源 {@code orchestratorPlatformDataSource}，以及 DB_ROW_EXISTS

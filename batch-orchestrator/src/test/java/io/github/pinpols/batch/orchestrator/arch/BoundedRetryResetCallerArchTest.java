@@ -2,20 +2,23 @@ package io.github.pinpols.batch.orchestrator.arch;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import java.util.Map;
+import java.util.Set;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+
 import io.github.pinpols.batch.orchestrator.application.service.governance.DefaultFileGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryRequeueCoordinator;
 import io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionReclaimUnit;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import java.util.Map;
-import java.util.Set;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 /**
  * ASSESS-20261102-DEC-01：Task/Partition 回到 READY 只允许经三个受限入口——重试重排队、文件重派和租约回收。

@@ -1,8 +1,9 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.function.Consumer;
+
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * R2:多行 INSERT 的 chunk 护栏。

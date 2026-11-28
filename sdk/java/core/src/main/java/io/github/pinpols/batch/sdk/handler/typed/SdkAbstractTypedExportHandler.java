@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Stream;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
 import io.github.pinpols.batch.sdk.task.SdkCommitCoordinator;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Stream;
 
 /**
  * A.2 — typed Export 模板:tenant → external(tenant DB → file),把强类型入参与 ADR-036 Export 行流模板合流。

@@ -7,18 +7,21 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
-import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
-import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
-import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
+import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("通知路由预览")

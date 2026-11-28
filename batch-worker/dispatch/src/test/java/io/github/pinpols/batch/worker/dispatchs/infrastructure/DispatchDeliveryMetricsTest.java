@@ -4,11 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelCircuitBreaker;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelCircuitBreaker;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
  * Dispatch 投递指标采集单测：

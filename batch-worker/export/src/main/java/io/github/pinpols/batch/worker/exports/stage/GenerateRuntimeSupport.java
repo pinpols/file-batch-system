@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.worker.exports.stage;
 
+import org.springframework.stereotype.Component;
+
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCursorCodec;
-import org.springframework.stereotype.Component;
 
 /**
  * 汇集 GENERATE 阶段的续跑与进度运行时协作者。

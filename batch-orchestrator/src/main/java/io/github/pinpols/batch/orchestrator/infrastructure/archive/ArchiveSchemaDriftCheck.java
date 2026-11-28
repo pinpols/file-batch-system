@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.archive;
 
-import io.github.pinpols.batch.common.mapper.InformationSchemaColumnView;
-import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,11 +7,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import io.github.pinpols.batch.common.mapper.InformationSchemaColumnView;
+import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
 
 /**
  * 启动期校验 batch 热表与 archive 冷表的 column 列表一致性,差异即 fail-fast。

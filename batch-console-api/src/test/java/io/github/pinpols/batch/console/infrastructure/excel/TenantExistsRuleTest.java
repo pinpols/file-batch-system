@@ -2,12 +2,14 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 
 @DisplayName("租户引用规则:配置包内租户存在性校验")
 class TenantExistsRuleTest {

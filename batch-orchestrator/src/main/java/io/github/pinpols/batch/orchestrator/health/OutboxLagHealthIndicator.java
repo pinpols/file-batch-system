@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.health;
 
+import java.util.List;
+
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
+
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
-import java.util.List;
-import org.springframework.boot.health.contributor.Health;
-import org.springframework.boot.health.contributor.HealthIndicator;
 
 /**
  * Outbox 积压健康探针。

@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.console.application.ops.query;
 
+import java.time.LocalDate;
+
+import org.springframework.format.annotation.DateTimeFormat;
+
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.time.LocalDate;
-import org.springframework.format.annotation.DateTimeFormat;
 
 public record ConsoleWaitRelationshipQuery(
         @NotBlank @Size(max = 64) String tenantId,

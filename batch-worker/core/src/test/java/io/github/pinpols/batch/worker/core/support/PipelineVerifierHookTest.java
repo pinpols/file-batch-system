@@ -5,24 +5,26 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.JobType;
-import io.github.pinpols.batch.common.verifier.ContentVerifier;
-import io.github.pinpols.batch.common.verifier.ContentVerifierRegistry;
-import io.github.pinpols.batch.common.verifier.VerifyContext;
-import io.github.pinpols.batch.common.verifier.VerifyResult;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.verifier.ContentVerifier;
+import io.github.pinpols.batch.common.verifier.ContentVerifierRegistry;
+import io.github.pinpols.batch.common.verifier.VerifyContext;
+import io.github.pinpols.batch.common.verifier.VerifyResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 
 @DisplayName("流水线校验钩子: 校验失败的明细写入与致命判定")
 class PipelineVerifierHookTest {

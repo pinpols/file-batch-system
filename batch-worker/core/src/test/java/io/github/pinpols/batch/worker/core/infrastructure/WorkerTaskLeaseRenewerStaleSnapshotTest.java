@@ -5,18 +5,20 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
-import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
-import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+
+import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
+import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @DisplayName("任务租约续期器忽略已被替换的租约快照")
 class WorkerTaskLeaseRenewerStaleSnapshotTest {

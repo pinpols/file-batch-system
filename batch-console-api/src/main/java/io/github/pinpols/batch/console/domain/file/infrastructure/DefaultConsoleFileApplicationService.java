@@ -1,5 +1,18 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.multipart.MultipartFile;
+
+import lombok.Builder;
+import lombok.RequiredArgsConstructor;
+
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.FileTemplateType;
@@ -31,16 +44,6 @@ import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestCli
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.io.IOException;
-import java.io.InputStream;
-import java.time.LocalDate;
-import java.util.List;
-import lombok.Builder;
-import lombok.RequiredArgsConstructor;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 文件治理 BFF：把 console 的文件操作 HTTP 请求转发到 orchestrator {@code /internal/files/**}，承担自由文本清洗与审批门控。
